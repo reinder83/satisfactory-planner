@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {openWorkspace} from './workspace.mjs';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import {createHash,timingSafeEqual} from 'node:crypto';
@@ -21,11 +22,11 @@ export function validateState(s){
    clean[kind][k]=v;
   }
  }
- if(!plain(s.settings)||!['3','4','5','post'].includes(s.settings.phase))fail('Invalid selected phase.');
+ if(!plain(s.settings)||!['1','2','3','4','5','post'].includes(s.settings.phase))fail('Invalid selected phase.');
  clean.settings={phase:s.settings.phase};
  if(!Array.isArray(s.customTasks)||s.customTasks.length>500)fail('Invalid personal tasks.');
  const seen=new Set();clean.customTasks=s.customTasks.map(t=>{
-  if(!plain(t)||!safeKey(t.id)||!t.id.startsWith('custom-')||seen.has(t.id)||typeof t.title!=='string'||!t.title.trim()||t.title.length>240||!['3','4','5','post'].includes(t.phase))fail('Invalid personal task.');
+  if(!plain(t)||!safeKey(t.id)||!t.id.startsWith('custom-')||seen.has(t.id)||typeof t.title!=='string'||!t.title.trim()||t.title.length>240||!['1','2','3','4','5','post'].includes(t.phase))fail('Invalid personal task.');
   seen.add(t.id);return {id:t.id,title:t.title.trim(),phase:t.phase};
  });
  clean.revision=Number.isSafeInteger(s.revision)&&s.revision>=0?s.revision:0;
@@ -44,15 +45,8 @@ export function mutate(s,op){
  return validateState(s);
 }
 export async function createApp({dataDir=process.env.DATA_DIR||path.join(root,'data'),user=process.env.APP_USER||'pioneer',password=process.env.APP_PASSWORD||''}={}){
- await fs.mkdir(dataDir,{recursive:true});const filename=path.join(dataDir,'progress.json');let state;
- try{state=validateState(JSON.parse(await fs.readFile(filename,'utf8')));}catch(e){if(e.code==='ENOENT')state=initialState();else throw new Error('Progress file could not be read. Restore a backup before starting; existing data has not been overwritten.');}
- let queue=Promise.resolve();
- const commit=fn=>{const run=queue.then(async()=>{
-  const next=fn(structuredClone(state));next.revision=state.revision+1;
-  // Save the previous good state first. Rename gives atomic replacement of the active file.
-  await fs.writeFile(filename+'.bak',JSON.stringify(state),{mode:0o600});
-  const tmp=filename+'.tmp';await fs.writeFile(tmp,JSON.stringify(next),{mode:0o600});await fs.rename(tmp,filename);state=next;return state;
- });queue=run.catch(()=>{});return run;};
+ await fs.mkdir(dataDir,{recursive:true});
+ const workspace=await openWorkspace({dataDir,initialState,validateState,mutate});
  const hash=s=>createHash('sha256').update(s).digest();
  const send=(res,status,value,headers={})=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});res.end(JSON.stringify(value));};
  const body=async req=>{let chunks=[],length=0;for await(const chunk of req){length+=chunk.length;if(length>2*1024*1024)fail('Backup or update exceeds 2 MB.',413);chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{fail('Invalid JSON.');}};
@@ -70,18 +64,11 @@ export async function createApp({dataDir=process.env.DATA_DIR||path.join(root,'d
     if(req.headers['x-planner-request']!=='1')fail('Missing request verification.',403);
     if(req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)fail('Cross-origin updates are not allowed.',403);
     if(!req.headers['content-type']?.startsWith('application/json'))fail('Expected JSON.',415);
-    if(url.pathname==='/api/update'){const op=await body(req);return send(res,200,await commit(s=>mutate(s,op)));}
-    if(url.pathname==='/api/import'){
-     const b=await body(req);const imported=validateState(b.format==='satisfactory-planner-backup'?b.state:b);
-     if(b.format&&b.format!=='satisfactory-planner-backup')fail('Wrong backup format.');
-     return send(res,200,await commit(()=>imported));
-    }
+    if(url.pathname.startsWith('/api/')){const r=await workspace(req,url,body);return send(res,r.status,r.data,r.headers);}
     return send(res,404,{error:'Not found.'});
    }
    if(!['GET','HEAD'].includes(req.method))return send(res,405,{error:'Method not allowed.'},{Allow:'GET, HEAD, POST'});
-   if(url.pathname==='/api/state')return send(res,200,state);
-   if(url.pathname==='/api/export')return send(res,200,{format:'satisfactory-planner-backup',exportedAt:new Date().toISOString(),state},{'Content-Disposition':'attachment; filename="satisfactory-progress.json"'});
-   if(url.pathname.startsWith('/api/'))return send(res,404,{error:'Not found.'});
+   if(url.pathname.startsWith('/api/')){const r=await workspace(req,url,body);return send(res,r.status,r.data,r.headers);}
    const publicDir=path.join(root,'public');const relative=decodeURIComponent(url.pathname);const file=path.resolve(publicDir,'.'+(relative==='/'?'/index.html':relative));
    if(!file.startsWith(publicDir+path.sep))return send(res,403,{error:'Not allowed.'});
    let content;try{content=await fs.readFile(file);}catch(e){if(['ENOENT','EISDIR'].includes(e.code))return send(res,404,{error:'Not found.'});throw e;}

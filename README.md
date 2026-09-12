@@ -1,85 +1,91 @@
 # Satisfactory Planner
 
-A private, self-hosted checklist for this Satisfactory save: phase build order, 85 factory profiles, 132 storage addresses, collectables, workshop, power and resources. The main interface opens straight onto your current build plan.
+A self-hosted Satisfactory planner with named saves, settings-first profile creation, calculated production targets, chronological checklists, storage maps and optional user accounts.
 
-## Run the published image
+## Your existing plan is preserved
 
-The GitHub Actions workflow tests the app, starts a real Docker container and checks persistence across restart, then publishes an AMD64/ARM64 image to **ghcr.io/reinder83/satisfactory-planner**. The package is private on its first publication.
+The original 50× elevator / pure-ingot handbook remains a separate, unchanged profile. On first start after this update, existing `progress.json` is copied into the original save in `workspace.json`. The old file is retained untouched. Checkmarks, deliveries, custom tasks and notes migrate together.
 
-1. Install Docker with Compose on the machine that will host the planner.
-2. Clone this private repository and enter its directory.
-3. Authenticate Docker to GHCR with your GitHub username and a **classic personal access token with `read:packages`**. Paste the token at the password prompt; do not put it in the Compose file:
+Each **user → named save → profile** has independent progress. Trying another profile does not reset the original. Profiles store a calculation snapshot, so updating the software cannot silently change existing targets. Rename saves and profiles from **Saves & profiles**.
 
-   ```sh
-   docker login ghcr.io -u reinder83
-   ```
+## Create a profile
 
-4. Optionally copy `.env.example` to `.env` and adjust the port or password.
-5. Start:
+Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save:
 
-   ```sh
-   docker compose pull
-   docker compose up -d
-   ```
+1. Name the save and enter its phase, purity/distribution, elevator multiplier, consumption multiplier and spare existing power.
+2. Choose standard/all alternates, pure ingots, SAM conversion policy, nuclear recycling, protected storage and extra Singularity Cell production.
+3. Choose minimal construction (24-hour delivery), balanced (8-hour delivery), a target time, or maximum elevator output.
+4. Review/edit available raw resource budgets. Confirm these before maximum-output planning.
+5. Review calculated buildings, delivery time, power and feasibility by phase, then create the profile.
 
-6. Open **http://localhost:8080**.
+The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs surplus to storage and sinks. Its optional storage template includes 132 addresses, collectables bays Q/R and the workshop underneath. New saves have no pre-completed steps.
 
-For other devices on your LAN, set `BIND_ADDRESS=0.0.0.0` and an `APP_PASSWORD` in `.env`, then open `http://HOST-IP:8080`. The username defaults to `pioneer`. For internet access, put it behind an HTTPS reverse proxy; Basic Authentication must not be sent over public plain HTTP. There is one shared save, not separate user accounts.
+## Run with Docker
 
-## Build locally instead
+The private image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. Clone this repository on your Docker host, enter the directory, then authenticate with a GitHub classic personal access token carrying `read:packages`:
 
-No registry login is required for a local build:
+```sh
+docker login ghcr.io -u reinder83
+docker compose pull
+docker compose up -d
+```
+
+Open **http://localhost:8080**. To update later, repeat the last two commands.
+
+Optionally copy `.env.example` to `.env`. For LAN access, set `BIND_ADDRESS=0.0.0.0`, then visit `http://HOST-IP:8080`. For public internet access use an HTTPS reverse proxy and set `COOKIE_SECURE=true`.
+
+A local build needs no registry login:
 
 ```sh
 docker compose -f compose.yaml -f compose.local.yaml up -d --build
 ```
 
-Or, with Node.js 22 or newer:
+## User accounts
 
-```sh
-npm start
-```
+The existing single-user workspace continues to work in **local mode**. Local mode shares the owner workspace with anyone who can reach the server; it is not user isolation. Enable accounts before sharing:
 
-There are no third-party runtime dependencies and no database service to configure.
+1. Open **Saves & profiles → Set up user accounts**.
+2. Read the host-only setup token:
+
+   ```sh
+   docker compose exec planner cat /data/account-setup-token.txt
+   ```
+
+3. Enter the token and choose your owner username and password. Your existing saves become this account’s saves.
+4. Optionally enable registration so other people can create accounts. Each new account starts without access to your saves or progress.
+
+Passwords are scrypt-hashed. Login sessions use HttpOnly, SameSite cookies and persist across container restarts. API reads and writes enforce ownership. The host setup token is never served through the API. Do not share it. There is no email/password-reset service in this version; keep your password securely and retain host backups.
+
+The previous `APP_USER` / `APP_PASSWORD` Basic Auth gate remains available as an additional host-wide gate. It is separate from individual accounts.
 
 ## Persistence and backups
 
-Progress is stored in `/data/progress.json`, in the named `planner-data` Docker volume. Container recreation and image updates keep this volume. **Do not run `docker compose down -v` unless you intend to delete the save.** The app also retains the previous successful state as `progress.json.bak`.
+The Docker `planner-data` volume stores `/data/workspace.json`: accounts, named saves, profiles, calculation snapshots and progress. Updates and container recreation preserve it. **Do not run `docker compose down -v` unless you intend to delete this data.**
 
-Use **Backup & notes → Download progress JSON** for a separate backup. Restore from the same page. Imports are validated and replace progress only, not the production-plan dataset. Do not edit the live JSON file while the server is running. If a file is damaged, the server refuses to reset it silently; stop the container and restore a known-good backup.
+- **Backup & notes** exports the current profile’s progress. Restore only to its matching profile; other profiles are untouched.
+- For a complete backup, stop the container and back up its data volume, including `workspace.json`. This contains password hashes and session records; keep the backup private.
+- `workspace.json.bak` retains the previous successful workspace write. Writes are serialized and atomically replaced. Corrupted data causes startup to fail rather than silently reset progress.
+- `progress.json` remains the pre-migration backup and is no longer the live store. Do not run old and new planner versions simultaneously against one volume.
 
-To update after GitHub publishes a new image:
+## Calculation scope
 
-```sh
-docker compose pull
-docker compose up -d
-```
+The generated plans solve material and resource constraints using HiGHS. Standard recipes are always available at their modeled phase; the alternate option enables phase-eligible alternates. Pure ingots override other ingot recipes when available. Actual recipe/milestone unlocking still has to happen in game.
 
-For a rollback, use one of the published `sha-...` image tags in `compose.yaml`. Progress IDs are stable; plan changes must preserve existing IDs or include a migration.
+Fixed-time plans minimize production-building equivalents, then report whole buildings and the last machine’s underclock. They do not claim the absolute minimum number of integer buildings. Maximum output maximizes simultaneous elevator delivery within the entered budgets and selected recipe set, then minimizes building equivalents at that output. It does not optimize AWESOME Sink points.
 
-## What is included
+SAM policies affect raw-resource conversion only. Essential SAM ingredients remain available. Full nuclear recycling burns plutonium and Ficsonium rods in Phase 5, enforcing zero accumulated radioactive waste. Phase 4 sinks plutonium fuel rods until Ficsonium is available.
 
-- Chronological checklists for Phases 3, 4, 5 and post-game, with personal tasks and notes.
-- Factory targets, recipe inputs, whole machines, last-machine clock, protected storage and later expansion.
-- Corrected resource conversion: 165 Converters and 5,250/min Reanimated SAM.
-- Ground and upper storage floors, the Q/R collectables extension and workshop underneath. G08 is Medicinal Inhaler, H01 Iodine-Infused Filter, H02 Gas Filter, H08 Nobelisk.
-- Per-container placement, labelling, connection and verification checklists.
-- Delivery counts with remaining steady-state production time.
-- Resource and power budgets, rocket-fuel modules and nuclear sequence.
+New power plants and their fuel inputs are included. Existing power is entered as **spare** capacity; its resource use must already be deducted from the entered budgets. A 20% utility allowance covers unmodelled mining, pumps and transport. Whole-building peak headroom is shown separately when needed. Phase 1 requires biomass or existing power. This is a steady-state estimate, not a simulation of startup, variable demand or your actual game grid.
 
-Initial progress marks only the facts known from the conversation: the ground-floor structure is built and the Phase 3 Versatile Framework delivery is complete. Containers are not assumed connected or stocked. The user can revise every check.
+Storage is an explicit protected output per item. Unpackaged fluids, radioactive items and gathered feedstock are excluded from continuous storage production. Gathered items still have storage locations. Some standard-recipe items need alternates to become sustainably automatable. Singularity Cells are an explicit extra supply rate; teleport use and operating power are not inferred automatically.
 
-## Important plan boundaries
+Purity does not determine randomized node counts. Reference budgets use standard counts at endgame extraction; oil wells are excluded and nitrogen is separate. Edit the budgets to match your seed and accessible mining. Other mods/settings are notes only: changed recipes, boosts and modded items are not simulated. The app does not read game-save files.
 
-This is a plan and checklist, **not a game-save reader or live factory simulator**. It does not detect in-game progress. The plan data is in `public/plan.json`.
+The preserved original handbook retains its previous assumptions and corrected resource ledger. It is not recalculated by this new engine.
 
-The corrected final budget includes retained turbofuel and truck fuel, six new rocket-fuel blocks, full nuclear recycling and resource conversion. It excludes additional post-game completion modules. Storage takes priority over continuing full elevator-export rates after Phase 5. Nitrogen availability and transport capacity still need checking in the randomized save. The late-game targets assume all-pure standard node counts and endgame extraction. Runtime power estimates retain the original conservative allowances.
+## Development
 
-The old coal and temporary fuel plants retire after testing turbofuel alone. Retained capacity is 44.425 GW; final planned gross capacity is 913.925 GW. These numbers are not live power readings.
-
-All rates derive from the recipe collection pinned in the original handbook. Sources are linked in the app. This is an unofficial personal planner and is not affiliated with Coffee Stain Studios.
-
-## Development and verification
+Node.js 22 or newer is sufficient; no package installation is required. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
 
 ```sh
 npm run check
@@ -87,6 +93,6 @@ npm test
 npm start
 ```
 
-Tests cover durable state, concurrent updates, backup/restore, invalid input, optional authentication, corrupted-save handling and key corrected plan figures. GitHub Actions also verifies the Docker runtime before publication. Pull requests run checks without publishing an image; pushes to `main` publish `latest` and a commit tag, while `v*` tags publish version tags. The workflow uses the built-in `GITHUB_TOKEN`; no registry secret is required in the repository.
+Tests cover migration, durable progress, concurrent updates, backup restore, corrupted saves, save/profile isolation, account ownership, authentication, calculator constraints and interface rendering. GitHub Actions additionally builds and restarts a real Docker container before publishing. Pushes to `main` publish `latest` and a commit tag; `v*` tags publish version tags. No additional registry secrets are required.
 
-Server configuration: `HOST` (default `0.0.0.0`), `PORT` (`8080`), `DATA_DIR` (`./data` outside Docker), `APP_USER` (`pioneer`) and `APP_PASSWORD` (empty means no login). The Compose file binds only to localhost unless changed.
+Server options: `HOST`, `PORT`, `DATA_DIR`, optional `APP_USER`/`APP_PASSWORD`, and `COOKIE_SECURE=true` behind HTTPS. One server process should own one data directory. This JSON-backed deployment is intended for personal/small-group hosting.

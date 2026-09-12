@@ -41,6 +41,7 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:18080/api/state | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).checks['docker-smoke']!==true)process.exit(1)})"
+          curl --fail --silent -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"settings":{"recipes":"all","pureIngots":true,"nuclear":"recycle"}}' http://127.0.0.1:18080/api/preview | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(!JSON.parse(s).stages['5'].feasible)process.exit(1)})"
       - name: Container diagnostics
         if: failure()
         run: docker logs planner-smoke || true
