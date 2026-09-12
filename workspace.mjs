@@ -50,6 +50,17 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
    await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');const state=blank();state.settings.phase=plan?.settings.phase||'3';save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;});return response({saveId,profileId,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
   if(endpoint==='/api/select'&&req.method==='POST'){const b=await body(req);const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);await commit(d=>{d.users.find(x=>x.id===u.id).activeSave=save.id;d.saves.find(s=>s.id===save.id).activeProfile=profile.id;});return response(summary(db.users.find(x=>x.id===u.id)));}
+  if(endpoint==='/api/remove-profile'&&req.method==='POST'){
+   const b=await body(req);if(b.confirmed!==true)fail('Confirm profile removal first.');
+   if(!b.saveId||!b.profileId)fail('Choose a profile to remove.');
+   const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);
+   await commit(d=>{const sv=d.saves.find(s=>s.id===save.id&&s.userId===u.id);if(!sv||!sv.profiles.some(p=>p.id===profile.id))fail('Profile not found.',404);
+    sv.profiles=sv.profiles.filter(p=>p.id!==profile.id);
+    if(!sv.profiles.length)d.saves=d.saves.filter(s=>s.id!==sv.id);
+    else if(sv.activeProfile===profile.id)sv.activeProfile=sv.profiles[0].id;
+    const owner=d.users.find(x=>x.id===u.id);if(!d.saves.some(s=>s.id===owner.activeSave&&s.userId===u.id))owner.activeSave=d.saves.find(s=>s.userId===u.id)?.id||null;
+   });return response(summary(db.users.find(x=>x.id===u.id)));
+  }
   if(endpoint==='/api/rename'&&req.method==='POST'){const b=await body(req);const title=name(b.name);const {save,profile}=scope(req,url,u);await commit(d=>{const sv=d.saves.find(s=>s.id===save.id);if(b.target==='save')sv.name=title;else if(b.target==='profile')sv.profiles.find(p=>p.id===profile.id).name=title;else fail('Unknown rename target.');});return response(summary(db.users.find(x=>x.id===u.id)));}
   const {save,profile}=scope(req,url,u);
   if(endpoint==='/api/round-up'&&req.method==='POST'){

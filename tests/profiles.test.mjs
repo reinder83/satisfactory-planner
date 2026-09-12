@@ -9,6 +9,26 @@ async function start(dir){const server=await createApp({dataDir:dir,password:''}
 const close=s=>new Promise(r=>s.close(r));
 const post=(url,endpoint,b,headers={})=>fetch(url+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...headers},body:JSON.stringify(b)});
 const json=async r=>{assert.ok(r.ok,await r.clone().text());return r.json();};
+test('profile removal requires confirmation, preserves other progress and survives an empty workspace',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-removal-'));let app=await start(dir);
+ try{
+  const a=await json(await post(app.url,'/api/profiles',{saveName:'Delete test',name:'A',kind:'original'}));
+  const b=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'B',kind:'original'}));
+  const ah={'X-Save-Id':a.saveId,'X-Profile-Id':a.profileId};
+  await json(await post(app.url,'/api/update',{type:'note',key:'global',value:'Keep this'},ah));
+  const remove={saveId:b.saveId,profileId:b.profileId};
+  assert.equal((await post(app.url,'/api/remove-profile',remove)).status,400);
+  let w=await json(await post(app.url,'/api/remove-profile',{...remove,confirmed:true}));
+  assert.equal(w.saves.find(s=>s.id===a.saveId).activeProfile,a.profileId);
+  assert.equal((await json(await fetch(app.url+'/api/state',{headers:ah}))).notes.global,'Keep this');
+  await json(await post(app.url,'/api/remove-profile',{saveId:a.saveId,profileId:a.profileId,confirmed:true}));
+  w=await json(await post(app.url,'/api/remove-profile',{saveId:'original-save',profileId:'original',confirmed:true}));
+  assert.equal(w.saves.length,0);assert.equal(w.activeSave,null);
+  await close(app.server);app=await start(dir);
+  assert.equal((await json(await fetch(app.url+'/api/workspace'))).saves.length,0);
+  await json(await post(app.url,'/api/profiles',{saveName:'Start again',name:'New',kind:'original'}));
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});
 test('migration, separate saves and profiles, explicit scope across tabs, durable switching',async()=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-profiles-'));const original=initialState();original.checks['built-iron']=true;original.notes.global='My original world';const old=JSON.stringify(original);await fs.writeFile(path.join(dir,'progress.json'),old);let app=await start(dir);
  try{
@@ -34,6 +54,7 @@ test('account setup requires host token; sessions and all data routes enforce ow
   const signup=await post(app.url,'/api/register',{username:'second-user',password:'Different-long-password'});assert.equal(signup.status,200);const other={Cookie:signup.headers.get('set-cookie').split(';')[0]};
   assert.equal((await fetch(app.url+'/api/state?save=original-save&profile=original',{headers:other})).status,404);
   assert.equal((await post(app.url,'/api/select',{saveId:'original-save',profileId:'original'},other)).status,404);
+  assert.equal((await post(app.url,'/api/remove-profile',{saveId:'original-save',profileId:'original',confirmed:true},other)).status,404);
   assert.equal((await post(app.url,'/api/profiles',{saveId:'original-save',name:'Intrusion',settings:{}},other)).status,404);
   assert.equal((await fetch(app.url+'/api/export?save=original-save&profile=original',{headers:other})).status,404);
   assert.equal((await post(app.url,'/api/update',{type:'check',key:'bad',value:true},{...other,'X-Save-Id':'original-save','X-Profile-Id':'original'})).status,404);
