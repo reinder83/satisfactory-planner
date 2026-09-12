@@ -61,3 +61,13 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
  const max=calculate({goal:'maximum',limitsConfirmed:true,recipes:'all'});assert.ok(max.stages[5].feasible);assert.ok(max.stages[5].hours<standard.stages[5].hours);
  const impossible=calculate({limits:{'Iron Ore':0,'Copper Ore':0},sam:'avoid'});assert.equal(impossible.stages[3].feasible,false);
 });
+
+test('whole production recalculates upstream inputs and makes surplus without changing old profiles',async()=>{
+ const rounded=calculate({wholeMachines:true});assert.equal(rounded.stages[3].feasible,true);const rubber=rounded.stages[3].rows.find(r=>r.name==='Rubber');assert.equal(rubber.equivalent,rubber.machines);assert.ok(Object.values(rounded.stages[3].surplus).some(q=>q>0));
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-rounded-'));const app=await start(dir);
+ try{
+  const a=await json(await post(app.url,'/api/profiles',{saveName:'World',name:'Precise',settings:{}}));const headers={'X-Save-Id':a.saveId,'X-Profile-Id':a.profileId};await post(app.url,'/api/update',{type:'note',key:'global',value:'Keep this note'},headers);await post(app.url,'/api/update',{type:'check',key:'unlock-Schematic_2-1_C',value:true},headers);
+  const old=await json(await fetch(app.url+'/api/context',{headers}));const b=await json(await post(app.url,'/api/round-up',{},headers));assert.notEqual(b.profileId,a.profileId);
+  const newer=await json(await fetch(app.url+'/api/context',{headers:{...headers,'X-Profile-Id':b.profileId}}));assert.equal(newer.plan.settings.wholeMachines,true);assert.equal(newer.state.notes.global,'Keep this note');assert.equal(newer.state.checks['unlock-Schematic_2-1_C'],true);assert.deepEqual(await json(await fetch(app.url+'/api/context',{headers})),old);
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});

@@ -52,6 +52,15 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
   if(endpoint==='/api/select'&&req.method==='POST'){const b=await body(req);const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);await commit(d=>{d.users.find(x=>x.id===u.id).activeSave=save.id;d.saves.find(s=>s.id===save.id).activeProfile=profile.id;});return response(summary(db.users.find(x=>x.id===u.id)));}
   if(endpoint==='/api/rename'&&req.method==='POST'){const b=await body(req);const title=name(b.name);const {save,profile}=scope(req,url,u);await commit(d=>{const sv=d.saves.find(s=>s.id===save.id);if(b.target==='save')sv.name=title;else if(b.target==='profile')sv.profiles.find(p=>p.id===profile.id).name=title;else fail('Unknown rename target.');});return response(summary(db.users.find(x=>x.id===u.id)));}
   const {save,profile}=scope(req,url,u);
+  if(endpoint==='/api/round-up'&&req.method==='POST'){
+   if(profile.kind!=='calculated')fail('The preserved handbook is unchanged. Create a calculated profile to use whole-machine planning.');
+   if(profile.plan.settings.wholeMachines)fail('This profile already uses whole-machine planning.');
+   throttle(req);const rounded=calculate({...profile.plan.settings,wholeMachines:true}),profileId=id();let reviewCount=0;
+   await commit(d=>{const sv=d.saves.find(s=>s.id===save.id&&s.userId===u.id);if(sv.profiles.length>=30)fail('Profile limit reached.');const previous=sv.profiles.find(p=>p.id===profile.id);const state=structuredClone(previous.state);
+    for(const [ph,stage]of Object.entries(rounded.stages))for(const row of stage.rows||[]){const old=previous.plan.stages[ph]?.rows?.find(r=>r.id===row.id);if(!old||Object.entries(row.inputs).some(([n,q])=>q>(old.inputs[n]||0)+0.001)||row.machines>old.machines){const k='calc-'+ph+'-'+row.id;if(state.checks[k]){state.checks[k]=false;reviewCount++;}}}
+    sv.profiles.push({id:profileId,name:(previous.name+' · whole machines').slice(0,80),kind:'calculated',plan:rounded,state});sv.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=sv.id;
+   });return response({saveId:save.id,profileId,reviewCount,workspace:summary(db.users.find(x=>x.id===u.id))},201);
+  }
   if(endpoint==='/api/context'&&req.method==='GET')return response({save:{id:save.id,name:save.name},profile:{id:profile.id,name:profile.name,kind:profile.kind},state:profile.state,plan:profile.plan||null});
   if(endpoint==='/api/state'&&req.method==='GET')return response(profile.state);
   if(endpoint==='/api/export'&&req.method==='GET')return response({format:'satisfactory-planner-backup',exportedAt:new Date().toISOString(),saveName:save.name,profileName:profile.name,profileId:profile.id,state:profile.state},200,{'Content-Disposition':'attachment; filename="satisfactory-progress.json"'});

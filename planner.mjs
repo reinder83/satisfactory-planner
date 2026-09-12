@@ -11,7 +11,7 @@ const choice=(v,allowed,fallback)=>v===undefined?fallback:allowed.includes(v)?v:
 const number=(v,min,max,fallback)=>v===undefined?fallback:Number.isFinite(v)&&v>=min&&v<=max?v:err(`Enter a number from ${min} to ${max}.`);
 export function settings(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))err('Invalid settings.');
- const s={phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,['vanilla','pure','normal','impure','custom'],'vanilla'),distribution:choice(input.distribution,['original','randomized','advanced'],'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,['none','construction','all'],'construction'),storageRate:number(input.storageRate,0.1,300,1),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
+ const s={phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,['vanilla','pure','normal','impure','custom'],'vanilla'),distribution:choice(input.distribution,['original','randomized','advanced'],'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,['none','construction','all'],'construction'),storageRate:number(input.storageRate,0.1,300,1),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
  s.limits={};const defaults=s.purity==='pure'?PURE_LIMITS:s.purity==='normal'?Object.fromEntries(RAW.map(k=>[k,['Water','Nitrogen Gas'].includes(k)?PURE_LIMITS[k]:PURE_LIMITS[k]/2])):s.purity==='impure'?Object.fromEntries(RAW.map(k=>[k,['Water','Nitrogen Gas'].includes(k)?PURE_LIMITS[k]:PURE_LIMITS[k]/4])):DEFAULT_LIMITS;
  for(const r of RAW)s.limits[r]=number(input.limits?.[r],0,10000000,defaults[r]);
  return s;
@@ -36,8 +36,9 @@ function generators(s,phase){
  }
  return result;
 }
-export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false}={}){
- const pool=[...recipePool(s,phase,conversion),...generators(s,phase)];
+export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,recipeIds=null}={}){
+ if(s.wholeMachines&&!recipeIds){const base=run({...s,wholeMachines:false},phase,{maximum,conversion,ignoreLimits});if(!base.feasible)return base;return run(s,phase,{maximum,conversion,ignoreLimits,recipeIds:new Set(base.rows.map(r=>r.id))});}
+ const pool=[...recipePool(s,phase,conversion),...generators(s,phase)].filter(r=>!recipeIds||recipeIds.has(r.id)||conversion&&Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water'));
  const reachable=new Set(RAW);if(s.nuclear!=='none'&&phase>=4)reachable.add('Uranium Waste');if(s.nuclear==='recycle'&&phase===5)reachable.add('Plutonium Waste');
  for(let i=0;i<20;i++)for(const r of pool)if(Object.keys(r.inputs).every(n=>reachable.has(n)))Object.keys(r.outputs).forEach(n=>reachable.add(n));
  const allItems=new Set(pool.flatMap(r=>[...Object.keys(r.inputs),...Object.keys(r.outputs)]));
@@ -58,12 +59,13 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false}=
   for(const [n,q] of Object.entries(r.inputs))v['item:'+n]=(v['item:'+n]||0)-q;
   if(r.id==='power-uranium'){v.nuclear=1;model.constraints.nuclear={min:s.uraniumReactors};}
   model.variables[r.id]=v;
+  if(s.wholeMachines&&Object.keys(r.outputs).some(n=>!DATA.items[n]?.fluid&&!RAW.includes(n))&&!/uranium|plutonium|ficsonium|waste|non-fissile/i.test([r.name,...Object.keys(r.inputs),...Object.keys(r.outputs)].join(' '))){(model.ints??={})[r.id]=1;}
  }
  for(const n of RAW){if(!allItems.has(n))continue;model.constraints['limit:'+n]={max:ignoreLimits?1e9:s.limits[n]};model.variables['raw:'+n]={cost:0.0001,['item:'+n]:1,['limit:'+n]:1};}
  if(s.nuclear!=='none'&&phase>=4&&(s.nuclear==='sink'||phase===4))model.variables['sink-plutonium']={cost:0.0001,'item:Plutonium Fuel Rod':-1};
  if(maximum){const v={gain:1};for(const [n,d] of Object.entries(delivery))v['item:'+n]=-d.target/1000;model.variables.goal=v;}
  let solved=solve(model);
- if(maximum&&solved.feasible){model.constraints.keepGoal={min:solved.goal*(1-1e-8)};model.variables.goal.keepGoal=1;model.optimize="cost";model.opType="min";const economical=solve(model);if(economical.feasible)solved=economical;}if(!solved.feasible||!solved.bounded)return {feasible:false};
+ if(maximum&&solved.feasible){model.constraints.keepGoal={min:solved.goal*(1-1e-8)};model.variables.goal.keepGoal=1;model.optimize="cost";model.opType="min";const economical=solve(model);if(economical.feasible)solved=economical;}if(!solved.feasible||!solved.bounded)return {feasible:false,solverStatus:solved.solverStatus};
  // Independently verify material, power and mining constraints before trusting a result.
  for(const [k,b] of Object.entries(model.constraints)){
   let total=0;for(const [v,co] of Object.entries(model.variables))total+=(solved[v]||0)*(co[k]||0);
@@ -87,18 +89,20 @@ export function calculate(input){
   if(!result.feasible&&phase===5&&s.sam==='needed')result=run(s,phase,{maximum:s.goal==='maximum',conversion:true});
   // For maximum output, compare conversion when allowed only at a binding resource limit.
   if(s.goal==='maximum'&&phase===5&&s.sam==='needed'){const converted=run(s,phase,{maximum:true,conversion:true});if(converted.feasible&&(!result.feasible||converted.hours<result.hours-1e-6))result=converted;}
-  if(!result.feasible){const diagnostic=run(s,phase,{conversion:phase===5&&s.sam!=='avoid',ignoreLimits:true});stages[phase]={...diagnostic,feasible:false,reason:diagnostic.feasible?'The goal exceeds the available resource or power budgets. Increase the time or revise your budgets.':'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.'};}
+  if(!result.feasible){const diagnostic=run(s,phase,{conversion:phase===5&&s.sam!=='avoid',ignoreLimits:true});stages[phase]={...diagnostic,feasible:false,reason:result.solverStatus&&!/infeasible/i.test(result.solverStatus)?'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.':diagnostic.feasible?'The goal exceeds the available resource or power budgets. Increase the time or revise your budgets.':'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.'};}
   else stages[phase]=result;
  }
  if(s.distribution!=='original'||s.purity==='custom')warnings.push('Randomized node counts cannot be inferred from purity. Resource budgets must match your seed.');
  if(!s.limitsConfirmed)warnings.push('Resource budgets are provisional. Confirm available extraction after reserving resources for existing factories.');
  warnings.push('Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.');
  warnings.push('Power includes new generators and their fuel chains, with a 20% utility allowance. Existing plants are represented only by spare capacity; subtract their fuel from available resources.');
+ if(s.wholeMachines)warnings.push('Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid, power and nuclear balancing can retain fractional clocks.');
  warnings.push('Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum.');
  if(s.modNotes)warnings.push('Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.');
  return {engine:ENGINE,settings:s,stages,warnings,createdAt:new Date().toISOString()};
 }
 export const catalog=()=>({engine:ENGINE,raw:RAW,limits:DEFAULT_LIMITS,pureLimits:PURE_LIMITS,goals:[{id:'minimal',name:'Minimal construction',description:'24-hour deliveries; minimize production-building equivalents.'},{id:'balanced',name:'Balanced progression',description:'8-hour deliveries with the selected storage and recipe preferences.'},{id:'timed',name:'Target completion time',description:'Calculate rates from your chosen hours per phase.'},{id:'maximum',name:'Maximum elevator output',description:'Fastest simultaneous delivery within confirmed resource budgets.'}]});
+
 
 
 

@@ -102,3 +102,13 @@ Server options: `HOST`, `PORT`, `DATA_DIR`, optional `APP_USER`/`APP_PASSWORD`, 
 Calculated profiles now include a Phase 1 construction-stock base, manually supplied Biomass/Solid Biofuel startup, phase-appropriate power commissioning, HUB milestone costs and MAM research suggestions. Mark unlocks in the checklist to update current-power advice. Unlock and alternate-recipe checkmarks persist across phases within the profile. Hard-drive tasks list the actual selected alternates and their recorded prerequisites; random scans do not guarantee a fixed drive count.
 
 Milestone cost notes use factories explicitly marked running in this or earlier phases. They do not assume that inventory or spare output exists. Starter construction and biomass lines are separate startup guidance, not added to the frozen continuous-production calculation. Existing factory targets and progress IDs are preserved.
+
+## Whole-machine production
+
+New profiles default to running solid-part production machines at 100%. The solver selects a recipe network first and fits whole-machine production within the resource budgets, recalculating upstream requirements and handling liquid byproducts. Extra solids are listed as surplus: supply downstream factories, refill storage, then sink the rest. This can increase the scale of the entire chain, not only the last machine in one factory.
+
+Fluid, generator and nuclear/waste-processing lines remain precisely balanced and may retain underclocks. Detailed instructions separate total machines, full-speed machines and the adjustable machine, and show output per machine next to its clock setting.
+
+For a previously calculated profile, use **Factories → Round up production**. This creates a new profile revision, copies notes/unlocks/progress, and clears completed factory checks only where increased inputs or machine counts need review. The previous profile and all its progress remain untouched. The preserved original handbook is not recalculated.
+
+If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
