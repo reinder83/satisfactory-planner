@@ -1,0 +1,4 @@
+services:
+  planner:
+    build: .
+    image: satisfactory-planner:local

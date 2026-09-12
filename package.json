@@ -1,0 +1,9 @@
+{
+  "name": "satisfactory-planner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A self-hosted Satisfactory build and storage planner",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node server.mjs", "test": "node --test tests/*.test.mjs", "check": "node --check server.mjs && node --check public/app.js" }
+}
