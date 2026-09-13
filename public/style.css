@@ -7,3 +7,5 @@
 .setting-help [role=tooltip]{display:none;position:absolute;z-index:20;top:1.5em;left:0;width:min(290px,65vw);padding:12px;background:#202925;color:#fff;border-radius:8px;font-size:13px;font-weight:400;line-height:1.5;box-shadow:0 4px 16px #0004}
 .setting-help:hover [role=tooltip],.setting-help:focus [role=tooltip]{display:block}
 .setting-help:focus{outline:2px solid currentColor;outline-offset:3px}
+
+.wizard-progress button{font:inherit;color:inherit;background:transparent;border:0;border-radius:6px;padding:8px 12px;cursor:pointer}.wizard-progress button.current{background:var(--accent,#d77835);color:#fff}.wizard-progress button:hover{background:#d7783520}.wizard-progress button:focus-visible{outline:2px solid #d77835;outline-offset:2px}.wizard-progress button:disabled{opacity:.6;cursor:wait}

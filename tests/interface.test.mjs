@@ -34,3 +34,17 @@ test('storage follows the selected contract, preserves addresses and displays sm
  assert.equal(vm.runInContext('power(1000)',c),(1000).toLocaleString()+' MW');
  assert.equal(vm.runInContext('power(1500)',c),(1.5).toLocaleString()+' GW');
 });
+test('wizard tabs retain edits and recalculate Review without native help tooltips',async()=>{
+ const c=ui();vm.runInContext(`wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,c);
+ const form={reportValidity:()=>true,querySelector:()=>({textContent:''})};c.document.querySelector=()=>form;
+ c.FormData=class{*[Symbol.iterator](){yield ['saveName','Edited world'];yield ['purity','pure'];}has(){return false;}};
+ await vm.runInContext('moveWizard(2)',c);
+ assert.equal(vm.runInContext('wizard.saveName',c),'Edited world');
+ assert.equal(vm.runInContext('wizard.settings.limits["Iron Ore"]',c),152400);
+ assert.equal(vm.runInContext('wizard.preview',c),null);
+ c.FormData=class{*[Symbol.iterator](){yield ['utilityPercent','35'];}has(){return false;}};
+ vm.runInContext(`post=async(url,body)=>{if(body.settings.utilityPercent!==35)throw Error('Lost input');return generated;}`,c);
+ await vm.runInContext('moveWizard(5)',c);assert.equal(vm.runInContext('wizard.step',c),5);
+ const html=vm.runInContext('renderWizard()',c);assert.equal((html.match(/data-wizard-step=/g)||[]).length,5);
+ const help=vm.runInContext('help("purity")',c);assert.ok(!help.includes(' title='));assert.ok(help.includes('aria-label='));assert.ok(help.includes('role="tooltip"'));
+});
