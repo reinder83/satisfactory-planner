@@ -40,6 +40,31 @@ A local build needs no registry login:
 docker compose -f compose.yaml -f compose.local.yaml up -d --build
 ```
 
+## Synology and custom user IDs
+
+The image supports `PUID`, `PGID` (default 1000:1000), and `TZ`. For DSM, use your own numeric NAS user/group IDs, for example:
+
+```yaml
+services:
+  planner:
+    image: ghcr.io/reinder83/satisfactory-planner:latest
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    environment:
+      PUID: "1028"
+      PGID: "100"
+      TZ: Europe/Amsterdam
+    volumes:
+      - ./data:/data
+```
+
+Pull the new image and rebuild the existing DSM project. Keep the same data mapping. Omit `user:` to let startup prepare ownership automatically. Startup briefly runs as root to prepare the dedicated data directory and known planner files, then clears supplementary groups and drops to PUID/PGID before opening the app. Unrelated files and subfolders are not changed. It does not delete or reset progress. Use a dedicated planner folder; symlinks and hard-linked data files are rejected.
+
+Explicit Docker `user:` remains supported when the directory is already writable and PUID/PGID match (or are omitted). Root IDs and invalid numeric values are rejected. Read-only mounts, restrictive NAS ACLs or filesystems that reject ownership changes still require host-side correction; the container reports the startup failure.
+
+If you use `cap_drop: ALL`, use the startup capabilities from the included Compose file: CHOWN, DAC_OVERRIDE, FOWNER, SETUID and SETGID. `no-new-privileges:true` is supported. Timezone controls server-side dates; the browser still formats displayed dates in its own timezone.
+
 ## User accounts
 
 The existing single-user workspace continues to work in **local mode**. Local mode shares the owner workspace with anyone who can reach the server; it is not user isolation. Enable accounts before sharing:

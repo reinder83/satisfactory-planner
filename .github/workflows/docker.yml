@@ -42,12 +42,35 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:18080/api/state | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).checks['docker-smoke']!==true)process.exit(1)})"
           curl --fail --silent -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"settings":{"recipes":"all","pureIngots":true,"nuclear":"recycle"}}' http://127.0.0.1:18080/api/preview | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(!JSON.parse(s).stages['5'].feasible)process.exit(1)})"
+      - name: Test Synology IDs and root-owned bind-mount migration
+        run: |
+          mkdir -p "$RUNNER_TEMP/planner-nas"
+          docker run --rm -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke node --input-type=module -e "import fs from 'node:fs';import {initialState} from './server.mjs';const s=initialState();s.checks['nas-migration']=true;fs.writeFileSync('/data/progress.json',JSON.stringify(s),{mode:0o600});fs.chownSync('/data',0,0);fs.chmodSync('/data',0o700);"
+          docker run -d --name planner-nas --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID --security-opt no-new-privileges:true -e PUID=1028 -e PGID=100 -e TZ=Europe/Amsterdam -p 127.0.0.1:18081:8080 -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/health; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18081/api/state | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).checks['nas-migration']!==true)process.exit(1)})"
+          docker exec planner-nas node -e "const fs=require('fs');const s=fs.readFileSync('/proc/1/status','utf8');if(!/^Uid:\\s+1028\\s+1028/m.test(s)||!/^Gid:\\s+100\\s+100/m.test(s))process.exit(1);const f=fs.statSync('/data/workspace.json');if(f.uid!==1028||f.gid!==100)process.exit(1);"
+          docker stop planner-nas
+          docker rm planner-nas
+          docker run -d --name planner-nas --user 1028:100 -e PUID=1028 -e PGID=100 -p 127.0.0.1:18081:8080 -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/health; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18081/api/state | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).checks['nas-migration']!==true)process.exit(1)})"
+          if docker run --rm -e PUID=invalid planner-smoke; then exit 1; fi
       - name: Container diagnostics
         if: failure()
-        run: docker logs planner-smoke || true
+        run: |
+          docker logs planner-smoke || true
+          docker logs planner-nas || true
       - name: Clean up smoke test
         if: always()
         run: |
+          docker rm -f planner-nas || true
           docker rm -f planner-smoke || true
           docker volume rm planner-smoke-data || true
 
