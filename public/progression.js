@@ -15,6 +15,7 @@ export function progression(plan,state,data,phase){
  for(const n of ['Logistics','Base Building','Field Research','Resource Sink Bonus Program'])add(byName(n));
  if(stage===1){add(byName('HUB Upgrade 6'));add(byName('Obstacle Clearing'));add(byName('Logistics Mk.2'));}
  if(stage>=2)add(byName('Coal Power'));
+ if(stage>=4&&plan.settings.droneFuel&&plan.settings.droneFuel!=='none')add(byName('Aeronautical Engineering'));
  if(rows.some(r=>r.machine==='Fuel Generator'))add(byName('Petroleum Power'));
  if(rows.some(r=>r.machine==='Nuclear Power Plant'))add(byName('Nuclear Power'));
  // Useful early research is reachable through Field Research; its dataset tier is not a HUB gate.
@@ -59,6 +60,10 @@ export function progression(plan,state,data,phase){
  {id:'early-base-reserves',title:'Protect building stock before scaling elevator production',body:'Keep at least one clearly labelled container per construction material, then add a separate elevator branch. If stock falls, pause or reduce elevator feed and refill it. Early splitters do not provide priority by themselves: use separate production or controlled feeds until Smart Splitters are unlocked in the Caterium MAM tree. These starter rates and milestone batches are guidance, not extra outputs included in the profile’s steady-state resource budget.'}
  ]:[];
  if(stage===5&&plan.settings.cellsPerMinute>0)tasks.push({id:'portal-supply',title:'Protect the continuous Singularity Cell supply for portals',body:`Unlock Tier 9 Spatial Energy Regulation. Each Main Portal consumes 2 Singularity Cells/min while maintaining its connection; the Satellite Portal needs no cells. Your dedicated ${fmt(plan.settings.cellsPerMinute)}/min contract supports ${Math.floor(plan.settings.cellsPerMinute/2)} continuously connected Main Portals. The standard manufacturing recipe produces 10/min, enough for five connections. Feed portals before storage or the sink, add a buffer, and reserve their operating and startup electrical demand separately from the production calculation.`});
+ if(stage>=4&&plan.settings.droneFuel&&plan.settings.droneFuel!=='none'){
+ const fuel=Object.entries(plan.stages[stage]?.drone||{}).map(([n,q])=>fmt(q)+' '+n+'/min').join(', ');
+ tasks.push({id:'drone-fuel-'+stage,title:'Unlock Aeronautical Engineering and commission drone fuel',body:`Complete Tier 8 Aeronautical Engineering (see milestone materials), then build and buffer the dedicated ${fuel} supply before launching routes. ${stage===4&&plan.settings.droneFuel==='Packaged Ionized Fuel'?'Use batteries now; upgrade to packaged ionized fuel after its Phase 5 unlocks. ':''}Route this protected supply to a fuel depot before general storage or sinking. Packaging inputs are included in the factory plan. Measure total fleet consumption at the ports, including fuel-delivery flights, and increase the supply target if necessary. Drone-port electricity shares the ${plan.settings.utilityPercent??20}% utilities allowance with trains, miners and pumps; fuel production power is already calculated. Fuel rods belong at the dedicated fuel depot, outside general storage.`});
+ }
  return {baseTasks,powerTasks:tasks,milestoneTasks,hardDrives};
 }
 
