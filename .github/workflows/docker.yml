@@ -1,4 +1,4 @@
-name: Test and publish Docker image
+name: Test and publish Docker and browser editions
 
 on:
   push:
@@ -25,6 +25,12 @@ jobs:
           node-version: '24'
       - run: npm run check
       - run: npm test
+      - name: Test browser edition and save transfers
+        run: |
+          node build-browser.mjs
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node browser-check.mjs
       - name: Build and smoke-test the Docker container
         run: |
           docker build -t planner-smoke .
@@ -73,6 +79,39 @@ jobs:
           docker rm -f planner-nas || true
           docker rm -f planner-smoke || true
           docker volume rm planner-smoke-data || true
+
+  publish-pages:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: node build-browser.mjs
+      - name: Publish static website to public deployment repository
+        env:
+          DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/pages-ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/pages-ssh/key"
+          chmod 600 "$RUNNER_TEMP/pages-ssh/key"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$RUNNER_TEMP/pages-ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/pages-ssh/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/pages-ssh/known_hosts"
+          trap 'rm -f "$RUNNER_TEMP/pages-ssh/key"' EXIT
+          git clone --depth 1 git@github.com:reinder83/reinder83.github.io.git "$RUNNER_TEMP/pages-site"
+          rsync -a --delete dist/satisfactory-planner/ "$RUNNER_TEMP/pages-site/satisfactory-planner/"
+          cp dist/index.html "$RUNNER_TEMP/pages-site/index.html"
+          cd "$RUNNER_TEMP/pages-site"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add satisfactory-planner index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Deploy planner ${GITHUB_SHA:0:7}"
+          git push origin main
 
   publish:
     needs: test

@@ -137,3 +137,14 @@ Fluid, generator and nuclear/waste-processing lines remain precisely balanced an
 For a previously calculated profile, use **Factories → Round up production**. This creates a new profile revision, copies notes/unlocks/progress, and clears completed factory checks only where increased inputs or machine counts need review. The previous profile and all its progress remain untouched. The preserved original handbook is not recalculated.
 
 If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
+# Public browser edition
+
+Use [Satisfactory Planner](https://reinder83.github.io/satisfactory-planner/) without installing a server. The calculator runs in a browser worker and saves profiles, checkmarks, notes and delivery counts in IndexedDB on that browser. No account is required and save contents are not uploaded to GitHub. GitHub serves the site and can receive ordinary web access information.
+
+Browser data is specific to the browser, device and site address. Clearing site data deletes saves; private browsing may discard them when closed. Use **Backups & transfer → Export all saves** regularly. Import adds separate copies rather than overwriting existing saves. The **Keep browser storage** button requests protection from automatic eviction where supported; it is not a backup.
+
+To move an existing Docker plan, update the Docker image, open **Backups → Export all saves**, then import that file on the public site. The transfer includes original handbooks, calculated profiles and progress, but excludes accounts, passwords and sessions. The same full export can be imported into Docker. There is no automatic synchronization between installations.
+
+`node build-browser.mjs` creates an allowlisted static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it. `node browser-check.mjs` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; install Playwright and Chromium first.
+
+Pushes to private-source `main` run server, browser and Docker checks, publish the Docker image, and push only the built website to the public `reinder83.github.io` deployment repository. Its Pages workflow publishes the site. `PAGES_DEPLOY_KEY` is a write deploy key limited to that public repository. Source-side pull requests run checks without deploying. Saved user data is never included in the static build.

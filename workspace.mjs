@@ -1,3 +1,4 @@
+import {validateTransfer,transferFormat} from './public/transfer.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomBytes,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
@@ -44,6 +45,15 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
   }
   if(!u)fail('Sign in to continue.',401);
   if(endpoint==='/api/logout'&&req.method==='POST'){const token=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('planner_session='))?.split('=')[1];if(token)await commit(d=>{d.sessions=d.sessions.filter(s=>s.hash!==digest(token));});return response({ok:true},200,{'Set-Cookie':authCookie('')});}
+  if(endpoint==='/api/export-saves'&&req.method==='GET'){
+   const handbook=JSON.parse(await fs.readFile(new URL('./public/plan.json',import.meta.url),'utf8'));
+   return response({format:transferFormat,version:1,exportedAt:new Date().toISOString(),saves:db.saves.filter(s=>s.userId===u.id).map(s=>({id:s.id,name:s.name,activeProfile:s.activeProfile,profiles:s.profiles.map(p=>({id:p.id,name:p.name,kind:p.kind,plan:p.plan||null,state:p.state,...(p.kind==='original'?{handbook:p.handbook||handbook}:{})}))}))});
+  }
+  if(endpoint==='/api/import-saves'&&req.method==='POST'){
+   const imported=validateTransfer(await body(req));
+   await commit(d=>{if(d.saves.filter(s=>s.userId===u.id).length+imported.saves.length>50)fail('Import would exceed the save limit.');for(const save of imported.saves){const old=save.activeProfile;for(const p of save.profiles){const previous=p.id;p.id=id();if(previous===old)save.activeProfile=p.id;}save.id=id();save.userId=u.id;d.saves.push(save);d.users.find(x=>x.id===u.id).activeSave=save.id;}});
+   return response(summary(db.users.find(x=>x.id===u.id)));
+  }
   if(endpoint==='/api/preview'&&req.method==='POST'){throttle(req);const b=await body(req);return response(calculate(b.settings));}
   if(endpoint==='/api/profiles'&&req.method==='POST'){
    throttle(req);const b=await body(req);const saveName=b.saveId?null:name(b.saveName),profileName=name(b.name);const plan=b.kind==='original'?null:calculate(b.settings);const profileId=id();let saveId=b.saveId||id();
@@ -72,7 +82,7 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
     sv.profiles.push({id:profileId,name:(previous.name+' · whole machines').slice(0,80),kind:'calculated',plan:rounded,state});sv.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=sv.id;
    });return response({saveId:save.id,profileId,reviewCount,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
-  if(endpoint==='/api/context'&&req.method==='GET')return response({save:{id:save.id,name:save.name},profile:{id:profile.id,name:profile.name,kind:profile.kind},state:profile.state,plan:profile.plan||null});
+  if(endpoint==='/api/context'&&req.method==='GET')return response({save:{id:save.id,name:save.name},profile:{id:profile.id,name:profile.name,kind:profile.kind},state:profile.state,plan:profile.plan||null,handbook:profile.handbook});
   if(endpoint==='/api/state'&&req.method==='GET')return response(profile.state);
   if(endpoint==='/api/export'&&req.method==='GET')return response({format:'satisfactory-planner-backup',exportedAt:new Date().toISOString(),saveName:save.name,profileName:profile.name,profileId:profile.id,state:profile.state},200,{'Content-Disposition':'attachment; filename="satisfactory-progress.json"'});
   if(['/api/update','/api/import'].includes(endpoint)&&req.method==='POST'){
