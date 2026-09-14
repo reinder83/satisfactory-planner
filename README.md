@@ -1,5 +1,7 @@
 # Satisfactory Planner
 
+For coding-assistant handoff, start with [AGENTS.md](AGENTS.md). Interface redesign guidance lives in [public/AGENTS.md](public/AGENTS.md), and [CLAUDE.md](CLAUDE.md) points Claude to the same shared instructions.
+
 A self-hosted Satisfactory planner with named saves, settings-first profile creation, calculated production targets, chronological checklists, storage maps and optional user accounts.
 
 ## Your existing plan is preserved
