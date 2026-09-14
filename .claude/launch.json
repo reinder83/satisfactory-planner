@@ -2,14 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "planner-isolated",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": [
-        "-NoProfile",
-        "-Command",
-        "$env:DATA_DIR = Join-Path $env:TEMP 'planner-icon-check'; $env:HOST = '127.0.0.1'; $env:PORT = '8091'; node server.mjs"
-      ],
-      "port": 8091
+      "name": "planner-preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set DATA_DIR=%TEMP%\\planner-preview-data&& set HOST=127.0.0.1&& set PORT=8123&& node server.mjs"],
+      "port": 8123
     }
   ]
 }

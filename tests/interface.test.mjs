@@ -18,6 +18,29 @@ test('original and calculated views render; wizard exposes all settings and safe
 });
 
 
+test('storage layout edits render custom floors, bays and assignments; missing edits render the handbook',()=>{
+ const c=ui();
+ vm.runInContext(`floor='ground'`,c);
+ assert.ok(vm.runInContext('renderStorage()',c).includes('data-slot="A01"'),'legacy state without storageEdits renders the handbook layout');
+ vm.runInContext(`state.storageEdits={floors:[{id:'cf-abcd12',label:'Basement'}],floorNames:{ground:'Main hall'},bays:[{id:'S',name:'Overflow',floor:'cf-abcd12'}],bayNames:{A:'Renamed ingots'},slots:{S01:'Iron Plate<x>'},clearedSlots:['A01']};`,c);
+ const ground=vm.runInContext('renderStorage()',c);
+ assert.match(ground,/Renamed ingots/);
+ assert.match(ground,/Main hall/);
+ assert.match(ground,/Basement/);
+ assert.ok(!ground.includes('data-slot="A01"'),'cleared containers show as reserved');
+ const custom=vm.runInContext(`floor='cf-abcd12';renderStorage()`,c);
+ assert.match(custom,/data-slot="S01"/);
+ assert.match(custom,/Iron Plate&lt;x&gt;/,'custom container names are escaped');
+ const editing=vm.runInContext('layoutEditing=true;renderStorage()',c);
+ assert.match(editing,/data-remove-bay="S"/);
+ assert.match(editing,/data-bay-rename="S"/);
+ assert.match(editing,/add-container/);
+ assert.match(editing,/data-remove-floor="cf-abcd12"/);
+ vm.runInContext(`layoutEditing=false;floor='ground';state.storageEdits=undefined;`,c);
+ assert.ok(vm.runInContext('renderStorage()',c).includes('data-slot="A01"'));
+ assert.equal(vm.runInContext('nextBayLetter()',c),'S');
+});
+
 test('machine instructions separate total, full-speed and adjustable machines',()=>{
  const c=ui();c.row={name:'Rubber',machine:'Refinery',machines:3,equivalent:2.4017,lastClock:40.17,outputs:{Rubber:48.034,'Heavy Oil Residue':48.034},inputs:{'Crude Oil':72.051}};
  const setup=vm.runInContext('machineSetup(row)',c);assert.equal(setup.whole,2);assert.equal(setup.partial,true);assert.match(setup.summary,/3 Refinery total: 2 at 100% \+ 1 adjustable/);assert.equal(setup.easy.clock,45);assert.equal(setup.easy.output.Rubber,9);
