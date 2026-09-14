@@ -47,6 +47,33 @@ test('machine instructions separate total, full-speed and adjustable machines',(
  c.row={...c.row,equivalent:3,lastClock:100,outputs:{Rubber:60},inputs:{'Crude Oil':90}};const full=vm.runInContext('machineSetup(row)',c);assert.equal(full.partial,false);assert.match(full.summary,/3 at 100%/);
 });
 
+test('factory details list where a local item is needed',()=>{
+ const c=ui();
+ vm.runInContext(`openFactory('wire')`,c);
+ const wire=vm.runInContext(`document.querySelector('#detail').innerHTML`,c);
+ assert.match(wire,/Where Wire is needed · Phase 3/);
+ assert.match(wire,/data-factory="cable"/,'consumers link to their own factory page');
+ assert.match(wire,/Storage refill module/);
+ const screws=vm.runInContext(`factoryUsageHtml(plan.factories.find(f=>f.id==='screws'),'3')`,c);
+ assert.match(screws,/Storage refill module/);
+ assert.match(screws,/only refills the protected storage/,'items without factory consumers say so');
+ const plating=vm.runInContext(`factoryUsageHtml(plan.factories.find(f=>f.id==='smart-plating'),'3')`,c);
+ assert.match(plating,/data-factory="modular-engine"/,'non-local factories get the breakdown too');
+ assert.ok(!plating.includes('only refills the protected storage'));
+ const engine=vm.runInContext(`factoryUsageHtml(plan.factories.find(f=>f.id==='modular-engine'),'3')`,c);
+ assert.match(engine,/Space Elevator delivery/);
+ const rod=vm.runInContext(`factoryUsageHtml(plan.factories.find(f=>f.id==='uranium-fuel-rod'),'5')`,c);
+ assert.match(rod,/nuclear power fleet/,'nuclear items point at the power plan instead of claiming storage');
+ assert.ok(!rod.includes('only refills the protected storage'));
+ vm.runInContext(`openFactory('reinforced-iron-plate')`,c);
+ const rip=vm.runInContext(`document.querySelector('#detail').innerHTML`,c);
+ assert.match(rip,/Local: ≈ 47 × Constructor at this site/,'local inputs show on-site machine counts');
+ assert.match(rip,/data-factory="wire"/);
+ vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
+ const calc=vm.runInContext(`(()=>{const x=calcStage();const r=x.rows.find(r=>Object.keys(r.outputs).some(n=>x.rows.some(o=>o.id!==r.id&&o.inputs[n])));return calcUsageHtml(r);})()`,c);
+ assert.match(calc,/Where .+ is needed/);
+ assert.match(calc,/data-calc-factory=/);
+});
 test('storage follows the selected contract, preserves addresses and displays small power in MW',()=>{
  const c=ui();vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Building stock'};floor='ground';`,c);
  const storage=vm.runInContext('renderStorage()',c);
