@@ -1,5 +1,7 @@
-export const initialState=()=>({version:1,revision:0,checks:{},notes:{},deliveries:{},settings:{phase:'1'},customTasks:[],storageEdits:blankEdits()});
+export const initialState=()=>({version:1,revision:0,checks:{},notes:{},deliveries:{},settings:{phase:'1'},customTasks:[],storageEdits:blankEdits(),taskEdits:blankTaskEdits(),factoryGroups:blankGroups()});
 const blankEdits=()=>({floors:[],floorNames:{},bays:[],bayNames:{},slots:{},clearedSlots:[]});
+const blankTaskEdits=()=>({order:{},removed:[],titles:{},bodies:{},links:{}});
+const blankGroups=()=>({groups:[],assignments:{}});
 const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
 const safeKey=k=>typeof k==='string'&&/^[a-zA-Z0-9:_-]{1,160}$/.test(k)&&!['__proto__','constructor','prototype'].includes(k);
 const fail=(message,status=400)=>{const e=new Error(message);e.status=status;throw e;};
@@ -9,6 +11,59 @@ const bayId=k=>typeof k==='string'&&/^[A-Z]{1,2}$/.test(k);
 const slotAddr=k=>typeof k==='string'&&/^[A-Z]{1,2}0[1-8]$/.test(k);
 const label=(v,max=80)=>typeof v==='string'&&v.trim()&&v.trim().length<=max;
 const hasEdits=e=>e.floors.length||e.bays.length||e.clearedSlots.length||Object.keys(e.floorNames).length+Object.keys(e.bayNames).length+Object.keys(e.slots).length>0;
+const phases=['1','2','3','4','5','post'];
+const groupId=k=>typeof k==='string'&&/^fg-[a-z0-9]{4,32}$/.test(k);
+const hasTaskEdits=e=>e.removed.length||Object.keys(e.order).length+Object.keys(e.titles).length+Object.keys(e.bodies).length+Object.keys(e.links).length>0;
+const hasGroups=g=>g.groups.length||Object.keys(g.assignments).length>0;
+function validateTaskEdits(raw){
+ if(raw===undefined)return blankTaskEdits();
+ if(!plain(raw))fail('Invalid build plan edits in backup.');
+ const e=blankTaskEdits();
+ if(raw.order!==undefined){
+  if(!plain(raw.order))fail('Invalid step order.');
+  for(const [ph,ids]of Object.entries(raw.order)){
+   if(!phases.includes(ph)||!Array.isArray(ids)||ids.length>600||ids.some(k=>!safeKey(k))||new Set(ids).size!==ids.length)fail('Invalid step order.');
+   if(ids.length)e.order[ph]=[...ids];
+  }
+ }
+ if(raw.removed!==undefined){
+  if(!Array.isArray(raw.removed)||raw.removed.length>2000||raw.removed.some(k=>!safeKey(k)))fail('Invalid removed steps.');
+  e.removed=[...new Set(raw.removed)];
+ }
+ for(const [kind,max] of [['titles',240],['bodies',6000],['links',160]]){
+  if(raw[kind]===undefined)continue;
+  if(!plain(raw[kind])||Object.keys(raw[kind]).length>2000)fail('Invalid step edits.');
+  for(const [k,v] of Object.entries(raw[kind])){if(!safeKey(k)||(kind==='links'?!safeKey(v):!label(v,max)))fail('Invalid step edit.');e[kind][k]=kind==='links'?v:v.trim();}
+ }
+ return e;
+}
+function validateGroups(raw){
+ if(raw===undefined)return blankGroups();
+ if(!plain(raw))fail('Invalid factory groups in backup.');
+ const g=blankGroups();
+ if(raw.groups!==undefined){
+  if(!Array.isArray(raw.groups)||raw.groups.length>60)fail('Invalid factory groups.');
+  const seen=new Set();
+  g.groups=raw.groups.map(x=>{if(!plain(x)||!groupId(x.id)||seen.has(x.id)||!label(x.name))fail('Invalid factory group.');seen.add(x.id);return {id:x.id,name:x.name.trim()};});
+ }
+ if(raw.assignments!==undefined){
+  if(!plain(raw.assignments)||Object.keys(raw.assignments).length>1000)fail('Invalid factory group assignments.');
+  const known=new Set(g.groups.map(x=>x.id));
+  for(const [k,list] of Object.entries(raw.assignments)){
+   if(!safeKey(k)||!Array.isArray(list)||!list.length||list.length>12)fail('Invalid factory group assignment.');
+   const used=new Set();
+   g.assignments[k]=list.map(m=>{if(!plain(m)||!known.has(m.group)||used.has(m.group))fail('Invalid factory group assignment.');used.add(m.group);const rate=m.rate??null;if(rate!==null&&(typeof rate!=='number'||!Number.isFinite(rate)||rate<=0||rate>10000000))fail('Invalid group production split.');return {group:m.group,rate};});
+  }
+ }
+ return g;
+}
+// Sharing a profile hands over the plan-shaped content (layout, groups, step
+// edits, personal tasks) while the recipient starts with fresh progress.
+export function shareState(s){
+ const clean=validateState(structuredClone(s));
+ clean.checks={};clean.notes={};clean.deliveries={};clean.revision=0;
+ return validateState(clean);
+}
 function validateEdits(raw){
  if(raw===undefined)return blankEdits();
  if(!plain(raw))fail('Invalid storage layout in backup.');
@@ -35,7 +90,7 @@ function validateEdits(raw){
  return e;
 }
 export function validateState(s){
- if(!plain(s)||![1,2].includes(s.version))fail(s?.version>2?'This backup was made by a newer planner version. Update the app to import it.':'Choose a valid version 1 planner backup.');
+ if(!plain(s)||![1,2,3].includes(s.version))fail(s?.version>3?'This backup was made by a newer planner version. Update the app to import it.':'Choose a valid version 1 planner backup.');
  const clean=initialState();
  for(const kind of ['checks','notes','deliveries']){
   if(!plain(s[kind])||Object.keys(s[kind]).length>20000)fail('Invalid '+kind+' in backup.');
@@ -54,10 +109,13 @@ export function validateState(s){
   seen.add(t.id);return {id:t.id,title:t.title.trim(),phase:t.phase};
  });
  clean.storageEdits=validateEdits(s.storageEdits);
+ clean.taskEdits=validateTaskEdits(s.taskEdits);
+ clean.factoryGroups=validateGroups(s.factoryGroups);
  // Version 1 states never carry layout edits, so older planners keep importing
- // untouched saves; a state with edits is marked 2 and old versions refuse it
- // instead of silently dropping the layout.
- clean.version=hasEdits(clean.storageEdits)?2:1;
+ // untouched saves; a state with layout edits is marked 2, and one with build
+ // plan edits or factory groups is marked 3, so old versions refuse it instead
+ // of silently dropping those edits.
+ clean.version=hasTaskEdits(clean.taskEdits)||hasGroups(clean.factoryGroups)?3:hasEdits(clean.storageEdits)?2:1;
  clean.revision=Number.isSafeInteger(s.revision)&&s.revision>=0?s.revision:0;
  return clean;
 }
@@ -73,10 +131,71 @@ export function mutate(s,op){
   for(const key of op.keys)s.checks[key]=op.value;
  }else if(op.type==='phase'){s.settings.phase=op.value;}
  else if(op.type==='addTask'){s.customTasks.push({id:op.id,title:op.title,phase:op.phase});}
- else if(op.type==='removeTask'){s.customTasks=s.customTasks.filter(t=>t.id!==op.id);delete s.checks[op.id];}
+ else if(op.type==='removeTask'){
+  s.customTasks=s.customTasks.filter(t=>t.id!==op.id);delete s.checks[op.id];
+  const e=s.taskEdits=validateTaskEdits(s.taskEdits);
+  delete e.titles[op.id];delete e.bodies[op.id];delete e.links[op.id];
+  e.removed=e.removed.filter(k=>k!==op.id);
+  for(const ph of Object.keys(e.order))e.order[ph]=e.order[ph].filter(k=>k!==op.id);
+ }
+ else if(op.type.startsWith('task')){mutateTasks(s,op);}
+ else if(op.type.startsWith('factory')){mutateGroups(s,op);}
  else if(op.type.startsWith('storage')){mutateLayout(s,op);}
  else fail('Unknown update.');
  return validateState(s);
+}
+function mutateTasks(s,op){
+ const e=s.taskEdits=validateTaskEdits(s.taskEdits);
+ if(op.type==='taskEdit'){
+  if(!safeKey(op.id))fail('Invalid step.');
+  for(const [kind,value,max] of [['titles',op.title,240],['bodies',op.body,6000]]){
+   if(value===undefined)continue;
+   if(typeof value!=='string'||value.length>max)fail('Invalid step text.');
+   if(value.trim())e[kind][op.id]=value.trim();else delete e[kind][op.id];
+  }
+  if(op.link!==undefined){
+   if(op.link===''||op.link===null)delete e.links[op.id];
+   else{if(!safeKey(op.link))fail('Invalid linked factory.');e.links[op.id]=op.link;}
+  }
+ }else if(op.type==='taskRemove'){
+  if(!safeKey(op.id))fail('Invalid step.');
+  if(!e.removed.includes(op.id))e.removed.push(op.id);
+ }else if(op.type==='taskRestore'){
+  if(!safeKey(op.id))fail('Invalid step.');
+  e.removed=e.removed.filter(k=>k!==op.id);
+ }else if(op.type==='taskOrder'){
+  if(!phases.includes(op.phase)||!Array.isArray(op.ids)||op.ids.length>600||op.ids.some(k=>!safeKey(k))||new Set(op.ids).size!==op.ids.length)fail('Invalid step order.');
+  if(op.ids.length)e.order[op.phase]=[...op.ids];else delete e.order[op.phase];
+ }else fail('Unknown update.');
+}
+function mutateGroups(s,op){
+ const g=s.factoryGroups=validateGroups(s.factoryGroups);
+ if(op.type==='factoryGroupAdd'){
+  if(!groupId(op.id)||g.groups.some(x=>x.id===op.id)||!label(op.name))fail('Invalid factory group.');
+  if(g.groups.length>=60)fail('You can keep up to 60 factory groups.');
+  g.groups.push({id:op.id,name:op.name.trim()});
+ }else if(op.type==='factoryGroupRename'){
+  if(!g.groups.some(x=>x.id===op.id))fail('Unknown factory group.');
+  if(!label(op.name))fail('Invalid group name.');
+  g.groups.find(x=>x.id===op.id).name=op.name.trim();
+ }else if(op.type==='factoryGroupRemove'){
+  if(!g.groups.some(x=>x.id===op.id))fail('Unknown factory group.');
+  g.groups=g.groups.filter(x=>x.id!==op.id);
+  for(const [k,list] of Object.entries(g.assignments)){
+   const kept=list.filter(m=>m.group!==op.id);
+   if(kept.length)g.assignments[k]=kept;else delete g.assignments[k];
+  }
+ }else if(op.type==='factoryAssign'){
+  if(!safeKey(op.key)||!Array.isArray(op.groups)||op.groups.length>12)fail('Invalid factory group assignment.');
+  const known=new Set(g.groups.map(x=>x.id)),used=new Set();
+  const list=op.groups.map(m=>{
+   if(!plain(m)||!known.has(m.group)||used.has(m.group))fail('Invalid factory group assignment.');
+   used.add(m.group);const rate=m.rate??null;
+   if(rate!==null&&(typeof rate!=='number'||!Number.isFinite(rate)||rate<=0||rate>10000000))fail('Enter a production rate above 0.');
+   return {group:m.group,rate};
+  });
+  if(list.length)g.assignments[op.key]=list;else delete g.assignments[op.key];
+ }else fail('Unknown update.');
 }
 function mutateLayout(s,op){
  const e=s.storageEdits=validateEdits(s.storageEdits===undefined?undefined:s.storageEdits);
