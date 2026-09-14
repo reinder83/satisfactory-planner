@@ -15,6 +15,7 @@ Use the current vanilla HTML/CSS/JS structure unless the requested scope warrant
 - View chronological guidance for Phases 1–5 and post-game, check tasks, record deliveries, save notes and manage custom tasks.
 - Find/filter factories; inspect machine counts, rates, inputs, surplus, expansion and unlock guidance. Preserve the difference between original and calculated plans.
 - View the selected storage contract, labeled container locations, floors and collectables/workshop guidance. Existing storage addresses matter to a physically built game layout.
+- Preserve direct container Done checkboxes and room completion. Both write the same four existing `slot-<address>-<step>` keys; room completion skips unselected/reserved positions. Successful dialog note saves close only that dialog, and blank note saves remove the note key. Item icons are bundled in `icons/` with source attribution.
 - Review resource budgets, feasibility, power headroom, transport allowance and fuel requirements.
 - Export/import full saves in both editions. Preserve progress-only backups where currently supported. Import confirmation must explain whether it adds copies or replaces progress.
 - In Docker, retain account setup/login/logout and user isolation. In browser mode, show local-storage and backup information instead of server/account claims.

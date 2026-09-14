@@ -22,6 +22,8 @@ Open **Saves & profiles → Create a save**, or **Try another profile** on an ex
 
 The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs surplus to storage and sinks. Its optional storage template includes 132 addresses, collectables bays Q/R and the workshop underneath. New saves have no pre-completed steps.
 
+On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Successful note saves close the details dialog; saving a blank note deletes the note. Existing container addresses and progress keys are unchanged.
+
 ## Run with Docker
 
 The private image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. Clone this repository on your Docker host, enter the directory, then authenticate with a GitHub classic personal access token carrying `read:packages`:

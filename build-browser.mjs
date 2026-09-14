@@ -10,6 +10,7 @@ await fs.mkdir(out,{recursive:true});
 // Explicit allowlist: server data, credentials and private handbook targets never enter the public build.
 const files=['app.js','style.css','index.html','favicon.svg','preferences.js','progression.js','progression.json','state.js','transfer.js','browser-api.js','browser-store.js'];
 for(const file of files)await fs.copyFile(path.join(root,'public',file),path.join(out,file));
+await fs.cp(path.join(root,'public/icons'),path.join(out,'icons'),{recursive:true});
 let html=await fs.readFile(path.join(out,'index.html'),'utf8');
 html=html.replaceAll('href="/','href="./').replaceAll('src="/','src="./').replace('<script type="module"','<script src="./browser-mode.js"></script><script type="module"');
 await fs.writeFile(path.join(out,'index.html'),html);

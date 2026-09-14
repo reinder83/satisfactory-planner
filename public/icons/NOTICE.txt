@@ -1,0 +1,8 @@
+Satisfactory item artwork belongs to Coffee Stain Studios.
+This is an unofficial fan-made planner and is not affiliated with Coffee Stain Studios.
+
+Icons were obtained from the Official Satisfactory Wiki:
+https://satisfactory.wiki.gg/wiki/Category:Item_icons
+
+See sources.json in this directory for each icon's original image URL and wiki file-description page.
+The artwork is not covered by the HiGHS solver's MIT license.

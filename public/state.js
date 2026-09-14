@@ -29,7 +29,11 @@ export function mutate(s,op){
  if(op.type==='check'||op.type==='note'||op.type==='delivery'){
   if(!safeKey(op.key))fail('Invalid record address.');
   const kind={check:'checks',note:'notes',delivery:'deliveries'}[op.type];
-  s[kind][op.key]=op.value;
+  if(op.type==='note'&&typeof op.value==='string'&&!op.value.trim())delete s.notes[op.key];
+  else s[kind][op.key]=op.value;
+ }else if(op.type==='checks'){
+  if(!Array.isArray(op.keys)||!op.keys.length||op.keys.length>1000||op.keys.some(k=>!safeKey(k))||typeof op.value!=='boolean')fail('Invalid checklist update.');
+  for(const key of op.keys)s.checks[key]=op.value;
  }else if(op.type==='phase'){s.settings.phase=op.value;}
  else if(op.type==='addTask'){s.customTasks.push({id:op.id,title:op.title,phase:op.phase});}
  else if(op.type==='removeTask'){s.customTasks=s.customTasks.filter(t=>t.id!==op.id);delete s.checks[op.id];}

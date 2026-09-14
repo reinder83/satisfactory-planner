@@ -1,0 +1,662 @@
+{
+  "Concrete": {
+    "file": "concrete.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Concrete.png/64px-Concrete.png?f56994",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Concrete.png"
+  },
+  "Iron Plate": {
+    "file": "iron-plate.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iron_Plate.png/64px-Iron_Plate.png?93d6ef",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iron_Plate.png"
+  },
+  "Iron Rod": {
+    "file": "iron-rod.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iron_Rod.png/64px-Iron_Rod.png?762556",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iron_Rod.png"
+  },
+  "Screws": {
+    "file": "screws.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Screws.png/64px-Screws.png?c69a34",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Screws.png"
+  },
+  "Reinforced Iron Plate": {
+    "file": "reinforced-iron-plate.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Reinforced_Iron_Plate.png/64px-Reinforced_Iron_Plate.png?9d05d4",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Reinforced_Iron_Plate.png"
+  },
+  "Steel Beam": {
+    "file": "steel-beam.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Steel_Beam.png/64px-Steel_Beam.png?422f94",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Steel_Beam.png"
+  },
+  "Steel Pipe": {
+    "file": "steel-pipe.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Steel_Pipe.png/64px-Steel_Pipe.png?c79680",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Steel_Pipe.png"
+  },
+  "Encased Industrial Beam": {
+    "file": "encased-industrial-beam.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Encased_Industrial_Beam.png/64px-Encased_Industrial_Beam.png?61a80d",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Encased_Industrial_Beam.png"
+  },
+  "Modular Frame": {
+    "file": "modular-frame.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Modular_Frame.png/64px-Modular_Frame.png?e657af",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Modular_Frame.png"
+  },
+  "Heavy Modular Frame": {
+    "file": "heavy-modular-frame.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Heavy_Modular_Frame.png/64px-Heavy_Modular_Frame.png?3faddb",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Heavy_Modular_Frame.png"
+  },
+  "Fused Modular Frame": {
+    "file": "fused-modular-frame.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Fused_Modular_Frame.png/64px-Fused_Modular_Frame.png?23cae9",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Fused_Modular_Frame.png"
+  },
+  "Pressure Conversion Cube": {
+    "file": "pressure-conversion-cube.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Pressure_Conversion_Cube.png/64px-Pressure_Conversion_Cube.png?cc788e",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Pressure_Conversion_Cube.png"
+  },
+  "Rotor": {
+    "file": "rotor.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Rotor.png/64px-Rotor.png?2616b2",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Rotor.png"
+  },
+  "Stator": {
+    "file": "stator.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Stator.png/64px-Stator.png?69b63f",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Stator.png"
+  },
+  "Motor": {
+    "file": "motor.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Motor.png/64px-Motor.png?345ae9",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Motor.png"
+  },
+  "Turbo Motor": {
+    "file": "turbo-motor.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Turbo_Motor.png/64px-Turbo_Motor.png?d2275a",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Turbo_Motor.png"
+  },
+  "Wire": {
+    "file": "wire.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Wire.png/64px-Wire.png?7a6df2",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Wire.png"
+  },
+  "Cable": {
+    "file": "cable.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Cable.png/64px-Cable.png?c87492",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Cable.png"
+  },
+  "Copper Sheet": {
+    "file": "copper-sheet.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Copper_Sheet.png/64px-Copper_Sheet.png?7eb920",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Copper_Sheet.png"
+  },
+  "Quickwire": {
+    "file": "quickwire.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Quickwire.png/64px-Quickwire.png?92bd94",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Quickwire.png"
+  },
+  "Circuit Board": {
+    "file": "circuit-board.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Circuit_Board.png/64px-Circuit_Board.png?1b77f5",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Circuit_Board.png"
+  },
+  "AI Limiter": {
+    "file": "ai-limiter.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/AI_Limiter.png/64px-AI_Limiter.png?a51ac6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:AI_Limiter.png"
+  },
+  "High-Speed Connector": {
+    "file": "high-speed-connector.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/High-Speed_Connector.png/64px-High-Speed_Connector.png?7a36b1",
+    "source": "https://satisfactory.wiki.gg/wiki/File:High-Speed_Connector.png"
+  },
+  "Computer": {
+    "file": "computer.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Computer.png/64px-Computer.png?823b42",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Computer.png"
+  },
+  "Supercomputer": {
+    "file": "supercomputer.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Supercomputer.png/64px-Supercomputer.png?3cd6c8",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Supercomputer.png"
+  },
+  "Electromagnetic Control Rod": {
+    "file": "electromagnetic-control-rod.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Electromagnetic_Control_Rod.png/64px-Electromagnetic_Control_Rod.png?d058e2",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Electromagnetic_Control_Rod.png"
+  },
+  "Crystal Oscillator": {
+    "file": "crystal-oscillator.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Crystal_Oscillator.png/64px-Crystal_Oscillator.png?d0e57d",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Crystal_Oscillator.png"
+  },
+  "Radio Control Unit": {
+    "file": "radio-control-unit.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Radio_Control_Unit.png/64px-Radio_Control_Unit.png?2cf497",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Radio_Control_Unit.png"
+  },
+  "Heat Sink": {
+    "file": "heat-sink.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Heat_Sink.png/64px-Heat_Sink.png?cd283e",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Heat_Sink.png"
+  },
+  "Cooling System": {
+    "file": "cooling-system.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Cooling_System.png/64px-Cooling_System.png?311266",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Cooling_System.png"
+  },
+  "Battery": {
+    "file": "battery.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Battery.png/64px-Battery.png?8ab8ca",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Battery.png"
+  },
+  "Power Shard": {
+    "file": "power-shard.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Power_Shard.png/64px-Power_Shard.png?fbe8b6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Power_Shard.png"
+  },
+  "Plastic": {
+    "file": "plastic.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Plastic.png/64px-Plastic.png?c8d276",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Plastic.png"
+  },
+  "Rubber": {
+    "file": "rubber.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Rubber.png/64px-Rubber.png?69f8e2",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Rubber.png"
+  },
+  "Fabric": {
+    "file": "fabric.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Fabric.png/64px-Fabric.png?5d3c94",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Fabric.png"
+  },
+  "Quartz Crystal": {
+    "file": "quartz-crystal.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Quartz_Crystal.png/64px-Quartz_Crystal.png?fccd00",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Quartz_Crystal.png"
+  },
+  "Silica": {
+    "file": "silica.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Silica.png/64px-Silica.png?7f794a",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Silica.png"
+  },
+  "Alclad Aluminum Sheet": {
+    "file": "alclad-aluminum-sheet.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Alclad_Aluminum_Sheet.png/64px-Alclad_Aluminum_Sheet.png?45856b",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Alclad_Aluminum_Sheet.png"
+  },
+  "Aluminum Casing": {
+    "file": "aluminum-casing.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Aluminum_Casing.png/64px-Aluminum_Casing.png?cea75a",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Aluminum_Casing.png"
+  },
+  "Portable Miner": {
+    "file": "portable-miner.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Portable_Miner.png/64px-Portable_Miner.png?ba064f",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Portable_Miner.png"
+  },
+  "Iron Ingot": {
+    "file": "iron-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iron_Ingot.png/64px-Iron_Ingot.png?a70603",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iron_Ingot.png"
+  },
+  "Copper Ingot": {
+    "file": "copper-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Copper_Ingot.png/64px-Copper_Ingot.png?e359bc",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Copper_Ingot.png"
+  },
+  "Steel Ingot": {
+    "file": "steel-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Steel_Ingot.png/64px-Steel_Ingot.png?c9f805",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Steel_Ingot.png"
+  },
+  "Caterium Ingot": {
+    "file": "caterium-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Caterium_Ingot.png/64px-Caterium_Ingot.png?91cdc0",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Caterium_Ingot.png"
+  },
+  "Aluminum Ingot": {
+    "file": "aluminum-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Aluminum_Ingot.png/64px-Aluminum_Ingot.png?223f1f",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Aluminum_Ingot.png"
+  },
+  "Aluminum Scrap": {
+    "file": "aluminum-scrap.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Aluminum_Scrap.png/64px-Aluminum_Scrap.png?feaec6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Aluminum_Scrap.png"
+  },
+  "Copper Powder": {
+    "file": "copper-powder.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Copper_Powder.png/64px-Copper_Powder.png?7104bd",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Copper_Powder.png"
+  },
+  "Ficsite Ingot": {
+    "file": "ficsite-ingot.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Ficsite_Ingot.png/64px-Ficsite_Ingot.png?282052",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Ficsite_Ingot.png"
+  },
+  "Iron Rebar": {
+    "file": "iron-rebar.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iron_Rebar.png/64px-Iron_Rebar.png?902ed6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iron_Rebar.png"
+  },
+  "Stun Rebar": {
+    "file": "stun-rebar.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Stun_Rebar.png/64px-Stun_Rebar.png?523858",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Stun_Rebar.png"
+  },
+  "Shatter Rebar": {
+    "file": "shatter-rebar.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Shatter_Rebar.png/64px-Shatter_Rebar.png?78747c",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Shatter_Rebar.png"
+  },
+  "Explosive Rebar": {
+    "file": "explosive-rebar.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Explosive_Rebar.png/64px-Explosive_Rebar.png?3564df",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Explosive_Rebar.png"
+  },
+  "Rifle Ammo": {
+    "file": "rifle-ammo.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Rifle_Ammo.png/64px-Rifle_Ammo.png?c719ef",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Rifle_Ammo.png"
+  },
+  "Homing Rifle Ammo": {
+    "file": "homing-rifle-ammo.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Homing_Rifle_Ammo.png/64px-Homing_Rifle_Ammo.png?e0d193",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Homing_Rifle_Ammo.png"
+  },
+  "Turbo Rifle Ammo": {
+    "file": "turbo-rifle-ammo.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Turbo_Rifle_Ammo.png/64px-Turbo_Rifle_Ammo.png?b15f75",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Turbo_Rifle_Ammo.png"
+  },
+  "Medicinal Inhaler": {
+    "file": "medicinal-inhaler.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Medicinal_Inhaler.png/64px-Medicinal_Inhaler.png?5ee407",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Medicinal_Inhaler.png"
+  },
+  "Iodine-Infused Filter": {
+    "file": "iodine-infused-filter.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iodine-Infused_Filter.png/64px-Iodine-Infused_Filter.png?d6c9bd",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iodine-Infused_Filter.png"
+  },
+  "Gas Filter": {
+    "file": "gas-filter.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Gas_Filter.png/64px-Gas_Filter.png?cc1cbe",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Gas_Filter.png"
+  },
+  "Gas Nobelisk": {
+    "file": "gas-nobelisk.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Gas_Nobelisk.png/64px-Gas_Nobelisk.png?8130d1",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Gas_Nobelisk.png"
+  },
+  "Pulse Nobelisk": {
+    "file": "pulse-nobelisk.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Pulse_Nobelisk.png/64px-Pulse_Nobelisk.png?88e4e8",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Pulse_Nobelisk.png"
+  },
+  "Cluster Nobelisk": {
+    "file": "cluster-nobelisk.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Cluster_Nobelisk.png/64px-Cluster_Nobelisk.png?8e7d65",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Cluster_Nobelisk.png"
+  },
+  "Black Powder": {
+    "file": "black-powder.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Black_Powder.png/64px-Black_Powder.png?e7d138",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Black_Powder.png"
+  },
+  "Smokeless Powder": {
+    "file": "smokeless-powder.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Smokeless_Powder.png/64px-Smokeless_Powder.png?acada5",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Smokeless_Powder.png"
+  },
+  "Nobelisk": {
+    "file": "nobelisk.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Nobelisk.png/64px-Nobelisk.png?b2a57f",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Nobelisk.png"
+  },
+  "SAM": {
+    "file": "sam.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/SAM.png/64px-SAM.png?62cd09",
+    "source": "https://satisfactory.wiki.gg/wiki/File:SAM.png"
+  },
+  "Reanimated SAM": {
+    "file": "reanimated-sam.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Reanimated_SAM.png/64px-Reanimated_SAM.png?61fe84",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Reanimated_SAM.png"
+  },
+  "SAM Fluctuator": {
+    "file": "sam-fluctuator.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Unknown_item_FP.png/64px-Unknown_item_FP.png?cf3e39",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Unknown_item_FP.png"
+  },
+  "Ficsite Trigon": {
+    "file": "ficsite-trigon.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Ficsite_Trigon.png/64px-Ficsite_Trigon.png?27883e",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Ficsite_Trigon.png"
+  },
+  "Diamonds": {
+    "file": "diamonds.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Diamonds.png/64px-Diamonds.png?1e71b5",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Diamonds.png"
+  },
+  "Time Crystal": {
+    "file": "time-crystal.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Time_Crystal.png/64px-Time_Crystal.png?77b7e0",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Time_Crystal.png"
+  },
+  "Dark Matter Crystal": {
+    "file": "dark-matter-crystal.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Dark_Matter_Crystal.png/64px-Dark_Matter_Crystal.png?f308d8",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Dark_Matter_Crystal.png"
+  },
+  "Superposition Oscillator": {
+    "file": "superposition-oscillator.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Superposition_Oscillator.png/64px-Superposition_Oscillator.png?10e747",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Superposition_Oscillator.png"
+  },
+  "Neural-Quantum Processor": {
+    "file": "neural-quantum-processor.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Neural-Quantum_Processor.png/64px-Neural-Quantum_Processor.png?2abda7",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Neural-Quantum_Processor.png"
+  },
+  "Alien Power Matrix": {
+    "file": "alien-power-matrix.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Alien_Power_Matrix.png/64px-Alien_Power_Matrix.png?24c417",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Alien_Power_Matrix.png"
+  },
+  "Singularity Cell": {
+    "file": "singularity-cell.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Singularity_Cell.png/64px-Singularity_Cell.png?6924db",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Singularity_Cell.png"
+  },
+  "Smart Plating": {
+    "file": "smart-plating.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Smart_Plating.png/64px-Smart_Plating.png?6026cb",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Smart_Plating.png"
+  },
+  "Versatile Framework": {
+    "file": "versatile-framework.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Versatile_Framework.png/64px-Versatile_Framework.png?260043",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Versatile_Framework.png"
+  },
+  "Automated Wiring": {
+    "file": "automated-wiring.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Automated_Wiring.png/64px-Automated_Wiring.png?f26170",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Automated_Wiring.png"
+  },
+  "Modular Engine": {
+    "file": "modular-engine.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Modular_Engine.png/64px-Modular_Engine.png?521332",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Modular_Engine.png"
+  },
+  "Adaptive Control Unit": {
+    "file": "adaptive-control-unit.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Adaptive_Control_Unit.png/64px-Adaptive_Control_Unit.png?69ee88",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Adaptive_Control_Unit.png"
+  },
+  "Assembly Director System": {
+    "file": "assembly-director-system.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Assembly_Director_System.png/64px-Assembly_Director_System.png?7be1c6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Assembly_Director_System.png"
+  },
+  "Magnetic Field Generator": {
+    "file": "magnetic-field-generator.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Magnetic_Field_Generator.png/64px-Magnetic_Field_Generator.png?730d42",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Magnetic_Field_Generator.png"
+  },
+  "Thermal Propulsion Rocket": {
+    "file": "thermal-propulsion-rocket.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Thermal_Propulsion_Rocket.png/64px-Thermal_Propulsion_Rocket.png?499c4c",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Thermal_Propulsion_Rocket.png"
+  },
+  "Nuclear Pasta": {
+    "file": "nuclear-pasta.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Nuclear_Pasta.png/64px-Nuclear_Pasta.png?3e99a2",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Nuclear_Pasta.png"
+  },
+  "Biochemical Sculptor": {
+    "file": "biochemical-sculptor.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Biochemical_Sculptor.png/64px-Biochemical_Sculptor.png?7483bc",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Biochemical_Sculptor.png"
+  },
+  "AI Expansion Server": {
+    "file": "ai-expansion-server.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/AI_Expansion_Server.png/64px-AI_Expansion_Server.png?4ab21c",
+    "source": "https://satisfactory.wiki.gg/wiki/File:AI_Expansion_Server.png"
+  },
+  "Ballistic Warp Drive": {
+    "file": "ballistic-warp-drive.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Ballistic_Warp_Drive.png/64px-Ballistic_Warp_Drive.png?e21b91",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Ballistic_Warp_Drive.png"
+  },
+  "Empty Canister": {
+    "file": "empty-canister.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Empty_Canister.png/64px-Empty_Canister.png?9f80b4",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Empty_Canister.png"
+  },
+  "Empty Fluid Tank": {
+    "file": "empty-fluid-tank.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Empty_Fluid_Tank.png/64px-Empty_Fluid_Tank.png?6c5529",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Empty_Fluid_Tank.png"
+  },
+  "Packaged Water": {
+    "file": "packaged-water.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Water.png/64px-Packaged_Water.png?a2cf8d",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Water.png"
+  },
+  "Packaged Oil": {
+    "file": "packaged-oil.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Oil.png/64px-Packaged_Oil.png?1713a9",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Oil.png"
+  },
+  "Packaged Heavy Oil Residue": {
+    "file": "packaged-heavy-oil-residue.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Heavy_Oil_Residue.png/64px-Packaged_Heavy_Oil_Residue.png?4a9dda",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Heavy_Oil_Residue.png"
+  },
+  "Packaged Alumina Solution": {
+    "file": "packaged-alumina-solution.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Alumina_Solution.png/64px-Packaged_Alumina_Solution.png?3319ee",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Alumina_Solution.png"
+  },
+  "Packaged Sulfuric Acid": {
+    "file": "packaged-sulfuric-acid.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Sulfuric_Acid.png/64px-Packaged_Sulfuric_Acid.png?91f48d",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Sulfuric_Acid.png"
+  },
+  "Packaged Nitric Acid": {
+    "file": "packaged-nitric-acid.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Nitric_Acid.png/64px-Packaged_Nitric_Acid.png?cd2744",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Nitric_Acid.png"
+  },
+  "Packaged Nitrogen Gas": {
+    "file": "packaged-nitrogen-gas.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Nitrogen_Gas.png/64px-Packaged_Nitrogen_Gas.png?482cc6",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Nitrogen_Gas.png"
+  },
+  "Packaged Fuel": {
+    "file": "packaged-fuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Fuel.png/64px-Packaged_Fuel.png?1f8352",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Fuel.png"
+  },
+  "Packaged Liquid Biofuel": {
+    "file": "packaged-liquid-biofuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Liquid_Biofuel.png/64px-Packaged_Liquid_Biofuel.png?3730e9",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Liquid_Biofuel.png"
+  },
+  "Packaged Turbofuel": {
+    "file": "packaged-turbofuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Turbofuel.png/64px-Packaged_Turbofuel.png?8bdd09",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Turbofuel.png"
+  },
+  "Packaged Rocket Fuel": {
+    "file": "packaged-rocket-fuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Rocket_Fuel.png/64px-Packaged_Rocket_Fuel.png?d3e993",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Rocket_Fuel.png"
+  },
+  "Packaged Ionized Fuel": {
+    "file": "packaged-ionized-fuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Packaged_Ionized_Fuel.png/64px-Packaged_Ionized_Fuel.png?71332a",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Packaged_Ionized_Fuel.png"
+  },
+  "Iron Ore": {
+    "file": "iron-ore.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Iron_Ore.png/64px-Iron_Ore.png?ce3a2d",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Iron_Ore.png"
+  },
+  "Copper Ore": {
+    "file": "copper-ore.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Copper_Ore.png/64px-Copper_Ore.png?6bbb80",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Copper_Ore.png"
+  },
+  "Caterium Ore": {
+    "file": "caterium-ore.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Caterium_Ore.png/64px-Caterium_Ore.png?4911c7",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Caterium_Ore.png"
+  },
+  "Limestone": {
+    "file": "limestone.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Limestone.png/64px-Limestone.png?d9cd95",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Limestone.png"
+  },
+  "Coal": {
+    "file": "coal.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Coal.png/64px-Coal.png?b318d1",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Coal.png"
+  },
+  "Raw Quartz": {
+    "file": "raw-quartz.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Raw_Quartz.png/64px-Raw_Quartz.png?686f8e",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Raw_Quartz.png"
+  },
+  "Sulfur": {
+    "file": "sulfur.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Sulfur.png/64px-Sulfur.png?a583d1",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Sulfur.png"
+  },
+  "Bauxite": {
+    "file": "bauxite.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Bauxite.png/64px-Bauxite.png?234701",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Bauxite.png"
+  },
+  "Polymer Resin": {
+    "file": "polymer-resin.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Polymer_Resin.png/64px-Polymer_Resin.png?a2f719",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Polymer_Resin.png"
+  },
+  "Petroleum Coke": {
+    "file": "petroleum-coke.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Petroleum_Coke.png/64px-Petroleum_Coke.png?c7b3af",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Petroleum_Coke.png"
+  },
+  "Compacted Coal": {
+    "file": "compacted-coal.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Compacted_Coal.png/64px-Compacted_Coal.png?cce317",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Compacted_Coal.png"
+  },
+  "Biomass": {
+    "file": "biomass.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Biomass.png/64px-Biomass.png?42a2d5",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Biomass.png"
+  },
+  "Solid Biofuel": {
+    "file": "solid-biofuel.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Solid_Biofuel.png/64px-Solid_Biofuel.png?572297",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Solid_Biofuel.png"
+  },
+  "Alien Protein": {
+    "file": "alien-protein.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Alien_Protein.png/64px-Alien_Protein.png?1798cc",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Alien_Protein.png"
+  },
+  "Alien DNA Capsule": {
+    "file": "alien-dna-capsule.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Alien_DNA_Capsule.png/64px-Alien_DNA_Capsule.png?f16f36",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Alien_DNA_Capsule.png"
+  },
+  "Leaves": {
+    "file": "leaves.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Leaves.png/64px-Leaves.png?cec6fe",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Leaves.png"
+  },
+  "Wood": {
+    "file": "wood.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Wood.png/64px-Wood.png?729069",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Wood.png"
+  },
+  "Mycelia": {
+    "file": "mycelia.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Mycelia.png/64px-Mycelia.png?d5eacc",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Mycelia.png"
+  },
+  "Hog Remains": {
+    "file": "hog-remains.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Hog_Remains.png/64px-Hog_Remains.png?92ca22",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Hog_Remains.png"
+  },
+  "Spitter Remains": {
+    "file": "spitter-remains.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Plasma_Spitter_Remains.png/64px-Plasma_Spitter_Remains.png?8e0f4f",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Plasma_Spitter_Remains.png"
+  },
+  "Stinger Remains": {
+    "file": "stinger-remains.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Stinger_Remains.png/64px-Stinger_Remains.png?c8bfb0",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Stinger_Remains.png"
+  },
+  "Hatcher Remains": {
+    "file": "hatcher-remains.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Hatcher_Remains.png/64px-Hatcher_Remains.png?f1c793",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Hatcher_Remains.png"
+  },
+  "Hard Drive": {
+    "file": "hard-drive.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Hard_Drive.png/64px-Hard_Drive.png?e40a92",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Hard_Drive.png"
+  },
+  "Blue Power Slug": {
+    "file": "blue-power-slug.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Blue_Power_Slug.png/64px-Blue_Power_Slug.png?c638f8",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Blue_Power_Slug.png"
+  },
+  "Yellow Power Slug": {
+    "file": "yellow-power-slug.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Yellow_Power_Slug.png/64px-Yellow_Power_Slug.png?73d24c",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Yellow_Power_Slug.png"
+  },
+  "Purple Power Slug": {
+    "file": "purple-power-slug.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Purple_Power_Slug.png/64px-Purple_Power_Slug.png?b04ed5",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Purple_Power_Slug.png"
+  },
+  "Paleberry": {
+    "file": "paleberry.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Paleberry.png/64px-Paleberry.png?5b0f20",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Paleberry.png"
+  },
+  "Beryl Nut": {
+    "file": "beryl-nut.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Beryl_Nut.png/64px-Beryl_Nut.png?84068a",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Beryl_Nut.png"
+  },
+  "Bacon Agaric": {
+    "file": "bacon-agaric.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Bacon_Agaric.png/64px-Bacon_Agaric.png?fd8447",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Bacon_Agaric.png"
+  },
+  "Mercer Sphere": {
+    "file": "mercer-sphere.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Mercer_Sphere.png/64px-Mercer_Sphere.png?7b3d0e",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Mercer_Sphere.png"
+  },
+  "Somersloop": {
+    "file": "somersloop.png",
+    "url": "https://satisfactory.wiki.gg/images/thumb/Somersloop.png/64px-Somersloop.png?4acb41",
+    "source": "https://satisfactory.wiki.gg/wiki/File:Somersloop.png"
+  }
+}
