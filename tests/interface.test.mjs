@@ -47,6 +47,25 @@ test('machine instructions separate total, full-speed and adjustable machines',(
  c.row={...c.row,equivalent:3,lastClock:100,outputs:{Rubber:60},inputs:{'Crude Oil':90}};const full=vm.runInContext('machineSetup(row)',c);assert.equal(full.partial,false);assert.match(full.summary,/3 at 100%/);
 });
 
+test('shared sites group their outputs above the individual factory list',()=>{
+ const c=ui();
+ const p3=vm.runInContext('renderFactories()',c);
+ assert.match(p3,/Oil campus/);
+ assert.match(p3,/SHARED SITE · 2 OUTPUTS/);
+ assert.equal((p3.match(/data-factory="plastic"/g)||[]).length,2,'Plastic appears only inside the oil campus group');
+ assert.ok(p3.indexOf('Oil campus')<p3.indexOf('INDIVIDUAL FACTORIES'),'shared sites render above the main grid');
+ assert.ok(!p3.includes('Nuclear site'),'no nuclear factories at Phase 3');
+ vm.runInContext(`state.settings.phase='5'`,c);
+ const p5=vm.runInContext('renderFactories()',c);
+ assert.match(p5,/Nuclear site/);
+ assert.match(p5,/data-factory="uranium-fuel-rod"/);
+ vm.runInContext(`query='plastic'`,c);
+ const filtered=vm.runInContext('renderFactories()',c);
+ assert.match(filtered,/Oil campus/);
+ assert.ok(!filtered.includes('Nuclear site')&&!filtered.includes('INDIVIDUAL FACTORIES'),'empty groups and labels disappear when filtering');
+ assert.ok(!filtered.includes('No factories match'),'no empty state while a group still matches');
+ vm.runInContext(`query='';state.settings.phase='3'`,c);
+});
 test('factory details list where a local item is needed',()=>{
  const c=ui();
  vm.runInContext(`openFactory('wire')`,c);
