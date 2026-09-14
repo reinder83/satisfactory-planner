@@ -35,6 +35,15 @@ Both editions must continue working. A design redesign is welcome; it must prese
 
 ## Data compatibility is essential
 
+**Mandatory release rule: an update must never lose, reset, orphan or incorrectly reassign a user's progress.** This applies to major redesigns, rewritten components, changed task identifiers, schema changes and both persistence editions. Existing users must be able to migrate to the new version without recreating saves or manually re-entering progress. A release is not ready until its migration path is implemented and verified.
+
+- Support upgrades from every previously released data format, directly or through a tested migration chain. Do not assume users installed every intermediate release. Version persisted data explicitly when its structure changes.
+- Migrate profiles, calculation snapshots/handbooks, checks, notes, delivery counts, custom tasks and active selections together. Preserve server ownership and browser-local isolation.
+- For renamed, split, merged or removed steps, define explicit identifier mappings. Preserve original completion records when no unambiguous mapping exists and expose them for review; do not silently discard them or mark unrelated new work complete. Keep the original saved plan accessible when a replacement changes its meaning.
+- Perform migrations atomically and make retries safe. Retain a recoverable copy of the pre-migration data before modifying it. Failed migrations must leave that data intact and present recovery guidance, never silently initialize an empty save. Automatic updates must not depend on the user having remembered to export a backup.
+- Apply equivalent safeguards to IndexedDB and server files. Keep older full-save exports importable through the same version-aware migration path. Never downgrade or overwrite an unknown newer format; explain that a compatible app version is needed.
+- Add anonymized fixtures for released formats and test direct/skipped-version upgrades, repeat attempts, partial-failure recovery and old exports. Verify exact progress and ownership preservation, not just that the new application opens. Migration tests are required whenever compatibility is affected.
+
 - Ownership hierarchy: server user → named save → profile. Each profile owns its checks, notes, deliveries, selected phase and custom tasks.
 - Calculated profiles retain calculation snapshots. Do not silently recalculate existing profiles during startup, navigation, import, or an application update.
 - Original profiles use the preserved handbook, including an imported profile's own `handbook` when present. Do not replace that with the current default template.
