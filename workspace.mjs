@@ -1,4 +1,5 @@
 import {validateTransfer,transferFormat} from './public/transfer.js';
+import {shareState} from './public/state.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomBytes,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
@@ -47,7 +48,25 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
   if(endpoint==='/api/logout'&&req.method==='POST'){const token=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('planner_session='))?.split('=')[1];if(token)await commit(d=>{d.sessions=d.sessions.filter(s=>s.hash!==digest(token));});return response({ok:true},200,{'Set-Cookie':authCookie('')});}
   if(endpoint==='/api/export-saves'&&req.method==='GET'){
    const handbook=JSON.parse(await fs.readFile(new URL('./public/plan.json',import.meta.url),'utf8'));
-   return response({format:transferFormat,version:1,exportedAt:new Date().toISOString(),saves:db.saves.filter(s=>s.userId===u.id).map(s=>({id:s.id,name:s.name,activeProfile:s.activeProfile,profiles:s.profiles.map(p=>({id:p.id,name:p.name,kind:p.kind,plan:p.plan||null,state:p.state,...(p.kind==='original'?{handbook:p.handbook||handbook}:{})}))}))});
+   const saveId=url.searchParams.get('save'),profileId=url.searchParams.get('profile'),share=url.searchParams.get('share')==='1';
+   let saves=db.saves.filter(s=>s.userId===u.id);
+   if(saveId){saves=saves.filter(s=>s.id===saveId);if(!saves.length)fail('Save not found.',404);}
+   if(profileId){saves=saves.filter(s=>s.profiles.some(p=>p.id===profileId));if(!saves.length)fail('Profile not found.',404);}
+   const exported=saves.map(s=>{
+    const profiles=profileId?s.profiles.filter(p=>p.id===profileId):s.profiles;
+    return {id:s.id,name:s.name,activeProfile:profiles.some(p=>p.id===s.activeProfile)?s.activeProfile:profiles[0].id,profiles:profiles.map(p=>({id:p.id,name:p.name,kind:p.kind,plan:p.plan||null,state:share?shareState(p.state):p.state,...(p.kind==='original'?{handbook:p.handbook||handbook}:{})}))};
+   });
+   return response({format:transferFormat,version:1,exportedAt:new Date().toISOString(),saves:exported});
+  }
+  if(endpoint==='/api/duplicate-profile'&&req.method==='POST'){
+   const b=await body(req);if(!b.saveId||!b.profileId)fail('Choose a profile to copy.');
+   const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);
+   const profileId=id();
+   await commit(d=>{const sv=d.saves.find(s=>s.id===save.id&&s.userId===u.id);const source=sv?.profiles.find(p=>p.id===profile.id);if(!source)fail('Profile not found.',404);
+    if(sv.profiles.length>=30)fail('You can keep up to 30 profiles per save.');
+    sv.profiles.push({...structuredClone(source),id:profileId,name:(source.name+' · copy').slice(0,80)});
+    sv.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=sv.id;
+   });return response({saveId:save.id,profileId,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
   if(endpoint==='/api/import-saves'&&req.method==='POST'){
    const imported=validateTransfer(await body(req));

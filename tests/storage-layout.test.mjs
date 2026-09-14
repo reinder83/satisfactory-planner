@@ -28,7 +28,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
  assert.equal(round.storageEdits.bayNames.S,'Overflow parts');
  assert.equal(round.storageEdits.floorNames.ground,'Main hall');
  assert.equal(round.storageEdits.floors[0].label,'Basement overflow');
- assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:3}),/newer planner version/);
+ assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:4}),/newer planner version/);
 });
 
 test('clearing and reassigning containers preserves saved checkmarks',()=>{

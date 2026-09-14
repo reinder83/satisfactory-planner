@@ -53,7 +53,7 @@ test('shared sites group their outputs above the individual factory list',()=>{
  assert.match(p3,/Oil campus/);
  assert.match(p3,/SHARED SITE · 2 OUTPUTS/);
  assert.equal((p3.match(/data-factory="plastic"/g)||[]).length,2,'Plastic appears only inside the oil campus group');
- assert.ok(p3.indexOf('Oil campus')<p3.indexOf('INDIVIDUAL FACTORIES'),'shared sites render above the main grid');
+ assert.ok(p3.indexOf('Oil campus')<p3.indexOf('UNGROUPED FACTORIES'),'shared sites render above the main grid');
  assert.ok(!p3.includes('Nuclear site'),'no nuclear factories at Phase 3');
  vm.runInContext(`state.settings.phase='5'`,c);
  const p5=vm.runInContext('renderFactories()',c);
@@ -62,10 +62,44 @@ test('shared sites group their outputs above the individual factory list',()=>{
  vm.runInContext(`query='plastic'`,c);
  const filtered=vm.runInContext('renderFactories()',c);
  assert.match(filtered,/Oil campus/);
- assert.ok(!filtered.includes('Nuclear site')&&!filtered.includes('INDIVIDUAL FACTORIES'),'empty groups and labels disappear when filtering');
+ assert.ok(!filtered.includes('Nuclear site')&&!filtered.includes('UNGROUPED FACTORIES'),'empty groups and labels disappear when filtering');
  assert.ok(!filtered.includes('No factories match'),'no empty state while a group still matches');
  vm.runInContext(`query='';state.settings.phase='3'`,c);
 });
+test('plan and factory edit modes render controls, groups, splits and factory links',()=>{
+ const c=ui();
+ vm.runInContext(`state.factoryGroups={groups:[{id:'fg-cable01',name:'Cable factory'},{id:'fg-plates1',name:'Stitched plates'}],assignments:{wire:[{group:'fg-cable01',rate:300},{group:'fg-plates1',rate:null}]}};`,c);
+ const grouped=vm.runInContext('renderFactories()',c);
+ assert.match(grouped,/Cable factory/);
+ assert.match(grouped,/FACTORY GROUP · 1 FACTORY/);
+ assert.match(grouped,/Here: 300\/min/,'a split shows the allocated production');
+ assert.match(grouped,/Remaining here:/,'the rateless membership shows the remainder');
+ const editing=vm.runInContext('factoryEditing=true;renderFactories()',c);
+ assert.match(editing,/id="add-group"/);
+ assert.match(editing,/data-group-rename="fg-cable01"/);
+ assert.match(editing,/data-assign-rate="wire"/);
+ assert.match(editing,/data-unassign="wire"/);
+ vm.runInContext('factoryEditing=false',c);
+ vm.runInContext(`state.taskEdits={order:{},removed:['phase-3-survey'],titles:{'phase-3-iron':'Iron halls renamed'},bodies:{},links:{'phase-3-retire-power':'wire'}};`,c);
+ const planHtml=vm.runInContext('renderPlan()',c);
+ assert.ok(!planHtml.includes('Survey the iron site'),'removed steps disappear from the plan');
+ assert.match(planHtml,/Iron halls renamed/);
+ assert.match(planHtml,/Open factory: Wire/,'linked steps offer the factory');
+ const editPlan=vm.runInContext('planEditing=true;renderPlan()',c);
+ assert.match(editPlan,/data-move-task=/);
+ assert.match(editPlan,/Removed steps in this phase \(1\)/);
+ assert.match(editPlan,/data-restore-task="phase-3-survey"/);
+ assert.match(vm.runInContext(`editingTask='phase-3-iron';renderPlan()`,c),/data-task-edit="phase-3-iron"/);
+ vm.runInContext(`planEditing=false;editingTask=null;state.taskEdits=undefined;state.factoryGroups=undefined;`,c);
+ vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
+ assert.match(vm.runInContext('renderCalculatedPlan()',c),/Open factory: /,'calculated steps link to their production line');
+ vm.runInContext(`state.factoryGroups={groups:[{id:'fg-north1',name:'North site'}],assignments:{'iron-ingot':[{group:'fg-north1',rate:null}]}};`,c);
+ const calcGroups=vm.runInContext('factoryEditing=true;renderCalculatedFactories()',c);
+ assert.match(calcGroups,/North site/);
+ assert.match(calcGroups,/data-assign-add=/);
+ vm.runInContext(`factoryEditing=false;calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
+});
+
 test('factory details list where a local item is needed',()=>{
  const c=ui();
  vm.runInContext(`openFactory('wire')`,c);

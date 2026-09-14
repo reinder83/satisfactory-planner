@@ -372,6 +372,32 @@ dialog::backdrop{background:rgba(6,8,9,.78)}
 }
 @media(max-width:420px){.bay-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+/* ── Plan step editing ─────────────────────────────────── */
+.head-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.task.is-editing{grid-template-columns:20px minmax(0,1fr) auto}
+.task-tools{display:flex;gap:8px;align-items:start;flex-wrap:wrap;justify-content:flex-end}
+.task-tools .btn.quiet{padding:2px 4px;font-size:11px}
+.task-tools .btn.quiet.danger{color:var(--red);border-bottom-color:rgba(224,85,58,.5);background:transparent}
+.task-link{display:inline-block;margin-top:8px}
+.task-edit{display:block;border:1px solid var(--warm-border)}
+.task-edit .field{margin:10px 0}
+.task-edit textarea{width:100%;min-height:110px;margin-top:7px;border:1px solid var(--line);background:#0f1214;color:var(--ink);padding:10px 12px;font-size:12.5px;line-height:1.6;letter-spacing:normal;text-transform:none}
+.task-edit-actions{margin-top:12px}
+.removed-steps{margin:14px 0}
+.removed-steps summary{cursor:pointer;color:var(--muted)}
+.removed-step{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;color:#99a2a9}
+.removed-step:last-child{border-bottom:0}
+
+/* ── Factory groups ────────────────────────────────────── */
+.site-group.user-group{border-color:var(--warm-border)}
+.allocation{color:var(--accent);margin-top:6px}
+.assign-editor{grid-column:1/-1;border-top:1px dashed var(--line);margin-top:10px;padding-top:10px;display:grid;gap:7px}
+.assign-row{display:grid;grid-template-columns:minmax(0,1fr) 130px auto;gap:8px;align-items:center;font-size:12px}
+.assign-row input{min-width:0;border:1px solid var(--line);background:#0f1214;color:var(--ink);padding:6px 8px;font-size:12px}
+.assign-row .btn.quiet.danger{color:var(--red);border-bottom-color:rgba(224,85,58,.5)}
+.assign-editor select{border:1px solid var(--line);background:#0f1214;color:var(--ink);padding:7px 9px;font-size:12px}
+.factory-card .assign-editor{margin-top:12px}
+
 /* ── Print: revert to paper ────────────────────────────── */
 @media print{
  :root{color-scheme:light;color:#1c2328;background:white}

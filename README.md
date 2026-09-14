@@ -24,6 +24,13 @@ The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs
 
 On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Successful note saves close the details dialog; saving a blank note deletes the note. Existing container addresses and progress keys are unchanged.
 
+## Make the plan your own
+
+- **Build plan → Edit steps** lets you rearrange steps with the arrow buttons, rewrite a step's title and details, link a step to one of your factories, or remove steps you do not want. Removed steps keep their checkmarks and can be restored from **Removed steps** while editing; clearing an edited field restores the original text. Calculated production steps link to their factory details automatically.
+- **Factories → Edit groups** organizes production into named factory groups — the physical sites of your world. A factory can join several groups with a production split: for example Wire at 300/min in your cable factory with the remainder beside stitched plates. Leave a rate empty for the whole output or the remainder. Removing a group never touches the factories or their progress.
+- **Saves & profiles → Duplicate** copies a profile including its progress, so you can try changes without touching the original plan.
+- **Saves & profiles → Share** downloads a share file with the profile's plan, storage layout, factory groups, personal tasks and step edits — but none of your checkmarks, notes or delivery counts. Anyone can import it in either edition under **Backup → Import saves**; it arrives as a new save without affecting theirs. (A share link in a URL is not offered: a profile snapshot is far larger than links reliably allow.) Older planner versions refuse a share that contains step edits or groups and ask for an update instead of dropping them.
+
 ## Run with Docker
 
 The private image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. Clone this repository on your Docker host, enter the directory, then authenticate with a GitHub classic personal access token carrying `read:packages`:

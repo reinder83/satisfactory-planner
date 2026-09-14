@@ -17,6 +17,9 @@ Use the current vanilla HTML/CSS/JS structure unless the requested scope warrant
 - View the selected storage contract, labeled container locations, floors and collectables/workshop guidance. Existing storage addresses matter to a physically built game layout.
 - Preserve direct container Done checkboxes and room completion. Both write the same four existing `slot-<address>-<step>` keys; room completion skips unselected/reserved positions. Successful dialog note saves close only that dialog, and blank note saves remove the note key. Item icons are bundled in `icons/` with source attribution.
 - Review resource budgets, feasibility, power headroom, transport allowance and fuel requirements.
+- Edit the build plan per profile: reorder steps, rewrite titles/details, link steps to factories, remove and restore steps. Removed and renamed steps keep their checklist keys and completion.
+- Group factories into named groups on both factories pages, including production splits where one item serves several groups (assignments keyed by factory/row id in `factoryGroups`). Removing groups must never touch factory progress.
+- Duplicate a profile (full copy including progress) and share a profile (scoped transfer export without progress) from Saves & profiles.
 - Export/import full saves in both editions. Preserve progress-only backups where currently supported. Import confirmation must explain whether it adds copies or replaces progress.
 - In Docker, retain account setup/login/logout and user isolation. In browser mode, show local-storage and backup information instead of server/account claims.
 - Retain error, loading, empty-workspace, infeasible-result and calculation-in-progress states. Never show a successful save after a failed write.

@@ -1,5 +1,5 @@
 import {openBrowserStore} from './browser-store.js';
-import {initialState,validateState,mutate} from './state.js';
+import {initialState,validateState,mutate,shareState} from './state.js';
 import {validateTransfer,transferFormat} from './transfer.js';
 export const browserMode=globalThis.PLANNER_BROWSER===true;
 let instance;
@@ -16,7 +16,32 @@ export function createBrowserApi(store,calculator,catalog){
    const profileName=cleanName(body.name),saveName=body.saveId?null:cleanName(body.saveName),plan=await calculator(body.settings),profileId=uid();
    return store.transaction(d=>{let save=d.saves.find(s=>s.id===body.saveId);if(body.saveId&&!save)throw Error('Save not found.');if(!save){if(d.saves.length>=50)throw Error('Save limit reached.');save={id:uid(),name:saveName,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)throw Error('Profile limit reached.');const state={...initialState(),checks:{},deliveries:{}};state.settings.phase=plan.settings.phase;save.profiles.push({id:profileId,name:profileName,kind:'calculated',plan,state});save.activeProfile=profileId;d.activeSave=save.id;return {saveId:save.id,profileId,workspace:summary(d)};});
   }
-  if(ep==='/api/export-saves'){return store.transaction(d=>{d.lastBackup=new Date().toISOString();return {format:transferFormat,version:1,exportedAt:d.lastBackup,saves:structuredClone(d.saves)};});}
+  if(ep==='/api/export-saves'){
+   const saveId=url.searchParams.get('save'),profileId=url.searchParams.get('profile'),share=url.searchParams.get('share')==='1';
+   return store.transaction(d=>{
+    let saves=structuredClone(d.saves);
+    if(saveId){saves=saves.filter(s=>s.id===saveId);if(!saves.length)throw Error('Save not found.');}
+    if(profileId){saves=saves.filter(s=>s.profiles.some(p=>p.id===profileId));if(!saves.length)throw Error('Profile not found.');}
+    for(const s of saves){
+     if(profileId)s.profiles=s.profiles.filter(p=>p.id===profileId);
+     if(!s.profiles.some(p=>p.id===s.activeProfile))s.activeProfile=s.profiles[0].id;
+     if(share)for(const p of s.profiles)p.state=shareState(p.state);
+    }
+    const exportedAt=new Date().toISOString();
+    if(!saveId&&!profileId&&!share)d.lastBackup=exportedAt;
+    return {format:transferFormat,version:1,exportedAt,saves};
+   });
+  }
+  if(ep==='/api/duplicate-profile'){
+   return store.transaction(d=>{
+    const {save,profile}=scope(d,url,headers,body);
+    if(save.profiles.length>=30)throw Error('Profile limit reached.');
+    const profileId=uid();
+    save.profiles.push({...structuredClone(profile),id:profileId,name:(profile.name+' · copy').slice(0,80)});
+    save.activeProfile=profileId;d.activeSave=save.id;
+    return {saveId:save.id,profileId,workspace:summary(d)};
+   });
+  }
   if(ep==='/api/import-saves'){
    const imported=validateTransfer(body);
    return store.transaction(d=>{if(d.saves.length+imported.saves.length>50)throw Error('Import would exceed the save limit.');for(const s of imported.saves){const old=s.activeProfile;for(const p of s.profiles){const previous=p.id;p.id=uid();if(previous===old)s.activeProfile=p.id;}s.id=uid();d.saves.push(s);d.activeSave=s.id;}return summary(d);});
