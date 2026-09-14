@@ -9,6 +9,7 @@ test('every assigned storage item has a bundled PNG and source attribution',()=>
  for(const item of storage.flatMap(b=>b.items).filter(x=>x.name)){
   const slug=item.name.toLowerCase().replace(/[^a-z0-9]+/g,'-');const png=fs.readFileSync(new URL('../public/icons/'+slug+'.png',import.meta.url));
   assert.equal(png.subarray(1,4).toString(),'PNG',item.name);assert.match(sources[item.name].source,/^https:\/\/satisfactory\.wiki\.gg\//);
+  assert.doesNotMatch(sources[item.name].url,/Unknown_item/,item.name+' uses the unknown-item placeholder instead of its real icon');
  }
 });
 
