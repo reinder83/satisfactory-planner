@@ -139,6 +139,11 @@ input::placeholder,textarea::placeholder{color:#5f686e}
 
 /* ── Factory cards ─────────────────────────────────────── */
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.site-group{border:1px solid var(--line2);background:var(--panel2);box-shadow:var(--drop);padding:14px;margin:0 0 16px}
+.site-group .site-head{display:flex;justify-content:space-between;align-items:end;gap:18px;flex-wrap:wrap;margin-bottom:13px;border-bottom:1px solid var(--line);padding-bottom:11px}
+.site-group .site-head h2{margin:3px 0 0;font-size:19px}
+.site-group .site-head p{margin:0;max-width:560px;text-wrap:pretty}
+p.eyebrow{margin:20px 0 10px}
 .factory-card{background:var(--raise);border:1px solid var(--line);box-shadow:inset 0 1px 0 #363d43,var(--drop);padding:14px;display:flex;flex-direction:column;gap:10px}
 .factory-card.done{border-color:#2c4a3a}
 .factory-card .card-top{display:flex;justify-content:space-between;gap:12px;align-items:start}
