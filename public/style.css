@@ -334,6 +334,12 @@ button.rail-tile:hover{border-color:var(--accent)}
 .alt-row[hidden]{display:none}
 .alt-row small{font-size:10px}
 .alt-info{flex:none;font-size:10px;padding:2px 7px;white-space:nowrap}
+.alt-pref{flex:none;cursor:pointer}
+.alt-pref input{position:absolute;opacity:0;width:1px;height:1px}
+.alt-pref span{font-size:14px;color:var(--dim)}
+.alt-pref input:checked+span{color:var(--accent)}
+.alt-pref input:disabled+span{opacity:.25;cursor:default}
+.alt-pref input:focus-visible+span{outline:2px solid var(--accent-hi);outline-offset:2px}
 .chain{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
 .chain-stage{display:flex;gap:13px;border:1px solid var(--line);padding:11px 13px;align-items:flex-start}
 .chain-no{flex:none;font-family:var(--head);font-weight:700;font-size:19px;color:var(--accent);min-width:30px}
