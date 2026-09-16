@@ -127,6 +127,12 @@ test('factory details list where a local item is needed',()=>{
  assert.match(rip,/Local: ≈ 47 × Constructor at this site/,'local inputs show on-site machine counts');
  assert.match(rip,/data-factory="wire"/);
  assert.match(rip,/Recipe · Stitched Iron Plate/,'the per-machine recipe panel names the chosen recipe');
+ vm.runInContext(`openFactory('plastic')`,c);
+ const plastic=vm.runInContext(`document.querySelector('#detail').innerHTML`,c);
+ assert.match(plastic,/179 shared campus buildings/,'oil expansion counts the shared campus instead of 0 refineries');
+ assert.match(plastic,/\+1[.,]242/,'campus growth between phases is shown as added buildings');
+ assert.match(plastic,/Campus inputs/,'the campus layout lists crude and water supply');
+ assert.match(plastic,/Fuel Generators/,'phase 3 fuel byproduct points at the generator bank');
  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
  const calc=vm.runInContext(`(()=>{const x=calcStage();const r=x.rows.find(r=>Object.keys(r.outputs).some(n=>x.rows.some(o=>o.id!==r.id&&o.inputs[n])));openCalculatedFactory(r.id);return document.querySelector('#detail').innerHTML;})()`,c);
  assert.match(calc,/Delivers · /);
