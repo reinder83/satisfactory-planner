@@ -4,7 +4,9 @@ import {solve} from './optimizer.mjs';
 export const DATA=JSON.parse(fs.readFileSync(new URL('./recipes.json',import.meta.url)));
 export const ENGINE='2.0.0';
 const MAM_RECIPES=['Recipe_Alternate_Turbofuel_C','Recipe_Alternate_EnrichedCoal_C'];
-const ALT_IDS=new Set(DATA.recipes.filter(r=>r.alternate&&!MAM_RECIPES.includes(r.id)).map(r=>r.id));
+// Power preferences other than auto/coal/fuel run turbofuel generators (directly or as the Phase 3 bridge).
+export const powerNeedsTurbofuel=mainPower=>!['auto','coal','fuel'].includes(mainPower||'auto');
+const ALT_IDS=new Set(DATA.recipes.filter(r=>r.alternate).map(r=>r.id));
 export const RAW=['Iron Ore','Copper Ore','Limestone','Coal','Caterium Ore','Raw Quartz','Sulfur','Bauxite','Uranium','SAM','Crude Oil','Nitrogen Gas','Water'];
 export const DEFAULT_LIMITS={'Iron Ore':92100,'Copper Ore':36900,Limestone:69900,Coal:42300,'Caterium Ore':15000,'Raw Quartz':13500,Sulfur:10800,Bauxite:12300,Uranium:2100,SAM:10200,'Crude Oil':9900,'Nitrogen Gas':12000,Water:1000000};
 export const PURE_LIMITS={'Iron Ore':152400,'Copper Ore':66000,Limestone:112800,Coal:74400,'Caterium Ore':20400,'Raw Quartz':20400,Sulfur:19200,Bauxite:20400,Uranium:6000,SAM:22800,'Crude Oil':18000,'Nitrogen Gas':13500,Water:1000000};
@@ -20,6 +22,7 @@ export function settings(input={}){
  if((s.mainPower==='nuclear'||s.mainPower.endsWith('-nuclear'))&&s.nuclear==='none')err('Choose a nuclear waste strategy for a nuclear power preference.');
  for(const r of RAW)s.limits[r]=number(input.limits?.[r],0,10000000,defaults[r]);
  s.alternateRecipes=Array.isArray(input.alternateRecipes)?[...new Set(input.alternateRecipes.filter(x=>ALT_IDS.has(x)))].sort():[];
+ if(s.recipes==='custom'&&powerNeedsTurbofuel(s.mainPower))s.alternateRecipes=[...new Set([...s.alternateRecipes,...MAM_RECIPES])].sort();
  return s;
 }
 const pureNames=['Alternate: Pure Iron Ingot','Alternate: Pure Copper Ingot','Alternate: Pure Caterium Ingot','Alternate: Pure Aluminum Ingot'];
@@ -27,7 +30,7 @@ const metals=['Iron Ingot','Copper Ingot','Caterium Ingot','Aluminum Ingot'];
 const construction=['Iron Plate','Iron Rod','Reinforced Iron Plate','Concrete','Wire','Cable','Copper Sheet','Steel Beam','Steel Pipe','Modular Frame','Encased Industrial Beam','Heavy Modular Frame','Motor','Computer','Plastic','Rubber','Alclad Aluminum Sheet','Aluminum Casing'];
 const key=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export function recipePool(s,phase,conversion){
- return DATA.recipes.map(r=>MAM_RECIPES.includes(r.id)?{...r,alternate:false,name:r.name.replace('Alternate: ','')}:r).filter(r=>r.phase<=phase&&(s.recipes==='all'||!r.alternate||s.recipes==='custom'&&s.alternateRecipes.includes(r.id)||s.pureIngots&&pureNames.includes(r.name)))
+ return DATA.recipes.filter(r=>!MAM_RECIPES.includes(r.id)||s.recipes!=='custom'||s.alternateRecipes.includes(r.id)).map(r=>MAM_RECIPES.includes(r.id)?{...r,alternate:false,name:r.name.replace('Alternate: ','')}:r).filter(r=>r.phase<=phase&&(s.recipes==='all'||!r.alternate||s.recipes==='custom'&&s.alternateRecipes.includes(r.id)||s.pureIngots&&pureNames.includes(r.name)))
  .filter(r=>!(s.pureIngots&&phase>=3&&metals.some(n=>r.outputs[n])&&!pureNames.includes(r.name)))
  .filter(r=>!Object.keys(r.outputs).some(x=>RAW.includes(x)&&x!=='Water')||conversion)
  .filter(r=>!['Uranium Fuel Rod','Plutonium Fuel Rod','Ficsonium','Ficsonium Fuel Rod','Encased Uranium Cell','Non-Fissile Uranium','Plutonium Pellet','Encased Plutonium Cell'].some(x=>r.outputs[x])||s.nuclear!=='none'||phase>=4&&s.droneFuel==='Uranium Fuel Rod'&&['Uranium Fuel Rod','Encased Uranium Cell'].some(x=>r.outputs[x]));

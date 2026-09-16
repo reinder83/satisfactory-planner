@@ -195,8 +195,12 @@ test('the wizard can pick specific alternate recipes',()=>{
  const pop=vm.runInContext('document.querySelector("#detail").innerHTML',c);
  assert.match(pop,/rail-recipe/,'the pop-out shows the recipe card');
  assert.match(pop,/Standard recipe for Reinforced Iron Plate/,'the standard recipe is shown for comparison');
- assert.match(html,/MAM research · always available/,'MAM-researched recipes are marked always available');
- assert.ok(!html.includes('name="alt" value="Recipe_Alternate_Turbofuel_C"'),'MAM recipes are not offered as picks');
+ assert.match(html,/MAM research/,'MAM-researched recipes are labelled');
+ assert.match(html,/name="alt" value="Recipe_Alternate_Turbofuel_C"/,'MAM recipes are normal picks with a neutral power choice');
+ const turbo=vm.runInContext(`wizard.settings.mainPower='turbofuel';renderWizard()`,c);
+ assert.match(turbo,/required by your power preference/,'a turbofuel power route locks the MAM recipes on');
+ assert.ok(!turbo.includes('name="alt" value="Recipe_Alternate_Turbofuel_C"'),'locked MAM recipes are not editable picks');
+ vm.runInContext(`wizard.settings.mainPower='auto';wizard.settings.recipes='custom';`,c);
  assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
  vm.runInContext('wizard=null',c);
 });
