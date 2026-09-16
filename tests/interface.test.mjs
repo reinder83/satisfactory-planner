@@ -170,7 +170,7 @@ test('storage follows the selected contract, preserves addresses and displays sm
 });
 test('wizard tabs retain edits and recalculate Review without native help tooltips',async()=>{
  const c=ui();vm.runInContext(`wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,c);
- const form={reportValidity:()=>true,querySelector:()=>({textContent:''})};c.document.querySelector=()=>form;
+ const form={reportValidity:()=>true,querySelector:sel=>sel==='.alt-list'?null:{textContent:''}};c.document.querySelector=()=>form;
  c.FormData=class{*[Symbol.iterator](){yield ['saveName','Edited world'];yield ['purity','pure'];}has(){return false;}};
  await vm.runInContext('moveWizard(2)',c);
  assert.equal(vm.runInContext('wizard.saveName',c),'Edited world');
@@ -181,4 +181,26 @@ test('wizard tabs retain edits and recalculate Review without native help toolti
  await vm.runInContext('moveWizard(5)',c);assert.equal(vm.runInContext('wizard.step',c),5);
  const html=vm.runInContext('renderWizard()',c);assert.equal((html.match(/data-wizard-step=/g)||[]).length,5);
  const help=vm.runInContext('help("purity")',c);assert.ok(!help.includes(' title='));assert.ok(help.includes('aria-label='));assert.ok(help.includes('role="tooltip"'));
+});
+
+test('the wizard can pick specific alternate recipes',()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:2,saveName:'S',name:'P',settings:{...structuredClone(generated.settings),recipes:'custom',alternateRecipes:['Recipe_Alternate_ReinforcedIronPlate_2_C']}};`,c);
+ const html=vm.runInContext('renderWizard()',c);
+ assert.match(html,/alt-picker/,'custom recipe access shows the alternate picker');
+ assert.match(html,/name="alt" value="Recipe_Alternate_ReinforcedIronPlate_2_C" checked/,'picked alternates are pre-checked');
+ assert.match(html,/Stitched Iron Plate/);
+ assert.match(html,/data-alt-info="Recipe_Alternate_ReinforcedIronPlate_2_C"/,'each alternate offers a recipe pop-out');
+ vm.runInContext('openAltRecipe("Recipe_Alternate_ReinforcedIronPlate_2_C")',c);
+ const pop=vm.runInContext('document.querySelector("#detail").innerHTML',c);
+ assert.match(pop,/rail-recipe/,'the pop-out shows the recipe card');
+ assert.match(pop,/Standard recipe for Reinforced Iron Plate/,'the standard recipe is shown for comparison');
+ assert.match(html,/MAM research/,'MAM-researched recipes are labelled');
+ assert.match(html,/name="alt" value="Recipe_Alternate_Turbofuel_C"/,'MAM recipes are normal picks with a neutral power choice');
+ const turbo=vm.runInContext(`wizard.settings.mainPower='turbofuel';renderWizard()`,c);
+ assert.match(turbo,/required by your power preference/,'a turbofuel power route locks the MAM recipes on');
+ assert.ok(!turbo.includes('name="alt" value="Recipe_Alternate_Turbofuel_C"'),'locked MAM recipes are not editable picks');
+ vm.runInContext(`wizard.settings.mainPower='auto';wizard.settings.recipes='custom';`,c);
+ assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
+ vm.runInContext('wizard=null',c);
 });
