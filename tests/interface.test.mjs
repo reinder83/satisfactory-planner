@@ -100,6 +100,31 @@ test('plan and factory edit modes render controls, groups, splits and factory li
  vm.runInContext(`factoryEditing=false;calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
 });
 
+test('the build plan checklist can be searched and can hide completed steps',()=>{
+ const c=ui();
+ const all=vm.runInContext('renderPlan()',c);
+ assert.match(all,/id="plan-search"/,'the plan offers a step search');
+ assert.match(all,/id="hide-done"/,'the plan offers a hide-completed toggle');
+ assert.match(all,/Survey the iron site/);
+ const searched=vm.runInContext(`query='steel';renderPlan()`,c);
+ assert.match(searched,/data-check="phase-3-steel"/);
+ assert.ok(!searched.includes('data-check="phase-3-survey"'),'search hides non-matching steps');
+ assert.match(searched,/1 of 9 steps/,'the toolbar counts the filtered steps');
+ assert.match(vm.runInContext(`query='no-such-step';renderPlan()`,c),/No steps match this search\./);
+ const hidden=vm.runInContext(`query='';state.checks={'phase-3-survey':true};hideDone=true;renderPlan()`,c);
+ assert.ok(!hidden.includes('data-check="phase-3-survey"'),'completed steps are hidden');
+ assert.match(hidden,/data-check="phase-3-iron"/,'unfinished steps stay visible');
+ assert.match(hidden,/8 of 9 steps/);
+ assert.match(hidden,/1 <span class="fraction">\/ 9<\/span>/,'progress stats keep counting every step');
+ const done=vm.runInContext(`state.checks=Object.fromEntries(planTasks().map(t=>[t.id,true]));renderPlan()`,c);
+ assert.match(done,/Every step of this phase is completed/,'an all-hidden checklist explains the toggle');
+ vm.runInContext(`state.checks={'calc-3-x':true};calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
+ const calc=vm.runInContext('renderCalculatedPlan()',c);
+ assert.match(calc,/id="plan-search"/,'the calculated plan gets the same tools');
+ assert.match(calc,/id="hide-done" checked/,'the toggle stays ticked across plan views');
+ vm.runInContext(`hideDone=false;query='';state.checks={};calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
+});
+
 test('factory details list where a local item is needed',()=>{
  const c=ui();
  vm.runInContext(`openFactory('wire')`,c);

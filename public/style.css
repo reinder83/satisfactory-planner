@@ -100,6 +100,9 @@ p{line-height:1.7;margin:8px 0 14px}
 .next-card p{font-size:11.5px;color:#9b968c}
 
 /* ── Checklists & tasks ────────────────────────────────── */
+.checklist-tools{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.checklist-tools .search{flex:1;min-width:160px;padding:9px 12px}
+.checklist-tools .check-row{white-space:nowrap;color:var(--muted)}
 .checklist{display:grid;gap:1px;background:var(--row);border:1px solid var(--line);box-shadow:var(--drop)}
 .task{background:var(--panel);padding:12px 15px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:13px;align-items:start}
 .task:has(input:checked){background:#101315}
@@ -508,7 +511,7 @@ button.rail-tile:hover{border-color:var(--accent)}
  body,.workspace,.panel,.stat,.factory-card,.bay,.slot,.task,.checklist,.table-wrap,th{background:white;color:#1c2328;box-shadow:none}
  .workspace{background-image:none}
  h1,h2,h3,.task summary,.slot-details span:last-child,td:first-child,.factory-card .name,.bay-head h3{color:#101417}
- .sidebar,.topbar,.toolbar,.btn,#toast{display:none}
+ .sidebar,.topbar,.toolbar,.checklist-tools,.btn,#toast{display:none}
  .layout{display:block}
  .workspace{padding:0}
  .cards{grid-template-columns:repeat(3,1fr)}
