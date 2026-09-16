@@ -92,3 +92,20 @@ test('whole production recalculates upstream inputs and makes surplus without ch
   const newer=await json(await fetch(app.url+'/api/context',{headers:{...headers,'X-Profile-Id':b.profileId}}));assert.equal(newer.plan.settings.wholeMachines,true);assert.equal(newer.state.notes.global,'Keep this note');assert.equal(newer.state.checks['unlock-Schematic_2-1_C'],true);assert.deepEqual(await json(await fetch(app.url+'/api/context',{headers})),old);
  }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('new calculated profiles start with default factory groups covering every production line',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-groups-'));const app=await start(dir);
+ try{
+  const created=await json(await post(app.url,'/api/profiles',{saveName:'Grouped',name:'Calc',kind:'calculated',settings:{}}));
+  const state=await json(await fetch(app.url+'/api/state',{headers:{'X-Planner-Request':'1','x-save-id':created.saveId,'x-profile-id':created.profileId}}));
+  const groups=state.factoryGroups;
+  assert.ok(groups?.groups?.length>3,'several default groups exist');
+  const plan=calculate({});
+  const ids=new Set(Object.values(plan.stages).flatMap(p=>(p.rows||[]).map(r=>r.id)));
+  for(const id of ids)assert.ok(groups.assignments[id]?.length,'row '+id+' is assigned to a group');
+  for(const a of Object.values(groups.assignments))assert.ok(groups.groups.some(g=>g.id===a[0].group),'assignments point at existing groups');
+  const original=await json(await post(app.url,'/api/profiles',{saveId:created.saveId,name:'Orig',kind:'original'}));
+  const os2=await json(await fetch(app.url+'/api/state',{headers:{'X-Planner-Request':'1','x-save-id':original.saveId,'x-profile-id':original.profileId}}));
+  assert.ok(!(os2.factoryGroups?.groups?.length),'original handbook profiles keep their built-in shared sites instead');
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});
