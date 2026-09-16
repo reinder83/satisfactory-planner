@@ -201,6 +201,12 @@ test('the wizard can pick specific alternate recipes',()=>{
  assert.match(turbo,/required by your power preference/,'a turbofuel power route locks the MAM recipes on');
  assert.ok(!turbo.includes('name="alt" value="Recipe_Alternate_Turbofuel_C"'),'locked MAM recipes are not editable picks');
  vm.runInContext(`wizard.settings.mainPower='auto';wizard.settings.recipes='custom';`,c);
+ assert.match(html,/name="alt" value="Recipe_Alternate_PureIronIngot_C"/,'pure recipes are normal picks by default');
+ const pure=vm.runInContext(`wizard.settings.pureIngots=true;renderWizard()`,c);
+ assert.match(pure,/required by your ingot preference/,'requiring pure ingots locks the pure recipes on');
+ assert.ok(!pure.includes('name="alt" value="Recipe_Alternate_PureIronIngot_C"'),'locked pure recipes are not editable picks');
+ assert.ok(!html.includes('Charcoal'),'recipes beyond Phase 5 are not offered');
+ vm.runInContext(`wizard.settings.pureIngots=false;`,c);
  assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
  vm.runInContext('wizard=null',c);
 });
