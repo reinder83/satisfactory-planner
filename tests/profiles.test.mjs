@@ -158,3 +158,17 @@ test('over-budget phases name the short resources and a phase time that fits',()
  assert.ok(st.minHours>0.25&&st.minHours<=2000,'a longer phase time is suggested');
  assert.equal(calculate({...input,hours:st.minHours}).stages[1].feasible,true,'the suggested phase time fits the budgets');
 });
+
+test('a budget only whole machines exceed names the rounding headroom',()=>{
+ const base={phase:'1',goal:'timed',hours:1,multiplier:10,storage:'none'};
+ const precise=calculate(base).stages[1];
+ assert.equal(precise.feasible,true,'precise balancing fits the default budgets');
+ const limit=precise.raw['Iron Ore']+0.001; // just above the exact mixed-recipe need
+ const st=calculate({...base,wholeMachines:true,limits:{...DEFAULT_LIMITS,'Iron Ore':limit}}).stages[1];
+ assert.equal(st.feasible,false,'whole machines cannot fit a budget cut to the exact precise need');
+ assert.equal(st.wholeMachinesOnly,true,'the draft records that only whole-machine production fails');
+ assert.deepEqual(st.shortfalls.map(f=>f.name),['Iron Ore'],'the budget short only for whole machines is identified');
+ assert.ok(st.shortfalls[0].needed>limit,'the whole-machine need exceeds the entered budget');
+ assert.match(st.reason,/Iron Ore/,'the explanation names the resource');
+ assert.equal(calculate({...base,wholeMachines:true,limits:{...DEFAULT_LIMITS,'Iron Ore':st.shortfalls[0].needed}}).stages[1].feasible,true,'the suggested budget fits whole machines');
+});
