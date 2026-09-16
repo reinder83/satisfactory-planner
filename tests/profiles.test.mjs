@@ -109,3 +109,11 @@ test('new calculated profiles start with default factory groups covering every p
   assert.ok(!(os2.factoryGroups?.groups?.length),'original handbook profiles keep their built-in shared sites instead');
  }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('custom recipe access limits alternates to the picked list',()=>{
+ const plan=calculate({recipes:'custom',alternateRecipes:['Recipe_Alternate_ReinforcedIronPlate_2_C','not-a-recipe']});
+ assert.deepEqual(plan.settings.alternateRecipes,['Recipe_Alternate_ReinforcedIronPlate_2_C'],'unknown ids are dropped');
+ for(const stagePlan of Object.values(plan.stages))for(const r of stagePlan.rows||[])if(r.alternate)assert.equal(r.id,'Recipe_Alternate_ReinforcedIronPlate_2_C','only picked alternates appear');
+ const none=calculate({recipes:'custom'});
+ for(const stagePlan of Object.values(none.stages))for(const r of stagePlan.rows||[])assert.ok(!r.alternate,'empty selection behaves like standard recipes');
+});

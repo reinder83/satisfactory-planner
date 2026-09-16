@@ -15,7 +15,7 @@ Each **user → named save → profile** has independent progress. Trying anothe
 Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save:
 
 1. Name the save and enter its phase, purity/distribution, elevator multiplier, consumption multiplier and spare existing power.
-2. Choose standard/all alternates, pure ingots, SAM conversion policy, nuclear recycling, protected storage and extra Singularity Cell production.
+2. Choose recipe access (standard, all alternates, or hand-pick specific alternate recipes), pure ingots, SAM conversion policy, nuclear recycling, protected storage and extra Singularity Cell production.
 3. Choose minimal construction (24-hour delivery), balanced (8-hour delivery), a target time, or maximum elevator output.
 4. Review/edit available raw resource budgets. Confirm these before maximum-output planning.
 5. Review calculated buildings, delivery time, power and feasibility by phase, then create the profile.
