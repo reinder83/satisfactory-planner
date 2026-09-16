@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createApp,initialState} from '../server.mjs';
-import {calculate,RAW,DATA,PURE_LIMITS,DEFAULT_LIMITS} from '../planner.mjs';
+import {calculate,catalog,RAW,DATA,PURE_LIMITS,DEFAULT_LIMITS} from '../planner.mjs';
 async function start(dir){const server=await createApp({dataDir:dir,password:''});await new Promise(r=>server.listen(0,'127.0.0.1',r));return {server,url:'http://127.0.0.1:'+server.address().port};}
 const close=s=>new Promise(r=>s.close(r));
 const post=(url,endpoint,b,headers={})=>fetch(url+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...headers},body:JSON.stringify(b)});
@@ -116,6 +116,24 @@ test('custom recipe access limits alternates to the picked list',()=>{
  for(const stagePlan of Object.values(plan.stages))for(const r of stagePlan.rows||[])if(r.alternate)assert.equal(r.id,'Recipe_Alternate_ReinforcedIronPlate_2_C','only picked alternates appear');
  const none=calculate({recipes:'custom'});
  for(const stagePlan of Object.values(none.stages))for(const r of stagePlan.rows||[])assert.ok(!r.alternate,'empty selection behaves like standard recipes');
+});
+
+test('a turbofuel-burning all-recipes optimum round-trips through Planner’s choice into equivalent custom picks',()=>{
+ const MAM=['Recipe_Alternate_Turbofuel_C','Recipe_Alternate_EnrichedCoal_C'];
+ const input={recipes:'all',mainPower:'fuel',goal:'maximum',limitsConfirmed:true};
+ const all=calculate(input);
+ const mamRows=Object.values(all.stages).flatMap(st=>(st.rows||[]).filter(r=>MAM.includes(r.id)));
+ assert.ok(mamRows.length,'this scenario’s all-recipes optimum burns turbofuel');
+ assert.ok(mamRows.every(r=>!r.alternate),'MAM rows are presented as standard recipes, so the alternate flag alone misses them');
+ // Collect used alternates the way the wizard’s Planner’s choice helper does: by catalog id, not the flag.
+ const altIds=new Set(catalog().alternates.map(a=>a.id));
+ const used=[...new Set(Object.values(all.stages).flatMap(st=>(st.rows||[]).filter(r=>r.alternate||altIds.has(r.id)).map(r=>r.id)))].sort();
+ for(const id of MAM)assert.ok(used.includes(id),id+' is ticked by Planner’s choice');
+ const custom=calculate({...input,recipes:'custom',alternateRecipes:used});
+ for(const phase of Object.keys(all.stages)){
+  assert.equal(custom.stages[phase].feasible,all.stages[phase].feasible,'phase '+phase+' feasibility matches');
+  if(all.stages[phase].feasible)assert.ok(custom.stages[phase].hours<=all.stages[phase].hours+1e-6,'phase '+phase+' custom picks reach the all-recipes optimum');
+ }
 });
 
 test('preferred recipes replace competing recipes for their product',()=>{
