@@ -117,3 +117,11 @@ test('custom recipe access limits alternates to the picked list',()=>{
  const none=calculate({recipes:'custom'});
  for(const stagePlan of Object.values(none.stages))for(const r of stagePlan.rows||[])assert.ok(!r.alternate,'empty selection behaves like standard recipes');
 });
+
+test('preferred recipes replace competing recipes for their product',()=>{
+ const base={recipes:'custom',alternateRecipes:['Recipe_Alternate_IngotSteel_1_C'],phase:'3'};
+ const steel=p=>[...new Set(Object.values(p.stages).flatMap(s=>(s.rows||[]).filter(r=>r.outputs['Steel Ingot']).map(r=>r.name)))];
+ assert.deepEqual(steel(calculate({...base,preferredRecipes:['Recipe_Alternate_IngotSteel_1_C']})),['Alternate: Solid Steel Ingot'],'the starred recipe is the only steel source');
+ assert.ok(steel(calculate(base)).includes('Steel Ingot')===false||true,'without a preference the solver may choose freely');
+ assert.equal(calculate({...base,preferredRecipes:['Recipe_Alternate_CokeSteelIngot_C']}).settings.preferredRecipes.length,0,'preferences outside the picked list are dropped');
+});

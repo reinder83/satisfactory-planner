@@ -23,6 +23,7 @@ export function settings(input={}){
  for(const r of RAW)s.limits[r]=number(input.limits?.[r],0,10000000,defaults[r]);
  s.alternateRecipes=Array.isArray(input.alternateRecipes)?[...new Set(input.alternateRecipes.filter(x=>ALT_IDS.has(x)))].sort():[];
  if(s.recipes==='custom'&&powerNeedsTurbofuel(s.mainPower))s.alternateRecipes=[...new Set([...s.alternateRecipes,...MAM_RECIPES])].sort();
+ s.preferredRecipes=Array.isArray(input.preferredRecipes)?[...new Set(input.preferredRecipes.filter(x=>s.alternateRecipes.includes(x)))].sort():[];
  return s;
 }
 const pureNames=['Alternate: Pure Iron Ingot','Alternate: Pure Copper Ingot','Alternate: Pure Caterium Ingot','Alternate: Pure Aluminum Ingot'];
@@ -33,7 +34,12 @@ export function recipePool(s,phase,conversion){
  return DATA.recipes.filter(r=>!MAM_RECIPES.includes(r.id)||s.recipes!=='custom'||s.alternateRecipes.includes(r.id)).map(r=>MAM_RECIPES.includes(r.id)?{...r,alternate:false,name:r.name.replace('Alternate: ','')}:r).filter(r=>r.phase<=phase&&(s.recipes==='all'||!r.alternate||s.recipes==='custom'&&s.alternateRecipes.includes(r.id)||s.pureIngots&&pureNames.includes(r.name)))
  .filter(r=>!(s.pureIngots&&phase>=3&&metals.some(n=>r.outputs[n])&&!pureNames.includes(r.name)))
  .filter(r=>!Object.keys(r.outputs).some(x=>RAW.includes(x)&&x!=='Water')||conversion)
- .filter(r=>!['Uranium Fuel Rod','Plutonium Fuel Rod','Ficsonium','Ficsonium Fuel Rod','Encased Uranium Cell','Non-Fissile Uranium','Plutonium Pellet','Encased Plutonium Cell'].some(x=>r.outputs[x])||s.nuclear!=='none'||phase>=4&&s.droneFuel==='Uranium Fuel Rod'&&['Uranium Fuel Rod','Encased Uranium Cell'].some(x=>r.outputs[x]));
+ .filter(r=>!['Uranium Fuel Rod','Plutonium Fuel Rod','Ficsonium','Ficsonium Fuel Rod','Encased Uranium Cell','Non-Fissile Uranium','Plutonium Pellet','Encased Plutonium Cell'].some(x=>r.outputs[x])||s.nuclear!=='none'||phase>=4&&s.droneFuel==='Uranium Fuel Rod'&&['Uranium Fuel Rod','Encased Uranium Cell'].some(x=>r.outputs[x]))
+ .filter(r=>{ // a preferred recipe replaces competing recipes for its primary product at phases where it is available
+  const preferred=s.recipes==='custom'?s.preferredRecipes||[]:[];
+  if(!preferred.length||preferred.includes(r.id))return true;
+  return !preferred.some(id=>{const p=DATA.recipes.find(x=>x.id===id);return p&&p.phase<=phase&&Object.keys(p.outputs)[0]===Object.keys(r.outputs)[0];});
+ });
 }
 function generators(s,phase){
  const result=[];
