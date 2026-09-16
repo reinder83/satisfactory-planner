@@ -233,8 +233,9 @@ test('the wizard can pick specific alternate recipes',()=>{
  assert.match(html,/name="altpref" value="Recipe_Alternate_ReinforcedIronPlate_2_C" checked=""|name="altpref" value="Recipe_Alternate_ReinforcedIronPlate_2_C"/,'picked rows offer a prefer star');
  assert.match(html,/data-alt-all/,'the picker offers select-shown');
  assert.match(html,/data-alt-none/,'the picker offers clear-shown');
- assert.equal(vm.runInContext('JSON.stringify(alternatesUsed(generated))',c),'[]','a standard plan uses no alternates');
+ assert.equal(vm.runInContext('JSON.stringify(alternatesUsed(generated))',c),'["Recipe_Alternate_EnrichedCoal_C","Recipe_Alternate_Turbofuel_C"]','a standard plan uses no hard-drive alternates, but its turbofuel power chain still needs the MAM picks');
  assert.equal(vm.runInContext(`JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'x',alternate:true},{id:'y'}]},b:{rows:[{id:'x',alternate:true}]}}}))`,c),'["x"]','used alternates are collected uniquely across phases');
+ assert.equal(vm.runInContext(`JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'Recipe_Alternate_Turbofuel_C',alternate:false},{id:'y'}]}}}))`,c),'["Recipe_Alternate_Turbofuel_C"]','MAM recipes count as used alternates even though plans mark them standard');
  vm.runInContext(`wizard.settings.pureIngots=false;`,c);
  assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
  vm.runInContext('wizard=null',c);
