@@ -113,7 +113,27 @@ export function calculate(input,onPhase){
   // For maximum output, compare conversion when allowed only at a binding resource limit.
   if(s.goal==='maximum'&&phase===5&&s.sam==='needed'){const converted=run(s,phase,{maximum:true,conversion:true});if(converted.feasible&&(!result.feasible||converted.hours<result.hours-1e-6))result=converted;}
   // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
-  if(!result.feasible){const diagnostic=run({...s,wholeMachines:false},phase,{conversion:phase===5&&s.sam!=='avoid',ignoreLimits:true});stages[phase]={...diagnostic,feasible:false,reason:result.solverStatus&&!/infeasible/i.test(result.solverStatus)?'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.':diagnostic.feasible?'The goal exceeds the available resource or power budgets. Increase the time or revise your budgets.':'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.'};}
+  if(!result.feasible){
+   const conversion=phase===5&&s.sam!=='avoid';
+   const diagnostic=run({...s,wholeMachines:false},phase,{conversion,ignoreLimits:true});
+   const stage={...diagnostic,feasible:false};
+   if(result.solverStatus&&!/infeasible/i.test(result.solverStatus))stage.reason='The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.';
+   else if(!diagnostic.feasible)stage.reason='The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
+   else{
+    const fits=h=>run({...s,wholeMachines:false,goal:'timed',hours:h},phase,{conversion}).feasible;
+    const currentHours=s.goal==='minimal'?24:s.goal==='balanced'?8:s.hours;
+    if(s.goal!=='maximum'&&fits(currentHours))stage.reason='Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
+    else{
+     stage.shortfalls=RAW.filter(n=>(diagnostic.raw[n]||0)>s.limits[n]+0.05).map(n=>({name:n,needed:Math.ceil(diagnostic.raw[n]),budget:s.limits[n]}));
+     // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
+     if(s.goal!=='maximum'&&fits(2000)){let lo=currentHours,hi=2000;for(let i=0;i<12&&hi-lo>0.25;i++){const mid=(lo+hi)/2;if(fits(mid))hi=mid;else lo=mid;}stage.minHours=Math.ceil(hi*4)/4;}
+     const names=stage.shortfalls.map(x=>x.name);
+     stage.reason=(names.length?`This phase needs more ${names.length>1?names.slice(0,-1).join(', ')+' and '+names[names.length-1]:names[0]} than the entered budgets provide.`:'The goal exceeds the available resource or power budgets.')
+      +(stage.minHours?` It fits the current budgets at about ${stage.minHours} hours for this phase.`:s.goal==='maximum'?' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.':' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.');
+    }
+   }
+   stages[phase]=stage;
+  }
   else stages[phase]=result;
  }
  if(s.distribution!=='original'||s.purity==='custom')warnings.push('Seed-dependent distribution: confirm resource-rich node counts, mixed purity and well totals against your save. Zero budgets mean unallocated resources.');

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createApp,initialState} from '../server.mjs';
-import {calculate,RAW,DATA,PURE_LIMITS} from '../planner.mjs';
+import {calculate,RAW,DATA,PURE_LIMITS,DEFAULT_LIMITS} from '../planner.mjs';
 async function start(dir){const server=await createApp({dataDir:dir,password:''});await new Promise(r=>server.listen(0,'127.0.0.1',r));return {server,url:'http://127.0.0.1:'+server.address().port};}
 const close=s=>new Promise(r=>s.close(r));
 const post=(url,endpoint,b,headers={})=>fetch(url+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...headers},body:JSON.stringify(b)});
@@ -140,5 +140,21 @@ test('over-budget plans finish quickly with an explained draft instead of hangin
  for(const [ph,st] of infeasible){
   assert.ok(st.reason,'infeasible phase '+ph+' explains itself');
   assert.ok(st.rows?.length,'infeasible phase '+ph+' still offers a planning draft');
+  for(const f of st.shortfalls||[]){
+   assert.ok(f.needed>f.budget,'phase '+ph+' shortfall '+f.name+' exceeds its budget');
+   assert.ok(st.reason.includes(f.name),'phase '+ph+' reason names '+f.name);
+  }
+  if(st.minHours)assert.ok(st.minHours>8&&st.minHours<=2000,'phase '+ph+' suggests a longer feasible phase time');
  }
+});
+
+test('over-budget phases name the short resources and a phase time that fits',()=>{
+ const input={phase:'1',goal:'timed',hours:0.25,multiplier:100,storage:'none',limits:{...DEFAULT_LIMITS,'Iron Ore':300}};
+ const st=calculate(input).stages[1];
+ assert.equal(st.feasible,false,'the squeezed budget makes phase 1 a draft');
+ assert.deepEqual(st.shortfalls.map(f=>f.name),['Iron Ore'],'the short resource is identified');
+ assert.ok(st.shortfalls[0].needed>300&&st.shortfalls[0].budget===300,'needed and entered rates are reported');
+ assert.ok(st.reason.includes('Iron Ore'),'the explanation names the resource');
+ assert.ok(st.minHours>0.25&&st.minHours<=2000,'a longer phase time is suggested');
+ assert.equal(calculate({...input,hours:st.minHours}).stages[1].feasible,true,'the suggested phase time fits the budgets');
 });

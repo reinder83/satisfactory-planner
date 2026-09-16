@@ -167,6 +167,9 @@ p.eyebrow{margin:20px 0 10px}
 .notice.blue{background:var(--panel2);border-color:var(--blue);color:#99a2a9}
 .notice.blue b,.notice.blue strong{color:#cfe0f5}
 .notice .btn{margin:6px 0}
+.notice p{margin:8px 0 2px}
+.notice ul{margin:4px 0 2px;padding-left:18px}
+.notice li{margin:3px 0}
 
 /* ── Deliveries ────────────────────────────────────────── */
 .delivery{border-bottom:1px solid var(--row);padding:13px 0}
