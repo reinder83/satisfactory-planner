@@ -4,6 +4,7 @@ import {progression} from './progression.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
+const num3=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:3});
 const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 let progressionData;
 let workspace,currentSave,currentProfile,calculated=null,wizard=null,authMode='login';
@@ -207,32 +208,129 @@ function renderResources(){const raw=plan.resources[stage()],p=plan.plans[stage(
  <section class="panel" style="margin-top:24px"><h2>Nuclear sequence</h2><p>Phase 4: 50 uranium reactors generate 500 waste/min. Process it into 2.5 Plutonium Fuel Rods/min and sink those rods.</p><p>Phase 5: 100 uranium reactors → 1,000 Uranium Waste/min → 5 Plutonium Fuel Rods/min → 50 plutonium reactors → 50 Plutonium Waste/min → 25 Ficsonium Fuel Rods/min → 25 Ficsonium reactors.</p><p class="small muted">Build downstream processing and burning capacity first. Final reactor cooling needs 42,000 Water/min, already included in the resource table. Keep radioactive buffers at the nuclear site.</p></section>`;}
 function renderBackup(){if(browserMode)return renderBrowserBackup();if(calculated)return renderCalculatedBackup();return portablePanel()+header('YOUR PROGRESS','Backup & notes','Progress is stored on the server, so the same Docker instance works across your devices.')+`<div class="backup-grid"><section class="panel"><h2>Download a backup</h2><p>Save a copy of your checkmarks, delivery counts, personal tasks and notes.</p><a class="btn primary" href="/api/export?save=${currentSave.id}&profile=${currentProfile.id}" download>Download progress JSON ↓</a><p class="small muted">The Docker volume keeps progress through container updates. This download gives you a separate copy.</p></section><section class="panel"><h2>Restore a backup</h2><p>Import a backup from this planner. It replaces current progress after confirmation; factory-plan data stays unchanged.</p><label class="btn">Choose backup file<input id="import-file" type="file" accept="application/json,.json" hidden></label><p class="small muted">Up to 2 MB. The previous state is also retained as workspace.json.bak on the server. The original progress file is kept during migration.</p></section></div><section class="panel" style="margin-top:24px"><h2>Save-wide notes</h2><textarea id="global-note" class="notes" maxlength="6000" aria-label="Save-wide notes">${esc(state.notes.global||'')}</textarea><div class="note-save"><span class="small muted">Seed, locations, routes and decisions.</span><button class="btn" data-save-note="global" data-input="global-note">Save notes</button></div></section><section class="panel"><h2>Plan assumptions</h2><p class="small">All tiers through 6 unlocked. Phase 3 Versatile Frameworks delivered. Pure nodes, 50× elevator costs, half consumption. Retire coal and temporary fuel; retain turbofuel. Phase 5 resource conversion and extra Reanimated SAM are included. Ground-floor storage shell is already built; individual containers are not assumed connected.</p><p class="small">The final extra storage modules need additional input allocations. After Phase 5, storage takes priority over maintaining full elevator-export rates for sinking. Gathered items require collection; equipment and inhalers are manually crafted.</p><div class="list-links">${plan.sources.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.title)} ↗</a>`).join('')}</div></section>`;}
 const itemIcon=name=>name?`<img class="item-icon" src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/,''))}.png" width="42" height="42" loading="lazy" alt="">`:'';
+// Belt/pipe logistics. Capacities are game constants; the unlocking milestone (tier, name) comes from progression.json.
+const FLUIDS=new Set(['Fuel','Rocket Fuel','Nitric Acid','Turbofuel','Ionized Fuel','Dark Matter Residue','Excited Photonic Matter','Heavy Oil Residue','Alumina Solution','Sulfuric Acid','Dissolved Silica','Nitrogen Gas','Water','Crude Oil','Liquid Biofuel']);
+const BELT_LANES=[{mark:'Mk.1',cap:60,entry:'Schematic_1-2_C'},{mark:'Mk.2',cap:120,entry:'Schematic_3-2_C'},{mark:'Mk.3',cap:270,entry:'Schematic_5-3_C'},{mark:'Mk.4',cap:480,entry:'Schematic_6-1_C'},{mark:'Mk.5',cap:780,entry:'Schematic_7-2_C'},{mark:'Mk.6',cap:1200,entry:'Schematic_9-5_C'}];
+const PIPE_LANES=[{mark:'Mk.1',cap:300,entry:'Schematic_3-1_C'},{mark:'Mk.2',cap:600,entry:'Schematic_6-5_C'}];
+const phaseForLaneTier=t=>t<=2?1:t<=4?2:t<=6?3:t<=8?4:5;
+function laneMilestone(l){const e=progressionData?.entries.find(x=>x.id===l.entry);return e?{name:e.name,tier:e.tier,phase:phaseForLaneTier(e.tier),marked:checked('unlock-'+e.id)}:null;}
+function bestLane(fluid,st){
+ const lanes=fluid?PIPE_LANES:BELT_LANES;const stageNo=Number(st??stage());let best=lanes[0],ms=laneMilestone(lanes[0]);
+ for(const l of lanes){const m=laneMilestone(l);if(!m||m.marked||m.phase<=stageNo){best=l;ms=m;}}
+ const next=lanes[lanes.indexOf(best)+1];
+ return {...best,fluid,unit:fluid?' m³/min':'/min',milestone:ms,next:next?{...next,milestone:laneMilestone(next)}:null};
+}
+function lanePlan(rate,fluid,st){const lane=bestLane(fluid,st);const count=Math.max(1,Math.ceil(rate/lane.cap-1e-9));const last=rate-(count-1)*lane.cap;return {lane,count,last,full:count-(last<lane.cap-1e-9?1:0),spare:count*lane.cap-rate,word:fluid?'pipe':'belt'};}
+function recipePanelHtml(m){
+ const rc=m.recipe;if(!rc)return '';
+ const cell=([n,q,link],out)=>{const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;};
+ return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>per 1 × ${esc(rc.machine)} @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x=>cell(x)).join('')||'<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x=>cell(x,true)).join('')}</div></div></div>`;
+}
+function flowHtml(m){
+ if(!m||(!m.inputs.length&&!m.outputs.length))return '';
+ const inTile=i=>{const p=i.plan,load=Math.round(i.rate/(p.count*p.lane.cap)*100);
+  const inner=`${itemIcon(i.name)}<span class="rail-main"><b>${esc(i.name)}</b><small${load>=70?' class="hot"':''}>${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''} · ${load}% load</small></span><span class="rail-rate">${num(i.rate)}<small>${p.lane.unit}</small></span>`;
+  return i.link?`<button class="rail-tile" ${i.link}>${inner}</button>`:`<div class="rail-tile">${inner}</div>`;};
+ const outRow=o=>{
+  const subs={consumer:`consumer${o.beltTxt?' · '+o.beltTxt:''}`,store:'protected module',ship:o.shipSub||'delivery',drone:'protected supply contract',sink:o.subTxt||'whole-machine rounding surplus',more:'combined smaller destinations'};
+  const name=o.link?`<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`:`<b class="${o.kind==='sink'||o.kind==='more'?'dim':''}">${esc(o.label)}</b>`;
+  const machCol=o.mach===undefined?'<span class="rail-mach"></span>':`<span class="rail-mach"><b>≈ ${o.mach<0.5?'<1':num(Math.ceil(o.mach-1e-9))}</b> × ${esc(m.machineName)}<small>${num(o.mach)} at 100% · ${m.local?'build beside it':'round up'}</small></span>`;
+  const rate=o.rateTxt??(o.rate!==undefined?`${num(o.rate)}<small>${o.unit||'/min'}</small>`:'');
+  return `<div class="rail-row ${o.kind}">${o.icon?itemIcon(o.icon):'<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre?esc(o.pre)+' · ':''}${subs[o.kind]||''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;};
+ const bar=m.bar?`${m.inputs.length?'<div class="rail-arrow">↓</div>':''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length?'<div class="rail-arrow">↓</div>':''}`:'';
+ return `<h3>Flow at ${phaseLabel(m.stage)}</h3>${recipePanelHtml(m)}${m.inputs.length?`<div class="rail-cap">Inputs · ${m.inputs.length} line${m.inputs.length>1?'s':''} in</div><div class="rail-grid">${m.inputs.map(inTile).join('')}</div>`:''}${bar}${m.outputs.length?`<div class="rail-caps"><span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(o=>o.mach!==undefined)?`<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>`:''}</div><div class="rail-rows">${m.outputs.map(outRow).join('')}</div>${m.bankNote||''}`:''}`;
+}
+function capFlowOutputs(list,unit='/min'){if(list.length<=10)return list;const rest=list.slice(9),sum=rest.reduce((s,x)=>s+(x.rate||0),0);return [...list.slice(0,9),{kind:'more',label:`+ ${rest.length} more destinations`,rate:sum,unit}];}
+function laneAdviceHtml(m){
+ if(!m||!m.inputs.length)return '';
+ const belts=bestLane(false,m.stage),pipes=bestLane(true,m.stage);
+ const nextNote=belts.next?.milestone?` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${esc(belts.next.milestone.name)} in Phase ${belts.next.milestone.phase}.`:'';
+ const rows=m.inputs.map(i=>{
+  const p=i.plan,l=p.lane,per=i.rate/m.equivalent,fed=Math.floor(l.cap/per+1e-9);
+  const parts=[`<b>${num(i.rate)}${l.unit}</b> → <b>${p.count} × ${l.mark} ${p.word}${p.count>1?'s':''}</b>${p.count>1?` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`:` (${Math.round(i.rate/l.cap*100)}% of ${num(l.cap)}${l.unit})`}.`];
+  if(m.machineCount>1)parts.push(fed<1?`Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`:m.machineCount>fed?`One full ${l.mark} ${p.word} feeds <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) — plan manifold rows of ${fed}.`:`One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`);
+  if(p.count>1&&p.spare>0.01){
+   const merge=m.sameItemConsumers(i.name).filter(x=>x.rate<=p.spare+0.01);
+   parts.push(`The last ${p.word} has <b>${num(p.spare)}${l.unit} spare</b> — ${merge.length?`enough to also carry ${merge.slice(0,2).map(x=>`<button class="btn quiet" ${x.attr}>${esc(x.label)} (${num(x.rate)}${l.unit}) ↗</button>`).join(' or ')} from the same bus`:'keep it as expansion headroom on this manifold'}.`);
+  }
+  if(i.local)parts.push(i.local);
+  return `<div class="logi-row">${itemIcon(i.name)}<div><b>${esc(i.name)}</b>${parts.map(t=>`<p>${t}</p>`).join('')}</div></div>`;
+ }).join('');
+ return `<h3>Belts &amp; pipes</h3><p class="small muted">${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in your save yet, plan with the earlier mark.</p><div class="logi">${rows}</div>`;
+}
+function handbookFlowModel(f,st,r,localInput,bankOnly=false){
+ const fluidOut=FLUIDS.has(f.name);const unit=fluidOut?' m³/min':'/min';
+ const eq=Math.max(r.machines-1+(r.lastClock??100)/100,0.01);const perOut=r.output/eq;
+ const beltTxt=p=>`${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''}`;
+ const mach=q=>bankOnly?undefined:q/perOut;
+ const consumers=plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[f.name]).map(o=>{const q=o.stages[st].inputs[f.name];return {kind:'consumer',label:o.name,icon:o.name,link:`data-factory="${o.id}"`,rate:q,unit,mach:mach(q),beltTxt:f.local?'made on site':beltTxt(lanePlan(q,fluidOut,st))};}).sort((a,b)=>b.rate-a.rate);
+ const outputs=[...consumers];
+ if(f.nuclear&&!consumers.length)outputs.push({kind:'ship',label:'Nuclear power fleet',shipSub:'planned in Power & resources',icon:f.name,rateTxt:''});
+ if(r.storage)outputs.push({kind:'store',label:'Storage refill',icon:f.name,rate:r.storage,unit,mach:mach(r.storage)});
+ if(r.delivery)outputs.push({kind:'ship',label:'Space Elevator delivery',icon:f.name,rate:r.delivery,unit,mach:mach(r.delivery)});
+ const surplus=Math.max(0,r.output-(r.demand??r.output));
+ if(surplus>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:f.name,rate:surplus,unit});
+ const inputs=bankOnly?[]:Object.entries(r.inputs||{}).map(([n,q])=>{const lp=localInput(n);const src=lp||plan.factories.find(x=>x.name===n&&x.stages[st]);return {name:n,rate:q,link:src?`data-factory="${src.id}"`:'',plan:lanePlan(q,FLUIDS.has(n),st),local:lp?`<button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q/lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`:''};});
+ const capped=capFlowOutputs(outputs,unit);
+ const splits=capped.filter(o=>o.mach!==undefined&&o.kind!=='sink');
+ const splitTxt=splits.length>1?` · split ≈ ${splits.map(o=>num(Math.ceil(o.mach-1e-9))).join(' / ')} across the deliveries below`:'';
+ const clock=(r.lastClock??100)<100?`@ 100% except the last at ${num(r.lastClock)}%`:'@ 100%';
+ return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:!!f.local,
+  recipe:bankOnly?null:{name:String(r.recipe||'').replace('Alternate: ',''),machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:[[f.name,perOut]]},
+  bar:bankOnly?null:{sub:`${esc(String(r.recipe||'').replace('Alternate: ',''))} · ${clock} · ${num3(perOut)} ${esc(f.name)}/min out per machine${splitTxt}${f.local?' · built beside the consumers':''}`,outTxt:`${num(r.output)}<small>${unit}</small>`,outSub:f.local?'out · distributed':'out · '+beltTxt(lanePlan(r.output,fluidOut,st))},
+  sameItemConsumers:n=>plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[n]).map(o=>({label:o.name,rate:o.stages[st].inputs[n],attr:`data-factory="${o.id}"`}))};
+}
+function calcFlowModel(r){
+ const x=calcStage(),st=stage(),multi=Object.keys(r.outputs||{}).length>1;
+ const eq=Math.max(r.equivalent||r.machines-1+(r.lastClock??100)/100||1,0.01);
+ const beltTxt=p=>`${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''}`;
+ const outputs=[];
+ for(const n of Object.keys(r.outputs||{})){
+  const fluid=FLUIDS.has(n),unit=fluid?' m³/min':'/min',pre=multi?n:'',perOut=r.outputs[n]/eq;
+  const mach=q=>multi?undefined:q/perOut;
+  for(const o of (x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]))outputs.push({kind:'consumer',label:o.name,icon:Object.keys(o.outputs||{})[0]||n,link:`data-calc-factory="${o.id}"`,rate:o.inputs[n],unit,pre,mach:mach(o.inputs[n]),beltTxt:beltTxt(lanePlan(o.inputs[n],fluid,st))});
+  if(x.storage?.[n])outputs.push({kind:'store',label:'Protected storage',icon:n,rate:x.storage[n],unit,pre,mach:mach(x.storage[n])});
+  if(x.delivery?.[n]?.rate)outputs.push({kind:'ship',label:'Space Elevator delivery',icon:n,rate:x.delivery[n].rate,unit,pre,mach:mach(x.delivery[n].rate)});
+  if(x.drone?.[n])outputs.push({kind:'drone',label:'Drone fuel contract',icon:n,rate:x.drone[n],unit,pre,mach:mach(x.drone[n])});
+  if(st==='5'&&n==='Singularity Cell'&&calculated.settings.cellsPerMinute)outputs.push({kind:'ship',label:'Extra Singularity Cells',shipSub:'configured portal supply',icon:n,rate:calculated.settings.cellsPerMinute,unit,pre,mach:mach(calculated.settings.cellsPerMinute)});
+  if(n==='Plutonium Fuel Rod'&&x.plutoniumSink)outputs.push({kind:'sink',label:'AWESOME Sink',subTxt:'waste strategy — sink these rods',icon:n,rate:x.plutoniumSink,unit,pre});
+  if(x.surplus?.[n]>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:n,rate:x.surplus[n],unit,pre});
+ }
+ outputs.sort((a,b)=>(b.rate||0)-(a.rate||0));
+ if(!outputs.length&&r.generationMW)outputs.push({kind:'ship',label:'Power grid',shipSub:'generation',rateTxt:power(r.generationMW)});
+ const inputs=Object.entries(r.inputs||{}).map(([n,q])=>{const src=(x.rows||[]).find(o=>o.id!==r.id&&o.outputs?.[n]);return {name:n,rate:q,link:src?`data-calc-factory="${src.id}"`:'',plan:lanePlan(q,FLUIDS.has(n),st)};});
+ const outName=Object.keys(r.outputs||{})[0];
+ const capped=capFlowOutputs(outputs);
+ const splits=capped.filter(o=>o.mach!==undefined&&o.kind!=='sink');
+ const splitTxt=splits.length>1?` · split ≈ ${splits.map(o=>num(Math.ceil(o.mach-1e-9))).join(' / ')} across the deliveries below`:'';
+ const clock=r.machines-eq>1e-7?'@ 100% + 1 adjustable':'@ 100%';
+ const shared=Object.keys(r.outputs||{}).some(n=>(x.rows||[]).some(o=>o.id!==r.id&&o.outputs?.[n]));
+ return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:false,
+  recipe:{name:r.name,machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:outName?Object.entries(r.outputs).map(([n,q])=>[n,q/eq]):[['MW',r.generationMW/eq]]},
+  bar:{sub:`${esc(r.name)} · ${clock}${outName&&!multi?` · ${num3(r.outputs[outName]/eq)} ${esc(outName)}/min out per machine`:''}${splitTxt}`,outTxt:outName?`${num(r.outputs[outName])}<small>${FLUIDS.has(outName)?' m³/min':'/min'}</small>`:power(r.generationMW),outSub:outName?(multi?'out · '+esc(outName)+' + byproducts':'out · '+beltTxt(lanePlan(r.outputs[outName],FLUIDS.has(outName),st))):'generation'},
+  bankNote:outputs.length?`<p class="small muted">Demand for the item across this phase's whole plan${shared?', supplied together with the other recipes producing it':''}.</p>`:'',
+  sameItemConsumers:n=>(x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]).map(o=>({label:o.name,rate:o.inputs[n],attr:`data-calc-factory="${o.id}"`}))};
+}
 function dialog(title,subtitle,body,icon=''){const d=$('#detail');d.innerHTML=`<header class="dialog-head"><div class="dialog-title">${icon?`<span class="dialog-icon">${itemIcon(icon)}</span>`:''}<div><div class="eyebrow">${subtitle}</div><h2>${esc(title)}</h2></div></div><button class="close" aria-label="Close details" data-close>×</button></header><div class="dialog-body">${body}</div>`;if(!d.open)d.showModal();}
 function openFactory(id){
  const f=plan.factories.find(x=>x.id===id);if(!f)return;activeDetail={type:'factory',id};const r=f.stages[stage()]||Object.values(f.stages)[0];
  let installed={};const history=Object.entries(f.stages).map(([ph,x])=>{const old=installed[x.machine]||0;const added=Math.max(0,x.machines-old);installed[x.machine]=Math.max(old,x.machines);return `<tr><td>${ph}</td><td>${num(x.output)}</td><td>${num(x.storage)}</td><td>${num(x.machines)} ${esc(x.machine)}</td><td>${added?`+${num(added)}`:'Keep capacity'}</td></tr>`;}).join('');
  const oil=['Plastic','Rubber'].includes(f.name);const st=f.stages[stage()]?stage():Object.keys(f.stages)[0];
+ const localInput=n=>plan.factories.find(x=>x.local&&x.name===n&&x.stages[st]);
+ const flow=handbookFlowModel(f,st,r,localInput,oil);
  dialog(f.name,`${phaseLabel(st)} · Handbook page ${f.page}`,`
  <span class="badge orange">${esc(r.recipe)}</span><div class="stats">${stat('Output',num(r.output)+'/min','Total production')}${stat('Storage',num(r.storage)+'/min','Protected allowance')}${stat('Machines',oil?'Campus':num(r.machines),oil?'Shared oil processes':esc(r.machine))}</div>
- ${f.note?`<div class="notice blue">${esc(f.note)}</div>`:''}${f.local?'<div class="notice">Distributed production budget: build these machines beside the consumers listed below, plus the storage refill module. Independent site rounding can require additional machines.</div>':''}${factoryUsageHtml(f,st)}${f.nuclear?'<div class="notice">Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a generic storage surplus.</div>':''}
- ${oil?oilDetail(st):(()=>{const localInput=n=>plan.factories.find(x=>x.local&&x.name===n&&x.stages[st]);return `<h3>Inputs per minute</h3><div class="table-wrap"><table><tbody>${Object.entries(r.inputs).map(([n,q])=>{const lp=localInput(n);return `<tr><td>${esc(n)}${lp?`<br><button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q/lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`:''}</td><td class="number">${num(q)}</td></tr>`;}).join('')}</tbody></table></div><p class="small muted">${num(r.machines)} whole buildings. All at 100%, except the last at ${num(r.lastClock)}%. Peak production load ${num(r.peakMW)} MW; upstream factories and logistics are separate.${Object.keys(r.inputs).some(localInput)?' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.':''}</p>`;})()}
+ ${f.note?`<div class="notice blue">${esc(f.note)}</div>`:''}${f.local?'<div class="notice">Distributed production budget: build these machines beside the consumers listed below, plus the storage refill module. Independent site rounding can require additional machines.</div>':''}${flowHtml(flow)}${usageNotesHtml(f,st)}${f.nuclear?'<div class="notice">Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a generic storage surplus.</div>':''}
+ ${oil?oilDetail(st):laneAdviceHtml(flow)+`<p class="small muted">${num(r.machines)} whole buildings. All at 100%, except the last at ${num(r.lastClock)}%. Peak production load ${num(r.peakMW)} MW; upstream factories and logistics are separate.${Object.keys(r.inputs).some(localInput)?' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.':''}</p>`}
  <h3>Expansion across phases</h3><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Output/min</th><th>Storage/min</th><th>Required</th><th>Add</th></tr></thead><tbody>${history}</tbody></table></div><p class="small muted">Keep larger earlier installed capacity. Recipe changes need their new input routes. Counts are running requirements, not a demolition instruction.</p>
  <div class="detail-actions"><label class="check-row"><input type="checkbox" data-check="factory-${st}-${f.id}" ${doneAttr('factory-'+st+'-'+f.id)}>Running at Phase ${st} target</label></div>
  <h3>Factory notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+f.id]||'')}</textarea><div class="note-save"><span class="small muted">Location, transport, next expansion.</span><button class="btn" data-save-note="factory-${f.id}" data-input="detail-note">Save notes</button></div>`,f.name);
 }
-function usageTable(rows,itemName,st,surplus=0){
- if(!rows.length&&surplus<=0.002)return '';
- return `<h3>Where ${esc(itemName)} is needed · ${phaseLabel(st)}</h3><div class="table-wrap"><table><thead><tr><th>Consumer</th><th>/min</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.factory?`<button class="btn quiet" data-factory="${x.factory}">${esc(x.label)} ↗</button>`:x.calcFactory?`<button class="btn quiet" data-calc-factory="${x.calcFactory}">${esc(x.label)} ↗</button>`:esc(x.label)}</td><td class="number">${num(x.rate)}</td></tr>`).join('')}${surplus>0.002?`<tr><td>Whole-machine rounding surplus (overflow to sink)</td><td class="number">${num(surplus)}</td></tr>`:''}</tbody></table></div>`;
-}
-function factoryUsageHtml(f,st){
+function usageNotesHtml(f,st){
  const r=f.stages[st];
- const consumers=plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[f.name]).map(o=>({label:o.name,rate:o.stages[st].inputs[f.name],factory:o.id})).sort((a,b)=>b.rate-a.rate);
- const rows=[...consumers];
- if(r.storage)rows.push({label:'Storage refill module',rate:r.storage});
- if(r.delivery)rows.push({label:'Space Elevator delivery',rate:r.delivery});
+ const consumers=plan.factories.some(o=>o.id!==f.id&&o.stages[st]?.inputs?.[f.name]);
  const completion=phase()==='post'?plan.completion.filter(c=>c.inputs?.[f.name]):[];
- return usageTable(rows,f.name,st,Math.max(0,r.output-(r.demand??r.output)))+
- (consumers.length||r.delivery?'':f.nuclear?`<p class="small muted">${esc(f.name)} is consumed by the nuclear power fleet, which is planned in <a href="#resources">Power &amp; resources</a> rather than as a factory target. Keep its flow inside the nuclear site.</p>`:r.storage?`<p class="small muted">No factory in this plan consumes ${esc(f.name)} directly; this capacity only refills the protected storage. The refill rate is a protected maximum, not continuous consumption — the machines idle once the container is full and only run while you take ${esc(f.name)} out.</p>`:'')+
+ return (consumers||r.delivery?'':f.nuclear?`<p class="small muted">${esc(f.name)} is consumed by the nuclear power fleet, which is planned in <a href="#resources">Power &amp; resources</a> rather than as a factory target. Keep its flow inside the nuclear site.</p>`:r.storage?`<p class="small muted">No factory in this plan consumes ${esc(f.name)} directly; this capacity only refills the protected storage. The refill rate is a protected maximum, not continuous consumption — the machines idle once the container is full and only run while you take ${esc(f.name)} out.</p>`:'')+
  (completion.length?`<p class="small muted">Additional completion modules also use ${esc(f.name)}: ${completion.map(c=>esc(c.name)+' '+num(c.inputs[f.name])+'/min').join(' · ')}. Allocate their supply on top of this factory's budget.</p>`:'');
 }
 function oilDetail(st){const p=plan.plans[st];return `<h3>Shared oil campus</h3><p>Supply both polymer exports together. Crude: ${num(p.oilTotals.crude)}/min; water: ${num(p.oilTotals.water)}/min.</p><div class="table-wrap"><table><thead><tr><th>Recipe</th><th>Buildings</th><th>100% equivalents</th></tr></thead><tbody>${p.oil.map(x=>`<tr><td>${esc(x.recipe.replace('Alternate: ',''))}</td><td>${num(x.machines)} ${esc(x.machine)}</td><td>${num(x.equivalent)}</td></tr>`).join('')}</tbody></table></div><p>${st==='3'?`Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.`:`Export ${num(p.oilTotals.fuel)} Fuel/min to Heat-Fused Frames. Remaining fuel and recycled polymers are internal flows. Seed the loops before opening exports.`}</p>`;}
@@ -391,21 +489,7 @@ function machineSetup(r){
  return {summary,whole,partial,fullOutput,lastOutput,clock:fraction*100,easy};
 }
 function setupHtml(r){const m=machineSetup(r);return `<h3>Machine setup</h3><p><b>${esc(m.summary)}</b></p><table><thead><tr><th>Machines</th><th>Clock each</th><th>Output per machine</th></tr></thead><tbody>${m.whole?`<tr><td>${m.whole} full-speed</td><td>100%</td><td>${esc(m.fullOutput)}</td></tr>`:''}${m.partial?`<tr><td>1 adjustable</td><td>≈ ${num(m.clock)}%</td><td>≈ ${esc(m.lastOutput)}</td></tr>`:''}</tbody></table>${m.easy&&!calculated?.settings.wholeMachines?`<div class="notice blue"><b>Easier optional setting: set only the adjustable machine to ${m.easy.clock}%.</b><p>Its output: ${inputText(m.easy.output)||num(r.generationMW/(r.equivalent||1)*m.easy.clock/100)+' MW'}.</p><p>Extra inputs needed: ${inputText(m.easy.inputs)}.<br>Extra outputs/byproducts: ${inputText(m.easy.extraOutputs)||'Additional generation'}.</p><p>This is extra capacity, not a recalculated balanced plan. Supply the extra inputs and handle every extra output before using it. The totals below remain the original calculated targets.</p></div>`:''}${m.partial?'<p class="small muted">Calculated percentages and outputs are displayed rounded. Keep the calculated setting for tightly balanced recycling; do not round nuclear or waste-processing lines independently.</p>':''}`;}
-function calcUsageHtml(r){
- const x=calcStage();const sections=[];
- for(const n of Object.keys(r.outputs||{})){
-  const rows=(x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]).map(o=>({label:o.name,rate:o.inputs[n],calcFactory:o.id})).sort((a,b)=>b.rate-a.rate);
-  if(x.storage?.[n])rows.push({label:'Protected storage refill',rate:x.storage[n]});
-  if(x.delivery?.[n]?.rate)rows.push({label:'Space Elevator delivery',rate:x.delivery[n].rate});
-  if(x.drone?.[n])rows.push({label:'Drone fuel contract',rate:x.drone[n]});
-  if(stage()==='5'&&n==='Singularity Cell'&&calculated.settings.cellsPerMinute)rows.push({label:'Extra Singularity Cells (configured)',rate:calculated.settings.cellsPerMinute});
-  if(n==='Plutonium Fuel Rod'&&x.plutoniumSink)rows.push({label:'AWESOME Sink (waste strategy)',rate:x.plutoniumSink});
-  sections.push(usageTable(rows,n,stage(),x.surplus?.[n]||0));
- }
- const shared=Object.keys(r.outputs||{}).some(n=>(calcStage().rows||[]).some(o=>o.id!==r.id&&o.outputs?.[n]));
- return sections.join('')+(sections.some(s=>s)?`<p class="small muted">Demand for the item across this phase's whole plan${shared?', supplied together with the other recipes producing it':''}.</p>`:'');
-}
-function openCalculatedFactory(id){const r=calcStage().rows?.find(r=>r.id===id);if(!r)return;const dialogIcon=Object.keys(r.outputs||{})[0]||'';dialog(r.name,phaseLabel(phase()),`${setupHtml(r)}<h3>Inputs per minute</h3><p>${inputText(r.inputs)||'None'}</p><h3>Outputs per minute</h3><p>${inputText(r.outputs)||power(r.generationMW)}</p>${calcUsageHtml(r)}<h3>Expansion by phase</h3><table><thead><tr><th>Phase</th><th>Machines</th><th>Add</th></tr></thead><tbody>${(()=>{let installed=0;return Object.entries(calculated.stages).map(([ph,p])=>{const x=p.rows?.find(x=>x.id===id),required=x?.machines||0,add=Math.max(0,required-installed);installed=Math.max(installed,required);return `<tr><td>${ph}</td><td>${required}</td><td>${add?'+'+add:'Keep available'}</td></tr>`;}).join('');})()}</tbody></table><p class="small muted">The optimizer may choose a different recipe in another phase. Keep earlier buildings until the replacement chain runs. Screws and wire can be made beside consumers.</p><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+id]||'')}</textarea><button class="btn" data-save-note="factory-${id}" data-input="detail-note">Save notes</button>`,dialogIcon);}
+function openCalculatedFactory(id){const r=calcStage().rows?.find(r=>r.id===id);if(!r)return;const flow=calcFlowModel(r);const dialogIcon=Object.keys(r.outputs||{})[0]||'';dialog(r.name,phaseLabel(phase()),`${flowHtml(flow)}${setupHtml(r)}${laneAdviceHtml(flow)}<h3>Outputs per minute</h3><p>${inputText(r.outputs)||power(r.generationMW)}</p><h3>Expansion by phase</h3><table><thead><tr><th>Phase</th><th>Machines</th><th>Add</th></tr></thead><tbody>${(()=>{let installed=0;return Object.entries(calculated.stages).map(([ph,p])=>{const x=p.rows?.find(x=>x.id===id),required=x?.machines||0,add=Math.max(0,required-installed);installed=Math.max(installed,required);return `<tr><td>${ph}</td><td>${required}</td><td>${add?'+'+add:'Keep available'}</td></tr>`;}).join('');})()}</tbody></table><p class="small muted">The optimizer may choose a different recipe in another phase. Keep earlier buildings until the replacement chain runs. Screws and wire can be made beside consumers.</p><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+id]||'')}</textarea><button class="btn" data-save-note="factory-${id}" data-input="detail-note">Save notes</button>`,dialogIcon);}
 function renderCalculatedResources(){const x=calcStage();return header('CHECK BEFORE EXPANDING','Power & resources','New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.')+calcWarnings()+`<div class="stats">${stat('New generation',power(x.generationMW),'Fuel and recycling included')}${stat('Whole-machine peak',power(x.peakMW),'At selected consumption multiplier')}${stat('With utility allowance',power(x.requiredMW),(calculated.settings.utilityPercent??20)+'% for transport and utilities; verify actual load')}${stat('Existing spare power',power(calculated.settings.availablePowerGW*1000),'Not total installed generation')}</div><div class="table-wrap"><table><thead><tr><th>Resource</th><th>Required /min</th><th>Budget /min</th><th>Remaining</th></tr></thead><tbody>${workspace.catalog.raw.map(n=>`<tr><td>${esc(n)}</td><td>${num(x.raw?.[n])}</td><td>${num(calculated.settings.limits[n])}</td><td class="${(x.raw?.[n]||0)>calculated.settings.limits[n]?'warn':''}">${num(calculated.settings.limits[n]-(x.raw?.[n]||0))}</td></tr>`).join('')}</tbody></table></div><div class="backup-grid"><section class="panel"><h2>Dedicated drone fuel /min</h2><p>${inputText(x.drone||{})||'No dedicated drone fuel in this phase.'}</p><h2>Protected storage /min</h2><p>${inputText(x.storage||{})||'No storage production requested.'}</p></section><section class="panel"><h2>Conversion and byproducts</h2><p>${x.conversions?.map(esc).join('<br>')||'No raw-resource conversion required.'}</p><p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p><p>Surplus solids: ${inputText(x.surplus||{})||'None'}</p><p class="small muted">Liquid and radioactive material balances are enforced. Do not let storage or overflow block recycling.</p></section></div>`;}
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
  if(b.hasAttribute('data-new-save'))startWizard();

@@ -259,6 +259,75 @@ dialog::backdrop{background:rgba(6,8,9,.78)}
 .dialog-body .stat{padding:12px 13px}
 .dialog-body .stat strong{font-size:24px}
 .detail-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:16px}
+
+/* ── Factory flow rails (2B layout) and belt logistics ── */
+.rail-cap{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--kicker);margin:16px 0 8px}
+.rail-caps{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:16px 0 8px}
+.rail-caps .rail-cap{margin:0}
+.rail-recipe{margin:12px 0 0;background:var(--panel2);border:1px solid var(--line2)}
+.rail-recipe-head{padding:8px 13px;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.rail-recipe-head span:first-child{font-family:var(--head);font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--bright)}
+.rail-recipe-head span:last-child{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--kicker)}
+.rail-recipe-body{padding:12px;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,215px);gap:10px;align-items:stretch}
+.rail-recipe-ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px}
+.rail-recipe-outs{display:grid;gap:8px;align-content:stretch}
+.rail-recipe-arrow{display:grid;place-items:center;color:var(--accent);font-size:17px}
+.rail-cell{box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px;background:var(--bg);border:1px solid var(--line2)}
+button.rail-cell{cursor:pointer;font:inherit;color:inherit;text-align:left;width:100%}
+button.rail-cell:hover{border-color:var(--accent)}
+.rail-cell .item-icon{width:26px;height:26px;flex:none}
+.rail-cell.out{background:#211a0d;border-color:var(--accent-sh)}
+.rail-cell.out .rail-main b{font-family:var(--head);font-size:19px;color:var(--accent)}
+.rail-cell.out .rail-main small{color:var(--gold)}
+.rail-cell .rail-main b{font-family:inherit;font-size:15px;letter-spacing:0}
+.rail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}
+.rail-tile{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--line);background:none;color:inherit;text-align:left;font:inherit;width:100%}
+button.rail-tile{cursor:pointer}
+button.rail-tile:hover{border-color:var(--accent)}
+.rail-tile .item-icon,.rail-row .item-icon{width:26px;height:26px;flex:none}
+.rail-noicon{width:26px;height:26px;flex:none;background:var(--panel2);border:1px dashed var(--line2)}
+.rail-main{flex:1;min-width:0}
+.rail-main b{display:block;font-family:var(--head);font-weight:600;font-size:14px;letter-spacing:.04em;color:var(--bright)}
+.rail-main b.dim{color:var(--muted);font-weight:400;font-family:inherit;font-size:12px}
+.rail-main small{display:block;font-size:10.5px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+.rail-main small.hot{color:var(--accent)}
+.rail-rate{flex:none;font-weight:600;font-size:14.5px;color:var(--ink);text-align:right}
+.rail-rate small{font-weight:400;font-size:10.5px;color:var(--muted)}
+.rail-arrow{display:grid;place-items:center;color:var(--dim);font-size:14px;padding:7px 0}
+.rail-machine{background:#211a0d;border:1px solid var(--accent);padding:12px 15px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.rail-machine-main{flex:1;min-width:220px}
+.rail-machine-main b{font-family:var(--head);font-weight:700;font-size:19px;letter-spacing:.03em;color:var(--bright)}
+.rail-machine-main small{display:block;font-size:10.5px;line-height:1.5;color:var(--gold);margin-top:3px}
+.rail-machine-out{text-align:right;margin-left:auto}
+.rail-machine-out b{font-family:var(--head);font-weight:700;font-size:19px;color:var(--accent)}
+.rail-machine-out b small{font-size:11px;color:var(--gold)}
+.rail-machine-out>small{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-top:1px}
+.rail-rows{display:flex;flex-direction:column;gap:8px}
+.rail-row{display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--line)}
+.rail-row.store{border-left:2px solid var(--accent)}
+.rail-row.store .rail-main small,.rail-row.drone .rail-main small{color:var(--accent);letter-spacing:.1em;text-transform:uppercase;font-size:9.5px}
+.rail-row.sink,.rail-row.more{border-style:dashed}
+.rail-row .rail-link{background:none;border:0;padding:0;font-family:var(--head);font-weight:600;font-size:14px;letter-spacing:.04em;color:var(--accent);border-bottom:1px solid rgba(248,156,28,.4);cursor:pointer}
+.rail-row .rail-link:hover{color:var(--accent-hi);border-bottom-color:var(--accent-hi)}
+.rail-mach{flex:none;width:192px;padding-left:13px;border-left:1px solid var(--line2);box-sizing:border-box}
+.rail-mach b{font-size:13.5px;color:var(--ink)}
+.rail-mach small{display:block;font-size:10.5px;color:var(--muted)}
+.rail-row .rail-rate{width:90px}
+@media (max-width:640px){
+ .rail-recipe-body{grid-template-columns:1fr}
+ .rail-recipe-arrow{transform:rotate(90deg)}
+ .rail-row{flex-wrap:wrap}
+ .rail-mach{width:calc(100% - 36px);border-left:0;padding-left:0;margin-left:36px}
+ .rail-row .rail-rate{width:auto;margin-left:auto}
+}
+
+.logi{margin:10px 0 4px;border:1px solid var(--line2);background:var(--panel2)}
+.logi-row{display:flex;gap:12px;padding:10px 12px;border-top:1px solid var(--line2);align-items:flex-start}
+.logi-row:first-child{border-top:0}
+.logi-row .item-icon{width:30px;height:30px;flex:none;margin-top:2px}
+.logi-row>div{min-width:0}
+.logi-row>div>b{color:var(--bright);font-size:11.5px}
+.logi-row p{margin:3px 0 0;font-size:11px}
 .check-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .list-links{display:grid;gap:10px}
 .list-links a{font-size:11.5px}
