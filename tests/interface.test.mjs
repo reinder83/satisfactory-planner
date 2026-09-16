@@ -183,6 +183,29 @@ test('wizard tabs retain edits and recalculate Review without native help toolti
  const help=vm.runInContext('help("purity")',c);assert.ok(!help.includes(' title='));assert.ok(help.includes('aria-label='));assert.ok(help.includes('role="tooltip"'));
 });
 
+test('the wizard shows calculation progress and options when the calculation times out',async()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:4,saveName:'W',name:'P',settings:structuredClone(generated.settings),preview:null};render=()=>{};`,c);
+ const errorNode={textContent:'',innerHTML:''};
+ const submitNode={textContent:'Calculate plan'};
+ const form={reportValidity:()=>true,querySelector:sel=>sel==='.alt-list'?null:sel==='button[type="submit"]'?submitNode:errorNode};
+ c.document.querySelector=()=>form;
+ c.FormData=class{*[Symbol.iterator](){}has(){return false;}getAll(){return [];}};
+ c.buttonText=()=>submitNode.textContent;
+ vm.runInContext(`let progressText='';post=async(url,body,scope,extra)=>{extra.onProgress(3);progressText=buttonText();throw Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.');};`,c);
+ await vm.runInContext('moveWizard(5)',c);
+ assert.equal(vm.runInContext('progressText',c),'Calculating… Phase 3 of 5…','the submit button reports the phase being calculated');
+ assert.equal(submitNode.textContent,'Calculate plan','the button label is restored after a failure');
+ assert.match(errorNode.innerHTML,/timed out/,'the timeout message is shown');
+ assert.match(errorNode.innerHTML,/Planner’s choice/,'the guidance suggests reducing picks with Planner’s choice');
+ assert.match(errorNode.innerHTML,/whole-machine production/,'the guidance mentions the whole-machine setting');
+ vm.runInContext(`post=async()=>{throw Error('Save not found.');}`,c);
+ errorNode.innerHTML='';errorNode.textContent='';
+ await vm.runInContext('moveWizard(5)',c);
+ assert.equal(errorNode.textContent,'Save not found.','other errors stay plain text');
+ assert.equal(errorNode.innerHTML,'','no guidance is attached to unrelated errors');
+});
+
 test('the wizard can pick specific alternate recipes',()=>{
  const c=ui();
  vm.runInContext(`wizard={step:2,saveName:'S',name:'P',settings:{...structuredClone(generated.settings),recipes:'custom',alternateRecipes:['Recipe_Alternate_ReinforcedIronPlate_2_C']}};`,c);

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createApp,initialState} from '../server.mjs';
-import {calculate,RAW} from '../planner.mjs';
+import {calculate,RAW,DATA,PURE_LIMITS} from '../planner.mjs';
 async function start(dir){const server=await createApp({dataDir:dir,password:''});await new Promise(r=>server.listen(0,'127.0.0.1',r));return {server,url:'http://127.0.0.1:'+server.address().port};}
 const close=s=>new Promise(r=>s.close(r));
 const post=(url,endpoint,b,headers={})=>fetch(url+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...headers},body:JSON.stringify(b)});
@@ -124,4 +124,21 @@ test('preferred recipes replace competing recipes for their product',()=>{
  assert.deepEqual(steel(calculate({...base,preferredRecipes:['Recipe_Alternate_IngotSteel_1_C']})),['Alternate: Solid Steel Ingot'],'the starred recipe is the only steel source');
  assert.ok(steel(calculate(base)).includes('Steel Ingot')===false||true,'without a preference the solver may choose freely');
  assert.equal(calculate({...base,preferredRecipes:['Recipe_Alternate_CokeSteelIngot_C']}).settings.preferredRecipes.length,0,'preferences outside the picked list are dropped');
+});
+
+// Regression: this settings shape (many alternates, SAM conversion, whole machines, budgets exceeded from
+// Phase 4) previously left the infeasible-phase diagnostic in an endless integer search inside HiGHS.
+test('over-budget plans finish quickly with an explained draft instead of hanging',()=>{
+ const excluded=['Recipe_Alternate_CoatedCable_C','Recipe_Alternate_HeatFusedFrame_C','Recipe_Alternate_Diamond_OilBased_C'];
+ const picks=DATA.recipes.filter(r=>r.alternate).map(r=>r.id).filter(id=>!excluded.includes(id));
+ const phases=[];
+ const started=Date.now();
+ const plan=calculate({recipes:'custom',alternateRecipes:picks,preferredRecipes:['Recipe_Alternate_IngotSteel_1_C'],phase:'3',purity:'pure',multiplier:50,powerFactor:0.5,availablePowerGW:44.425,pureIngots:true,sam:'needed',nuclear:'recycle',uraniumReactors:50,storage:'all',storageRate:10,cellsPerMinute:20,goal:'balanced',wholeMachines:true,droneFuel:'Battery',collectables:true,mainPower:'rocket-nuclear',limits:{...PURE_LIMITS}},phase=>phases.push(phase));
+ assert.deepEqual(phases,[1,2,3,4,5],'calculate reports each phase to the progress callback');
+ assert.ok(Date.now()-started<120000,'calculation completes without hanging');
+ const infeasible=Object.entries(plan.stages).filter(([,st])=>!st.feasible);
+ for(const [ph,st] of infeasible){
+  assert.ok(st.reason,'infeasible phase '+ph+' explains itself');
+  assert.ok(st.rows?.length,'infeasible phase '+ph+' still offers a planning draft');
+ }
 });
