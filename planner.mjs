@@ -122,13 +122,25 @@ export function calculate(input,onPhase){
    else{
     const fits=h=>run({...s,wholeMachines:false,goal:'timed',hours:h},phase,{conversion}).feasible;
     const currentHours=s.goal==='minimal'?24:s.goal==='balanced'?8:s.hours;
-    if(s.goal!=='maximum'&&fits(currentHours))stage.reason='Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
+    const listNames=a=>a.length>1?a.slice(0,-1).join(', ')+' and '+a[a.length-1]:a[0];
+    if(s.goal!=='maximum'&&fits(currentHours)){
+     // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
+     // doubled budgets to measure which resources need headroom and how much; keep bounds modest for MIP stability.
+     stage.wholeMachinesOnly=true;
+     const network=run({...s,wholeMachines:false},phase,{conversion});
+     const rounded=network.feasible?run({...s,limits:Object.fromEntries(RAW.map(n=>[n,s.limits[n]*2+600]))},phase,{conversion,recipeIds:new Set(network.rows.map(r=>r.id))}):{feasible:false};
+     if(rounded.feasible)stage.shortfalls=RAW.filter(n=>(rounded.raw[n]||0)>s.limits[n]+0.001).map(n=>({name:n,needed:Math.ceil(rounded.raw[n]),budget:s.limits[n]}));
+     const names=(stage.shortfalls||[]).map(x=>x.name);
+     stage.reason=names.length
+      ?`Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length>1?'those budgets':'that budget'} a little, or turn off whole-machine production for this profile.`
+      :'Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
+    }
     else{
      stage.shortfalls=RAW.filter(n=>(diagnostic.raw[n]||0)>s.limits[n]+0.05).map(n=>({name:n,needed:Math.ceil(diagnostic.raw[n]),budget:s.limits[n]}));
      // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
      if(s.goal!=='maximum'&&fits(2000)){let lo=currentHours,hi=2000;for(let i=0;i<12&&hi-lo>0.25;i++){const mid=(lo+hi)/2;if(fits(mid))hi=mid;else lo=mid;}stage.minHours=Math.ceil(hi*4)/4;}
      const names=stage.shortfalls.map(x=>x.name);
-     stage.reason=(names.length?`This phase needs more ${names.length>1?names.slice(0,-1).join(', ')+' and '+names[names.length-1]:names[0]} than the entered budgets provide.`:'The goal exceeds the available resource or power budgets.')
+     stage.reason=(names.length?`This phase needs more ${listNames(names)} than the entered budgets provide.`:'The goal exceeds the available resource or power budgets.')
       +(stage.minHours?` It fits the current budgets at about ${stage.minHours} hours for this phase.`:s.goal==='maximum'?' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.':' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.');
     }
    }

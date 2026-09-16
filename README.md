@@ -147,7 +147,7 @@ Fluid, generator and nuclear/waste-processing lines remain precisely balanced an
 
 For a previously calculated profile, use **Factories → Round up production**. This creates a new profile revision, copies notes/unlocks/progress, and clears completed factory checks only where increased inputs or machine counts need review. The previous profile and all its progress remain untouched. The preserved original handbook is not recalculated.
 
-If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
+If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. When only the whole-machine fit exceeds a budget, the draft names each short resource with the rate that would fit and offers the alternative of precise balancing. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
 # Public browser edition
 
 Use [Satisfactory Planner](https://reinder83.github.io/satisfactory-planner/) without installing a server. The calculator runs in a browser worker and saves profiles, checkmarks, notes and delivery counts in IndexedDB on that browser. No account is required and save contents are not uploaded to GitHub. GitHub serves the site and can receive ordinary web access information.

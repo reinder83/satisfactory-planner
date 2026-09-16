@@ -574,8 +574,9 @@ function calcTasks(){const p=calcStage(),g=progression(calculated,state,progress
 function draftOptions(x,s){
  const fixes=[];
  if(x.shortfalls?.length)fixes.push(`Raise the short budget${x.shortfalls.length>1?'s':''} (Resources): ${x.shortfalls.map(f=>`${esc(f.name)} to about ${num(f.needed)}/min (entered: ${num(f.budget)}/min)`).join('; ')}.`);
+ if(x.wholeMachinesOnly)fixes.push('Keep these budgets instead: untick “Run solid-part machines at 100%” (Goals). Precise balancing fits, with one adjustable machine per production line.');
  if(x.minHours)fixes.push(s?.goal==='timed'?`Raise “Hours per phase” (Goals) to at least ${num(x.minHours)} h.`:`Switch the goal (Goals) to “Target completion time” with at least ${num(x.minHours)} hours per phase.`);
- else if(x.shortfalls?.length)fixes.push(s?.goal==='maximum'?'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).':`More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${s?.roundRates?', or untick delivery-rate rounding (Goals)':''}.`);
+ else if(x.shortfalls?.length&&!x.wholeMachinesOnly)fixes.push(s?.goal==='maximum'?'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).':`More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${s?.roundRates?', or untick delivery-rate rounding (Goals)':''}.`);
  if(x.shortfalls?.length&&s?.recipes==='standard')fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
  if(x.shortfalls?.length&&s?.sam==='avoid')fixes.push('Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.');
  return fixes.length?`<p><b>Options</b></p><ul>${fixes.map(f=>`<li>${f}</li>`).join('')}</ul>`:'';
