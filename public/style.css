@@ -334,6 +334,9 @@ button.rail-tile:hover{border-color:var(--accent)}
 .alt-row[hidden]{display:none}
 .alt-row small{font-size:10px}
 .alt-info{flex:none;font-size:10px;padding:2px 7px;white-space:nowrap}
+.alt-force-hint{display:flex;gap:11px;align-items:center;margin:10px 13px 0;padding:8px 12px;border:1px solid var(--warm-border);background:linear-gradient(180deg,#1c150a,#171208);color:var(--gold);font-size:11px;line-height:1.55}
+.alt-force-hint b{color:var(--accent)}
+.alt-force-star{flex:none;font-size:19px;color:var(--accent);text-shadow:0 0 8px rgba(248,156,28,.45)}
 .alt-pref{flex:none;cursor:pointer}
 .alt-pref input{position:absolute;opacity:0;width:1px;height:1px}
 .alt-pref span{font-size:14px;color:var(--dim)}
