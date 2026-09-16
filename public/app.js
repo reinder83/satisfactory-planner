@@ -234,8 +234,7 @@ function flowHtml(m){
  const outRow=o=>{
   const subs={consumer:`consumer${o.beltTxt?' · '+o.beltTxt:''}`,store:'protected module',ship:o.shipSub||'delivery',drone:'protected supply contract',sink:o.subTxt||'whole-machine rounding surplus',more:'combined smaller destinations'};
   const name=o.link?`<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`:`<b class="${o.kind==='sink'||o.kind==='more'?'dim':''}">${esc(o.label)}</b>`;
-  const shown=o.mach===undefined?0:o.kind==='sink'?Math.round(o.mach):Math.ceil(o.mach-1e-9);
-  const machCol=o.mach===undefined?'<span class="rail-mach"></span>':`<span class="rail-mach"><b>≈ ${o.mach<0.5?'<1':num(shown)}</b> × ${esc(m.machineName)}<small>${o.kind==='sink'?`surplus of the ${num(m.machineCount)} built`:`${num(o.mach)} at 100% · ${m.local?'build beside it':'round up'}`}</small></span>`;
+  const machCol=o.mach===undefined?'<span class="rail-mach"></span>':`<span class="rail-mach"><b>≈ ${o.mach<0.5?'<1':num(Math.ceil(o.mach-1e-9))}</b> × ${esc(m.machineName)}<small>${num(o.mach)} at 100% · ${m.local?'build beside it':'round up'}</small></span>`;
   const rate=o.rateTxt??(o.rate!==undefined?`${num(o.rate)}<small>${o.unit||'/min'}</small>`:'');
   return `<div class="rail-row ${o.kind}">${o.icon?itemIcon(o.icon):'<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre?esc(o.pre)+' · ':''}${subs[o.kind]||''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;};
  const bar=m.bar?`${m.inputs.length?'<div class="rail-arrow">↓</div>':''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length?'<div class="rail-arrow">↓</div>':''}`:'';
@@ -270,7 +269,7 @@ function handbookFlowModel(f,st,r,localInput,bankOnly=false){
  if(r.storage)outputs.push({kind:'store',label:'Storage refill',icon:f.name,rate:r.storage,unit,mach:mach(r.storage)});
  if(r.delivery)outputs.push({kind:'ship',label:'Space Elevator delivery',icon:f.name,rate:r.delivery,unit,mach:mach(r.delivery)});
  const surplus=Math.max(0,r.output-(r.demand??r.output));
- if(surplus>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:f.name,rate:surplus,unit,mach:mach(surplus)});
+ if(surplus>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:f.name,rate:surplus,unit});
  const inputs=bankOnly?[]:Object.entries(r.inputs||{}).map(([n,q])=>{const lp=localInput(n);const src=lp||plan.factories.find(x=>x.name===n&&x.stages[st]);return {name:n,rate:q,link:src?`data-factory="${src.id}"`:'',plan:lanePlan(q,FLUIDS.has(n),st),local:lp?`<button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q/lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`:''};});
  const capped=capFlowOutputs(outputs,unit);
  const splits=capped.filter(o=>o.mach!==undefined&&o.kind!=='sink');
@@ -295,7 +294,7 @@ function calcFlowModel(r){
   if(x.drone?.[n])outputs.push({kind:'drone',label:'Drone fuel contract',icon:n,rate:x.drone[n],unit,pre,mach:mach(x.drone[n])});
   if(st==='5'&&n==='Singularity Cell'&&calculated.settings.cellsPerMinute)outputs.push({kind:'ship',label:'Extra Singularity Cells',shipSub:'configured portal supply',icon:n,rate:calculated.settings.cellsPerMinute,unit,pre,mach:mach(calculated.settings.cellsPerMinute)});
   if(n==='Plutonium Fuel Rod'&&x.plutoniumSink)outputs.push({kind:'sink',label:'AWESOME Sink',subTxt:'waste strategy — sink these rods',icon:n,rate:x.plutoniumSink,unit,pre});
-  if(x.surplus?.[n]>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:n,rate:x.surplus[n],unit,pre,mach:mach(x.surplus[n])});
+  if(x.surplus?.[n]>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:n,rate:x.surplus[n],unit,pre});
  }
  outputs.sort((a,b)=>(b.rate||0)-(a.rate||0));
  if(!outputs.length&&r.generationMW)outputs.push({kind:'ship',label:'Power grid',shipSub:'generation',rateTxt:power(r.generationMW)});
