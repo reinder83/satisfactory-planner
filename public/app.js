@@ -116,7 +116,7 @@ function groupSections(list,keyOf,cardFn){
  return factoryGroupsState().groups.map(gr=>{
   const members=list.filter(x=>membershipsOf(keyOf(x)).some(m=>m.group===gr.id));
   if(!members.length&&!factoryEditing)return '';
-  return `<section class="site-group user-group"><header class="site-head"><div><span class="eyebrow">FACTORY GROUP · ${members.length} ${members.length===1?'FACTORY':'FACTORIES'}</span>${factoryEditing?`<input class="bay-rename" data-group-rename="${gr.id}" value="${esc(gr.name)}" maxlength="80" aria-label="Rename group ${esc(gr.name)}">`:`<h2>${esc(gr.name)}</h2>`}</div>${factoryEditing?`<button class="btn danger" data-remove-group="${gr.id}">Remove group</button>`:''}</header><div class="cards">${members.map(x=>cardFn(x,gr.id)).join('')||'<div class="empty-state">Empty group. Add factories with the group selector on their cards.</div>'}</div></section>`;
+  return `<section class="site-group user-group"><header class="site-head"><div><span class="eyebrow">FACTORY GROUP · ${members.length} ${members.length===1?'FACTORY':'FACTORIES'}</span>${factoryEditing?`<input class="bay-rename" data-group-rename="${gr.id}" value="${esc(gr.name)}" maxlength="80" aria-label="Rename group ${esc(gr.name)}">`:`<h2>${esc(gr.name)}</h2>`}</div>${factoryEditing?`<button class="btn danger" data-remove-group="${gr.id}">Remove group</button>`:members.length>1?`<button class="btn" data-group-chain="${gr.id}">Build order ↗</button>`:''}</header><div class="cards">${members.map(x=>cardFn(x,gr.id)).join('')||'<div class="empty-state">Empty group. Add factories with the group selector on their cards.</div>'}</div></section>`;
  }).join('');
 }
 function factoryEditToolbar(){return `<button class="btn ${factoryEditing?'primary':''}" data-toggle-factory-edit>${factoryEditing?'Done editing':'Edit groups'}</button>`;}
@@ -372,6 +372,52 @@ function oilDetail(st){
  }).join('');
  return `<h3>Shared oil campus · ${phaseLabel(st)}</h3><p>One campus makes Plastic and Rubber together. Crude never feeds the polymer machines directly${st==='3'?': the standard refineries turn it into the polymers plus Heavy Oil Residue, which becomes generator fuel.':': it becomes Heavy Oil Residue and Polymer Resin first, and the polymers come out of the fuel-driven recycled loops.'} Build the stages in this order; recipe cells are per machine at 100%, per minute.</p><p class="small muted">Flow rates here stay exactly balanced instead of rounded up: unpackaged fluids cannot overflow to the AWESOME Sink, and the loops feed themselves, so surplus fluid would back the chain up. Machine counts are whole — only each stage's last machine runs underclocked.</p>${bank}${stageHtml}<p>${st==='3'?`Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.`:`Export ${num(p.oilTotals.fuel)} Fuel/min; remaining fuel and recycled polymers are internal flows. <b>Seeding the loops:</b> run the Residual Rubber Refineries from resin first, feed that rubber with fuel into Recycled Plastic, then bring Recycled Rubber online — open the campus exports only once both loops are saturated.`}</p>`;
 }
+function groupChainNodes(gid){
+ if(calculated){
+  const x=calcStage();
+  return (x.rows||[]).filter(r=>membershipsOf(r.id).some(m=>m.group===gid)).map(r=>({id:r.id,attr:`data-calc-factory="${r.id}"`,name:r.name,machine:r.machine,machines:r.machines,inputs:r.inputs||{},outputs:r.outputs||{},mw:r.generationMW}));
+ }
+ const st=stage();
+ return plan.factories.filter(f=>f.stages[st]&&membershipsOf(f.id).some(m=>m.group===gid)).map(f=>{const r=f.stages[st];return {id:f.id,attr:`data-factory="${f.id}"`,name:f.name,machine:r.machine,machines:r.machines,inputs:r.inputs||{},outputs:{[f.name]:r.output},recipe:r.recipe};});
+}
+function openGroupChain(gid){
+ const gr=factoryGroupsState().groups.find(g=>g.id===gid);if(!gr)return;activeDetail={type:'group',id:gid};
+ const nodes=groupChainNodes(gid);
+ if(!nodes.length)return dialog(gr.name,'Factory group · build order','<p class="small muted">No factories from this group produce anything in the current phase.</p>');
+ const makers=n=>nodes.filter(o=>o.outputs[n]);
+ const placed=[],placedSet=new Set(),loopSeeds=new Map(),pending=[...nodes];
+ while(pending.length){
+  let idx=pending.findIndex(nd=>Object.keys(nd.inputs).every(n=>makers(n).every(m=>placedSet.has(m.id)||m===nd)));
+  let loop=false;
+  if(idx<0){
+   let bestCount=Infinity;idx=0;
+   pending.forEach((nd,i)=>{const c=Object.keys(nd.inputs).filter(n=>makers(n).some(m=>!placedSet.has(m.id)&&m!==nd)).length;if(c<bestCount){bestCount=c;idx=i;}});
+   loop=true;
+  }
+  const nd=pending.splice(idx,1)[0];
+  if(loop)loopSeeds.set(nd.id,Object.keys(nd.inputs).filter(n=>makers(n).some(m=>!placedSet.has(m.id)&&m!==nd)));
+  placed.push(nd);placedSet.add(nd.id);
+ }
+ const stageNo=new Map(placed.map((nd,i)=>[nd.id,i+1]));
+ const others=calculated?(calcStage().rows||[]):plan.factories.filter(f=>f.stages[stage()]).map(f=>({id:f.id,name:f.name,inputs:f.stages[stage()].inputs||{}}));
+ const html=placed.map((nd,i)=>{
+  const loopIns=loopSeeds.get(nd.id)||[];
+  const needs=Object.entries(nd.inputs).map(([n,q])=>{
+   const from=makers(n).filter(m=>m!==nd);
+   const src=loopIns.includes(n)?'<b class="chain-loop">loop — seed a starter batch</b>':from.length?'stage '+Math.min(...from.map(m=>stageNo.get(m.id))):'outside the group';
+   return `${esc(n)} ${num(q)}${FLUIDS.has(n)?' m³':''}/min <span class="muted">· ${src}</span>`;
+  }).join('<br>');
+  const feeds=Object.keys(nd.outputs).map(n=>{
+   const inGroup=nodes.filter(o=>o!==nd&&o.inputs[n]).map(o=>`stage ${stageNo.get(o.id)} · ${esc(o.name)}`);
+   const outside=others.filter(o=>o.id!==nd.id&&o.inputs?.[n]&&!nodes.some(g=>g.id===o.id)).length;
+   const parts=[...inGroup];if(outside)parts.push(`${outside} ${outside===1?'factory':'factories'} outside the group`);
+   return `${esc(n)} → ${parts.join(' · ')||'storage, export or sink'}`;
+  }).join('<br>')||(nd.mw?'Power grid':'—');
+  return `<div class="chain-stage"><span class="chain-no">${String(i+1).padStart(2,'0')}</span><div class="chain-body"><div class="chain-title"><button class="rail-link" ${nd.attr}>${esc(nd.name)} ↗</button><span class="muted">${num(nd.machines)} × ${esc(nd.machine)}</span></div>${needs?`<p class="small"><b>Needs</b><br>${needs}</p>`:'<p class="small muted">No belt or pipe inputs.</p>'}<p class="small"><b>Feeds</b><br>${feeds}</p></div></div>`;
+ }).join('');
+ const split=nodes.some(nd=>membershipsOf(nd.id).some(m=>m.group===gid&&m.rate!=null));
+ dialog(gr.name,`Factory group · build order · ${phaseLabel(stage())}`,`<p class="small muted">Stages are ordered so suppliers come before their consumers. An input marked <b>loop</b> is produced by a later stage: run that stage from a starter batch first, then close the loop.</p><div class="chain">${html}</div>${split?'<p class="small muted">Rates are the whole plan’s totals; this group’s production split is shown on the factory cards.</p>':''}`);
+}
 function openSlot(id){const b=storageBays().find(b=>b.items.some(x=>x.id===id));const x=b?.items.find(x=>x.id===id);if(!x?.name)return;activeDetail={type:'slot',id};const factory=calculated?calcStage().rows?.find(r=>r.outputs[x.name]):plan.factories.find(f=>f.name===x.name);const index=Number(id.slice(b.id.length));dialog(x.name,`${id} · ${esc(storageFloors().find(f=>f.id===b.floor)?.label||b.floor)} · Bay ${b.id}`,`<p><b>${esc(b.name)}</b><br>${index<=4?'Rear':'Front'} bank, position ${(index-1)%4+1} from the left on the floor plan.</p><div class="check-columns">${[['built','Container placed'],['labelled','Sign and address labelled'],['connected','Correct supply connected'],['verified','Flow and overflow verified']].map(([k,l])=>`<label class="check-row"><input type="checkbox" data-check="slot-${id}-${k}" ${doneAttr('slot-'+id+'-'+k)}>${l}</label>`).join('')}</div>${factory?`<div class="detail-actions"><button class="btn" ${calculated?'data-calc-factory':'data-factory'}="${factory.id}">Open production target →</button></div>`:'<p class="small muted">Collected or completion item. Reserve its own supply; this storage position does not add production capacity.</p>'}<h3>Container notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">${esc(state.notes['slot-'+id]||'')}</textarea><div class="note-save"><span class="small muted">Belt source, splitter setting or remaining work.</span><button class="btn" data-save-note="slot-${id}" data-input="detail-note">Save notes</button></div>`,x.name);}
 document.addEventListener('click',async e=>{
  const target=e.target.closest('button,a');if(!target)return;
@@ -533,6 +579,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
  if(b.hasAttribute('data-new-save'))startWizard();
  if(b.dataset.newProfile)startWizard(b.dataset.newProfile);
  if(b.dataset.calcFactory)openCalculatedFactory(b.dataset.calcFactory);
+ if(b.dataset.groupChain)openGroupChain(b.dataset.groupChain);
  if(b.hasAttribute('data-round-up')){if(!allowSwitch())return;b.disabled=true;b.textContent='Recalculating…';try{await writeQueue;const r=await post('/api/round-up',{});workspace=r.workspace;await loadContext(r.saveId,r.profileId);render();toast('Created rounded profile. '+r.reviewCount+' completed factory checks need review; previous progress is preserved.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Round up production';}}
  if(b.dataset.duplicateProfile){if(!allowSwitch())return;b.disabled=true;b.textContent='Copying…';try{await writeQueue;const r=await post('/api/duplicate-profile',{saveId:b.dataset.duplicateSave,profileId:b.dataset.duplicateProfile});workspace=r.workspace;await loadContext(r.saveId,r.profileId);navigate('plan');toast('Copy created and opened. Changes here leave the original profile untouched.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Duplicate';}}
  if(b.dataset.shareProfile){b.disabled=true;try{await writeQueue;const sv=workspace.saves.find(s=>s.id===b.dataset.shareSave),pr=sv?.profiles.find(p=>p.id===b.dataset.shareProfile);const data=await request('/api/export-saves?save='+encodeURIComponent(b.dataset.shareSave)+'&profile='+encodeURIComponent(b.dataset.shareProfile)+'&share=1');downloadJson(data,(slug(pr?.name||'profile')||'profile')+'-share.json');toast('Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.');}catch(err){toast(err.message,true);}finally{b.disabled=false;}}

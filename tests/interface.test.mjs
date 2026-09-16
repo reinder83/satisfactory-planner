@@ -138,6 +138,26 @@ test('factory details list where a local item is needed',()=>{
  assert.match(calc,/Delivers · /);
  assert.match(calc,/data-calc-factory=/);
 });
+test('group build order stages suppliers before consumers with needs and feeds',()=>{
+ const c=ui();
+ vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
+ const names=vm.runInContext(`(()=>{
+  const x=calcStage();
+  const consumer=x.rows.find(r=>x.rows.some(o=>o.id!==r.id&&Object.keys(o.outputs||{}).some(n=>r.inputs?.[n])));
+  const supplier=x.rows.find(o=>o.id!==consumer.id&&Object.keys(o.outputs||{}).some(n=>consumer.inputs[n]));
+  state.factoryGroups={groups:[{id:'fg-test01',name:'Chain test'}],assignments:{[supplier.id]:[{group:'fg-test01',rate:null}],[consumer.id]:[{group:'fg-test01',rate:null}]}};
+  openGroupChain('fg-test01');
+  return {supplier:supplier.name,consumer:consumer.name};
+ })()`,c);
+ const chain=vm.runInContext(`document.querySelector('#detail').innerHTML`,c);
+ assert.match(chain,/build order/i);
+ assert.match(chain,/Needs|No belt or pipe inputs/);
+ assert.match(chain,/Feeds/);
+ assert.match(chain,/data-calc-factory=/,'chain stages link to the factory dialogs');
+ assert.ok(chain.indexOf('>'+names.supplier.replace(/&/g,'&amp;'))<=chain.indexOf('>'+names.consumer.replace(/&/g,'&amp;')),'supplier stage comes before its consumer');
+ assert.match(vm.runInContext('renderCalculatedFactories()',c),/data-group-chain="fg-test01"/,'group headers offer the build order view');
+ vm.runInContext(`calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
+});
 test('storage follows the selected contract, preserves addresses and displays small power in MW',()=>{
  const c=ui();vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Building stock'};floor='ground';`,c);
  const storage=vm.runInContext('renderStorage()',c);

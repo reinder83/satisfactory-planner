@@ -321,6 +321,13 @@ button.rail-tile:hover{border-color:var(--accent)}
  .rail-row .rail-rate{width:auto;margin-left:auto}
 }
 
+.chain{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px}
+.chain-stage{display:flex;gap:13px;border:1px solid var(--line);padding:11px 13px;align-items:flex-start}
+.chain-no{flex:none;font-family:var(--head);font-weight:700;font-size:19px;color:var(--accent);min-width:30px}
+.chain-body{min-width:0;flex:1}
+.chain-title{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:2px}
+.chain-body p{margin:6px 0 0;line-height:1.6}
+.chain-loop{color:var(--accent)}
 .logi{margin:10px 0 4px;border:1px solid var(--line2);background:var(--panel2)}
 .logi-row{display:flex;gap:12px;padding:10px 12px;border-top:1px solid var(--line2);align-items:flex-start}
 .logi-row:first-child{border-top:0}
