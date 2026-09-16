@@ -231,7 +231,7 @@ function bestLane(fluid,st){
  return {...best,fluid,unit:fluid?' m³/min':'/min',milestone:ms,next:next?{...next,milestone:laneMilestone(next)}:null};
 }
 function lanePlan(rate,fluid,st){const lane=bestLane(fluid,st);const count=Math.max(1,Math.ceil(rate/lane.cap-1e-9));const last=rate-(count-1)*lane.cap;return {lane,count,last,full:count-(last<lane.cap-1e-9?1:0),spare:count*lane.cap-rate,word:fluid?'pipe':'belt'};}
-const machinesLabel=(count,machine)=>count>1?`1 of the ${num(count)} ${esc(machine.replace(/y$/,'ie'))}s`:`the 1 ${esc(machine)}`;
+const machinesLabel=(count,machine)=>count>1?`1 of the ${num(count)} ${esc(machine.replace(/y$/,'ie'))}s`:`1 × ${esc(machine)}`;
 function recipeCell([n,q,link],out){
  const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;
  return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;
@@ -515,7 +515,14 @@ const power= mw=>num(mw>1000?mw/1000:mw)+(mw>1000?' GW':' MW');
 function altPickerHtml(s){
  const picked=new Set(s.alternateRecipes||[]);
  const list=workspace.catalog.alternates||[];
- return `<div class="alt-picker"><div class="alt-picker-head"><b>Alternate recipes · ${picked.size} selected</b><input id="alt-filter" type="search" placeholder="Filter by recipe or product…" aria-label="Filter alternate recipes"></div><p class="small muted">Only the recipes you tick are allowed in the plan; unlock them with hard drives in game. Pure ingot recipes are added automatically when required above. Selecting none plans with standard recipes only.</p><div class="alt-list">${list.map(a=>`<label class="check-row alt-row" data-alt-text="${esc((a.name+' '+a.outputs.join(' ')).toLowerCase())}"><input type="checkbox" name="alt" value="${esc(a.id)}" ${picked.has(a.id)?'checked':''}><span>${esc(a.name)}<small class="muted"> · ${esc(a.outputs.join(', '))} · Phase ${a.phase}</small></span></label>`).join('')}</div></div>`;
+ return `<div class="alt-picker"><div class="alt-picker-head"><b>Alternate recipes · ${picked.size} selected</b><input id="alt-filter" type="search" placeholder="Filter by recipe or product…" aria-label="Filter alternate recipes"></div><p class="small muted">Only the recipes you tick are allowed in the plan; unlock them with hard drives in game. Pure ingot recipes are added automatically when required above. Selecting none plans with standard recipes only.</p><div class="alt-list">${list.map(a=>{const outs=Object.keys(a.outputs);return `<div class="alt-row" data-alt-text="${esc((a.name+' '+outs.join(' ')).toLowerCase())}"><label class="check-row"><input type="checkbox" name="alt" value="${esc(a.id)}" ${picked.has(a.id)?'checked':''}><span>${esc(a.name)}<small class="muted"> · ${esc(outs.join(', '))} · Phase ${a.phase}</small></span></label><button type="button" class="btn quiet alt-info" data-alt-info="${esc(a.id)}" aria-label="Show the ${esc(a.name)} recipe">recipe ↗</button></div>`;}).join('')}</div></div>`;
+}
+function openAltRecipe(id){
+ const a=(workspace.catalog.alternates||[]).find(x=>x.id===id);if(!a)return;
+ const primary=Object.keys(a.outputs)[0];
+ const standards=(workspace.catalog.standardRecipes||[]).filter(r=>r.outputs[primary]);
+ const panel=rc=>recipePanelHtml({machineCount:1,recipe:{name:rc.name.replace('Alternate: ',''),machine:rc.machine,ins:Object.entries(rc.inputs||{}),outs:Object.entries(rc.outputs||{})}});
+ dialog(a.name,`Alternate recipe · available from Phase ${a.phase} · ${esc(a.machine)}`,`${panel(a)}${standards.length?`<h3>Standard ${standards.length>1?'recipes':'recipe'} for ${esc(primary)}</h3>${standards.map(panel).join('')}`:`<p class="small muted">No standard recipe produces ${esc(primary)}.</p>`}<p class="small muted">Rates are per machine at 100%, per minute. Alternates are unlocked with hard drives in game; ticking a recipe is a planning allowance, not an in-game unlock.</p>`,primary);
 }
 function field(label,key,value,type='number',extra=''){return `<label class="field">${label} ${help(key)}<input name="${key}" type="${type}" value="${esc(value)}" ${extra}></label>`;}
 function selectField(label,key,options,value){return `<label class="field">${label} ${help(key)}<select name="${key}">${options.map(([v,l])=>option(v,l,value)).join('')}</select></label>`;}
@@ -589,6 +596,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
  if(b.dataset.newProfile)startWizard(b.dataset.newProfile);
  if(b.dataset.calcFactory)openCalculatedFactory(b.dataset.calcFactory);
  if(b.dataset.groupChain)openGroupChain(b.dataset.groupChain);
+ if(b.dataset.altInfo)openAltRecipe(b.dataset.altInfo);
  if(b.hasAttribute('data-round-up')){if(!allowSwitch())return;b.disabled=true;b.textContent='Recalculating…';try{await writeQueue;const r=await post('/api/round-up',{});workspace=r.workspace;await loadContext(r.saveId,r.profileId);render();toast('Created rounded profile. '+r.reviewCount+' completed factory checks need review; previous progress is preserved.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Round up production';}}
  if(b.dataset.duplicateProfile){if(!allowSwitch())return;b.disabled=true;b.textContent='Copying…';try{await writeQueue;const r=await post('/api/duplicate-profile',{saveId:b.dataset.duplicateSave,profileId:b.dataset.duplicateProfile});workspace=r.workspace;await loadContext(r.saveId,r.profileId);navigate('plan');toast('Copy created and opened. Changes here leave the original profile untouched.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Duplicate';}}
  if(b.dataset.shareProfile){b.disabled=true;try{await writeQueue;const sv=workspace.saves.find(s=>s.id===b.dataset.shareSave),pr=sv?.profiles.find(p=>p.id===b.dataset.shareProfile);const data=await request('/api/export-saves?save='+encodeURIComponent(b.dataset.shareSave)+'&profile='+encodeURIComponent(b.dataset.shareProfile)+'&share=1');downloadJson(data,(slug(pr?.name||'profile')||'profile')+'-share.json');toast('Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.');}catch(err){toast(err.message,true);}finally{b.disabled=false;}}

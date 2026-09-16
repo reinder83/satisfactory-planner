@@ -190,6 +190,11 @@ test('the wizard can pick specific alternate recipes',()=>{
  assert.match(html,/alt-picker/,'custom recipe access shows the alternate picker');
  assert.match(html,/name="alt" value="Recipe_Alternate_ReinforcedIronPlate_2_C" checked/,'picked alternates are pre-checked');
  assert.match(html,/Stitched Iron Plate/);
+ assert.match(html,/data-alt-info="Recipe_Alternate_ReinforcedIronPlate_2_C"/,'each alternate offers a recipe pop-out');
+ vm.runInContext('openAltRecipe("Recipe_Alternate_ReinforcedIronPlate_2_C")',c);
+ const pop=vm.runInContext('document.querySelector("#detail").innerHTML',c);
+ assert.match(pop,/rail-recipe/,'the pop-out shows the recipe card');
+ assert.match(pop,/Standard recipe for Reinforced Iron Plate/,'the standard recipe is shown for comparison');
  assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
  vm.runInContext('wizard=null',c);
 });
