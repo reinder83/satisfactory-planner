@@ -4,8 +4,9 @@
     {
       "name": "planner-preview",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set DATA_DIR=%TEMP%\\planner-preview-data&& set HOST=127.0.0.1&& set PORT=8123&& node server.mjs"],
-      "port": 8123
+      "runtimeArgs": ["/c", "set DATA_DIR=%TEMP%\\planner-preview-data-%PORT%&& set HOST=127.0.0.1&& node server.mjs"],
+      "port": 8123,
+      "autoPort": true
     }
   ]
 }
