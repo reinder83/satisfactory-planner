@@ -231,10 +231,14 @@ function bestLane(fluid,st){
  return {...best,fluid,unit:fluid?' m³/min':'/min',milestone:ms,next:next?{...next,milestone:laneMilestone(next)}:null};
 }
 function lanePlan(rate,fluid,st){const lane=bestLane(fluid,st);const count=Math.max(1,Math.ceil(rate/lane.cap-1e-9));const last=rate-(count-1)*lane.cap;return {lane,count,last,full:count-(last<lane.cap-1e-9?1:0),spare:count*lane.cap-rate,word:fluid?'pipe':'belt'};}
+const machinesLabel=(count,machine)=>count>1?`1 of the ${num(count)} ${esc(machine.replace(/y$/,'ie'))}s`:`the 1 ${esc(machine)}`;
+function recipeCell([n,q,link],out){
+ const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;
+ return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;
+}
 function recipePanelHtml(m){
  const rc=m.recipe;if(!rc)return '';
- const cell=([n,q,link],out)=>{const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;};
- return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>per 1 × ${esc(rc.machine)} @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x=>cell(x)).join('')||'<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x=>cell(x,true)).join('')}</div></div></div>`;
+ return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>what ${machinesLabel(m.machineCount,rc.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x=>recipeCell(x)).join('')||'<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x=>recipeCell(x,true)).join('')}</div></div></div>`;
 }
 function flowHtml(m){
  if(!m||(!m.inputs.length&&!m.outputs.length))return '';
@@ -354,7 +358,6 @@ function oilDetail(st){
  const pipeTxt=q=>{const pl=lanePlan(q,true,st);return `${pl.count} × ${pl.lane.mark} pipe${pl.count>1?'s':''}`;};
  const fuelConsumer=plan.factories.find(ff=>!['plastic','rubber'].includes(ff.id)&&ff.stages[st]?.inputs?.Fuel);
  const bank=`<div class="rail-cap">Campus inputs</div><div class="rail-grid">${[['Crude Oil',p.oilTotals.crude],['Water',p.oilTotals.water]].filter(([,q])=>q>0.01).map(([n,q])=>`<div class="rail-tile">${itemIcon(n)}<span class="rail-main"><b>${esc(n)}</b><small>${pipeTxt(q)}</small></span><span class="rail-rate">${num(q)}<small> m³/min</small></span></div>`).join('')}</div>`;
- const cell=([n,q],out)=>`<div class="rail-cell${out?' out':''}">${itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':''}</b><small>${esc(n)}</small></span></div>`;
  const stageHtml=stages.map(x=>{
   const tot=side=>Object.entries(x.rc[side]).map(([n,q])=>`${num(q*x.equivalent)}${FLUIDS.has(n)?' m³':''} ${esc(n)}`).join(' + ');
   const dest=Object.keys(x.rc.out).map(n=>{
@@ -363,7 +366,7 @@ function oilDetail(st){
    if(n==='Fuel'){if(Number(p.oilTotals.generators)>0)parts.push(`${num(p.oilTotals.generators)} Fuel Generators (${num(p.oilTotals.grossGW)} GW gross)`);else if(p.oilTotals.fuel>0.01)parts.push(`export ${num(p.oilTotals.fuel)}/min${fuelConsumer?` to <button class="btn quiet" data-factory="${fuelConsumer.id}">${esc(fuelConsumer.name)} ↗</button>`:''}`);}
    return parts.length?`${esc(n)} → ${parts.join(' + ')}`:'';
   }).filter(Boolean).join('<br>');
-  return `<div class="rail-arrow">↓</div><div class="rail-machine"><div class="rail-machine-main"><b>${num(x.machines)} × ${esc(x.machine)}</b><small>${esc(x.recipe)} · ${num(x.equivalent)} full-speed equivalents · in ${tot('in')||'—'} · out ${tot('out')}</small></div></div><div class="rail-recipe"><div class="rail-recipe-body"><div class="rail-recipe-ins">${Object.entries(x.rc.in).map(c=>cell(c)).join('')}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${Object.entries(x.rc.out).map(c=>cell(c,true)).join('')}</div></div></div>${dest?`<p class="small muted">${dest}</p>`:''}`;
+  return `<div class="rail-arrow">↓</div><div class="rail-machine"><div class="rail-machine-main"><b>${num(x.machines)} × ${esc(x.machine)}</b><small>${esc(x.recipe)} · ${num(x.equivalent)} full-speed equivalents · in ${tot('in')||'—'} · out ${tot('out')}</small></div></div><div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(x.recipe.replace('Alternate: ',''))}</span><span>what ${machinesLabel(x.machines,x.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${Object.entries(x.rc.in).map(c=>recipeCell(c)).join('')}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${Object.entries(x.rc.out).map(c=>recipeCell(c,true)).join('')}</div></div></div>${dest?`<p class="small muted">${dest}</p>`:''}`;
  }).join('');
  return `<h3>Shared oil campus · ${phaseLabel(st)}</h3><p>One campus makes Plastic and Rubber together. Crude never feeds the polymer machines directly${st==='3'?': the standard refineries turn it into the polymers plus Heavy Oil Residue, which becomes generator fuel.':': it becomes Heavy Oil Residue and Polymer Resin first, and the polymers come out of the fuel-driven recycled loops.'} Build the stages in this order; recipe cells are per machine at 100%, per minute.</p>${bank}${stageHtml}<p>${st==='3'?`Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.`:`Export ${num(p.oilTotals.fuel)} Fuel/min; remaining fuel and recycled polymers are internal flows. <b>Seeding the loops:</b> run the Residual Rubber Refineries from resin first, feed that rubber with fuel into Recycled Plastic, then bring Recycled Rubber online — open the campus exports only once both loops are saturated.`}</p>`;
 }
