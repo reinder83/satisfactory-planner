@@ -325,6 +325,8 @@ button.rail-tile:hover{border-color:var(--accent)}
 .alt-picker-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 13px;border-bottom:1px solid var(--line2)}
 .alt-picker-head b{font-family:var(--head);font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--bright)}
 .alt-picker-head input{background:#0f1214;border:1px solid #343b41;padding:7px 10px;min-width:min(280px,100%)}
+.alt-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.alt-tools .btn{font-size:10px;padding:5px 10px}
 .alt-picker>p{padding:0 13px;margin:8px 0}
 .alt-list{max-height:340px;overflow-y:auto;padding:4px 13px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:2px 18px}
 .alt-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px}
