@@ -25,7 +25,8 @@ test('a shared profile exports one profile without progress and imports as a fre
   const state=share.saves[0].profiles[0].state;
   assert.deepEqual(state.checks,{});
   assert.deepEqual(state.notes,{});
-  assert.equal(state.factoryGroups.groups[0].name,'Cable factory','the factory grouping travels with the shared plan');
+  assert.ok(state.factoryGroups.groups.some(g=>g.name==='Cable factory'),'the factory grouping travels with the shared plan');
+  assert.ok(state.factoryGroups.groups.some(g=>g.name==='Iron & steel works'),'default groups travel too');
   assert.ok(share.saves[0].profiles[0].plan,'the calculation snapshot travels with the share');
   assert.ok(!JSON.stringify(share).includes('Private seed notes'));
   const w=await json(await post(app.url,'/api/import-saves',share));
@@ -76,7 +77,7 @@ test('browser edition shares and duplicates through the same portable format',as
  const share=await api(`/api/export-saves?save=${a.saveId}&profile=${a.profileId}&share=1`);
  assert.equal(share.saves.length,1);
  assert.deepEqual(share.saves[0].profiles[0].state.checks,{});
- assert.equal(share.saves[0].profiles[0].state.factoryGroups.groups.length,1);
+ assert.ok(share.saves[0].profiles[0].state.factoryGroups.groups.some(g=>g.name==='Cable factory'));
  assert.equal(data.lastBackup,undefined,'a share is not recorded as a full backup');
  await post('/api/import-saves',share);
  assert.equal((await api('/api/workspace')).saves.length,2);

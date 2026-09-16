@@ -1,5 +1,5 @@
 import {validateTransfer,transferFormat} from './public/transfer.js';
-import {shareState} from './public/state.js';
+import {shareState,defaultFactoryGroups} from './public/state.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomBytes,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
@@ -76,7 +76,7 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
   if(endpoint==='/api/preview'&&req.method==='POST'){throttle(req);const b=await body(req);return response(calculate(b.settings));}
   if(endpoint==='/api/profiles'&&req.method==='POST'){
    throttle(req);const b=await body(req);const saveName=b.saveId?null:name(b.saveName),profileName=name(b.name);const plan=b.kind==='original'?null:calculate(b.settings);const profileId=id();let saveId=b.saveId||id();
-   await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');const state=blank();state.settings.phase=plan?.settings.phase||'3';save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;});return response({saveId,profileId,workspace:summary(db.users.find(x=>x.id===u.id))},201);
+   await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');const state=blank();state.settings.phase=plan?.settings.phase||'3';if(plan)state.factoryGroups=defaultFactoryGroups(plan);save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;});return response({saveId,profileId,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
   if(endpoint==='/api/select'&&req.method==='POST'){const b=await body(req);const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);await commit(d=>{d.users.find(x=>x.id===u.id).activeSave=save.id;d.saves.find(s=>s.id===save.id).activeProfile=profile.id;});return response(summary(db.users.find(x=>x.id===u.id)));}
   if(endpoint==='/api/remove-profile'&&req.method==='POST'){
