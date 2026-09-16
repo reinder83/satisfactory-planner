@@ -273,6 +273,8 @@ dialog::backdrop{background:rgba(6,8,9,.78)}
 .rail-recipe-outs{display:grid;gap:8px;align-content:stretch}
 .rail-recipe-arrow{display:grid;place-items:center;color:var(--accent);font-size:17px}
 .rail-cell{box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px;background:var(--bg);border:1px solid var(--line2)}
+button.rail-cell{cursor:pointer;font:inherit;color:inherit;text-align:left;width:100%}
+button.rail-cell:hover{border-color:var(--accent)}
 .rail-cell .item-icon{width:26px;height:26px;flex:none}
 .rail-cell.out{background:#211a0d;border-color:var(--accent-sh)}
 .rail-cell.out .rail-main b{font-family:var(--head);font-size:19px;color:var(--accent)}

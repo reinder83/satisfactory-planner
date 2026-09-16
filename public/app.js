@@ -223,7 +223,7 @@ function bestLane(fluid,st){
 function lanePlan(rate,fluid,st){const lane=bestLane(fluid,st);const count=Math.max(1,Math.ceil(rate/lane.cap-1e-9));const last=rate-(count-1)*lane.cap;return {lane,count,last,full:count-(last<lane.cap-1e-9?1:0),spare:count*lane.cap-rate,word:fluid?'pipe':'belt'};}
 function recipePanelHtml(m){
  const rc=m.recipe;if(!rc)return '';
- const cell=([n,q],out)=>`<div class="rail-cell${out?' out':''}">${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span></div>`;
+ const cell=([n,q,link],out)=>{const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;};
  return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>per 1 × ${esc(rc.machine)} @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x=>cell(x)).join('')||'<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x=>cell(x,true)).join('')}</div></div></div>`;
 }
 function flowHtml(m){
@@ -276,7 +276,7 @@ function handbookFlowModel(f,st,r,localInput,bankOnly=false){
  const splitTxt=splits.length>1?` · split ≈ ${splits.map(o=>num(Math.ceil(o.mach-1e-9))).join(' / ')} across the deliveries below`:'';
  const clock=(r.lastClock??100)<100?`@ 100% except the last at ${num(r.lastClock)}%`:'@ 100%';
  return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:!!f.local,
-  recipe:bankOnly?null:{name:String(r.recipe||'').replace('Alternate: ',''),machine:r.machine,ins:Object.entries(r.inputs||{}).map(([n,q])=>[n,q/eq]),outs:[[f.name,perOut]]},
+  recipe:bankOnly?null:{name:String(r.recipe||'').replace('Alternate: ',''),machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:[[f.name,perOut]]},
   bar:bankOnly?null:{sub:`${esc(String(r.recipe||'').replace('Alternate: ',''))} · ${clock} · ${num3(perOut)} ${esc(f.name)}/min out per machine${splitTxt}${f.local?' · built beside the consumers':''}`,outTxt:`${num(r.output)}<small>${unit}</small>`,outSub:f.local?'out · distributed':'out · '+beltTxt(lanePlan(r.output,fluidOut,st))},
   sameItemConsumers:n=>plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[n]).map(o=>({label:o.name,rate:o.stages[st].inputs[n],attr:`data-factory="${o.id}"`}))};
 }
@@ -306,7 +306,7 @@ function calcFlowModel(r){
  const clock=r.machines-eq>1e-7?'@ 100% + 1 adjustable':'@ 100%';
  const shared=Object.keys(r.outputs||{}).some(n=>(x.rows||[]).some(o=>o.id!==r.id&&o.outputs?.[n]));
  return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:false,
-  recipe:{name:r.name,machine:r.machine,ins:Object.entries(r.inputs||{}).map(([n,q])=>[n,q/eq]),outs:outName?Object.entries(r.outputs).map(([n,q])=>[n,q/eq]):[['MW',r.generationMW/eq]]},
+  recipe:{name:r.name,machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:outName?Object.entries(r.outputs).map(([n,q])=>[n,q/eq]):[['MW',r.generationMW/eq]]},
   bar:{sub:`${esc(r.name)} · ${clock}${outName&&!multi?` · ${num3(r.outputs[outName]/eq)} ${esc(outName)}/min out per machine`:''}${splitTxt}`,outTxt:outName?`${num(r.outputs[outName])}<small>${FLUIDS.has(outName)?' m³/min':'/min'}</small>`:power(r.generationMW),outSub:outName?(multi?'out · '+esc(outName)+' + byproducts':'out · '+beltTxt(lanePlan(r.outputs[outName],FLUIDS.has(outName),st))):'generation'},
   bankNote:outputs.length?`<p class="small muted">Demand for the item across this phase's whole plan${shared?', supplied together with the other recipes producing it':''}.</p>`:'',
   sameItemConsumers:n=>(x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]).map(o=>({label:o.name,rate:o.inputs[n],attr:`data-calc-factory="${o.id}"`}))};
