@@ -22,3 +22,13 @@ test('browser imports reject invalid data atomically and deletion preserves othe
  assert.notEqual(workspace.saves[0].profiles[0].id,workspace.saves[1].profiles[0].id);
  assert.equal((await api('/api/state')).checks.remember,true);
 });
+
+test('preview and profile calculation forward the progress callback to the calculator',async()=>{
+ let data={version:1,activeSave:null,saves:[]};
+ const store={async transaction(change){const copy=structuredClone(data);if(!change)return copy;const result=change(copy);data=copy;return structuredClone(result);}};
+ const api=createBrowserApi(store,(settings,onProgress)=>{onProgress?.(4);return calculate(settings);},{});
+ const phases=[];
+ await api('/api/preview',{body:JSON.stringify({settings:{phase:'1',goal:'minimal'}}),onProgress:p=>phases.push(p)});
+ await api('/api/profiles',{body:JSON.stringify({saveName:'Progress save',name:'Progress',settings:{phase:'1',goal:'minimal'}}),onProgress:p=>phases.push(p)});
+ assert.deepEqual(phases,[4,4],'both calculating endpoints report solver progress');
+});

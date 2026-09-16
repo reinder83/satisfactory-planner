@@ -402,6 +402,9 @@ button.rail-tile:hover{border-color:var(--accent)}
 .save-panel .section-head{gap:15px;flex-wrap:wrap}
 .form-error{color:#ff7a5e;font-weight:600}
 .form-error:empty{margin:0}
+.form-error .error-options{display:block;margin-top:8px;font-weight:400;color:var(--ink,inherit)}
+.form-error .error-options>span{display:block;margin:4px 0 0 0;padding-left:14px;position:relative}
+.form-error .error-options>span::before{content:'•';position:absolute;left:2px}
 .auth-panel{max-width:540px}
 .auth-panel button{margin-top:20px}
 .auth-panel .check-row{margin:20px 0}

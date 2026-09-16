@@ -82,7 +82,8 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
   model.variables[r.id]=v;
   if(s.wholeMachines&&Object.keys(r.outputs).some(n=>!DATA.items[n]?.fluid&&!RAW.includes(n))&&!/uranium|plutonium|ficsonium|waste|non-fissile/i.test([r.name,...Object.keys(r.inputs),...Object.keys(r.outputs)].join(' '))){(model.ints??={})[r.id]=1;}
  }
- for(const n of RAW){if(!allItems.has(n))continue;model.constraints['limit:'+n]={max:ignoreLimits?1e9:s.limits[n]};model.variables['raw:'+n]={cost:0.0001,['item:'+n]:1,['limit:'+n]:1};}
+ // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
+ for(const n of RAW){if(!allItems.has(n))continue;model.constraints['limit:'+n]={max:ignoreLimits?1e7:s.limits[n]};model.variables['raw:'+n]={cost:0.0001,['item:'+n]:1,['limit:'+n]:1};}
  if(s.nuclear!=='none'&&phase>=4&&(s.nuclear==='sink'||phase===4))model.variables['sink-plutonium']={cost:0.0001,'item:Plutonium Fuel Rod':-1};
  if(maximum){const v={gain:1};for(const [n,d] of Object.entries(delivery))v['item:'+n]=-d.target/1000;model.variables.goal=v;}
  let solved=solve(model);
@@ -102,15 +103,17 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
  const seen=new Set(),visiting=new Set(),ordered=[];function visit(r){if(seen.has(r.id)||visiting.has(r.id))return;visiting.add(r.id);for(const n of Object.keys(r.inputs))for(const p of producers[n]||[])visit(p);visiting.delete(r.id);seen.add(r.id);ordered.push(r);}rows.forEach(visit);
  return {feasible:true,rows:ordered,raw,storage,drone,delivery,surplus,plutoniumSink:solved['sink-plutonium']||0,peakMW,generationMW,requiredMW:peakMW*utilityFactor,additionalHeadroomMW:Math.max(0,peakMW*utilityFactor-generationMW-s.availablePowerGW*1000),hours:Math.max(...Object.values(delivery).map(d=>d.rate?d.target/d.rate/60:Infinity)),conversions:rows.filter(r=>Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water')).map(r=>r.name)};
 }
-export function calculate(input){
+export function calculate(input,onPhase){
  const s=settings(input);if(s.goal==='maximum'&&!s.limitsConfirmed)err('Confirm your available resource budgets before maximizing output.');
  const stages={};const warnings=[];
  for(let phase=1;phase<=5;phase++){
+  onPhase?.(phase);
   let result=run(s,phase,{maximum:s.goal==='maximum',conversion:phase===5&&s.sam==='allow'});
   if(!result.feasible&&phase===5&&s.sam==='needed')result=run(s,phase,{maximum:s.goal==='maximum',conversion:true});
   // For maximum output, compare conversion when allowed only at a binding resource limit.
   if(s.goal==='maximum'&&phase===5&&s.sam==='needed'){const converted=run(s,phase,{maximum:true,conversion:true});if(converted.feasible&&(!result.feasible||converted.hours<result.hours-1e-6))result=converted;}
-  if(!result.feasible){const diagnostic=run(s,phase,{conversion:phase===5&&s.sam!=='avoid',ignoreLimits:true});stages[phase]={...diagnostic,feasible:false,reason:result.solverStatus&&!/infeasible/i.test(result.solverStatus)?'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.':diagnostic.feasible?'The goal exceeds the available resource or power budgets. Increase the time or revise your budgets.':'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.'};}
+  // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
+  if(!result.feasible){const diagnostic=run({...s,wholeMachines:false},phase,{conversion:phase===5&&s.sam!=='avoid',ignoreLimits:true});stages[phase]={...diagnostic,feasible:false,reason:result.solverStatus&&!/infeasible/i.test(result.solverStatus)?'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.':diagnostic.feasible?'The goal exceeds the available resource or power budgets. Increase the time or revise your budgets.':'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.'};}
   else stages[phase]=result;
  }
  if(s.distribution!=='original'||s.purity==='custom')warnings.push('Seed-dependent distribution: confirm resource-rich node counts, mixed purity and well totals against your save. Zero budgets mean unallocated resources.');

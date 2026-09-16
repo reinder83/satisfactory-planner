@@ -11,9 +11,9 @@ export function createBrowserApi(store,calculator,catalog){
  return async function request(route,options={}){
   const url=new URL(route,'https://planner.invalid'),ep=url.pathname,body=options.body?JSON.parse(options.body):{},headers=options.headers||{};
   if(ep==='/api/workspace')return summary(await store.transaction());
-  if(ep==='/api/preview')return calculator(body.settings);
+  if(ep==='/api/preview')return calculator(body.settings,options.onProgress);
   if(ep==='/api/profiles'){
-   const profileName=cleanName(body.name),saveName=body.saveId?null:cleanName(body.saveName),plan=await calculator(body.settings),profileId=uid();
+   const profileName=cleanName(body.name),saveName=body.saveId?null:cleanName(body.saveName),plan=await calculator(body.settings,options.onProgress),profileId=uid();
    return store.transaction(d=>{let save=d.saves.find(s=>s.id===body.saveId);if(body.saveId&&!save)throw Error('Save not found.');if(!save){if(d.saves.length>=50)throw Error('Save limit reached.');save={id:uid(),name:saveName,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)throw Error('Profile limit reached.');const state={...initialState(),checks:{},deliveries:{}};state.settings.phase=plan.settings.phase;state.factoryGroups=defaultFactoryGroups(plan);save.profiles.push({id:profileId,name:profileName,kind:'calculated',plan,state});save.activeProfile=profileId;d.activeSave=save.id;return {saveId:save.id,profileId,workspace:summary(d)};});
   }
   if(ep==='/api/export-saves'){
@@ -47,7 +47,7 @@ export function createBrowserApi(store,calculator,catalog){
    return store.transaction(d=>{if(d.saves.length+imported.saves.length>50)throw Error('Import would exceed the save limit.');for(const s of imported.saves){const old=s.activeProfile;for(const p of s.profiles){const previous=p.id;p.id=uid();if(previous===old)s.activeProfile=p.id;}s.id=uid();d.saves.push(s);d.activeSave=s.id;}return summary(d);});
   }
   if(ep==='/api/round-up'){
-   const before=scope(await store.transaction(),url,headers);if(before.profile.kind!=='calculated'||before.profile.plan.settings.wholeMachines)throw Error('Choose a calculated profile without whole-machine production.');const rounded=await calculator({...before.profile.plan.settings,wholeMachines:true}),profileId=uid();
+   const before=scope(await store.transaction(),url,headers);if(before.profile.kind!=='calculated'||before.profile.plan.settings.wholeMachines)throw Error('Choose a calculated profile without whole-machine production.');const rounded=await calculator({...before.profile.plan.settings,wholeMachines:true},options.onProgress),profileId=uid();
    return store.transaction(d=>{const {save,profile}=scope(d,url,headers);if(save.profiles.length>=30)throw Error('Profile limit reached.');const state=structuredClone(profile.state);let reviewCount=0;for(const [ph,stage]of Object.entries(rounded.stages))for(const row of stage.rows||[]){const old=profile.plan.stages[ph]?.rows?.find(r=>r.id===row.id);if(!old||row.machines>old.machines||Object.entries(row.inputs).some(([n,q])=>q>(old.inputs[n]||0)+.001)){const key='calc-'+ph+'-'+row.id;if(state.checks[key]){state.checks[key]=false;reviewCount++;}}}save.profiles.push({id:profileId,name:(profile.name+' · whole machines').slice(0,80),kind:'calculated',plan:rounded,state});save.activeProfile=profileId;d.activeSave=save.id;return {saveId:save.id,profileId,reviewCount,workspace:summary(d)};});
   }
   const read=['/api/context','/api/state','/api/export'].includes(ep);
@@ -73,9 +73,10 @@ export async function browserRequest(route,options){
  if(!instance)instance=(async()=>{
   if(!globalThis.indexedDB)throw Error('Browser storage is unavailable. Use a regular browser window with site storage enabled.');
   let worker;let serial=0;const pending=new Map();
-  const calculate=settings=>new Promise((resolve,reject)=>{
-   if(!worker){worker=new Worker(new URL('./calculator-worker.js',import.meta.url),{type:'module'});worker.onmessage=e=>{const entry=pending.get(e.data.id);if(!entry)return;pending.delete(e.data.id);clearTimeout(entry.timer);e.data.error?entry.reject(Error(e.data.error)):entry.resolve(e.data.result);};worker.onerror=()=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('The calculator could not load. Refresh and try again.'));}pending.clear();worker.terminate();worker=null;};}
-   const id=++serial,timer=setTimeout(()=>{worker?.terminate();worker=null;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.'));}pending.clear();},180000);pending.set(id,{resolve,reject,timer});worker.postMessage({id,settings});
+  const expire=()=>{worker?.terminate();worker=null;for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.'));}pending.clear();};
+  const calculate=(settings,onProgress)=>new Promise((resolve,reject)=>{
+   if(!worker){worker=new Worker(new URL('./calculator-worker.js',import.meta.url),{type:'module'});worker.onmessage=e=>{const entry=pending.get(e.data.id);if(!entry)return;if(e.data.phase){clearTimeout(entry.timer);entry.timer=setTimeout(expire,180000);try{entry.onProgress?.(e.data.phase);}catch{}return;}pending.delete(e.data.id);clearTimeout(entry.timer);e.data.error?entry.reject(Error(e.data.error)):entry.resolve(e.data.result);};worker.onerror=()=>{for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error('The calculator could not load. Refresh and try again.'));}pending.clear();worker.terminate();worker=null;};}
+   const id=++serial,timer=setTimeout(expire,180000);pending.set(id,{resolve,reject,timer,onProgress});worker.postMessage({id,settings});
   });
   const response=await fetch(new URL('./catalog.json',import.meta.url));if(!response.ok)throw Error('Could not load recipe catalog.');
   return createBrowserApi(openBrowserStore(indexedDB),calculate,await response.json());

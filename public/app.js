@@ -503,7 +503,7 @@ window.addEventListener('hashchange',()=>{view=['plan','factories','storage','re
 $('#detail').addEventListener('click',e=>{if(e.target===$('#detail')){$('#detail').close();activeDetail=null;}});
 window.addEventListener('beforeunload',e=>{if(pending){e.preventDefault();e.returnValue='';}});
 function scopeHeaders(){return {'X-Save-Id':currentSave?.id||'','X-Profile-Id':currentProfile?.id||''};}
-async function post(endpoint,data,scope=true){return request(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...(scope?scopeHeaders():{})},body:JSON.stringify(data)});}
+async function post(endpoint,data,scope=true,extra={}){return request(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...(scope?scopeHeaders():{})},body:JSON.stringify(data),...extra});}
 async function loadContext(saveId,profileId){await writeQueue;const c=await request('/api/context?save='+encodeURIComponent(saveId)+'&profile='+encodeURIComponent(profileId));currentSave=c.save;currentProfile=c.profile;state=c.state;calculated=c.plan;plan=c.handbook||basePlan||plan;query='';activeDetail=null;planEditing=false;editingTask=null;factoryEditing=false;layoutEditing=false;$('#detail').close();}
 function navigate(v){view=v;if(location.hash==='#'+v)render();else location.hash=v;}
 function hasUnsavedNotes(){return [...document.querySelectorAll('textarea.notes')].some(el=>{const button=document.querySelector(`[data-input="${el.id}"]`);return button&&el.value!==(state.notes[button.dataset.saveNote]||'');});}
@@ -550,14 +550,22 @@ function renderSignedOut(){state=null;$('#app').innerHTML=`<main class="signin">
 const calcStage=()=>calculated.stages[stage()];
 function calculatedDelivery(id){const d=Object.entries(calcStage().delivery||{}).find(([n])=>id===stage()+'-'+slug(n));return d?{id,name:d[0],...d[1],initial:0}:null;}
 let wizardBusy=false;
+// The public edition reports each phase from the calculator worker; the server edition shows the static label.
+const calcProgress=(button,label)=>{if(button)button.textContent=label;return {onProgress:phase=>{if(button)button.textContent=`${label} Phase ${phase} of 5…`;}};};
+function wizardError(form,err){
+ const el=form?.querySelector('.form-error');if(!el){toast(err.message,true);return;}
+ if(/timed out/i.test(err.message))el.innerHTML=`${esc(err.message)}<span class="error-options"><b>Ways to get a plan:</b><span>Try again — speed varies with your device and other open tabs.</span><span>In the recipe picker, use <b>Planner’s choice</b> or untick alternates you don’t need; many recipes for the same product slow the search the most.</span><span>In Goals, turn off whole-machine production — exact balancing calculates much faster.</span><span>Lower the elevator multiplier or allow more hours per phase.</span></span>`;
+ else el.textContent=err.message;
+}
 async function moveWizard(target){
  if(wizardBusy||!wizard||target===wizard.step||target<1||target>5)return;
  const form=$('#wizard-form');if(target>wizard.step&&!form.reportValidity())return;
  readWizard(form);
  if(target!==5){wizard.step=target;render();return;}
  wizardBusy=true;const buttons=document.querySelectorAll('[data-wizard-step],#wizard-form button');buttons.forEach(b=>b.disabled=true);
- try{wizard.name=wizard.name.trim()||workspace.catalog.goals.find(g=>g.id===wizard.settings.goal).name;wizard.preview=await post('/api/preview',{settings:wizard.settings});wizard.step=5;render();}
- catch(err){form.querySelector('.form-error').textContent=err.message;}
+ const submit=form.querySelector('button[type="submit"]'),label=submit?.textContent;
+ try{wizard.name=wizard.name.trim()||workspace.catalog.goals.find(g=>g.id===wizard.settings.goal).name;wizard.preview=await post('/api/preview',{settings:wizard.settings},true,calcProgress(submit,'Calculating…'));wizard.step=5;render();}
+ catch(err){wizardError(form,err);if(submit)submit.textContent=label;}
  finally{wizardBusy=false;buttons.forEach(b=>b.disabled=false);}
 }
 function calcTasks(){const p=calcStage(),g=progression(calculated,state,progressionData,phase());const startup=stage()==='1'?[g.baseTasks[0],...g.powerTasks.slice(0,2),...g.baseTasks.slice(1,5),...g.milestoneTasks,...g.powerTasks.slice(2),...g.baseTasks.slice(5)]:[...g.powerTasks,...g.milestoneTasks];return [...startup,...g.hardDrives,...(p.rows||[]).map(r=>({id:'calc-'+stage()+'-'+r.id,title:r.name,body:`${machineSetup(r).summary} ${machineSetup(r).partial?'Adjustable machine: ≈ '+num(machineSetup(r).clock)+'% → ≈ '+machineSetup(r).lastOutput+'. Open factory details for an easier rounded option.':'Each machine: '+machineSetup(r).fullOutput+'.'} Inputs /min: ${Object.entries(r.inputs).map(([n,q])=>n+' '+num(q)).join(', ')||'none'}. Outputs /min: ${Object.entries(r.outputs).map(([n,q])=>n+' '+num(q)).join(', ')||power(r.generationMW)}.`})),{id:'calc-'+stage()+'-storage',title:'Connect protected storage and overflow',body:'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.'}];}
@@ -604,16 +612,16 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   p.querySelector('.alt-picker-head b').textContent=`Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;
  }
  if(b.hasAttribute('data-alt-best')&&wizard&&!b.disabled){
-  b.disabled=true;const label=b.textContent;b.textContent='Calculating…';
+  b.disabled=true;const label=b.textContent;
   try{
    readWizard($('#wizard-form'));
-   const preview=await post('/api/preview',{settings:{...wizard.settings,recipes:'all'}});
+   const preview=await post('/api/preview',{settings:{...wizard.settings,recipes:'all'}},true,calcProgress(b,'Calculating…'));
    wizard.settings.alternateRecipes=alternatesUsed(preview);
    render();
    toast(`Selected ${wizard.settings.alternateRecipes.length} alternate recipes the planner uses with your current settings.`);
-  }catch(err){toast(err.message,true);b.disabled=false;b.textContent=label;}
+  }catch(err){wizardError($('#wizard-form'),err);b.disabled=false;b.textContent=label;}
  }
- if(b.hasAttribute('data-round-up')){if(!allowSwitch())return;b.disabled=true;b.textContent='Recalculating…';try{await writeQueue;const r=await post('/api/round-up',{});workspace=r.workspace;await loadContext(r.saveId,r.profileId);render();toast('Created rounded profile. '+r.reviewCount+' completed factory checks need review; previous progress is preserved.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Round up production';}}
+ if(b.hasAttribute('data-round-up')){if(!allowSwitch())return;b.disabled=true;try{await writeQueue;const r=await post('/api/round-up',{},true,calcProgress(b,'Recalculating…'));workspace=r.workspace;await loadContext(r.saveId,r.profileId);render();toast('Created rounded profile. '+r.reviewCount+' completed factory checks need review; previous progress is preserved.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Round up production';}}
  if(b.dataset.duplicateProfile){if(!allowSwitch())return;b.disabled=true;b.textContent='Copying…';try{await writeQueue;const r=await post('/api/duplicate-profile',{saveId:b.dataset.duplicateSave,profileId:b.dataset.duplicateProfile});workspace=r.workspace;await loadContext(r.saveId,r.profileId);navigate('plan');toast('Copy created and opened. Changes here leave the original profile untouched.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Duplicate';}}
  if(b.dataset.shareProfile){b.disabled=true;try{await writeQueue;const sv=workspace.saves.find(s=>s.id===b.dataset.shareSave),pr=sv?.profiles.find(p=>p.id===b.dataset.shareProfile);const data=await request('/api/export-saves?save='+encodeURIComponent(b.dataset.shareSave)+'&profile='+encodeURIComponent(b.dataset.shareProfile)+'&share=1');downloadJson(data,(slug(pr?.name||'profile')||'profile')+'-share.json');toast('Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.');}catch(err){toast(err.message,true);}finally{b.disabled=false;}}
  if(b.dataset.removeProfile){if(!allowSwitch())return;const sv=workspace.saves.find(s=>s.id===b.dataset.removeSave),pr=sv?.profiles.find(p=>p.id===b.dataset.removeProfile);if(!pr)return;if(!confirm('Are you sure? Remove "'+pr.name+'" and its progress and notes?'+(sv.profiles.length===1?' This also removes the empty save.':' Other profiles keep their progress.')))return;b.disabled=true;try{await writeQueue;await post('/api/remove-profile',{saveId:sv.id,profileId:pr.id,confirmed:true});await boot();if(workspace.saves.length)navigate('profiles');toast('Profile removed.');}catch(err){toast(err.message,true);b.disabled=false;}}
@@ -629,12 +637,12 @@ document.addEventListener('submit',async e=>{
  try{
   if(f.id==='wizard-form'){
    const w=wizard;if(w.step<5){b.disabled=false;await moveWizard(w.step+1);return;}
-   if(w.step===5){b.textContent='Saving profile…';const r=await post('/api/profiles',{saveId:w.saveId,saveName:w.saveName,name:w.name,settings:w.settings});workspace=r.workspace;await loadContext(r.saveId,r.profileId);wizard=null;navigate('plan');toast('Profile created. Your other progress is unchanged.');return;}
+   if(w.step===5){const r=await post('/api/profiles',{saveId:w.saveId,saveName:w.saveName,name:w.name,settings:w.settings},true,calcProgress(b,'Saving profile…'));workspace=r.workspace;await loadContext(r.saveId,r.profileId);wizard=null;navigate('plan');toast('Profile created. Your other progress is unchanged.');return;}
 
   }else if(f.id==='auth-form'){
    const data=Object.fromEntries(new FormData(f));data.registration=new FormData(f).has('registration');const mode=workspace.accountsEnabled?authMode:'setup';await post('/api/'+mode,data,false);await boot();
   }else{workspace=await post('/api/rename',Object.fromEntries(new FormData(f)));const s=workspace.saves.find(s=>s.id===currentSave.id);currentSave.name=s.name;currentProfile.name=s.profiles.find(p=>p.id===currentProfile.id).name;render();}
- }catch(err){const el=f.querySelector('.form-error');if(el)el.textContent=err.message;else toast(err.message,true);b.disabled=false;if(f.id==='wizard-form'&&wizard.step===4)b.textContent='Calculate plan';}
+ }catch(err){if(f.id==='wizard-form')wizardError(f,err);else{const el=f.querySelector('.form-error');if(el)el.textContent=err.message;else toast(err.message,true);}b.disabled=false;if(f.id==='wizard-form')b.textContent=wizard.step===5?'Create profile':wizard.step===4?'Calculate plan':'Continue →';}
 });
 async function boot(){try{
  workspace=await request('/api/workspace');if(!workspace.user){authMode='login';renderSignedOut();return;}

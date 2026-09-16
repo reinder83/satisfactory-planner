@@ -29,7 +29,7 @@ await fs.writeFile(path.join(out,'optimizer.mjs'),optimizer);
 await fs.writeFile(path.join(out,'highs.mjs'),(await fs.readFile(path.join(root,'vendor/highs.cjs'),'utf8'))+'\nexport default Module;\n');
 await fs.copyFile(path.join(root,'vendor/highs.wasm'),path.join(out,'highs.wasm'));
 await fs.copyFile(path.join(root,'vendor/HIGHS-LICENSE'),path.join(out,'HIGHS-LICENSE'));
-await fs.writeFile(path.join(out,'calculator-worker.js'),"const ready=import('./planner.mjs');\nself.onmessage=async({data})=>{try{const {calculate}=await ready;self.postMessage({id:data.id,result:calculate(data.settings)});}catch(e){self.postMessage({id:data.id,error:e.message});}};\n");
+await fs.writeFile(path.join(out,'calculator-worker.js'),"const ready=import('./planner.mjs');\nself.onmessage=async({data})=>{try{const {calculate}=await ready;self.postMessage({id:data.id,result:calculate(data.settings,phase=>self.postMessage({id:data.id,phase}))});}catch(e){self.postMessage({id:data.id,error:e.message});}};\n");
 await fs.writeFile(path.join(root,'dist','.nojekyll'),'');
 await fs.writeFile(path.join(root,'dist','index.html'),'<!doctype html><meta charset="utf-8"><title>Satisfactory Planner</title><a href="./satisfactory-planner/">Open Satisfactory Planner</a>');
 console.log('Browser edition built in dist/satisfactory-planner');
