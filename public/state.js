@@ -57,6 +57,96 @@ function validateGroups(raw){
  }
  return g;
 }
+// A new profile for a save you are already playing describes the same world.
+// These groups say which of the previous profile's records are facts about that
+// world (unlocks, the built storage room, deliveries handed in) rather than
+// facts about its plan, so a new profile can start from them instead of an
+// empty checklist. Plan-shaped records are carried only where the new plan
+// still asks for the same or less work.
+export const carryOptions=[
+ ['unlocks','Milestone, MAM and hard-drive unlocks','Tier milestones, MAM research and the alternate recipes you confirmed in game.'],
+ ['storage','Storage room layout and containers','Floors, bays, container names and every built, labelled, connected and verified position.'],
+ ['commissioning','Power and start-up steps','Biomass, coal, fuel, nuclear, drone-fuel and portal commissioning you already finished.'],
+ ['deliveries','Elevator deliveries handed in','The part counts you already delivered to the Space Elevator.'],
+ ['notes','Notes and personal tasks','Save-wide notes, step notes and the tasks you added yourself.'],
+ ['planEdits','Build-plan edits and factory groups','Renamed, reordered and removed steps, plus your factory group names.'],
+ ['factories','Factory progress for unchanged lines','Production lines stay ticked where the new plan needs no more machines and no more input.'],
+ ['picked','Treat this plan’s alternate recipes as unlocked','Ticks the unlock step for every alternate recipe you picked, including the ones your ingot and power preferences require.']
+];
+const carryPrefixes={
+ unlocks:['unlock-','recipe-unlock-','hard-drives-'],
+ storage:['slot-','storage-'],
+ commissioning:['startup-','preferred-power-','drone-fuel-','early-base-','portal-supply','power-retained']
+};
+export const carryPicks=raw=>Object.fromEntries(carryOptions.map(([key])=>[key,raw===undefined?true:!!(plain(raw)&&raw[key])]));
+// Rows of a plan keyed by the checklist address their step uses.
+const planRows=plan=>{const rows=new Map();for(const [ph,stage] of Object.entries(plan?.stages||{}))for(const r of stage.rows||[])rows.set('calc-'+ph+'-'+r.id,r);return rows;};
+// Hand-picking alternates states which recipes you own: the recipes ticked in
+// the picker plus the ones a pure-ingot or power preference locks in for you,
+// which reach the plan as alternate rows rather than as picks.
+export function pickedRecipeUnlocks(plan){
+ if(plan?.settings?.recipes!=='custom')return [];
+ const ids=new Set(plan.settings.alternateRecipes||[]);
+ for(const row of planRows(plan).values())if(row.alternate)ids.add(row.id);
+ return [...ids].filter(id=>safeKey('recipe-unlock-'+id));
+}
+// Build the starting progress for a newly created profile. Without a source
+// profile this is the blank state every earlier release produced.
+export function newProfileState(plan,source,sourcePlan,raw){
+ const state=initialState();
+ state.settings.phase=plan?.settings?.phase||'3';
+ if(plan)state.factoryGroups=defaultFactoryGroups(plan);
+ if(!source)return {state:validateState(state),reviewCount:0,carried:0};
+ const picks=carryPicks(raw);
+ // For a save you already play those picks are in-game unlocks, so their
+ // confirmation steps start ticked. Records copied below still win, including a
+ // step the previous profile left deliberately unticked.
+ if(picks.picked)for(const id of pickedRecipeUnlocks(plan))state.checks['recipe-unlock-'+id]=true;
+ const prefixes=Object.entries(carryPrefixes).filter(([key])=>picks[key]).flatMap(([,list])=>list);
+ for(const [key,value] of Object.entries(source.checks||{}))if(prefixes.some(p=>key.startsWith(p)))state.checks[key]=value;
+ if(picks.deliveries)state.deliveries={...source.deliveries};
+ if(picks.storage)for(const [key,value] of Object.entries(source.notes||{}))if(key.startsWith('slot-'))state.notes[key]=value;
+ if(picks.storage)state.storageEdits=validateEdits(source.storageEdits);
+ if(picks.notes){
+  state.notes={...state.notes,...source.notes};
+  state.customTasks=structuredClone(source.customTasks||[]);
+  for(const task of state.customTasks)if(source.checks?.[task.id]!==undefined)state.checks[task.id]=source.checks[task.id];
+ }
+ if(picks.planEdits){
+  state.taskEdits=validateTaskEdits(source.taskEdits);
+  state.factoryGroups=mergeGroups(state.factoryGroups,source.factoryGroups,plan);
+ }
+ let reviewCount=0;
+ if(picks.factories&&plan){
+  const previous=planRows(sourcePlan);
+  for(const [key,row] of planRows(plan)){
+   if(!source.checks?.[key]||!safeKey(key))continue;
+   const old=previous.get(key);
+   const grown=!old||row.machines>old.machines||Object.entries(row.inputs||{}).some(([n,q])=>q>(old.inputs?.[n]||0)+0.001);
+   state.checks[key]=!grown;
+   if(grown)reviewCount++;
+  }
+ }
+ const clean=validateState(state);
+ return {state:clean,reviewCount,carried:Object.values(clean.checks).filter(Boolean).length};
+}
+// Keep the previous profile's group names and its assignments for rows the new
+// plan still builds, then place the plan's remaining rows with the defaults.
+function mergeGroups(defaults,raw,plan){
+ const carried=validateGroups(raw);
+ if(!carried.groups.length)return defaults;
+ const rows=new Set([...planRows(plan).values()].map(r=>r.id));
+ const groups=[...carried.groups];
+ const known=new Set(groups.map(g=>g.id));
+ const assignments={};
+ for(const [key,list] of Object.entries(carried.assignments))if(rows.has(key))assignments[key]=list;
+ for(const [key,list] of Object.entries(defaults.assignments)){
+  if(assignments[key])continue;
+  for(const m of list)if(!known.has(m.group)){const g=defaults.groups.find(x=>x.id===m.group);if(g&&groups.length<60){groups.push(g);known.add(g.id);}}
+  if(list.every(m=>known.has(m.group)))assignments[key]=list;
+ }
+ return validateGroups({groups,assignments});
+}
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
 export function shareState(s){

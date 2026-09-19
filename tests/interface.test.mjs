@@ -1,12 +1,13 @@
-import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText} from '../public/preferences.js';
+import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor} from '../public/preferences.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {progression} from '../public/progression.js';
+import {carryOptions,pickedRecipeUnlocks} from '../public/state.js';
 import {calculate,catalog} from '../planner.mjs';
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^(?:import[^\n]*\n)+/,'').replaceAll('import.meta.url',JSON.stringify('https://example.com/satisfactory-planner/app.js')).replace(/\nboot\(\);\s*$/,'');
-function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,progression,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
+function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,progression,carryOptions,pickedRecipeUnlocks,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
 test('original and calculated views render; wizard exposes all settings and safe names',()=>{
  const c=ui();for(const route of ['renderPlan','renderFactories','renderStorage','renderResources','renderBackup','renderProfiles','renderAccount'])assert.ok(vm.runInContext(route+'()',c).length>100,route);
  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,c);
@@ -195,7 +196,7 @@ test('storage follows the selected contract, preserves addresses and displays sm
 });
 test('wizard tabs retain edits and recalculate Review without native help tooltips',async()=>{
  const c=ui();vm.runInContext(`wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,c);
- const form={reportValidity:()=>true,querySelector:sel=>sel==='.alt-list'?null:{textContent:''}};c.document.querySelector=()=>form;
+ const form={reportValidity:()=>true,querySelector:sel=>['.alt-list','.carry-list'].includes(sel)?null:{textContent:''}};c.document.querySelector=()=>form;
  c.FormData=class{*[Symbol.iterator](){yield ['saveName','Edited world'];yield ['purity','pure'];}has(){return false;}};
  await vm.runInContext('moveWizard(2)',c);
  assert.equal(vm.runInContext('wizard.saveName',c),'Edited world');
@@ -213,7 +214,7 @@ test('the wizard shows calculation progress and options when the calculation tim
  vm.runInContext(`wizard={step:4,saveName:'W',name:'P',settings:structuredClone(generated.settings),preview:null};render=()=>{};`,c);
  const errorNode={textContent:'',innerHTML:''};
  const submitNode={textContent:'Calculate plan'};
- const form={reportValidity:()=>true,querySelector:sel=>sel==='.alt-list'?null:sel==='button[type="submit"]'?submitNode:errorNode};
+ const form={reportValidity:()=>true,querySelector:sel=>['.alt-list','.carry-list'].includes(sel)?null:sel==='button[type="submit"]'?submitNode:errorNode};
  c.document.querySelector=()=>form;
  c.FormData=class{*[Symbol.iterator](){}has(){return false;}getAll(){return [];}};
  c.buttonText=()=>submitNode.textContent;
@@ -264,4 +265,55 @@ test('the wizard can pick specific alternate recipes',()=>{
  vm.runInContext(`wizard.settings.pureIngots=false;`,c);
  assert.ok(!vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`,c).includes('alt-picker'),'the picker only shows for custom access');
  vm.runInContext('wizard=null',c);
+});
+
+test('adding a profile to an existing save offers to carry its progress over',()=>{
+ const c=ui();
+ vm.runInContext(`workspace.saves=[{id:'s1',name:'One world',activeProfile:'p2',profiles:[{id:'p1',name:'First <plan>',kind:'calculated',settings:generated.settings},{id:'p2',name:'Second',kind:'calculated',settings:generated.settings}]}];`,c);
+ vm.runInContext(`wizard={step:5,saveId:'s1',saveName:'One world',name:'Third',settings:structuredClone(generated.settings),preview:generated,carryFrom:'p2',carry:Object.fromEntries(carryOptions.map(([k])=>[k,true]))};`,c);
+ const html=vm.runInContext('renderWizard()',c);
+ assert.match(html,/carry-list/,'the review step offers the carry-over options');
+ assert.match(html,/name="carryFrom"/,'the source profile can be chosen');
+ assert.match(html,/value="p1"/,'other profiles of the same save are offered');
+ assert.match(html,/value="p2" selected/,'the profile being continued is preselected');
+ assert.ok(!html.includes('First <plan>'),'profile names are escaped');
+ for(const key of ['unlocks','storage','commissioning','deliveries','notes','planEdits','factories'])assert.match(html,new RegExp(`name="carry" value="${key}" checked`),key+' is carried by default');
+ assert.ok(!html.includes('value="picked"'),'recipe picks are only offered when the plan picks its own recipes');
+ vm.runInContext(`wizard.preview={...generated,settings:{...generated.settings,recipes:'custom',alternateRecipes:['Recipe_Alternate_Screw_C']}};`,c);
+ assert.match(vm.runInContext('renderWizard()',c),/name="carry" value="picked" checked/,'hand-picked recipes can be claimed as unlocked');
+ assert.match(vm.runInContext('renderWizard()',c),/<\/b> \(1\)/,'the number of recipes the claim covers is shown');
+ vm.runInContext(`wizard.saveId=null;`,c);
+ assert.ok(!vm.runInContext('renderWizard()',c).includes('carry-list'),'a brand new save has nothing to carry');
+ c.FormData=class{getAll(){return ['storage','factories'];}get(){return 'p1';}};
+ vm.runInContext(`readCarry({querySelector:sel=>sel==='.carry-list'?{}:null})`,c);
+ assert.equal(vm.runInContext('wizard.carryFrom',c),'p1','the chosen source profile is kept');
+ assert.equal(vm.runInContext('wizard.carry.storage',c),true,'ticked options are kept');
+ assert.equal(vm.runInContext('wizard.carry.notes',c),false,'unticked options are cleared');
+});
+
+test('the wizard offers two storage rates and per-item overrides',()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:2,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),storage:'all',storageRate:1,buildRate:30,storageOverrides:{Concrete:60}},preview:null};`,c);
+ const html=vm.runInContext('renderWizard()',c);
+ assert.match(html,/name="buildRate" type="number" value="30"/,'the construction rate is its own field');
+ assert.match(html,/name="storageRate" type="number" value="1"/,'the general rate stays a separate field');
+ assert.match(html,/rate-list/,'per-item rates are offered');
+ assert.match(html,/name="rate:Concrete"[^>]*value="60"/,'an overridden item shows its rate');
+ assert.match(html,/name="rate:Screws"[^>]*value=""/,'an item without an override is left blank');
+ assert.match(html,/name="rate:Iron Plate"[^>]*placeholder="30"/,'construction materials show the build rate as their placeholder');
+ assert.match(html,/name="rate:Screws"[^>]*placeholder="1"/,'other items show the general rate as their placeholder');
+ assert.match(html,/1 set/,'the summary counts the overrides');
+
+ vm.runInContext(`wizard.settings.storage='construction';`,c);
+ const narrow=vm.runInContext('renderWizard()',c);
+ assert.match(narrow,/name="rate:Concrete"/,'the list follows the selected storage supply');
+ assert.ok(!narrow.includes('name="rate:Ballistic Warp Drive"'),'items outside the contract are not listed');
+ vm.runInContext(`wizard.settings.storage='none';`,c);
+ assert.ok(!vm.runInContext('renderWizard()',c).includes('rate-list'),'no dedicated storage means no rates to set');
+
+ vm.runInContext(`wizard.settings.storage='all';wizard.settings.storageOverrides={};`,c);
+ const form={querySelector:sel=>sel==='.rate-list'?{}:null,reportValidity:()=>true};
+ c.FormData=class{*[Symbol.iterator](){yield ['rate:Concrete','60'];yield ['rate:Screws','0'];yield ['rate:Wire',''];}has(){return false;}getAll(){return [];}get(){return null;}};
+ vm.runInContext('readWizard(form)',Object.assign(c,{form}));
+ assert.equal(vm.runInContext('JSON.stringify(wizard.settings.storageOverrides)',c),'{"Concrete":60,"Screws":0}','blank boxes stay unset while zero is kept');
 });

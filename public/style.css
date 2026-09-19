@@ -418,6 +418,18 @@ button.rail-tile:hover{border-color:var(--accent)}
 .signin .brand{color:var(--bright);border-bottom:0;padding:0 0 14px}
 .wizard-panel .notice{margin:18px 0}
 .wizard-panel details.panel summary{font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;color:var(--bright)}
+.rate-picker{margin:16px 0 0}
+.rate-picker summary{font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;color:var(--bright)}
+.rate-picker #rate-filter{background:#0f1214;border:1px solid #343b41;padding:7px 10px;min-width:min(280px,100%);margin:0 0 12px}
+.rate-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px 14px;max-height:340px;overflow:auto}
+.rate-row{gap:4px}
+.rate-row input{width:100%}
+.carry-panel{margin:18px 0 0}
+.carry-panel .field{max-width:420px;margin:0 0 14px}
+.carry-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px}
+.carry-list .check-row{align-items:flex-start;line-height:1.45}
+.carry-list .check-row b{font-family:var(--head);letter-spacing:.06em;color:var(--bright)}
+.carry-list small{font-size:11px}
 
 /* ── Help tooltips ─────────────────────────────────────── */
 .setting-help{position:relative;display:inline-block;cursor:help;color:var(--accent);font-size:13px;letter-spacing:normal}
@@ -470,7 +482,7 @@ button.rail-tile:hover{border-color:var(--accent)}
  .check-columns{grid-template-columns:1fr}
  td,th{padding:9px 10px}
  .toolbar{gap:8px}
- .form-grid,.goal-grid,.profile-cards{grid-template-columns:1fr}
+ .form-grid,.goal-grid,.profile-cards,.carry-list{grid-template-columns:1fr}
  .resource-inputs{grid-template-columns:1fr 1fr}
  .wizard-progress button{font-size:12px;padding:9px 10px;letter-spacing:.08em}
  .wizard-panel{padding:14px}

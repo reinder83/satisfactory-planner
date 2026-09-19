@@ -16,9 +16,15 @@ Open **Saves & profiles → Create a save**, or **Try another profile** on an ex
 
 1. Name the save and enter its phase, purity/distribution, elevator multiplier, consumption multiplier and spare existing power.
 2. Choose recipe access (standard, all alternates, or hand-pick specific alternate recipes), pure ingots, SAM conversion policy, nuclear recycling, protected storage and extra Singularity Cell production.
+
+   Protected storage reserves production for every selected item, permanently, so it is often the largest single cost in a plan. It is set by two rates: **Construction materials refill /min** for the parts you carry out by hand (plates, rods, concrete, wire, cable, beams, pipes, frames, plastic, rubber) and **Other items refill /min** for everything else. **Per-item storage rates** overrides single items; `0` keeps an item's container and address without reserving any production for it, and surplus still fills it. Settings saved before this existed use their one rate for both, so existing profiles are unchanged.
+
+   Space Elevator parts start at `0`. Deliveries and the later project parts that consume them are already planned, so a standing buffer on top would be production nobody draws from. They keep their containers and addresses; enter a rate against one if you want a buffer anyway.
 3. Choose minimal construction (24-hour delivery), balanced (8-hour delivery), a target time, or maximum elevator output.
 4. Review/edit available raw resource budgets. Confirm these before maximum-output planning.
 5. Review calculated buildings, delivery time, power and feasibility by phase, then create the profile.
+
+When you add a profile to a save you are already playing, Review also offers **Continue the progress in this save**. A new plan does not undo the world: choose the profile to carry from and which of its records come along — milestone/MAM and hard-drive unlocks, the storage room layout and its built containers, power and start-up steps, elevator deliveries already handed in, notes and personal tasks, build-plan edits and factory group names, and factory progress for production lines the new plan does not expand. Lines that now need more machines or more input are carried unticked so you can review them, exactly as **Round up production** does. Hand-picking alternate recipes for a save you play also states which recipes you own, so their unlock steps can start ticked. Nothing is moved: the profile you carry from keeps all of it, and a brand new save still starts empty.
 
 The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs surplus to storage and sinks. Its optional storage template includes 132 addresses, collectables bays Q/R and the workshop underneath. New saves have no pre-completed steps.
 
