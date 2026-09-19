@@ -492,7 +492,20 @@ document.addEventListener('change',async e=>{
 });
 document.addEventListener('input',e=>{if(['factory-search','storage-search','plan-search'].includes(e.target.id)){query=e.target.value;render();}
  if(e.target.id==='alt-filter'){const q=e.target.value.trim().toLowerCase();for(const row of document.querySelectorAll('.alt-row'))row.hidden=q!==''&&!row.dataset.altText.includes(q);}
- if(e.target.id==='rate-filter'){const q=e.target.value.trim().toLowerCase();for(const row of document.querySelectorAll('.rate-row'))row.hidden=q!==''&&!row.dataset.rateText.includes(q);}});
+ if(e.target.id==='rate-filter'){const q=e.target.value.trim().toLowerCase();for(const row of document.querySelectorAll('.rate-row'))row.hidden=q!==''&&!row.dataset.rateText.includes(q);}
+ // Each per-item box shows the rate its group would give it, so editing either
+ // group rate has to refresh the placeholders the list is already showing.
+ if(['buildRate','storageRate'].includes(e.target.name))refreshRatePlaceholders();});
+function refreshRatePlaceholders(){
+ const rows=document.querySelectorAll('.rate-row');if(!rows.length)return;
+ const read=name=>{const value=document.querySelector('[name='+name+']')?.value;return value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value):null;};
+ const general=read('storageRate'),build=read('buildRate')??general;
+ for(const row of rows){
+  const rate=row.dataset.rateGroup==='delivered'?0:row.dataset.rateGroup==='build'?build:general;
+  const input=row.querySelector('input');
+  if(input&&rate!==null)input.placeholder=num(rate);
+ }
+}
 document.addEventListener('submit',async e=>{if(e.target.id==='add-task'){e.preventDefault();const title=new FormData(e.target).get('title').trim();if(!title)return;const btn=e.target.querySelector('button');btn.disabled=true;try{await save({type:'addTask',id:'custom-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),phase:phase(),title});render();}catch{btn.disabled=false;}}});
 document.addEventListener('submit',async e=>{
  const f=e.target,read=()=>String(new FormData(f).get('name')||'').trim();
@@ -559,7 +572,7 @@ function storageRatesHtml(s){
  const items=(workspace.catalog.storageItems||[]).filter(i=>wantsStorage(i.name,s.storage));
  if(!items.length)return '';
  const over=s.storageOverrides||{},set=items.filter(i=>over[i.name]!==undefined).length;
- return `<details class="panel rate-picker" ${set?'open':''}><summary>Per-item storage rates${set?' · '+num(set)+' set':''} ${help('storageOverrides')}</summary><p class="small muted">Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container and address without reserving any production for it. Space Elevator parts start at 0: deliveries and later project parts already consume them, so a standing buffer would be production nobody draws from. ${num(items.length)} items are in your selected storage supply.</p><input id="rate-filter" type="search" placeholder="Filter by item…" aria-label="Filter storage items"><div class="rate-list">${items.map(i=>`<label class="rate-row field" data-rate-text="${esc(i.name.toLowerCase())}"><span>${esc(i.name)}${i.build?' <small class="muted">· construction</small>':i.delivered?' <small class="muted">· delivered</small>':''}</span><input name="rate:${esc(i.name)}" type="number" min="0" max="300" step="0.1" value="${over[i.name]??''}" placeholder="${num(storageRateFor({...s,storageOverrides:{}},i.name))}" aria-label="Storage refill for ${esc(i.name)} per minute"></label>`).join('')}</div></details>`;
+ return `<details class="panel rate-picker" ${set?'open':''}><summary>Per-item storage rates${set?' · '+num(set)+' set':''} ${help('storageOverrides')}</summary><p class="small muted">Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container and address without reserving any production for it. Space Elevator parts start at 0: deliveries and later project parts already consume them, so a standing buffer would be production nobody draws from. ${num(items.length)} items are in your selected storage supply.</p><input id="rate-filter" type="search" placeholder="Filter by item…" aria-label="Filter storage items"><div class="rate-list">${items.map(i=>`<label class="rate-row field" data-rate-text="${esc(i.name.toLowerCase())}" data-rate-group="${i.build?'build':i.delivered?'delivered':'other'}"><span>${esc(i.name)}${i.build?' <small class="muted">· construction</small>':i.delivered?' <small class="muted">· delivered</small>':''}</span><input name="rate:${esc(i.name)}" type="number" min="0" max="300" step="0.1" value="${over[i.name]??''}" placeholder="${num(storageRateFor({...s,storageOverrides:{}},i.name))}" aria-label="Storage refill for ${esc(i.name)} per minute"></label>`).join('')}</div></details>`;
 }
 function readCarry(form,data){
  const w=wizard;if(!form?.querySelector('.carry-list'))return;
