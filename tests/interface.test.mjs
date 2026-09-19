@@ -350,3 +350,25 @@ test('editing a group rate refreshes the per-item placeholders it applies to',()
  vm.runInContext('refreshRatePlaceholders()',c);
  assert.equal(rows[2].input.placeholder,'4','a half-typed rate leaves the last usable placeholder in place');
 });
+
+test('the wizard chooses what the target time applies to and Review shows what a phase used to take',()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:3,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),goal:'timed',hours:10},preview:null};`,c);
+ const goals=vm.runInContext('renderWizard()',c);
+ assert.match(goals,/name="phaseTime"/,'the goals step asks what the target time applies to');
+ assert.match(goals,/value="every" selected/,'every phase is the default');
+ vm.runInContext(`wizard.settings.phaseTime='final';`,c);
+ assert.match(vm.runInContext('renderWizard()',c),/value="final" selected/,'the saved choice is shown');
+ assert.match(vm.runInContext(`help('phaseTime')`,c),/final phase/,'the choice is explained');
+
+ vm.runInContext(`wizard.step=5;wizard.preview={...generated,stages:{...generated.stages,1:{...generated.stages[1],hours:5.21,aheadOf:9.92}}};`,c);
+ const review=vm.runInContext('renderWizard()',c);
+ assert.match(review,/was 9.92 h/,'a pulled-forward phase shows what it used to take');
+ vm.runInContext(`wizard.preview=generated;`,c);
+ assert.ok(!vm.runInContext('renderWizard()',c).includes('was '),'an ordinary plan shows no such note');
+
+ const form={querySelector:()=>null,reportValidity:()=>true};
+ c.FormData=class{*[Symbol.iterator](){yield ['phaseTime','final'];yield ['goal','timed'];}has(){return false;}getAll(){return [];}get(){return null;}};
+ vm.runInContext('readWizard(form)',Object.assign(c,{form}));
+ assert.equal(vm.runInContext('wizard.settings.phaseTime',c),'final','the choice is carried out of the form');
+});
