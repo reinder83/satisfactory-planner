@@ -317,3 +317,36 @@ test('the wizard offers two storage rates and per-item overrides',()=>{
  vm.runInContext('readWizard(form)',Object.assign(c,{form}));
  assert.equal(vm.runInContext('JSON.stringify(wizard.settings.storageOverrides)',c),'{"Concrete":60,"Screws":0}','blank boxes stay unset while zero is kept');
 });
+
+test('editing a group rate refreshes the per-item placeholders it applies to',()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:2,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),storage:'all',storageRate:1,buildRate:30,storageOverrides:{}},preview:null};`,c);
+ const html=vm.runInContext('renderWizard()',c);
+ assert.match(html,/data-rate-group="build"[^>]*>\s*<span>Concrete/,'construction rows say which rate they follow');
+ assert.match(html,/data-rate-group="delivered"[^>]*>\s*<span>Nuclear Pasta/,'delivered rows say which rate they follow');
+ assert.match(html,/data-rate-group="other"[^>]*>\s*<span>Screws/,'everything else follows the general rate');
+
+ // A stand-in for the rendered list: one row per group, plus the two rate fields.
+ const rows=[['build',{placeholder:'30'}],['delivered',{placeholder:'0'}],['other',{placeholder:'1'}]].map(([group,input])=>({dataset:{rateGroup:group},querySelector:()=>input,input}));
+ const fields={storageRate:{value:'1'},buildRate:{value:'30'}};
+ c.document.querySelectorAll=sel=>sel==='.rate-row'?rows:[];
+ c.document.querySelector=sel=>fields[sel.replace('[name=','').replace(']','')]||null;
+
+ fields.buildRate.value='45';
+ vm.runInContext('refreshRatePlaceholders()',c);
+ assert.equal(rows[0].input.placeholder,'45','construction boxes follow the construction rate');
+ assert.equal(rows[2].input.placeholder,'1','the general boxes are untouched');
+ assert.equal(rows[1].input.placeholder,'0','delivered parts stay at zero');
+
+ fields.storageRate.value='4';
+ vm.runInContext('refreshRatePlaceholders()',c);
+ assert.equal(rows[2].input.placeholder,'4','the general boxes follow the general rate');
+ assert.equal(rows[0].input.placeholder,'45','the construction boxes keep their own rate');
+
+ fields.buildRate.value='';
+ vm.runInContext('refreshRatePlaceholders()',c);
+ assert.equal(rows[0].input.placeholder,'4','an empty construction rate falls back to the general rate, as the planner does');
+ fields.storageRate.value='';
+ vm.runInContext('refreshRatePlaceholders()',c);
+ assert.equal(rows[2].input.placeholder,'4','a half-typed rate leaves the last usable placeholder in place');
+});
