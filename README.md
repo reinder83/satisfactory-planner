@@ -21,6 +21,8 @@ Open **Saves & profiles → Create a save**, or **Try another profile** on an ex
 
    Space Elevator parts start at `0`. Deliveries and the later project parts that consume them are already planned, so a standing buffer on top would be production nobody draws from. They keep their containers and addresses; enter a rate against one if you want a buffer anyway.
 3. Choose minimal construction (24-hour delivery), balanced (8-hour delivery), a target time, or maximum elevator output.
+
+   **Target time applies to** decides whether that time is each phase's target or only the final phase's. On *The final phase*, earlier phases run their lines as hard as the machines a later phase already builds allow, so they finish sooner without adding a building the plan later drops — an early phase is never made slower, never runs more of a recipe than a later phase keeps, and never uses a recipe no later phase uses. Their delivery rates are not rounded, and Review shows what each pulled-forward phase would otherwise have taken. Ignored for maximum output, which already maximizes every phase.
 4. Review/edit available raw resource budgets. Confirm these before maximum-output planning.
 5. Review calculated buildings, delivery time, power and feasibility by phase, then create the profile.
 

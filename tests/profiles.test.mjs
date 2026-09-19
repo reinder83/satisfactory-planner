@@ -343,3 +343,35 @@ test('Space Elevator parts keep a container but no standing storage contract',()
  const all=Object.fromEntries(elevatorParts.map(n=>[n,4]));
  assert.ok(machines(calculate({...base,storageOverrides:all}))>machines(calculate(base)),'stocking them again costs machines');
 });
+
+test('a final-phase target lets earlier phases use the machines later phases already build',()=>{
+ const base={phase:'1',goal:'timed',hours:10,multiplier:50,storage:'all',storageRate:1,purity:'pure',limits:{...PURE_LIMITS},recipes:'all'};
+ const every=calculate(base),final=calculate({...base,phaseTime:'final'});
+ assert.equal(every.settings.phaseTime,'every','settings saved before this existed keep one target per phase');
+ for(const ph of ['1','2','3','4','5'])assert.equal(every.stages[ph].hours,calculate(base).stages[ph].hours,'the default plan is unchanged');
+ assert.equal(final.stages[5].hours,every.stages[5].hours,'the final phase still hits the target');
+
+ const machines=st=>(st.rows||[]).reduce((a,r)=>a+r.machines,0);
+ let pulled=0;
+ for(const ph of ['1','2','3','4']){
+  const before=every.stages[ph],after=final.stages[ph];
+  assert.ok(after.hours<=before.hours+1e-6,'phase '+ph+' is never made slower');
+  if(after.aheadOf===undefined){assert.equal(after.hours,before.hours,'an unchanged phase keeps its plan');continue;}
+  pulled++;
+  assert.equal(after.aheadOf,before.hours,'phase '+ph+' records what it used to take');
+  assert.ok(after.hours<before.hours-1e-6,'a phase is only replaced when it finishes sooner');
+  // nothing is built that no later phase keeps
+  for(const row of after.rows||[]){
+   const kept=Math.max(0,...['1','2','3','4','5'].filter(p=>p>=ph).map(p=>(every.stages[p].rows||[]).find(r=>r.id===row.id)?.machines||0));
+   assert.ok(row.machines<=kept,'phase '+ph+' runs no more '+row.name+' than a later phase builds ('+row.machines+' vs '+kept+')');
+  }
+  assert.ok(machines(after)<=machines(every.stages['5']),'a pulled-forward phase stays within the final build');
+ }
+ assert.ok(pulled>0,'at least one phase finishes sooner');
+ assert.match(final.warnings.join(' '),/target time applies to Phase 5/,'the plan says the target moved to the final phase');
+ assert.ok(!every.warnings.join(' ').includes('target time applies to Phase 5'),'the default plan does not claim it');
+
+ const maxed=calculate({...base,goal:'maximum',limitsConfirmed:true,phaseTime:'final'});
+ for(const ph of ['1','2','3','4','5'])assert.equal(maxed.stages[ph].aheadOf,undefined,'maximum output already maximizes every phase');
+ assert.throws(()=>calculate({...base,phaseTime:'sometimes'}),/Invalid profile option/,'only the two choices are accepted');
+});
