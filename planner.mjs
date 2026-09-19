@@ -1,4 +1,4 @@
-import {droneFuels,droneSupply,wantsStorage,storageOptions,distributions,purities,powerOptions,resourceDefaults} from './public/preferences.js';
+import {droneFuels,droneSupply,wantsStorage,storageRateFor,constructionItems,elevatorParts,storageOptions,distributions,purities,powerOptions,resourceDefaults} from './public/preferences.js';
 import fs from 'node:fs';
 import {solve} from './optimizer.mjs';
 export const DATA=JSON.parse(fs.readFileSync(new URL('./recipes.json',import.meta.url)));
@@ -14,9 +14,24 @@ export const DELIVERIES={1:{'Smart Plating':50},2:{'Smart Plating':1000,'Versati
 const err=message=>{throw Object.assign(new Error(message),{status:400});};
 const choice=(v,allowed,fallback)=>v===undefined?fallback:allowed.includes(v)?v:err('Invalid profile option.');
 const number=(v,min,max,fallback)=>v===undefined?fallback:Number.isFinite(v)&&v>=min&&v<=max?v:err(`Enter a number from ${min} to ${max}.`);
+// Per-item storage rates. Only storable item names are accepted so a stale or
+// mistyped entry cannot silently reserve production for nothing.
+const storable=name=>!RAW.includes(name)&&!DATA.items[name]?.fluid&&!DATA.items[name]?.radioactive&&(DATA.items[name]?.sink||0)>0;
+const rateOverrides=raw=>{
+ if(raw===undefined)return {};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))err('Invalid per-item storage rates.');
+ const entries=Object.entries(raw);
+ if(entries.length>200)err('Too many per-item storage rates.');
+ const out={};
+ for(const [name,rate] of entries){
+  if(!storable(name))err(`${name} cannot be given a storage rate.`);
+  out[name]=number(rate,0,300,0);
+ }
+ return out;
+};
 export function settings(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))err('Invalid settings.');
- const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
+ const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),buildRate:number(input.buildRate,0,300,number(input.storageRate,0.1,300,1)),storageOverrides:rateOverrides(input.storageOverrides),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
  if(s.droneFuel==='Plutonium Fuel Rod'&&s.nuclear==='none')err('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
  s.limits={};const defaults=resourceDefaults(s.purity,s.distribution).limits;
  if((s.mainPower==='nuclear'||s.mainPower.endsWith('-nuclear'))&&s.nuclear==='none')err('Choose a nuclear waste strategy for a nuclear power preference.');
@@ -28,7 +43,6 @@ export function settings(input={}){
 }
 const pureNames=['Alternate: Pure Iron Ingot','Alternate: Pure Copper Ingot','Alternate: Pure Caterium Ingot','Alternate: Pure Aluminum Ingot'];
 const metals=['Iron Ingot','Copper Ingot','Caterium Ingot','Aluminum Ingot'];
-const construction=['Iron Plate','Iron Rod','Reinforced Iron Plate','Concrete','Wire','Cable','Copper Sheet','Steel Beam','Steel Pipe','Modular Frame','Encased Industrial Beam','Heavy Modular Frame','Motor','Computer','Plastic','Rubber','Alclad Aluminum Sheet','Aluminum Casing'];
 const key=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 export function recipePool(s,phase,conversion){
  return DATA.recipes.filter(r=>!MAM_RECIPES.includes(r.id)||s.recipes!=='custom'||s.alternateRecipes.includes(r.id)).map(r=>MAM_RECIPES.includes(r.id)?{...r,alternate:false,name:r.name.replace('Alternate: ','')}:r).filter(r=>r.phase<=phase&&(s.recipes==='all'||!r.alternate||s.recipes==='custom'&&s.alternateRecipes.includes(r.id)||s.pureIngots&&pureNames.includes(r.name)))
@@ -64,7 +78,7 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
  const allItems=new Set(pool.flatMap(r=>[...Object.keys(r.inputs),...Object.keys(r.outputs)]));
  const demand={};const storage={};const drone=droneSupply(s,phase),utilityFactor=1+(s.utilityPercent??20)/100;
  const candidates=[...reachable].filter(n=>!RAW.includes(n)&&!DATA.items[n]?.fluid&&!DATA.items[n]?.radioactive&&(DATA.items[n]?.sink||0)>0&&wantsStorage(n,s.storage));
- for(const n of candidates)if(reachable.has(n)){storage[n]=s.storageRate;demand[n]=s.storageRate;}
+ for(const n of candidates)if(reachable.has(n)){const rate=storageRateFor(s,n);storage[n]=rate;if(rate>0)demand[n]=rate;}
  const delivery={};const hours=s.goal==='minimal'?24:s.goal==='balanced'?8:s.hours;
  for(const [n,amount] of Object.entries(DELIVERIES[phase])){let rate=amount*s.multiplier/(hours*60);if(s.roundRates)rate=rate>=100?Math.round(rate/10)*10:rate>=10?Math.round(rate):Math.ceil(rate*10)/10;delivery[n]={target:Math.ceil(amount*s.multiplier),rate};if(!maximum)demand[n]=(demand[n]||0)+rate;}
  for(const [n,q] of Object.entries(drone))demand[n]=(demand[n]||0)+q;
@@ -157,7 +171,7 @@ export function calculate(input,onPhase){
  if(s.modNotes)warnings.push('Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.');
  return {engine:ENGINE,settings:s,stages,warnings,createdAt:new Date().toISOString()};
 }
-export const catalog=()=>({engine:ENGINE,alternates:DATA.recipes.filter(r=>r.alternate&&r.phase<=5).map(r=>({id:r.id,name:r.name.replace('Alternate: ',''),phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs,...(MAM_RECIPES.includes(r.id)?{mam:true}:{}),...(pureNames.includes(r.name)?{pure:true}:{})})).sort((a,b)=>a.name.localeCompare(b.name)),standardRecipes:DATA.recipes.filter(r=>!r.alternate).map(r=>({id:r.id,name:r.name,phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs})),storageOptions,distributions,purities,powerOptions,raw:RAW,limits:DEFAULT_LIMITS,pureLimits:PURE_LIMITS,goals:[{id:'minimal',name:'Minimal construction',description:'24-hour deliveries; minimize production-building equivalents.'},{id:'balanced',name:'Balanced progression',description:'8-hour deliveries with the selected storage and recipe preferences.'},{id:'timed',name:'Target completion time',description:'Calculate rates from your chosen hours per phase.'},{id:'maximum',name:'Maximum elevator output',description:'Fastest simultaneous delivery within confirmed resource budgets.'}]});
+export const catalog=()=>({engine:ENGINE,alternates:DATA.recipes.filter(r=>r.alternate&&r.phase<=5).map(r=>({id:r.id,name:r.name.replace('Alternate: ',''),phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs,...(MAM_RECIPES.includes(r.id)?{mam:true}:{}),...(pureNames.includes(r.name)?{pure:true}:{})})).sort((a,b)=>a.name.localeCompare(b.name)),standardRecipes:DATA.recipes.filter(r=>!r.alternate).map(r=>({id:r.id,name:r.name,phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs})),storageOptions,storageItems:Object.keys(DATA.items).filter(storable).map(name=>({name,build:constructionItems.includes(name),delivered:elevatorParts.includes(name)})).sort((a,b)=>Number(b.build)-Number(a.build)||a.name.localeCompare(b.name)),distributions,purities,powerOptions,raw:RAW,limits:DEFAULT_LIMITS,pureLimits:PURE_LIMITS,goals:[{id:'minimal',name:'Minimal construction',description:'24-hour deliveries; minimize production-building equivalents.'},{id:'balanced',name:'Balanced progression',description:'8-hour deliveries with the selected storage and recipe preferences.'},{id:'timed',name:'Target completion time',description:'Calculate rates from your chosen hours per phase.'},{id:'maximum',name:'Maximum elevator output',description:'Fastest simultaneous delivery within confirmed resource budgets.'}]});
 
 
 

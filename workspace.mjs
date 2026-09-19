@@ -1,5 +1,5 @@
 import {validateTransfer,transferFormat} from './public/transfer.js';
-import {shareState,defaultFactoryGroups} from './public/state.js';
+import {shareState,newProfileState} from './public/state.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomBytes,scrypt as scryptCallback,timingSafeEqual,createHash} from 'node:crypto';
@@ -12,7 +12,6 @@ const publicUser=u=>u?{id:u.id,username:u.username,owner:u.id==='owner'}:null;
 const authCookie=token=>`planner_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token?2592000:0}${process.env.COOKIE_SECURE==='true'?'; Secure':''}`;
 export async function openWorkspace({dataDir,initialState,validateState,mutate}){
  const file=path.join(dataDir,'workspace.json');let db;
- const blank=()=>({...initialState(),checks:{},deliveries:{}});
  const original=(state)=>({id:'original',name:'Original · 50× complete automation',kind:'original',state});
  try{db=JSON.parse(await fs.readFile(file,'utf8'));if(db.version!==2||!Array.isArray(db.users)||!Array.isArray(db.saves)||!Array.isArray(db.sessions)||!db.users.some(u=>u.id==='owner'))throw Error();for(const save of db.saves){if(!db.users.some(u=>u.id===save.userId)||!Array.isArray(save.profiles)||!save.profiles.some(p=>p.id===save.activeProfile))throw Error();for(const p of save.profiles)p.state=validateState(p.state);}}
  catch(e){if(e.code!=='ENOENT')throw new Error('Workspace could not be read; existing data has not been overwritten.');let legacy;try{legacy=validateState(JSON.parse(await fs.readFile(path.join(dataDir,'progress.json'),'utf8')));}catch(e){if(e.code==='ENOENT')legacy=initialState();else throw new Error('Progress could not be read; existing data has not been overwritten.');}
@@ -76,7 +75,11 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
   if(endpoint==='/api/preview'&&req.method==='POST'){throttle(req);const b=await body(req);return response(calculate(b.settings));}
   if(endpoint==='/api/profiles'&&req.method==='POST'){
    throttle(req);const b=await body(req);const saveName=b.saveId?null:name(b.saveName),profileName=name(b.name);const plan=b.kind==='original'?null:calculate(b.settings);const profileId=id();let saveId=b.saveId||id();
-   await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');const state=blank();state.settings.phase=plan?.settings.phase||'3';if(plan)state.factoryGroups=defaultFactoryGroups(plan);save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;});return response({saveId,profileId,workspace:summary(db.users.find(x=>x.id===u.id))},201);
+   const carried=await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');
+    const source=b.carryFrom?save.profiles.find(p=>p.id===b.carryFrom):null;if(b.carryFrom&&!source)fail('The profile to carry progress from was not found.',404);
+    const started=newProfileState(plan,source?.state||null,source?.plan||null,b.carry);
+    save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state:started.state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;return started;});
+   return response({saveId,profileId,reviewCount:carried.reviewCount,carriedChecks:carried.carried,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
   if(endpoint==='/api/select'&&req.method==='POST'){const b=await body(req);const {save,profile}=scope({headers:{'x-save-id':b.saveId,'x-profile-id':b.profileId}},url,u);await commit(d=>{d.users.find(x=>x.id===u.id).activeSave=save.id;d.saves.find(s=>s.id===save.id).activeProfile=profile.id;});return response(summary(db.users.find(x=>x.id===u.id)));}
   if(endpoint==='/api/remove-profile'&&req.method==='POST'){

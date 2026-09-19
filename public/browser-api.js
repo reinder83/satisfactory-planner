@@ -1,5 +1,5 @@
 import {openBrowserStore} from './browser-store.js';
-import {initialState,validateState,mutate,shareState,defaultFactoryGroups} from './state.js';
+import {validateState,mutate,shareState,newProfileState} from './state.js';
 import {validateTransfer,transferFormat} from './transfer.js';
 export const browserMode=globalThis.PLANNER_BROWSER===true;
 let instance;
@@ -14,7 +14,10 @@ export function createBrowserApi(store,calculator,catalog){
   if(ep==='/api/preview')return calculator(body.settings,options.onProgress);
   if(ep==='/api/profiles'){
    const profileName=cleanName(body.name),saveName=body.saveId?null:cleanName(body.saveName),plan=await calculator(body.settings,options.onProgress),profileId=uid();
-   return store.transaction(d=>{let save=d.saves.find(s=>s.id===body.saveId);if(body.saveId&&!save)throw Error('Save not found.');if(!save){if(d.saves.length>=50)throw Error('Save limit reached.');save={id:uid(),name:saveName,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)throw Error('Profile limit reached.');const state={...initialState(),checks:{},deliveries:{}};state.settings.phase=plan.settings.phase;state.factoryGroups=defaultFactoryGroups(plan);save.profiles.push({id:profileId,name:profileName,kind:'calculated',plan,state});save.activeProfile=profileId;d.activeSave=save.id;return {saveId:save.id,profileId,workspace:summary(d)};});
+   return store.transaction(d=>{let save=d.saves.find(s=>s.id===body.saveId);if(body.saveId&&!save)throw Error('Save not found.');if(!save){if(d.saves.length>=50)throw Error('Save limit reached.');save={id:uid(),name:saveName,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)throw Error('Profile limit reached.');
+    const source=body.carryFrom?save.profiles.find(p=>p.id===body.carryFrom):null;if(body.carryFrom&&!source)throw Error('The profile to carry progress from was not found.');
+    const started=newProfileState(plan,source?.state||null,source?.plan||null,body.carry);
+    save.profiles.push({id:profileId,name:profileName,kind:'calculated',plan,state:started.state});save.activeProfile=profileId;d.activeSave=save.id;return {saveId:save.id,profileId,reviewCount:started.reviewCount,carriedChecks:started.carried,workspace:summary(d)};});
   }
   if(ep==='/api/export-saves'){
    const saveId=url.searchParams.get('save'),profileId=url.searchParams.get('profile'),share=url.searchParams.get('share')==='1';

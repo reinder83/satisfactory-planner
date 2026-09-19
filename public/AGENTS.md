@@ -20,6 +20,7 @@ Use the current vanilla HTML/CSS/JS structure unless the requested scope warrant
 - Edit the build plan per profile: reorder steps, rewrite titles/details, link steps to factories, remove and restore steps. Removed and renamed steps keep their checklist keys and completion.
 - Group factories into named groups on both factories pages, including production splits where one item serves several groups (assignments keyed by factory/row id in `factoryGroups`). Removing groups must never touch factory progress.
 - Duplicate a profile (full copy including progress) and share a profile (scoped transfer export without progress) from Saves & profiles.
+- When adding a profile to an existing save, the Review step offers carrying that save's progress over: a source-profile picker and one checkbox per record group. It stays a five-step wizard, the source profile is never modified, and a brand new save shows no panel and starts empty.
 - Export/import full saves in both editions. Preserve progress-only backups where currently supported. Import confirmation must explain whether it adds copies or replaces progress.
 - In Docker, retain account setup/login/logout and user isolation. In browser mode, show local-storage and backup information instead of server/account claims.
 - Retain error, loading, empty-workspace, infeasible-result and calculation-in-progress states. Never show a successful save after a failed write.

@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createApp,initialState} from '../server.mjs';
-import {calculate,catalog,RAW,DATA,PURE_LIMITS,DEFAULT_LIMITS} from '../planner.mjs';
+import {calculate,catalog,RAW,DATA,PURE_LIMITS,DEFAULT_LIMITS,DELIVERIES} from '../planner.mjs';
+import {elevatorParts} from '../public/preferences.js';
 async function start(dir){const server=await createApp({dataDir:dir,password:''});await new Promise(r=>server.listen(0,'127.0.0.1',r));return {server,url:'http://127.0.0.1:'+server.address().port};}
 const close=s=>new Promise(r=>s.close(r));
 const post=(url,endpoint,b,headers={})=>fetch(url+endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...headers},body:JSON.stringify(b)});
@@ -189,4 +190,156 @@ test('a budget only whole machines exceed names the rounding headroom',()=>{
  assert.ok(st.shortfalls[0].needed>limit,'the whole-machine need exceeds the entered budget');
  assert.match(st.reason,/Iron Ore/,'the explanation names the resource');
  assert.equal(calculate({...base,wholeMachines:true,limits:{...DEFAULT_LIMITS,'Iron Ore':st.shortfalls[0].needed}}).stages[1].feasible,true,'the suggested budget fits whole machines');
+});
+
+test('a new profile for the same save carries the world progress its plan still describes',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-carry-'));const app=await start(dir);
+ try{
+  const settings={phase:'1',goal:'timed',hours:8,multiplier:1,storage:'none'};
+  const a=await json(await post(app.url,'/api/profiles',{saveName:'One world',name:'First plan',settings}));
+  const ah={'X-Save-Id':a.saveId,'X-Profile-Id':a.profileId};
+  const state=await json(await fetch(app.url+'/api/state',{headers:ah}));
+  const rows=Object.entries(calculate(settings).stages).flatMap(([ph,st])=>(st.rows||[]).map(r=>'calc-'+ph+'-'+r.id));
+  assert.ok(rows.includes('calc-1-Recipe_IngotIron_C'),'the first plan smelts iron in phase 1');
+  assert.deepEqual(state.checks,{},'a first profile still starts empty');
+  const ticks=['unlock-Schematic_1-1_C','recipe-unlock-Recipe_Alternate_Screw_C','hard-drives-1','startup-biomass','slot-A01-built','storage-ground-shell',...rows];
+  await json(await post(app.url,'/api/update',{type:'checks',keys:ticks,value:true},ah));
+  await json(await post(app.url,'/api/update',{type:'check',key:'unlock-Schematic_1-2_C',value:false},ah));
+  await json(await post(app.url,'/api/update',{type:'delivery',key:'1-smart-plating',value:400},ah));
+  await json(await post(app.url,'/api/update',{type:'note',key:'global',value:'Seed and routes'},ah));
+  await json(await post(app.url,'/api/update',{type:'note',key:'slot-A01',value:'Left of the ramp'},ah));
+  await json(await post(app.url,'/api/update',{type:'addTask',id:'custom-lights',title:'Hang lights',phase:'1'},ah));
+  await json(await post(app.url,'/api/update',{type:'check',key:'custom-lights',value:true},ah));
+  await json(await post(app.url,'/api/update',{type:'storageSlotAssign',key:'A01',name:'Iron Plate'},ah));
+  await json(await post(app.url,'/api/update',{type:'taskEdit',id:'startup-biomass',title:'Leaves first'},ah));
+  await json(await post(app.url,'/api/update',{type:'factoryGroupRename',id:'fg-iron01',name:'North iron'},ah));
+
+  const same=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Same settings',settings,carryFrom:a.profileId}));
+  const sameState=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':same.saveId,'X-Profile-Id':same.profileId}}));
+  assert.equal(sameState.checks['unlock-Schematic_1-1_C'],true,'milestone unlocks carry');
+  assert.equal(sameState.checks['unlock-Schematic_1-2_C'],false,'a deliberately unticked unlock stays unticked');
+  assert.equal(sameState.checks['recipe-unlock-Recipe_Alternate_Screw_C'],true,'confirmed hard-drive recipes carry');
+  assert.equal(sameState.checks['slot-A01-built'],true,'the built storage room carries');
+  assert.equal(sameState.checks['storage-ground-shell'],true,'storage room completion carries');
+  assert.equal(sameState.checks['startup-biomass'],true,'commissioned power steps carry');
+  assert.equal(sameState.checks['custom-lights'],true,'personal tasks keep their progress');
+  assert.equal(sameState.storageEdits.slots.A01,'Iron Plate','container names carry');
+  assert.equal(sameState.notes.global,'Seed and routes','notes carry');
+  assert.equal(sameState.notes['slot-A01'],'Left of the ramp','container notes carry');
+  assert.equal(sameState.deliveries['1-smart-plating'],400,'deliveries handed in carry');
+  assert.equal(sameState.taskEdits.titles['startup-biomass'],'Leaves first','step edits carry');
+  assert.equal(sameState.factoryGroups.groups.find(g=>g.id==='fg-iron01').name,'North iron','renamed factory groups carry');
+  assert.ok(sameState.factoryGroups.assignments['Recipe_IngotIron_C'],'rows the new plan builds are still grouped');
+  assert.equal(same.reviewCount,0,'an identical plan needs no factory review');
+  assert.equal(sameState.checks['calc-1-Recipe_IngotIron_C'],true,'unchanged production lines stay marked running');
+  assert.equal(sameState.revision,0,'the new profile starts its own revision history');
+
+  const bigger=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Twice the elevator',settings:{...settings,multiplier:2},carryFrom:a.profileId}));
+  const biggerState=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':bigger.saveId,'X-Profile-Id':bigger.profileId}}));
+  assert.ok(bigger.reviewCount>0,'expanded production lines are reported for review');
+  assert.equal(biggerState.checks['calc-1-Recipe_IngotIron_C'],false,'a line that needs more machines is left unticked');
+  assert.equal(biggerState.checks['slot-A01-built'],true,'world progress still carries into a different plan');
+
+  const none=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Clean sheet',settings,carryFrom:a.profileId,carry:{}}));
+  const noneState=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':none.saveId,'X-Profile-Id':none.profileId}}));
+  assert.deepEqual(noneState.checks,{},'clearing every option starts empty');
+  assert.deepEqual(noneState.deliveries,{},'clearing every option keeps deliveries out');
+  assert.deepEqual(noneState.notes,{},'clearing every option keeps notes out');
+
+  const plain=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'No source',settings}));
+  const plainState=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':plain.saveId,'X-Profile-Id':plain.profileId}}));
+  assert.deepEqual(plainState.checks,{},'without a source profile nothing is carried, as before');
+
+  assert.equal((await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Missing source',settings,carryFrom:'nope'})).status,404);
+  const original=await json(await fetch(app.url+'/api/state',{headers:ah}));
+  assert.equal(original.checks['calc-1-Recipe_IngotIron_C'],true,'the profile carried from is untouched');
+  assert.equal(original.notes.global,'Seed and routes','the profile carried from keeps its notes');
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('hand-picked alternate recipes start their unlock steps ticked, and only when asked',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-picked-'));const app=await start(dir);
+ try{
+  const settings={phase:'1',goal:'timed',hours:8,storage:'none',recipes:'custom',alternateRecipes:['Recipe_Alternate_Screw_C','Recipe_Alternate_ReinforcedIronPlate_1_C']};
+  const a=await json(await post(app.url,'/api/profiles',{saveName:'Picked world',name:'First',settings}));
+  const first=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':a.saveId,'X-Profile-Id':a.profileId}}));
+  assert.deepEqual(first.checks,{},'a brand new save claims no in-game unlocks');
+  const b=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Second',settings,carryFrom:a.profileId}));
+  const second=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':b.saveId,'X-Profile-Id':b.profileId}}));
+  assert.equal(second.checks['recipe-unlock-Recipe_Alternate_Screw_C'],true,'picking a recipe for a save you play marks it unlocked');
+  assert.equal(second.checks['recipe-unlock-Recipe_Alternate_ReinforcedIronPlate_1_C'],true,'every pick is marked');
+  const c=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Third',settings,carryFrom:a.profileId,carry:{unlocks:true}}));
+  const third=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':c.saveId,'X-Profile-Id':c.profileId}}));
+  assert.deepEqual(third.checks,{},'without the option the picks claim nothing');
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('recipes a plan locks in for you are claimed alongside the picked ones',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'planner-locked-'));const app=await start(dir);
+ try{
+  const settings={phase:'3',goal:'timed',hours:24,storage:'none',purity:'pure',limits:{...PURE_LIMITS},pureIngots:true,recipes:'custom',alternateRecipes:['Recipe_Alternate_Screw_C']};
+  const used=Object.values(calculate(settings).stages).flatMap(st=>(st.rows||[]).filter(r=>r.alternate).map(r=>r.id));
+  assert.ok(used.includes('Recipe_Alternate_PureIronIngot_C'),'requiring pure ingots puts the pure recipe in the plan without picking it');
+  const a=await json(await post(app.url,'/api/profiles',{saveName:'Pure world',name:'First',settings}));
+  const b=await json(await post(app.url,'/api/profiles',{saveId:a.saveId,name:'Second',settings,carryFrom:a.profileId}));
+  const state=await json(await fetch(app.url+'/api/state',{headers:{'X-Save-Id':b.saveId,'X-Profile-Id':b.profileId}}));
+  assert.equal(state.checks['recipe-unlock-Recipe_Alternate_PureIronIngot_C'],true,'a recipe your ingot preference requires is claimed too');
+  assert.equal(state.checks['recipe-unlock-Recipe_Alternate_Screw_C'],true,'picked recipes are still claimed');
+ }finally{await close(app.server);await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('construction materials get their own storage rate, with per-item overrides',()=>{
+ const base={phase:'3',goal:'timed',hours:8,storage:'all',storageRate:1};
+ const flat=calculate(base).stages[3];
+ assert.equal(flat.storage.Concrete,1,'one rate still covers everything when no build rate is given');
+ assert.equal(flat.storage.Computer,1,'items are unchanged for settings saved before build rates existed');
+ assert.equal(calculate({...base,storageRate:4}).stages[3].storage.Concrete,4,'the single rate still drives every item');
+
+ const split=calculate({...base,buildRate:30}).stages[3];
+ assert.equal(split.storage.Concrete,30,'construction materials use the build rate');
+ assert.equal(split.storage['Iron Plate'],30,'plates are construction materials');
+ assert.equal(split.storage['Steel Pipe'],30,'pipes are construction materials');
+ assert.equal(split.storage.Screws,1,'other items keep the general rate');
+ assert.deepEqual(Object.keys(split.storage).sort(),Object.keys(flat.storage).sort(),'the same items keep a container either way');
+
+ const tuned=calculate({...base,buildRate:30,storageOverrides:{Concrete:60,Screws:0}}).stages[3];
+ assert.equal(tuned.storage.Concrete,60,'a per-item rate beats the build rate');
+ assert.equal(tuned.storage.Screws,0,'zero reserves no production');
+ assert.equal(tuned.storage['Iron Plate'],30,'unlisted construction materials keep the build rate');
+ assert.ok(Object.keys(tuned.storage).includes('Screws'),'a zero-rate item keeps its container and address');
+
+ const machines=p=>Object.values(p.stages).reduce((a,x)=>a+(x.rows||[]).reduce((b,r)=>b+r.machines,0),0);
+ assert.ok(machines(calculate({...base,buildRate:30}))>machines(calculate(base)),'a faster build refill costs machines');
+ assert.ok(machines(calculate({...base,storageRate:30}))>machines(calculate({...base,buildRate:30})),'but far fewer than raising every item to the same rate');
+
+ assert.throws(()=>calculate({...base,storageOverrides:{Water:5}}),/cannot be given a storage rate/,'raw resources are rejected');
+ assert.throws(()=>calculate({...base,storageOverrides:{'Uranium Waste':5}}),/cannot be given a storage rate/,'radioactive items are rejected');
+ assert.throws(()=>calculate({...base,storageOverrides:{Concrete:900}}),/Enter a number/,'out-of-range rates are rejected');
+ assert.throws(()=>calculate({...base,storageOverrides:['Concrete']}),/Invalid per-item storage rates/,'a list is not a rate map');
+ assert.deepEqual(calculate(base).settings.storageOverrides,{},'settings always carry a rate map');
+ assert.equal(calculate(base).settings.buildRate,1,'an absent build rate records the general rate');
+});
+
+test('Space Elevator parts keep a container but no standing storage contract',()=>{
+ const delivered=[...new Set(Object.values(DELIVERIES).flatMap(d=>Object.keys(d)))].sort();
+ assert.deepEqual([...elevatorParts].sort(),delivered,'the shared elevator-part list matches the delivery table');
+
+ const base={phase:'5',goal:'timed',hours:10,storage:'all',storageRate:4};
+ const p5=calculate(base).stages[5];
+ for(const name of elevatorParts){
+  if(p5.storage[name]===undefined)continue;
+  assert.equal(p5.storage[name],0,name+' reserves no production');
+ }
+ assert.ok(Object.keys(p5.storage).includes('Nuclear Pasta'),'a delivered part still holds its container and address');
+ assert.equal(p5.storage.Concrete,4,'other items are unaffected');
+ assert.ok(p5.delivery['Nuclear Pasta'].rate>0,'the elevator delivery itself is untouched');
+ const pasta=(p5.rows||[]).filter(r=>r.outputs['Nuclear Pasta']).reduce((a,r)=>a+r.outputs['Nuclear Pasta'],0);
+ assert.ok(pasta>=p5.delivery['Nuclear Pasta'].rate-0.001,'production still covers the delivery rate');
+
+ const buffered=calculate({...base,storageOverrides:{'Nuclear Pasta':5}}).stages[5];
+ assert.equal(buffered.storage['Nuclear Pasta'],5,'a per-item rate still buys a buffer for anyone who wants one');
+
+ const machines=p=>Object.values(p.stages).reduce((a,x)=>a+(x.rows||[]).reduce((b,r)=>b+r.machines,0),0);
+ const all=Object.fromEntries(elevatorParts.map(n=>[n,4]));
+ assert.ok(machines(calculate({...base,storageOverrides:all}))>machines(calculate(base)),'stocking them again costs machines');
 });
