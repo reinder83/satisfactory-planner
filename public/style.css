@@ -198,7 +198,7 @@ td:first-child{font-family:var(--head);font-size:15px;font-weight:600;letter-spa
 
 /* ── Storage floor ─────────────────────────────────────── */
 .floor-grid{display:grid;grid-template-columns:1fr 44px 1fr;gap:15px 0}
-.bay{background:var(--panel);border:1px solid var(--line);box-shadow:var(--drop);padding:0}
+.bay{background:var(--panel);border:1px solid var(--line);box-shadow:var(--drop);padding:0;grid-row:var(--bay-row);grid-column:var(--bay-col)}
 .bay-head{display:flex;gap:11px;align-items:center;padding:10px 13px;background:var(--bar);border-bottom:1px solid var(--line)}
 .bay-letter{background:var(--accent);color:#0b0d0e;padding:0;width:26px;height:26px;display:grid;place-items:center;font-family:var(--head);font-size:16px;font-weight:700;flex:none}
 .bay-head h3{font-size:14.5px;letter-spacing:.1em;margin:0;color:var(--bright)}
@@ -234,7 +234,7 @@ td:first-child{font-family:var(--head);font-size:15px;font-weight:600;letter-spa
 .add-container{margin:0;padding:9px 12px;border-top:1px dashed var(--warm-border);background:var(--panel2)}
 .add-container input{font-size:11.5px}
 .bay-actions>span:last-child{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
-.aisle{display:flex;align-items:center;justify-content:center;background:var(--panel2);border:1px solid var(--line2);color:#5f686e;font-size:9px;writing-mode:vertical-rl;letter-spacing:.4em;margin:0 10px}
+.aisle{grid-row:var(--aisle-row);grid-column:2;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:1px solid var(--line2);color:#5f686e;font-size:9px;writing-mode:vertical-rl;letter-spacing:.4em;margin:0 10px}
 .entry{text-align:center;font-size:10px;font-weight:400;letter-spacing:.3em;color:var(--dim);margin:22px 0;text-transform:uppercase}
 
 /* ── Notes & forms ─────────────────────────────────────── */
@@ -472,10 +472,10 @@ button.rail-tile:hover{border-color:var(--accent)}
  .stat strong{font-size:25px}
  .side-panels,.backup-grid,.completion-grid{grid-template-columns:1fr}
  .cards{grid-template-columns:1fr}
- /* Stacked in one column the hall’s rear-to-front rows read as a jumble, so
-    order the bays by address instead and drop the orientation markers. */
- .floor-grid{display:flex;flex-direction:column}
- .bay{margin-bottom:14px;order:var(--bay-order,0)}
+ /* One bay per row, in address order: the hall’s rear-to-front rows and the
+    markers that orient them mean nothing once the aisle is gone. */
+ .floor-grid{display:block}
+ .bay{margin-bottom:14px}
  .floor-marker{display:none}
  .bay-items{grid-template-columns:repeat(4,minmax(0,1fr))}
  .aisle{display:none}

@@ -42,6 +42,20 @@ test('storage layout edits render custom floors, bays and assignments; missing e
  assert.equal(vm.runInContext('nextBayLetter()',c),'S');
 });
 
+test('storage bays stay in address order in the document and take their hall position from the grid',()=>{
+ const c=ui();
+ const html=vm.runInContext(`floor='ground';renderStorage()`,c);
+ const letters=[...html.matchAll(/class="bay-letter">([A-Z]+)</g)].map(m=>m[1]);
+ assert.ok(letters.length>2&&letters.length%2===0,'the ground floor has whole rows of bays to order');
+ assert.deepEqual(letters,[...letters].sort(),'a single narrow column reads alphabetically');
+ const at=Object.fromEntries([...html.matchAll(/--bay-row:([0-9]+);--bay-col:([0-9]+)[^]*?bay-letter">([A-Z]+)</g)].map(m=>[m[3],[Number(m[1]),Number(m[2])]]));
+ assert.deepEqual(at.A,[letters.length/2,1],'A stays at the entrance, left of the aisle');
+ assert.deepEqual(at.B,[letters.length/2,3],'B stays at the entrance, right of the aisle');
+ assert.deepEqual(at[letters.at(-2)],[1,1],'the last pair of bays stays at the rear of the hall');
+ assert.equal([...html.matchAll(/class="aisle"/g)].length,letters.length/2,'every row keeps its aisle');
+ assert.match(html,/eyebrow floor-marker">REAR OF HALL/,'the orientation markers can be hidden when stacked');
+});
+
 test('machine instructions separate total, full-speed and adjustable machines',()=>{
  const c=ui();c.row={name:'Rubber',machine:'Refinery',machines:3,equivalent:2.4017,lastClock:40.17,outputs:{Rubber:48.034,'Heavy Oil Residue':48.034},inputs:{'Crude Oil':72.051}};
  const setup=vm.runInContext('machineSetup(row)',c);assert.equal(setup.whole,2);assert.equal(setup.partial,true);assert.match(setup.summary,/3 Refinery total: 2 at 100% \+ 1 adjustable/);assert.equal(setup.easy.clock,45);assert.equal(setup.easy.output.Rubber,9);
