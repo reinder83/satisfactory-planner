@@ -361,7 +361,7 @@ test('the wizard chooses what the target time applies to and Review shows what a
  assert.match(vm.runInContext('renderWizard()',c),/value="final" selected/,'the saved choice is shown');
  assert.match(vm.runInContext(`help('phaseTime')`,c),/final phase/,'the choice is explained');
 
- vm.runInContext(`wizard.step=5;wizard.preview={...generated,stages:{...generated.stages,1:{...generated.stages[1],hours:5.21,aheadOf:9.92}}};`,c);
+ vm.runInContext(`wizard.step=5;wizard.preview={...generated,settings:{...generated.settings,phase:'1'},stages:{...generated.stages,1:{...generated.stages[1],hours:5.21,aheadOf:9.92}}};`,c);
  const review=vm.runInContext('renderWizard()',c);
  assert.match(review,/was 9.92 h/,'a pulled-forward phase shows what it used to take');
  vm.runInContext(`wizard.preview=generated;`,c);
@@ -384,4 +384,25 @@ test('the expansion table only claims an addition where there is one',()=>{
  assert.match(rows[3],/<td>9<\/td><td>\+5<\/td>/,'growth shows only the extra machines');
  assert.match(rows[4],/<td>—<\/td><td>—<\/td>/,'a phase that drops the line adds nothing');
  assert.ok(!vm.runInContext(`calcExpansionRows('iron')`,c).includes('Keep available'),'no phase claims capacity is being kept');
+});
+
+test('a profile only offers the phases it was created for',()=>{
+ const c=ui();
+ vm.runInContext(`calculated={...generated,settings:{...generated.settings,phase:'3'}};currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,c);
+ assert.equal(vm.runInContext('JSON.stringify(phaseOptions())',c),'["3","4","5","post"]','a phase 3 profile hides the phases behind it');
+ assert.equal(vm.runInContext(`state.settings.phase='1';phase()`,c),'3','a stored phase behind the start reads as the start');
+ assert.equal(vm.runInContext(`state.settings.phase='4';phase()`,c),'4','a later phase is left alone');
+ assert.equal(vm.runInContext(`state.settings.phase='post';phase()`,c),'post','post-game is still reachable');
+
+ vm.runInContext(`calculated={...generated,settings:{...generated.settings,phase:'1'}};state.settings.phase='1';`,c);
+ assert.equal(vm.runInContext('JSON.stringify(phaseOptions())',c),'["1","2","3","4","5","post"]','a phase 1 profile offers everything');
+
+ vm.runInContext(`calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.settings.phase='3';`,c);
+ assert.equal(vm.runInContext('JSON.stringify(phaseOptions())',c),'["3","4","5","post"]','the preserved handbook still starts at phase 3');
+
+ // the expansion table follows the same bound
+ vm.runInContext(`calculated={settings:{phase:'3'},stages:{1:{rows:[{id:'iron',machines:9}]},2:{rows:[{id:'iron',machines:9}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:6}]},5:{rows:[]}}};`,c);
+ const rows=vm.runInContext(`calcExpansionRows('iron')`,c).split('</tr>').filter(Boolean);
+ assert.equal(rows.length,3,'only the phases this profile builds are listed');
+ assert.match(rows[0],/<td>3<\/td><td>4<\/td><td>\+4<\/td>/,'the starting phase builds its own machines from scratch');
 });
