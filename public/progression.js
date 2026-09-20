@@ -64,6 +64,16 @@ export function progression(plan,state,data,phase){
  const fuel=Object.entries(plan.stages[stage]?.drone||{}).map(([n,q])=>fmt(q)+' '+n+'/min').join(', ');
  tasks.push({id:'drone-fuel-'+stage,title:'Unlock Aeronautical Engineering and commission drone fuel',body:`Complete Tier 8 Aeronautical Engineering (see milestone materials), then build and buffer the dedicated ${fuel} supply before launching routes. ${stage===4&&plan.settings.droneFuel==='Packaged Ionized Fuel'?'Use batteries now; upgrade to packaged ionized fuel after its Phase 5 unlocks. ':''}Route this protected supply to a fuel depot before general storage or sinking. Packaging inputs are included in the factory plan. Measure total fleet consumption at the ports, including fuel-delivery flights, and increase the supply target if necessary. Drone-port electricity shares the ${plan.settings.utilityPercent??20}% utilities allowance with trains, miners and pumps; fuel production power is already calculated. Fuel rods belong at the dedicated fuel depot, outside general storage.`});
  }
- return {baseTasks,powerTasks:tasks,milestoneTasks,hardDrives};
+ // Lines an earlier phase built that this phase's plan drops. Its resource and
+ // power budgets do not include them, and a replacement is usually a different
+ // machine rather than an upgrade in place, so say what becomes of them.
+ // Only what the previous phase ran: each line is retired once, in the phase
+ // straight after the last one that needed it.
+ const start=Number(plan.settings.phase||1),previous=stage-1,retired=new Map();
+ if(previous>=start)for(const r of plan.stages[previous]?.rows||[])retired.set(r.id,{name:r.name,machine:r.machine,machines:r.machines});
+ for(let p=stage;p<=5;p++)for(const r of plan.stages[p]?.rows||[])retired.delete(r.id);
+ const all=[...retired.values()].sort((a,b)=>b.machines-a.machines),listed=all.slice(0,10),rest=all.length-listed.length;
+ const retire=listed.length?[{id:'retire-'+stage,title:'Retire the lines this phase no longer uses',body:`Phase ${stage} does not run ${listed.map(x=>`${fmt(x.machines)} × ${x.name} (${x.machine})`).join('; ')}${rest?` and ${rest} more line${rest>1?'s':''}`:''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`}]:[];
+ return {baseTasks,powerTasks:tasks,milestoneTasks,hardDrives,retire};
 }
 
