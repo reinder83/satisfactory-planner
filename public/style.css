@@ -222,6 +222,8 @@ td:first-child{font-family:var(--head);font-size:15px;font-weight:600;letter-spa
 .slot-complete input{width:17px;height:17px}
 .slot.done .slot-complete{color:var(--green)}
 .walkway{grid-column:1/-1;text-align:center;font-size:9px;color:#5f686e;letter-spacing:.3em;padding:4px;background:var(--panel2);text-transform:uppercase}
+/* Positions past the printed eight: marked as an extension of the bay, not part of its two banks. */
+.walkway.added{color:var(--kicker);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 /* Layout editor */
 .slot{position:relative}
 .slot-remove{position:absolute;top:4px;right:4px;z-index:2;width:20px;height:20px;border:1px solid #4a2a24;background:#1c1615;color:var(--red);font-size:11px;line-height:1;display:grid;place-items:center;padding:0}
@@ -447,7 +449,9 @@ button.rail-tile:hover{border-color:var(--accent)}
  .side-panels .panel+.panel{margin-top:0}
  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
  .bay-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+ /* Two columns no longer show the two banks, but which containers were added past the printed bay still reads. */
  .walkway{display:none}
+ .walkway.added{display:block}
  .stats{gap:10px}
  .stat{padding:12px 13px}
  .stat strong{font-size:26px}

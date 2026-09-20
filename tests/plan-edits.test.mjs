@@ -34,7 +34,7 @@ test('build plan edits round-trip, mark the state version 3 and preserve checkma
  s=mutate(s,{type:'taskOrder',phase:'3',ids:[]});
  assert.equal(s.version,1,'reverting every edit keeps the state importable by older planners');
  assert.equal(s.checks['phase-3-survey'],true);
- assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:4}),/newer planner version/);
+ assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:5}),/newer planner version/);
 });
 
 test('deleting a personal task cleans its plan edits',()=>{
