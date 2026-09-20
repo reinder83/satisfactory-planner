@@ -5,9 +5,10 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {progression} from '../public/progression.js';
 import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from '../public/state.js';
+import {adaRemarks} from '../public/ada.js';
 import {calculate,catalog} from '../planner.mjs';
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^(?:import[^\n]*\n)+/,'').replaceAll('import.meta.url',JSON.stringify('https://example.com/satisfactory-planner/app.js')).replace(/\nboot\(\);\s*$/,'');
-function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
+function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,adaRemarks,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
 test('original and calculated views render; wizard exposes all settings and safe names',()=>{
  const c=ui();for(const route of ['renderPlan','renderFactories','renderStorage','renderResources','renderBackup','renderProfiles','renderAccount'])assert.ok(vm.runInContext(route+'()',c).length>100,route);
  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,c);
@@ -177,6 +178,37 @@ test('every build-plan step carries an icon for the kind of work it is',()=>{
  assert.match(calc,/data-kind="item" aria-hidden="true"><img class="item-icon" src="[^"]*icons\/iron-ingot[.]png"/,'a calculated production step shows its own part');
  assert.ok(!calc.includes('data-kind="undefined"')&&!calc.includes('><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></span>'),'every glyph resolves');
  vm.runInContext(`state.settings.phase='3';calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
+});
+
+test('ADA comments on the plan from the sidebar and can be muted',()=>{
+ const c=ui();
+ const panel=vm.runInContext('shell()',c);
+ assert.match(panel,/class="ada" data-tone="calm"/);
+ assert.match(panel,/Artificial Directory and Assistant/);
+ assert.match(panel,/data-ada-next/);
+ assert.match(panel,/Zero of \d+ steps ticked for Phase 3/,'the opening line is the most relevant one');
+ // A renamed step is the user's own text wherever ADA repeats it.
+ vm.runInContext("state.taskEdits={titles:{[planTasks()[0].id]:'Weld the <boat>'}};adaSignature='';",c);
+ const renamed=vm.runInContext('shell()',c);
+ assert.match(renamed,/Weld the &lt;boat&gt;/);
+ assert.ok(!renamed.includes('<boat>'),'ADA speaks the user’s text escaped, like every other name');
+ // Cycling walks the whole list and wraps round to the first line.
+ const seen=[...Array(8)].map((_,i)=>vm.runInContext('adaIndex='+i+';adaCurrent().text',c));
+ assert.ok(new Set(seen).size>=7,'ADA has more than one thing to say');
+ assert.equal(vm.runInContext('adaIndex=0;adaCurrent().text',c),seen[0]);
+ // The plan decides the tone: a draft profile leads with the draft.
+ vm.runInContext("calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};calculated.stages['3'].feasible=false;calculated.stages['3'].reason='Iron Ore budget exceeded.';adaSignature='';",c);
+ const draft=vm.runInContext('shell()',c);
+ assert.match(draft,/data-tone="warn"/);
+ assert.match(draft,/planning draft, not a plan[^]*Iron Ore budget exceeded\./,'ADA repeats the planner’s own reason');
+ vm.runInContext("delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.taskEdits=undefined;adaSignature='';",c);
+ // Muted: no remark, and a way back.
+ vm.runInContext('adaMuted=true;',c);
+ const muted=vm.runInContext('shell()',c);
+ assert.match(muted,/ADA muted/);
+ assert.match(muted,/data-ada-mute="off"/);
+ assert.ok(!muted.includes('data-ada-next'),'a muted assistant says nothing');
+ vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';",c);
 });
 
 test('factory details list where a local item is needed',()=>{

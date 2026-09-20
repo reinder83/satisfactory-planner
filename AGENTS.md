@@ -18,6 +18,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `public/app.js` | Shared vanilla-JS UI, hash routes, forms, event handlers, API dispatch |
 | `public/style.css`, `public/index.html`, `public/favicon.svg` | Presentation and shell |
 | `public/preferences.js` | Wizard options, resource presets, help text |
+| `public/ada.js` | ADA’s remarks: facts in, ordered plain-text lines out |
 | `public/progression.js`, `public/progression.json` | Chronological guidance and unlock/milestone metadata |
 | `public/plan.json` | Preserved original handbook; real plan content, not a disposable fixture |
 | `public/state.js` | Shared blank progress, validation and mutations |

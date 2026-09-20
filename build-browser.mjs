@@ -8,7 +8,7 @@ if(path.dirname(path.dirname(out))!==root)throw Error('Invalid build directory')
 await fs.rm(path.join(root,'dist'),{recursive:true,force:true});
 await fs.mkdir(out,{recursive:true});
 // Explicit allowlist: server data, credentials and private handbook targets never enter the public build.
-const files=['app.js','style.css','index.html','favicon.svg','preferences.js','progression.js','progression.json','state.js','transfer.js','browser-api.js','browser-store.js'];
+const files=['app.js','ada.js','style.css','index.html','favicon.svg','preferences.js','progression.js','progression.json','state.js','transfer.js','browser-api.js','browser-store.js'];
 for(const file of files)await fs.copyFile(path.join(root,'public',file),path.join(out,file));
 await fs.cp(path.join(root,'public/icons'),path.join(out,'icons'),{recursive:true});
 await fs.cp(path.join(root,'public/fonts'),path.join(out,'fonts'),{recursive:true});
