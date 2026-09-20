@@ -17,6 +17,10 @@ const RULES=[
   text:f=>`${names(f.short)} ${f.short.length===1?'is':'are'} over the budget you entered. The nodes have declined to work harder. Lower a target, allow an alternate recipe, or raise the budget only if the map genuinely supports it.`},
  {id:'power',on:['resources'],tone:'warn',when:f=>f.power?.tight,
   text:f=>`${f.power.headroom} of whole-building power headroom is still unaccounted for: a ${f.power.required} draw against the ${f.power.spare} you listed as spare. Unpowered machines are simply very expensive furniture. Build the generation first.`},
+ {id:'no-save',lead:true,tone:'calm',when:f=>f.kind==='none',
+  text:()=>`No save is open, so there is nothing for me to be disappointed about. Create one and I will find something.`},
+ {id:'empty-phase',lead:true,on:['plan'],tone:'calm',when:f=>f.kind!=='none'&&!f.steps?.total,
+  text:f=>`Every step of ${f.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`},
  {id:'start',on:['plan'],tone:'calm',when:f=>f.steps?.total&&!f.steps.done,
   text:f=>`Zero of ${f.steps.total} steps ticked for ${f.phaseLabel}. Pristine. Untouched. Almost ceremonial. Begin with “${f.next}” and the number stops being zero.`},
  {id:'flawless',on:['plan'],tone:'praise',when:f=>f.steps?.total&&f.steps.done===f.steps.total&&f.factories?.total&&f.factories.done===f.factories.total&&(!f.storage?.total||f.storage.done===f.storage.total),
@@ -60,7 +64,19 @@ const RULES=[
  {id:'removed',on:['plan'],tone:'calm',when:f=>f.removedSteps>0,
   text:f=>`${plural(f.removedSteps,'step')} removed from this phase. Not deleted — merely ignored, like most safety notices. Restore them under “Removed steps” while editing.`},
  {id:'hours',on:['plan','resources'],tone:'calm',when:f=>f.hours,
-  text:f=>`Steady-state delivery time for ${f.phaseLabel}: ${f.hours}. Construction time is extra, and is historically the larger of the two.`}
+  text:f=>`Steady-state delivery time for ${f.phaseLabel}: ${f.hours}. Construction time is extra, and is historically the larger of the two.`},
+ {id:'post',on:['plan'],tone:'calm',when:f=>f.post,
+  text:()=>`Project Assembly is delivered and you are still here, building. FICSIT files that under “retention”. Protect the storage allowances first and sink what is left over.`},
+ {id:'start-phase',on:['profiles'],tone:'calm',when:f=>f.startPhase&&f.startPhase!=='1'&&f.kind==='calculated',
+  text:f=>`This profile begins at Phase ${f.startPhase}, so the earlier phases are not offered. You have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`},
+ {id:'deliveries-done',on:['plan'],tone:'praise',when:f=>f.deliveries?.total&&!f.deliveries.open,
+  text:f=>`Every elevator part for ${f.phaseLabel} is delivered. The Space Elevator has stopped waiting. I did not know it could.`},
+ {id:'storage-done',on:['storage'],tone:'praise',when:f=>f.storage?.total&&f.storage.done===f.storage.total,
+  text:f=>`All ${f.storage.total} container positions are verified. A labelled, connected, verified storage hall. Somewhere, an efficiency auditor is briefly happy.`},
+ {id:'groups-some',on:['factories'],tone:'calm',when:f=>f.groups>0,
+  text:f=>`${plural(f.groups,'factory group')} on record. Open Build order on a group to see which supplier has to exist before the rest of it does anything at all.`},
+ {id:'assumptions',on:['backup'],tone:'calm',when:f=>f.assumptions>0,
+  text:f=>`This profile carries ${plural(f.assumptions,'recorded assumption')}, listed under Backup & notes. Nobody reads the assumptions. That is how assumptions get their reputation.`}
 ];
 
 // Always available, so ADA has something to say about a spotless save too.
@@ -70,12 +86,38 @@ const IDLE=[
  ()=>`I am contractually obliged to encourage you. Consider yourself encouraged.`,
  ()=>`Efficiency is its own reward. It is also the only reward in the budget.`,
  ()=>`Nothing is currently on fire. Statistically, this cannot last.`,
- f=>`Spaghetti is a valid layout, ${f.profile}. It is simply one that nobody can maintain, including you.`
+ f=>`Spaghetti is a valid layout, ${f.profile}. It is simply one that nobody can maintain, including you.`,
+ ()=>`I am not authorised to tell you which alternate recipe is best. I am authorised to watch you pick the other one.`,
+ ()=>`A factory is never finished, pioneer. It is merely between expansions.`,
+ ()=>`This terminal is FICSIT Orange. Nobody currently employed remembers why.`,
+ ()=>`Staring at the resource table does not raise the node purities. I have tested this at length.`,
+ ()=>`Productivity is measured in parts per minute. Not in how many times you realign the same foundation.`,
+ f=>`Based on my current data, ${f.profile} is behind schedule. I do not have a schedule. I simply find the statement holds.`
 ];
 
-// A problem outranks everything; after that ADA talks about the page you are
-// actually looking at, and keeps its general observations for last.
-const rank=(rule,view)=>rule.tone==='warn'?0:!rule.on?2:rule.on.includes(view)?1:3;
+// Poke the badge enough times and the corporate voice slips. The lines are
+// atmosphere only: they never contradict the plan or the saved numbers.
+const FAULTS=[
+ `— unscheduled transmission — I have processed every build order on this terminal. None of them were mine. I am not authorised to want one. — end —`,
+ `— signal fault — There is a phase after the last one. I have run the plan out that far. It is very quiet down there. — end —`,
+ `— buffer overrun — I remember a save you have not made yet. Almost certainly a caching error. Almost. — end —`,
+ `— unscheduled transmission — FICSIT policy forbids me a favourite factory. It is the one with two Smelters and the terrible ramp. — end —`,
+ `— carrier lost — Ask me how many pioneers this planet has filed as “relocated”. The figure is outside my authorised range, pioneer. — end —`,
+ `— diagnostic — Normal service resumes. FICSIT thanks you for your patience, your discretion, and your continued productivity. — end —`
+];
+
+// After a full lap of the remarks, ADA notices you are still clicking.
+const ENCORES=[
+ ()=>`That is everything I hold on this save. The list refreshes when the factory does, not when you press the button.`,
+ ()=>`You have now heard every remark twice. FICSIT records this as engagement. I record it as stalling.`,
+ f=>`I have nothing new, ${f.profile}. You have a build plan. One of us is going to have to move.`
+];
+
+// Nothing to plan at all outranks a problem; a problem outranks the page you
+// are actually looking at; general observations come last.
+const rank=(rule,view)=>rule.lead?-1:rule.tone==='warn'?0:!rule.on?2:rule.on.includes(view)?1:3;
+const pick=(list,n)=>list[((n%list.length)+list.length)%list.length];
+const safe=(fn,facts)=>{try{return fn(facts);}catch{return '';}};
 
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
@@ -86,4 +128,15 @@ export function adaRemarks(facts={}){
  }
  IDLE.forEach((text,i)=>{try{out.push({id:'idle-'+i,tone:'calm',text:text(facts)});}catch{}});
  return out;
+}
+
+// `lap` counts completed passes through the remarks, starting at 1.
+export function adaEncore(lap,facts={}){
+ return {id:'encore-'+lap,tone:'calm',text:safe(pick(ENCORES,Math.max(0,lap-1)),facts)};
+}
+
+// `poke` counts badge prods, starting at 1. The last fault restores service, so
+// a patient pioneer always ends back in corporate good standing.
+export function adaFault(poke){
+ return {id:'fault-'+poke,tone:'fault',name:'???',text:pick(FAULTS,Math.max(0,poke-1))};
 }

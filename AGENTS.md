@@ -74,6 +74,14 @@ Keep presentation separate from calculation. Do not change recipe rates, power b
 
 The owner's original handbook starts in Phase 3, with all Tier 6 unlocks, pure nodes/ingot recipes, 50× elevator requirements and half power consumption. Iron expands across phases rather than being fully built in Phase 3. Its storage layout includes an already-built ground floor and a workshop. These are original-profile facts, not defaults for every new user. Use the stored handbook as the source of exact targets rather than reconstructing numbers from this summary.
 
+## ADA
+
+`public/ada.js` holds ADA’s remarks: facts in, ordered plain-text lines out. `adaFacts` in `public/app.js` builds those facts from the same counters the pages render, and escapes the text like any other untrusted name.
+
+**When you add a feature, add ADA’s lines for it in the same change.** A new counter, warning, page or editing mode that ADA cannot see is a gap users notice. Give the rule a stable `id`, an `on` page affinity, a `tone` (`calm`, `warn`, `praise`; `lead` for a state that makes everything else irrelevant), and cover it in `tests/ada.test.mjs`.
+
+Keep the deal the feature rests on: the joke is in the tone, never in the numbers. A remark may only restate what the plan already contains — including repeating the planner’s own infeasibility reason rather than inventing one — must never imply the app has altered saved progress, and must not be the only place some piece of guidance appears. Rules are skipped rather than thrown from, and the panel is wrapped in a guard: ADA must not be able to break the shell.
+
 ## Development and verification
 
 Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The application has no frontend framework or bundler requirement.

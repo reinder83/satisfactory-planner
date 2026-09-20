@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {adaRemarks} from '../public/ada.js';
+import {adaRemarks,adaEncore,adaFault} from '../public/ada.js';
 
 const facts=(over={})=>({
  view:'plan',phaseLabel:'Phase 3',kind:'calculated',save:'World',profile:'Balanced',
@@ -65,12 +65,44 @@ test('ADA leads with the page you are looking at',()=>{
   'the page changes the order, not which remarks apply');
 });
 
+test('ADA notices the states that are not just a number',()=>{
+ assert.equal(first(facts({kind:'none',steps:{done:0,total:0},next:''})).id,'no-save');
+ assert.equal(first(facts({steps:{done:0,total:0},next:''})).id,'empty-phase');
+ assert.ok(ids(facts({post:true})).includes('post'));
+ assert.match(adaRemarks(facts({deliveries:{open:0,total:2}})).find(r=>r.id==='deliveries-done').text,/Space Elevator has stopped waiting/);
+ assert.match(adaRemarks(facts({storage:{done:9,total:9}})).find(r=>r.id==='storage-done').text,/All 9 container positions are verified/);
+ assert.match(adaRemarks(facts({groups:3})).find(r=>r.id==='groups-some').text,/3 factory groups on record/);
+ assert.match(adaRemarks(facts({assumptions:4})).find(r=>r.id==='assumptions').text,/4 recorded assumptions/);
+ assert.match(adaRemarks(facts({startPhase:'3'})).find(r=>r.id==='start-phase').text,/begins at Phase 3/);
+ assert.ok(!ids(facts({startPhase:'1'})).includes('start-phase'),'a profile from the first phase has nothing to explain');
+ assert.ok(!ids(facts({kind:'original',startPhase:'3'})).includes('start-phase'),'the handbook profile is not a calculated one');
+});
+
+test('a full lap of the remarks is answered, and the badge can be prodded',()=>{
+ assert.match(adaEncore(1,facts()).text,/everything I hold on this save/);
+ assert.match(adaEncore(2,facts()).text,/twice/);
+ assert.match(adaEncore(3,facts({profile:'Balanced'})).text,/Balanced/);
+ assert.equal(adaEncore(9,facts()).tone,'calm','later laps keep cycling rather than running out');
+ const seen=new Set();
+ for(let poke=1;poke<=8;poke++){
+  const f=adaFault(poke);
+  assert.equal(f.tone,'fault');
+  assert.equal(f.name,'???','a corrupted transmission is not signed ADA');
+  assert.ok(!/[<>]/.test(f.text),'no markup of its own: '+f.text);
+  seen.add(f.text);
+ }
+ assert.ok(seen.size>=6,'prodding again gives a different transmission');
+ assert.match(adaFault(6).text,/Normal service resumes/,'the last one hands the terminal back');
+});
+
 test('ADA always has something to say, and never throws',()=>{
  const quiet=adaRemarks(facts({steps:{done:0,total:0},next:'',factories:{done:0,total:0},storage:{done:0,total:0},kind:'none',profiles:0}));
  assert.ok(quiet.length>=6,'the idle lines are always available');
  assert.equal(new Set(quiet.map(r=>r.text)).size,quiet.length,'no line is repeated in one cycle');
  for(const bad of [undefined,{},{steps:null,short:'not a list'},{phaseLabel:null,next:{}}]){
   const out=adaRemarks(bad);
+  assert.doesNotThrow(()=>adaEncore(1,bad));
+  assert.doesNotThrow(()=>adaFault(1));
   assert.ok(Array.isArray(out)&&out.length,'garbage facts still produce remarks: '+JSON.stringify(bad));
   for(const r of out)assert.equal(typeof r.text,'string');
  }

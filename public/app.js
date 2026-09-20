@@ -2,7 +2,7 @@ import {browserMode,browserRequest} from './browser-api.js';
 import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor} from './preferences.js';
 import {progression} from './progression.js';
 import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from './state.js';
-import {adaRemarks} from './ada.js';
+import {adaRemarks,adaEncore,adaFault as makeFault} from './ada.js';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
@@ -12,7 +12,7 @@ const plural=(n,word)=>num(n)+' '+word+(n===1?'':'s');
 let progressionData;
 let workspace,currentSave,currentProfile,calculated=null,wizard=null,authMode='login';
 const ADA_KEY='planner-ada';
-let adaIndex=0,adaSignature='',adaMuted=adaStored();
+let adaIndex=0,adaSignature='',adaMuted=adaStored(),adaFault=null,adaFaultTimer,adaPokes=0,adaPokedAt=0;
 let basePlan,plan,state,view='plan',query='',floor='ground',factoryFilter='all',hideDone=false,activeDetail=null,pending=0,toastTimer,layoutEditing=false,planEditing=false,editingTask=null,factoryEditing=false;
 // A profile records the phase it was created for. Earlier phases are already
 // behind the user, so their steps and targets are not theirs to build.
@@ -175,23 +175,39 @@ function adaFacts(){
   power:headroom>0.01?{required:power(x.requiredMW||0),spare:power(spareMW),headroom:power(headroom),tight:true}:null,
   hours:calculated&&x.hours?num(x.hours)+' h':'',
   profiles:workspace.saves.find(s=>s.id===currentSave.id)?.profiles.length||0,
-  backupDays:workspace.lastBackup?Math.max(0,Math.floor((Date.now()-new Date(workspace.lastBackup).getTime())/86400000)):null
+  backupDays:workspace.lastBackup?Math.max(0,Math.floor((Date.now()-new Date(workspace.lastBackup).getTime())/86400000)):null,
+  post:phase()==='post',startPhase:startPhase(),
+  assumptions:calculated?(calculated.warnings||[]).length:0
  };
 }
 // A changed situation deserves the most relevant line, so the cycle restarts
-// whenever the set of applicable remarks changes.
+// whenever the set of applicable remarks changes. Cycling past the end of the
+// list is not an error: ADA has something to say about that too.
 function adaCurrent(){
- const list=adaRemarks(adaFacts());
+ if(adaFault)return adaFault;
+ const facts=adaFacts(),list=adaRemarks(facts);
  if(!list.length)return null;
  const signature=list.map(r=>r.id).join('|');
  if(signature!==adaSignature){adaSignature=signature;adaIndex=0;}
- return list[((adaIndex%list.length)+list.length)%list.length];
+ const lap=Math.floor(adaIndex/list.length),at=adaIndex%list.length;
+ return lap>0&&!at?adaEncore(lap,facts):list[at];
+}
+// Prodding the badge is the only way to reach these, and the last one restores
+// normal service, so nobody is stranded in a corrupted transmission.
+function adaClearFault(){clearTimeout(adaFaultTimer);adaFault=null;adaPokes=0;}
+function adaPoke(){
+ clearTimeout(adaFaultTimer);
+ adaPokes=Date.now()-adaPokedAt>2500?1:adaPokes+1;adaPokedAt=Date.now();
+ if(adaPokes<5)return;
+ adaFault=makeFault(adaPokes-4);
+ adaFaultTimer=setTimeout(()=>{adaClearFault();render();},12000);
+ render();
 }
 function adaPanel(){
  try{
   if(adaMuted)return `<div class="ada is-muted"><span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button></div>`;
   const r=adaCurrent();if(!r)return '';
-  return `<section class="ada" data-tone="${r.tone}" aria-label="ADA"><div class="ada-head"><span class="ada-mark" aria-hidden="true">◈</span><div><b>ADA</b><div class="eyebrow">Artificial Directory and Assistant</div></div></div><p class="ada-line" id="ada-line" role="status" aria-live="polite">${esc(r.text)}</p><div class="ada-tools"><button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button><button class="btn quiet" type="button" data-ada-mute="on">Mute</button></div></section>`;
+  return `<section class="ada" data-tone="${r.tone}" aria-label="ADA"><div class="ada-head"><span class="ada-mark" aria-hidden="true">◈</span><div><b>${esc(r.name||'ADA')}</b><div class="eyebrow">${r.name?'Transmission fault':'Artificial Directory and Assistant'}</div></div></div><p class="ada-line" id="ada-line" role="status" aria-live="polite">${esc(r.text)}</p><div class="ada-tools"><button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button><button class="btn quiet" type="button" data-ada-mute="on">Mute</button></div></section>`;
  }catch{return '';}
 }
 const shell=()=>`<div class="layout"><aside class="sidebar"><div class="brand"><img src="./favicon.svg" alt=""><div>Project Assembly<div class="eyebrow">FICSIT compliance terminal</div></div></div><nav class="nav" aria-label="Main navigation">${[['plan','◫','Build plan'],['factories','▥','Factories'],['storage','▦','Storage room'],['resources','↗','Power & resources'],['backup','⇅','Backup & notes']].map(([id,icon,label])=>`<a href="#${id}" class="${view===id?'active':''}" ${view===id?'aria-current="page"':''}><span class="navicon" aria-hidden="true">${icon}</span>${label}</a>`).join('')}</nav>${adaPanel()}<div class="save-status"><span class="dot"></span><span id="saved">${browserMode?'Saved in this browser':'Saved on server'}</span></div><div class="sidebar-foot">${profileFooter()}</div></aside><div><header class="topbar"><div class="breadcrumbs"><a href="#profiles">${esc(currentSave.name)}</a> <span aria-hidden="true"> / </span> ${phaseLabel(phase())}</div><label class="small">Working on <select id="phase-picker" aria-label="Working phase" ${!currentSave.id?'disabled':''}>${phaseOptions().map(p=>`<option value="${p}" ${phase()===p?'selected':''}>${phaseLabel(p)}</option>`).join('')}</select></label></header><main id="main" class="workspace" tabindex="-1"></main></div></div>`;
@@ -559,6 +575,9 @@ function openGroupChain(gid){
  dialog(gr.name,`Factory group · build order · ${phaseLabel(stage())}`,`<p class="small muted">Stages are ordered so suppliers come before their consumers. An input marked <b>loop</b> is produced by a later stage: run that stage from a starter batch first, then close the loop.</p><div class="chain">${html}</div>${split?'<p class="small muted">Rates are the whole plan’s totals; this group’s production split is shown on the factory cards.</p>':''}`);
 }
 function openSlot(id){const b=storageBays().find(b=>b.items.some(x=>x.id===id));const x=b?.items.find(x=>x.id===id);if(!x?.name)return;activeDetail={type:'slot',id};const factory=calculated?calcStage().rows?.find(r=>r.outputs[x.name]):plan.factories.find(f=>f.name===x.name);const index=Number(id.slice(b.id.length));dialog(x.name,`${id} · ${esc(storageFloors().find(f=>f.id===b.floor)?.label||b.floor)} · Bay ${b.id}`,`<p><b>${esc(b.name)}</b><br>${index<=4?'Rear':'Front'} bank, position ${(index-1)%4+1} from the left on the floor plan.</p><div class="check-columns">${[['built','Container placed'],['labelled','Sign and address labelled'],['connected','Correct supply connected'],['verified','Flow and overflow verified']].map(([k,l])=>`<label class="check-row"><input type="checkbox" data-check="slot-${id}-${k}" ${doneAttr('slot-'+id+'-'+k)}>${l}</label>`).join('')}</div>${factory?`<div class="detail-actions"><button class="btn" ${calculated?'data-calc-factory':'data-factory'}="${factory.id}">Open production target →</button></div>`:'<p class="small muted">Collected or completion item. Reserve its own supply; this storage position does not add production capacity.</p>'}<h3>Container notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">${esc(state.notes['slot-'+id]||'')}</textarea><div class="note-save"><span class="small muted">Belt source, splitter setting or remaining work.</span><button class="btn" data-save-note="slot-${id}" data-input="detail-note">Save notes</button></div>`,x.name);}
+// The badge is decoration, not a control: it is hidden from assistive software
+// and nothing is only reachable through it.
+document.addEventListener('click',e=>{if(e.target.closest('.ada-mark')&&!adaMuted)adaPoke();});
 document.addEventListener('click',async e=>{
  const target=e.target.closest('button,a');if(!target)return;
  if(target.hasAttribute('data-close')){$('#detail').close();activeDetail=null;}
@@ -566,8 +585,12 @@ document.addEventListener('click',async e=>{
  if(target.dataset.slot)openSlot(target.dataset.slot);
  if(target.dataset.completeBay){const bay=storageBays().find(b=>b.id===target.dataset.completeBay);if(bay){target.disabled=true;try{await save({type:'checks',keys:bay.items.filter(x=>x.name).flatMap(x=>slotKeys(x.id)),value:true});render();toast('Room '+bay.id+' completed. You can uncheck individual containers if needed.');}catch{}finally{target.disabled=false;}}}
  if(target.dataset.floor){floor=target.dataset.floor;query='';render();}
- if(target.hasAttribute('data-ada-next')){adaIndex++;const r=adaCurrent(),line=$('#ada-line');if(r&&line){line.textContent=r.text;const host=line.closest('.ada');if(host)host.dataset.tone=r.tone;}}
- if(target.dataset.adaMute){adaMuted=target.dataset.adaMute==='on';adaStore();render();}
+ if(target.hasAttribute('data-ada-next')){
+  // A fault redraws the whole panel, since the name above the line changes too.
+  if(adaFault){adaClearFault();render();}
+  else{adaIndex++;const r=adaCurrent(),line=$('#ada-line');if(r&&line){line.textContent=r.text;const host=line.closest('.ada');if(host)host.dataset.tone=r.tone;}}
+ }
+ if(target.dataset.adaMute){adaMuted=target.dataset.adaMute==='on';adaStore();adaClearFault();render();}
  if(target.hasAttribute('data-toggle-layout')){layoutEditing=!layoutEditing;render();}
  if(target.hasAttribute('data-toggle-plan-edit')){planEditing=!planEditing;editingTask=null;render();}
  if(target.hasAttribute('data-toggle-factory-edit')){factoryEditing=!factoryEditing;render();}

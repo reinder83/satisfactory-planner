@@ -5,10 +5,10 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {progression} from '../public/progression.js';
 import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from '../public/state.js';
-import {adaRemarks} from '../public/ada.js';
+import {adaRemarks,adaEncore,adaFault as makeFault} from '../public/ada.js';
 import {calculate,catalog} from '../planner.mjs';
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^(?:import[^\n]*\n)+/,'').replaceAll('import.meta.url',JSON.stringify('https://example.com/satisfactory-planner/app.js')).replace(/\nboot\(\);\s*$/,'');
-function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,adaRemarks,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
+function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,adaRemarks,adaEncore,makeFault,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
 test('original and calculated views render; wizard exposes all settings and safe names',()=>{
  const c=ui();for(const route of ['renderPlan','renderFactories','renderStorage','renderResources','renderBackup','renderProfiles','renderAccount'])assert.ok(vm.runInContext(route+'()',c).length>100,route);
  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,c);
@@ -202,13 +202,33 @@ test('ADA comments on the plan from the sidebar and can be muted',()=>{
  assert.match(draft,/data-tone="warn"/);
  assert.match(draft,/planning draft, not a plan[^]*Iron Ore budget exceeded\./,'ADA repeats the planner’s own reason');
  vm.runInContext("delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.taskEdits=undefined;adaSignature='';",c);
+ // Cycling past the last remark is answered rather than silently repeated.
+ const count=vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length',c);
+ assert.match(vm.runInContext('adaIndex='+count+';adaCurrent().text',c),/everything I hold on this save/);
+ assert.match(vm.runInContext('adaIndex='+(count*2)+';adaCurrent().text',c),/twice/);
+ assert.equal(vm.runInContext('adaIndex='+(count+1)+';adaCurrent().text',c),seen[1],'the lap resumes where it left off');
+ // Prod the badge five times and the corporate voice slips.
+ vm.runInContext("adaIndex=0;for(let i=0;i<4;i++)adaPoke();",c);
+ assert.ok(!vm.runInContext('shell()',c).includes('???'),'four prods are within tolerance');
+ vm.runInContext('adaPoke()',c);
+ const fault=vm.runInContext('shell()',c);
+ assert.match(fault,/data-tone="fault"/);
+ assert.match(fault,/<b>\?\?\?<\/b>/);
+ assert.match(fault,/Transmission fault/);
+ const again=vm.runInContext('adaPoke();shell()',c);
+ assert.notEqual(vm.runInContext('adaCurrent().text',c),vm.runInContext('makeFault(1).text',c),'prodding again advances the transmission');
+ assert.match(again,/data-tone="fault"/);
+ // Anything else hands the terminal back, and no timer is left running.
+ vm.runInContext('adaClearFault();',c);
+ const back=vm.runInContext('shell()',c);
+ assert.ok(!back.includes('???')&&back.includes('Artificial Directory and Assistant'));
  // Muted: no remark, and a way back.
  vm.runInContext('adaMuted=true;',c);
  const muted=vm.runInContext('shell()',c);
  assert.match(muted,/ADA muted/);
  assert.match(muted,/data-ada-mute="off"/);
  assert.ok(!muted.includes('data-ada-next'),'a muted assistant says nothing');
- vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';",c);
+ vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();",c);
 });
 
 test('factory details list where a local item is needed',()=>{
