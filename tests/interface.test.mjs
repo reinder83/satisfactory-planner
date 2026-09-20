@@ -372,3 +372,16 @@ test('the wizard chooses what the target time applies to and Review shows what a
  vm.runInContext('readWizard(form)',Object.assign(c,{form}));
  assert.equal(vm.runInContext('wizard.settings.phaseTime',c),'final','the choice is carried out of the form');
 });
+
+test('the expansion table only claims an addition where there is one',()=>{
+ const c=ui();
+ vm.runInContext(`calculated={stages:{1:{rows:[]},2:{rows:[{id:'iron',machines:4}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:9}]},5:{rows:[]}}};`,c);
+ const rows=vm.runInContext(`calcExpansionRows('iron')`,c).split('</tr>').filter(Boolean);
+ assert.equal(rows.length,5,'every phase is listed');
+ assert.match(rows[0],/<td>—<\/td><td>—<\/td>/,'a phase without the line has nothing to show and nothing to add');
+ assert.match(rows[1],/<td>4<\/td><td>\+4<\/td>/,'the phase that first builds it adds four');
+ assert.match(rows[2],/<td>4<\/td><td>—<\/td>/,'an unchanged phase adds nothing');
+ assert.match(rows[3],/<td>9<\/td><td>\+5<\/td>/,'growth shows only the extra machines');
+ assert.match(rows[4],/<td>—<\/td><td>—<\/td>/,'a phase that drops the line adds nothing');
+ assert.ok(!vm.runInContext(`calcExpansionRows('iron')`,c).includes('Keep available'),'no phase claims capacity is being kept');
+});
