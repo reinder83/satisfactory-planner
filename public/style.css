@@ -56,6 +56,29 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
 .dot{width:7px;height:7px;background:var(--green);display:inline-block;flex:none;animation:fx-blink 2.6s steps(1) infinite}
 .sidebar-foot{margin:12px 18px 0;border-top:1px dashed var(--line2);padding-top:12px;font-size:10px;color:var(--dim);line-height:1.85;text-transform:uppercase;letter-spacing:.05em}
 .sidebar-foot a{color:var(--gold)}
+
+/* ── ADA: the assistant panel in the sidebar ───────────── */
+.ada{margin:16px 14px 0;border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--panel2);padding:10px 12px 11px}
+.ada[data-tone=warn]{border-left-color:var(--red)}
+.ada[data-tone=praise]{border-left-color:var(--green)}
+.ada-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.ada-head b{display:block;font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:.2em;color:var(--bright)}
+.ada-head .eyebrow{margin-top:1px;font-size:7.5px;letter-spacing:.16em}
+.ada-mark{width:22px;height:22px;flex:none;display:grid;place-items:center;border:1px solid var(--accent);color:var(--accent);font-size:10px;animation:fx-blink 3.4s steps(1) infinite}
+.ada[data-tone=warn] .ada-mark{border-color:var(--red);color:var(--red)}
+.ada[data-tone=praise] .ada-mark{border-color:var(--green);color:var(--green)}
+/* Transmission fault: off-channel, so it reads as neither advice nor warning. */
+.ada[data-tone=fault]{border-color:#24323f;border-left-color:var(--blue);background:#0c1116}
+.ada[data-tone=fault] .ada-head b{color:var(--blue);letter-spacing:.32em}
+.ada[data-tone=fault] .ada-mark{border-color:var(--blue);color:var(--blue);animation:fx-blink .5s steps(1) infinite}
+.ada[data-tone=fault] .ada-line{color:#93a7b8}
+.ada-line{margin:0;font-size:11px;line-height:1.75;color:#a7b0b7;text-wrap:pretty}
+.ada-tools{display:flex;gap:14px;margin-top:9px}
+.ada-tools .btn.quiet{padding:2px 0;font-size:9.5px;letter-spacing:.14em}
+.ada.is-muted{display:flex;align-items:center;gap:9px;border-left-color:var(--line);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ada.is-muted .ada-mark{animation:none;border-color:var(--line);color:var(--dim)}
+.ada.is-muted .btn.quiet{margin-left:auto;padding:2px 0;font-size:9.5px}
+@media (prefers-reduced-motion:reduce){.ada-mark{animation:none}}
 .topbar{padding:13px clamp(14px,2.4vw,30px);display:flex;justify-content:space-between;align-items:center;background:#0f1214;gap:16px;border-bottom:7px solid;border-image:var(--hazard) 7}
 .breadcrumbs{color:#9aa3aa;font-family:var(--head);font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
 .breadcrumbs a{color:var(--accent);border-bottom:1px solid rgba(248,156,28,.45)}
@@ -467,6 +490,7 @@ button.rail-tile:hover{border-color:var(--accent)}
  .nav a{padding:9px 12px;font-size:13.5px;white-space:nowrap;border-left:0;border-bottom:3px solid transparent}
  .nav a.active{border-bottom-color:var(--accent)}
  .navicon,.sidebar-foot,.sidebar .save-status{display:none}
+ .ada{margin:12px 16px 0}
  .topbar{padding:11px 16px}
  .workspace{padding:20px 16px 60px}
  h1{font-size:27px}
@@ -544,7 +568,7 @@ button.rail-tile:hover{border-color:var(--accent)}
  body,.workspace,.panel,.stat,.factory-card,.bay,.slot,.task,.checklist,.table-wrap,th{background:white;color:#1c2328;box-shadow:none}
  .workspace{background-image:none}
  h1,h2,h3,.task summary,.slot-details span:last-child,td:first-child,.factory-card .name,.bay-head h3{color:#101417}
- .sidebar,.topbar,.toolbar,.checklist-tools,.btn,#toast{display:none}
+ .sidebar,.topbar,.toolbar,.checklist-tools,.btn,#toast,.ada{display:none}
  .layout{display:block}
  .workspace{padding:0}
  .cards{grid-template-columns:repeat(3,1fr)}

@@ -42,6 +42,14 @@ On the storage map, **Complete room** marks all four checklist steps for the roo
 - **Saves & profiles → Duplicate** copies a profile including its progress, so you can try changes without touching the original plan.
 - **Saves & profiles → Share** downloads a share file with the profile's plan, storage layout, factory groups, personal tasks and step edits — but none of your checkmarks, notes or delivery counts. Anyone can import it in either edition under **Backup → Import saves**; it arrives as a new save without affecting theirs. (A share link in a URL is not offered: a profile snapshot is far larger than links reliably allow.) Older planner versions refuse a share that contains step edits, groups or container positions past 08 and ask for an update instead of dropping them.
 
+## ADA
+
+ADA — the Artificial Directory and Assistant — sits under the navigation and comments on the plan you have open. Every remark is built from the same counters the pages show: steps left in this phase and which one is next, factory targets not yet marked running, unverified container positions, elevator parts short of target, retirement steps still open, resources over the budget you entered, missing power headroom, and (in the browser edition) how long ago you exported a full backup. The tone is a joke; the advice is not, and ADA never invents a number the plan does not already contain.
+
+**Another remark** cycles through everything that applies right now: whole-page states first ("no save is open"), then real problems, then whatever the current page is about, then ADA’s general observations. Keep going past the last one and she notices. **Mute** silences ADA; the choice is remembered in that browser and is never part of a save, so muting changes nothing about your progress and nothing about a transfer.
+
+Prod the small badge beside her name five times in a row and the corporate voice slips into a transmission fault. Prod it again for another one; the last one hands the terminal back, and anything else you click restores normal service immediately. It is decoration — nothing is only reachable that way.
+
 ## Run with Docker
 
 The private image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. Clone this repository on your Docker host, enter the directory, then authenticate with a GitHub classic personal access token carrying `read:packages`:

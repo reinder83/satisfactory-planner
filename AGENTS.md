@@ -18,6 +18,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `public/app.js` | Shared vanilla-JS UI, hash routes, forms, event handlers, API dispatch |
 | `public/style.css`, `public/index.html`, `public/favicon.svg` | Presentation and shell |
 | `public/preferences.js` | Wizard options, resource presets, help text |
+| `public/ada.js` | ADA’s remarks: facts in, ordered plain-text lines out |
 | `public/progression.js`, `public/progression.json` | Chronological guidance and unlock/milestone metadata |
 | `public/plan.json` | Preserved original handbook; real plan content, not a disposable fixture |
 | `public/state.js` | Shared blank progress, validation and mutations |
@@ -72,6 +73,14 @@ Keep presentation separate from calculation. Do not change recipe rates, power b
 - Preserve warnings and infeasible-plan explanations; never present an infeasible result as a completed production plan.
 
 The owner's original handbook starts in Phase 3, with all Tier 6 unlocks, pure nodes/ingot recipes, 50× elevator requirements and half power consumption. Iron expands across phases rather than being fully built in Phase 3. Its storage layout includes an already-built ground floor and a workshop. These are original-profile facts, not defaults for every new user. Use the stored handbook as the source of exact targets rather than reconstructing numbers from this summary.
+
+## ADA
+
+`public/ada.js` holds ADA’s remarks: facts in, ordered plain-text lines out. `adaFacts` in `public/app.js` builds those facts from the same counters the pages render, and escapes the text like any other untrusted name.
+
+**When you add a feature, add ADA’s lines for it in the same change.** A new counter, warning, page or editing mode that ADA cannot see is a gap users notice. Give the rule a stable `id`, an `on` page affinity, a `tone` (`calm`, `warn`, `praise`; `lead` for a state that makes everything else irrelevant), and cover it in `tests/ada.test.mjs`.
+
+Keep the deal the feature rests on: the joke is in the tone, never in the numbers. A remark may only restate what the plan already contains — including repeating the planner’s own infeasibility reason rather than inventing one — must never imply the app has altered saved progress, and must not be the only place some piece of guidance appears. Rules are skipped rather than thrown from, and the panel is wrapped in a guard: ADA must not be able to break the shell.
 
 ## Development and verification
 
