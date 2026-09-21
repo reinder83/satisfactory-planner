@@ -126,6 +126,27 @@ test('the build plan checklist can be searched and can hide completed steps',()=
  vm.runInContext(`hideDone=false;query='';state.checks={};calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
 });
 
+test('every build-plan step carries an icon for the kind of work it is',()=>{
+ const c=ui();
+ const handbook=vm.runInContext('renderPlan()',c);
+ assert.equal((handbook.match(/class="task-icon"/g)||[]).length,9,'each handbook step of this phase is labelled');
+ assert.match(handbook,/data-kind="survey"[^]*?Survey the iron site/,'a verification step reads as an inspection');
+ assert.match(handbook,/data-kind="retire"[^]*?Retire the temporary power plants/);
+ assert.match(handbook,/data-kind="delivery"[^]*?Deliver Phase 3/);
+ assert.match(handbook,/data-kind="build"[^]*?Concrete, copper/);
+ vm.runInContext(`state.taskEdits={links:{'phase-3-steel':'wire'}};`,c);
+ assert.match(vm.runInContext('renderPlan()',c),/data-kind="item" aria-hidden="true"><img class="item-icon" src="[^"]*icons\/wire[.]png"[^]*?Steel and structural/,'a step linked to a factory shows the part it makes');
+ vm.runInContext(`state.taskEdits=undefined;calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};state.settings.phase='1';`,c);
+ const calc=vm.runInContext('renderCalculatedPlan()',c);
+ assert.match(calc,/data-kind="milestone"[^]*?Tier /,'HUB milestones read as unlocks');
+ assert.match(calc,/data-kind="biomass"[^]*?Turn leaves and wood into Biomass/);
+ assert.match(calc,/data-kind="power"[^]*?Power available now/);
+ assert.match(calc,/data-kind="storage"[^]*?Connect protected storage/);
+ assert.match(calc,/data-kind="item" aria-hidden="true"><img class="item-icon" src="[^"]*icons\/iron-ingot[.]png"/,'a calculated production step shows its own part');
+ assert.ok(!calc.includes('data-kind="undefined"')&&!calc.includes('><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></span>'),'every glyph resolves');
+ vm.runInContext(`state.settings.phase='3';calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,c);
+});
+
 test('factory details list where a local item is needed',()=>{
  const c=ui();
  vm.runInContext(`openFactory('wire')`,c);

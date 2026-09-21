@@ -104,7 +104,7 @@ p{line-height:1.7;margin:8px 0 14px}
 .checklist-tools .search{flex:1;min-width:160px;padding:9px 12px}
 .checklist-tools .check-row{white-space:nowrap;color:var(--muted)}
 .checklist{display:grid;gap:1px;background:var(--row);border:1px solid var(--line);box-shadow:var(--drop)}
-.task{background:var(--panel);padding:12px 15px;display:grid;grid-template-columns:20px minmax(0,1fr);gap:13px;align-items:start}
+.task{background:var(--panel);padding:12px 15px;display:grid;grid-template-columns:20px 26px minmax(0,1fr);gap:12px;align-items:start}
 .task:has(input:checked){background:#101315}
 .task input[type=checkbox],.check-row input{width:18px;height:18px;margin:3px 0;flex:none}
 .task summary{font-family:var(--head);font-size:16.5px;font-weight:600;letter-spacing:.05em;color:#e6ecf0;cursor:pointer;list-style:none;line-height:1.35}
@@ -472,8 +472,11 @@ button.rail-tile:hover{border-color:var(--accent)}
  .stat strong{font-size:25px}
  .side-panels,.backup-grid,.completion-grid{grid-template-columns:1fr}
  .cards{grid-template-columns:1fr}
- .floor-grid{display:block}
- .bay{margin-bottom:14px}
+ /* Stacked in one column the hall’s rear-to-front rows read as a jumble, so
+    order the bays by address instead and drop the orientation markers. */
+ .floor-grid{display:flex;flex-direction:column}
+ .bay{margin-bottom:14px;order:var(--bay-order,0)}
+ .floor-marker{display:none}
  .bay-items{grid-template-columns:repeat(4,minmax(0,1fr))}
  .aisle{display:none}
  .slot{font-size:10px;padding:7px 5px}
@@ -493,7 +496,18 @@ button.rail-tile:hover{border-color:var(--accent)}
 
 /* ── Plan step editing ─────────────────────────────────── */
 .head-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.task.is-editing{grid-template-columns:20px minmax(0,1fr) auto}
+.task.is-editing{grid-template-columns:20px 26px minmax(0,1fr) auto}
+/* Step category icons: a linked production step shows its part, others a glyph. */
+.task-icon{width:26px;height:26px;flex:none;display:grid;place-items:center;color:var(--accent)}
+.task-icon svg{width:100%;height:100%;display:block}
+.task-icon .item-icon{width:26px;height:26px;background:radial-gradient(circle at 50% 45%,rgba(248,156,28,.12),transparent 70%)}
+.task-icon[data-kind=power]{color:var(--gold)}
+.task-icon[data-kind=biomass]{color:var(--green)}
+.task-icon[data-kind=nuclear],.task-icon[data-kind=retire]{color:var(--red)}
+.task-icon[data-kind=milestone],.task-icon[data-kind=research],.task-icon[data-kind=harddrive],.task-icon[data-kind=fluid],.task-icon[data-kind=portal]{color:var(--blue)}
+.task-icon[data-kind=logistics],.task-icon[data-kind=storage],.task-icon[data-kind=survey],.task-icon[data-kind=note]{color:var(--muted)}
+.task:has(input:checked) .task-icon{color:#55615b}
+.task:has(input:checked) .task-icon .item-icon{filter:grayscale(1);opacity:.45}
 .task-tools{display:flex;gap:8px;align-items:start;flex-wrap:wrap;justify-content:flex-end}
 .task-tools .btn.quiet{padding:2px 4px;font-size:11px}
 .task-tools .btn.quiet.danger{color:var(--red);border-bottom-color:rgba(224,85,58,.5);background:transparent}
@@ -505,6 +519,9 @@ button.rail-tile:hover{border-color:var(--accent)}
 .removed-steps{margin:14px 0}
 .removed-steps summary{cursor:pointer;color:var(--muted)}
 .removed-step{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;color:#99a2a9}
+.removed-step>span{display:flex;align-items:center;gap:10px;min-width:0}
+.removed-step .task-icon{width:20px;height:20px}
+.removed-step .task-icon .item-icon{width:20px;height:20px}
 .removed-step:last-child{border-bottom:0}
 
 /* ── Factory groups ────────────────────────────────────── */
