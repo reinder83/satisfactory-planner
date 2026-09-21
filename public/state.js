@@ -8,7 +8,15 @@ const fail=(message,status=400)=>{const e=new Error(message);e.status=status;thr
 export const builtinFloors=[['ground','Ground floor'],['upper','Upper floor'],['workshop','Workshop']];
 const floorId=k=>typeof k==='string'&&(builtinFloors.some(([id])=>id===k)||/^cf-[a-z0-9]{4,32}$/.test(k));
 const bayId=k=>typeof k==='string'&&/^[A-Z]{1,2}$/.test(k);
-const slotAddr=k=>typeof k==='string'&&/^[A-Z]{1,2}0[1-8]$/.test(k);
+// A bay prints eight positions, 01-08. Needing more containers than that
+// extends the bay with addresses 09 upwards, up to bayCapacity. Printed
+// addresses never move, so saved progress stays with its container.
+export const bayCapacity=99;
+export const bayOfSlot=k=>k.slice(0,-2);
+export const slotPosition=k=>Number(k.slice(-2));
+const slotAddr=k=>typeof k==='string'&&/^[A-Z]{1,2}[0-9]{2}$/.test(k)&&slotPosition(k)>=1&&slotPosition(k)<=bayCapacity;
+const addedSlot=k=>slotPosition(k)>8;
+const hasAddedSlots=e=>Object.keys(e.slots).some(addedSlot);
 const label=(v,max=80)=>typeof v==='string'&&v.trim()&&v.trim().length<=max;
 const hasEdits=e=>e.floors.length||e.bays.length||e.clearedSlots.length||Object.keys(e.floorNames).length+Object.keys(e.bayNames).length+Object.keys(e.slots).length>0;
 const phases=['1','2','3','4','5','post'];
@@ -168,19 +176,23 @@ function validateEdits(raw){
   const seen=new Set();
   e.bays=raw.bays.map(b=>{if(!plain(b)||!bayId(b.id)||seen.has(b.id)||!label(b.name)||!floorId(b.floor))fail('Invalid storage bay.');seen.add(b.id);return {id:b.id,name:b.name.trim(),floor:b.floor};});
  }
- for(const [kind,check,max] of [['floorNames',floorId,15],['bayNames',bayId,60],['slots',slotAddr,600]]){
+ // Every address a layout can reach: 18 handbook bays plus 40 added ones, each
+ // holding up to bayCapacity containers.
+ for(const [kind,check,max] of [['floorNames',floorId,15],['bayNames',bayId,60],['slots',slotAddr,58*bayCapacity]]){
   if(raw[kind]===undefined)continue;
   if(!plain(raw[kind])||Object.keys(raw[kind]).length>max)fail('Invalid storage names.');
   for(const [k,v] of Object.entries(raw[kind])){if(!check(k)||!label(v,kind==='slots'?120:80))fail('Invalid storage name.');e[kind][k]=v.trim();}
  }
  if(raw.clearedSlots!==undefined){
   if(!Array.isArray(raw.clearedSlots)||raw.clearedSlots.length>600||raw.clearedSlots.some(k=>!slotAddr(k)))fail('Invalid storage positions.');
-  e.clearedSlots=[...new Set(raw.clearedSlots)];
+  // A cleared position hides a handbook container. An added position has no
+  // handbook container behind it, so clearing one removes the address itself.
+  e.clearedSlots=[...new Set(raw.clearedSlots)].filter(k=>!addedSlot(k));
  }
  return e;
 }
 export function validateState(s){
- if(!plain(s)||![1,2,3].includes(s.version))fail(s?.version>3?'This backup was made by a newer planner version. Update the app to import it.':'Choose a valid version 1 planner backup.');
+ if(!plain(s)||![1,2,3,4].includes(s.version))fail(s?.version>4?'This backup was made by a newer planner version. Update the app to import it.':'Choose a valid version 1 planner backup.');
  const clean=initialState();
  for(const kind of ['checks','notes','deliveries']){
   if(!plain(s[kind])||Object.keys(s[kind]).length>20000)fail('Invalid '+kind+' in backup.');
@@ -202,10 +214,10 @@ export function validateState(s){
  clean.taskEdits=validateTaskEdits(s.taskEdits);
  clean.factoryGroups=validateGroups(s.factoryGroups);
  // Version 1 states never carry layout edits, so older planners keep importing
- // untouched saves; a state with layout edits is marked 2, and one with build
- // plan edits or factory groups is marked 3, so old versions refuse it instead
- // of silently dropping those edits.
- clean.version=hasTaskEdits(clean.taskEdits)||hasGroups(clean.factoryGroups)?3:hasEdits(clean.storageEdits)?2:1;
+ // untouched saves; a state with layout edits is marked 2, one with build plan
+ // edits or factory groups 3, and one using a container position past 08 is
+ // marked 4, so old versions refuse it instead of silently dropping those edits.
+ clean.version=hasAddedSlots(clean.storageEdits)?4:hasTaskEdits(clean.taskEdits)||hasGroups(clean.factoryGroups)?3:hasEdits(clean.storageEdits)?2:1;
  clean.revision=Number.isSafeInteger(s.revision)&&s.revision>=0?s.revision:0;
  return clean;
 }
@@ -311,14 +323,17 @@ function mutateLayout(s,op){
  }else if(op.type==='storageBayRemove'){
   if(!e.bays.some(b=>b.id===op.id))fail('Only added bays can be removed. Progress on handbook bays is preserved.');
   e.bays=e.bays.filter(b=>b.id!==op.id);delete e.bayNames[op.id];
-  for(const k of Object.keys(e.slots))if(k.startsWith(op.id)&&slotAddr(k)&&k.slice(0,-2)===op.id)delete e.slots[k];
-  e.clearedSlots=e.clearedSlots.filter(k=>k.slice(0,-2)!==op.id);
+  for(const k of Object.keys(e.slots))if(slotAddr(k)&&bayOfSlot(k)===op.id)delete e.slots[k];
+  e.clearedSlots=e.clearedSlots.filter(k=>bayOfSlot(k)!==op.id);
  }else if(op.type==='storageSlotAssign'){
   if(!slotAddr(op.key)||!label(op.name,120))fail('Invalid container.');
   e.slots[op.key]=op.name.trim();e.clearedSlots=e.clearedSlots.filter(k=>k!==op.key);
  }else if(op.type==='storageSlotClear'){
   if(!slotAddr(op.key))fail('Invalid container address.');
-  delete e.slots[op.key];if(!e.clearedSlots.includes(op.key))e.clearedSlots.push(op.key);
+  delete e.slots[op.key];
+  // An added position disappears with its container; a handbook one stays as a
+  // reserved address so its printed label keeps meaning something.
+  if(!addedSlot(op.key)&&!e.clearedSlots.includes(op.key))e.clearedSlots.push(op.key);
  }else fail('Unknown update.');
 }
 

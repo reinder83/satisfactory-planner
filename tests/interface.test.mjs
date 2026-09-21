@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {progression} from '../public/progression.js';
-import {carryOptions,pickedRecipeUnlocks} from '../public/state.js';
+import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from '../public/state.js';
 import {calculate,catalog} from '../planner.mjs';
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^(?:import[^\n]*\n)+/,'').replaceAll('import.meta.url',JSON.stringify('https://example.com/satisfactory-planner/app.js')).replace(/\nboot\(\);\s*$/,'');
-function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,progression,carryOptions,pickedRecipeUnlocks,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
+function ui(){const node={addEventListener(){},close(){},showModal(){},innerHTML:''};const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor});vm.runInContext(source,c);c.fixture=JSON.parse(fs.readFileSync(new URL('../public/plan.json',import.meta.url),'utf8'));c.catalogData=catalog();c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));c.generated=calculate({});vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,c);return c;}
 test('original and calculated views render; wizard exposes all settings and safe names',()=>{
  const c=ui();for(const route of ['renderPlan','renderFactories','renderStorage','renderResources','renderBackup','renderProfiles','renderAccount'])assert.ok(vm.runInContext(route+'()',c).length>100,route);
  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,c);
@@ -54,6 +54,24 @@ test('storage bays stay in address order in the document and take their hall pos
  assert.deepEqual(at[letters.at(-2)],[1,1],'the last pair of bays stays at the rear of the hall');
  assert.equal([...html.matchAll(/class="aisle"/g)].length,letters.length/2,'every row keeps its aisle');
  assert.match(html,/eyebrow floor-marker">REAR OF HALL/,'the orientation markers can be hidden when stacked');
+});
+
+test('a bay grows past eight containers and keeps offering the next address',()=>{
+ const c=ui();
+ vm.runInContext(`floor='ground';layoutEditing=true;state.storageEdits={floors:[],floorNames:{},bays:[],bayNames:{},slots:{A10:'Aluminum Casing'},clearedSlots:[]};`,c);
+ const html=vm.runInContext('renderStorage()',c);
+ assert.match(html,/data-slot="A08"/,'the printed positions keep their addresses');
+ assert.match(html,/<strong>A09<\/strong><span>Reserved<\/span>/,'the gap up to the added container is reserved');
+ assert.match(html,/data-slot="A10"/,'the added container renders at its own address');
+ assert.match(html,/ADDED POSITIONS/,'added positions are marked off from the two printed banks');
+ assert.ok(!html.includes('data-slot="A11"'),'the bay is only as long as its highest filled address');
+ const full=vm.runInContext(`state.storageEdits.slots=Object.fromEntries(Array.from({length:bayCapacity-8},(_,i)=>['A'+(i+9),'Item '+i]));renderStorage()`,c);
+ assert.match(full,new RegExp(`data-slot="A${bayCapacity}"`),'a bay can reach the last addressable position');
+ assert.ok(!/<form class="inline-form add-container" data-bay="A"/.test(full),'a bay with no address left stops offering one');
+ const bay=vm.runInContext(`storageBays().find(b=>b.id==='A')`,c);
+ assert.equal(bay.items.length,bayCapacity);
+ assert.equal(bayOfSlot(bay.items.at(-1).id),'A');
+ assert.equal(slotPosition(bay.items.at(-1).id),bayCapacity);
 });
 
 test('machine instructions separate total, full-speed and adjustable machines',()=>{

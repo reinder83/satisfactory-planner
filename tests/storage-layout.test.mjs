@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState,validateState,mutate} from '../public/state.js';
+import {initialState,validateState,mutate,bayCapacity} from '../public/state.js';
 
 test('legacy version-1 states validate unchanged, gain empty layout edits and stay version 1',()=>{
  const legacy={version:1,revision:3,checks:{'slot-A01-built':true,'factory-3-iron':true},notes:{global:'route notes'},deliveries:{'3-modular-engine':50},settings:{phase:'3'},customTasks:[{id:'custom-a',title:'Wire station',phase:'3'}]};
@@ -28,7 +28,36 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
  assert.equal(round.storageEdits.bayNames.S,'Overflow parts');
  assert.equal(round.storageEdits.floorNames.ground,'Main hall');
  assert.equal(round.storageEdits.floors[0].label,'Basement overflow');
- assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:4}),/newer planner version/);
+ assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:5}),/newer planner version/);
+});
+
+test('a bay takes containers past its printed eight and marks the state version 4',()=>{
+ let s=initialState();
+ s=mutate(s,{type:'storageSlotAssign',key:'A09',name:'Alclad Aluminum Sheet'});
+ s=mutate(s,{type:'storageSlotAssign',key:'A12',name:'Aluminum Casing'});
+ s=mutate(s,{type:'check',key:'slot-A09-built',value:true});
+ assert.equal(s.version,4,'an address past 08 is new content older planners must refuse');
+ const round=validateState(JSON.parse(JSON.stringify(s)));
+ assert.equal(round.version,4);
+ assert.equal(round.storageEdits.slots.A09,'Alclad Aluminum Sheet');
+ assert.equal(round.storageEdits.slots.A12,'Aluminum Casing');
+ assert.throws(()=>validateState({...JSON.parse(JSON.stringify(s)),version:5}),/newer planner version/);
+ // An added position has no handbook container behind it, so clearing one drops
+ // the address instead of reserving it, while its progress records stay put.
+ s=mutate(s,{type:'storageSlotClear',key:'A09'});
+ assert.deepEqual(s.storageEdits.clearedSlots,[]);
+ assert.equal(s.storageEdits.slots.A09,undefined);
+ assert.equal(s.checks['slot-A09-built'],true);
+ s=mutate(s,{type:'storageSlotClear',key:'A12'});
+ assert.equal(s.version,1,'a layout back within the printed eight is importable by older planners again');
+ assert.throws(()=>mutate(structuredClone(s),{type:'storageSlotAssign',key:'A'+(bayCapacity+1),name:'Past the last address'}),/Invalid container/);
+});
+
+test('an added position imported as cleared is dropped rather than reserved',()=>{
+ const raw={...initialState(),storageEdits:{floors:[],floorNames:{},bays:[],bayNames:{},slots:{B02:'Wire'},clearedSlots:['B01','B09']}};
+ const clean=validateState(raw);
+ assert.deepEqual(clean.storageEdits.clearedSlots,['B01']);
+ assert.equal(clean.version,2,'nothing past 08 remains, so the state stays readable by older planners');
 });
 
 test('clearing and reassigning containers preserves saved checkmarks',()=>{
@@ -69,7 +98,9 @@ test('invalid layout updates are rejected without corrupting the state',()=>{
   {type:'storageFloorAdd',id:'cf-x',label:'Too short id'},
   {type:'storageBayAdd',id:'abc',name:'Bad letter',floor:'ground'},
   {type:'storageBayAdd',id:'S',name:'Ghost floor',floor:'cf-000000'},
-  {type:'storageSlotAssign',key:'S99',name:'Bad address'},
+  {type:'storageSlotAssign',key:'S00',name:'Bad address'},
+  {type:'storageSlotAssign',key:'S100',name:'Bad address'},
+  {type:'storageSlotAssign',key:'S9',name:'Bad address'},
   {type:'storageSlotAssign',key:'S01',name:''},
   {type:'storageSlotClear',key:'__proto__'},
   {type:'storageFloorRename',id:'cf-nothere1',label:'Missing'},
