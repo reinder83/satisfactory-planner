@@ -197,13 +197,13 @@ test('storage follows the selected contract, preserves addresses and displays sm
 test('wizard tabs retain edits and recalculate Review without native help tooltips',async()=>{
  const c=ui();vm.runInContext(`wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,c);
  const form={reportValidity:()=>true,querySelector:sel=>['.alt-list','.carry-list'].includes(sel)?null:{textContent:''}};c.document.querySelector=()=>form;
- c.FormData=class{*[Symbol.iterator](){yield ['saveName','Edited world'];yield ['purity','pure'];}has(){return false;}};
+ c.FormData=class{*[Symbol.iterator](){yield ['saveName','Edited world'];yield ['purity','pure'];}has(){return false;}getAll(){return [];}};
  await vm.runInContext('moveWizard(2)',c);
  assert.equal(vm.runInContext('wizard.saveName',c),'Edited world');
  assert.equal(vm.runInContext('wizard.settings.limits["Iron Ore"]',c),152400);
  assert.equal(vm.runInContext('wizard.preview',c),null);
- c.FormData=class{*[Symbol.iterator](){yield ['utilityPercent','35'];}has(){return false;}};
- vm.runInContext(`post=async(url,body)=>{if(body.settings.utilityPercent!==35)throw Error('Lost input');return generated;}`,c);
+ c.FormData=class{*[Symbol.iterator](){yield ['utilityPercent','35'];yield ['installedPowerMW','60000'];yield ['somersloops','104'];yield ['augmenters','1'];yield ['fueledAugmenters','1'];}has(){return false;}getAll(){return ['shards'];}};
+ vm.runInContext(`post=async(url,body)=>{if(body.settings.utilityPercent!==35)throw Error('Lost input');if(body.settings.augmenters!==1||body.settings.fueledAugmenters!==1||body.settings.somersloops!==104)throw Error('Lost the somersloop ledger');if(body.settings.installedPowerGW!==60)throw Error('Lost installed power');if(String(body.settings.sloopReserved)!=='shards')throw Error('Lost the reserved lines');return generated;}`,c);
  await vm.runInContext('moveWizard(5)',c);assert.equal(vm.runInContext('wizard.step',c),5);
  const html=vm.runInContext('renderWizard()',c);assert.equal((html.match(/data-wizard-step=/g)||[]).length,5);
  const help=vm.runInContext('help("purity")',c);assert.ok(!help.includes(' title='));assert.ok(help.includes('aria-label='));assert.ok(help.includes('role="tooltip"'));
@@ -291,6 +291,15 @@ test('adding a profile to an existing save offers to carry its progress over',()
  assert.equal(vm.runInContext('wizard.carry.notes',c),false,'unticked options are cleared');
 });
 
+test('the wizard keeps every preference field beside the somersloop ledger',()=>{
+ const c=ui();
+ vm.runInContext(`wizard={step:2,saveName:'W',name:'P',settings:{...structuredClone(generated.settings),somersloops:104,augmenters:1,fueledAugmenters:1,sloopReserved:['shards']},preview:null};`,c);
+ const html=vm.runInContext('renderWizard()',c);
+ for(const name of ['cellsPerMinute','storageRate','buildRate','somersloops','augmenters','fueledAugmenters'])assert.ok(html.includes('name="'+name+'"'),'step 2 lost the '+name+' field');
+ assert.equal((html.match(/name="sloop"/g)||[]).length,3);
+ assert.ok(html.includes('Committed: <b>11</b> of 104 available'),'the ledger totals what the plan commits');
+ assert.ok(html.includes('5 Alien Power Matrix/min'),'the ledger derives the fuel rate from the augmenter count');
+});
 test('the wizard offers two storage rates and per-item overrides',()=>{
  const c=ui();
  vm.runInContext(`wizard={step:2,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),storage:'all',storageRate:1,buildRate:30,storageOverrides:{Concrete:60}},preview:null};`,c);
