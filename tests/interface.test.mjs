@@ -404,6 +404,12 @@ test('a profile only offers the phases it was created for',()=>{
  assert.equal(vm.runInContext(`state.settings.phase='post';phase()`,c),'post','post-game is still reachable');
 
  vm.runInContext(`calculated={...generated,settings:{...generated.settings,phase:'1'}};state.settings.phase='1';`,c);
+ // Review must not flag a phase the profile will never offer.
+ vm.runInContext(`wizard={step:5,saveName:'W',name:'P',settings:{...generated.settings,phase:'4'},preview:{...generated,settings:{...generated.settings,phase:'4'},stages:{...generated.stages,3:{feasible:false,reason:'Earlier phase shortfall'},5:{feasible:false,reason:'Later phase shortfall'}}},carryFrom:null,carry:{}};`,c);
+ const review=vm.runInContext('renderWizard()',c);
+ assert.ok(!review.includes('Earlier phase shortfall'),'a phase behind the start is not flagged');
+ assert.ok(review.includes('Later phase shortfall'),'a phase the profile plans is still flagged');
+
  assert.equal(vm.runInContext('JSON.stringify(phaseOptions())',c),'["1","2","3","4","5","post"]','a phase 1 profile offers everything');
 
  vm.runInContext(`calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.settings.phase='3';`,c);
