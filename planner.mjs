@@ -40,7 +40,7 @@ const reservedUses=raw=>{
 };
 export function settings(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))err('Invalid settings.');
- const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),buildRate:number(input.buildRate,0,300,number(input.storageRate,0.1,300,1)),storageOverrides:rateOverrides(input.storageOverrides),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),installedPowerGW:number(input.installedPowerGW,0,10000,number(input.availablePowerGW,0,10000,0)),somersloops:number(input.somersloops,0,106,0),augmenters:number(input.augmenters,0,10,0),fueledAugmenters:number(input.fueledAugmenters,0,10,0),sloopReserved:reservedUses(input.sloopReserved),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),phaseTime:choice(input.phaseTime,['every','final'],'every'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
+ const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),buildRate:number(input.buildRate,0,300,number(input.storageRate,0.1,300,1)),storageOverrides:rateOverrides(input.storageOverrides),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),installedPowerGW:number(input.installedPowerGW,0,10000,number(input.availablePowerGW,0,10000,0)),somersloops:number(input.somersloops,0,106,0),augmenters:number(input.augmenters,0,10,0),fueledAugmenters:number(input.fueledAugmenters,0,10,0),sloopReserved:reservedUses(input.sloopReserved),amplifySloops:number(input.amplifySloops,0,106,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),phaseTime:choice(input.phaseTime,['every','final'],'every'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
  if(s.droneFuel==='Plutonium Fuel Rod'&&s.nuclear==='none')err('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
  if(s.fueledAugmenters>s.augmenters)err('More fueled Alien Power Augmenters than augmenters.');
  if(s.installedPowerGW<s.availablePowerGW)err('Total installed generation cannot be less than the spare part of it.');
@@ -66,6 +66,18 @@ export function recipePool(s,phase,conversion){
   return !preferred.some(id=>{const p=DATA.recipes.find(x=>x.id===id);return p&&p.phase<=phase&&Object.keys(p.outputs)[0]===Object.keys(r.outputs)[0];});
  });
 }
+// Production amplification. A somersloop machine is a whole machine: the same inputs, double the
+// output and four times the power, per (1 + filled/total)^2 with every slot filled. Miners,
+// extractors, packagers and generators have no slots. Opt-in: with no budget nothing is offered,
+// so a plan that does not want to go slug hunting is calculated exactly as before.
+// How many of the largest lines are offered an amplified twin. Every twin is another integer
+// variable, and the fit has to finish inside the solver's time limit: whole-machine plans already
+// carry integer machine counts, so they can afford fewer twins than precisely balanced ones.
+// Measured against the heaviest plans in the test set; raising these starts losing whole phases.
+export const AMPLIFY_CANDIDATES={whole:22,precise:26};
+export const AMPLIFY_SLOTS={Smelter:1,Constructor:1,Assembler:2,Foundry:2,Refinery:2,Converter:2,Manufacturer:4,Blender:4,'Particle Accelerator':4,'Quantum Encoder':4};
+const amplifiable=r=>r.power>0&&AMPLIFY_SLOTS[r.machine]>0;
+const amplified=r=>({...r,id:'amp:'+r.id,name:r.name+' (somersloop amplified)',power:r.power*4,slots:AMPLIFY_SLOTS[r.machine],outputs:Object.fromEntries(Object.entries(r.outputs).map(([n,q])=>[n,q*2]))});
 function generators(s,phase){
  const result=[];
  if(phase>=2)result.push({id:'power-coal',name:'Coal power',machine:'Coal Generator',phase:2,power:-75,inputs:{Coal:15,Water:45},outputs:{}});
@@ -81,9 +93,20 @@ function generators(s,phase){
  const fuel=preferred==='fuel'?'Fuel':preferred.startsWith('rocket')&&phase>=4?'Rocket Fuel':'Turbofuel';
  return result.filter(r=>r.machine==='Nuclear Power Plant'||r.inputs[fuel]);
 }
-export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,recipeIds=null,caps=null}={}){
- if(s.wholeMachines&&!recipeIds){const base=run({...s,wholeMachines:false},phase,{maximum,conversion,ignoreLimits,caps});if(!base.feasible)return base;return run(s,phase,{maximum,conversion,ignoreLimits,caps,recipeIds:new Set(base.rows.map(r=>r.id))});}
- const pool=[...recipePool(s,phase,conversion),...generators(s,phase)].filter(r=>!recipeIds||recipeIds.has(r.id)||conversion&&Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water'));
+export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,recipeIds=null,caps=null,baseline=null}={}){
+ if((s.wholeMachines||s.amplifySloops>0)&&!recipeIds){
+  const base=run({...s,wholeMachines:false,amplifySloops:0},phase,{maximum,conversion,ignoreLimits,caps});if(!base.feasible)return base;
+  const ids=new Set(base.rows.map(r=>r.id));
+  const baseline=Object.fromEntries([...base.rows].filter(r=>r.equivalent>=1).sort((a,b)=>b.equivalent-a.equivalent).slice(0,AMPLIFY_CANDIDATES[s.wholeMachines?'whole':'precise']).map(r=>[r.id,r.equivalent]));
+  const fit=run(s,phase,{maximum,conversion,ignoreLimits,caps,recipeIds:ids,baseline});
+  // Amplification is optional by definition: the solver may always place no somersloops at all.
+  // So a failure here is the integer search running out of time, never a real shortage — never let
+  // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
+  if(!fit.feasible&&s.amplifySloops>0){const plain=run({...s,amplifySloops:0},phase,{maximum,conversion,ignoreLimits,caps,recipeIds:ids});if(plain.feasible)return {...plain,amplificationDropped:true};}
+  return fit;
+ }
+ const selected=[...recipePool(s,phase,conversion),...generators(s,phase)].filter(r=>!recipeIds||recipeIds.has(r.id)||conversion&&Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water'));
+ const pool=[...selected,...(s.amplifySloops>0&&recipeIds?selected.filter(r=>amplifiable(r)&&baseline?.[r.id]!==undefined).map(amplified):[])];
  const reachable=new Set(RAW);if(s.nuclear!=='none'&&phase>=4)reachable.add('Uranium Waste');if(s.nuclear==='recycle'&&phase===5)reachable.add('Plutonium Waste');
  for(let i=0;i<20;i++)for(const r of pool)if(Object.keys(r.inputs).every(n=>reachable.has(n)))Object.keys(r.outputs).forEach(n=>reachable.add(n));
  const allItems=new Set(pool.flatMap(r=>[...Object.keys(r.inputs),...Object.keys(r.outputs)]));
@@ -116,9 +139,17 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
   for(const [n,q] of Object.entries(r.inputs))v['item:'+n]=(v['item:'+n]||0)-q;
   if(r.id==='power-uranium'){v.nuclear=1;model.constraints.nuclear={min:s.uraniumReactors};}
   model.variables[r.id]=v;
+  if(r.slots){
+   (model.ints??={})[r.id]=1;v.sloops=r.slots;
+   // One amplified machine does the work of two, so a line never wants more than half its
+   // unamplified count, and the whole budget cannot buy more than it can pay slots for.
+   const need=baseline?.[r.id.slice(4)];
+   (model.bounds??={})[r.id]=Math.max(1,Math.min(Math.floor(s.amplifySloops/r.slots),need===undefined?1e9:Math.ceil(need/2)+1));
+  }
   if(s.wholeMachines&&Object.keys(r.outputs).some(n=>!DATA.items[n]?.fluid&&!RAW.includes(n)&&DATA.items[n]?.sink>0)&&!/uranium|plutonium|ficsonium|waste|non-fissile/i.test([r.name,...Object.keys(r.inputs),...Object.keys(r.outputs)].join(' '))){(model.ints??={})[r.id]=1;}
  }
  // An earlier phase may run no more of a recipe than a later phase already builds, so nothing is added that the plan later drops.
+ if(s.amplifySloops>0)model.constraints.sloops={max:s.amplifySloops};
  if(caps)for(const r of pool){const cap=caps[r.id]??0;model.constraints["cap:"+r.id]={max:cap};model.variables[r.id]["cap:"+r.id]=1;}
  // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
  for(const n of RAW){if(!allItems.has(n))continue;model.constraints['limit:'+n]={max:ignoreLimits?1e7:s.limits[n]};model.variables['raw:'+n]={cost:0.0001,['item:'+n]:1,['limit:'+n]:1};}
@@ -132,14 +163,14 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
   const tol=0.002+Math.abs(total)*1e-6;if(b.min!==undefined&&total<b.min-tol||b.max!==undefined&&total>b.max+tol||b.equal!==undefined&&Math.abs(total-b.equal)>tol)return {feasible:false};
  }
  if(maximum)for(const d of Object.values(delivery))d.rate=(solved.goal||0)*d.target/1000;
- const rows=pool.filter(r=>(solved[r.id]||0)>1e-6).map(r=>{const eq=solved[r.id];const machines=Math.ceil(eq-1e-6);return {...r,equivalent:eq,machines,lastClock:Math.max(0,(eq-machines+1)*100),inputs:Object.fromEntries(Object.entries(r.inputs).map(([n,q])=>[n,q*eq])),outputs:Object.fromEntries(Object.entries(r.outputs).map(([n,q])=>[n,q*eq])),peakMW:r.power<0?0:machines*r.power*s.powerFactor,generationMW:r.power<0?-r.power*eq:0};});
+ const rows=pool.filter(r=>(solved[r.id]||0)>1e-6).map(r=>{const eq=solved[r.id];const machines=Math.ceil(eq-1e-6);return {...r,equivalent:eq,machines,...(r.slots?{amplified:true,sloops:r.slots*machines}:{}),lastClock:Math.max(0,(eq-machines+1)*100),inputs:Object.fromEntries(Object.entries(r.inputs).map(([n,q])=>[n,q*eq])),outputs:Object.fromEntries(Object.entries(r.outputs).map(([n,q])=>[n,q*eq])),peakMW:r.power<0?0:machines*r.power*s.powerFactor,generationMW:r.power<0?-r.power*eq:0};});
  const raw=Object.fromEntries(RAW.map(n=>[n,solved['raw:'+n]||0]));const used={},made={};for(const r of rows){for(const [n,q] of Object.entries(r.inputs))used[n]=(used[n]||0)+q;for(const [n,q] of Object.entries(r.outputs))made[n]=(made[n]||0)+q;}
  const surplus=Object.fromEntries(Object.keys(made).map(n=>[n,Math.max(0,made[n]-(used[n]||0)-(storage[n]||0)-(delivery[n]?.rate||0)-(drone[n]||0)-(n==='Singularity Cell'&&phase===5?s.cellsPerMinute:0)-(n==='Alien Power Matrix'?matrix:0))]).filter(([n,q])=>q>0.002&&!DATA.items[n]?.radioactive&&!DATA.items[n]?.fluid&&DATA.items[n]?.sink>0));
  const peakMW=rows.reduce((a,r)=>a+r.peakMW,0),generationMW=rows.reduce((a,r)=>a+r.generationMW,0);
  // Order by dependency depth; recycling loops are commissioned as a connected group.
  const producers={};for(const r of rows)for(const n of Object.keys(r.outputs))(producers[n]??=[]).push(r);
  const seen=new Set(),visiting=new Set(),ordered=[];function visit(r){if(seen.has(r.id)||visiting.has(r.id))return;visiting.add(r.id);for(const n of Object.keys(r.inputs))for(const p of producers[n]||[])visit(p);visiting.delete(r.id);seen.add(r.id);ordered.push(r);}rows.forEach(visit);
- return {feasible:true,rows:ordered,raw,storage,drone,delivery,surplus,plutoniumSink:solved['sink-plutonium']||0,peakMW,generationMW,augmenters,fueledAugmenters:fueled,boost,augmenterMW:500*augmenters,matrixRate:matrix,availableMW:generationMW*(1+boost)+spareMW,requiredMW:peakMW*utilityFactor,additionalHeadroomMW:Math.max(0,peakMW*utilityFactor-generationMW*(1+boost)-spareMW),hours:Math.max(...Object.values(delivery).map(d=>d.rate?d.target/d.rate/60:Infinity)),conversions:rows.filter(r=>Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water')).map(r=>r.name)};
+ return {feasible:true,rows:ordered,raw,storage,drone,delivery,surplus,plutoniumSink:solved['sink-plutonium']||0,peakMW,generationMW,sloopsUsed:rows.reduce((a,r)=>a+(r.sloops||0),0),augmenters,fueledAugmenters:fueled,boost,augmenterMW:500*augmenters,matrixRate:matrix,availableMW:generationMW*(1+boost)+spareMW,requiredMW:peakMW*utilityFactor,additionalHeadroomMW:Math.max(0,peakMW*utilityFactor-generationMW*(1+boost)-spareMW),hours:Math.max(...Object.values(delivery).map(d=>d.rate?d.target/d.rate/60:Infinity)),conversions:rows.filter(r=>Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water')).map(r=>r.name)};
 }
 export function calculate(input,onPhase){
  const s=settings(input);if(s.goal==='maximum'&&!s.limitsConfirmed)err('Confirm your available resource budgets before maximizing output.');
@@ -218,10 +249,16 @@ export function calculate(input,onPhase){
    worthIt:!dry.feasible||(s.goal==='maximum'?wet.hours<dry.hours-1e-6:count(wet)<count(dry))
   }};
  }
- if(s.augmenters){
-  const committed=10*s.augmenters+s.sloopReserved.length;
-  warnings.push(`${s.augmenters} Alien Power Augmenter${s.augmenters>1?'s':''}: ${500*s.augmenters} MW of generation, plus a ${Math.round((0.1*(s.augmenters-s.fueledAugmenters)+0.3*s.fueledAugmenters)*100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`);
-  if(s.somersloops&&committed>s.somersloops)warnings.push(`This plan commits ${committed} somersloops — 10 per augmenter${s.sloopReserved.length?` plus ${s.sloopReserved.length} reserved for hand-fed lines`:''} — but ${s.somersloops} are recorded as available. Collect more, or build fewer augmenters.`);
+ if(s.augmenters||s.amplifySloops){
+  const committed=10*s.augmenters+s.sloopReserved.length+s.amplifySloops;
+  if(s.augmenters)warnings.push(`${s.augmenters} Alien Power Augmenter${s.augmenters>1?'s':''}: ${500*s.augmenters} MW of generation, plus a ${Math.round((0.1*(s.augmenters-s.fueledAugmenters)+0.3*s.fueledAugmenters)*100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`);
+  if(s.somersloops&&committed>s.somersloops)warnings.push(`This plan commits ${committed} somersloops — 10 per augmenter${s.sloopReserved.length?`, ${s.sloopReserved.length} reserved for hand-fed lines`:''}${s.amplifySloops?`, ${s.amplifySloops} for production amplification`:''} — but ${s.somersloops} are recorded as available. Collect more, or build fewer augmenters.`);
+ }
+ {
+  const used=Math.max(0,...Object.values(stages).map(x=>x.sloopsUsed||0));
+  const dropped=Object.entries(stages).filter(([,x])=>x.amplificationDropped).map(([p])=>p);
+  if(s.amplifySloops>0)warnings.push(`Production amplification may place up to ${s.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`);
+  if(dropped.length)warnings.push(`Phase ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length>1?'those phases are':'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`);
  }
  if(s.fueledAugmenters)warnings.push(`Fuel for ${s.fueledAugmenters} augmenter${s.fueledAugmenters>1?'s':''} adds ${5*s.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`);
  {

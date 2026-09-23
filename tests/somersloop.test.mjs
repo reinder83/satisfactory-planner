@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {calculate,settings,DATA} from '../planner.mjs';
+import {calculate,settings,DATA,AMPLIFY_SLOTS} from '../planner.mjs';
 
 const base={phase:'5',recipes:'all',nuclear:'recycle',goal:'balanced'};
 const buildings=x=>(x.rows||[]).reduce((a,r)=>a+r.machines,0);
@@ -96,4 +96,54 @@ test('committing more somersloops than the save holds is reported, not silently 
  const plan=calculate({...base,somersloops:12,augmenters:1,sloopReserved:['shards','dna','biofuel']});
  assert.ok(plan.warnings.some(w=>/commits 13 somersloops/.test(w)));
  assert.ok(!calculate({...base,somersloops:20,augmenters:1}).warnings.some(w=>/commits/.test(w)));
+});
+
+const amplifiedRows=x=>(x.rows||[]).filter(r=>r.amplified);
+
+test('production amplification is off until the plan asks for it',()=>{
+ assert.equal(settings({}).amplifySloops,0);
+ const x=calculate({...base,somersloops:106}).stages[5];
+ assert.equal(amplifiedRows(x).length,0,'no somersloop machines without a budget');
+ assert.equal(x.sloopsUsed,0);
+ assert.throws(()=>settings({amplifySloops:200}),/number from 0 to 106/);
+});
+
+test('amplified machines are whole machines that double output for four times the power',()=>{
+ const x=calculate({...base,somersloops:106,amplifySloops:24}).stages[5];
+ const amp=amplifiedRows(x);
+ assert.ok(amp.length,'the plan places somersloops');
+ assert.ok(x.sloopsUsed<=24,`used ${x.sloopsUsed} of a 24 somersloop budget`);
+ assert.equal(x.sloopsUsed,amp.reduce((a,r)=>a+r.sloops,0));
+ for(const r of amp){
+  assert.ok(Math.abs(r.machines-r.equivalent)<1e-6,'a somersloop cannot go in part of a machine');
+  assert.ok(Math.abs(r.lastClock-100)<1e-3);
+  assert.ok(AMPLIFY_SLOTS[r.machine]>0,r.machine+' has no somersloop slots');
+  assert.equal(r.sloops,r.slots*r.machines);
+  const plain=DATA.recipes.find(y=>y.id===r.id.slice(4));
+  assert.ok(plain,'every amplified row comes from a real recipe');
+  assert.equal(r.power,plain.power*4);
+  for(const [n,q] of Object.entries(plain.outputs))assert.ok(Math.abs(r.outputs[n]/r.equivalent-q*2)<1e-6,n+' should double');
+  for(const [n,q] of Object.entries(plain.inputs))assert.ok(Math.abs(r.inputs[n]/r.equivalent-q)<1e-6,n+' should be unchanged');
+ }
+});
+
+test('amplification buys ore and buildings with power',()=>{
+ const off=calculate({...base,somersloops:106}).stages[5];
+ const on=calculate({...base,somersloops:106,amplifySloops:24}).stages[5];
+ const raw=x=>Object.values(x.raw).reduce((a,b)=>a+b,0);
+ const count=x=>(x.rows||[]).reduce((a,r)=>a+r.machines,0);
+ assert.ok(raw(on)<raw(off),`raw ${raw(on)} should be under ${raw(off)}`);
+ assert.ok(count(on)<count(off),`buildings ${count(on)} should be under ${count(off)}`);
+});
+
+test('machines without somersloop slots are never amplified',()=>{
+ const x=calculate({...base,recipes:'all',droneFuel:'Packaged Fuel',somersloops:106,amplifySloops:40}).stages[5];
+ for(const r of amplifiedRows(x))assert.ok(!['Packager','Coal Generator','Fuel Generator','Nuclear Power Plant'].includes(r.machine),r.machine+' cannot take a somersloop');
+ assert.ok((x.rows||[]).some(r=>r.machine==='Packager'),'the plan does package something');
+});
+
+test('a budget the solver cannot fit never costs the user a plan',()=>{
+ const x=calculate({...base,wholeMachines:true,storage:'all',storageRate:5,somersloops:106,amplifySloops:106}).stages[5];
+ assert.equal(x.feasible,true,'the plan survives even if amplification has to be dropped');
+ if(x.amplificationDropped)assert.equal(x.sloopsUsed,0);
 });

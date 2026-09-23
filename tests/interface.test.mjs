@@ -295,7 +295,7 @@ test('the wizard keeps every preference field beside the somersloop ledger',()=>
  const c=ui();
  vm.runInContext(`wizard={step:2,saveName:'W',name:'P',settings:{...structuredClone(generated.settings),somersloops:104,augmenters:1,fueledAugmenters:1,sloopReserved:['shards']},preview:null};`,c);
  const html=vm.runInContext('renderWizard()',c);
- for(const name of ['cellsPerMinute','storageRate','buildRate','somersloops','augmenters','fueledAugmenters'])assert.ok(html.includes('name="'+name+'"'),'step 2 lost the '+name+' field');
+ for(const name of ['cellsPerMinute','storageRate','buildRate','somersloops','augmenters','fueledAugmenters','amplifySloops'])assert.ok(html.includes('name="'+name+'"'),'step 2 lost the '+name+' field');
  assert.equal((html.match(/name="sloop"/g)||[]).length,3);
  assert.ok(html.includes('Committed: <b>11</b> of 104 available'),'the ledger totals what the plan commits');
  assert.ok(html.includes('5 Alien Power Matrix/min'),'the ledger derives the fuel rate from the augmenter count');
