@@ -1,32 +1,20 @@
-// Delegated DOM event handlers for saves, profiles, the wizard and the account.
-import { downloadJson, navigate, post, request, toast, writeQueue } from '../api.js';
+// Delegated DOM event handler for the profile wizard's form. The saves, profiles, backup
+// and account pages are Vue components that handle their own controls (ui/pages/).
+import { navigate, post, toast } from '../api.js';
 import { plural } from '../format.js';
-import {
-  authMode,
-  boot,
-  currentProfile,
-  currentSave,
-  loadContext,
-  setWizard,
-  setWorkspace,
-  wizard,
-  workspace,
-} from '../session.js';
-import { render } from '../shell.js';
+import { loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.js';
 import { moveExtraction } from '../wizard/extraction.js';
 import { guidedBuiltKeys, guidedFlow, moveGuided } from '../wizard/guided.js';
 import { calcProgress, moveWizard, readCarry, wizardError } from '../wizard/wizard.js';
 
-// Listeners here are registered after those in events/views.js and before backup.js
-// (see public/app.js); tests/app-modules.test.mjs pins the order.
+// Registered after the listeners in events/views.js (see public/app.js);
+// tests/ui/app-modules.test.mjs pins the order.
 
-// Submit for three forms: the profile wizard (#wizard-form), sign-in / register / account
-// setup (#auth-form, views/account.js) and the rename form on the profiles page
-// (#rename-form). Its submit button is disabled while working and re-enabled on failure;
-// on success the page is redrawn anyway.
+// Submit for the profile wizard (#wizard-form). Its submit button is disabled while working
+// and re-enabled on failure; on success the page is redrawn anyway.
 document.addEventListener('submit', async e => {
   const f = e.target;
-  if (!['wizard-form', 'auth-form', 'rename-form'].includes(f.id)) return;
+  if (f.id !== 'wizard-form') return;
   e.preventDefault();
   const b = f.querySelector('button[type="submit"]') || f.querySelector('button');
   b.disabled = true;
@@ -96,86 +84,21 @@ document.addEventListener('submit', async e => {
         );
         return;
       }
-      // --- Account ---
-      // Sign-in, register or account setup. Until accounts are enabled the form is the setup
-      // form (/api/setup); otherwise authMode picks /api/login or /api/register. boot() then
-      // reloads the workspace, which shows the planner or the sign-in screen again.
-    } else if (f.id === 'auth-form') {
-      const data = Object.fromEntries(new FormData(f));
-      data.registration = new FormData(f).has('registration');
-      const mode = workspace.accountsEnabled ? authMode : 'setup';
-      await post('/api/' + mode, data, false);
-      await boot();
-      // --- Rename (profiles page) ---
-      // #rename-form renames the open save or the open profile (its "target" select), then
-      // copies the new names into the session's currentSave and currentProfile and redraws.
-    } else {
-      setWorkspace(await post('/api/rename', Object.fromEntries(new FormData(f))));
-      const s = workspace.saves.find(s => s.id === currentSave.id);
-      currentSave.name = s.name;
-      currentProfile.name = s.profiles.find(p => p.id === currentProfile.id).name;
-      render();
     }
-    // Failure: the wizard shows the error in its form (with advice for a timed-out
-    // calculation); the others use their .form-error line, or a toast without one.
+    // Failure: the error goes in the form, with advice for a timed-out calculation.
   } catch (err) {
-    if (f.id === 'wizard-form') wizardError(f, err);
-    else {
-      const el = f.querySelector('.form-error');
-      if (el) el.textContent = err.message;
-      else toast(err.message, true);
-    }
+    wizardError(f, err);
     b.disabled = false;
-    // calcProgress rewrote the wizard button's label, so give it the right one back.
-    if (f.id === 'wizard-form')
-      b.textContent =
-        wizard.mode === 'guided' && wizard.guidedStep <= guidedFlow().length
-          ? wizard.guidedStep >= guidedFlow().length
+    // calcProgress rewrote the button's label, so give it the right one back.
+    b.textContent =
+      wizard.mode === 'guided' && wizard.guidedStep <= guidedFlow().length
+        ? wizard.guidedStep >= guidedFlow().length
+          ? 'Calculate plan'
+          : 'Continue →'
+        : wizard.step === 5
+          ? 'Create profile'
+          : wizard.step === 4
             ? 'Calculate plan'
-            : 'Continue →'
-          : wizard.step === 5
-            ? 'Create profile'
-            : wizard.step === 4
-              ? 'Calculate plan'
-              : 'Continue →';
-  }
-});
-
-// Clicks on the Backup page's "Full saves & transfer" panel and the browser edition's
-// "Keep a backup" panel. Index: export all saves, request persistent storage.
-// The "Import saves" file picker next to the export button is handled in backup.js.
-document.addEventListener('click', async e => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  // "Export all saves": wait for queued saves, download every save of this user as one
-  // full-save file, then refetch the workspace, which carries lastBackup (when a full
-  // export last ran in the browser edition). There is no redraw, so the Backup page's
-  // "Last export" line only catches up on the next render.
-  if (button.hasAttribute('data-export-saves')) {
-    button.disabled = true;
-    try {
-      await writeQueue;
-      downloadJson(await request('/api/export-saves'), 'satisfactory-full-saves.json');
-      setWorkspace(await request('/api/workspace'));
-      toast('Full save backup downloaded.');
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      button.disabled = false;
-    }
-  }
-  // "Request persistent browser storage" (browser edition): ask the browser not to evict
-  // this site's storage, and say whether it agreed. Nothing is saved.
-  if (button.hasAttribute('data-persist-storage')) {
-    try {
-      const granted = await navigator.storage?.persist?.();
-      toast(
-        granted
-          ? 'Persistent browser storage enabled.'
-          : 'Browser did not grant persistence. Keep downloaded backups.',
-      );
-    } catch (err) {
-      toast(err.message, true);
-    }
+            : 'Continue →';
   }
 });

@@ -7,8 +7,7 @@ import { beforeEach, test } from 'vitest';
 import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.js';
 import { setContext, setView, setWorkspace } from '../../public/app/session.js';
 import { render } from '../../public/app/shell.js';
-import { unmountShell } from '../../public/app/ui/mount.js';
-import { renderSignedOut } from '../../public/app/views/account.js';
+import { showSignedOut, unmountShell } from '../../public/app/ui/mount.js';
 
 // Vitest runs from the repository root.
 const handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
@@ -138,7 +137,7 @@ test('five pokes at the badge stage a transmission fault; the next remark ends i
 test('the sign-in screen replaces the frame, and the next render brings it back', async () => {
   render();
   setWorkspace({ user: null, registration: false });
-  renderSignedOut();
+  showSignedOut($('#app'));
   assert.equal($('.layout'), null);
   assert.ok($('#auth-form'), 'the sign-in form is shown');
   open();
