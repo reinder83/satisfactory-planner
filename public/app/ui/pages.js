@@ -3,12 +3,15 @@
 // with each stage of the migration (see public/AGENTS.md).
 import AccountPage from './pages/AccountPage.vue';
 import BackupPage from './pages/BackupPage.vue';
+import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
+import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
 
 // The component for `view`, or null while it is still a legacy page. A calculated
 // profile's resources page is still legacy (renderCalculatedResources).
 export function vuePage(view, calculated) {
+  if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;
   if (view === 'backup') return BackupPage;

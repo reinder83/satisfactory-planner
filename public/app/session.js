@@ -49,6 +49,9 @@ export let factoryEditing = false;
 export function setWorkspace(value) {
   workspace = value;
 }
+export function setProgressionData(value) {
+  progressionData = value;
+}
 export function setWizard(value) {
   wizard = value;
 }

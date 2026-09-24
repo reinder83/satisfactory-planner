@@ -123,9 +123,9 @@ function ui() {
 }
 test('original and calculated views render; wizard exposes all settings and safe names', () => {
   const c = ui();
-  // Profiles, account, backup and the handbook's resources page are Vue components, tested
-  // in tests/ui/pages.test.mjs.
-  for (const route of ['renderPlan', 'renderFactories', 'renderStorage'])
+  // Profiles, account, backup, both plan pages and the handbook's resources page are Vue
+  // components, tested in tests/ui/.
+  for (const route of ['renderFactories', 'renderStorage'])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
@@ -137,16 +137,9 @@ test('original and calculated views render; wizard exposes all settings and safe
     assert.ok(!text.includes('value="World <one>"'));
   }
   assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-  for (const route of [
-    'renderCalculatedPlan',
-    'renderCalculatedFactories',
-    'renderCalculatedResources',
-    'renderStorage',
-  ])
+  for (const route of ['renderCalculatedFactories', 'renderCalculatedResources', 'renderStorage'])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
   assert.ok(!vm.runInContext('renderStorage()', c).includes('<b>Ground floor is built.</b>'));
-  vm.runInContext(`state.settings.phase='1'`, c);
-  assert.ok(vm.runInContext('renderCalculatedPlan()', c).includes('Phase 1'));
 });
 
 // Markup that was escaped as text: a tag shown on the page, or an entity escaped twice.
@@ -162,13 +155,12 @@ test('every page escapes user text exactly once', () => {
     c,
   );
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
-  // The pages that are Vue components are covered by tests/ui/pages.test.mjs.
+  // The pages that are Vue components are covered by tests/ui/.
   const shared = ['renderStorage'];
-  const original = render([...shared, 'renderPlan', 'renderFactories']);
+  const original = render([...shared, 'renderFactories']);
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
   const calculatedPages = render([
     ...shared,
-    'renderCalculatedPlan',
     'renderCalculatedFactories',
     'renderCalculatedResources',
   ]);
@@ -187,30 +179,20 @@ test('every page escapes user text exactly once', () => {
   );
   const dialog = open => vm.runInContext(`${open};document.querySelector('#detail').innerHTML`, c);
   const editing = [
-    ...render(['renderPlan', 'renderFactories', 'renderStorage']).map(([r, p]) => [
-      r + ' editing',
-      p,
-    ]),
-    ['task edit form', vm.runInContext(`editingTask='custom-1';renderPlan()`, c)],
+    ...render(['renderFactories', 'renderStorage']).map(([r, p]) => [r + ' editing', p]),
     ['factory dialog', dialog(`openFactory('computer')`)],
     ['oil campus dialog', dialog(`openFactory('plastic')`)],
     ['group chain dialog', dialog(`openGroupChain('fg-a')`)],
     ['container dialog', dialog(`openSlot('S01')`)],
   ];
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};editingTask=null;`,
-    c,
-  );
+  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
   editing.push(
     [
       'calculated factory dialog',
       dialog(`openCalculatedFactory(generated.stages['3'].rows[0].id)`),
     ],
     ['alternate recipe dialog', dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`)],
-    ...render(['renderCalculatedPlan', 'renderCalculatedFactories']).map(([r, p]) => [
-      r + ' editing',
-      p,
-    ]),
+    ...render(['renderCalculatedFactories']).map(([r, p]) => [r + ' editing', p]),
   );
   const all = [...original, ...calculatedPages, ...wizardPages, ...editing];
   for (const [route, page] of all) {
@@ -222,20 +204,14 @@ test('every page escapes user text exactly once', () => {
   const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
   for (const [route, page] of all.filter(([r]) =>
     [
-      'renderCalculatedPlan',
       'renderWizard 1',
       'renderWizard guided',
-      'task edit form',
       'factory dialog',
       'container dialog',
       'group chain dialog',
     ].includes(r),
   ))
     assert.ok(page.includes(escaped), route);
-  // A note keeps its text, and the textarea gains no leading space from the formatting.
-  assert.ok(
-    original.find(([r]) => r === 'renderPlan')[1].includes('aria-label="Phase notes">' + escaped),
-  );
 });
 
 test('storage layout edits render custom floors, bays and assignments; missing edits render the handbook', () => {
@@ -400,7 +376,8 @@ test('shared sites group their outputs above the individual factory list', () =>
   assert.ok(!filtered.includes('No factories match'), 'no empty state while a group still matches');
   vm.runInContext(`query='';state.settings.phase='3'`, c);
 });
-test('plan and factory edit modes render controls, groups, splits and factory links', () => {
+// The build plan's edit mode is tested with its components in tests/ui/plan.test.mjs.
+test('factory edit mode renders controls, groups and splits', () => {
   const c = ui();
   vm.runInContext(
     `state.factoryGroups={groups:[{id:'fg-cable01',name:'Cable factory'},{id:'fg-plates1',name:'Stitched plates'}],assignments:{wire:[{group:'fg-cable01',rate:300},{group:'fg-plates1',rate:null}]}};`,
@@ -416,35 +393,9 @@ test('plan and factory edit modes render controls, groups, splits and factory li
   assert.match(editing, /data-group-rename="fg-cable01"/);
   assert.match(editing, /data-assign-rate="wire"/);
   assert.match(editing, /data-unassign="wire"/);
-  vm.runInContext('factoryEditing=false', c);
   vm.runInContext(
-    `state.taskEdits={order:{},removed:['phase-3-survey'],titles:{'phase-3-iron':'Iron halls renamed'},bodies:{},links:{'phase-3-retire-power':'wire'}};`,
+    `factoryEditing=false;state.factoryGroups=undefined;calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
     c,
-  );
-  const planHtml = vm.runInContext('renderPlan()', c);
-  assert.ok(!planHtml.includes('Survey the iron site'), 'removed steps disappear from the plan');
-  assert.match(planHtml, /Iron halls renamed/);
-  assert.match(planHtml, /Open factory: Wire/, 'linked steps offer the factory');
-  const editPlan = vm.runInContext('planEditing=true;renderPlan()', c);
-  assert.match(editPlan, /data-move-task=/);
-  assert.match(editPlan, /Removed steps in this phase \(1\)/);
-  assert.match(editPlan, /data-restore-task="phase-3-survey"/);
-  assert.match(
-    vm.runInContext(`editingTask='phase-3-iron';renderPlan()`, c),
-    /data-task-edit="phase-3-iron"/,
-  );
-  vm.runInContext(
-    `planEditing=false;editingTask=null;state.taskEdits=undefined;state.factoryGroups=undefined;`,
-    c,
-  );
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  assert.match(
-    vm.runInContext('renderCalculatedPlan()', c),
-    /Open factory: /,
-    'calculated steps link to their production line',
   );
   vm.runInContext(
     `state.factoryGroups={groups:[{id:'fg-north1',name:'North site'}],assignments:{'iron-ingot':[{group:'fg-north1',rate:null}]}};`,
@@ -455,103 +406,6 @@ test('plan and factory edit modes render controls, groups, splits and factory li
   assert.match(calcGroups, /data-assign-add=/);
   vm.runInContext(
     `factoryEditing=false;calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,
-    c,
-  );
-});
-
-test('the build plan checklist can be searched and can hide completed steps', () => {
-  const c = ui();
-  const all = vm.runInContext('renderPlan()', c);
-  assert.match(all, /id="plan-search"/, 'the plan offers a step search');
-  assert.match(all, /id="hide-done"/, 'the plan offers a hide-completed toggle');
-  assert.match(all, /Survey the iron site/);
-  const searched = vm.runInContext(`query='steel';renderPlan()`, c);
-  assert.match(searched, /data-check="phase-3-steel"/);
-  assert.ok(!searched.includes('data-check="phase-3-survey"'), 'search hides non-matching steps');
-  assert.match(searched, /1 of 9 steps/, 'the toolbar counts the filtered steps');
-  assert.match(
-    vm.runInContext(`query='no-such-step';renderPlan()`, c),
-    /No steps match this search\./,
-  );
-  const hidden = vm.runInContext(
-    `query='';state.checks={'phase-3-survey':true};hideDone=true;renderPlan()`,
-    c,
-  );
-  assert.ok(!hidden.includes('data-check="phase-3-survey"'), 'completed steps are hidden');
-  assert.match(hidden, /data-check="phase-3-iron"/, 'unfinished steps stay visible');
-  assert.match(hidden, /8 of 9 steps/);
-  assert.match(
-    hidden,
-    /1 <span class="fraction">\/ 9<\/span>/,
-    'progress stats keep counting every step',
-  );
-  const done = vm.runInContext(
-    `state.checks=Object.fromEntries(planTasks().map(t=>[t.id,true]));renderPlan()`,
-    c,
-  );
-  assert.match(
-    done,
-    /Every step of this phase is completed/,
-    'an all-hidden checklist explains the toggle',
-  );
-  vm.runInContext(
-    `state.checks={'calc-3-x':true};calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  const calc = vm.runInContext('renderCalculatedPlan()', c);
-  assert.match(calc, /id="plan-search"/, 'the calculated plan gets the same tools');
-  assert.match(calc, /id="hide-done" checked/, 'the toggle stays ticked across plan views');
-  vm.runInContext(
-    `hideDone=false;query='';state.checks={};calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,
-    c,
-  );
-});
-
-test('every build-plan step carries an icon for the kind of work it is', () => {
-  const c = ui();
-  const handbook = vm.runInContext('renderPlan()', c);
-  assert.equal(
-    (handbook.match(/class="task-icon"/g) || []).length,
-    9,
-    'each handbook step of this phase is labelled',
-  );
-  assert.match(
-    handbook,
-    /data-kind="survey"[^]*?Survey the iron site/,
-    'a verification step reads as an inspection',
-  );
-  assert.match(handbook, /data-kind="retire"[^]*?Retire the temporary power plants/);
-  assert.match(handbook, /data-kind="delivery"[^]*?Deliver Phase 3/);
-  assert.match(handbook, /data-kind="build"[^]*?Concrete, copper/);
-  vm.runInContext(`state.taskEdits={links:{'phase-3-steel':'wire'}};`, c);
-  assert.match(
-    vm.runInContext('renderPlan()', c),
-    /data-kind="item" aria-hidden="true"><img class="item-icon" src="[^"]*icons\/wire[.]png"[^]*?Steel and structural/,
-    'a step linked to a factory shows the part it makes',
-  );
-  vm.runInContext(
-    `state.taskEdits=undefined;calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};state.settings.phase='1';`,
-    c,
-  );
-  const calc = vm.runInContext('renderCalculatedPlan()', c);
-  assert.match(calc, /data-kind="milestone"[^]*?Tier /, 'HUB milestones read as unlocks');
-  assert.match(calc, /data-kind="biomass"[^]*?Turn leaves and wood into Biomass/);
-  assert.match(calc, /data-kind="power"[^]*?Power available now/);
-  assert.match(calc, /data-kind="storage"[^]*?Connect protected storage/);
-  assert.match(
-    calc,
-    /data-kind="item" aria-hidden="true"><img class="item-icon" src="[^"]*icons\/iron-ingot[.]png"/,
-    'a calculated production step shows its own part',
-  );
-  assert.ok(
-    !calc.includes('data-kind="undefined"') &&
-      !calc.includes(
-        '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></span>',
-      ),
-    'every glyph resolves',
-  );
-  vm.runInContext(
-    `state.settings.phase='3';calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,
     c,
   );
 });

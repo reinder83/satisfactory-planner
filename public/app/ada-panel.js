@@ -92,7 +92,7 @@ function adaFacts() {
         initial: 0,
       }))
     : plan.deliveries.filter(d => d.phase === phase());
-  // Same default as views/plan.js: the original handbook starts from its recorded amounts.
+  // Same default as ui/plan/DeliveryCounter.vue: the original handbook starts from its recorded amounts.
   const delivered = d =>
     state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;

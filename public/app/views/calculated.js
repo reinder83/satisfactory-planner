@@ -1,17 +1,15 @@
-// Views for a calculated profile: plan, factories and resources (#plan, #factories and
-// #resources when `calculated` is set; render() in shell.js picks these over the handbook
-// views). Everything reads the profile's frozen calculation snapshot through calcStage();
+// Views for a calculated profile: factories and resources (#factories and #resources
+// when `calculated` is set; render() in shell.js picks these over the handbook views), and
+// the checklist steps of its plan page (ui/pages/CalculatedPlanPage.vue). Everything reads the profile's frozen calculation snapshot through calcStage();
 // nothing here recalculates. storage.js and backup.js serve both profile kinds themselves.
 import { progression } from '../../progression.js';
 import { dialog } from '../factory-detail.js';
 import { calcFlowModel, flowHtml, laneAdviceHtml } from '../flow.js';
-import { itemIcon, num, slug, stat } from '../format.js';
+import { itemIcon, num, stat } from '../format.js';
 import { html, raw } from '../html.js';
 import {
   calcStage,
   calculated,
-  checked,
-  currentProfile,
   doneAttr,
   factoryEditing,
   fromStart,
@@ -24,7 +22,6 @@ import {
   workspace,
 } from '../session.js';
 import { header } from '../shell.js';
-import { checklistHtml, planEditToolbar, planTasks, removedStepsHtml } from '../tasks.js';
 import {
   allocationHtml,
   assignEditor,
@@ -33,19 +30,8 @@ import {
   groupSections,
   membershipsOf,
 } from './factories.js';
-import { deliveryHtml } from './plan.js';
 import { inputText } from './storage.js';
 import { power } from '../wizard/fields.js';
-
-// The delivery record behind a calculated profile's `data-delivery` input, rebuilt from its
-// id `<stage>-<item slug>` so the change handler in events/views.js can check the target.
-// null when the current stage has no such delivery.
-export function calculatedDelivery(id) {
-  const d = Object.entries(calcStage().delivery || {}).find(
-    ([n]) => id === stage() + '-' + slug(n),
-  );
-  return d ? { id, name: d[0], ...d[1], initial: 0 } : null;
-}
 
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.js adds those). Order: startup, power and milestone steps
@@ -94,9 +80,9 @@ export function calcTasks() {
 }
 
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
-// Returns an HTML "Options" list for an infeasible phase `x` under settings `s`, or ''.
-// Also used by the wizard's Review step (wizard/wizard.js).
-export function draftOptions(x, s) {
+// The options for an infeasible phase `x` under settings `s`, as sentences (none for an
+// older snapshot). ui/plan/CalcWarnings.vue lists them too.
+export function draftFixes(x, s) {
   const fixes = [];
   if (x.shortfalls?.length)
     fixes.push(
@@ -124,6 +110,13 @@ export function draftOptions(x, s) {
     fixes.push(
       'Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.',
     );
+  return fixes;
+}
+
+// HTML "Options" list of draftFixes, or ''. Also used by the wizard's Review step
+// (wizard/wizard.js).
+export function draftOptions(x, s) {
+  const fixes = draftFixes(x, s);
   return fixes.length
     ? html`<p><b>Options</b></p>
         <ul>
@@ -133,7 +126,8 @@ export function draftOptions(x, s) {
 }
 
 // HTML notices for the current phase: the infeasible-draft warning with its options, and
-// extra power headroom for whole buildings. Shown on all three calculated pages.
+// extra power headroom for whole buildings. Shown on the calculated factories and resources
+// pages; ui/plan/CalcWarnings.vue shows them on the plan.
 function calcWarnings() {
   const x = calcStage();
   const options = x.feasible ? '' : draftOptions(x, calculated?.settings);
@@ -151,77 +145,6 @@ function calcWarnings() {
     Allow another ${power(x.additionalHeadroomMW)} for whole-building power headroom. Phase 1 needs
     biomass or existing generation.
   </div>`}`;
-}
-
-// HTML for #plan on a calculated profile: warnings, summary tiles, the checklist (planTasks,
-// i.e. calcTasks with edits) with phase notes (`phase-<phase>`), and a side column with the
-// elevator delivery counters and the profile's calculation warnings.
-export function renderCalculatedPlan() {
-  const x = calcStage(),
-    ts = planTasks(),
-    done = ts.filter(t => checked(t.id)).length;
-  return String(
-    html`${header('CALCULATED BUILD SEQUENCE', phaseLabel(phase()), currentProfile.name)}
-      ${calcWarnings()}
-      <div class="stats">
-        ${stat('Progress', done + '/' + ts.length, 'Checklist steps')}
-        ${stat('Delivery time', num(x.hours) + ' h', 'At steady state; excludes construction')}
-        ${stat(
-          'Buildings',
-          num(x.rows?.reduce((a, r) => a + r.machines, 0)),
-          'Includes new power generation',
-        )}
-        ${stat('New power', power(x.generationMW), 'Existing spare power is separate')}
-      </div>
-      ${phase() === 'post' &&
-      html`<div class="notice blue">
-        Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
-        elevator exports as needed and sink spare parts.
-      </div>`}
-      <div class="split">
-        <section>
-          <div class="section-head">
-            <h2>Build sequence</h2>
-            ${planEditToolbar()}
-          </div>
-          <p class="small muted">
-            Start with construction stock and currently available power. Mark HUB, MAM and recipe
-            unlocks as you complete them; these carry across phases. Milestone cost guidance updates
-            from factories marked running. Full-phase factory targets follow the startup and unlock
-            steps.
-          </p>
-          ${checklistHtml(ts)}${removedStepsHtml()}
-          <form id="add-task" class="inline-form">
-            <input
-              name="title"
-              maxlength="240"
-              required
-              placeholder="Add a task…"
-              aria-label="Personal task"
-            /><button class="btn">Add task</button>
-          </form>
-          <h2>Phase notes</h2>
-          <textarea id="phase-note" class="notes" maxlength="6000">
-${state.notes['phase-' + phase()] || ''}</textarea
-          >
-          <button class="btn" data-save-note="phase-${phase()}" data-input="phase-note">
-            Save notes
-          </button>
-        </section>
-        <aside>
-          <section class="panel">
-            <h2>Elevator delivery</h2>
-            ${Object.entries(x.delivery || {}).map(([n, d]) =>
-              deliveryHtml({ id: stage() + '-' + slug(n), name: n, ...d, initial: 0 }),
-            )}
-          </section>
-          <section class="panel">
-            <h2>Profile assumptions</h2>
-            ${calculated.warnings.map(w => html`<p class="small">${w}</p>`)}
-          </section>
-        </aside>
-      </div>`,
-  );
 }
 
 // HTML card for one calculated production row. Its Running box writes `calc-<stage>-<row id>`,
