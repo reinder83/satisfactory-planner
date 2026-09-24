@@ -23,11 +23,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+          cache: npm
+      - run: npm ci
       - run: npm run check
       - run: npm test
       - name: Test browser edition and save transfers
         run: |
-          node build-browser.mjs
+          npm run build
           npm install --no-save --package-lock=false playwright@1.56.1
           npx playwright install --with-deps chromium
           node browser-check.mjs
@@ -40,6 +42,11 @@ jobs:
             sleep 1
           done
           curl --fail http://127.0.0.1:18080/
+          # The image serves the bundled, minified frontend, not the module sources: no imports
+          # of ./app/ modules and no line comments left (template strings keep their newlines,
+          # so the line count is not a usable signal).
+          curl --fail --silent http://127.0.0.1:18080/app.js | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(s.includes('./app/')||/^\s*\/\/ /m.test(s))process.exit(1)})"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/app/session.js)" = 404
           curl --fail -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"type":"check","key":"docker-smoke","value":true}' http://127.0.0.1:18080/api/update
           docker restart planner-smoke
           for i in $(seq 1 30); do
@@ -91,7 +98,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - run: node build-browser.mjs
+          cache: npm
+      - run: npm ci
+      - run: npm run build -- pages
       - name: Publish static website to public deployment repository
         env:
           DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}

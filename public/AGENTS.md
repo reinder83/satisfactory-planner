@@ -32,7 +32,7 @@ Use the current vanilla HTML/CSS/JS structure unless the requested scope warrant
 
 An update must never break existing progress. A redesign that changes saved structures or task identifiers must implement and test the migration requirements in `../AGENTS.md` before release. Keeping old records in storage is insufficient if users can no longer see or use them. Preserve access to original plans and completion history, including where new steps cannot be mapped automatically.
 
-`app.js` uses hash routes (`#plan`, `#factories`, `#storage`, `#resources`, `#backup`, `#profiles`, `#wizard`, `#account`) and delegated events. Preserve working deep links. Keep `data-*` action hooks and form field names compatible or update all handlers and tests together. Checklist IDs and saved data keys are not visual implementation details: keep them stable.
+The UI (`app.js` and the modules in `app/`) uses hash routes (`#plan`, `#factories`, `#storage`, `#resources`, `#backup`, `#profiles`, `#wizard`, `#account`) and delegated events. Preserve working deep links. Keep `data-*` action hooks and form field names compatible or update all handlers and tests together. Checklist IDs and saved data keys are not visual implementation details: keep them stable.
 
 Use the shared request path and browser API adapter. Do not bypass them with localStorage, cookies, new server calls or hardcoded profile state. Keep calculation in the browser worker for the public version, and preserve transactional saves and explicit profile scope across tabs.
 

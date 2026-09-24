@@ -1,0 +1,70 @@
+// Alternate recipe picker, shown on wizard step 2 when Recipe access is "Pick
+// specific alternate recipes". Its buttons (Planner's choice, Select/Clear all,
+// the filter, the stars, "recipe ↗") are handled in events/views.js.
+import { dialog } from '../factory-detail.js';
+import { recipePanelHtml } from '../flow.js';
+import { esc } from '../format.js';
+import { workspace } from '../session.js';
+
+// HTML for the picker. Ticked boxes (name="alt") become s.alternateRecipes and
+// ticked stars (name="altpref") s.preferredRecipes, read back by readWizard. A
+// recipe your power or ingot preference already requires shows as a locked,
+// ticked box with no name, so it is never read back as a pick.
+export function altPickerHtml(s) {
+  const picked = new Set(s.alternateRecipes || []);
+  const list = workspace.catalog.alternates || [];
+  return `<div class="alt-picker"><div class="alt-picker-head"><b>Alternate recipes · ${picked.size} selected</b><span class="alt-tools"><button type="button" class="btn quiet" data-alt-best title="Recalculates with every alternate allowed and ticks only the recipes the optimal plan uses">Planner’s choice</button><button type="button" class="btn quiet" data-alt-all>Select all</button><button type="button" class="btn quiet" data-alt-none>Clear all</button></span><input id="alt-filter" type="search" placeholder="Filter by recipe or product…" aria-label="Filter alternate recipes"></div><p class="small muted">Only the recipes you tick are allowed in the plan. Hard-drive alternates are unlocked from crash sites; Turbofuel and Compacted Coal are researched in the MAM instead. Recipes your other choices depend on are selected automatically: a turbofuel-based power route locks its MAM recipes, and requiring pure ingots locks the pure recipes. Raw-resource conversion recipes are not alternates — they follow the SAM conversion setting and Tier 9 unlocks. Selecting none plans with standard recipes only. <b>Planner’s choice</b> recalculates with every alternate allowed and ticks only the recipes the optimal plan actually uses — each ticked recipe costs one hard drive. Select all and Clear all apply to the rows currently shown by the filter.</p><p class="alt-force-hint"><span class="alt-force-star">★</span><span><b>Force a recipe:</b> tick it, then click its star. The plan will use <b>no other recipe</b> for that product once the starred one is available.</span></p><div class="alt-list">${list
+    .map(a => {
+      const outs = Object.keys(a.outputs);
+      const why =
+        a.mam && !['auto', 'coal', 'fuel'].includes(s.mainPower || 'auto')
+          ? 'power preference'
+          : a.pure && s.pureIngots === true
+            ? 'ingot preference'
+            : '';
+      const pref = new Set(s.preferredRecipes || []);
+      return `<div class="alt-row" data-alt-text="${esc((a.name + ' ' + outs.join(' ')).toLowerCase())}"><label class="check-row">${why ? `<input type="checkbox" checked disabled aria-label="${esc(a.name)} is required by your ${why}">` : `<input type="checkbox" name="alt" value="${esc(a.id)}" ${picked.has(a.id) ? 'checked' : ''}>`}<span>${esc(a.name)}<small class="muted"> · ${esc(outs.join(', '))} · ${a.mam ? 'MAM research' : 'Phase ' + a.phase}${why ? ' · required by your ' + why : ''}</small></span></label>${why ? '' : `<label class="alt-pref" title="Force this recipe: the plan will not use any other recipe for ${esc(outs[0])} once this one is available"><input type="checkbox" name="altpref" value="${esc(a.id)}" ${pref.has(a.id) ? 'checked' : ''} ${picked.has(a.id) ? '' : 'disabled'} aria-label="Force ${esc(a.name)} as the only ${esc(outs[0])} recipe"><span>★</span></label>`}<button type="button" class="btn quiet alt-info" data-alt-info="${esc(a.id)}" aria-label="Show the ${esc(a.name)} recipe">recipe ↗</button></div>`;
+    })
+    .join('')}</div></div>`;
+}
+
+// The alternate ids a calculated plan actually uses, sorted. "Planner's choice"
+// (events/views.js) calculates with every alternate allowed and ticks these.
+// MAM recipes (Turbofuel, Compacted Coal) appear in plans with alternate:false, so match catalog ids too.
+export const alternatesUsed = plan => {
+  const altIds = new Set((workspace?.catalog?.alternates || []).map(a => a.id));
+  return [
+    ...new Set(
+      Object.values(plan?.stages || {}).flatMap(st =>
+        (st.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
+      ),
+    ),
+  ].sort();
+};
+
+// "recipe ↗": a dialog with the alternate beside the standard recipe(s) for its
+// first output, so the two can be compared.
+export function openAltRecipe(id) {
+  const a = (workspace.catalog.alternates || []).find(x => x.id === id);
+  if (!a) return;
+  const primary = Object.keys(a.outputs)[0];
+  const standards = (workspace.catalog.standardRecipes || []).filter(r => r.outputs[primary]);
+  const panel = rc =>
+    recipePanelHtml({
+      machineCount: 1,
+      recipe: {
+        name: rc.name.replace('Alternate: ', ''),
+        machine: rc.machine,
+        ins: Object.entries(rc.inputs || {}),
+        outs: Object.entries(rc.outputs || {}),
+      },
+    });
+  dialog(
+    a.name,
+    a.mam
+      ? `MAM research · unlocked in the MAM, not from hard drives · ${esc(a.machine)}`
+      : `Alternate recipe · available from Phase ${a.phase} · ${esc(a.machine)}`,
+    `${panel(a)}${standards.length ? `<h3>Standard ${standards.length > 1 ? 'recipes' : 'recipe'} for ${esc(primary)}</h3>${standards.map(panel).join('')}` : `<p class="small muted">No standard recipe produces ${esc(primary)}.</p>`}<p class="small muted">Rates are per machine at 100%, per minute. Alternates are unlocked with hard drives in game; ticking a recipe is a planning allowance, not an in-game unlock.</p>`,
+    primary,
+  );
+}

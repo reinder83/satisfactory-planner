@@ -1,0 +1,12 @@
+# Generated, vendored or data files: kept byte-for-byte.
+dist/
+node_modules/
+vendor/
+public/icons/
+public/*.json
+recipes.json
+package-lock.json
+# Prose and CI config are edited by hand.
+*.md
+*.yml
+*.yaml

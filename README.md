@@ -186,13 +186,19 @@ The preserved original handbook retains its previous assumptions and corrected r
 
 ## Development
 
-Node.js 22 or newer is sufficient; no package installation is required. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
+Node.js 22 or newer is sufficient. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
+
+The source is plain, readable ES modules; `npm start` serves `public/` as it is, so development needs no build step and `npm test` needs no installed packages. The two dev dependencies are Prettier (formatting) and esbuild (the release build):
 
 ```sh
-npm run check
+npm ci            # installs Prettier and esbuild
+npm run check     # formatting; `npm run format` fixes it
 npm test
 npm start
+npm run build     # minified editions in dist/web (Docker) and dist/satisfactory-planner (Pages)
 ```
+
+The frontend lives in `public/`: `app.js` is the entry point and `public/app/` holds the UI modules (one per view under `views/`, the profile wizard under `wizard/`, delegated event handlers under `events/`). The release build bundles `public/app/` into a single minified `app.js` and minifies the other scripts and the stylesheet file by file. The Docker image runs that build in its first stage and serves `dist/web`; the Pages workflow publishes `dist/satisfactory-planner`. The server-side modules in the image (`server.mjs`, `planner.mjs`, …) are not minified.
 
 Tests cover migration, durable progress, concurrent updates, backup restore, corrupted saves, save/profile isolation, account ownership, authentication, calculator constraints and interface rendering. GitHub Actions additionally builds and restarts a real Docker container before publishing. Pushes to `main` publish `latest` and a commit tag; `v*` tags publish version tags. No additional registry secrets are required.
 
@@ -221,6 +227,6 @@ Browser data is specific to the browser, device and site address. Clearing site 
 
 To move an existing Docker plan, update the Docker image, open **Backups → Export all saves**, then import that file on the public site. The transfer includes original handbooks, calculated profiles and progress, but excludes accounts, passwords and sessions. The same full export can be imported into Docker. There is no automatic synchronization between installations.
 
-`node build-browser.mjs` creates an allowlisted static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it. `node browser-check.mjs` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; install Playwright and Chromium first.
+`npm run build -- pages` creates an allowlisted, minified static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it. `node browser-check.mjs` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; install Playwright and Chromium first.
 
 Pushes to private-source `main` run server, browser and Docker checks, publish the Docker image, and push only the built website to the public `reinder83.github.io` deployment repository. Its Pages workflow publishes the site. `PAGES_DEPLOY_KEY` is a write deploy key limited to that public repository. Source-side pull requests run checks without deploying. Saved user data is never included in the static build.
