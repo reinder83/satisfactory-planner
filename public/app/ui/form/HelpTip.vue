@@ -1,5 +1,4 @@
-<!-- The ⓘ tooltip for a setting (help() in wizard/fields.js for the legacy screens), or
-     nothing when preferences.js has no help text for `name`. It opens on hover and on
+<!-- The ⓘ tooltip for a setting, or nothing when preferences.js has no help text for `name`. It opens on hover and on
      keyboard focus, and the tooltip text doubles as its accessible name. -->
 <script setup>
 import { computed } from 'vue';

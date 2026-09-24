@@ -1,36 +1,12 @@
 // Detail dialogs in the shared #detail <dialog>. The factory dialogs (handbook and calculated),
 // a factory group's build order and the storage container are components in ui/detail/, opened
-// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.js).
-// dialog() fills #detail with HTML for the one dialog that is not a component yet: the
-// wizard's alternate recipe (wizard/recipes.js).
-import { $, itemIcon, num } from './format.js';
+// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.js), as
+// is the wizard's alternate recipe (openAltRecipe in wizard/recipes.js).
+import { num } from './format.js';
 import { FLUIDS } from './flow.js';
-import { html } from './html.js';
 import { calcStage, calculated, plan, setActiveDetail, stage } from './session.js';
-import { showDetail, unmountDetail } from './ui/detail.js';
+import { showDetail } from './ui/detail.js';
 import { factoryGroupsState, membershipsOf } from './views/factories.js';
-
-// Fills the shared #detail <dialog> and opens it if it is not open yet, so following a link
-// inside a dialog replaces its contents in place. Plain-string arguments are escaped: pass
-// html`` for markup in `subtitle` or `body`. `icon` is an item name for the header icon.
-export function dialog(title, subtitle, body, icon = '') {
-  const d = $('#detail');
-  unmountDetail();
-  d.innerHTML = String(
-    html`<header class="dialog-head">
-        <div class="dialog-title">
-          ${icon && html`<span class="dialog-icon">${itemIcon(icon)}</span>`}
-          <div>
-            <div class="eyebrow">${subtitle}</div>
-            <h2>${title}</h2>
-          </div>
-        </div>
-        <button class="close" aria-label="Close details" data-close>×</button>
-      </header>
-      <div class="dialog-body">${body}</div>`,
-  );
-  if (!d.open) d.showModal();
-}
 
 // The dialog for one handbook factory (ui/detail/FactoryDialog.vue); nothing for an unknown id.
 export function openFactory(id) {

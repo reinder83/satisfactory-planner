@@ -15,8 +15,6 @@ import {
 } from '../../public/preferences.js';
 import { setWizard, wizard } from '../../public/app/session.js';
 import { render } from '../../public/app/shell.js';
-import { vuePage } from '../../public/app/ui/pages.js';
-import SurveyPage from '../../public/app/ui/pages/SurveyPage.vue';
 import { $, $$, catalog, generated, go, open, page } from './setup.mjs';
 
 const text = s => $(s).textContent.replace(/\s+/g, ' ');
@@ -75,13 +73,6 @@ const change = async (selector, value) => {
   el.dispatchEvent(new Event('change', { bubbles: true }));
   await nextTick();
 };
-
-test('only the survey is a component; the rest of the wizard is still legacy', () => {
-  assert.equal(vuePage('wizard', null, { mode: 'extraction' }), SurveyPage);
-  assert.equal(vuePage('wizard', null, { mode: 'advanced' }), null);
-  assert.equal(vuePage('wizard', null, { mode: 'guided' }), null);
-  assert.equal(vuePage('wizard', null, null), null);
-});
 
 test('the survey has four screens as tabs and links to the map', async () => {
   survey(1);

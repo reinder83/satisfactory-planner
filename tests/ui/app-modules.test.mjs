@@ -34,16 +34,11 @@ test('the app entry point loads as ES modules and registers its listeners in ord
   assert.deepEqual(registered, [
     'document click',
     'document change',
-    'document input',
-    'document input',
-    'document keydown',
-    'document focusout',
     'document error',
     'window hashchange',
     '#detail click',
     'window beforeunload',
     'document click',
-    'document submit',
     'rendered',
   ]);
 });

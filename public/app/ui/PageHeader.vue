@@ -1,4 +1,4 @@
-<!-- The heading row at the top of every page (header() in shell.js for the legacy pages). -->
+<!-- The heading row at the top of every page. -->
 <script setup>
 defineProps({
   eyebrow: { type: String, required: true },

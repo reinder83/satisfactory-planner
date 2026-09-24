@@ -70,14 +70,11 @@ function ui() {
     querySelector: () => null,
     querySelectorAll: () => [],
   };
-  const clickHandlers = [];
   const c = vm.createContext({
     document: {
       querySelector: () => node,
       querySelectorAll: () => [],
-      addEventListener(type, fn) {
-        if (type === 'click') clickHandlers.push(fn);
-      },
+      addEventListener() {},
       activeElement: null,
     },
     window: { addEventListener() {}, scrollTo() {} },
@@ -153,61 +150,19 @@ function ui() {
     fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   );
   c.generated = calculate({});
-  c.clickHandlers = clickHandlers;
   vm.runInContext(
     `plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World'};currentProfile={id:'p',kind:'calculated',name:'Balanced'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=generated;`,
     c,
   );
   return c;
 }
-// Press a delegated button the way a browser would: the app's own listener,
-// reached through e.target.closest('button').
-async function clickButton(c, attr, data = {}) {
-  const el = {
-    tagName: 'BUTTON',
-    dataset: data,
-    hasAttribute: n => n === attr || n in data,
-    getAttribute: n => data[n] ?? null,
-    closest: s => (s === 'button' ? el : null),
-    disabled: false,
-  };
-  assert.ok(c.clickHandlers.length, 'the app registered a click listener');
-  for (const fn of c.clickHandlers)
-    await fn({ target: el, preventDefault() {}, stopPropagation() {} });
-}
-
 const guided = (c, extra = '') =>
   vm.runInContext(
     `wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};${extra}`,
     c,
   );
 
-test('the guided start asks a short sequence and every screen offers All settings', () => {
-  const c = ui();
-  guided(c);
-  const total = vm.runInContext('guidedFlow().length', c);
-  assert.ok(total >= 5 && total <= 7, 'a handful of questions, not a form: ' + total);
-  // Counted for the record: what the guided start replaces.
-  assert.ok(guidedQuestions.length < 10);
-  for (let step = 1; step <= total; step++) {
-    const html = vm.runInContext(`wizard.guidedStep=${step};renderWizard()`, c);
-    assert.ok(html.includes('wizard-form'), 'step ' + step + ' renders the shared form');
-    assert.ok(
-      html.includes('guided-card') || html.includes('supply-list'),
-      'step ' + step + ' renders cards, or the rate rows for the one question that is not a choice',
-    );
-    assert.match(html, /data-guided-advanced="[1-4]"/, 'step ' + step + ' offers All settings');
-    assert.ok(html.includes('guided-progress'), 'step ' + step + ' shows where you are');
-  }
-  // The escape hatch points at the advanced step that owns the same settings.
-  vm.runInContext('wizard.guidedStep=1', c);
-  assert.match(vm.runInContext('renderWizard()', c), /data-guided-advanced="1"/);
-  const goalStep = vm.runInContext(`guidedFlow().findIndex(q=>q.id==='goal')+1`, c);
-  assert.match(
-    vm.runInContext(`wizard.guidedStep=${goalStep};renderWizard()`, c),
-    /data-guided-advanced="3"/,
-  );
-});
+// The wizard and guided screens themselves: tests/ui/wizard.test.mjs.
 
 test('guided answers write the same settings object the wizard writes', () => {
   const c = ui();
@@ -261,39 +216,9 @@ test('switching to All settings keeps every guided answer and can switch back', 
   assert.equal(vm.runInContext('wizard.step', c), 3, 'lands on the step that owns the question');
   assert.equal(vm.runInContext('wizard.settings.goal', c), 'minimal', 'answers survive the switch');
   assert.equal(vm.runInContext('wizard.settings.phase', c), '5');
-  const advanced = vm.runInContext('renderWizard()', c);
-  assert.ok(advanced.includes('wizard-progress'), 'the five-step wizard is intact');
-  assert.ok(advanced.includes('data-guided-start'), 'and offers the way back');
   vm.runInContext('toGuided()', c);
   assert.equal(vm.runInContext('wizard.mode', c), 'guided');
   assert.equal(vm.runInContext('wizard.settings.goal', c), 'minimal');
-});
-
-test('the advanced wizard is unchanged when nothing asks for the guided start', () => {
-  const c = ui();
-  // A wizard object without a mode is what earlier releases and the existing
-  // tests build; it must still render the five-step form.
-  vm.runInContext(
-    `wizard={step:1,saveName:'World',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
-    c,
-  );
-  for (let step = 1; step <= 5; step++) {
-    const html = vm.runInContext(`wizard.step=${step};renderWizard()`, c);
-    assert.ok(html.includes('wizard-form'));
-    assert.ok(!html.includes('guided-card'), 'step ' + step + ' shows no guided cards');
-    assert.equal((html.match(/data-wizard-step=/g) || []).length, 5);
-  }
-  assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-  assert.match(
-    vm.runInContext('wizard.step=2;renderWizard()', c),
-    /name="storageRate"/,
-    'the rate boxes are still there',
-  );
-  assert.match(
-    vm.runInContext('wizard.step=2;renderWizard()', c),
-    /name="somersloops"/,
-    'and the somersloop ledger',
-  );
 });
 
 test('the tutorial question is asked at Phase 1 and the already-running one after it', () => {
@@ -324,60 +249,11 @@ test('a second profile for a save you already play is asked what changed, not ev
     c,
   );
   guided(c, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
-  const html = vm.runInContext('renderWizard()', c);
-  assert.ok(html.includes('guided-topics'), 'the topic picker is shown first');
-  assert.ok(html.includes('First run'), 'and names the profile it starts from');
-  assert.ok(html.includes('guided-known'), 'with the settings it is keeping');
+  // Nothing chosen yet: the topic picker comes first, and asks every question it offers.
+  assert.equal(vm.runInContext('wizard.guidedAsk', c), null);
   // Choosing only the phase asks only the phase.
   vm.runInContext(`wizard.guidedAsk=['phase']`, c);
   assert.equal(vm.runInContext("guidedFlow().map(q=>q.id).join(',')", c), 'phase');
-  assert.ok(vm.runInContext('renderWizard()', c).includes('guided-card'));
-});
-
-test('the already-running question asks for a rate, not a tick against the plan', () => {
-  const c = ui();
-  guided(c);
-  const step = vm.runInContext(`guidedFlow().findIndex(q=>q.id==='supply')+1`, c);
-  const html = vm.runInContext(`wizard.guidedStep=${step};renderWizard()`, c);
-  assert.ok(html.includes('supply-list'), 'the rate rows are shown');
-  assert.ok(!html.includes('guided-card'), 'this question has no cards to pick from');
-  assert.ok(
-    html.includes('placeholder="Search item"'),
-    'the item field reads as a search, not as example data',
-  );
-  assert.ok(!html.includes('placeholder="50"'), 'and the rate carries no placeholder of its own');
-  assert.ok(
-    !html.includes('<datalist'),
-    'suggestions are drawn in the page, not by browser chrome',
-  );
-  assert.ok(
-    html.includes('class="supply-options"') && html.includes('role="listbox"'),
-    'with a list we own',
-  );
-  assert.equal((html.match(/name="supplyItem"/g) || []).length, 1, 'one blank row to start');
-  // A declared line gets its own row plus a fresh blank one and a way out.
-  vm.runInContext(
-    `wizard.settings.existingSupply={'Modular Frame':50};delete wizard.supplyRows;`,
-    c,
-  );
-  const filled = vm.runInContext('renderWizard()', c);
-  assert.equal(
-    (filled.match(/name="supplyItem"/g) || []).length,
-    2,
-    'the declared line plus a blank row',
-  );
-  assert.ok(filled.includes('value="Modular Frame"') && filled.includes('value="50"'));
-  assert.ok(
-    filled.includes('data-supply-remove="0"'),
-    'and can be removed by position, since a half-finished row has no name',
-  );
-  // It says plainly what it does to the plan and to the budgets.
-  assert.match(filled, /builds only the remainder/i);
-  assert.match(filled, /net of them/i);
-  // All settings owns the same control, so switching modes is continuous.
-  const advanced = vm.runInContext(`wizard.mode='advanced';wizard.step=1;renderWizard()`, c);
-  assert.ok(advanced.includes('supply-list'), 'All settings step 1 has it too');
-  assert.ok(advanced.includes('value="Modular Frame"'));
 });
 
 test('a new profile without a list of finished work is exactly the blank state as before', () => {
@@ -602,8 +478,6 @@ test('leaving the "what is different" screen starts the questions it chose', asy
     c,
   );
   guided(c, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
-  // The topic picker is guided step 1 while nothing has been chosen yet.
-  assert.ok(vm.runInContext('renderWizard()', c).includes('guided-topics'));
   vm.runInContext(
     `FormData=class{constructor(f){this.f=f;}get(){return null;}getAll(k){return k==='topic'?['phase','goal']:[];}has(){return false;}*[Symbol.iterator](){}}`,
     c,
@@ -821,15 +695,10 @@ test('a plan saved before existing production existed still renders every page',
     `calculated=legacyPlan;currentProfile={id:'p',kind:'calculated',name:'Older profile'};state={settings:{phase:'3'},checks:{['calc-3-'+legacyPlan.stages['3'].rows[0].id]:true},notes:{},deliveries:{},customTasks:[]};`,
     c,
   );
-  // The pages are components: tests/ui/ render them for this shape too.
+  // The pages, and the wizard Review of such a plan, are components: tests/ui/ render them
+  // for this shape too.
   // ADA reads the same counters and must not throw on the older shape.
   assert.doesNotThrow(() => vm.runInContext('adaFacts()', c));
-  // Review of an older plan shows no credit notice at all.
-  vm.runInContext(
-    `wizard={step:5,saveId:null,saveName:'W',name:'Older',settings:legacyPlan.settings,preview:legacyPlan,carryFrom:null,carry:{},mode:'advanced',guidedStep:1,guidedAsk:null,tutorial:'doing'};`,
-    c,
-  );
-  assert.ok(!vm.runInContext('renderWizard()', c).includes('supply-notice'));
   // And its progress is untouched by any of this.
   assert.equal(vm.runInContext(`Object.values(state.checks).filter(Boolean).length`, c), 1);
 });
@@ -886,10 +755,8 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
     '[{"name":"Modular Frame","rate":""}]',
     'but the row is still there',
   );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.ok(html.includes('value="Modular Frame"'), 'and still on screen');
-  assert.match(html, /Add a rate and this line is credited/, 'saying why it does not count yet');
-  // A name that is not an item says so rather than being silently dropped.
+  // A name that is not an item is kept as typed but not credited (the row says why:
+  // tests/ui/wizard.test.mjs).
   vm.runInContext(
     call([
       ['Modul', '12'],
@@ -897,9 +764,8 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
     ]),
     c,
   );
-  assert.match(vm.runInContext('renderWizard()', c), /No item of that name/);
   assert.equal(vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', c), '{}');
-  // Completed, it counts and the hint goes away.
+  // Completed, it counts.
   vm.runInContext(
     call([
       ['Modular Frame', '50'],
@@ -911,66 +777,9 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
     vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', c),
     '{"Modular Frame":50}',
   );
-  assert.ok(!vm.runInContext('renderWizard()', c).includes('supply-hint'));
 });
 
-test('every supply row reserves the same columns, so the fields line up', () => {
-  const c = ui();
-  guided(c);
-  vm.runInContext(
-    `wizard.guidedStep=guidedFlow().findIndex(q=>q.id==='supply')+1;wizard.settings.existingSupply={'Computer':20};delete wizard.supplyRows;`,
-    c,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  const rows = html.match(/class="supply-row"/g) || [];
-  assert.equal(rows.length, 2, 'the declared line plus a blank one');
-  // A row that sizes its third column to something narrower than the button
-  // pushes its inputs out of line with the row above, so every row carries one.
-  assert.equal(
-    (html.match(/class="btn quiet supply-remove/g) || []).length,
-    2,
-    'both rows reserve the remove slot',
-  );
-  assert.equal(
-    (html.match(/supply-remove is-blank/g) || []).length,
-    1,
-    'only the blank row hides it',
-  );
-  // Hidden, but genuinely inert rather than merely invisible.
-  assert.match(
-    html,
-    /supply-remove is-blank" data-supply-remove="1" tabindex="-1" aria-hidden="true"/,
-  );
-  assert.ok(!html.includes('supply-spacer'), 'no stand-in of a different width');
-});
-
-test('a chosen item shows its icon in the field', () => {
-  const c = ui();
-  guided(c);
-  vm.runInContext(
-    `wizard.guidedStep=guidedFlow().findIndex(q=>q.id==='supply')+1;wizard.settings.existingSupply={'Modular Frame':50};delete wizard.supplyRows;`,
-    c,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.match(
-    html,
-    /class="supply-input has-icon" data-icon="Modular Frame"/,
-    'the filled row carries its icon',
-  );
-  assert.match(
-    html,
-    /supply-input has-icon[^>]*>\s*<img class="item-icon" src="\.\/icons\/modular-frame\.png"/,
-    'the icon sits before the input',
-  );
-  // The blank row has no icon and no reserved indent.
-  assert.match(html, /class="supply-input" data-icon=""/);
-  assert.equal((html.match(/has-icon/g) || []).length, 1);
-  // A name that is not an item gets no icon rather than a broken image.
-  vm.runInContext(`wizard.supplyRows=[{name:'Modul',rate:'12'}];`, c);
-  const partial = vm.runInContext('renderWizard()', c);
-  assert.ok(!partial.includes('has-icon'), 'nothing is shown for a name that is not an item');
-  assert.ok(!partial.includes('icons/modul.png'));
-  // The icons the suggestion list shows come from the same bundled set.
+test('the icons the item search shows are bundled', () => {
   for (const name of ['Modular Frame', 'Plastic', 'Computer']) {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     assert.ok(fs.existsSync(new URL('../public/icons/' + slug + '.png', import.meta.url)), name);

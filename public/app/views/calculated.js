@@ -5,7 +5,6 @@
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.js';
 import { num } from '../format.js';
-import { html } from '../html.js';
 import {
   calcStage,
   calculated,
@@ -65,7 +64,8 @@ export function calcTasks() {
 
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
 // The options for an infeasible phase `x` under settings `s`, as sentences (none for an
-// older snapshot). ui/plan/CalcWarnings.vue lists them too.
+// older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review
+// (ui/wizard/ReviewStep.vue) list them.
 export function draftFixes(x, s) {
   const fixes = [];
   if (x.shortfalls?.length)
@@ -95,18 +95,6 @@ export function draftFixes(x, s) {
       'Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.',
     );
   return fixes;
-}
-
-// HTML "Options" list of draftFixes, or ''. Also used by the wizard's Review step
-// (wizard/wizard.js).
-export function draftOptions(x, s) {
-  const fixes = draftFixes(x, s);
-  return fixes.length
-    ? html`<p><b>Options</b></p>
-        <ul>
-          ${fixes.map(f => html`<li>${f}</li>`)}
-        </ul>`
-    : '';
 }
 
 // How to build row `r`: how many machines run at 100% and whether one last machine runs

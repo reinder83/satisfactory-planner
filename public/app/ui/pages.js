@@ -1,21 +1,22 @@
-// The pages that are Vue components so far, by hash route. render() in shell.js mounts one
-// of these into <main>, and draws any other page with its legacy render function. Grows
-// with each stage of the migration (see public/AGENTS.md).
+// The page component for each hash route. render() in shell.js mounts it into <main>.
+import { guidedFlow } from '../wizard/guided.js';
 import AccountPage from './pages/AccountPage.vue';
 import BackupPage from './pages/BackupPage.vue';
 import CalculatedFactoriesPage from './pages/CalculatedFactoriesPage.vue';
 import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
 import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import FactoriesPage from './pages/FactoriesPage.vue';
+import GuidedPage from './pages/GuidedPage.vue';
 import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
 import StoragePage from './pages/StoragePage.vue';
 import SurveyPage from './pages/SurveyPage.vue';
+import WizardPage from './pages/WizardPage.vue';
 
-// The component for `view`, or null while it is still a legacy page. The wizard's node
-// survey (`draft`, the wizard draft, in mode 'extraction') is a component; its five steps and
-// guided start are still legacy (renderWizard).
+// The component for `view`, or null for an unknown one. #wizard depends on the draft
+// (`draft`, the wizard object): the node survey, the guided questions until they are
+// answered, and otherwise the five steps, whose Review also ends the guided start.
 export function vuePage(view, calculated, draft) {
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
@@ -24,6 +25,10 @@ export function vuePage(view, calculated, draft) {
   if (view === 'account') return AccountPage;
   if (view === 'backup') return BackupPage;
   if (view === 'resources') return calculated ? CalculatedResourcesPage : ResourcesPage;
-  if (view === 'wizard' && draft?.mode === 'extraction') return SurveyPage;
+  if (view === 'wizard') {
+    if (draft?.mode === 'extraction') return SurveyPage;
+    if (draft?.mode === 'guided' && draft.guidedStep <= guidedFlow().length) return GuidedPage;
+    return WizardPage;
+  }
   return null;
 }

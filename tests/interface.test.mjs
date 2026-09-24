@@ -121,69 +121,9 @@ function ui() {
   );
   return c;
 }
-test('original and calculated views render; wizard exposes all settings and safe names', () => {
-  const c = ui();
-  // Every page but the wizard is a Vue component, tested in tests/ui/.
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
-    c,
-  );
-  for (let step = 1; step <= 5; step++) {
-    const text = vm.runInContext(`wizard.step=${step};renderWizard()`, c);
-    assert.ok(text.includes('wizard-form'));
-    assert.ok(!text.includes('value="World <one>"'));
-  }
-  assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-});
+// The wizard and guided screens themselves: tests/ui/wizard.test.mjs.
 
-// Markup that was escaped as text: a tag shown on the page, or an entity escaped twice.
-// Either means a string of markup reached html`` without raw() or its own html``.
-const ESCAPED_MARKUP =
-  /&lt;\/?(?:a|article|aside|b|br|button|div|form|h[1-6]|img|input|label|li|main|nav|option|p|section|select|small|span|strong|table|tbody|td|textarea|th|thead|tr|ul)\b|&amp;(?:amp|lt|gt|quot|#39);/;
-test('every page escapes user text exactly once', () => {
-  const c = ui();
-  const evil = '<x-evil onclick=alert(1)> & "quoted"';
-  c.evil = evil;
-  vm.runInContext(
-    `currentSave={id:'s',name:evil};currentProfile={id:'original',kind:'original',name:evil};workspace.saves=[{id:'s',name:evil,profiles:[{id:'original',kind:'original',name:evil,completed:0,phase:'3'},{id:'p',kind:'calculated',name:evil,completed:1,phase:'4',settings:{purity:evil,multiplier:1,powerFactor:1}}]}];workspace.accountsEnabled=true;workspace.user={id:'owner',username:evil};state.notes={global:evil,'phase-3':evil};`,
-    c,
-  );
-  const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
-  // The pages that are Vue components are covered by tests/ui/.
-  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  // The wizard's five steps and the guided start, adding a profile to the save.
-  const wizardPages = [1, 2, 3, 4, 5, 'guided'].flatMap(step => {
-    vm.runInContext(
-      `wizard={step:${step === 'guided' ? 1 : step},saveId:'s',saveName:evil,name:evil,settings:structuredClone(generated.settings),preview:generated,carryFrom:null,carry:{},mode:${step === 'guided' ? "'guided'" : "'advanced'"},guidedStep:1,guidedAsk:null,tutorial:'doing'};`,
-      c,
-    );
-    return render(['renderWizard']).map(([r, page]) => [r + ' ' + step, page]);
-  });
-  // Edit modes and dialogs, with the hostile text in every user-editable place they show.
-  vm.runInContext(
-    `calculated=null;currentProfile={id:'original',kind:'original',name:evil};state.customTasks=[{id:'custom-1',phase:'3',title:evil,body:evil}];state.factoryGroups={groups:[{id:'fg-a',name:evil}],assignments:{wire:[{group:'fg-a',rate:null}],computer:[{group:'fg-a',rate:null}]}};state.storageEdits={bays:[{id:'S',name:evil,floor:'ground'}],slots:{S01:evil},bayNames:{A:evil}};state.notes['factory-computer']=evil;state.notes['slot-S01']=evil;planEditing=true;factoryEditing=true;layoutEditing=true;`,
-    c,
-  );
-  const dialog = open => vm.runInContext(`${open};document.querySelector('#detail').innerHTML`, c);
-  const editing = [];
-  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  editing.push([
-    'alternate recipe dialog',
-    dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`),
-  ]);
-  const all = [...wizardPages, ...editing];
-  for (const [route, page] of all) {
-    assert.equal(typeof page, 'string', route);
-    assert.ok(!page.includes('<x-evil'), route + ' inserted user text as markup');
-    assert.doesNotMatch(page, ESCAPED_MARKUP, route + ' escaped its own markup');
-  }
-  // The escaped name is there, once-escaped, on the pages that show it.
-  const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
-  for (const [route, page] of all.filter(([r]) =>
-    ['renderWizard 1', 'renderWizard guided'].includes(r),
-  ))
-    assert.ok(page.includes(escaped), route);
-});
+// Every page is a component; each is rendered with hostile names in tests/ui/.
 
 // The storage page and its container dialog are components, tested in
 // tests/ui/storage.test.mjs. Their data stays here.
@@ -343,7 +283,7 @@ test('storage follows the selected contract and small power displays in MW', () 
   assert.equal(vm.runInContext('power(1000)', c), (1000).toLocaleString() + ' MW');
   assert.equal(vm.runInContext('power(1500)', c), (1.5).toLocaleString() + ' GW');
 });
-test('wizard tabs retain edits and recalculate Review without native help tooltips', async () => {
+test('wizard tabs retain edits and recalculate Review', async () => {
   const c = ui();
   vm.runInContext(
     `wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,
@@ -391,12 +331,6 @@ test('wizard tabs retain edits and recalculate Review without native help toolti
   );
   await vm.runInContext('moveWizard(5)', c);
   assert.equal(vm.runInContext('wizard.step', c), 5);
-  const html = vm.runInContext('renderWizard()', c);
-  assert.equal((html.match(/data-wizard-step=/g) || []).length, 5);
-  const help = vm.runInContext('help("purity")', c);
-  assert.ok(!help.includes(' title='));
-  assert.ok(help.includes('aria-label='));
-  assert.ok(help.includes('role="tooltip"'));
 });
 
 test('the wizard shows calculation progress and options when the calculation times out', async () => {
@@ -461,74 +395,9 @@ test('the wizard shows calculation progress and options when the calculation tim
   assert.equal(errorNode.innerHTML, '', 'no guidance is attached to unrelated errors');
 });
 
-test('the wizard can pick specific alternate recipes', () => {
+// The alternate picker itself: tests/ui/wizard.test.mjs.
+test('Planner’s choice collects the alternates a plan uses', () => {
   const c = ui();
-  vm.runInContext(
-    `wizard={step:2,saveName:'S',name:'P',settings:{...structuredClone(generated.settings),recipes:'custom',alternateRecipes:['Recipe_Alternate_ReinforcedIronPlate_2_C']}};`,
-    c,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.match(html, /alt-picker/, 'custom recipe access shows the alternate picker');
-  assert.match(
-    html,
-    /name="alt" value="Recipe_Alternate_ReinforcedIronPlate_2_C" checked/,
-    'picked alternates are pre-checked',
-  );
-  assert.match(html, /Stitched Iron Plate/);
-  assert.match(
-    html,
-    /data-alt-info="Recipe_Alternate_ReinforcedIronPlate_2_C"/,
-    'each alternate offers a recipe pop-out',
-  );
-  vm.runInContext('openAltRecipe("Recipe_Alternate_ReinforcedIronPlate_2_C")', c);
-  const pop = vm.runInContext('document.querySelector("#detail").innerHTML', c);
-  assert.match(pop, /rail-recipe/, 'the pop-out shows the recipe card');
-  assert.match(
-    pop,
-    /Standard recipe for Reinforced Iron Plate/,
-    'the standard recipe is shown for comparison',
-  );
-  assert.match(html, /MAM research/, 'MAM-researched recipes are labelled');
-  assert.match(
-    html,
-    /name="alt" value="Recipe_Alternate_Turbofuel_C"/,
-    'MAM recipes are normal picks with a neutral power choice',
-  );
-  const turbo = vm.runInContext(`wizard.settings.mainPower='turbofuel';renderWizard()`, c);
-  assert.match(
-    turbo,
-    /required by your power preference/,
-    'a turbofuel power route locks the MAM recipes on',
-  );
-  assert.ok(
-    !turbo.includes('name="alt" value="Recipe_Alternate_Turbofuel_C"'),
-    'locked MAM recipes are not editable picks',
-  );
-  vm.runInContext(`wizard.settings.mainPower='auto';wizard.settings.recipes='custom';`, c);
-  assert.match(
-    html,
-    /name="alt" value="Recipe_Alternate_PureIronIngot_C"/,
-    'pure recipes are normal picks by default',
-  );
-  const pure = vm.runInContext(`wizard.settings.pureIngots=true;renderWizard()`, c);
-  assert.match(
-    pure,
-    /required by your ingot preference/,
-    'requiring pure ingots locks the pure recipes on',
-  );
-  assert.ok(
-    !pure.includes('name="alt" value="Recipe_Alternate_PureIronIngot_C"'),
-    'locked pure recipes are not editable picks',
-  );
-  assert.ok(!html.includes('Charcoal'), 'recipes beyond Phase 5 are not offered');
-  assert.match(html, /data-alt-best/, 'the picker offers the planner’s choice helper');
-  assert.match(
-    html,
-    /name="altpref" value="Recipe_Alternate_ReinforcedIronPlate_2_C" checked=""|name="altpref" value="Recipe_Alternate_ReinforcedIronPlate_2_C"/,
-    'picked rows offer a prefer star',
-  );
-  assert.match(html, /data-alt-all/, 'the picker offers select-shown');
-  assert.match(html, /data-alt-none/, 'the picker offers clear-shown');
   assert.equal(
     vm.runInContext('JSON.stringify(alternatesUsed(generated))', c),
     '["Recipe_Alternate_EnrichedCoal_C","Recipe_Alternate_Turbofuel_C"]',
@@ -550,66 +419,14 @@ test('the wizard can pick specific alternate recipes', () => {
     '["Recipe_Alternate_Turbofuel_C"]',
     'MAM recipes count as used alternates even though plans mark them standard',
   );
-  vm.runInContext(`wizard.settings.pureIngots=false;`, c);
-  assert.ok(
-    !vm.runInContext(`wizard.settings.recipes='standard';renderWizard()`, c).includes('alt-picker'),
-    'the picker only shows for custom access',
-  );
-  vm.runInContext('wizard=null', c);
 });
 
-test('adding a profile to an existing save offers to carry its progress over', () => {
+// The carry panel itself: tests/ui/wizard.test.mjs.
+test('the carry-over choices are read into the draft', () => {
   const c = ui();
-  vm.runInContext(
-    `workspace.saves=[{id:'s1',name:'One world',activeProfile:'p2',profiles:[{id:'p1',name:'First <plan>',kind:'calculated',settings:generated.settings},{id:'p2',name:'Second',kind:'calculated',settings:generated.settings}]}];`,
-    c,
-  );
   vm.runInContext(
     `wizard={step:5,saveId:'s1',saveName:'One world',name:'Third',settings:structuredClone(generated.settings),preview:generated,carryFrom:'p2',carry:Object.fromEntries(carryOptions.map(([k])=>[k,true]))};`,
     c,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.match(html, /carry-list/, 'the review step offers the carry-over options');
-  assert.match(html, /name="carryFrom"/, 'the source profile can be chosen');
-  assert.match(html, /value="p1"/, 'other profiles of the same save are offered');
-  assert.match(html, /value="p2" selected/, 'the profile being continued is preselected');
-  assert.ok(!html.includes('First <plan>'), 'profile names are escaped');
-  for (const key of [
-    'unlocks',
-    'storage',
-    'commissioning',
-    'deliveries',
-    'notes',
-    'planEdits',
-    'factories',
-  ])
-    assert.match(
-      html,
-      new RegExp(`name="carry" value="${key}" checked`),
-      key + ' is carried by default',
-    );
-  assert.ok(
-    !html.includes('value="picked"'),
-    'recipe picks are only offered when the plan picks its own recipes',
-  );
-  vm.runInContext(
-    `wizard.preview={...generated,settings:{...generated.settings,recipes:'custom',alternateRecipes:['Recipe_Alternate_Screw_C']}};`,
-    c,
-  );
-  assert.match(
-    vm.runInContext('renderWizard()', c),
-    /name="carry" value="picked" checked/,
-    'hand-picked recipes can be claimed as unlocked',
-  );
-  assert.match(
-    vm.runInContext('renderWizard()', c),
-    /<\/b> \(1\)/,
-    'the number of recipes the claim covers is shown',
-  );
-  vm.runInContext(`wizard.saveId=null;`, c);
-  assert.ok(
-    !vm.runInContext('renderWizard()', c).includes('carry-list'),
-    'a brand new save has nothing to carry',
   );
   c.FormData = class {
     getAll() {
@@ -623,85 +440,18 @@ test('adding a profile to an existing save offers to carry its progress over', (
   assert.equal(vm.runInContext('wizard.carryFrom', c), 'p1', 'the chosen source profile is kept');
   assert.equal(vm.runInContext('wizard.carry.storage', c), true, 'ticked options are kept');
   assert.equal(vm.runInContext('wizard.carry.notes', c), false, 'unticked options are cleared');
+  // Without the panel on screen (a brand new save) the draft is left alone.
+  vm.runInContext(`readCarry({querySelector:()=>null})`, c);
+  assert.equal(vm.runInContext('wizard.carryFrom', c), 'p1');
 });
 
-test('the wizard keeps every preference field beside the somersloop ledger', () => {
+// The storage rate fields themselves: tests/ui/wizard.test.mjs.
+test('per-item storage rates are read back, keeping zero and leaving blanks unset', () => {
   const c = ui();
   vm.runInContext(
-    `wizard={step:2,saveName:'W',name:'P',settings:{...structuredClone(generated.settings),somersloops:104,augmenters:1,fueledAugmenters:1,sloopReserved:['shards']},preview:null};`,
+    `wizard={step:2,saveName:'World',name:'Balanced',settings:structuredClone(generated.settings),preview:null};wizard.settings.storage='all';wizard.settings.storageOverrides={};`,
     c,
   );
-  const html = vm.runInContext('renderWizard()', c);
-  for (const name of [
-    'cellsPerMinute',
-    'storageRate',
-    'buildRate',
-    'somersloops',
-    'augmenters',
-    'fueledAugmenters',
-    'amplifySloops',
-  ])
-    assert.ok(html.includes('name="' + name + '"'), 'step 2 lost the ' + name + ' field');
-  assert.equal((html.match(/name="sloop"/g) || []).length, 3);
-  assert.ok(
-    html.includes('Committed: <b>11</b> of 104 available'),
-    'the ledger totals what the plan commits',
-  );
-  assert.ok(
-    html.includes('5 Alien Power Matrix/min'),
-    'the ledger derives the fuel rate from the augmenter count',
-  );
-});
-test('the wizard offers two storage rates and per-item overrides', () => {
-  const c = ui();
-  vm.runInContext(
-    `wizard={step:2,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),storage:'all',storageRate:1,buildRate:30,storageOverrides:{Concrete:60}},preview:null};`,
-    c,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.match(
-    html,
-    /name="buildRate" type="number" value="30"/,
-    'the construction rate is its own field',
-  );
-  assert.match(
-    html,
-    /name="storageRate" type="number" value="1"/,
-    'the general rate stays a separate field',
-  );
-  assert.match(html, /rate-list/, 'per-item rates are offered');
-  assert.match(html, /name="rate:Concrete"[^>]*value="60"/, 'an overridden item shows its rate');
-  assert.match(
-    html,
-    /name="rate:Screws"[^>]*value=""/,
-    'an item without an override is left blank',
-  );
-  assert.match(
-    html,
-    /name="rate:Iron Plate"[^>]*placeholder="30"/,
-    'construction materials show the build rate as their placeholder',
-  );
-  assert.match(
-    html,
-    /name="rate:Screws"[^>]*placeholder="1"/,
-    'other items show the general rate as their placeholder',
-  );
-  assert.match(html, /1 set/, 'the summary counts the overrides');
-
-  vm.runInContext(`wizard.settings.storage='construction';`, c);
-  const narrow = vm.runInContext('renderWizard()', c);
-  assert.match(narrow, /name="rate:Concrete"/, 'the list follows the selected storage supply');
-  assert.ok(
-    !narrow.includes('name="rate:Ballistic Warp Drive"'),
-    'items outside the contract are not listed',
-  );
-  vm.runInContext(`wizard.settings.storage='none';`, c);
-  assert.ok(
-    !vm.runInContext('renderWizard()', c).includes('rate-list'),
-    'no dedicated storage means no rates to set',
-  );
-
-  vm.runInContext(`wizard.settings.storage='all';wizard.settings.storageOverrides={};`, c);
   const form = {
     querySelector: sel => (sel === '.rate-list' ? {} : null),
     reportValidity: () => true,
@@ -730,99 +480,13 @@ test('the wizard offers two storage rates and per-item overrides', () => {
   );
 });
 
-test('editing a group rate refreshes the per-item placeholders it applies to', () => {
+// The goals step and Review themselves: tests/ui/wizard.test.mjs.
+test('the target-time choice is read out of the goals step', () => {
   const c = ui();
   vm.runInContext(
-    `wizard={step:2,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),storage:'all',storageRate:1,buildRate:30,storageOverrides:{}},preview:null};`,
+    `wizard={step:2,saveName:'World',name:'Balanced',settings:structuredClone(generated.settings),preview:null};wizard.step=3;wizard.settings.goal='timed';`,
     c,
   );
-  const html = vm.runInContext('renderWizard()', c);
-  assert.match(
-    html,
-    /data-rate-group="build"[^>]*>\s*<span>Concrete/,
-    'construction rows say which rate they follow',
-  );
-  assert.match(
-    html,
-    /data-rate-group="delivered"[^>]*>\s*<span>Nuclear Pasta/,
-    'delivered rows say which rate they follow',
-  );
-  assert.match(
-    html,
-    /data-rate-group="other"[^>]*>\s*<span>Screws/,
-    'everything else follows the general rate',
-  );
-
-  // A stand-in for the rendered list: one row per group, plus the two rate fields.
-  const rows = [
-    ['build', { placeholder: '30' }],
-    ['delivered', { placeholder: '0' }],
-    ['other', { placeholder: '1' }],
-  ].map(([group, input]) => ({ dataset: { rateGroup: group }, querySelector: () => input, input }));
-  const fields = { storageRate: { value: '1' }, buildRate: { value: '30' } };
-  c.document.querySelectorAll = sel => (sel === '.rate-row' ? rows : []);
-  c.document.querySelector = sel => fields[sel.replace('[name=', '').replace(']', '')] || null;
-
-  fields.buildRate.value = '45';
-  vm.runInContext('refreshRatePlaceholders()', c);
-  assert.equal(rows[0].input.placeholder, '45', 'construction boxes follow the construction rate');
-  assert.equal(rows[2].input.placeholder, '1', 'the general boxes are untouched');
-  assert.equal(rows[1].input.placeholder, '0', 'delivered parts stay at zero');
-
-  fields.storageRate.value = '4';
-  vm.runInContext('refreshRatePlaceholders()', c);
-  assert.equal(rows[2].input.placeholder, '4', 'the general boxes follow the general rate');
-  assert.equal(rows[0].input.placeholder, '45', 'the construction boxes keep their own rate');
-
-  fields.buildRate.value = '';
-  vm.runInContext('refreshRatePlaceholders()', c);
-  assert.equal(
-    rows[0].input.placeholder,
-    '4',
-    'an empty construction rate falls back to the general rate, as the planner does',
-  );
-  fields.storageRate.value = '';
-  vm.runInContext('refreshRatePlaceholders()', c);
-  assert.equal(
-    rows[2].input.placeholder,
-    '4',
-    'a half-typed rate leaves the last usable placeholder in place',
-  );
-});
-
-test('the wizard chooses what the target time applies to and Review shows what a phase used to take', () => {
-  const c = ui();
-  vm.runInContext(
-    `wizard={step:3,saveName:'World',name:'Balanced',settings:{...structuredClone(generated.settings),goal:'timed',hours:10},preview:null};`,
-    c,
-  );
-  const goals = vm.runInContext('renderWizard()', c);
-  assert.match(goals, /name="phaseTime"/, 'the goals step asks what the target time applies to');
-  assert.match(goals, /value="every" selected/, 'every phase is the default');
-  vm.runInContext(`wizard.settings.phaseTime='final';`, c);
-  assert.match(
-    vm.runInContext('renderWizard()', c),
-    /value="final" selected/,
-    'the saved choice is shown',
-  );
-  assert.match(
-    vm.runInContext(`String(help('phaseTime'))`, c),
-    /final phase/,
-    'the choice is explained',
-  );
-
-  vm.runInContext(
-    `wizard.step=5;wizard.preview={...generated,settings:{...generated.settings,phase:'1'},stages:{...generated.stages,1:{...generated.stages[1],hours:5.21,aheadOf:9.92}}};`,
-    c,
-  );
-  const review = vm.runInContext('renderWizard()', c);
-  assert.match(review, /was 9.92 h/, 'a pulled-forward phase shows what it used to take');
-  vm.runInContext(`wizard.preview=generated;`, c);
-  assert.ok(
-    !vm.runInContext('renderWizard()', c).includes('was '),
-    'an ordinary plan shows no such note',
-  );
-
   const form = { querySelector: () => null, reportValidity: () => true };
   c.FormData = class {
     *[Symbol.iterator]() {
@@ -894,14 +558,7 @@ test('a profile only offers the phases it was created for', () => {
     `calculated={...generated,settings:{...generated.settings,phase:'1'}};state.settings.phase='1';`,
     c,
   );
-  // Review must not flag a phase the profile will never offer.
-  vm.runInContext(
-    `wizard={step:5,saveName:'W',name:'P',settings:{...generated.settings,phase:'4'},preview:{...generated,settings:{...generated.settings,phase:'4'},stages:{...generated.stages,3:{feasible:false,reason:'Earlier phase shortfall'},5:{feasible:false,reason:'Later phase shortfall'}}},carryFrom:null,carry:{}};`,
-    c,
-  );
-  const review = vm.runInContext('renderWizard()', c);
-  assert.ok(!review.includes('Earlier phase shortfall'), 'a phase behind the start is not flagged');
-  assert.ok(review.includes('Later phase shortfall'), 'a phase the profile plans is still flagged');
+  // Review flags only the phases the profile plans: tests/ui/wizard.test.mjs.
 
   assert.equal(
     vm.runInContext('JSON.stringify(phaseOptions())', c),

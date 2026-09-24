@@ -6,12 +6,10 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import {
-  dialog,
   openCalculatedFactory,
   openFactory,
   openGroupChain,
 } from '../../public/app/factory-detail.js';
-import { html } from '../../public/app/html.js';
 import {
   calcStage,
   setFactoryEditing,
@@ -283,17 +281,6 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   assert.equal($('#detail-note').value, 'Unsaved thought');
   openFactory('wire');
   assert.equal($('#detail-note').value, '', 'opening the dialog again starts from the saved note');
-});
-
-test('an HTML dialog replaces a component dialog cleanly', () => {
-  render();
-  openFactory('wire');
-  dialog('Plain', 'Legacy', html`<p id="legacy-body">Body</p>`);
-  assert.ok($('#legacy-body'));
-  assert.equal($$('#detail .dialog-head').length, 1);
-  openFactory('cable');
-  assert.equal($('#legacy-body'), null);
-  assert.equal($('#detail h2').textContent, 'Cable');
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {

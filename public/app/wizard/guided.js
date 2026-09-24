@@ -1,24 +1,20 @@
 // Guided start: the short question sequence in front of the wizard. It is the
 // default for a new profile (startWizard sets mode 'guided'). The questions and
 // the settings each answer writes are data in preferences.js (guidedQuestions,
-// guidedStandingQuestion); this module sequences, draws and reads them. Draft
-// fields used: guidedStep (1-based index into guidedFlow()), guidedAsk, tutorial.
-// Continue is the #wizard-form submit (events/profiles.js -> moveGuided).
-import { browserMode } from '../../browser-api.js';
+// guidedStandingQuestion); this module sequences and reads them, and
+// ui/pages/GuidedPage.vue (with ui/guided/) draws them. Draft fields used:
+// guidedStep (1-based index into guidedFlow()), guidedAsk, tutorial.
 import {
   GUIDED_TOPUP_RATE,
   guidedQuestions,
   guidedStandingQuestion,
   guidedTopupItems,
-  storageOptions,
   tutorialKeys,
 } from '../../preferences.js';
-import { $, itemIcon, num } from '../format.js';
-import { html, raw } from '../html.js';
-import { wizard, workspace } from '../session.js';
-import { browserNotice, header, render } from '../shell.js';
-import { field, help } from './fields.js';
-import { readSupply, supplyRowsHtml } from './supply.js';
+import { $ } from '../format.js';
+import { wizard } from '../session.js';
+import { render } from '../shell.js';
+import { readSupply } from './supply.js';
 import { calculateWizard, readWizard, wizardBusy } from './wizard.js';
 
 // --- The guided start -------------------------------------------------------
@@ -31,7 +27,7 @@ import { calculateWizard, readWizard, wizardBusy } from './wizard.js';
 // little as possible", and inline SVG themes with currentColor, needs no build
 // allowlist entry and raises no attribution question. The concrete questions
 // use the item icons already bundled and attributed in icons/sources.json.
-const GUIDED_GLYPHS = {
+export const GUIDED_GLYPHS = {
   minimal: '<path d="M4 20h4v-6H4zM10 20h4v-9h-4z"/><path d="M17 5v9M17 14l-2.5-3M17 14l2.5-3"/>',
   balanced: '<path d="M12 4v16M6 20h12"/><path d="M3 9h18"/><path d="M6 9l-3 5h6zM18 9l-3 5h6z"/>',
   timed: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/>',
@@ -53,36 +49,15 @@ const GUIDED_GLYPHS = {
     '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>',
 };
 
-// A card's inline SVG from GUIDED_GLYPHS, falling back to the balanced one.
-const guidedGlyph = name =>
-  html`<span class="guided-art" aria-hidden="true"
-    ><svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      ${raw(GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced)}
-    </svg></span
-  >`;
-
-// A card's artwork from up to four bundled item icons (the phase cards).
-const guidedItemArt = items =>
-  html`<span class="guided-art items" aria-hidden="true"
-    >${items.slice(0, 4).map(n => itemIcon(n))}</span
-  >`;
-
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
 // Order: the preferences.js list (phase, goal, recipes, stock, exact), with the
 // tutorial question (Phase 1) or the "already producing" question (later
 // phases) inserted after phase for a new save. When wizard.guidedAsk is set
-// (the "What is different" screen), only those ids are kept. renderWizard and
-// the submit handler compare guidedStep with this length to know when the
-// questions are finished; ada-panel.js reads it too.
+// (the "What is different" screen), only those ids are kept. vuePage (ui/pages.js)
+// and the screens compare guidedStep with this length to know when the questions
+// are finished; ada-panel.js reads it too.
 export function guidedFlow() {
   const w = wizard,
     list = [];
@@ -97,7 +72,7 @@ export function guidedFlow() {
 // The option value currently chosen for a question, derived from the settings
 // (so a change made in All settings shows up here). 'tutorial' lives on the
 // draft rather than the settings. No question has the id 'standing'.
-const guidedAnswer = q => {
+export const guidedAnswer = q => {
   const w = wizard,
     s = w.settings;
   if (q.id === 'tutorial') return w.tutorial || 'doing';
@@ -108,117 +83,10 @@ const guidedAnswer = q => {
   return String(s[q.id] ?? '');
 };
 
-// A question's options as radio cards named "guided:<id>", read by readGuided.
-function guidedCardsHtml(q) {
-  const picked = guidedAnswer(q);
-  return html`<div class="guided-grid">
-    ${q.options.map(
-      o =>
-        html`<label class="guided-card${o.value === picked ? ' is-picked' : ''}">
-          <input
-            type="radio"
-            name="guided:${q.id}"
-            value="${o.value}"
-            aria-label="${o.label + '. ' + o.detail}"
-            ${o.value === picked && raw('checked')}
-          />
-          ${o.items ? guidedItemArt(o.items) : guidedGlyph(o.glyph)}
-          <strong>${o.label}</strong>
-          <p>${o.detail}</p>
-          ${o.handoff && html`<span class="badge">Opens All settings</span>`}
-        </label>`,
-    )}
-  </div>`;
-}
-
-// The materials you carry out by hand. A floor for one of them costs about 1%
-// more buildings; the general construction rate that would reach the same
-// number costs 81-425%, because it applies to all eighteen at once.
-// Checkboxes named "topup"; readGuided turns the ticked ones into
-// storageOverrides of GUIDED_TOPUP_RATE each. Only on the stock question.
-function guidedTopupHtml(s) {
-  if (s.storage === 'none') return '';
-  const over = s.storageOverrides || {};
-  return html`<fieldset class="guided-topup">
-    <legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
-    <p class="small muted">
-      Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and
-      19 Iron Plate a minute into storage. These get a guaranteed ${num(GUIDED_TOPUP_RATE)}/min on
-      top, which costs about 1% more buildings each. Concrete is picked for you because it is the
-      one the plan leaves least spare.
-    </p>
-    <div class="guided-chips">
-      ${guidedTopupItems.map(
-        n =>
-          html`<label class="guided-chip${over[n] !== undefined ? ' is-picked' : ''}"
-            ><input
-              type="checkbox"
-              name="topup"
-              value="${n}"
-              aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${n} a minute"
-              ${over[n] !== undefined && raw('checked')}
-            />${itemIcon(n)}<span>${n}</span></label
-          >`,
-      )}
-    </div>
-  </fieldset>`;
-}
-
-// A second profile for a save you already play starts from the settings of the
-// profile you are on, so the useful question is what changed rather than all of
-// them again.
-// Shown instead of a question while wizard.saveId is set and guidedAsk is null.
-// Ticked "topic" boxes become wizard.guidedAsk, which narrows guidedFlow().
-function guidedTopicsHtml() {
-  const w = wizard,
-    s = w.settings,
-    save = workspace.saves.find(x => x.id === w.saveId);
-  const from =
-    save?.profiles.find(p => p.id === (w.carryFrom || save.activeProfile)) || save?.profiles[0];
-  const known = [
-    ['Phase', 'Phase ' + (s.phase || '3')],
-    ['Goal', (workspace.catalog.goals.find(g => g.id === s.goal) || {}).name || s.goal],
-    [
-      'Recipes',
-      s.recipes === 'all'
-        ? 'All alternates'
-        : s.recipes === 'custom'
-          ? num((s.alternateRecipes || []).length) + ' picked'
-          : 'Standard only',
-    ],
-    ['Stocked', (storageOptions.find(([v]) => v === s.storage) || [, s.storage])[1]],
-    ['Machines', s.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
-  ];
-  return html`<h2>What is different this time?</h2>
-    <p>
-      Starting from the settings of <b>${from?.name || 'this save'}</b>. Tick only what changes; the
-      rest is kept as it is.
-    </p>
-    <div class="guided-known">${known.map(([k, v]) => html`<span><b>${k}</b>${v}</span>`)}</div>
-    <div class="guided-topics">
-      ${guidedQuestions.map(
-        q =>
-          html`<label class="check-row"
-            ><input
-              type="checkbox"
-              name="topic"
-              value="${q.id}"
-              ${q.id === 'phase' && raw('checked')}
-            />${q.title}</label
-          >`,
-      )}
-    </div>
-    <p class="small muted">
-      Progress from ${from?.name || 'the other profile'} can be carried over on the Review step,
-      including the production lines this plan does not expand.
-    </p>`;
-}
-
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
 // the only ones a guided answer can tick: everything else it learns is a rate,
 // which changes the plan rather than its progress.
-// Sent as `built` by the profile-create submit (events/profiles.js), which also
-// passes the form; only `w` is used.
+// Sent as `built` by createProfile (wizard.js).
 export function guidedBuiltKeys(w) {
   return w.tutorial === 'done' ? [...tutorialKeys] : [];
 }
@@ -267,98 +135,6 @@ function readGuided(form) {
   if (s.goal !== 'timed') s.phaseTime = 'every';
   if (s.storage === 'none') s.storageOverrides = {};
   w.preview = null;
-}
-
-// The row of question names above the form, marking done and current ones.
-function guidedProgressHtml(flow, index) {
-  return html`<div class="guided-progress" role="list">
-    ${flow.map(
-      (q, i) =>
-        html`<span
-          role="listitem"
-          class="${i === index ? 'current' : i < index ? 'done' : ''}"
-          ${i === index && raw('aria-current="step"')}
-          ><i></i>${q.short || q.title.replace(/\?$/, '')}</span
-        >`,
-    )}
-  </div>`;
-}
-
-// HTML for the guided screen: the "What is different" topics screen, the
-// question at guidedStep, or "Ready to calculate" when no questions remain.
-// The name box is the save name for a new save and the profile name otherwise.
-// "All settings" jumps to the five-step wizard step that owns this question.
-export function renderGuided() {
-  const w = wizard,
-    s = w.settings,
-    flow = guidedFlow();
-  const topics = w.saveId && w.guidedAsk === null;
-  const index = topics ? -1 : Math.min(w.guidedStep - 1, flow.length - 1);
-  const q = topics ? null : flow[index];
-  let content;
-  if (topics) content = guidedTopicsHtml();
-  else if (!q) content = html`<h2>Ready to calculate</h2>`;
-  else
-    content = html`<h2>${q.title}</h2>
-      <p>${q.lead}</p>
-      ${q.kind === 'supply' ? supplyRowsHtml(s) : guidedCardsHtml(q)}
-      ${q.id === 'goal' &&
-      s.goal === 'timed' &&
-      html`<div class="form-grid guided-follow">
-        ${field(
-          'Hours per phase',
-          'hours',
-          s.hours ?? 8,
-          'number',
-          'min="0.25" max="2000" step="0.25" required',
-        )}
-      </div>`}
-      ${q.id === 'stock' && guidedTopupHtml(s)}`;
-  const last = topics ? false : index >= flow.length - 1;
-  const advancedStep = q?.step || 1;
-  const first = topics || w.guidedStep <= 1;
-  return String(
-    html`${browserMode && browserNotice()}
-      ${header(
-        'A FEW QUESTIONS',
-        w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
-        'Answer what matters and the planner fills in the rest. Every setting is still there under All settings.',
-      )}
-      ${!topics && guidedProgressHtml(flow, index)}
-      <form id="wizard-form" class="panel wizard-panel guided-panel">
-        ${!topics &&
-        html`<label class="field guided-name"
-          >${w.saveId ? 'Profile name' : 'Save name'}<input
-            name="${w.saveId ? 'profileName' : 'saveName'}"
-            type="text"
-            value="${w.saveId ? w.name : w.saveName}"
-            ${!w.saveId && raw('required')}
-            maxlength="80"
-            placeholder="${w.saveId
-              ? 'Named after your goal if left blank'
-              : 'My Satisfactory save'}"
-        /></label>`}
-        ${content}
-        <div class="wizard-actions">
-          <button
-            type="button"
-            class="btn"
-            ${raw(first ? 'data-cancel-wizard' : 'data-guided-back')}
-          >
-            ${first ? 'Cancel' : 'Back'}
-          </button>
-          <span class="guided-escape"
-            ><button type="button" class="btn quiet" data-guided-advanced="${advancedStep}">
-              All settings →
-            </button>
-            <button class="btn primary" type="submit">
-              ${last ? 'Calculate plan' : 'Continue →'}
-            </button></span
-          >
-        </div>
-        <p id="wizard-error" class="form-error" role="alert"></p>
-      </form>`,
-  );
 }
 
 // Go to question `target` (1-based): read the screen, then re-render, hand over

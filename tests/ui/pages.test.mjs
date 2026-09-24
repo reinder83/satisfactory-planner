@@ -164,7 +164,7 @@ test('the handbook resources page shows every resource with its icon, and the po
   assert.equal($('[data-check="power-u4"]').checked, true, 'a saved check shows ticked');
 });
 
-test('moving between a component page and a legacy page leaves nothing behind', async () => {
+test('moving between pages leaves nothing behind', async () => {
   go('profiles');
   render();
   assert.equal($$('.profile-card').length, 2);
@@ -181,7 +181,6 @@ test('moving between a component page and a legacy page leaves nothing behind', 
   assert.equal($$('#main h1').length, 1);
   assert.equal($('#main h1').textContent, 'Power & resources');
   assert.equal(vuePage('resources', {}), CalculatedResourcesPage);
-  assert.equal(vuePage('wizard', {}), null, 'the wizard is still a legacy page');
 });
 
 // A calculated profile's resources page, with the catalog's raw resources as the server
