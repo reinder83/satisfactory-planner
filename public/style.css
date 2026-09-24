@@ -2416,7 +2416,12 @@ button.rail-tile:hover {
   max-height: 340px;
   overflow: auto;
 }
+/* A column whose input sits at the bottom, so boxes line up across a grid row
+   when a long name wraps to two lines. */
 .rate-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   gap: 4px;
 }
 .rate-row input {
