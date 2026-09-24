@@ -315,3 +315,19 @@ test('a reserved position opens no dialog', () => {
   openSlot('A01');
   assert.equal($('#detail').open, false);
 });
+
+// The save indicator redraws the bay before the click handler resumes; the button must stay
+// as that redraw leaves it (browser-check.mjs waits for exactly this).
+test('"Complete room" stays disabled once the saved room is complete', async () => {
+  stubFetch({
+    '/api/update': body => ({
+      ...state,
+      checks: { ...state.checks, ...Object.fromEntries(body.keys.map(k => [k, true])) },
+    }),
+  });
+  render();
+  const button = $('[data-complete-bay="A"]');
+  button.click();
+  await settle();
+  assert.equal($('[data-complete-bay="A"]').disabled, true);
+});

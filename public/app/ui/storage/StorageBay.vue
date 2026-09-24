@@ -7,7 +7,7 @@
   (a free position first, then the next address) and an added bay removed.
 -->
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { bayCapacity } from '../../../state.js';
 import { save, toast } from '../../api.js';
 import { slug } from '../../format.js';
@@ -48,7 +48,9 @@ const view = computed(() =>
 );
 
 // Runs one save for a control, disabled meanwhile, then redraws; a failed save leaves the
-// control as it was.
+// control as it was. Only for controls whose disabled state the template does not bind: the
+// save indicator redraws the bay before this resumes, so resetting a bound one here would
+// undo what the redraw set.
 async function saving(el, op, done) {
   el.disabled = true;
   try {
@@ -61,19 +63,25 @@ async function saving(el, op, done) {
   }
 }
 
-// "Complete room X": tick every check of every named container in the bay in one write.
-function completeRoom(e) {
+// "Complete room X": tick every check of every named container in the bay in one write. The
+// button stays disabled while saving, and afterwards while every container is done.
+const completing = ref(false);
+async function completeRoom() {
   const bay = storageBays().find(b => b.id === props.bay.id);
   if (!bay) return;
-  saving(
-    e.currentTarget,
-    {
+  completing.value = true;
+  try {
+    await save({
       type: 'checks',
       keys: bay.items.filter(x => x.name).flatMap(x => slotKeys(x.id)),
       value: true,
-    },
-    () => toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.'),
-  );
+    });
+    render();
+    toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.');
+  } catch {
+  } finally {
+    completing.value = false;
+  }
 }
 
 // A container's Done box. A failed write unticks it again.
@@ -173,7 +181,7 @@ async function addContainer(e) {
         <button
           class="btn quiet"
           :data-complete-bay="bay.id"
-          :disabled="!view.named || view.done === view.named"
+          :disabled="completing || !view.named || view.done === view.named"
           @click="completeRoom"
         >
           Complete room {{ bay.id }}

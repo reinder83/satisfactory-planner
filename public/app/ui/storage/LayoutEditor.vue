@@ -5,6 +5,7 @@
   Each form ignores an empty name and empties after a successful save.
 -->
 <script setup>
+import { ref } from 'vue';
 import { save, toast } from '../../api.js';
 import { setFloor } from '../../session.js';
 import { render } from '../../shell.js';
@@ -51,16 +52,17 @@ const renameFloor = e =>
   submit(e, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
 
 // "Remove this floor", after a confirmation; then back to the ground floor.
-async function removeFloor(e) {
+const removing = ref(false);
+async function removeFloor() {
   if (!confirm('Remove this added floor?')) return;
-  const el = e.currentTarget;
-  el.disabled = true;
+  removing.value = true;
   try {
     await save({ type: 'storageFloorRemove', id: props.floor.id });
     setFloor('ground');
     render();
   } catch {
-    el.disabled = false;
+  } finally {
+    removing.value = false;
   }
 }
 </script>
@@ -103,7 +105,7 @@ async function removeFloor(e) {
         v-if="!floor.builtin"
         class="btn danger"
         :data-remove-floor="floor.id"
-        :disabled="bays > 0"
+        :disabled="removing || bays > 0"
         @click="removeFloor"
       >
         {{ bays ? 'Remove its bays first' : 'Remove this floor' }}
