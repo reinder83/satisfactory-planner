@@ -2,7 +2,6 @@
 // CalculatedPlanPage.vue, with their parts in public/app/ui/plan/), mounted through render()
 // the way the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import {
@@ -14,17 +13,19 @@ import {
 } from '../../public/app/session.js';
 import { render } from '../../public/app/shell.js';
 import { planTasks } from '../../public/app/tasks.js';
-import { $, $$, evil, go, handbook, open, page, stubFetch } from './setup.mjs';
+import {
+  $,
+  $$,
+  evil,
+  generated as makeGenerated,
+  go,
+  handbook,
+  open,
+  page,
+  stubFetch,
+} from './setup.mjs';
 
-// A real calculated snapshot for the calculated plan page, made once. The planner reads its
-// data files through import.meta.url, which happy-dom does not give it, so it runs in Node.
-const generated = JSON.parse(
-  execFileSync(process.execPath, [
-    '--input-type=module',
-    '-e',
-    "import('./planner.mjs').then(m => process.stdout.write(JSON.stringify(m.calculate({}))))",
-  ]),
-);
+const generated = makeGenerated();
 
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');

@@ -14,30 +14,23 @@
 // backdrop click, beforeunload, then the wizard submit in profiles.js.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { bayCapacity } from '../../state.js';
-import { allowSwitch, navigate, pending, post, save, toast, writeQueue } from '../api.js';
-import { openFactory, openGroupChain } from '../factory-detail.js';
+import { navigate, pending, post, save, toast } from '../api.js';
+import { openCalculatedFactory, openFactory } from '../factory-detail.js';
 import { $, num } from '../format.js';
 import {
-  factoryEditing,
   floor,
   layoutEditing,
-  loadContext,
   setActiveDetail,
-  setFactoryEditing,
-  setFactoryFilter,
   setFloor,
   setLayoutEditing,
   setQuery,
   setView,
   setWizard,
-  setWorkspace,
   state,
   wizard,
   workspace,
 } from '../session.js';
 import { render } from '../shell.js';
-import { openCalculatedFactory } from '../views/calculated.js';
-import { membershipsOf } from '../views/factories.js';
 import { nextBayLetter, openSlot, slotKeys, storageBays } from '../views/storage.js';
 import {
   extractionOf,
@@ -67,9 +60,9 @@ import {
 
 // Click 1 of 2: buttons and links on the planner pages.
 // Index: dialogs (close, factory, container), storage room (complete room, floor tabs),
-// edit-mode toggles, factory groups (remove, unassign), storage layout (clear container,
-// remove bay, remove floor), notes. The build plan's own controls are handled in its
-// components (ui/plan/).
+// the storage layout toggle, storage layout (clear container, remove bay, remove floor),
+// notes. The build plan's and the factories pages' own controls are handled in their
+// components (ui/plan/, ui/factories/).
 // The branches are separate ifs, each keyed on its own attribute.
 document.addEventListener('click', async e => {
   const target = e.target.closest('button,a');
@@ -118,35 +111,6 @@ document.addEventListener('click', async e => {
   if (target.hasAttribute('data-toggle-layout')) {
     setLayoutEditing(!layoutEditing);
     render();
-  }
-  // "Edit groups" / "Done editing" on the factories page: show or hide the group editor.
-  if (target.hasAttribute('data-toggle-factory-edit')) {
-    setFactoryEditing(!factoryEditing);
-    render();
-  }
-  // --- Factory groups (factories page, after "Edit groups") ---
-  // "Remove group", after a confirmation: only the group goes; its factories and their
-  // progress stay.
-  if (
-    target.dataset.removeGroup &&
-    confirm('Remove this group? The factories stay in the list and keep their progress.')
-  ) {
-    try {
-      await save({ type: 'factoryGroupRemove', id: target.dataset.removeGroup });
-      render();
-    } catch {}
-  }
-  // ✕ beside a group in a factory card's group editor: save the factory's memberships
-  // without that group (data-group), keeping the other groups' rates.
-  if (target.dataset.unassign) {
-    const key = target.dataset.unassign,
-      groups = membershipsOf(key)
-        .filter(m => m.group !== target.dataset.group)
-        .map(m => ({ group: m.group, rate: m.rate }));
-    try {
-      await save({ type: 'factoryAssign', key, groups });
-      render();
-    } catch {}
   }
   // --- Storage layout editing (storage page, after "Edit layout") ---
   // ✕ on a container: take the item off that address. Its checkmarks stay saved with the
@@ -215,9 +179,8 @@ document.addEventListener('click', async e => {
 
 // Change events: checkboxes, selects and fields that save when committed, plus the
 // wizard fields that reshape its form.
-// Index: container Done, progress checkmarks, working phase, factory filter, wizard
-// redraws (settings, guided, node survey, existing supply), alternate recipe ticks, bay
-// and group renames, group assignment and rate.
+// Index: container Done, progress checkmarks, wizard redraws (settings, guided, node
+// survey, existing supply), alternate recipe ticks, bay renames.
 document.addEventListener('change', async e => {
   const el = e.target;
   // --- Checkmarks ---
@@ -249,12 +212,6 @@ document.addEventListener('change', async e => {
     } finally {
       el.disabled = false;
     }
-  }
-  // --- Page controls ---
-  // The factory status filter on the factories page (view state only).
-  if (el.id === 'factory-filter') {
-    setFactoryFilter(el.value);
-    render();
   }
   // --- Profile wizard (nothing is saved until the profile is created) ---
   // Settings whose answer changes what the five-step wizard shows: read the form into the
@@ -308,7 +265,7 @@ document.addEventListener('change', async e => {
       if (!el.checked) star.checked = false;
     }
   }
-  // --- Storage and factory group editing ---
+  // --- Storage layout editing ---
   // A bay's name field in the layout editor. Redrawn whether or not the save worked, so a
   // failed rename shows the saved name again.
   if (el.dataset.bayRename) {
@@ -321,70 +278,12 @@ document.addEventListener('change', async e => {
       render();
     }
   }
-  // A group's name field while editing groups; redrawn either way, like the bay name.
-  if (el.dataset.groupRename) {
-    el.disabled = true;
-    try {
-      await save({ type: 'factoryGroupRename', id: el.dataset.groupRename, name: el.value });
-    } catch {
-    } finally {
-      el.disabled = false;
-      render();
-    }
-  }
-  // "+ Add to group…" select on a factory card: add the factory to that group with no
-  // rate (the whole output, or the remainder when it is in other groups too).
-  if (el.dataset.assignAdd && el.value) {
-    const key = el.dataset.assignAdd,
-      groups = [
-        ...membershipsOf(key).map(m => ({ group: m.group, rate: m.rate })),
-        { group: el.value, rate: null },
-      ];
-    el.disabled = true;
-    try {
-      await save({ type: 'factoryAssign', key, groups });
-    } catch {
-    } finally {
-      el.disabled = false;
-      render();
-    }
-  }
-  // The per-minute rate beside a group in a factory card's group editor. Empty means the
-  // whole output or the remainder; anything else must be above 0, or a toast explains and
-  // the redraw shows the saved rate again.
-  if (el.dataset.assignRate) {
-    const key = el.dataset.assignRate,
-      raw = el.value.trim();
-    let rate = null;
-    if (raw !== '') {
-      rate = Number(raw);
-      if (!Number.isFinite(rate) || rate <= 0) {
-        toast(
-          'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
-          true,
-        );
-        render();
-        return;
-      }
-    }
-    const groups = membershipsOf(key).map(m =>
-      m.group === el.dataset.group ? { group: m.group, rate } : { group: m.group, rate: m.rate },
-    );
-    el.disabled = true;
-    try {
-      await save({ type: 'factoryAssign', key, groups });
-    } catch {
-    } finally {
-      el.disabled = false;
-      render();
-    }
-  }
 });
 
 // Input events on search and filter boxes, as you type.
 document.addEventListener('input', e => {
-  // The find boxes on the factories and storage pages: store the query and redraw.
-  if (['factory-search', 'storage-search'].includes(e.target.id)) {
+  // The find box on the storage page: store the query and redraw.
+  if (e.target.id === 'storage-search') {
     setQuery(e.target.value);
     render();
   }
@@ -484,9 +383,9 @@ document.addEventListener('focusout', e => {
   if (field && !field.contains(e.relatedTarget)) hideSupplyOptions(input);
 });
 
-// Submit 1 of 2 (then profiles.js): the inline forms of the storage layout editor and the
-// factory group editor. Each ignores an empty name.
-// Index: add floor, rename floor, add bay, add container, add group.
+// Submit 1 of 2 (then profiles.js): the inline forms of the storage layout editor. Each
+// ignores an empty name.
+// Index: add floor, rename floor, add bay, add container.
 document.addEventListener('submit', async e => {
   const f = e.target,
     read = () => String(new FormData(f).get('name') || '').trim();
@@ -557,25 +456,6 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
-  // --- Factory groups ---
-  // "+ Add group" in the group editor: a new, empty group with a random fg-… id.
-  if (f.id === 'add-group') {
-    e.preventDefault();
-    const name = read();
-    if (!name) return;
-    try {
-      await save({
-        type: 'factoryGroupAdd',
-        id:
-          'fg-' +
-          Array.from(crypto.getRandomValues(new Uint8Array(6)), b =>
-            b.toString(16).padStart(2, '0'),
-          ).join(''),
-        name,
-      });
-      render();
-    } catch {}
-  }
 });
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
@@ -631,9 +511,9 @@ window.addEventListener('beforeunload', e => {
 });
 
 // Click 2 of 2 on document: the profile wizard and the dialogs it and the calculated pages
-// open. Index: new save (also on the Vue profiles page), calculated factory and group
-// build-order dialogs, the alternate recipe picker, round up, wizard and guided navigation,
-// the node survey, existing-supply rows, cancel wizard.
+// open. Index: new save (also on the Vue profiles page), the calculated factory dialog, the
+// alternate recipe picker, wizard and guided navigation, the node survey, existing-supply
+// rows, cancel wizard.
 document.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -643,8 +523,6 @@ document.addEventListener('click', async e => {
   // --- Dialogs ---
   // A calculated plan's factory name, "Details ↗" or "Open factory" link: its dialog.
   if (b.dataset.calcFactory) openCalculatedFactory(b.dataset.calcFactory);
-  // "Build order ↗" on a factory group with more than one factory.
-  if (b.dataset.groupChain) openGroupChain(b.dataset.groupChain);
   // "recipe ↗" beside an alternate in the recipe picker: show that recipe.
   if (b.dataset.altInfo) openAltRecipe(b.dataset.altInfo);
   // --- Alternate recipe picker (wizard) ---
@@ -686,30 +564,6 @@ document.addEventListener('click', async e => {
       wizardError($('#wizard-form'), err);
       b.disabled = false;
       b.textContent = label;
-    }
-  }
-  // --- Profile actions ---
-  // "Round up production" on a calculated plan: after the unsaved-notes check and any
-  // queued saves, the server creates a new profile with whole machines and it is opened.
-  // The old profile keeps its progress; the toast says how many checks need review.
-  if (b.hasAttribute('data-round-up')) {
-    if (!allowSwitch()) return;
-    b.disabled = true;
-    try {
-      await writeQueue;
-      const r = await post('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
-      setWorkspace(r.workspace);
-      await loadContext(r.saveId, r.profileId);
-      render();
-      toast(
-        'Created rounded profile. ' +
-          r.reviewCount +
-          ' completed factory checks need review; previous progress is preserved.',
-      );
-    } catch (err) {
-      toast(err.message, true);
-      b.disabled = false;
-      b.textContent = 'Round up production';
     }
   }
   // --- Wizard navigation ---
