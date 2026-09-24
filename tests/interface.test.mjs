@@ -123,10 +123,8 @@ function ui() {
 }
 test('original and calculated views render; wizard exposes all settings and safe names', () => {
   const c = ui();
-  // Profiles, account, backup, the plan and factories pages and the handbook's resources
-  // page are Vue components, tested in tests/ui/.
-  for (const route of ['renderStorage'])
-    assert.ok(vm.runInContext(route + '()', c).length > 100, route);
+  // Every page but the wizard and the calculated resources page is a Vue component, tested
+  // in tests/ui/.
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
     c,
@@ -137,9 +135,7 @@ test('original and calculated views render; wizard exposes all settings and safe
     assert.ok(!text.includes('value="World <one>"'));
   }
   assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-  for (const route of ['renderCalculatedResources', 'renderStorage'])
-    assert.ok(vm.runInContext(route + '()', c).length > 100, route);
-  assert.ok(!vm.runInContext('renderStorage()', c).includes('<b>Ground floor is built.</b>'));
+  assert.ok(vm.runInContext('renderCalculatedResources()', c).length > 100);
 });
 
 // Markup that was escaped as text: a tag shown on the page, or an entity escaped twice.
@@ -156,10 +152,9 @@ test('every page escapes user text exactly once', () => {
   );
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
   // The pages that are Vue components are covered by tests/ui/.
-  const shared = ['renderStorage'];
-  const original = render(shared);
+  const original = [];
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  const calculatedPages = render([...shared, 'renderCalculatedResources']);
+  const calculatedPages = render(['renderCalculatedResources']);
   // The wizard's five steps and the guided start, adding a profile to the save.
   const wizardPages = [1, 2, 3, 4, 5, 'guided'].flatMap(step => {
     vm.runInContext(
@@ -174,10 +169,7 @@ test('every page escapes user text exactly once', () => {
     c,
   );
   const dialog = open => vm.runInContext(`${open};document.querySelector('#detail').innerHTML`, c);
-  const editing = [
-    ...render(['renderStorage']).map(([r, p]) => [r + ' editing', p]),
-    ['container dialog', dialog(`openSlot('S01')`)],
-  ];
+  const editing = [];
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
   editing.push([
     'alternate recipe dialog',
@@ -192,108 +184,33 @@ test('every page escapes user text exactly once', () => {
   // The escaped name is there, once-escaped, on the pages that show it.
   const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
   for (const [route, page] of all.filter(([r]) =>
-    ['renderWizard 1', 'renderWizard guided', 'container dialog'].includes(r),
+    ['renderWizard 1', 'renderWizard guided'].includes(r),
   ))
     assert.ok(page.includes(escaped), route);
 });
 
-test('storage layout edits render custom floors, bays and assignments; missing edits render the handbook', () => {
+// The storage page and its container dialog are components, tested in
+// tests/ui/storage.test.mjs. Their data stays here.
+test('an added bay takes the next free letter after the handbook bays', () => {
   const c = ui();
-  vm.runInContext(`floor='ground'`, c);
-  assert.ok(
-    vm.runInContext('renderStorage()', c).includes('data-slot="A01"'),
-    'legacy state without storageEdits renders the handbook layout',
-  );
-  vm.runInContext(
-    `state.storageEdits={floors:[{id:'cf-abcd12',label:'Basement'}],floorNames:{ground:'Main hall'},bays:[{id:'S',name:'Overflow',floor:'cf-abcd12'}],bayNames:{A:'Renamed ingots'},slots:{S01:'Iron Plate<x>'},clearedSlots:['A01']};`,
-    c,
-  );
-  const ground = vm.runInContext('renderStorage()', c);
-  assert.match(ground, /Renamed ingots/);
-  assert.match(ground, /Main hall/);
-  assert.match(ground, /Basement/);
-  assert.ok(!ground.includes('data-slot="A01"'), 'cleared containers show as reserved');
-  const custom = vm.runInContext(`floor='cf-abcd12';renderStorage()`, c);
-  assert.match(custom, /data-slot="S01"/);
-  assert.match(custom, /Iron Plate&lt;x&gt;/, 'custom container names are escaped');
-  const editing = vm.runInContext('layoutEditing=true;renderStorage()', c);
-  assert.match(editing, /data-remove-bay="S"/);
-  assert.match(editing, /data-bay-rename="S"/);
-  assert.match(editing, /add-container/);
-  assert.match(editing, /data-remove-floor="cf-abcd12"/);
-  vm.runInContext(`layoutEditing=false;floor='ground';state.storageEdits=undefined;`, c);
-  assert.ok(vm.runInContext('renderStorage()', c).includes('data-slot="A01"'));
   assert.equal(vm.runInContext('nextBayLetter()', c), 'S');
+  vm.runInContext(`state.storageEdits={bays:[{id:'S',name:'Overflow',floor:'ground'}]};`, c);
+  assert.equal(vm.runInContext('nextBayLetter()', c), 'T');
 });
 
-test('storage bays stay in address order in the document and take their hall position from the grid', () => {
-  const c = ui();
-  const html = vm.runInContext(`floor='ground';renderStorage()`, c);
-  const letters = [...html.matchAll(/class="bay-letter">([A-Z]+)</g)].map(m => m[1]);
-  assert.ok(
-    letters.length > 2 && letters.length % 2 === 0,
-    'the ground floor has whole rows of bays to order',
-  );
-  assert.deepEqual(letters, [...letters].sort(), 'a single narrow column reads alphabetically');
-  const at = Object.fromEntries(
-    [...html.matchAll(/--bay-row:([0-9]+);--bay-col:([0-9]+)[^]*?bay-letter">([A-Z]+)</g)].map(
-      m => [m[3], [Number(m[1]), Number(m[2])]],
-    ),
-  );
-  assert.deepEqual(at.A, [letters.length / 2, 1], 'A stays at the entrance, left of the aisle');
-  assert.deepEqual(at.B, [letters.length / 2, 3], 'B stays at the entrance, right of the aisle');
-  assert.deepEqual(
-    at[letters.at(-2)],
-    [1, 1],
-    'the last pair of bays stays at the rear of the hall',
-  );
-  assert.equal(
-    [...html.matchAll(/class="aisle"/g)].length,
-    letters.length / 2,
-    'every row keeps its aisle',
-  );
-  assert.match(
-    html,
-    /eyebrow floor-marker">REAR OF HALL/,
-    'the orientation markers can be hidden when stacked',
-  );
-});
-
-test('a bay grows past eight containers and keeps offering the next address', () => {
+test('a bay grows past eight containers up to the last addressable position', () => {
   const c = ui();
   vm.runInContext(
-    `floor='ground';layoutEditing=true;state.storageEdits={floors:[],floorNames:{},bays:[],bayNames:{},slots:{A10:'Aluminum Casing'},clearedSlots:[]};`,
+    `state.storageEdits={floors:[],floorNames:{},bays:[],bayNames:{},slots:{A10:'Aluminum Casing'},clearedSlots:[]};`,
     c,
   );
-  const html = vm.runInContext('renderStorage()', c);
-  assert.match(html, /data-slot="A08"/, 'the printed positions keep their addresses');
-  assert.match(
-    html,
-    /<strong>A09<\/strong><span>Reserved<\/span>/,
-    'the gap up to the added container is reserved',
-  );
-  assert.match(html, /data-slot="A10"/, 'the added container renders at its own address');
-  assert.match(
-    html,
-    /ADDED POSITIONS/,
-    'added positions are marked off from the two printed banks',
-  );
-  assert.ok(
-    !html.includes('data-slot="A11"'),
-    'the bay is only as long as its highest filled address',
-  );
-  const full = vm.runInContext(
-    `state.storageEdits.slots=Object.fromEntries(Array.from({length:bayCapacity-8},(_,i)=>['A'+(i+9),'Item '+i]));renderStorage()`,
+  const grown = JSON.parse(vm.runInContext(`JSON.stringify(storageBays().find(b=>b.id==='A'))`, c));
+  assert.equal(grown.items.length, 10, 'the bay is as long as its highest filled address');
+  assert.equal(grown.items[8].name, null, 'the gap up to the added container is reserved');
+  assert.equal(grown.items[9].name, 'Aluminum Casing');
+  vm.runInContext(
+    `state.storageEdits.slots=Object.fromEntries(Array.from({length:bayCapacity-8},(_,i)=>['A'+(i+9),'Item '+i]));`,
     c,
-  );
-  assert.match(
-    full,
-    new RegExp(`data-slot="A${bayCapacity}"`),
-    'a bay can reach the last addressable position',
-  );
-  assert.ok(
-    !/<form class="inline-form add-container" data-bay="A"/.test(full),
-    'a bay with no address left stops offering one',
   );
   const bay = vm.runInContext(`storageBays().find(b=>b.id==='A')`, c);
   assert.equal(bay.items.length, bayCapacity);
@@ -407,20 +324,25 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", c);
 });
 
-test('storage follows the selected contract, preserves addresses and displays small power in MW', () => {
+test('storage follows the selected contract and small power displays in MW', () => {
   const c = ui();
   vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Building stock'};floor='ground';`,
+    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Stock'};`,
     c,
   );
-  const storage = vm.runInContext('renderStorage()', c);
-  assert.match(storage, /Iron Plate/);
-  assert.ok(!storage.includes('data-slot="G01"'));
+  const named = () =>
+    JSON.parse(
+      vm.runInContext(
+        `JSON.stringify(storageBays().flatMap(b=>b.items).filter(x=>x.name).map(x=>x.name))`,
+        c,
+      ),
+    );
+  assert.ok(named().includes('Iron Plate'));
   vm.runInContext(
     `calculated=structuredClone(generated);for(const stage of Object.values(calculated.stages))stage.storage={};calculated.settings.storage='none';calculated.settings.collectables=false;`,
     c,
   );
-  assert.ok(!vm.runInContext('renderStorage()', c).includes('data-slot='));
+  assert.deepEqual(named(), [], 'nothing selected leaves no containers');
   assert.equal(vm.runInContext('power(500)', c), '500 MW');
   assert.equal(vm.runInContext('power(1000)', c), (1000).toLocaleString() + ' MW');
   assert.equal(vm.runInContext('power(1500)', c), (1.5).toLocaleString() + ' GW');

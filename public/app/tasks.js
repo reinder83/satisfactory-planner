@@ -1,16 +1,13 @@
-// Build-plan checklist steps: per-profile edits, links and icons. The build plan's
-// components (ui/plan/) read them; views/storage.js draws its own checklists with
-// taskHtml until the storage page is a component too.
+// Build-plan checklist steps: per-profile edits, links and icons, read by the build plan's
+// components (ui/plan/). The storage page's fixed checklists use the same step component and
+// icons (ui/storage/StorageChecklist.vue).
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
-import { itemIcon } from './format.js';
-import { html, raw } from './html.js';
 import {
   calcStage,
   calculated,
   checked,
-  doneAttr,
   hideDone,
   phase,
   plan,
@@ -188,47 +185,6 @@ function taskIconItem(t) {
 export function taskIcon(t) {
   const item = taskIconItem(t);
   return item ? { item } : { kind: taskKind(t) };
-}
-
-// HTML for a step's icon, for the storage page's checklists.
-function taskIconHtml(t) {
-  const item = taskIconItem(t);
-  if (item)
-    return html`<span class="task-icon" data-kind="item" aria-hidden="true"
-      >${itemIcon(item)}</span
-    >`;
-  const kind = taskKind(t);
-  return html`<span class="task-icon" data-kind="${kind}" aria-hidden="true"
-    ><svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      ${raw(TASK_GLYPHS[kind])}
-    </svg></span
-  >`;
-}
-
-// HTML for one step of the storage page's checklists: checkbox (data-check=<step id>, the
-// saved checklist key, handled in events/views.js), icon and expandable text. Those steps
-// have no edits, links or personal tasks; the build plan draws its steps with
-// ui/plan/PlanStep.vue.
-export function taskHtml(t) {
-  return html`<article class="task">
-    <input
-      type="checkbox"
-      data-check="${t.id}"
-      aria-label="Complete: ${t.title}"
-      ${raw(doneAttr(t.id))}
-    />${taskIconHtml(t)}
-    <details data-task="${t.id}">
-      <summary>${t.title}</summary>
-      <p>${t.body}</p>
-    </details>
-  </article>`;
 }
 
 // Applies the "Hide completed" toggle and the step search to a list of steps.

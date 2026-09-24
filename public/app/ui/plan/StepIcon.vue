@@ -1,5 +1,5 @@
 <!-- A build-plan step's icon: the bundled icon of the part it makes, otherwise the glyph for
-     its kind of work (taskIcon() in tasks.js; taskIconHtml() for the storage page). The
+     its kind of work (taskIcon() in tasks.js), on the build plan and the storage page. The
      glyphs are fixed markup from TASK_GLYPHS, never user text. -->
 <script setup>
 import { TASK_GLYPHS } from '../../tasks.js';

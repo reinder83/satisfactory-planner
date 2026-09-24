@@ -38,7 +38,6 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'document input',
     'document keydown',
     'document focusout',
-    'document submit',
     'document error',
     'window hashchange',
     '#detail click',

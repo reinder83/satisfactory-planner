@@ -29,8 +29,11 @@ import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
 
+// null once the open profile is no longer a calculated one: until render() swaps this page
+// out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
+    if (!calculated) return null;
     const x = calcStage(),
       ts = planTasks();
     return {
@@ -56,55 +59,57 @@ const page = computed(() =>
 </script>
 
 <template>
-  <PageHeader
-    eyebrow="CALCULATED BUILD SEQUENCE"
-    :title="page.title"
-    :subtitle="page.profileName"
-  />
-  <CalcWarnings />
-  <div class="stats">
-    <StatTile label="Progress" :value="page.progress" caption="Checklist steps" />
-    <StatTile
-      label="Delivery time"
-      :value="page.hours"
-      caption="At steady state; excludes construction"
+  <template v-if="page">
+    <PageHeader
+      eyebrow="CALCULATED BUILD SEQUENCE"
+      :title="page.title"
+      :subtitle="page.profileName"
     />
-    <StatTile label="Buildings" :value="page.buildings" caption="Includes new power generation" />
-    <StatTile label="New power" :value="page.power" caption="Existing spare power is separate" />
-  </div>
-  <div v-if="page.post" class="notice blue">
-    Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
-    elevator exports as needed and sink spare parts.
-  </div>
-  <div class="split">
-    <section>
-      <div class="section-head">
-        <h2>Build sequence</h2>
-        <EditStepsToggle />
-      </div>
-      <p class="small muted">
-        Start with construction stock and currently available power. Mark HUB, MAM and recipe
-        unlocks as you complete them; these carry across phases. Milestone cost guidance updates
-        from factories marked running. Full-phase factory targets follow the startup and unlock
-        steps.
-      </p>
-      <Checklist />
-      <AddTaskForm placeholder="Add a task…" />
-      <h2>Phase notes</h2>
-      <textarea id="phase-note" class="notes" maxlength="6000" :value="page.note"></textarea>
-      <button class="btn" :data-save-note="'phase-' + page.phase" data-input="phase-note">
-        Save notes
-      </button>
-    </section>
-    <aside>
-      <section class="panel">
-        <h2>Elevator delivery</h2>
-        <DeliveryCounter v-for="d in page.deliveries" :key="d.id" :delivery="d" />
+    <CalcWarnings />
+    <div class="stats">
+      <StatTile label="Progress" :value="page.progress" caption="Checklist steps" />
+      <StatTile
+        label="Delivery time"
+        :value="page.hours"
+        caption="At steady state; excludes construction"
+      />
+      <StatTile label="Buildings" :value="page.buildings" caption="Includes new power generation" />
+      <StatTile label="New power" :value="page.power" caption="Existing spare power is separate" />
+    </div>
+    <div v-if="page.post" class="notice blue">
+      Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
+      elevator exports as needed and sink spare parts.
+    </div>
+    <div class="split">
+      <section>
+        <div class="section-head">
+          <h2>Build sequence</h2>
+          <EditStepsToggle />
+        </div>
+        <p class="small muted">
+          Start with construction stock and currently available power. Mark HUB, MAM and recipe
+          unlocks as you complete them; these carry across phases. Milestone cost guidance updates
+          from factories marked running. Full-phase factory targets follow the startup and unlock
+          steps.
+        </p>
+        <Checklist />
+        <AddTaskForm placeholder="Add a task…" />
+        <h2>Phase notes</h2>
+        <textarea id="phase-note" class="notes" maxlength="6000" :value="page.note"></textarea>
+        <button class="btn" :data-save-note="'phase-' + page.phase" data-input="phase-note">
+          Save notes
+        </button>
       </section>
-      <section class="panel">
-        <h2>Profile assumptions</h2>
-        <p v-for="(w, i) in page.warnings" :key="i" class="small">{{ w }}</p>
-      </section>
-    </aside>
-  </div>
+      <aside>
+        <section class="panel">
+          <h2>Elevator delivery</h2>
+          <DeliveryCounter v-for="d in page.deliveries" :key="d.id" :delivery="d" />
+        </section>
+        <section class="panel">
+          <h2>Profile assumptions</h2>
+          <p v-for="(w, i) in page.warnings" :key="i" class="small">{{ w }}</p>
+        </section>
+      </aside>
+    </div>
+  </template>
 </template>

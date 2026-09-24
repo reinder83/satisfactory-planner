@@ -7,7 +7,6 @@ import { invalidate } from './ui/bridge.js';
 import { mountPage, mountShell, unmountPage } from './ui/mount.js';
 import { vuePage } from './ui/pages.js';
 import { renderCalculatedResources } from './views/calculated.js';
-import { renderStorage } from './views/storage.js';
 import { renderWizard } from './wizard/wizard.js';
 
 // HTML for the heading row at the top of every page. Plain strings are escaped, so pass
@@ -37,7 +36,6 @@ export function browserNotice() {
 // yet (ui/pages.js has those). A calculated profile has its own resources page.
 const legacyRoutes = () => ({
   wizard: renderWizard,
-  storage: renderStorage,
   resources: calculated ? renderCalculatedResources : null,
 });
 
