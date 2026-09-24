@@ -2422,6 +2422,9 @@ button.rail-tile:hover {
 .rate-row input {
   width: 100%;
 }
+.rate-row[hidden] {
+  display: none;
+}
 .carry-panel {
   margin: 18px 0 0;
 }
