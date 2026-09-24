@@ -6,7 +6,24 @@ Read `../AGENTS.md` first. This guide applies to files in `public/` and to inter
 
 You may redesign colors, typography, spacing, navigation, cards, tables, dialogs and responsive layouts. The current visual style is not a requirement. Prefer familiar labels and clear hierarchy over exposing solver or implementation terminology. Show useful production numbers with units and retain access to detailed inputs, outputs, machine counts and expansion steps.
 
-Use the current vanilla HTML/CSS/JS structure unless the requested scope warrants an architectural migration. A framework migration must retain both runtime modes, static hosting, save compatibility and functional coverage; do not introduce one merely to reskin the interface.
+The interface is being migrated to Vue 3 (see "Vue migration" below). A framework migration must retain both runtime modes, static hosting, save compatibility and functional coverage; do not introduce one merely to reskin the interface.
+
+## Vue migration
+
+The owner chose Vue on 2026-09-24. It lands in stages, one pull request each, and every stage must leave both editions working and every screen behaving as before:
+
+1. Foundation (done): Vite and Vitest, `ui/Shell.vue` (sidebar, navigation, save status, profile footer, top bar, phase picker) and `ui/AdaPanel.vue`.
+2. Saves & profiles, account and sign-in, backup, handbook resources.
+3. Build plan: checklist, step editing, removed steps, deliveries, notes (both profile kinds).
+4. Factories: cards, groups and the group editor, and one dialog component for the factory, flow, oil campus and group chain views.
+5. Storage room: floors, bays, layout editing, container dialog, workshop.
+6. Calculated factories and resources, and the calculated factory dialog.
+7. The wizard: five steps, guided start, node survey, supply search, recipe picker.
+8. Cleanup: remove the legacy page rendering, `html.js` and the leftover delegated handlers, and the rebuild workarounds in `render()`.
+
+How the two layers meet until then: session state (`session.js`) is not reactive. `render()` in `shell.js` mounts the frame once (`ui/mount.js`), calls `invalidate()` from `ui/bridge.js`, and fills `<main>` synchronously with the legacy page, because some handlers read the page right after calling it. A component reads session state inside `legacy(() => …)`, which re-runs on `invalidate()`. `<main>` has no children in the template, so Vue never touches the legacy page inside it. Screens that replace `#app` wholesale (sign-in, the boot error) call `unmountShell()` first.
+
+Rules for components: keep class names and structure identical to the markup they replace, so `style.css` needs no change and the rendered layout can be compared with the previous release element by element; keep every `id`, `data-*` hook and form field name that `browser-check.mjs`, the tests or remaining delegated handlers use; move a control's handler into the component (`@click`, `@change`) and delete its delegated branch in `events/` in the same change; never use `v-html` for user text. Template asset URLs are page-relative (`./favicon.svg`), so `vite.config.mjs` turns off Vue's asset URL rewriting. Test components with Vitest in `tests/ui/`, mounted through `render()` as the app mounts them, including a hostile name wherever user text appears.
 
 ## Functional inventory — retain these flows
 

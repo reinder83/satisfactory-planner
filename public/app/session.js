@@ -6,6 +6,7 @@ import { pending, request, writeQueue } from './api.js';
 import { $ } from './format.js';
 import { html } from './html.js';
 import { render } from './shell.js';
+import { unmountShell } from './ui/mount.js';
 import { renderSignedOut } from './views/account.js';
 import { startWizard } from './wizard/wizard.js';
 
@@ -127,9 +128,21 @@ export const phaseLabel = p => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
 // Waits for queued saves first so they land in the profile they were made in.
 export async function loadContext(saveId, profileId) {
   await writeQueue;
-  const c = await request(
-    '/api/context?save=' + encodeURIComponent(saveId) + '&profile=' + encodeURIComponent(profileId),
+  setContext(
+    await request(
+      '/api/context?save=' +
+        encodeURIComponent(saveId) +
+        '&profile=' +
+        encodeURIComponent(profileId),
+    ),
   );
+  $('#detail').close();
+}
+
+// Makes an /api/context reply the open save and profile ({ save, profile, state, plan,
+// handbook }): its state, its calculated plan (null for the handbook) and the handbook it
+// reads, and resets the per-page UI state. Also used by the component tests.
+export function setContext(c) {
   currentSave = c.save;
   currentProfile = c.profile;
   state = c.state;
@@ -141,7 +154,6 @@ export async function loadContext(saveId, profileId) {
   editingTask = null;
   factoryEditing = false;
   layoutEditing = false;
-  $('#detail').close();
 }
 
 // The calculated plan's data for the current stage (rows, delivery, power, raw use).
@@ -200,6 +212,7 @@ export async function boot() {
     }
   } catch (e) {
     // Any failure while opening replaces the page with an error and a retry button.
+    unmountShell();
     $('#app').innerHTML = String(
       html`<section class="loading">
         <h1>Could not open the planner</h1>

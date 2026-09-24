@@ -24,10 +24,12 @@ const fail = (message, status = 400) => {
 // Builds the Docker edition's HTTP server (not yet listening) around the workspace in
 // dataDir. APP_PASSWORD adds an optional HTTP Basic login in front of everything, separate
 // from the in-app accounts in workspace.mjs. Tests call this with a temporary dataDir.
+// `dev` serves the frontend through Vite (see devFrontend below) instead of as plain files.
 export async function createApp({
   dataDir = process.env.DATA_DIR || path.join(root, 'data'),
   user = process.env.APP_USER || 'pioneer',
   password = process.env.APP_PASSWORD || '',
+  dev = false,
 } = {}) {
   await fs.mkdir(dataDir, { recursive: true });
   const workspace = await openWorkspace({ dataDir, initialState, validateState, mutate });
@@ -111,8 +113,10 @@ export async function createApp({
         const r = await workspace(req, url, body);
         return send(res, r.status, r.data, r.headers);
       }
-      // Static files come from public/ unbuilt. A path that resolves outside it, such as
-      // one with ../, is refused, so data/ and the source are never served.
+      // In development Vite serves the page and its modules, compiling .vue files.
+      if (vite && (await vite.handle(req, res, url))) return;
+      // Static files come from public/ (built by build.mjs in the Docker image). A path that
+      // resolves outside it, such as one with ../, is refused, so data/ is never served.
       const publicDir = path.join(root, 'public');
       const relative = decodeURIComponent(url.pathname);
       const file = path.resolve(publicDir, '.' + (relative === '/' ? '/index.html' : relative));
@@ -148,11 +152,59 @@ export async function createApp({
       else res.end();
     }
   });
+  const vite = dev ? await devFrontend(server) : null;
+  if (vite) server.on('close', () => vite.close());
   return server;
+}
+
+// Development only: Vite in middleware mode on the planner's own server and port, so
+// `npm start` still serves the source as it is, with the Vue components compiled on
+// request and edits reloaded in the browser. Its file access is limited to public/ and the
+// installed packages, so data/ stays out of reach. Needs the dev dependencies (npm ci).
+async function devFrontend(server) {
+  let vite;
+  try {
+    vite = await (
+      await import('vite')
+    ).createServer({
+      configFile: path.join(root, 'vite.config.mjs'),
+      appType: 'custom',
+      server: {
+        middlewareMode: true,
+        hmr: { server },
+        fs: { strict: true, allow: [path.join(root, 'public'), path.join(root, 'node_modules')] },
+      },
+    });
+  } catch (e) {
+    if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+    throw Error(
+      'Development mode needs the dev dependencies: run npm ci (or set NODE_ENV=production to serve a build).',
+    );
+  }
+  return {
+    close: () => vite.close(),
+    // Answers the request if it is Vite's to answer; false leaves it to the static files.
+    async handle(req, res, url) {
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        const page = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache',
+        });
+        res.end(await vite.transformIndexHtml(url.pathname, page));
+        return true;
+      }
+      await new Promise(done => {
+        res.once('finish', done);
+        vite.middlewares(req, res, done);
+      });
+      return res.headersSent;
+    },
+  };
 }
 // Listen only when run directly (node server.mjs), not when imported by tests.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const server = await createApp();
+  const server = await createApp({ dev: process.env.NODE_ENV !== 'production' });
   const port = Number(process.env.PORT || 8080);
   server.listen(port, process.env.HOST || '0.0.0.0', () =>
     console.log('Planner ready at http://localhost:' + port),

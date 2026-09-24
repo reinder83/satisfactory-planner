@@ -1,9 +1,11 @@
-import { test } from 'node:test';
+// @vitest-environment node
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 // The interface tests load the app as one concatenated script (tests/helpers/app-source.mjs),
 // which hides ES-module mistakes: a missing export, or a module reading another's binding
-// before it is initialised. This imports the real entry point with a stub DOM instead.
+// before it is initialised. This imports the real entry point with a stub DOM instead,
+// through Vite so the .vue components compile.
 test('the app entry point loads as ES modules and registers its listeners in order', async () => {
   const registered = [];
   const element = name => ({
@@ -17,18 +19,19 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     ...element('document'),
     querySelector: element,
     querySelectorAll: () => [],
+    // Vue's DOM runtime makes a <template> element as it loads.
+    createElement: () => ({}),
   };
   globalThis.window = { ...element('window'), scrollTo() {} };
   globalThis.location = { hash: '#plan' };
   globalThis.fetch = async () => {
     throw new Error('offline');
   };
-  await import('../public/app.js');
+  await import('../../public/app.js');
   await new Promise(resolve => setTimeout(resolve, 50));
   // Several handlers share an event type, so their order is behaviour; boot() then renders
   // its error screen because the stub fetch fails.
   assert.deepEqual(registered, [
-    'document click',
     'document click',
     'document change',
     'document input',

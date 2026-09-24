@@ -6,6 +6,7 @@ import { browserMode, browserRequest } from '../browser-api.js';
 import { $ } from './format.js';
 import { currentProfile, currentSave, setState, setView, state } from './session.js';
 import { render } from './shell.js';
+import { invalidate } from './ui/bridge.js';
 
 // Number of save() calls still in flight; drives the "Saving…" indicator.
 export let pending = 0;
@@ -79,15 +80,10 @@ export function save(op) {
     });
 }
 
-// Updates the sidebar save status (#saved). Also called at the end of every render().
+// Refreshes the sidebar save status ("Saving…" while a write is pending), which
+// ui/Shell.vue reads from `pending`.
 export function saveIndicator() {
-  const el = $('#saved');
-  if (el)
-    el.textContent = pending
-      ? 'Saving…'
-      : browserMode
-        ? 'Saved in this browser'
-        : 'Saved on server';
+  invalidate();
 }
 
 // Headers that name the save and profile a request applies to. Both editions read them

@@ -4,7 +4,7 @@
 //   dist/satisfactory-planner/   GitHub Pages edition: allowlisted, browser-only, with the
 //                                calculator running in a worker.
 //
-// Both are minified: the modules in public/app/ are bundled into app.js, the other scripts
+// Both are minified: the modules in public/app/ are bundled into app.js by Vite, the other scripts
 // and the stylesheet are minified file by file. Development needs no build; `npm start`
 // serves public/ as it is.
 //
@@ -13,6 +13,7 @@ import * as esbuild from 'esbuild';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build as viteBuild } from 'vite';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
@@ -47,29 +48,39 @@ const minifyJs = async code =>
 const minifyCss = async code =>
   (await esbuild.transform(code, { loader: 'css', minify: true, charset: 'utf8' })).code;
 
+// public/app.js with public/app/ (including the Vue components) and Vue itself, as one
+// minified module, built by Vite. The shared root scripts stay imports of their own files.
 async function bundleApp() {
-  const result = await esbuild.build({
-    entryPoints: [path.join(publicDir, 'app.js')],
-    bundle: true,
-    format: 'esm',
-    minify: true,
-    charset: 'utf8',
-    write: false,
-    logLevel: 'warning',
-    plugins: [
-      {
-        name: 'shared-modules',
-        setup(build) {
-          build.onResolve({ filter: /^\./ }, args => {
-            const file = path.resolve(args.resolveDir, args.path);
-            if (path.dirname(file) === publicDir && SHARED.includes(path.basename(file)))
-              return { path: './' + path.basename(file), external: true };
-          });
+  const result = await viteBuild({
+    configFile: path.join(root, 'vite.config.mjs'),
+    build: {
+      write: false,
+      minify: true,
+      modulePreload: false,
+      rollupOptions: {
+        input: path.join(publicDir, 'app.js'),
+        preserveEntrySignatures: 'strict',
+        // Called with the import as written, so relative ones are resolved against the importer.
+        external: (id, importer, resolved) => {
+          const file = resolved || !importer ? id : path.resolve(path.dirname(importer), id);
+          return path.dirname(file) === publicDir && SHARED.includes(path.basename(file));
+        },
+        output: {
+          format: 'es',
+          entryFileNames: 'app.js',
+
+          paths: id => './' + path.basename(id),
         },
       },
-    ],
+    },
   });
-  return result.outputFiles[0].text;
+  const chunks = (Array.isArray(result) ? result[0] : result).output;
+  const app = chunks.filter(c => c.type === 'chunk');
+  if (app.length !== 1 || chunks.some(c => c.type === 'asset'))
+    throw Error(
+      'build.mjs: expected app.js as the only output, got ' + chunks.map(c => c.fileName),
+    );
+  return app[0].code;
 }
 
 // Every script at the root of public/ must be classified above, so a new one is never
