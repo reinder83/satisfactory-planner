@@ -6,7 +6,6 @@ import { calculated, view } from './session.js';
 import { invalidate } from './ui/bridge.js';
 import { mountPage, mountShell, unmountPage } from './ui/mount.js';
 import { vuePage } from './ui/pages.js';
-import { renderCalculatedResources } from './views/calculated.js';
 import { renderWizard } from './wizard/wizard.js';
 
 // HTML for the heading row at the top of every page. Plain strings are escaped, so pass
@@ -33,10 +32,9 @@ export function browserNotice() {
 }
 
 // Hash route -> legacy view function returning HTML, for the pages that are not components
-// yet (ui/pages.js has those). A calculated profile has its own resources page.
+// yet (ui/pages.js has those).
 const legacyRoutes = () => ({
   wizard: renderWizard,
-  resources: calculated ? renderCalculatedResources : null,
 });
 
 // Redraws the page for the current `view` from session state. Called after every change

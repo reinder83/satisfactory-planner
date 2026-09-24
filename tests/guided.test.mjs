@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createApp } from '../server.mjs';
-import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS, RAW } from '../planner.mjs';
+import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS } from '../planner.mjs';
 import { nodeCounts } from '../public/preferences.js';
 import { progression } from '../public/progression.js';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.js';
@@ -821,13 +821,7 @@ test('a plan saved before existing production existed still renders every page',
     `calculated=legacyPlan;currentProfile={id:'p',kind:'calculated',name:'Older profile'};state={settings:{phase:'3'},checks:{['calc-3-'+legacyPlan.stages['3'].rows[0].id]:true},notes:{},deliveries:{},customTasks:[]};`,
     c,
   );
-  // The other pages are components: tests/ui/ render them for this shape too.
-  for (const view of ['renderCalculatedResources']) {
-    const html = vm.runInContext(view + '()', c);
-    assert.ok(typeof html === 'string' && html.length > 100, view + ' rendered nothing');
-  }
-  // The resources page says there is nothing credited rather than breaking.
-  assert.match(vm.runInContext('renderCalculatedResources()', c), /None credited in this phase/);
+  // The pages are components: tests/ui/ render them for this shape too.
   // ADA reads the same counters and must not throw on the older shape.
   assert.doesNotThrow(() => vm.runInContext('adaFacts()', c));
   // Review of an older plan shows no credit notice at all.
@@ -1149,20 +1143,7 @@ test('applying the survey writes the budgets and confirms them', () => {
   );
 });
 
-test('the resource tables show the ore beside its name', () => {
-  const c = ui();
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  const calc = vm.runInContext('renderCalculatedResources()', c);
-  for (const n of RAW)
-    assert.ok(
-      calc.includes('icons/' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png'),
-      n + ' icon on the calculated page',
-    );
-  // The original handbook's resources page is a Vue component: tests/ui/pages.test.mjs.
-});
+// The resource tables' ore icons: tests/ui/pages.test.mjs.
 
 test('a node count means a count, and an unsurveyed resource is called out', () => {
   const c = ui();

@@ -1,10 +1,10 @@
-// For a calculated profile: the resources page (#resources when `calculated` is set;
-// render() in shell.js picks it over the handbook's), the checklist steps of its plan page
-// (ui/pages/CalculatedPlanPage.vue), and the machine setup and expansion its factory dialog
-// shows (ui/detail/CalcFactoryDialog.vue). Everything reads the profile's frozen calculation
+// For a calculated profile: the checklist steps of its plan page
+// (ui/pages/CalculatedPlanPage.vue), the options for an infeasible phase, and the machine
+// setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
+// resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.js';
-import { itemIcon, num, stat } from '../format.js';
+import { num } from '../format.js';
 import { html } from '../html.js';
 import {
   calcStage,
@@ -14,10 +14,7 @@ import {
   progressionData,
   stage,
   state,
-  workspace,
 } from '../session.js';
-import { header } from '../shell.js';
-import { inputText } from './storage.js';
 import { power } from '../wizard/fields.js';
 
 // The generated checklist for a calculated profile's current phase, before the user's step
@@ -112,28 +109,6 @@ export function draftOptions(x, s) {
     : '';
 }
 
-// HTML notices for the current phase: the infeasible-draft warning with its options, and
-// extra power headroom for whole buildings, on the calculated resources page;
-// ui/plan/CalcWarnings.vue shows them on the plan and factories pages.
-function calcWarnings() {
-  const x = calcStage();
-  const options = x.feasible ? '' : draftOptions(x, calculated?.settings);
-  return html`${!x.feasible &&
-  html`<div class="notice">
-    <b>Planning draft — resource budget exceeded or recipe combination unavailable.</b>
-    ${x.reason}${options &&
-    html`${options}
-      <p class="small">
-        Profiles are calculated snapshots: create a new profile with adjusted settings to apply an
-        option.
-      </p>`}
-  </div>`}${x.additionalHeadroomMW > 0.01 &&
-  html`<div class="notice">
-    Allow another ${power(x.additionalHeadroomMW)} for whole-building power headroom. Phase 1 needs
-    biomass or existing generation.
-  </div>`}`;
-}
-
 // How to build row `r`: how many machines run at 100% and whether one last machine runs
 // underclocked, with per-machine output text. `easy` is an optional rounded-up clock for
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear
@@ -196,108 +171,4 @@ export function calcExpansion(id) {
     installed = Math.max(installed, required);
     return { phase: ph, required: required || '—', add: add ? '+' + add : '—' };
   });
-}
-
-// HTML for #resources on a calculated profile: power tiles (somersloop and augmenter tiles
-// only when used), raw resources against the entered budgets (settings.limits), then drone
-// fuel, protected storage, credited existing production, conversions and surplus.
-export function renderCalculatedResources() {
-  const x = calcStage(),
-    s = calculated.settings;
-  const conversions = x.conversions || [];
-  return String(
-    html`${header(
-        'CHECK BEFORE EXPANDING',
-        'Power & resources',
-        'New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.',
-      )}
-      ${calcWarnings()}
-      <div class="stats">
-        ${stat('New generation', power(x.generationMW), 'Fuel and recycling included')}
-        ${stat('Whole-machine peak', power(x.peakMW), 'At selected consumption multiplier')}
-        ${stat(
-          'With utility allowance',
-          power(x.requiredMW),
-          (s.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
-        )}
-        ${stat(
-          'Existing spare power',
-          power(s.availablePowerGW * 1000),
-          'Not total installed generation',
-        )}
-        ${x.sloopsUsed > 0 &&
-        stat(
-          'Somersloops in production',
-          num(x.sloopsUsed),
-          'Amplified machines: double output, four times the power',
-        )}
-        ${x.augmenters > 0 &&
-        stat(
-          'With augmenter boost',
-          power(x.availableMW),
-          num(x.augmenters) +
-            ' augmenter' +
-            (x.augmenters > 1 ? 's' : '') +
-            ' · ' +
-            num(x.augmenterMW) +
-            ' MW plus ' +
-            Math.round(x.boost * 100) +
-            '% of base production',
-        )}
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Resource</th>
-              <th>Required /min</th>
-              <th>Budget /min</th>
-              <th>Remaining</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${workspace.catalog.raw.map(
-              n =>
-                html`<tr>
-                  <td class="resource-name">${itemIcon(n)}<span>${n}</span></td>
-                  <td>${num(x.raw?.[n])}</td>
-                  <td>${num(s.limits[n])}</td>
-                  <td class="${(x.raw?.[n] || 0) > s.limits[n] ? 'warn' : ''}">
-                    ${num(s.limits[n] - (x.raw?.[n] || 0))}
-                  </td>
-                </tr>`,
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div class="backup-grid">
-        <section class="panel">
-          <h2>Dedicated drone fuel /min</h2>
-          <p>${inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.'}</p>
-          <h2>Protected storage /min</h2>
-          <p>${inputText(x.storage || {}) || 'No storage production requested.'}</p>
-          <h2>From production you already run</h2>
-          <p>${inputText(x.supplied || {}) || 'None credited in this phase.'}</p>
-          ${Object.keys(x.supplied || {}).length > 0 &&
-          html`<p class="small muted">
-            The plan does not build these lines or the chain behind them. Their extraction is
-            assumed to be outside the budgets above.
-          </p>`}
-        </section>
-        <section class="panel">
-          <h2>Conversion and byproducts</h2>
-          <p>
-            ${conversions.length
-              ? conversions.flatMap((c, i) => (i ? [html`<br />`, c] : [c]))
-              : 'No raw-resource conversion required.'}
-          </p>
-          <p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p>
-          <p>Surplus solids: ${inputText(x.surplus || {}) || 'None'}</p>
-          <p class="small muted">
-            Liquid and radioactive material balances are enforced. Do not let storage or overflow
-            block recycling.
-          </p>
-        </section>
-      </div>`,
-  );
 }
