@@ -22,7 +22,9 @@ const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8')
 // supplied as globals, so its render functions can be called directly.
 function ui(){
  const node={addEventListener(){},close(){},showModal(){},innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};
- const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(){},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,
+ const clickHandlers=[];
+ const c=vm.createContext({document:{querySelector:()=>node,querySelectorAll:()=>[],addEventListener(type,fn){if(type==='click')clickHandlers.push(fn);},activeElement:null},window:{addEventListener(){},scrollTo(){}},location:{hash:'#plan'},console,setTimeout,clearTimeout,URL,JSON,structuredClone,browserMode:false,
+  FormData:class{[Symbol.iterator](){return [][Symbol.iterator]();}get(){return null;}getAll(){return [];}has(){return false;}},
   adaRemarks,adaEncore,makeFault,progression,carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition,
   droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor,
   guidedQuestions,guidedStandingQuestion,guidedTopupItems,GUIDED_TOPUP_RATE,tutorialKeys,purities3,minerMarks,clockChoices,minedResources,blankCounts,blankExtraction,nodeYield,wellYield,resourcePool,extractionLimits,nodePresets,presetSurvey,presetCounts,matchingPreset,startingSurvey,knownWorld,presetPurities,uniformPurities,richShape});
@@ -31,9 +33,18 @@ function ui(){
  c.catalogData=catalog();
  c.progressionFixture=JSON.parse(fs.readFileSync(new URL('../public/progression.json',import.meta.url),'utf8'));
  c.generated=calculate({});
+ c.clickHandlers=clickHandlers;
  vm.runInContext(`plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World'};currentProfile={id:'p',kind:'calculated',name:'Balanced'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=generated;`,c);
  return c;
 }
+// Press a delegated button the way a browser would: the app's own listener,
+// reached through e.target.closest('button').
+async function clickButton(c,attr,data={}){
+ const el={tagName:'BUTTON',dataset:data,hasAttribute:n=>n===attr||n in data,getAttribute:n=>data[n]??null,closest:s=>s==='button'?el:null,disabled:false};
+ assert.ok(c.clickHandlers.length,'the app registered a click listener');
+ for(const fn of c.clickHandlers)await fn({target:el,preventDefault(){},stopPropagation(){}});
+}
+
 const guided=(c,extra='')=>vm.runInContext(`wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};${extra}`,c);
 
 test('the guided start asks a short sequence and every screen offers All settings',()=>{
@@ -683,7 +694,7 @@ test('the survey steps are tabs, and jumping between them keeps what was typed',
  assert.ok(html.includes('class="wizard-progress"'),'styled as the wizard tabs');
  assert.ok(!html.includes('guided-progress'),'and not as the guided dots');
  assert.match(html,/data-extraction-step="1" aria-current="step"/);
- for(const [i,label] of ['How you mine','Ore nodes','Oil, gas &amp; water','Your budgets'].entries()){
+ for(const [i,label] of ['How you mine','Ore nodes','Resource wells','Your budgets'].entries()){
   assert.ok(html.includes(`>${i+1}. ${label}</button>`),label+' is a button');
  }
  // Jumping forward and back reads the screen being left, so counts survive.
@@ -767,7 +778,7 @@ test('the survey asks the two World Randomization settings and fills what it can
  assert.match(vm.runInContext('renderWizard()',c3),/still the <b>map's totals at All Pure<\/b>/);
 });
 
-test('the survey can be emptied, so a hand counter is never correcting a preset',()=>{
+test('the survey can be emptied, so a hand counter is never correcting a preset',async()=>{
  const c=ui();
  guided(c,`wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='pure';wizard.extraction=presetSurvey('pure',{mark:2,clock:1},'original');wizard.extraction.used={'Iron Ore':500};`);
  assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`,c),127,'starts filled');
@@ -776,14 +787,38 @@ test('the survey can be emptied, so a hand counter is never correcting a preset'
   vm.runInContext('wizard.extractionStep='+step,c);
   assert.match(vm.runInContext('renderWizard()',c),/data-node-reset/,'step '+step);
  }
- // Emptying keeps the equipment, which has no zero, and drops everything else.
- vm.runInContext('resetExtraction()',c);
+ // Pressed for real, through the app's own click listener. The first version of
+ // this button was gated on confirm(), which a browser may answer false without
+ // ever showing a dialog — so the button did nothing and no test noticed. This
+ // one asks nothing and is undoable instead, and is exercised by being clicked.
+ await clickButton(c,'data-node-reset');
  const e=vm.runInContext('JSON.stringify(wizard.extraction)',c);
  assert.equal(e,JSON.stringify({mark:2,clock:1,nodes:{},wells:{},used:{}}),'emptied but still Mk.2 at 100%');
  // An empty survey is nobody's world, so the screen offers to fill it again.
  assert.equal(matchingPreset(JSON.parse(e)),'','no preset claims an empty survey');
  vm.runInContext('wizard.extractionStep=2',c);
- assert.match(vm.runInContext('renderWizard()',c),/Fill in the counts below/);
+ const cleared=vm.runInContext('renderWizard()',c);
+ assert.match(cleared,/Fill in the counts below/);
+ // Nothing is lost by a misclick: the undo is offered in place of the reset.
+ assert.match(cleared,/data-node-undo/,'undo offered');
+ assert.doesNotMatch(cleared,/data-node-reset/,'and not both at once');
+ await clickButton(c,'data-node-undo');
+ assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`,c),127,'put back');
+ assert.equal(vm.runInContext(`wizard.extraction.used['Iron Ore']`,c),500,'including what was committed');
+ assert.equal(vm.runInContext('wizard.extractionUndo',c),null,'and spent');
+ assert.match(vm.runInContext('renderWizard()',c),/data-node-reset/,'reset offered again');
+
+ // Filling from the world settings is the other wholesale change, so it takes
+ // the undo with it rather than leaving a button that would undo the fill.
+ await clickButton(c,'data-node-reset');
+ await clickButton(c,'data-node-preset',{nodePreset:'pure'});
+ assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`,c),127,'filled from the preset');
+ assert.equal(vm.runInContext('wizard.extractionUndo',c),null,'undo spent by the fill');
+
+ // And leaving the survey does too, so the undo cannot outlive the screen.
+ await clickButton(c,'data-node-reset');
+ vm.runInContext('leaveExtraction()',c);
+ assert.equal(vm.runInContext('wizard.extractionUndo',c),null,'undo cleared on the way out');
 });
 
 test('a resource-rich world is described, never counted for the user',()=>{

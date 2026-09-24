@@ -55,7 +55,7 @@ Adding a profile to a save you already play starts from that save's settings ins
 
    **Random** randomization is a shuffle: it moves which resource sits at each location, but every resource keeps its node count — nineteen SAM nodes are still nineteen SAM nodes, somewhere else. So under Random the counts still fill in for the uniform purities (All Pure, Average, All Impure), where the split across purities stops mattering. Random shuffles the purities too, so for Default, Mostly Pure and Mostly Impure the totals are still right but the split is yours to count, and the survey says exactly that rather than refusing outright.
 
-   **Reset all counts to zero** is on both counting screens, for when you would rather enter your own map than correct a filled-in one. It clears every ore, well and committed amount and asks first; your miner mark and clock speed are equipment rather than counts, so those stay.
+   **Reset all counts to zero** is on both counting screens, for when you would rather enter your own map than correct a filled-in one. It clears every ore, well and committed amount, and your miner mark and clock speed stay because those are equipment rather than counts. Nothing is asked first — **Undo reset** takes its place in the same spot and puts back exactly what was on screen, until you fill the counts in again or leave the survey.
 
    **Resource wells are the exception.** A well is randomized as a whole rather than satellite by satellite, and the map's seventeen wells carry different numbers of satellites, so a shuffle that leaves every ordinary node count untouched can still land nitrogen on a bigger or smaller well than it had. Under Random the survey fills the ordinary nodes and leaves the nitrogen wells for you to count, and says why.
 

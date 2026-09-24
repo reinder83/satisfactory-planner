@@ -1128,7 +1128,7 @@ function toGuided(){
 // Four short screens rather than one long one: where the numbers come from and
 // how you mine, then the ores, then oil and gas, then the total with whatever
 // is already spoken for taken off it.
-const EXTRACTION_STEPS=['How you mine','Ore nodes','Oil, gas & water','Your budgets'];
+const EXTRACTION_STEPS=['How you mine','Ore nodes','Resource wells','Your budgets'];
 const MAP_URL='https://satisfactory-calculator.com/en/interactive-map';
 function extractionOf(w){
  if(!w.extraction)w.extraction=w.settings.extraction?structuredClone(w.settings.extraction):startingSurvey(w.settings);
@@ -1173,14 +1173,23 @@ const presetBarHtml=()=>{
   :`<div class="notice"><b>No preset for these settings.</b> ${richShape[s.distribution]
     ?`A resource-rich distribution changes how many nodes each resource has, and the players who have counted these worlds get answers a third apart from one seed to the next — so filling anything in here would be a guess wearing a number. ${esc(richShape[s.distribution])} Which way it goes is consistent; how far is not.`
     :'A random or hand-set purity has no fixed split to rearrange.'} Count yours on the map linked on the first screen, or upload your save there and it will count them for you.${active?` The counts below are still the <b>map's totals at ${esc(label)}</b>, so check them against your save.`:''}</div>`}
- <p class="small"><button type="button" class="btn quiet" data-node-reset>Reset all counts to zero</button> <span class="muted">Clears every ore, well and committed amount so you can enter your own.</span></p>
+ <p class="small">${wizard.extractionUndo
+  ?`<button type="button" class="btn quiet" data-node-undo>Undo reset</button> <span class="muted">Every count was cleared. This puts back what was there before.</span>`
+  :`<button type="button" class="btn quiet" data-node-reset>Reset all counts to zero</button> <span class="muted">Clears every ore, well and committed amount so you can enter your own. You can undo it.</span>`}</p>
  <p class="small muted">The purity settings do not move nodes or add any, they shift every node up or down the purity scale, so a known purity is the known node count rearranged. Oil wells are not in that table — count those yourself.</p></div>`;};
 // Back to an empty survey. Every count goes, including what was already
 // committed; the miner mark and clock stay, because they are equipment rather
-// than counts and have no meaningful zero.
+// than counts and have no meaningful zero. The old counts are kept aside so the
+// clearing can be undone, which is why no confirmation is asked for.
 function resetExtraction(){
- const {mark,clock}=extractionOf(wizard);
- wizard.extraction={...blankExtraction(),mark,clock};
+ const previous=extractionOf(wizard);
+ wizard.extractionUndo=JSON.parse(JSON.stringify(previous));
+ wizard.extraction={...blankExtraction(),mark:previous.mark,clock:previous.clock};
+}
+function undoExtractionReset(){
+ if(!wizard.extractionUndo)return;
+ wizard.extraction=wizard.extractionUndo;
+ wizard.extractionUndo=null;
 }
 function renderExtraction(){
  const w=wizard,e=extractionOf(w),step=w.extractionStep;
@@ -1200,7 +1209,7 @@ function renderExtraction(){
  if(step===2)content=`<h2>Your ore nodes</h2>${presetBarHtml()}
   <p>How many nodes of each purity your world holds for each ore. ${help('extractionNodes')} Zero means zero: a purity your world has none of, or an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter everything you intend to work.</p>
   ${extractionTableHtml('node',minedResources,e)}`;
- if(step===3)content=`<h2>Oil, gas and water</h2>${presetBarHtml()}
+ if(step===3)content=`<h2>Resource wells</h2>${presetBarHtml()}
   <p>Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells. ${help('extractionWells')}</p>
   <h3>Crude oil nodes</h3>${extractionTableHtml('node',['Crude Oil'],e)}
   <h3>Resource well satellites</h3>${extractionTableHtml('well',['Crude Oil','Nitrogen Gas'],e)}
@@ -1284,7 +1293,7 @@ function leaveExtraction(){
  w.mode=w.extractionReturn?.mode||'advanced';
  w.step=w.extractionReturn?.step||4;
  if(w.extractionReturn?.guidedStep)w.guidedStep=w.extractionReturn.guidedStep;
- w.extractionReturn=null;
+ w.extractionReturn=null;w.extractionUndo=null;
  render();
 }
 function openExtraction(){
@@ -1434,15 +1443,22 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
  if(b.dataset.nodePreset&&wizard){
   const form=$('#wizard-form');if(form)readExtraction(form);
   wizard.extraction=presetSurvey(b.dataset.nodePreset,extractionOf(wizard),wizard.settings.distribution);
+  wizard.extractionUndo=null;
   // Keep the profile's recorded purity in step with the counts it now holds.
   wizard.settings.purity=b.dataset.nodePreset;
   render();
   toast('Filled in the default world at '+(nodePresets.find(([v])=>v===b.dataset.nodePreset)?.[1]||'that purity')+'. Change any count that does not match your save.');
  }
- if(b.hasAttribute('data-node-reset')&&wizard&&confirm('Reset every count to zero? The ore nodes, wells and committed amounts are cleared so you can enter your own. Your miner mark and clock speed are kept.')){
+ if(b.hasAttribute('data-node-reset')&&wizard){
+  const form=$('#wizard-form');if(form)readExtraction(form);
   resetExtraction();
   render();
-  toast('Cleared. Every count is zero — enter your own, or pick your world settings above to fill them in again.');
+  toast('Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.');
+ }
+ if(b.hasAttribute('data-node-undo')&&wizard){
+  undoExtractionReset();
+  render();
+  toast('Put back the counts you had before the reset.');
  }
  if(b.dataset.extractionStep)await moveExtraction(Number(b.dataset.extractionStep));
  if(b.hasAttribute('data-extraction-back'))await moveExtraction(wizard.extractionStep-1);
