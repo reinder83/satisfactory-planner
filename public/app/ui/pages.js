@@ -5,14 +5,14 @@ import AccountPage from './pages/AccountPage.vue';
 import BackupPage from './pages/BackupPage.vue';
 import CalculatedFactoriesPage from './pages/CalculatedFactoriesPage.vue';
 import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
+import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import FactoriesPage from './pages/FactoriesPage.vue';
 import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
 import StoragePage from './pages/StoragePage.vue';
 
-// The component for `view`, or null while it is still a legacy page. A calculated
-// profile's resources page is still legacy (renderCalculatedResources).
+// The component for `view`, or null while it is still a legacy page (the wizard).
 export function vuePage(view, calculated) {
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
@@ -20,6 +20,6 @@ export function vuePage(view, calculated) {
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;
   if (view === 'backup') return BackupPage;
-  if (view === 'resources' && !calculated) return ResourcesPage;
+  if (view === 'resources') return calculated ? CalculatedResourcesPage : ResourcesPage;
   return null;
 }

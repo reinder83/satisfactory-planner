@@ -1,8 +1,7 @@
 <!--
-  The notices above a calculated profile's pages for the current phase: the infeasible-draft
-  warning with its options (draftFixes in views/calculated.js), and extra power headroom for
-  whole buildings. calcWarnings() in views/calculated.js draws the same for the pages that
-  are not components yet.
+  The notices above a calculated profile's plan, factories and resources pages for the current
+  phase: the infeasible-draft warning with its options (draftFixes in views/calculated.js), and
+  extra power headroom for whole buildings. It draws nothing without a calculated profile.
 -->
 <script setup>
 import { computed } from 'vue';

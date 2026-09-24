@@ -123,8 +123,7 @@ function ui() {
 }
 test('original and calculated views render; wizard exposes all settings and safe names', () => {
   const c = ui();
-  // Every page but the wizard and the calculated resources page is a Vue component, tested
-  // in tests/ui/.
+  // Every page but the wizard is a Vue component, tested in tests/ui/.
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
     c,
@@ -135,7 +134,6 @@ test('original and calculated views render; wizard exposes all settings and safe
     assert.ok(!text.includes('value="World <one>"'));
   }
   assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-  assert.ok(vm.runInContext('renderCalculatedResources()', c).length > 100);
 });
 
 // Markup that was escaped as text: a tag shown on the page, or an entity escaped twice.
@@ -152,9 +150,7 @@ test('every page escapes user text exactly once', () => {
   );
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
   // The pages that are Vue components are covered by tests/ui/.
-  const original = [];
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  const calculatedPages = render(['renderCalculatedResources']);
   // The wizard's five steps and the guided start, adding a profile to the save.
   const wizardPages = [1, 2, 3, 4, 5, 'guided'].flatMap(step => {
     vm.runInContext(
@@ -175,7 +171,7 @@ test('every page escapes user text exactly once', () => {
     'alternate recipe dialog',
     dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`),
   ]);
-  const all = [...original, ...calculatedPages, ...wizardPages, ...editing];
+  const all = [...wizardPages, ...editing];
   for (const [route, page] of all) {
     assert.equal(typeof page, 'string', route);
     assert.ok(!page.includes('<x-evil'), route + ' inserted user text as markup');

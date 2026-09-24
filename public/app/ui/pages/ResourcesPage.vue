@@ -2,7 +2,7 @@
   #resources for the original handbook, at the current stage: power tiles, the fresh
   resource table against plan.capacities, and the power commissioning checklist, whose boxes
   write the saved check keys `power-…` (the shared data-check handler in events/views.js).
-  A calculated profile gets renderCalculatedResources in views/calculated.js instead. Much of
+  A calculated profile gets CalculatedResourcesPage.vue instead. Much of
   the text (coal limit, rocket-fuel blocks, nuclear sequence) describes the owner's handbook
   and is fixed copy.
 -->

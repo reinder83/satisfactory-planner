@@ -9,6 +9,7 @@ import { openCalculatedFactory } from '../../public/app/factory-detail.js';
 import { invalidate } from '../../public/app/ui/bridge.js';
 import { showSignedOut } from '../../public/app/ui/mount.js';
 import { vuePage } from '../../public/app/ui/pages.js';
+import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
 import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.mjs';
 
 // User text inserted as markup would create an <x-evil> element. (innerHTML cannot tell:
@@ -179,8 +180,102 @@ test('moving between a component page and a legacy page leaves nothing behind', 
   render();
   assert.equal($$('#main h1').length, 1);
   assert.equal($('#main h1').textContent, 'Power & resources');
-  // A calculated profile's resources page is still the legacy one.
-  assert.equal(vuePage('resources', {}), null);
+  assert.equal(vuePage('resources', {}), CalculatedResourcesPage);
+  assert.equal(vuePage('wizard', {}), null, 'the wizard is still a legacy page');
+});
+
+// A calculated profile's resources page, with the catalog's raw resources as the server
+// sends them (the same list as the plan's budgets).
+function openCalculatedResources(p) {
+  open({ calculated: p, workspace: { catalog: { raw: Object.keys(p.settings.limits) } } });
+  go('resources');
+  render();
+}
+
+test('the calculated resources page shows every budget with its icon and what is left', () => {
+  const p = generated();
+  const x = p.stages['3'];
+  const [first, second] = Object.keys(p.settings.limits);
+  // One resource over budget.
+  x.raw[first] = p.settings.limits[first] + 10;
+  x.surplus = {};
+  openCalculatedResources(p);
+  assert.equal($('#main h1').textContent, 'Power & resources');
+  assert.equal($('#main .eyebrow').textContent, 'CHECK BEFORE EXPANDING');
+  const rows = $$('#main tbody tr');
+  assert.deepEqual(
+    rows.map(r => r.querySelector('.resource-name span').textContent),
+    Object.keys(p.settings.limits),
+  );
+  for (const row of rows) {
+    const name = row.querySelector('.resource-name span').textContent;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    assert.equal(
+      row.querySelector('.resource-name img').getAttribute('src'),
+      `./icons/${slug}.png`,
+    );
+  }
+  const cells = r => [...r.querySelectorAll('td')].slice(1).map(td => td.textContent.trim());
+  assert.equal(cells(rows[0])[2], '-10');
+  assert.ok(rows[0].querySelectorAll('td')[3].classList.contains('warn'), 'over budget');
+  assert.ok(!rows[1].querySelectorAll('td')[3].classList.contains('warn'), second + ' fits');
+  // The four power tiles; somersloops and augmenters only when the plan uses them.
+  assert.deepEqual(
+    $$('#main .stat .eyebrow').map(e => e.textContent),
+    ['New generation', 'Whole-machine peak', 'With utility allowance', 'Existing spare power'],
+  );
+  assert.equal(
+    $$('#main .stat small')[2].textContent,
+    '20% for transport and utilities; verify actual load',
+  );
+  assert.match($('#main .backup-grid').textContent, /No raw-resource conversion required\./);
+  assert.match($('#main .backup-grid').textContent, /None credited in this phase\./);
+  assert.match($('#main .backup-grid').textContent, /Surplus solids: None/);
+});
+
+test('the calculated resources page lists somersloops, augmenters, conversions and credits', () => {
+  const p = generated();
+  const x = p.stages['3'];
+  Object.assign(x, {
+    feasible: false,
+    reason: evil,
+    sloopsUsed: 12,
+    augmenters: 2,
+    augmenterMW: 100,
+    boost: 0.2,
+    availableMW: 5000,
+    conversions: [evil, 'Second conversion'],
+    supplied: { 'Iron Plate': 30 },
+  });
+  openCalculatedResources(p);
+  noMarkup();
+  const tiles = $$('#main .stat');
+  assert.equal(tiles.length, 6);
+  assert.equal(tiles[4].querySelector('strong').textContent, '12');
+  assert.equal(tiles[5].querySelector('strong').textContent, '5 GW');
+  assert.equal(
+    tiles[5].querySelector('small').textContent,
+    '2 augmenters · 100 MW plus 20% of base production',
+  );
+  assert.match($('#main .notice').textContent, /Planning draft/);
+  assert.ok($('#main .notice').textContent.includes(evil), 'the reason is shown as text');
+  const conversions = $$('#main .backup-grid .panel')[1].querySelector('p');
+  assert.equal(conversions.querySelectorAll('br').length, 1);
+  assert.equal(conversions.textContent.trim(), evil + 'Second conversion');
+  assert.match($('#main .backup-grid').textContent, /Iron Plate 30\/min/);
+  assert.match($('#main .backup-grid .small.muted').textContent, /does not build these lines/);
+});
+
+// Exactly what a profile calculated by an earlier release looks like: no existingSupply in
+// its settings and no supplied on any stage.
+test('the calculated resources page renders a plan saved before existing production existed', () => {
+  const p = generated();
+  delete p.settings.existingSupply;
+  for (const stage of Object.values(p.stages)) delete stage.supplied;
+  openCalculatedResources(p);
+  assert.equal($$('#main tbody tr').length, Object.keys(p.settings.limits).length);
+  assert.match($('#main .backup-grid').textContent, /None credited in this phase\./);
+  assert.doesNotMatch($('#main .backup-grid').textContent, /does not build these lines/);
 });
 
 // Opening the handbook from a calculated profile's page: anything that redraws before render()
@@ -191,7 +286,7 @@ test('a calculated page survives a redraw after the handbook is opened', async (
   const onError = e => errors.push(e.reason ?? e.error);
   process.on('unhandledRejection', onError);
   try {
-    for (const view of ['plan', 'factories', 'storage']) {
+    for (const view of ['plan', 'factories', 'storage', 'resources']) {
       page();
       const plan = generated();
       open({ calculated: plan });
