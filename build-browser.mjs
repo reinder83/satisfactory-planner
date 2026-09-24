@@ -15,6 +15,7 @@ await fs.mkdir(out, { recursive: true });
 // Explicit allowlist: server data, credentials and private handbook targets never enter the public build.
 const files = [
   'app.js',
+  'app-root.js',
   'ada.js',
   'style.css',
   'index.html',
@@ -28,6 +29,7 @@ const files = [
   'browser-store.js',
 ];
 for (const file of files) await fs.copyFile(path.join(root, 'public', file), path.join(out, file));
+await fs.cp(path.join(root, 'public/app'), path.join(out, 'app'), { recursive: true });
 await fs.cp(path.join(root, 'public/icons'), path.join(out, 'icons'), { recursive: true });
 await fs.cp(path.join(root, 'public/fonts'), path.join(out, 'fonts'), { recursive: true });
 let html = await fs.readFile(path.join(out, 'index.html'), 'utf8');

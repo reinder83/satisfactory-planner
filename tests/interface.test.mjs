@@ -46,11 +46,8 @@ import {
 } from '../public/state.js';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.js';
 import { calculate, catalog } from '../planner.mjs';
-const source = fs
-  .readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
-  .replace(/^(?:import[^;]*;\n)+/, '')
-  .replaceAll('import.meta.url', JSON.stringify('https://example.com/satisfactory-planner/app.js'))
-  .replace(/\nboot\(\);\s*$/, '');
+import { appSource } from './helpers/app-source.mjs';
+const source = appSource();
 function ui() {
   const node = { addEventListener() {}, close() {}, showModal() {}, innerHTML: '' };
   const c = vm.createContext({

@@ -10,6 +10,7 @@ import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS, RAW } from
 import { nodeCounts } from '../public/preferences.js';
 import { progression } from '../public/progression.js';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.js';
+import { appSource } from './helpers/app-source.mjs';
 import {
   carryOptions,
   pickedRecipeUnlocks,
@@ -57,11 +58,7 @@ import {
   richShape,
 } from '../public/preferences.js';
 
-const source = fs
-  .readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
-  .replace(/^(?:import[^;]*;\n)+/, '')
-  .replaceAll('import.meta.url', JSON.stringify('https://example.com/satisfactory-planner/app.js'))
-  .replace(/\nboot\(\);\s*$/, '');
+const source = appSource();
 // The same VM harness the interface tests use: app.js runs with its imports
 // supplied as globals, so its render functions can be called directly.
 function ui() {
