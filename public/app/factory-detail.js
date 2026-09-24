@@ -1,4 +1,8 @@
 // Detail dialogs for a factory, a factory group chain and the oil campus.
+// openFactory is the original-handbook factory dialog (data-factory links); a calculated plan's
+// factory dialog is openCalculatedFactory in views/calculated.js, which reuses dialog() and the
+// flow.js renderers. openGroupChain works for both kinds of profile. Click handlers in
+// events/views.js open them.
 import {
   flowHtml,
   FLUIDS,
@@ -23,18 +27,29 @@ import {
 } from './session.js';
 import { factoryGroupsState, membershipsOf } from './views/factories.js';
 
+// Fills the shared #detail <dialog> and opens it if it is not open yet, so following a link
+// inside a dialog replaces its contents in place. Only `title` is escaped here: `subtitle` and
+// `body` are HTML the caller has already escaped. `icon` is an item name for the header icon.
 export function dialog(title, subtitle, body, icon = '') {
   const d = $('#detail');
   d.innerHTML = `<header class="dialog-head"><div class="dialog-title">${icon ? `<span class="dialog-icon">${itemIcon(icon)}</span>` : ''}<div><div class="eyebrow">${subtitle}</div><h2>${esc(title)}</h2></div></div><button class="close" aria-label="Close details" data-close>×</button></header><div class="dialog-body">${body}</div>`;
   if (!d.open) d.showModal();
 }
 
+// The dialog for one handbook factory (plan.factories id): stats, flow, lane advice, expansion
+// table, the "Running at Phase N target" check and the factory notes. Shows the current phase, or
+// the factory's first phase when it has no stage in the current one. Plastic and Rubber come from
+// the shared oil campus, which replaces the lane advice with oilDetail.
 export function openFactory(id) {
   const f = plan.factories.find(x => x.id === id);
   if (!f) return;
   setActiveDetail({ type: 'factory', id });
   const r = f.stages[stage()] || Object.values(f.stages)[0];
   const oil = ['Plastic', 'Rubber'].includes(f.name);
+  // Expansion table, one row per phase the factory runs in. `installed` remembers the most
+  // machines of each type built so far, so "Add" is only the growth beyond that and a smaller
+  // later requirement reads "Keep capacity". A different machine type starts its own count.
+  // For oil the count is every building on that phase's shared campus.
   let installed = {};
   const history = Object.entries(f.stages)
     .map(([ph, x]) => {
@@ -47,8 +62,12 @@ export function openFactory(id) {
       return `<tr><td>${ph}</td><td>${num(x.output)}</td><td>${num(x.storage)}</td><td>${num(machines)} ${label}</td><td>${added ? `+${num(added)}` : 'Keep capacity'}</td></tr>`;
     })
     .join('');
+  // `st` is the phase key of `r`. Local factories (cable, wire, screws…) are built beside their
+  // consumers, so an input one of them makes is shown as made on site.
   const st = f.stages[stage()] ? stage() : Object.keys(f.stages)[0];
   const localInput = n => plan.factories.find(x => x.local && x.name === n && x.stages[st]);
+  // The check key `factory-<phase>-<id>` and the note key `factory-<id>` hold saved progress and
+  // must stay as they are. The notes are shared by every phase of the factory.
   const flow = handbookFlowModel(f, st, r, localInput, oil);
   dialog(
     f.name,
@@ -64,6 +83,9 @@ export function openFactory(id) {
   );
 }
 
+// Explains an output no factory or delivery takes: nuclear parts feed the power fleet, and
+// anything else with a storage allowance only refills protected storage. In the post-game phase it
+// also lists the completion modules (plan.completion) that draw on this item.
 function usageNotesHtml(f, st) {
   const r = f.stages[st];
   const consumers = plan.factories.some(o => o.id !== f.id && o.stages[st]?.inputs?.[f.name]);
@@ -82,16 +104,24 @@ function usageNotesHtml(f, st) {
   );
 }
 
+// The handbook's shared oil campus at phase `st`, from plan.plans[st]: `oil` lists the campus
+// stages in build order ({recipe, machines, equivalent, machine}) and `oilTotals` the campus
+// totals (crude, water, fuel, generators, grossGW…). Phase 3 runs standard refineries whose Heavy
+// Oil Residue becomes generator fuel; later phases run the fuel-driven recycled polymer loops.
 function oilDetail(st) {
   const p = plan.plans[st];
+  // Each stage with its per-machine recipe; an unknown recipe name gets empty in/out.
   const stages = p.oil.map(x => ({ ...x, rc: OIL_RECIPES[x.recipe] || { in: {}, out: {} } }));
   const pipeTxt = q => {
     const pl = lanePlan(q, true, st);
     return `${pl.count} × ${pl.lane.mark} pipe${pl.count > 1 ? 's' : ''}`;
   };
+  // The first factory other than the polymers that takes Fuel as an input, linked from exported
+  // fuel.
   const fuelConsumer = plan.factories.find(
     ff => !['plastic', 'rubber'].includes(ff.id) && ff.stages[st]?.inputs?.Fuel,
   );
+  // Raw campus inputs (crude oil and water), skipping any the phase does not use.
   const bank = `<div class="rail-cap">Campus inputs</div><div class="rail-grid">${[
     ['Crude Oil', p.oilTotals.crude],
     ['Water', p.oilTotals.water],
@@ -102,12 +132,16 @@ function oilDetail(st) {
         `<div class="rail-tile">${itemIcon(n)}<span class="rail-main"><b>${esc(n)}</b><small>${pipeTxt(q)}</small></span><span class="rail-rate">${num(q)}<small> m³/min</small></span></div>`,
     )
     .join('')}</div>`;
+  // One block per campus stage: the machine bar, its recipe panel and where each output goes.
   const stageHtml = stages
     .map(x => {
+      // Whole-stage flow: per-machine recipe rate × machine equivalents.
       const tot = side =>
         Object.entries(x.rc[side])
           .map(([n, q]) => `${num(q * x.equivalent)}${FLUIDS.has(n) ? ' m³' : ''} ${esc(n)}`)
           .join(' + ');
+      // Destinations of each output: later or earlier campus stages that consume it, the polymer
+      // export, and Fuel either burned in generators (Phase 3) or exported.
       const dest = Object.keys(x.rc.out)
         .map(n => {
           const parts = stages
@@ -131,6 +165,8 @@ function oilDetail(st) {
         })
         .filter(Boolean)
         .join('<br>');
+      // Full-speed machines plus the underclocked last one; the epsilon keeps an exact whole
+      // equivalent from reading as one machine short.
       const whole = Math.floor(x.equivalent + 1e-7),
         frac = x.equivalent - whole;
       const clock =
@@ -151,6 +187,10 @@ function oilDetail(st) {
   return `<h3>Shared oil campus · ${phaseLabel(st)}</h3><p>One campus makes Plastic and Rubber together. Crude never feeds the polymer machines directly${st === '3' ? ': the standard refineries turn it into the polymers plus Heavy Oil Residue, which becomes generator fuel.' : ': it becomes Heavy Oil Residue and Polymer Resin first, and the polymers come out of the fuel-driven recycled loops.'} Build the stages in this order; recipe cells are per machine at 100%, per minute.</p><p class="small muted">Flow rates here stay exactly balanced instead of rounded up: unpackaged fluids cannot overflow to the AWESOME Sink, and the loops feed themselves, so surplus fluid would back the chain up. Machine counts are whole — only each stage's last machine runs underclocked.</p>${bank}${stageHtml}<p>${st === '3' ? `Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.` : `Export ${num(p.oilTotals.fuel)} Fuel/min; remaining fuel and recycled polymers are internal flows. <b>Seeding the loops:</b> run the Residual Rubber Refineries from resin first, feed that rubber with fuel into Recycled Plastic, then bring Recycled Rubber online — open the campus exports only once both loops are saturated.`}</p>`;
 }
 
+// The factories assigned to group `gid` that run in the current phase, in one shape for both
+// profile kinds: { id, attr (the data-* link), name, machine, machines, inputs, outputs } with
+// total rates. Calculated rows also carry generationMW as `mw`; a handbook factory has a single
+// output, its own item.
 function groupChainNodes(gid) {
   if (calculated) {
     const x = calcStage();
@@ -185,6 +225,8 @@ function groupChainNodes(gid) {
     });
 }
 
+// The build-order dialog for a factory group: its factories as numbered stages, suppliers before
+// consumers, each with what it needs (and from which stage) and what it feeds.
 export function openGroupChain(gid) {
   const gr = factoryGroupsState().groups.find(g => g.id === gid);
   if (!gr) return;
@@ -196,6 +238,10 @@ export function openGroupChain(gid) {
       'Factory group · build order',
       '<p class="small muted">No factories from this group produce anything in the current phase.</p>',
     );
+  // Topological ordering. Each round places the first pending node whose in-group suppliers are
+  // all placed (making its own input does not count). When none qualifies there is a loop: place
+  // the node with the fewest unplaced suppliers and record those inputs in loopSeeds, which the
+  // stage text shows as "seed a starter batch".
   const makers = n => nodes.filter(o => o.outputs[n]);
   const placed = [],
     placedSet = new Set(),
@@ -229,6 +275,7 @@ export function openGroupChain(gid) {
     placed.push(nd);
     placedSet.add(nd.id);
   }
+  // Stage numbers by node id, and every factory in the phase, to count consumers outside the group.
   const stageNo = new Map(placed.map((nd, i) => [nd.id, i + 1]));
   const others = calculated
     ? calcStage().rows || []
@@ -237,6 +284,8 @@ export function openGroupChain(gid) {
         .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()].inputs || {} }));
   const html = placed
     .map((nd, i) => {
+      // Needs: each input with the earliest in-group stage making it, "outside the group" when
+      // none does, or the loop marker.
       const loopIns = loopSeeds.get(nd.id) || [];
       const needs = Object.entries(nd.inputs)
         .map(([n, q]) => {
@@ -249,6 +298,7 @@ export function openGroupChain(gid) {
           return `${esc(n)} ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min <span class="muted">· ${src}</span>`;
         })
         .join('<br>');
+      // Feeds: in-group consumers by stage, plus a count of consuming factories outside the group.
       const feeds =
         Object.keys(nd.outputs)
           .map(n => {
@@ -267,6 +317,7 @@ export function openGroupChain(gid) {
       return `<div class="chain-stage"><span class="chain-no">${String(i + 1).padStart(2, '0')}</span><div class="chain-body"><div class="chain-title"><button class="rail-link" ${nd.attr}>${esc(nd.name)} ↗</button><span class="muted">${num(nd.machines)} × ${esc(nd.machine)}</span></div>${needs ? `<p class="small"><b>Needs</b><br>${needs}</p>` : '<p class="small muted">No belt or pipe inputs.</p>'}<p class="small"><b>Feeds</b><br>${feeds}</p></div></div>`;
     })
     .join('');
+  // A membership with an explicit rate is a production split; the chain still shows full totals.
   const split = nodes.some(nd => membershipsOf(nd.id).some(m => m.group === gid && m.rate != null));
   dialog(
     gr.name,

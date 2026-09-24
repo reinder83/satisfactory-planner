@@ -1,4 +1,9 @@
 // Production flow of a factory: belts, pipes, inputs, outputs and lane advice.
+// A flow model is a plain object describing one factory at one phase: what comes in (with the
+// belts or pipes that carry it), the machine bar, and where the output goes. It is built either
+// from the original handbook (handbookFlowModel, plan.json factories) or from a calculated plan
+// (calcFlowModel, planner rows), and rendered by flowHtml and laneAdviceHtml. The factory
+// dialogs in factory-detail.js and views/calculated.js are the callers.
 import { esc, itemIcon, num, num3 } from './format.js';
 import {
   calcStage,
@@ -12,6 +17,8 @@ import {
 import { power } from './wizard/fields.js';
 
 // Belt/pipe logistics. Capacities are game constants; the unlocking milestone (tier, name) comes from progression.json.
+// Items that travel by pipe: rates for these are m³/min instead of items/min. Matches the items
+// marked fluid in recipes.json.
 export const FLUIDS = new Set([
   'Fuel',
   'Rocket Fuel',
@@ -30,6 +37,8 @@ export const FLUIDS = new Set([
   'Liquid Biofuel',
 ]);
 
+// Conveyor belt marks in unlock order. cap is items/min per belt; entry is the progression.json
+// milestone id that unlocks the mark.
 const BELT_LANES = [
   { mark: 'Mk.1', cap: 60, entry: 'Schematic_1-2_C' },
   { mark: 'Mk.2', cap: 120, entry: 'Schematic_3-2_C' },
@@ -39,12 +48,15 @@ const BELT_LANES = [
   { mark: 'Mk.6', cap: 1200, entry: 'Schematic_9-5_C' },
 ];
 
+// Pipeline marks, same shape as BELT_LANES; cap is m³/min per pipe.
 const PIPE_LANES = [
   { mark: 'Mk.1', cap: 300, entry: 'Schematic_3-1_C' },
   { mark: 'Mk.2', cap: 600, entry: 'Schematic_6-5_C' },
 ];
 
 // Oil-campus recipes per machine at 100%, per minute; values from the bundled recipes.json dataset.
+// Keyed by the recipe names in plan.json plans[phase].oil; `in`/`out` map item to rate (fluids in
+// m³/min). Only the handbook's shared oil campus (oilDetail in factory-detail.js) reads it.
 export const OIL_RECIPES = {
   Plastic: { in: { 'Crude Oil': 30 }, out: { Plastic: 20, 'Heavy Oil Residue': 10 } },
   Rubber: { in: { 'Crude Oil': 30 }, out: { Rubber: 20, 'Heavy Oil Residue': 20 } },
@@ -59,8 +71,12 @@ export const OIL_RECIPES = {
   'Alternate: Recycled Rubber': { in: { Plastic: 30, Fuel: 30 }, out: { Rubber: 60 } },
 };
 
+// The planner phase in which a milestone tier becomes available: Tiers 1–2 are Phase 1, 3–4
+// Phase 2, 5–6 Phase 3, 7–8 Phase 4 and 9 Phase 5.
 const phaseForLaneTier = t => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
 
+// The milestone that unlocks a belt or pipe mark: its name, tier, the phase it belongs to and
+// whether the user has ticked its `unlock-<id>` step. Null when progression.json lacks the entry.
 function laneMilestone(l) {
   const e = progressionData?.entries.find(x => x.id === l.entry);
   return e
@@ -73,6 +89,10 @@ function laneMilestone(l) {
     : null;
 }
 
+// The highest belt (or pipe) mark available at phase `st` (default: the current stage). A mark
+// counts as available when its milestone is ticked, belongs to this phase or earlier, or is
+// unknown; Mk.1 is the fallback. Returns the lane with its display unit, its milestone and the
+// next mark up (with that mark's milestone), which laneAdviceHtml mentions as the next upgrade.
 function bestLane(fluid, st) {
   const lanes = fluid ? PIPE_LANES : BELT_LANES;
   const stageNo = Number(st ?? stage());
@@ -95,6 +115,10 @@ function bestLane(fluid, st) {
   };
 }
 
+// How many belts or pipes of the best available mark carry `rate`. Returns the lane, the lane
+// count (at least 1), the rate on the last lane, how many lanes run full, the unused capacity
+// (all of it on the last lane) and the word to print. The 1e-9 keeps an exact multiple of the
+// capacity from rounding up to an extra lane through floating-point noise.
 export function lanePlan(rate, fluid, st) {
   const lane = bestLane(fluid, st);
   const count = Math.max(1, Math.ceil(rate / lane.cap - 1e-9));
@@ -109,9 +133,14 @@ export function lanePlan(rate, fluid, st) {
   };
 }
 
+// "1 of the 12 Refineries" or "1 × Refinery" (HTML-escaped): the recipe panel's rates are for
+// one machine. The y→ie swap pluralises Refinery and Foundry.
 export const machinesLabel = (count, machine) =>
   count > 1 ? `1 of the ${num(count)} ${esc(machine.replace(/y$/, 'ie'))}s` : `1 × ${esc(machine)}`;
 
+// One item cell of a recipe panel: [item name, rate, optional data-* attribute string]. The
+// attribute turns the cell into a button that opens the factory making that item. The pseudo item
+// 'MW' is a generator's power output. `out` styles it as an output.
 export function recipeCell([n, q, link], out) {
   const inner = `${n === 'MW' ? '' : itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n) ? ' m³' : n === 'MW' ? ' MW' : ''}</b><small>${n === 'MW' ? 'Power generation' : esc(n)}</small></span>`;
   return link
@@ -119,14 +148,21 @@ export function recipeCell([n, q, link], out) {
     : `<div class="rail-cell${out ? ' out' : ''}">${inner}</div>`;
 }
 
+// The "Recipe · …" panel: per-machine inputs → outputs at 100%. Reads m.recipe ({name, machine,
+// ins, outs}, with ins/outs as recipeCell tuples) and m.machineCount. Also used by the alternate
+// recipe dialog in wizard/recipes.js, which passes a minimal model of just those two fields.
 export function recipePanelHtml(m) {
   const rc = m.recipe;
   if (!rc) return '';
   return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>what ${machinesLabel(m.machineCount, rc.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x => recipeCell(x)).join('') || '<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x => recipeCell(x, true)).join('')}</div></div></div>`;
 }
 
+// Renders a flow model as the "Flow at Phase N" section: recipe panel, input tiles, the machine
+// bar, then one row per destination. Empty when the model has neither inputs nor outputs.
 export function flowHtml(m) {
   if (!m || (!m.inputs.length && !m.outputs.length)) return '';
+  // An input tile: item, lane count and mark, and how full those lanes are. 70% load or more is
+  // highlighted as a line with little headroom.
   const inTile = i => {
     const p = i.plan,
       load = Math.round((i.rate / (p.count * p.lane.cap)) * 100);
@@ -135,6 +171,10 @@ export function flowHtml(m) {
       ? `<button class="rail-tile" ${i.link}>${inner}</button>`
       : `<div class="rail-tile">${inner}</div>`;
   };
+  // A destination row. `kind` picks the caption: consumer (another factory), store (protected
+  // storage), ship (elevator, power fleet, augmenters…), drone (fuel contract), sink (surplus to
+  // the AWESOME Sink) or more (the rows capFlowOutputs folded together). `mach` is how many
+  // machines' worth of output the destination takes; it is absent where that cannot be split.
   const outRow = o => {
     const subs = {
       consumer: `consumer${o.beltTxt ? ' · ' + o.beltTxt : ''}`,
@@ -147,6 +187,7 @@ export function flowHtml(m) {
     const name = o.link
       ? `<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`
       : `<b class="${o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''}">${esc(o.label)}</b>`;
+    // Machines are rounded up per destination; under half a machine reads "<1".
     const machCol =
       o.mach === undefined
         ? '<span class="rail-mach"></span>'
@@ -155,12 +196,17 @@ export function flowHtml(m) {
       o.rateTxt ?? (o.rate !== undefined ? `${num(o.rate)}<small>${o.unit || '/min'}</small>` : '');
     return `<div class="rail-row ${o.kind}">${o.icon ? itemIcon(o.icon) : '<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre ? esc(o.pre) + ' · ' : ''}${subs[o.kind] || ''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;
   };
+  // The machine bar between inputs and outputs. m.bar's strings are built already escaped by the
+  // model functions, so they are inserted as they are.
   const bar = m.bar
     ? `${m.inputs.length ? '<div class="rail-arrow">↓</div>' : ''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length ? '<div class="rail-arrow">↓</div>' : ''}`
     : '';
   return `<h3>Flow at ${phaseLabel(m.stage)}</h3>${recipePanelHtml(m)}${m.inputs.length ? `<div class="rail-cap">Inputs · ${m.inputs.length} line${m.inputs.length > 1 ? 's' : ''} in</div><div class="rail-grid">${m.inputs.map(inTile).join('')}</div>` : ''}${bar}${m.outputs.length ? `<div class="rail-caps"><span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(o => o.mach !== undefined) ? `<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>` : ''}</div><div class="rail-rows">${m.outputs.map(outRow).join('')}</div>${m.bankNote || ''}` : ''}`;
 }
 
+// Keeps a destination list to at most ten rows: past that, the first nine stay and the rest become
+// one "+ N more destinations" row carrying their summed rate. Order is the caller's, so whatever
+// sorts last is what gets folded.
 function capFlowOutputs(list, unit = '/min') {
   if (list.length <= 10) return list;
   const rest = list.slice(9),
@@ -171,6 +217,9 @@ function capFlowOutputs(list, unit = '/min') {
   ];
 }
 
+// The "Belts & pipes" section: for every input, how many lanes it needs, how many machines one
+// lane can feed (manifold rows), and whether the last lane's spare capacity could also carry
+// another factory's demand for the same item (m.sameItemConsumers). Empty without inputs.
 export function laneAdviceHtml(m) {
   if (!m || !m.inputs.length) return '';
   const belts = bestLane(false, m.stage),
@@ -180,6 +229,7 @@ export function laneAdviceHtml(m) {
     : '';
   const rows = m.inputs
     .map(i => {
+      // per: what one machine at 100% draws; fed: how many such machines one full lane supplies.
       const p = i.plan,
         l = p.lane,
         per = i.rate / m.equivalent,
@@ -195,6 +245,8 @@ export function laneAdviceHtml(m) {
               ? `One full ${l.mark} ${p.word} feeds <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) — plan manifold rows of ${fed}.`
               : `One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`,
         );
+      // Other factories whose whole demand for this item fits in the spare capacity; at most two
+      // are offered as links.
       if (p.count > 1 && p.spare > 0.01) {
         const merge = m.sameItemConsumers(i.name).filter(x => x.rate <= p.spare + 0.01);
         parts.push(
@@ -218,13 +270,25 @@ export function laneAdviceHtml(m) {
   return `<h3>Belts &amp; pipes</h3><p class="small muted">${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in your save yet, plan with the earlier mark.</p><div class="logi">${rows}</div>`;
 }
 
+// Flow model for an original-handbook factory (plan.json). `f` is the factory, `st` the phase key,
+// `r` its stage record (output, demand, storage, delivery, inputs, machines, lastClock, machine,
+// recipe) and `localInput(name)` returns the local factory that makes that input on site, if any.
+// A handbook factory makes one item; its destinations are the other handbook factories that list
+// it as an input in the same phase, plus its storage refill, elevator delivery and any surplus.
+// `bankOnly` (the oil campus products) keeps only the destinations: no inputs, recipe panel, bar
+// or machine counts, because factory-detail.js draws the campus itself.
+// Returns { stage, inputs, outputs, equivalent, machineCount, machineName, local, recipe, bar,
+// sameItemConsumers }; links use data-factory="<handbook id>".
 export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
   const fluidOut = FLUIDS.has(f.name);
   const unit = fluidOut ? ' m³/min' : '/min';
+  // Machine equivalents: all at 100% except the last at lastClock. The floor keeps perOut finite
+  // for the oil products, which record 0 machines.
   const eq = Math.max(r.machines - 1 + (r.lastClock ?? 100) / 100, 0.01);
   const perOut = r.output / eq;
   const beltTxt = p => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
   const mach = q => (bankOnly ? undefined : q / perOut);
+  // Destinations: every other factory consuming this item in this phase, largest first.
   const consumers = plan.factories
     .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[f.name])
     .map(o => {
@@ -241,6 +305,8 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
       };
     })
     .sort((a, b) => b.rate - a.rate);
+  // Then the non-factory destinations. Nuclear parts nobody else consumes go to the power fleet,
+  // which the handbook plans on the resources page rather than as a factory.
   const outputs = [...consumers];
   if (f.nuclear && !consumers.length)
     outputs.push({
@@ -268,9 +334,14 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
       unit,
       mach: mach(r.delivery),
     });
+  // Output above the stage's recorded demand is whole-machine rounding surplus, bound for the
+  // sink. The 0.002/min threshold hides floating-point leftovers.
   const surplus = Math.max(0, r.output - (r.demand ?? r.output));
   if (surplus > 0.002)
     outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: f.name, rate: surplus, unit });
+  // Inputs, each with its lane plan. The link prefers a local factory making it on site, otherwise
+  // the handbook factory producing the item in this phase; local ones also get a button with the
+  // machines to build beside this factory (stage `rate` is one local machine's output).
   const inputs = bankOnly
     ? []
     : Object.entries(r.inputs || {}).map(([n, q]) => {
@@ -286,12 +357,14 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
             : '',
         };
       });
+  // With more than one destination, the bar suggests how the machines split between them.
   const capped = capFlowOutputs(outputs, unit);
   const splits = capped.filter(o => o.mach !== undefined && o.kind !== 'sink');
   const splitTxt =
     splits.length > 1
       ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach - 1e-9))).join(' / ')} across the deliveries below`
       : '';
+  // The handbook records the last machine's clock, so it is printed as a figure.
   const clock =
     (r.lastClock ?? 100) < 100 ? `@ 100% except the last at ${num(r.lastClock)}%` : '@ 100%';
   return {
@@ -319,6 +392,7 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
             ? 'out · distributed'
             : 'out · ' + beltTxt(lanePlan(r.output, fluidOut, st)),
         },
+    // Other factories consuming item `n` this phase, for laneAdviceHtml's spare-lane suggestion.
     sameItemConsumers: n =>
       plan.factories
         .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[n])
@@ -330,6 +404,14 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
   };
 }
 
+// Flow model for a row of a calculated plan, at the current phase. `r` is a row of
+// calcStage().rows from planner.mjs: inputs and outputs are totals for the whole row (per-machine
+// rate × equivalent), and a row may have several outputs (byproducts) or none (a generator, with
+// generationMW). Unlike the handbook, destinations come from the phase's plan-wide books:
+// consuming rows, storage, delivery, drone fuel, augmenter fuel, extra cells, plutonium and
+// surplus sinks. Those are totals for the item, not this row's share, when several rows make it
+// (bankNote says so). Same return shape as handbookFlowModel plus bankNote; links use
+// data-calc-factory="<row id>".
 export function calcFlowModel(r) {
   const x = calcStage(),
     st = stage(),
@@ -337,6 +419,8 @@ export function calcFlowModel(r) {
   const eq = Math.max(r.equivalent || r.machines - 1 + (r.lastClock ?? 100) / 100 || 1, 0.01);
   const beltTxt = p => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
   const outputs = [];
+  // One pass per output item. With byproducts, every row is prefixed with its item name and no
+  // machine counts are given, since the same machines make all the outputs at once.
   for (const n of Object.keys(r.outputs || {})) {
     const fluid = FLUIDS.has(n),
       unit = fluid ? ' m³/min' : '/min',
@@ -385,6 +469,8 @@ export function calcFlowModel(r) {
         pre,
         mach: mach(x.drone[n]),
       });
+    // Phase 5 extras the planner reserves on top of factory demand: matrix for fueled Alien Power
+    // Augmenters, and the configured extra Singularity Cells.
     if (st === '5' && n === 'Alien Power Matrix' && x.matrixRate)
       outputs.push({
         kind: 'ship',
@@ -410,6 +496,8 @@ export function calcFlowModel(r) {
         pre,
         mach: mach(calculated.settings.cellsPerMinute),
       });
+    // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
+    // leaves fluids, radioactive and unsinkable items out of `surplus`, so they never show here.
     if (n === 'Plutonium Fuel Rod' && x.plutoniumSink)
       outputs.push({
         kind: 'sink',
@@ -423,6 +511,7 @@ export function calcFlowModel(r) {
     if (x.surplus?.[n] > 0.002)
       outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: n, rate: x.surplus[n], unit, pre });
   }
+  // A generator row has no item outputs; its one destination is the power grid.
   outputs.sort((a, b) => (b.rate || 0) - (a.rate || 0));
   if (!outputs.length && r.generationMW)
     outputs.push({
@@ -431,6 +520,7 @@ export function calcFlowModel(r) {
       shipSub: 'generation',
       rateTxt: power(r.generationMW),
     });
+  // Inputs link to the first other row producing the item; there may be more than one.
   const inputs = Object.entries(r.inputs || {}).map(([n, q]) => {
     const src = (x.rows || []).find(o => o.id !== r.id && o.outputs?.[n]);
     return {
@@ -447,6 +537,9 @@ export function calcFlowModel(r) {
     splits.length > 1
       ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach - 1e-9))).join(' / ')} across the deliveries below`
       : '';
+  // A calculated row is whole machines at 100% plus, when the equivalent is fractional, one
+  // adjustable machine; its clock is in the dialog's Machine setup table. `shared` is true when
+  // another row makes one of the same items, which the bank note mentions.
   const clock = r.machines - eq > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%';
   const shared = Object.keys(r.outputs || {}).some(n =>
     (x.rows || []).some(o => o.id !== r.id && o.outputs?.[n]),
@@ -459,6 +552,7 @@ export function calcFlowModel(r) {
     machineCount: r.machines,
     machineName: r.machine,
     local: false,
+    // Per-machine rates for the recipe panel; a generator's single cell is its MW.
     recipe: {
       name: r.name,
       machine: r.machine,
@@ -478,6 +572,7 @@ export function calcFlowModel(r) {
           : 'out · ' + beltTxt(lanePlan(r.outputs[outName], FLUIDS.has(outName), st))
         : 'generation',
     },
+    // Consumer, storage and delivery rates are the item's plan-wide demand, not this row's share.
     bankNote: outputs.length
       ? `<p class="small muted">Demand for the item across this phase's whole plan${shared ? ', supplied together with the other recipes producing it' : ''}.</p>`
       : '',

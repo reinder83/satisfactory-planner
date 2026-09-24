@@ -4,6 +4,7 @@
 // not already contain. Lines are plain text and carry save, profile and step
 // names, so the caller escapes them before rendering.
 
+// Small text helpers: "3 steps", "A, B, C and 2 more", and a whole-number percentage.
 const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 const names = (xs, max = 3) =>
   xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`;
@@ -11,7 +12,13 @@ const share = (done, total) => (total ? Math.round((done / total) * 100) : 100);
 
 // Ordered most useful first: the panel opens on the first line that applies and
 // cycles through the rest. `tone` only colors the panel.
+// Each rule: `id` (stable, used by tests and to detect a changed remark list), `on` (pages it
+// belongs to, compared with facts.view), `tone` (`calm`, `warn` or `praise`), optional
+// `lead`, `when(facts)` to decide whether it applies and `text(facts)` for the line.
+// adaRemarks sorts by rank() below; equal ranks keep this order.
 const RULES = [
+  // Problems with the plan itself. Warnings rank above every page-specific remark, so these
+  // lead on whatever page is open.
   {
     id: 'draft',
     on: ['resources'],
@@ -36,6 +43,7 @@ const RULES = [
     text: f =>
       `${f.power.headroom} of whole-building power headroom is still unaccounted for: a ${f.power.required} draw against the ${f.power.spare} you listed as spare. Unpowered machines are simply very expensive furniture. Build the generation first.`,
   },
+  // `lead` rules describe a state that makes everything else irrelevant and rank first.
   {
     id: 'no-save',
     lead: true,
@@ -53,6 +61,8 @@ const RULES = [
     text: f =>
       `Every step of ${f.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`,
   },
+  // Phase progress on the build plan, from nothing ticked to everything ticked. f.steps counts
+  // the phase's steps and f.next names the first unticked one.
   {
     id: 'start',
     on: ['plan'],
@@ -106,6 +116,7 @@ const RULES = [
     text: f =>
       `${plural(f.retireOpen, 'retirement step')} still open. This phase stopped budgeting for those lines; your power grid did not. Dismantle them and reclaim the material.`,
   },
+  // Factory, storage, delivery and notes counters for the current phase.
   {
     id: 'factories-none',
     on: ['factories'],
@@ -146,6 +157,7 @@ const RULES = [
     text: f =>
       `No notes saved for ${f.phaseLabel}. You will certainly remember which node that train goes to. Pioneers always do. They do not.`,
   },
+  // Browser edition only: full-export reminders from workspace.lastBackup.
   {
     id: 'backup-never',
     on: ['backup'],
@@ -162,6 +174,7 @@ const RULES = [
     text: f =>
       `Last full backup: ${plural(f.backupDays, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
+  // Page-specific hints: the profile list, factory groups, the wizard and Resources.
   {
     id: 'one-profile',
     on: ['profiles'],
@@ -218,6 +231,7 @@ const RULES = [
     text: () =>
       `Existing power means spare capacity, not everything you have installed. Overstate it and the plan fails politely, later, at scale.`,
   },
+  // Profile kind and editing modes.
   {
     id: 'handbook',
     on: ['profiles'],
@@ -274,6 +288,7 @@ const RULES = [
     text: f =>
       `This profile begins at Phase ${f.startPhase}, so the earlier phases are not offered. You have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`,
   },
+  // Praise and follow-ups that apply once a counter is complete or a feature is in use.
   {
     id: 'deliveries-done',
     on: ['plan'],
@@ -352,8 +367,11 @@ const ENCORES = [
 
 // Nothing to plan at all outranks a problem; a problem outranks the page you
 // are actually looking at; general observations come last.
+// Lower ranks first: lead -1, warn 0, a rule for the current page 1, a rule without `on` 2,
+// a rule for another page 3.
 const rank = (rule, view) =>
   rule.lead ? -1 : rule.tone === 'warn' ? 0 : !rule.on ? 2 : rule.on.includes(view) ? 1 : 3;
+// Wraps n around the list (negative n too), so encores and faults cycle rather than run out.
 const pick = (list, n) => list[((n % list.length) + list.length) % list.length];
 const safe = (fn, facts) => {
   try {
@@ -365,6 +383,9 @@ const safe = (fn, facts) => {
 
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
+// `facts` comes from adaFacts in app/ada-panel.js. Returns every applicable rule as
+// { id, tone, text } in rank order, followed by all IDLE lines. The panel shows one at a time
+// and restarts at the top when the list of ids changes.
 export function adaRemarks(facts = {}) {
   const out = [];
   for (const rule of [...RULES].sort((a, b) => rank(a, facts.view) - rank(b, facts.view))) {
@@ -381,6 +402,7 @@ export function adaRemarks(facts = {}) {
 }
 
 // `lap` counts completed passes through the remarks, starting at 1.
+// Shown by the panel in place of the first remark on every lap after the first.
 export function adaEncore(lap, facts = {}) {
   return {
     id: 'encore-' + lap,
@@ -391,6 +413,8 @@ export function adaEncore(lap, facts = {}) {
 
 // `poke` counts badge prods, starting at 1. The last fault restores service, so
 // a patient pioneer always ends back in corporate good standing.
+// The panel calls this from the fifth quick poke on (poke = pokes - 4); past the last fault
+// it wraps round to the first.
 export function adaFault(poke) {
   return {
     id: 'fault-' + poke,

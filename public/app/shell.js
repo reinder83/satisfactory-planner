@@ -27,10 +27,14 @@ import { renderResources } from './views/resources.js';
 import { renderStorage } from './views/storage.js';
 import { renderWizard } from './wizard/wizard.js';
 
+// HTML for the heading row at the top of every page. The arguments are inserted as HTML,
+// so callers must esc() any user text (save/profile names) they pass in.
 export function header(eyebrow, title, subtitle = '', badge = '') {
   return `<div class="heading-row"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1>${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}</div>${badge ? `<span class="badge orange">${badge}</span>` : ''}</div>`;
 }
 
+// HTML for the sidebar footer: the open profile's name and the game settings it was
+// planned for. The original handbook's settings are fixed, so they are written out.
 function profileFooter() {
   if (calculated) {
     const s = calculated.settings;
@@ -42,6 +46,8 @@ function profileFooter() {
   return 'Create or select a profile';
 }
 
+// HTML for the page frame: sidebar navigation, ADA, save status, profile footer, and the
+// top bar with breadcrumbs and the phase picker. The view goes into the empty <main>.
 const shell = () =>
   `<div class="layout"><aside class="sidebar"><div class="brand"><img src="./favicon.svg" alt=""><div>Project Assembly<div class="eyebrow">FICSIT compliance terminal</div></div></div><nav class="nav" aria-label="Main navigation">${[
     ['plan', '◫', 'Build plan'],
@@ -62,11 +68,16 @@ const shell = () =>
       '',
     )}</select></label></header><main id="main" class="workspace" tabindex="-1"></main></div></div>`;
 
+// Redraws the whole page for the current `view` from session state. Called after every
+// change (save, navigation, toggles). Everything is rebuilt through innerHTML, so it keeps
+// what a rebuild would lose: open step <details>, the focused field and its caret.
 export function render() {
   const open = [...document.querySelectorAll('details[open][data-task]')].map(x => x.dataset.task);
   const focused = document.activeElement?.id;
   const selection = document.activeElement?.selectionStart;
   $('#app').innerHTML = shell();
+  // Hash route -> view function returning HTML. A calculated profile has its own plan,
+  // factories and resources pages; storage, backup and the rest are shared.
   const routes = {
     profiles: renderProfiles,
     wizard: renderWizard,
@@ -78,6 +89,7 @@ export function render() {
     backup: renderBackup,
   };
   $('#main').innerHTML = routes[view]();
+  // Restore what the rebuild reset.
   open.forEach(id =>
     document.querySelector(`details[data-task="${id}"]`)?.setAttribute('open', ''),
   );

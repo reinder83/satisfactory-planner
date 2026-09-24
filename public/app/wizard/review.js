@@ -1,8 +1,13 @@
-// Review step notices: somersloops, supply and fuel.
+// Notices built from settings or a calculated preview: the somersloop ledger
+// (wizard step 2, Preferences), and the supply and augmenter-fuel notices on
+// step 5, Review. All return HTML strings for renderWizard (wizard.js).
 import { esc, itemIcon, num } from '../format.js';
 import { workspace } from '../session.js';
 import { power } from './fields.js';
 
+// Step 2. Drawn from the settings as last read, so its totals refresh on the next
+// render rather than as you type. The hand-fed line checkboxes (name="sloop")
+// become s.sloopReserved in readWizard. Each augmenter costs 10 sloops.
 // The somersloop ledger. Augmenters and their fuel change the calculation; the hand-fed lines
 // do not — their inputs are gathered, never belted — so those only reserve sloops and add steps.
 export function sloopLedgerHtml(s) {
@@ -21,6 +26,9 @@ export function sloopLedgerHtml(s) {
  <p class="small muted">These double the output of a finite, hand-gathered input, so they are usually the best sloop you will ever spend: the world's power slugs are worth twice as many Power Shards through an amplified Constructor. Their inputs are carried in by hand, so they stay out of the production balance and only reserve a sloop and add a checklist step. The Crafting Bench cannot be amplified — the constructor recipe is the one that doubles.</p>`;
 }
 
+// Review. Takes the preview plan `p` (from /api/preview); reports, per declared
+// item, the largest rate any phase from the current one onward drew, and names
+// the phases that dropped the credit (stage.supplyDropped).
 // What the plan actually drew from the production you already run. It asks for
 // at most what you declared: the rest of that line's output is yours, and the
 // plan neither needs nor counts it.
@@ -47,6 +55,9 @@ export function supplyNoticeHtml(p) {
  ${dropped.length ? `<p class="small"><b>Phase ${dropped.join(' and ')}</b> could not be fitted to whole machines while crediting them, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead of whole machines usually keeps the credit.</p>` : ''}</div>`;
 }
 
+// Review. Reads stages[5].fuelVerdict, the calculator's side-by-side of Phase 5
+// with and without the fuel. It exists only when some augmenters are fueled and
+// Phase 5 fits; otherwise this returns ''.
 // Fueling an augmenter trades an Alien Power Matrix line for 20% more grid power. The answer
 // depends on the plan's own scale, so show the like-for-like comparison rather than a rule of thumb.
 export function fuelVerdictHtml(p) {

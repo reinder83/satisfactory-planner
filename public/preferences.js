@@ -1,4 +1,6 @@
 // Shared by the planner and wizard. Unknown seed totals must never masquerade as verified budgets.
+// [value, label] pairs for the storage setting (`s.storage`), shown by the wizard and the
+// guided start and validated by planner.mjs. wantsStorage below decides what each one covers.
 export const storageOptions = [
   ['none', 'No dedicated storage'],
   ['construction', 'Construction materials'],
@@ -7,6 +9,8 @@ export const storageOptions = [
   ['packaged', 'Packaged fluids only'],
   ['all', 'All automatable solids and packaged fluids'],
 ];
+// Materials you carry out by hand to build with. They get the construction rate (`buildRate`)
+// in storageRateFor and are in every storage mode except 'none' and 'packaged'.
 export const constructionItems = [
   'Iron Plate',
   'Iron Rod',
@@ -27,6 +31,8 @@ export const constructionItems = [
   'Alclad Aluminum Sheet',
   'Aluminum Casing',
 ];
+// Whether item `name` gets a container and a protected refill under storage mode `mode`.
+// planner.mjs uses it for the storage contract; the wizard uses it to list the covered items.
 export function wantsStorage(name, mode) {
   if (mode === 'none') return false;
   if (mode === 'all') return true;
@@ -70,6 +76,8 @@ export const storageRateFor = (s, name) => {
   if (elevatorParts.includes(name)) return 0;
   return constructionItems.includes(name) ? (s.buildRate ?? s.storageRate) : s.storageRate;
 };
+// World Randomization "resource distribution" choices (`s.distribution`). Only 'original' has
+// known node totals; the rest are handled by resourceDefaults and knownWorld below.
 export const distributions = [
   ['original', 'Default'],
   ['randomized', 'Random'],
@@ -77,6 +85,7 @@ export const distributions = [
   ['advanced', 'Advanced Resource Rich'],
   ['fossil', 'Fossil Fuel Rich'],
 ];
+// World Randomization "node purity" choices (`s.purity`); 'custom' means totals entered by hand.
 export const purities = [
   ['vanilla', 'Default'],
   ['pure', 'All Pure'],
@@ -87,6 +96,8 @@ export const purities = [
   ['random', 'Random'],
   ['custom', 'Custom / manual'],
 ];
+// [value, label] pairs for the preferred main power (`s.mainPower`); progression.js turns the
+// choice into a "power before the next production block" step.
 export const powerOptions = [
   ['auto', 'Let the planner choose'],
   ['coal', 'Coal'],
@@ -98,6 +109,8 @@ export const powerOptions = [
   ['rocket-nuclear', 'Rocket fuel + nuclear'],
 ];
 // Original map: impure / normal / pure, from the official resource-node and well tables.
+// Known facts, not estimates. Nitrogen Gas counts resource-well satellites, not nodes.
+// Crude Oil counts oil nodes only; its wells are not in this table.
 export const nodeCounts = {
   'Iron Ore': [39, 42, 46],
   'Copper Ore': [13, 29, 13],
@@ -112,6 +125,11 @@ export const nodeCounts = {
   'Crude Oil': [10, 12, 8],
   'Nitrogen Gas': [2, 7, 36],
 };
+// Default resource budgets (items/min, Mk.3 miners at 250%) for a purity and distribution;
+// planner.mjs fills any missing limit from it and the wizard shows it. `rate` is one impure
+// node's yield and `weights` multiply it per impure/normal/pure node: 1 impure, 2 normal, 4
+// pure, with the Mostly settings shifting one level. `uncertain` marks a seed-dependent
+// result, and `description` says which.
 export function resourceDefaults(purity = 'vanilla', distribution = 'original') {
   const uncertain = distribution !== 'original' || ['random', 'custom'].includes(purity);
   const limits = { Water: 1000000 };
@@ -151,6 +169,8 @@ export function resourceDefaults(purity = 'vanilla', distribution = 'original') 
       : 'Original map totals at Mk.3 / 250% extraction. Oil excludes resource wells; water is a planning allowance, not a finite map total.',
   };
 }
+// Tooltip text, keyed by settings field name; fields.js looks it up for each wizard field.
+// More keys are added by the Object.assign calls further down.
 export const helpText = {
   worldSeed:
     'Record the signed world seed from your game. Seed simulation is not built in: use the linked seed lookup and transfer extraction totals in Resources.',
@@ -204,6 +224,7 @@ export const helpText = {
   roundRates: 'Rounds elevator target rates; completion time may be slightly longer or shorter.',
 };
 
+// Drone fuel choices (`s.droneFuel`); 'none' plans no dedicated drone fuel supply.
 export const droneFuels = [
   'none',
   'Battery',
@@ -214,6 +235,8 @@ export const droneFuels = [
   'Uranium Fuel Rod',
   'Plutonium Fuel Rod',
 ];
+// The protected drone fuel line planner.mjs adds to a phase, as { item: items/min }. None
+// before Phase 4. With ionized fuel chosen, Phase 4 supplies batteries instead (the bridge).
 export function droneSupply(s, phase) {
   if (phase < 4 || !s.droneFuel || s.droneFuel === 'none') return {};
   const bridge = phase === 4 && s.droneFuel === 'Packaged Ionized Fuel';
@@ -261,6 +284,7 @@ Object.assign(helpText, {
 // halving and doubling all thirteen resource budgets — changed a default plan
 // by exactly nothing. Those keep their defaults until someone goes looking in
 // All settings, which is always one click away.
+// The items/min a guided top-up item gets as a per-item storage override (storageOverrides).
 export const GUIDED_TOPUP_RATE = 20;
 // The construction materials you carry out of a container by the hundred.
 // A per-item floor for these costs 1-2% more buildings; raising the general
@@ -295,6 +319,8 @@ export const phaseParts = {
 };
 // Each question names the advanced step that owns the same settings, so
 // "All settings" lands where you already were instead of at the top.
+// Each option's `set` is merged into the settings; `handoff` names the All settings step
+// the guided flow jumps to after it; `glyph` or `items` picks the card's artwork.
 export const guidedQuestions = [
   {
     id: 'phase',
@@ -482,6 +508,7 @@ export const guidedStandingQuestion = phase =>
       };
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.
+// Used by guidedBuiltKeys in app/wizard/guided.js.
 export const tutorialKeys = ['early-base-hub', 'unlock-Schematic_Tutorial5_C'];
 Object.assign(helpText, {
   existingSupply:
@@ -507,11 +534,13 @@ export const MINER_BASE = { 1: 60, 2: 120, 3: 240 }; // Miner Mk.1 / Mk.2 / Mk.3
 export const OIL_BASE = 120; // Oil Extractor, crude oil node
 export const WELL_BASE = 60; // Resource Well Extractor, per satellite
 export const purityFactor = { impure: 0.5, normal: 1, pure: 2 };
+// The per-node purity levels, in the order the node-count inputs show them.
 export const purities3 = [
   ['impure', 'Impure'],
   ['normal', 'Normal'],
   ['pure', 'Pure'],
 ];
+// [mark, label] for the miner select; the tier is where the game unlocks that miner.
 export const minerMarks = [
   [1, 'Mk.1 — Tier 0'],
   [2, 'Mk.2 — Tier 4'],
@@ -547,6 +576,9 @@ export const minedResources = [
 // All settings like any other budget.
 export const uncountedResources = ['Water'];
 
+// Survey shapes (`settings.extraction`, edited in app/wizard/extraction.js): `nodes` and
+// `wells` hold per-resource { impure, normal, pure } counts, `used` the items/min already
+// committed elsewhere.
 export const blankCounts = () => ({ impure: 0, normal: 0, pure: 0 });
 export const blankExtraction = () => ({ mark: 3, clock: 2.5, nodes: {}, wells: {}, used: {} });
 
@@ -563,6 +595,7 @@ export function wellYield(purity, { clock = 2.5 } = {}) {
   const p = purityFactor[purity];
   return p ? WELL_BASE * p * clock : 0;
 }
+// One resource's counts from a nodes/wells map, with missing purities as 0.
 const countsOf = (map, name) => ({ ...blankCounts(), ...(map?.[name] || {}) });
 // What a resource yields in total, before anything is deducted.
 export function resourcePool(extraction, resource) {
@@ -661,6 +694,7 @@ export const richShape = {
   fossil:
     'Fossil Fuel Rich concentrates on what burns: expect much more coal, crude oil and sulfur, and less of nearly everything else.',
 };
+// [id, label] for each preset purity, labelled as in `purities`.
 export const nodePresets = presetPurities.map(id => [
   id,
   (purities.find(([v]) => v === id) || [, id])[1],

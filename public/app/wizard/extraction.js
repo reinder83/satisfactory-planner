@@ -1,4 +1,10 @@
-// Resource survey: node counts, presets and extraction budgets.
+// Resource survey: node counts, presets and extraction budgets. Opened from
+// wizard step 4 ("Work these out from my nodes"), it takes over the screen by
+// setting wizard.mode = 'extraction'; renderWizard then hands rendering here.
+// Draft fields it adds to `wizard`: extraction (the survey being edited),
+// extractionStep (1-4), extractionReturn (where to go back to) and
+// extractionUndo (the counts before "Reset all counts"). Button and change
+// handlers are in events/views.js; form submit is in events/profiles.js.
 import { browserMode } from '../../browser-api.js';
 import {
   blankCounts,
@@ -43,6 +49,10 @@ const EXTRACTION_STEPS = ['How you mine', 'Ore nodes', 'Resource wells', 'Your b
 
 const MAP_URL = 'https://satisfactory-calculator.com/en/interactive-map';
 
+// The survey being edited, created on first use: a copy of the one saved on the
+// settings, or a starting survey for the chosen world settings. Its shape is
+// { mark, clock, nodes: { ore: { impure, normal, pure } }, wells: {...}, used }.
+// Cached on the draft, so an unapplied survey is still there when reopened.
 export function extractionOf(w) {
   if (!w.extraction)
     w.extraction = w.settings.extraction
@@ -51,6 +61,8 @@ export function extractionOf(w) {
   return w.extraction;
 }
 
+// The impure/normal/pure inputs for one resource. Input names are
+// "node:<name>:<purity>" or "well:<name>:<purity>", parsed by readExtraction.
 const countRow = (kind, name, counts) =>
   purities3
     .map(
@@ -59,6 +71,8 @@ const countRow = (kind, name, counts) =>
     )
     .join('');
 
+// A table of count rows with each resource's resulting rate per minute.
+// `kind` is 'node' (ores, crude oil nodes) or 'well' (resource-well satellites).
 function extractionTableHtml(kind, names, e) {
   const map = kind === 'well' ? e.wells : e.nodes;
   return `<div class="count-table">${names
@@ -128,18 +142,22 @@ export function resetExtraction() {
   wizard.extraction = { ...blankExtraction(), mark: previous.mark, clock: previous.clock };
 }
 
+// Put back the counts resetExtraction set aside; offered until the survey closes.
 export function undoExtractionReset() {
   if (!wizard.extractionUndo) return;
   wizard.extraction = wizard.extractionUndo;
   wizard.extractionUndo = null;
 }
 
+// HTML for the survey screen at wizard.extractionStep. It reuses the
+// #wizard-form id, so the shared submit handler advances it (moveExtraction).
 export function renderExtraction() {
   const w = wizard,
     e = extractionOf(w),
     step = w.extractionStep;
   const sample = (name, purity) => num(Math.round(nodeYield(name, purity, e)));
   let content = '';
+  // Screen 1: where to find counts, plus miner mark and clock speed.
   if (step === 1)
     content = `<h2>Where your numbers come from</h2>
   <div class="notice blue"><b>You do not have to count nodes by hand.</b> Open the
@@ -162,16 +180,19 @@ export function renderExtraction() {
    )}
   </div>
   <div class="notice"><b>At these settings</b> one iron node gives ${sample('Iron Ore', 'impure')}/min impure, ${sample('Iron Ore', 'normal')}/min normal and ${sample('Iron Ore', 'pure')}/min pure. A crude oil node gives ${sample('Crude Oil', 'normal')}/min normal, and one resource-well satellite ${num(Math.round(wellYield('normal', e)))}/min.</div>`;
+  // Screen 2: world settings/presets and the ore node counts.
   if (step === 2)
     content = `<h2>Your ore nodes</h2>${presetBarHtml()}
   <p>How many nodes of each purity your world holds for each ore. ${help('extractionNodes')} Zero means zero: a purity your world has none of, or an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter everything you intend to work.</p>
   ${extractionTableHtml('node', minedResources, e)}`;
+  // Screen 3: crude oil nodes and resource-well satellites (oil, nitrogen).
   if (step === 3)
     content = `<h2>Resource wells</h2>${presetBarHtml()}
   <p>Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells. ${help('extractionWells')}</p>
   <h3>Crude oil nodes</h3>${extractionTableHtml('node', ['Crude Oil'], e)}
   <h3>Resource well satellites</h3>${extractionTableHtml('well', ['Crude Oil', 'Nitrogen Gas'], e)}
   <div class="notice blue">${itemIcon('Water')} <b>Water is not counted.</b> Extractors sit on any lake or ocean and there is far more coastline than a factory can draw on, so a node count would be a fiction. The planner keeps its standing water allowance of ${num(w.settings.limits.Water)}/min, which you can still change in All settings if you want to model a genuinely constrained site.</div>`;
+  // Screen 4: pool minus "already committed" per resource, i.e. the budgets.
   if (step === 4) {
     const rows = [...minedResources, 'Crude Oil', 'Nitrogen Gas'];
     // Leaving a resource at zero is a legitimate answer, and it is also exactly
@@ -221,6 +242,9 @@ export function renderExtraction() {
 
 // Every screen writes straight into the survey, so moving between them keeps
 // what was typed even before the budgets are applied.
+// Exception: purity and distribution are the step 1 settings themselves, so they
+// are written to wizard.settings at once, even if the survey is left unapplied.
+// Counts are whole and non-negative; an all-zero row is dropped from the map.
 export function readExtraction(form) {
   const w = wizard,
     e = extractionOf(w),
@@ -248,6 +272,8 @@ export function readExtraction(form) {
   }
 }
 
+// Go to survey screen `target`. Below 1 leaves without applying; past the last
+// screen applies the survey to settings.limits and leaves.
 export async function moveExtraction(target) {
   const w = wizard,
     form = $('#wizard-form');
@@ -284,6 +310,8 @@ export function leaveExtraction() {
   render();
 }
 
+// Start the survey: read the current form into the draft first, and remember
+// where we came from so leaveExtraction can return there.
 export function openExtraction() {
   const w = wizard,
     form = $('#wizard-form');

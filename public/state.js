@@ -1,3 +1,21 @@
+// Progress state: everything one profile records, shared by both editions (server.mjs via
+// workspace.mjs, the Pages edition via browser-api.js) and by full-save exports.
+//   version        content version, recomputed by validateState (see the end of it)
+//   revision       bumped by the server/browser store on every accepted write
+//   checks         { key: boolean } ticked checklist items
+//   notes          { key: string } save-wide ('global'), factory and container notes
+//   deliveries     { deliveryId: count } Space Elevator parts handed in,
+//                  e.g. '3-versatile-framework'
+//   settings       { phase } the selected phase; nothing else in settings is kept
+//   customTasks    [{ id: 'custom-…', title, phase }] steps the user added
+//   storageEdits   storage room layout edits (blankEdits), version 2+/4
+//   taskEdits      build-plan step edits (blankTaskEdits), version 3
+//   factoryGroups  named production areas and row assignments (blankGroups), version 3
+// Checklist keys link progress to content and must never be renamed, because saved states
+// only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
+// (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
+// 'unlock-<schematic>', 'recipe-unlock-<recipe>', 'early-base-…', 'startup-…', 'custom-…'.
+// Notes use 'factory-<id>' and 'slot-<address>' without a phase or step.
 export const initialState = () => ({
   version: 1,
   revision: 0,
@@ -10,6 +28,10 @@ export const initialState = () => ({
   taskEdits: blankTaskEdits(),
   factoryGroups: blankGroups(),
 });
+// Storage layout edits on top of the handbook's storage room. floors/bays are added ones
+// ({ id: 'cf-…', label } and { id: 'A'–'ZZ', name, floor }); floorNames/bayNames rename
+// built-in or added ones; slots maps a container address ('A01') to the item it holds;
+// clearedSlots lists handbook addresses the user emptied.
 const blankEdits = () => ({
   floors: [],
   floorNames: {},
@@ -18,17 +40,26 @@ const blankEdits = () => ({
   slots: {},
   clearedSlots: [],
 });
+// Build-plan edits, keyed by step id: order is { phase: [stepId…] }, removed lists hidden
+// steps, titles/bodies replace step text and links point a step at a factory or row id.
 const blankTaskEdits = () => ({ order: {}, removed: [], titles: {}, bodies: {}, links: {} });
+// Factory groups: groups is [{ id: 'fg-…', name }]; assignments maps a plan row id (not a
+// 'calc-' key) to [{ group, rate }], where rate null means the whole row.
 const blankGroups = () => ({ groups: [], assignments: {} });
+// Only literal objects count as records, so arrays, class instances and null are rejected.
 const plain = x =>
   x !== null &&
   typeof x === 'object' &&
   !Array.isArray(x) &&
   Object.getPrototypeOf(x) === Object.prototype;
+// Every record address (check, note, delivery, step or row id) must pass this. The
+// prototype names are refused so a saved key can never reach an object's prototype.
 const safeKey = k =>
   typeof k === 'string' &&
   /^[a-zA-Z0-9:_-]{1,160}$/.test(k) &&
   !['__proto__', 'constructor', 'prototype'].includes(k);
+// Throws an error carrying the HTTP status server.mjs replies with; its message is the
+// text the user sees.
 const fail = (message, status = 400) => {
   const e = new Error(message);
   e.status = status;
@@ -39,6 +70,7 @@ export const builtinFloors = [
   ['upper', 'Upper floor'],
   ['workshop', 'Workshop'],
 ];
+// A floor is a built-in one or an added 'cf-…' one; a bay is one or two capital letters.
 const floorId = k =>
   typeof k === 'string' &&
   (builtinFloors.some(([id]) => id === k) || /^cf-[a-z0-9]{4,32}$/.test(k));
@@ -55,8 +87,11 @@ const slotAddr = k =>
   slotPosition(k) >= 1 &&
   slotPosition(k) <= bayCapacity;
 const addedSlot = k => slotPosition(k) > 8;
+// Whether a layout needs version 4: only a named container at 09 or above does.
 const hasAddedSlots = e => Object.keys(e.slots).some(addedSlot);
+// A user-entered name: non-blank and at most max characters once trimmed.
 const label = (v, max = 80) => typeof v === 'string' && v.trim() && v.trim().length <= max;
+// hasEdits, hasTaskEdits and hasGroups decide the content version in validateState.
 const hasEdits = e =>
   e.floors.length ||
   e.bays.length ||
@@ -73,6 +108,9 @@ const hasTaskEdits = e =>
     Object.keys(e.links).length >
     0;
 const hasGroups = g => g.groups.length || Object.keys(g.assignments).length > 0;
+// Returns a clean copy of taskEdits, or a blank one when absent (states before version 3).
+// Throws on anything malformed. Step ids are not checked against a plan, so edits to a
+// step the current plan no longer shows are kept rather than dropped.
 function validateTaskEdits(raw) {
   if (raw === undefined) return blankTaskEdits();
   if (!plain(raw)) fail('Invalid build plan edits in backup.');
@@ -115,6 +153,8 @@ function validateTaskEdits(raw) {
   }
   return e;
 }
+// Returns a clean copy of factoryGroups, or a blank one when absent. Every assignment must
+// name a group from the same list, each group at most once per row.
 function validateGroups(raw) {
   if (raw === undefined) return blankGroups();
   if (!plain(raw)) fail('Invalid factory groups in backup.');
@@ -201,6 +241,8 @@ export const carryOptions = [
     'Ticks the unlock step for every alternate recipe you picked, including the ones your ingot and power preferences require.',
   ],
 ];
+// The checklist key prefixes each world-shaped carry option copies as they are. The other
+// options (deliveries, notes, planEdits, factories, picked) are handled in newProfileState.
 const carryPrefixes = {
   unlocks: ['unlock-', 'recipe-unlock-', 'hard-drives-'],
   storage: ['slot-', 'storage-'],
@@ -213,6 +255,8 @@ const carryPrefixes = {
     'power-retained',
   ],
 };
+// Turns the client's carry choices into { option: boolean }. An absent choice carries
+// everything; anything else that is not an object carries nothing.
 export const carryPicks = raw =>
   Object.fromEntries(
     carryOptions.map(([key]) => [key, raw === undefined ? true : !!(plain(raw) && raw[key])]),
@@ -254,6 +298,13 @@ const builtKeys = (raw, plan) => {
 // Build the starting progress for a newly created profile. Without a source
 // profile and without a list of finished work this is the blank state every
 // earlier release produced.
+//
+// plan is the new profile's calculation (null for an original-handbook profile), source and
+// sourcePlan the sibling profile's state and plan to carry from, raw the carry choices and
+// built the guided start's finished-work keys. Returns { state, reviewCount, carried }: the
+// validated state, how many carried 'calc-' ticks were unticked for review, and how many
+// checks start ticked. The source is only read. Called by /api/profiles in workspace.mjs and
+// by the matching route in browser-api.js.
 export function newProfileState(plan, source, sourcePlan, raw, built) {
   const state = initialState();
   state.settings.phase = plan?.settings?.phase || '3';
@@ -298,6 +349,9 @@ export function newProfileState(plan, source, sourcePlan, raw, built) {
     state.taskEdits = validateTaskEdits(source.taskEdits);
     state.factoryGroups = mergeGroups(state.factoryGroups, source.factoryGroups, plan);
   }
+  // A row ticked in the source stays ticked only if the old plan had the same row with at
+  // least as many machines and inputs. Otherwise it is stored as false, the same review
+  // rule /api/round-up applies. Rows the source never ticked are left alone.
   let reviewCount = 0;
   if (picks.factories && plan) {
     const previous = planRows(sourcePlan);
@@ -342,6 +396,7 @@ function mergeGroups(defaults, raw, plan) {
 }
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
+// Used by /api/export-saves?share=1 in workspace.mjs and browser-api.js; the input is cloned.
 export function shareState(s) {
   const clean = validateState(structuredClone(s));
   clean.checks = {};
@@ -350,6 +405,8 @@ export function shareState(s) {
   clean.revision = 0;
   return validateState(clean);
 }
+// Returns a clean copy of storageEdits, or a blank one when absent (version 1 states).
+// Throws on anything malformed; only clearedSlots is quietly narrowed, see below.
 function validateEdits(raw) {
   if (raw === undefined) return blankEdits();
   if (!plain(raw)) fail('Invalid storage layout in backup.');
@@ -401,6 +458,15 @@ function validateEdits(raw) {
   }
   return e;
 }
+// The single gate for progress: every load, import, update and new profile passes through
+// it, on the server (workspace.mjs), in the browser (browser-api.js) and inside full-save
+// imports (transfer.js). Returns a fresh, normalised copy and never changes its input.
+// Versions 1–4 are accepted as they are; there is no field-by-field upgrade, because each
+// version only adds optional sections that default to blank. A higher version is refused
+// with an update message, so a newer save is never downgraded or stripped. Anything
+// malformed throws with status 400 instead of being dropped, so a bad import cannot
+// replace good progress. Unknown top-level fields and settings other than phase are not
+// kept.
 export function validateState(s) {
   if (!plain(s) || ![1, 2, 3, 4].includes(s.version))
     fail(
@@ -461,6 +527,11 @@ export function validateState(s) {
   clean.revision = Number.isSafeInteger(s.revision) && s.revision >= 0 ? s.revision : 0;
   return clean;
 }
+// Applies one /api/update operation (op.type below) to a state and returns the validated
+// result. It changes s in place first: the server passes the profile inside its draft copy
+// of the workspace and browser-api.js passes a structuredClone, so a throw from the final
+// validateState discards the change. Values such as a check's boolean or a delivery count
+// are only type-checked there, not here.
 export function mutate(s, op) {
   if (!plain(op)) fail('Invalid update.');
   if (op.type === 'check' || op.type === 'note' || op.type === 'delivery') {
@@ -484,6 +555,7 @@ export function mutate(s, op) {
   } else if (op.type === 'addTask') {
     s.customTasks.push({ id: op.id, title: op.title, phase: op.phase });
   } else if (op.type === 'removeTask') {
+    // Deleting a personal task also removes its tick and any step edits naming it.
     s.customTasks = s.customTasks.filter(t => t.id !== op.id);
     delete s.checks[op.id];
     const e = (s.taskEdits = validateTaskEdits(s.taskEdits));
@@ -501,6 +573,8 @@ export function mutate(s, op) {
   } else fail('Unknown update.');
   return validateState(s);
 }
+// Build-plan step edits: taskEdit (title, body, link; an empty value restores the
+// original), taskRemove / taskRestore (hide or show a step, its tick is kept) and taskOrder.
 function mutateTasks(s, op) {
   const e = (s.taskEdits = validateTaskEdits(s.taskEdits));
   if (op.type === 'taskEdit') {
@@ -540,6 +614,7 @@ function mutateTasks(s, op) {
     else delete e.order[op.phase];
   } else fail('Unknown update.');
 }
+// Factory group edits. Removing a group also drops it from every row's assignment list.
 function mutateGroups(s, op) {
   const g = (s.factoryGroups = validateGroups(s.factoryGroups));
   if (op.type === 'factoryGroupAdd') {
@@ -580,6 +655,9 @@ function mutateGroups(s, op) {
     else delete g.assignments[op.key];
   } else fail('Unknown update.');
 }
+// Storage layout edits. Only added floors and bays can be removed; built-in ones can only be
+// renamed. These edits change names and addresses only: 'slot-' checks and notes for a
+// removed bay's containers stay in checks and notes.
 function mutateLayout(s, op) {
   const e = (s.storageEdits = validateEdits(
     s.storageEdits === undefined ? undefined : s.storageEdits,
@@ -788,6 +866,10 @@ const GROUP_BY_ITEM = {
   Fabric: 'fg-ammo01',
   'Portable Miner': 'fg-ammo01',
 };
+// Assigns every row of every phase to a default group by its first output ('power-' rows
+// to nuclear or power generation by their id), and lists only the groups actually used.
+// Called by newProfileState for calculated profiles. Group ids are stored in saves, so the
+// fg-… ids above must stay stable even if their names change.
 export function defaultFactoryGroups(plan) {
   const assignments = {};
   for (const stage of Object.values(plan?.stages || {}))

@@ -1,9 +1,16 @@
-// Backup & notes view, in server and browser-only editions.
+// Backup & notes view (#backup), in server and browser-only editions. The browser edition
+// (browserMode) has no server, so it never shows the /api/export progress download and
+// instead explains that saves live in this browser. Its handlers: `data-export-saves` and
+// `data-persist-storage` in events/profiles.js, #import-saves in events/backup.js, and
+// #import-file (progress-only restore) and `data-save-note` in events/views.js.
 import { browserMode } from '../../browser-api.js';
 import { esc } from '../format.js';
 import { calculated, currentProfile, currentSave, plan, state, workspace } from '../session.js';
 import { header } from '../shell.js';
 
+// HTML for #backup. Picks the browser-edition page, the calculated-profile page, or (below)
+// the server page for the original handbook, with its plan assumptions and sources.
+// The save-wide note is stored under the key `global`.
 export function renderBackup() {
   if (browserMode) return renderBrowserBackup();
   if (calculated) return renderCalculatedBackup();
@@ -18,14 +25,20 @@ export function renderBackup() {
   );
 }
 
+// HTML notice that saves are browser-local. Shown at the top of the browser edition's
+// backup, profiles, wizard, guided-start and extraction-survey pages.
 export function browserNotice() {
   return `<div class="notice blue">Your saves stay in this browser on this device. Clearing site data or using private browsing can remove them. Export a full backup before switching devices or website addresses. <a href="#backup">Backups & transfer</a></div>`;
 }
 
+// HTML panel for full-save export and import (the `satisfactory-planner-saves` format),
+// offered in both editions. Import always adds copies; it never replaces a save.
 function portablePanel() {
   return `<section class="panel"><h2>Full saves & transfer</h2><p>Export all your saves, profile calculations, checkmarks and notes. Account passwords and sessions are excluded. Import adds copies without replacing existing saves.</p><button class="btn primary" data-export-saves>Export all saves</button> <label class="btn">Import saves<input id="import-saves" type="file" accept="application/json,.json" hidden></label></section>`;
 }
 
+// HTML for the browser edition's backup page. Also what #account shows in that edition,
+// since there are no accounts. workspace.lastBackup is when a full export last ran here.
 export function renderBrowserBackup() {
   return (
     header(
@@ -39,6 +52,10 @@ export function renderBrowserBackup() {
   );
 }
 
+// HTML for #backup on a calculated profile in the server edition: this profile's progress
+// download and restore, its save-wide note, and the calculation's warnings. The save and
+// profile names are user text, so they are escaped. (renderBackup has already routed the
+// browser edition away, so the browserMode check here is only a safeguard.)
 function renderCalculatedBackup() {
   if (browserMode) return renderBrowserBackup();
   return (

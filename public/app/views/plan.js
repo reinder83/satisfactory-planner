@@ -1,15 +1,23 @@
-// Build plan view for the original handbook.
+// Build plan view (#plan) for the original handbook profile. A calculated profile gets
+// renderCalculatedPlan in calculated.js instead; render() in shell.js picks one.
 import { esc, num, stat } from '../format.js';
 import { checked, currentProfile, phase, phaseLabel, plan, stage, state } from '../session.js';
 import { header } from '../shell.js';
 import { checklistHtml, planEditToolbar, planTasks, removedStepsHtml } from '../tasks.js';
 import { storageBays } from './storage.js';
 
+// HTML for the #plan page of the original handbook: summary tiles, the phase checklist
+// with its edit toolbar, phase notes, and a side column with the next step and deliveries.
+// Post-game ('post') reads the Phase 5 stage of the handbook: stage() maps it to '5'.
 export function renderPlan() {
+  // Checklist progress: planTasks() already applies this profile's step edits.
   const ts = planTasks(),
     done = ts.filter(t => checked(t.id)).length,
     next = ts.find(t => !checked(t.id)),
     pct = ts.length ? Math.round((done / ts.length) * 100) : 100;
+  // Factory and storage counters. The check keys are saved progress and must not change:
+  // `factory-<stage>-<id>` is a factory's Running box, `slot-<address>-verified` the last
+  // of a container's four checks (see slotKeys in storage.js).
   const fs = plan.factories.filter(f => f.stages[stage()]);
   const built = fs.filter(f => checked('factory-' + stage() + '-' + f.id)).length;
   const slots = storageBays()
@@ -41,6 +49,10 @@ export function renderPlan() {
   );
 }
 
+// HTML for one Space Elevator delivery counter. Shared with the calculated plan, which
+// passes ids shaped `<stage>-<item slug>` and initial 0. An unsaved count falls back to the
+// handbook's `initial` only on the original profile. The `data-delivery` input is saved by
+// the change handler in events/views.js, which rebuilds `d` to check the target.
 export function deliveryHtml(d) {
   const v = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
   return `<div class="delivery"><label for="delivery-${d.id}">${esc(d.name)}</label><div><input id="delivery-${d.id}" data-delivery="${d.id}" type="number" min="0" max="${d.target}" step="1" value="${v}"><small>/ ${num(d.target)}</small></div><div class="progress-track"><span style="width:${Math.min(100, (v / d.target) * 100)}%"></span></div><span class="small muted">${d.rate ? `${num(d.rate)}/min net · ${num(Math.max(0, d.target - v) / d.rate)} minutes remaining` : 'Phase 3 delivery already complete'}</span></div>`;

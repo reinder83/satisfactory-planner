@@ -1,4 +1,9 @@
-// Guided start: the short question sequence in front of the wizard.
+// Guided start: the short question sequence in front of the wizard. It is the
+// default for a new profile (startWizard sets mode 'guided'). The questions and
+// the settings each answer writes are data in preferences.js (guidedQuestions,
+// guidedStandingQuestion); this module sequences, draws and reads them. Draft
+// fields used: guidedStep (1-based index into guidedFlow()), guidedAsk, tutorial.
+// Continue is the #wizard-form submit (events/profiles.js -> moveGuided).
 import { browserMode } from '../../browser-api.js';
 import {
   GUIDED_TOPUP_RATE,
@@ -48,9 +53,11 @@ const GUIDED_GLYPHS = {
     '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>',
 };
 
+// A card's inline SVG from GUIDED_GLYPHS, falling back to the balanced one.
 const guidedGlyph = name =>
   `<span class="guided-art" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced}</svg></span>`;
 
+// A card's artwork from up to four bundled item icons (the phase cards).
 const guidedItemArt = items =>
   `<span class="guided-art items" aria-hidden="true">${items
     .slice(0, 4)
@@ -60,6 +67,12 @@ const guidedItemArt = items =>
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
+// Order: the preferences.js list (phase, goal, recipes, stock, exact), with the
+// tutorial question (Phase 1) or the "already producing" question (later
+// phases) inserted after phase for a new save. When wizard.guidedAsk is set
+// (the "What is different" screen), only those ids are kept. renderWizard and
+// the submit handler compare guidedStep with this length to know when the
+// questions are finished; ada-panel.js reads it too.
 export function guidedFlow() {
   const w = wizard,
     list = [];
@@ -71,6 +84,9 @@ export function guidedFlow() {
   return w.guidedAsk ? list.filter(q => w.guidedAsk.includes(q.id)) : list;
 }
 
+// The option value currently chosen for a question, derived from the settings
+// (so a change made in All settings shows up here). 'tutorial' lives on the
+// draft rather than the settings. No question has the id 'standing'.
 const guidedAnswer = q => {
   const w = wizard,
     s = w.settings;
@@ -82,6 +98,7 @@ const guidedAnswer = q => {
   return String(s[q.id] ?? '');
 };
 
+// A question's options as radio cards named "guided:<id>", read by readGuided.
 function guidedCardsHtml(q) {
   const picked = guidedAnswer(q);
   return `<div class="guided-grid">${q.options
@@ -99,6 +116,8 @@ function guidedCardsHtml(q) {
 // The materials you carry out by hand. A floor for one of them costs about 1%
 // more buildings; the general construction rate that would reach the same
 // number costs 81-425%, because it applies to all eighteen at once.
+// Checkboxes named "topup"; readGuided turns the ticked ones into
+// storageOverrides of GUIDED_TOPUP_RATE each. Only on the stock question.
 function guidedTopupHtml(s) {
   if (s.storage === 'none') return '';
   const over = s.storageOverrides || {};
@@ -110,6 +129,8 @@ function guidedTopupHtml(s) {
 // A second profile for a save you already play starts from the settings of the
 // profile you are on, so the useful question is what changed rather than all of
 // them again.
+// Shown instead of a question while wizard.saveId is set and guidedAsk is null.
+// Ticked "topic" boxes become wizard.guidedAsk, which narrows guidedFlow().
 function guidedTopicsHtml() {
   const w = wizard,
     s = w.settings,
@@ -140,10 +161,17 @@ function guidedTopicsHtml() {
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
 // the only ones a guided answer can tick: everything else it learns is a rate,
 // which changes the plan rather than its progress.
+// Sent as `built` by the profile-create submit (events/profiles.js), which also
+// passes the form; only `w` is used.
 export function guidedBuiltKeys(w) {
   return w.tutorial === 'done' ? [...tutorialKeys] : [];
 }
 
+// Copy the current guided screen into the draft. The mapping from answer to
+// settings is the chosen option's `set` object (preferences.js), merged into
+// wizard.settings: the same fields All settings writes (phase, goal, recipes,
+// pureIngots, storage, collectables, wholeMachines). The tutorial answer is kept
+// on the draft instead. Clears the preview, so Review must recalculate.
 function readGuided(form) {
   const w = wizard,
     s = w.settings,
@@ -185,10 +213,15 @@ function readGuided(form) {
   w.preview = null;
 }
 
+// The row of question names above the form, marking done and current ones.
 function guidedProgressHtml(flow, index) {
   return `<div class="guided-progress" role="list">${flow.map((q, i) => `<span role="listitem" class="${i === index ? 'current' : i < index ? 'done' : ''}" ${i === index ? 'aria-current="step"' : ''}><i></i>${esc(q.short || q.title.replace(/\?$/, ''))}</span>`).join('')}</div>`;
 }
 
+// HTML for the guided screen: the "What is different" topics screen, the
+// question at guidedStep, or "Ready to calculate" when no questions remain.
+// The name box is the save name for a new save and the profile name otherwise.
+// "All settings" jumps to the five-step wizard step that owns this question.
 export function renderGuided() {
   const w = wizard,
     s = w.settings,
@@ -230,6 +263,9 @@ export function renderGuided() {
   );
 }
 
+// Go to question `target` (1-based): read the screen, then re-render, hand over
+// to All settings, or, past the last question, calculate and show Review.
+// Forward moves must pass the form's own validation first.
 export async function moveGuided(target) {
   const w = wizard,
     form = $('#wizard-form');
@@ -267,6 +303,8 @@ export async function moveGuided(target) {
   await calculateWizard(form);
 }
 
+// readGuided plus the name box, which every guided screen but the topics one has.
+// Also used by the survey and supply code before they re-render.
 export function readGuidedForm(form) {
   const w = wizard,
     f = new FormData(form);
@@ -277,6 +315,7 @@ export function readGuidedForm(form) {
 
 // Switching to All settings keeps every answer: both modes write the same
 // settings object, so nothing is recalculated or lost either way.
+// Lands on `step`, clamped to 1-4: Review is only reached by calculating.
 export function toAdvanced(step) {
   const w = wizard;
   const form = $('#wizard-form');
@@ -287,6 +326,8 @@ export function toAdvanced(step) {
   render();
 }
 
+// "← Guided start" from the five-step wizard: read that form, then resume the
+// questions at the last guided step, clamped to the current flow.
 export function toGuided() {
   const w = wizard;
   const form = $('#wizard-form');

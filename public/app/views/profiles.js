@@ -1,10 +1,16 @@
-// Saves & profiles view.
+// Saves & profiles view (#profiles): every save in the workspace with its profile cards.
 import { browserMode } from '../../browser-api.js';
 import { esc, num } from '../format.js';
 import { currentProfile, currentSave, phaseLabel, workspace } from '../session.js';
 import { header } from '../shell.js';
 import { browserNotice } from './backup.js';
 
+// HTML for #profiles. A card is marked "PRESERVED HANDBOOK" for the original profile and
+// "CALCULATED PROFILE" otherwise; only calculated ones have `settings` to summarise. Save and
+// profile names are user text and go through esc(). The browser edition links to backups
+// instead of accounts. Buttons are handled in events/views.js: `data-new-save`,
+// `data-new-profile`, `data-open-save`/`-profile`, `data-duplicate-*`, `data-share-*`,
+// `data-remove-*`; #rename-form is submitted in events/profiles.js.
 export function renderProfiles() {
   return (
     (browserMode ? browserNotice() : '') +

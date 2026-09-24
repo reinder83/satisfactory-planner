@@ -1,3 +1,19 @@
+// The production calculator. `calculate(settings)` validates a profile's settings and solves one
+// linear program per phase (1 to 5) with HiGHS (optimizer.mjs). The result is the plan a
+// calculated profile stores as a frozen snapshot (`profile.plan`); profiles are never silently
+// recalculated. Post Phase 5 has no stage of its own: the interface shows Phase 5's stage for it
+// (`stage()` in public/app/session.js).
+//
+// Callers: workspace.mjs (`/api/preview`, `/api/profiles`, `/api/round-up`, and `catalog()` in
+// the session summary) for the Docker edition. The Pages edition runs a copy that build.mjs adapts
+// for the browser, inside calculator-worker.js, which public/browser-api.js drives; `catalog()` is
+// written to catalog.json at build time. tests/*.test.mjs import this module directly.
+//
+// Units: items per minute (m³ per minute for fluids) and MW. Recipe rates in recipes.json are for
+// one machine at 100% clock, so a recipe's LP variable counts machine-equivalents.
+//
+// build.mjs finds the node:fs import, the preferences.js path and the recipes.json read below by
+// exact string match and replaces them for the browser; keep those three snippets unchanged.
 import {
   droneFuels,
   droneSupply,
@@ -13,13 +29,27 @@ import {
 } from './public/preferences.js';
 import fs from 'node:fs';
 import { solve } from './optimizer.mjs';
+// Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
+// machine, per-minute `inputs`/`outputs` for one machine at 100%, and `power` in MW per machine.
+// `items`: fluid, radioactive, `energy` (MJ per item or m³, used for fuel generators) and `sink`
+// (AWESOME Sink points; 0 means the sink refuses it). Recipe ids become row ids and progress keys.
 export const DATA = JSON.parse(fs.readFileSync(new URL('./recipes.json', import.meta.url)));
+// Recorded as `plan.engine` in every calculated plan, so a stored snapshot says which engine
+// produced it. Nothing in the app reads it back at the moment.
 export const ENGINE = '2.0.0';
+// Turbofuel and Enriched Coal come from MAM research, not hard drives, so recipePool treats them
+// as standard recipes. Under 'custom' recipes they are opt-in like any alternate, and settings()
+// adds them itself when the power preference needs turbofuel.
 const MAM_RECIPES = ['Recipe_Alternate_Turbofuel_C', 'Recipe_Alternate_EnrichedCoal_C'];
 // Power preferences other than auto/coal/fuel run turbofuel generators (directly or as the Phase 3 bridge).
 export const powerNeedsTurbofuel = mainPower =>
   !['auto', 'coal', 'fuel'].includes(mainPower || 'auto');
+// Every alternate recipe id: the whitelist for a profile's `alternateRecipes`.
 const ALT_IDS = new Set(DATA.recipes.filter(r => r.alternate).map(r => r.id));
+// Extracted resources. Each is supplied by a `raw:` LP variable capped by the profile's budget in
+// `settings.limits` (per minute); nothing crafts them except the Phase 5 Converter recipes, which
+// are only in the pool when `conversion` is on. The order is the Resources table's row order
+// (`catalog().raw`).
 export const RAW = [
   'Iron Ore',
   'Copper Ore',
@@ -35,6 +65,12 @@ export const RAW = [
   'Nitrogen Gas',
   'Water',
 ];
+// Resource budgets per minute for the default map at its own purities, every node worked at 250%
+// clock: Miner Mk.3 300/600/1200 on impure/normal/pure, Oil Extractor 150/300/600 (resource wells
+// excluded), Resource Well Extractor 75/150/300 per nitrogen satellite. These are `nodeCounts`
+// in public/preferences.js through that extraction table, and a test (guided.test.mjs) rebuilds
+// both tables from it. Water is a planning allowance, not a map total. Shipped to the interface
+// as `catalog().limits`; a profile's own budgets live in `settings.limits`.
 export const DEFAULT_LIMITS = {
   'Iron Ore': 92100,
   'Copper Ore': 36900,
@@ -50,6 +86,8 @@ export const DEFAULT_LIMITS = {
   'Nitrogen Gas': 12000,
   Water: 1000000,
 };
+// The same nodes and extraction rates with every node pure (the "All Pure" purity setting).
+// Shipped as `catalog().pureLimits`.
 export const PURE_LIMITS = {
   'Iron Ore': 152400,
   'Copper Ore': 66000,
@@ -65,6 +103,10 @@ export const PURE_LIMITS = {
   'Nitrogen Gas': 13500,
   Water: 1000000,
 };
+// Space Elevator project parts per phase, as the game asks for them at a 1x cost multiplier.
+// `run` scales them by `settings.multiplier` and turns them into delivery rates over the phase's
+// hours. `elevatorParts` in public/preferences.js is kept in step with this by a test. Item names
+// here are part of saved progress: delivery counts are stored under '<phase>-<slugged name>'.
 export const DELIVERIES = {
   1: { 'Smart Plating': 50 },
   2: { 'Smart Plating': 1000, 'Versatile Framework': 1000, 'Automated Wiring': 100 },
@@ -82,9 +124,12 @@ export const DELIVERIES = {
     'Ballistic Warp Drive': 200,
   },
 };
+// Settings validation helpers. A rejected setting throws with status 400; server.mjs sends a
+// thrown error that carries a status back with its message, so the user sees this text.
 const err = message => {
   throw Object.assign(new Error(message), { status: 400 });
 };
+// An absent value takes the fallback; a present but invalid one is rejected, never corrected.
 const choice = (v, allowed, fallback) =>
   v === undefined ? fallback : allowed.includes(v) ? v : err('Invalid profile option.');
 const number = (v, min, max, fallback) =>
@@ -123,6 +168,7 @@ const supplyRates = raw => {
   }
   return out;
 };
+// { resource: { impure, normal, pure } } node or well-satellite counts from the extraction survey.
 const counts3 = raw => {
   const out = {};
   if (raw === undefined) return out;
@@ -169,6 +215,7 @@ const extractionRecord = raw => {
     used,
   };
 };
+// Per-item protected storage rates, items/min, 0 to 300. Resolved by storageRateFor.
 const rateOverrides = raw => {
   if (raw === undefined) return {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) err('Invalid per-item storage rates.');
@@ -184,6 +231,8 @@ const rateOverrides = raw => {
 // Somersloops parked in hand-fed constructors: slugs to shards, remains to protein and DNA,
 // biomass to solid biofuel. Their inputs are gathered, never belted, so these reserve a
 // somersloop and add checklist steps without entering the continuous production balance.
+// [id, label] pairs; the ids are what profiles store in `settings.sloopReserved`, so keep them.
+// Shipped as `catalog().sloopUses`. calculate() counts one somersloop per reserved use.
 export const SLOOP_USES = [
   ['shards', 'Power Shards from power slugs'],
   ['dna', 'Alien Protein and DNA Capsules from remains'],
@@ -194,6 +243,18 @@ const reservedUses = raw => {
   if (!Array.isArray(raw)) err('Invalid somersloop reservations.');
   return [...new Set(raw.filter(x => SLOOP_USES.some(([id]) => id === x)))].sort();
 };
+// Validates and normalises a profile's settings. Every field has a default, so `settings({})` is a
+// complete profile, and a field older profiles never stored must default to the value that makes
+// them calculate exactly as before (e.g. `buildRate` falls back to `storageRate`,
+// `installedPowerGW` to `availablePowerGW`, `existingSupply` to {}, `phaseTime` to 'every').
+// Unknown fields are dropped. The result is stored as `plan.settings` and the interface reads it
+// back (limits, utilityPercent, availablePowerGW, recipes, sam, ...). Called by calculate() and
+// directly by tests; throws a 400 error for invalid input.
+//
+// Units: availablePowerGW and installedPowerGW in GW (spare and total installed generation),
+// utilityPercent in %, rates (droneFuelRate, storageRate, buildRate, cellsPerMinute) per minute,
+// hours per phase, limits per minute, multiplier the elevator cost multiplier, powerFactor the
+// power consumption multiplier.
 export function settings(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) err('Invalid settings.');
   const s = {
@@ -265,11 +326,15 @@ export function settings(input = {}) {
   if (s.fueledAugmenters > s.augmenters) err('More fueled Alien Power Augmenters than augmenters.');
   if (s.installedPowerGW < s.availablePowerGW)
     err('Total installed generation cannot be less than the spare part of it.');
+  // Budgets the profile did not enter default to what its map preset gives (resourceDefaults in
+  // public/preferences.js): DEFAULT_LIMITS for the default map, zero for the resource-rich ones.
   s.limits = {};
   const defaults = resourceDefaults(s.purity, s.distribution).limits;
   if ((s.mainPower === 'nuclear' || s.mainPower.endsWith('-nuclear')) && s.nuclear === 'none')
     err('Choose a nuclear waste strategy for a nuclear power preference.');
   for (const r of RAW) s.limits[r] = number(input.limits?.[r], 0, 10000000, defaults[r]);
+  // Alternates only matter under recipes: 'custom'. Unknown ids are dropped and the lists sorted,
+  // so equal choices always produce equal settings. Preferred recipes must be selected alternates.
   s.alternateRecipes = Array.isArray(input.alternateRecipes)
     ? [...new Set(input.alternateRecipes.filter(x => ALT_IDS.has(x)))].sort()
     : [];
@@ -287,11 +352,28 @@ const pureNames = [
   'Alternate: Pure Aluminum Ingot',
 ];
 const metals = ['Iron Ingot', 'Copper Ingot', 'Caterium Ingot', 'Aluminum Ingot'];
+// Slug for generated row ids ('power-rocket-fuel'). Row ids are progress keys, so keep it stable.
 const key = n =>
   n
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+// The recipes a phase may choose from, before power generators are added (generators() below).
+// `s` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
+// Converter recipes that make raw resources (SAM-based ore conversion) are allowed. Returns
+// recipe objects from recipes.json, MAM recipes relabelled as standard. Used only by `run`.
+// The filters, in order:
+// 1. MAM recipes are always in, except under 'custom' where they must be selected; the map
+//    then relabels them as standard recipes.
+// 2. Available by this phase, and standard, or allowed by the recipe setting, or one of the
+//    pure ingot alternates when `pureIngots` is on.
+// 3. With `pureIngots`, from Phase 3 the pure alternates replace every other recipe for the four
+//    metal ingots (the owner's handbook runs pure ingot recipes from Phase 3).
+// 4. Recipes that make a raw resource (the Converter's ore conversions) only with `conversion`.
+//    Water is exempt: aluminum scrap, batteries and several blender recipes return water.
+// 5. Nuclear fuel and waste-processing recipes only with a nuclear strategy, except that from
+//    Phase 4 uranium drone fuel admits the Uranium Fuel Rod and Encased Uranium Cell recipes.
+// 6. Preferred recipes (custom only) push out the competitors for their primary product.
 export function recipePool(s, phase, conversion) {
   return DATA.recipes
     .filter(
@@ -357,6 +439,8 @@ export function recipePool(s, phase, conversion) {
 // carry integer machine counts, so they can afford fewer twins than precisely balanced ones.
 // Measured against the heaviest plans in the test set; raising these starts losing whole phases.
 export const AMPLIFY_CANDIDATES = { whole: 22, precise: 26 };
+// Somersloop slots per production machine, as in the game. Amplifying a machine fills all its
+// slots, so this is also the somersloop cost of one amplified machine.
 export const AMPLIFY_SLOTS = {
   Smelter: 1,
   Constructor: 1,
@@ -370,6 +454,8 @@ export const AMPLIFY_SLOTS = {
   'Quantum Encoder': 4,
 };
 const amplifiable = r => r.power > 0 && AMPLIFY_SLOTS[r.machine] > 0;
+// The amplified twin of a recipe: a separate row with an 'amp:' id (its own progress key), which
+// `run` makes an integer variable. `slots` marks it as amplified there.
 const amplified = r => ({
   ...r,
   id: 'amp:' + r.id,
@@ -378,6 +464,12 @@ const amplified = r => ({
   slots: AMPLIFY_SLOTS[r.machine],
   outputs: Object.fromEntries(Object.entries(r.outputs).map(([n, q]) => [n, q * 2])),
 });
+// Power plants modelled as recipes, so the LP sizes generation and fuel chains with everything
+// else. `power` is negative (MW generated per plant at 100%); inputs are fuel and water per
+// minute. Coal from Phase 2, fuel generators from Phase 3 (rocket fuel from 4), nuclear from 4
+// with a waste strategy, plutonium and ficsonium plants in Phase 5 when recycling. Phase 1 has no
+// generators: biomass burners are hand-fed and stay out of the model. Then `mainPower` narrows
+// the list from Phase 3 on; 'auto' leaves the choice to the solver.
 function generators(s, phase) {
   const result = [];
   if (phase >= 2)
@@ -398,6 +490,7 @@ function generators(s, phase) {
         machine: 'Fuel Generator',
         phase: 3,
         power: -250,
+        // 250 MW is 15,000 MJ per minute, divided by the fuel's energy per m³.
         inputs: { [name]: 15000 / DATA.items[name].energy },
         outputs: {},
       });
@@ -433,6 +526,9 @@ function generators(s, phase) {
         },
       );
   }
+  // Nuclear plants (present only with a waste strategy) are kept under every preference. The
+  // others keep one fuel: coal, 'fuel', rocket fuel from Phase 4 for the rocket options, and
+  // turbofuel otherwise, which is also the Phase 3 bridge for 'nuclear' before plants unlock.
   const preferred = s.mainPower || 'auto';
   if (preferred === 'auto' || phase < 3) return result;
   if (preferred === 'coal')
@@ -447,6 +543,37 @@ function generators(s, phase) {
         : 'Turbofuel';
   return result.filter(r => r.machine === 'Nuclear Power Plant' || r.inputs[fuel]);
 }
+// Plans one phase: builds the phase's LP (or MIP), solves it and turns the solution into a stage.
+// Each phase is a self-contained steady state; nothing is carried over from an earlier phase's
+// solution (only calculate()'s phaseTime 'final' pass passes `caps` from later phases).
+//
+// Inputs: `s` normalised settings, `phase` a number 1 to 5, and options:
+//   maximum       maximise simultaneous elevator delivery instead of meeting fixed delivery rates
+//   conversion    allow the Converter recipes that make raw resources (Phase 5 SAM conversion)
+//   ignoreLimits  lift every resource budget to 1e7/min (diagnostics: what would this need?)
+//   recipeIds     restrict the pool to these recipe ids (the network an exact solve chose); set,
+//                 it also marks the inner solve of the two-step fit below
+//   caps          { recipeId: max machine-equivalents }; a recipe missing from it is capped at 0
+//   baseline      { recipeId: equivalent } from the exact solve: which lines get amplified twins
+//
+// Returns { feasible: false, solverStatus? } or a stage:
+//   rows        one per recipe in use, in build order (suppliers before consumers): the recipe
+//               plus `equivalent` (machine-equivalents at 100%), `machines` (whole buildings),
+//               `lastClock` (% clock of the last machine), inputs/outputs scaled to the line's
+//               per-minute totals, `peakMW` (whole machines at full power, before the utility
+//               allowance), `generationMW` for generators, and `amplified`/`sloops` for 'amp:' rows
+//   raw         per-minute draw on each raw resource; `supplied` credited existing production
+//   storage     protected storage rate per storable item (0 keeps the container, reserves nothing)
+//   drone       dedicated drone fuel per minute; `delivery` { item: { target, rate } }
+//   surplus     solid, sinkable output per minute beyond every demand (overflow for the sink)
+//   power       peakMW, generationMW, requiredMW (peak with utility allowance), availableMW (new
+//               generation with augmenter boost plus spare), additionalHeadroomMW (shortfall)
+//   hours       time to finish the phase's deliveries at these rates
+//   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names)
+// calculate() may add aheadOf, fuelVerdict, supplyDropped/amplificationDropped, or turn a failed
+// phase into a draft with reason/shortfalls/minHours. The interface reads these fields in
+// public/app/views/calculated.js, public/app/flow.js and public/app/wizard/. Only calculate()
+// calls run, directly and through the two-step fit below.
 export function run(
   s,
   phase,
@@ -459,9 +586,16 @@ export function run(
     baseline = null,
   } = {},
 ) {
+  // Two-step fit for whole machines and amplification. First the exact LP (fractional machines,
+  // no amplification) chooses the recipe network; then the integer fit re-solves over only that
+  // network (`recipeIds`), which keeps the integer search small enough for the solver's 3-second
+  // limit. Hence the warning that the result is not a global mixed-recipe integer optimum.
+  // The inner calls pass `recipeIds`, so they skip this block and build the model below.
   if ((s.wholeMachines || s.amplifySloops > 0) && !recipeIds) {
     const opts = { maximum, conversion, ignoreLimits, caps };
     const exact = t => run({ ...t, wholeMachines: false, amplifySloops: 0 }, phase, opts);
+    // The amplification candidates: the largest lines (at least one machine-equivalent) of an
+    // exact solve, as { recipeId: equivalent }.
     const twins = b =>
       Object.fromEntries(
         [...b.rows]
@@ -470,6 +604,7 @@ export function run(
           .slice(0, AMPLIFY_CANDIDATES[s.wholeMachines ? 'whole' : 'precise'])
           .map(r => [r.id, r.equivalent]),
       );
+    // If even the exact LP fails, rounding cannot help; calculate() explains the failure.
     const base = exact(s);
     if (!base.feasible) return base;
     const ids = new Set(base.rows.map(r => r.id));
@@ -510,6 +645,9 @@ export function run(
     }
     return fit;
   }
+  // Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
+  // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
+  // and only for the baseline's candidate lines.
   const selected = [...recipePool(s, phase, conversion), ...generators(s, phase)].filter(
     r =>
       !recipeIds ||
@@ -522,6 +660,9 @@ export function run(
       ? selected.filter(r => amplifiable(r) && baseline?.[r.id] !== undefined).map(amplified)
       : []),
   ];
+  // Items the pool can actually make from raw resources (and from nuclear waste, which the
+  // plants themselves produce), found by repeated passes. Only reachable items are given a
+  // protected storage demand, so storage never asks for something this phase cannot make.
   const reachable = new Set(RAW);
   if (s.nuclear !== 'none' && phase >= 4) reachable.add('Uranium Waste');
   if (s.nuclear === 'recycle' && phase === 5) reachable.add('Plutonium Waste');
@@ -532,10 +673,15 @@ export function run(
   const allItems = new Set(
     pool.flatMap(r => [...Object.keys(r.inputs), ...Object.keys(r.outputs)]),
   );
+  // Demands: per-minute amounts that must leave the network rather than feed another recipe.
+  // They become the right-hand sides of the item balance constraints below. Four kinds: protected
+  // storage, elevator deliveries, drone fuel, and Phase 5 Singularity Cells and augmenter fuel.
   const demand = {};
   const storage = {};
   const drone = droneSupply(s, phase),
     utilityFactor = 1 + (s.utilityPercent ?? 20) / 100;
+  // Protected storage: solid, sinkable, non-radioactive items the storage mode covers, each at
+  // its rate from storageRateFor (per-item override, elevator parts 0, build rate, general rate).
   const candidates = [...reachable].filter(
     n =>
       !RAW.includes(n) &&
@@ -550,6 +696,11 @@ export function run(
       storage[n] = rate;
       if (rate > 0) demand[n] = rate;
     }
+  // Elevator deliveries: the phase's parts spread over its hours (24 for 'minimal', 8 for
+  // 'balanced', the profile's own for 'timed'). `roundRates` rounds to readable belt rates: to
+  // tens from 100/min, whole numbers from 10/min, and up to a tenth below that. Rounding to the
+  // nearest can round a rate down, so `hours` is recomputed from the rates at the end. Under
+  // `maximum` deliveries are not a fixed demand; the goal variable below draws them instead.
   const delivery = {};
   const hours = s.goal === 'minimal' ? 24 : s.goal === 'balanced' ? 8 : s.hours;
   for (const [n, amount] of Object.entries(DELIVERIES[phase])) {
@@ -572,12 +723,18 @@ export function run(
   const matrix = phase === 5 ? 5 * s.fueledAugmenters : 0;
   if (matrix) demand['Alien Power Matrix'] = (demand['Alien Power Matrix'] || 0) + matrix;
   Object.keys(demand).forEach(n => allItems.add(n));
+  // The objective. Normally minimise `cost`: one per machine-equivalent, plus a tiny power term
+  // that breaks ties towards lower consumption. Under `maximum`, maximise `gain`, the goal
+  // variable's level, then re-solve for cost (see after the solve).
   const model = {
     optimize: maximum ? 'gain' : 'cost',
     opType: maximum ? 'max' : 'min',
     constraints: {},
     variables: {},
   };
+  // One balance constraint per item, 'item:<name>': production minus consumption (including the
+  // raw, supply and goal variables) must be at least the item's demand. Solids may overshoot;
+  // the excess is surplus bound for the sink, which is what lets whole machines round up.
   // An item the AWESOME Sink cannot accept has nowhere to overflow: Power Shards would back a
   // Synthetic Power Shard line up and stall it. Balance those exactly, as fluids and waste are.
   for (const n of allItems) {
@@ -598,7 +755,13 @@ export function run(
     installedMW = s.installedPowerGW * 1000;
   const spareMW =
     s.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
+  // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
+  // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
+  // constraint (its power is hand-fed biomass). Under `maximum` it applies in Phase 1 too, where
+  // there are no generators, so only the entered spare power can run that phase.
   if (phase >= 2 || maximum) model.constraints.power = { max: spareMW };
+  // One variable per recipe: its level is machine-equivalents at 100% clock, and its
+  // coefficients are its per-machine outputs (+) and inputs (-) in each item balance.
   for (const r of pool) {
     const v = {
       cost: 1 + (r.power > 0 ? r.power / 100000 : 0),
@@ -606,11 +769,14 @@ export function run(
     };
     for (const [n, q] of Object.entries(r.outputs)) v['item:' + n] = (v['item:' + n] || 0) + q;
     for (const [n, q] of Object.entries(r.inputs)) v['item:' + n] = (v['item:' + n] || 0) - q;
+    // At least the requested number of uranium plants (settings.uraniumReactors) when nuclear
+    // power is in the pool. Nuclear rows are never integer (see the whole-machine rule below).
     if (r.id === 'power-uranium') {
       v.nuclear = 1;
       model.constraints.nuclear = { min: s.uraniumReactors };
     }
     model.variables[r.id] = v;
+    // Amplified twins: integer machine counts, each using `slots` somersloops of the budget.
     if (r.slots) {
       (model.ints ??= {})[r.id] = 1;
       v.sloops = r.slots;
@@ -625,6 +791,10 @@ export function run(
         ),
       );
     }
+    // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
+    // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
+    // generators and anything nuclear keep fractional clocks, because their balances are exact.
+    // (Generators have no outputs, and power-uranium outputs waste.)
     if (
       s.wholeMachines &&
       Object.keys(r.outputs).some(
@@ -638,13 +808,20 @@ export function run(
     }
   }
   // An earlier phase may run no more of a recipe than a later phase already builds, so nothing is added that the plan later drops.
+  // (That comment describes the `caps` block after the next line.) First the somersloop budget:
+  // amplified machines may together fill no more slots than `amplifySloops`, per phase.
   if (s.amplifySloops > 0) model.constraints.sloops = { max: s.amplifySloops };
+  // Caps, for phaseTime 'final': each recipe's equivalent is at most the whole machines built
+  // for it in this or a later phase. Every pool recipe gets a cap, so a recipe no such phase
+  // uses is capped at 0 — including generators.
   if (caps)
     for (const r of pool) {
       const cap = caps[r.id] ?? 0;
       model.constraints['cap:' + r.id] = { max: cap };
       model.variables[r.id]['cap:' + r.id] = 1;
     }
+  // Raw resources: a 'raw:' source variable per extracted item the pool uses, capped by its
+  // budget ('limit:') and almost free, so extraction is spent only where it saves machines.
   // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
   for (const n of RAW) {
     if (!allItems.has(n)) continue;
@@ -661,13 +838,21 @@ export function run(
     model.constraints['supply:' + n] = { max: rate };
     model.variables['supply:' + n] = { cost: 0.0001, ['item:' + n]: 1, ['supply:' + n]: 1 };
   }
+  // Uranium waste must balance exactly, and the 'sink' strategy (and Phase 4 under 'recycle',
+  // before plutonium plants exist) ends the waste chain at Plutonium Fuel Rods: this variable
+  // disposes of them in the AWESOME Sink. Reported as `plutoniumSink` (rods per minute).
   if (s.nuclear !== 'none' && phase >= 4 && (s.nuclear === 'sink' || phase === 4))
     model.variables['sink-plutonium'] = { cost: 0.0001, 'item:Plutonium Fuel Rod': -1 };
+  // Maximum output: the goal variable consumes every delivery part in proportion to its target,
+  // at target/1000 per minute per unit of goal, so maximising it maximises the rate at which the
+  // whole phase completes together (hours = 1000 / (60 x goal)).
   if (maximum) {
     const v = { gain: 1 };
     for (const [n, d] of Object.entries(delivery)) v['item:' + n] = -d.target / 1000;
     model.variables.goal = v;
   }
+  // Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
+  // numerical slack) and minimises machines, so the fastest plan is also the leanest one.
   let solved = solve(model);
   if (maximum && solved.feasible) {
     model.constraints.keepGoal = { min: solved.goal * (1 - 1e-8) };
@@ -677,6 +862,7 @@ export function run(
     const economical = solve(model);
     if (economical.feasible) solved = economical;
   }
+  // solverStatus lets calculate() tell a time-out ('Time limit reached') from a real shortage.
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   // Independently verify material, power and mining constraints before trusting a result.
@@ -691,8 +877,13 @@ export function run(
     )
       return { feasible: false };
   }
+  // Post-processing. Under `maximum` the delivery rates are whatever the goal achieved.
   if (maximum)
     for (const d of Object.values(delivery)) d.rate = ((solved.goal || 0) * d.target) / 1000;
+  // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
+  // one runs underclocked at `lastClock` % (100 for a whole-machine row). Row inputs and outputs
+  // are the line's totals per minute. peakMW counts whole machines at full power without the
+  // utility allowance; generationMW is a generator's output at its fractional level.
   const rows = pool
     .filter(r => (solved[r.id] || 0) > 1e-6)
     .map(r => {
@@ -716,6 +907,10 @@ export function run(
       .filter(([, q]) => q > 0.002),
   );
   const raw = Object.fromEntries(RAW.map(n => [n, solved['raw:' + n] || 0]));
+  // Surplus: what the rows make beyond what the rows consume and every demand takes. Only solid,
+  // sinkable items are listed; fluids, waste and unsinkable items are balanced exactly. `made`
+  // counts rows only, so an item also drawn from existing supply or a raw budget shows the rows'
+  // excess over total use, clamped at 0.
   const used = {},
     made = {};
   for (const r of rows) {
@@ -745,6 +940,8 @@ export function run(
           DATA.items[n]?.sink > 0,
       ),
   );
+  // Power totals. The LP balanced power at fractional machine counts; building whole machines at
+  // full power can need more, and the difference is reported as additionalHeadroomMW below.
   const peakMW = rows.reduce((a, r) => a + r.peakMW, 0),
     generationMW = rows.reduce((a, r) => a + r.generationMW, 0);
   // Order by dependency depth; recycling loops are commissioned as a connected group.
@@ -780,26 +977,46 @@ export function run(
     boost,
     augmenterMW: 500 * augmenters,
     matrixRate: matrix,
+    // New generation with the augmenter boost, plus the spare figure (which already includes the
+    // augmenters' 500 MW each and their boost on installed capacity).
     availableMW: generationMW * (1 + boost) + spareMW,
     requiredMW: peakMW * utilityFactor,
     additionalHeadroomMW: Math.max(
       0,
       peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
     ),
+    // The phase takes as long as its slowest delivery (Infinity if a rate is 0).
     hours: Math.max(
       ...Object.values(delivery).map(d => (d.rate ? d.target / d.rate / 60 : Infinity)),
     ),
+    // Names of the raw-resource conversion rows (Converter recipes), listed on the Resources page.
     conversions: rows
       .filter(r => Object.keys(r.outputs).some(n => RAW.includes(n) && n !== 'Water'))
       .map(r => r.name),
   };
 }
+// Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
+// interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
+// settings(); `onPhase(phase)` is called before each phase is solved, which the browser worker
+// forwards as progress so its timeout restarts.
+//
+// Returns { engine, settings, stages: { 1..5: stage }, warnings: [string], createdAt }. A stage is
+// run()'s result, or for a phase that does not fit a draft with `feasible: false`, the diagnostic
+// solve's rows and a `reason`, plus `shortfalls` [{ name, needed, budget }], `minHours` and
+// `wholeMachinesOnly` where they apply (see draftOptions in public/app/views/calculated.js).
+// Stored as `profile.plan` and never recalculated behind the user's back, so a field added here
+// must be optional for plans saved by older engines.
+//
+// Callers: workspace.mjs (/api/preview, /api/profiles, /api/round-up), calculator-worker.js in
+// the Pages edition (via public/browser-api.js), and the tests.
 export function calculate(input, onPhase) {
   const s = settings(input);
   if (s.goal === 'maximum' && !s.limitsConfirmed)
     err('Confirm your available resource budgets before maximizing output.');
   const stages = {};
   const warnings = [];
+  // Solve each phase on its own. SAM conversion: 'allow' offers it to the Phase 5 solve from the
+  // start, 'needed' only when Phase 5 does not fit without it, 'avoid' never.
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
     let result = run(s, phase, {
@@ -814,6 +1031,10 @@ export function calculate(input, onPhase) {
       if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
         result = converted;
     }
+    // Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
+    // budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
+    // solver timed out (no shortage proven); the recipes and power options cannot make it at all;
+    // or it is a budget problem, split into "only whole machines break it" and a real shortfall.
     // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
     if (!result.feasible) {
       const conversion = phase === 5 && s.sam !== 'avoid';
@@ -829,6 +1050,7 @@ export function calculate(input, onPhase) {
         stage.reason =
           'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
       else {
+        // Does the exact LP fit the real budgets at `h` hours for this phase?
         const fits = h =>
           run({ ...s, wholeMachines: false, goal: 'timed', hours: h }, phase, { conversion })
             .feasible;
@@ -860,6 +1082,7 @@ export function calculate(input, onPhase) {
             n => ({ name: n, needed: Math.ceil(diagnostic.raw[n]), budget: s.limits[n] }),
           );
           // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
+          // Bisection between the current hours and the 2,000-hour maximum, to a quarter hour.
           if (s.goal !== 'maximum' && fits(2000)) {
             let lo = currentHours,
               hi = 2000;
@@ -885,6 +1108,8 @@ export function calculate(input, onPhase) {
       stages[phase] = stage;
     } else stages[phase] = result;
   }
+  // Everything below adjusts the finished stages or adds warnings. Warnings are plain sentences,
+  // shown in this order as the profile's assumptions (plan page, Backup page, wizard review).
   // With the target time on the final phase, an earlier phase may run its lines as
   // hard as the machines a later phase already builds allow, so it finishes sooner
   // without adding a building the plan later drops. A phase is never made slower,
@@ -894,6 +1119,11 @@ export function calculate(input, onPhase) {
     s.goal !== 'maximum' &&
     Object.values(stages).every(x => x.feasible)
   ) {
+    // built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
+    // are the most machines any phase from n to 5 builds, so running a line harder than its own
+    // plan asks never needs a building that is not built anyway. The re-solve maximises output
+    // under those caps, and is kept only when it finishes strictly sooner, recording the time it
+    // replaces as `aheadOf` (shown by public/app/wizard/wizard.js).
     const built = {};
     for (let phase = 1; phase <= 5; phase++)
       for (const r of stages[phase].rows || [])
@@ -925,6 +1155,8 @@ export function calculate(input, onPhase) {
         r = run({ ...s, fueledAugmenters: 0 }, 5, { ...opts, conversion: true });
       return r;
     })();
+    // `fuelVerdict` (rendered by fuelVerdictHtml in public/app/wizard/review.js) compares the
+    // fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
     const count = x => (x.rows || []).reduce((a, r) => a + r.machines, 0),
       wet = stages[5];
     stages[5] = {
@@ -946,6 +1178,8 @@ export function calculate(input, onPhase) {
       },
     };
   }
+  // Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
+  // amplification budget. Warned about, never enforced: the plan is still calculated.
   if (s.augmenters || s.amplifySloops) {
     const committed = 10 * s.augmenters + s.sloopReserved.length + s.amplifySloops;
     if (s.augmenters)
@@ -957,6 +1191,7 @@ export function calculate(input, onPhase) {
         `This plan commits ${committed} somersloops — 10 per augmenter${s.sloopReserved.length ? `, ${s.sloopReserved.length} reserved for hand-fed lines` : ''}${s.amplifySloops ? `, ${s.amplifySloops} for production amplification` : ''} — but ${s.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
       );
   }
+  // Amplification: the busiest phase's somersloop use, and phases whose fit fell back.
   {
     const used = Math.max(0, ...Object.values(stages).map(x => x.sloopsUsed || 0));
     const dropped = Object.entries(stages)
@@ -971,6 +1206,7 @@ export function calculate(input, onPhase) {
         `Phase ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
       );
   }
+  // Existing production: which credits some phase drew on, and phases that had to drop them.
   {
     const supplied = [
       ...new Set(Object.values(stages).flatMap(x => Object.keys(x.supplied || {}))),
@@ -991,6 +1227,7 @@ export function calculate(input, onPhase) {
     warnings.push(
       `Fuel for ${s.fueledAugmenters} augmenter${s.fueledAugmenters > 1 ? 's' : ''} adds ${5 * s.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`,
     );
+  // Unsinkable solid outputs (Power Shards today), which are balanced exactly, not rounded.
   {
     const stuck = [
       ...new Set(
@@ -1038,6 +1275,11 @@ export function calculate(input, onPhase) {
     );
   return { engine: ENGINE, settings: s, stages, warnings, createdAt: new Date().toISOString() };
 }
+// Static data the interface needs before any calculation: recipe lists for the wizard's
+// alternate picker, storage, supply and raw-resource options, default budgets and goal labels.
+// The Docker edition sends it with the session summary (workspace.mjs); build.mjs writes it to
+// catalog.json for the Pages edition, which public/browser-api.js loads. The UI reads it as
+// `workspace.catalog`.
 export const catalog = () => ({
   engine: ENGINE,
   alternates: DATA.recipes

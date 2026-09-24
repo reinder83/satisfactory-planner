@@ -1,5 +1,17 @@
 // Delegated DOM event handlers for the planner views: checklist, factories,
 // storage, dialogs and navigation.
+// The pages are HTML strings redrawn by render() in shell.js, so every listener sits on
+// document or window and dispatches on data-* attributes, element ids or form ids.
+// Progress changes go through save() in api.js: it queues the write, toasts a failure
+// itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
+// (or put the control back); a success toast never follows a failed write.
+// Shared UI state lives in session.js and is changed through its setX() setters.
+
+// Registration order matters where listeners share an event type: app.js imports this
+// module first, and tests/app-modules.test.mjs pins the order. In order: ADA badge
+// click, main page click, change, search input, supply input, supply keydown, supply
+// focusout, add-task submit, editor submit, image error (capture), hashchange, #detail
+// backdrop click, beforeunload, then the profiles/wizard/account click.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { bayCapacity } from '../../state.js';
 import {
@@ -90,19 +102,36 @@ import {
 
 // The badge is decoration, not a control: it is hidden from assistive software
 // and nothing is only reachable through it.
+// Click 1 of 3 on document: poking ADA's ◈ badge (adaPoke counts rapid pokes and, at
+// five, stages a "transmission fault" remark). Ignored while ADA is muted.
 document.addEventListener('click', e => {
   if (e.target.closest('.ada-mark') && !adaMuted) adaPoke();
 });
 
+// Click 2 of 3: buttons and links on the planner pages.
+// Index: dialogs (close, factory, container), storage room (complete room, floor tabs),
+// ADA panel (another remark, mute), edit-mode toggles, build-plan step editing (move,
+// edit, cancel, remove, restore), factory groups (remove, unassign), storage layout
+// (clear container, remove bay, remove floor), notes, delete personal task.
+// The branches are separate ifs, each keyed on its own attribute.
 document.addEventListener('click', async e => {
   const target = e.target.closest('button,a');
   if (!target) return;
+  // --- Dialogs ---
+  // The × in a detail dialog's header (dialog() in factory-detail.js): close #detail.
+  // There is no unsaved-notes check, so an unsaved note edit in the dialog is dropped.
   if (target.hasAttribute('data-close')) {
     $('#detail').close();
     setActiveDetail(null);
   }
+  // A handbook factory's name or "Details ↗" link (factory cards, flow diagrams, storage
+  // details, other dialogs): open that factory's detail dialog.
   if (target.dataset.factory) openFactory(target.dataset.factory);
+  // A container tile in the storage room: open that address's detail dialog.
   if (target.dataset.slot) openSlot(target.dataset.slot);
+  // --- Storage room ---
+  // "Complete room X" on a bay: tick every check of every named container in the bay in
+  // one write, then redraw. The button is disabled while saving.
   if (target.dataset.completeBay) {
     const bay = storageBays().find(b => b.id === target.dataset.completeBay);
     if (bay) {
@@ -121,11 +150,15 @@ document.addEventListener('click', async e => {
       }
     }
   }
+  // A floor tab above the storage room: switch floor, clear the search, redraw.
   if (target.dataset.floor) {
     setFloor(target.dataset.floor);
     setQuery('');
     render();
   }
+  // --- ADA panel (sidebar) ---
+  // "Another remark": end a transmission fault, or show the next remark in place without
+  // redrawing the page.
   if (target.hasAttribute('data-ada-next')) {
     // A fault redraws the whole panel, since the name above the line changes too.
     if (adaFault) {
@@ -142,25 +175,33 @@ document.addEventListener('click', async e => {
       }
     }
   }
+  // ADA's "Mute" / "Unmute": remember the choice in localStorage (adaStore) and redraw.
   if (target.dataset.adaMute) {
     setAdaMuted(target.dataset.adaMute === 'on');
     adaStore();
     adaClearFault();
     render();
   }
+  // --- Edit-mode toggles (view state only, nothing is saved) ---
+  // "Edit layout" / "Done editing" on the storage page: show or hide the layout editor.
   if (target.hasAttribute('data-toggle-layout')) {
     setLayoutEditing(!layoutEditing);
     render();
   }
+  // "Edit steps" / "Done editing" on the plan checklist; either way closes any step form.
   if (target.hasAttribute('data-toggle-plan-edit')) {
     setPlanEditing(!planEditing);
     setEditingTask(null);
     render();
   }
+  // "Edit groups" / "Done editing" on the factories page: show or hide the group editor.
   if (target.hasAttribute('data-toggle-factory-edit')) {
     setFactoryEditing(!factoryEditing);
     render();
   }
+  // --- Build-plan step editing (plan page, after "Edit steps") ---
+  // ↑ / ↓ beside a step (data-dir is -1 or 1): swap it with its neighbour and save this
+  // phase's whole order (taskOrder). Nothing happens at either end of the list.
   if (target.dataset.moveTask) {
     const ids = planTasks().map(t => t.id),
       i = ids.indexOf(target.dataset.moveTask),
@@ -173,14 +214,20 @@ document.addEventListener('click', async e => {
       } catch {}
     }
   }
+  // "Edit" beside a step: swap it for its edit form (taskEditForm in tasks.js). The form
+  // is saved by the data-task-edit branch of the editor submit listener below.
   if (target.dataset.editTask) {
     setEditingTask(target.dataset.editTask);
     render();
   }
+  // "Cancel" in a step's edit form: close it without saving.
   if (target.hasAttribute('data-cancel-task-edit')) {
     setEditingTask(null);
     render();
   }
+  // "Remove" beside a step, after a confirmation. A personal task (id custom-…) is
+  // deleted; a plan step is only hidden (taskRemove) and keeps its checkmark, so it can
+  // be put back from "Removed steps in this phase".
   if (target.dataset.removeStep) {
     const id = target.dataset.removeStep;
     if (id.startsWith('custom-')) {
@@ -201,12 +248,16 @@ document.addEventListener('click', async e => {
       } catch {}
     }
   }
+  // "Restore" in the "Removed steps in this phase" list: show a removed plan step again.
   if (target.dataset.restoreTask) {
     try {
       await save({ type: 'taskRestore', id: target.dataset.restoreTask });
       render();
     } catch {}
   }
+  // --- Factory groups (factories page, after "Edit groups") ---
+  // "Remove group", after a confirmation: only the group goes; its factories and their
+  // progress stay.
   if (
     target.dataset.removeGroup &&
     confirm('Remove this group? The factories stay in the list and keep their progress.')
@@ -216,6 +267,8 @@ document.addEventListener('click', async e => {
       render();
     } catch {}
   }
+  // ✕ beside a group in a factory card's group editor: save the factory's memberships
+  // without that group (data-group), keeping the other groups' rates.
   if (target.dataset.unassign) {
     const key = target.dataset.unassign,
       groups = membershipsOf(key)
@@ -226,6 +279,9 @@ document.addEventListener('click', async e => {
       render();
     } catch {}
   }
+  // --- Storage layout editing (storage page, after "Edit layout") ---
+  // ✕ on a container: take the item off that address. Its checkmarks stay saved with the
+  // address. Re-enabled only on failure, since a success redraws the button away.
   if (target.dataset.clearSlot) {
     target.disabled = true;
     try {
@@ -236,6 +292,7 @@ document.addEventListener('click', async e => {
       target.disabled = false;
     }
   }
+  // "Remove bay" on an added bay (handbook bays have none), after a confirmation.
   if (
     target.dataset.removeBay &&
     confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')
@@ -248,6 +305,8 @@ document.addEventListener('click', async e => {
       target.disabled = false;
     }
   }
+  // "Remove this floor" for an added floor, after a confirmation; then back to the ground
+  // floor. The button is rendered disabled while the floor still has bays.
   if (target.dataset.removeFloor && confirm('Remove this added floor?')) {
     target.disabled = true;
     try {
@@ -258,6 +317,12 @@ document.addEventListener('click', async e => {
       target.disabled = false;
     }
   }
+  // --- Notes ---
+  // "Save notes" under a notes box: phase notes (plan page), save-wide notes (Backup
+  // page) and the notes in factory and container dialogs. data-save-note is the notes key
+  // and data-input the textarea's id. Inside a dialog a successful save also closes it.
+  // There is no redraw: save() has already stored the new state. "Notes saved." only
+  // appears after the write succeeded.
   if (target.dataset.saveNote) {
     const noteDialog = target.closest('dialog');
     target.disabled = true;
@@ -277,6 +342,8 @@ document.addEventListener('click', async e => {
       target.disabled = false;
     }
   }
+  // "Delete personal task" inside a personal task's details (outside edit mode), after a
+  // confirmation.
   if (target.dataset.remove && confirm('Delete this personal task?')) {
     try {
       await save({ type: 'removeTask', id: target.dataset.remove });
@@ -285,8 +352,17 @@ document.addEventListener('click', async e => {
   }
 });
 
+// Change events: checkboxes, selects and fields that save when committed, plus the
+// wizard fields that reshape its form.
+// Index: container Done, progress checkmarks, working phase, factory filter, hide
+// completed, wizard redraws (settings, guided, node survey, existing supply), alternate
+// recipe ticks, bay and group renames, group assignment and rate, elevator deliveries,
+// restore a progress backup. The full-save import picker is handled in backup.js.
 document.addEventListener('change', async e => {
   const el = e.target;
+  // --- Checkmarks ---
+  // "Done" on a storage container: set all of that address's checks in one write. A failed
+  // write unticks it again.
   if (el.dataset.completeSlot) {
     const value = el.checked;
     el.disabled = true;
@@ -299,6 +375,9 @@ document.addEventListener('change', async e => {
       el.disabled = false;
     }
   }
+  // Any progress checkbox: plan steps, a factory's "Running", calculated rows, storage and
+  // commissioning checklists, the factory dialog's target check. A failed write puts the
+  // box back.
   if (el.dataset.check) {
     const value = el.checked;
     el.disabled = true;
@@ -311,6 +390,10 @@ document.addEventListener('change', async e => {
       el.disabled = false;
     }
   }
+  // --- Page controls ---
+  // The "Working phase" select in the sidebar: save the profile's selected phase, clear
+  // the search and redraw; on failure it shows the saved phase again. There is no
+  // unsaved-notes check, so an unsaved phase note edit is lost in the redraw.
   if (el.id === 'phase-picker') {
     el.disabled = true;
     try {
@@ -323,18 +406,25 @@ document.addEventListener('change', async e => {
       el.disabled = false;
     }
   }
+  // The factory status filter on the factories page (view state only).
   if (el.id === 'factory-filter') {
     setFactoryFilter(el.value);
     render();
   }
+  // "Hide completed" above the plan checklist (view state only).
   if (el.id === 'hide-done') {
     setHideDone(el.checked);
     render();
   }
+  // --- Profile wizard (nothing is saved until the profile is created) ---
+  // Settings whose answer changes what the five-step wizard shows: read the form into the
+  // wizard and redraw.
   if (['recipes', 'mainPower', 'pureIngots'].includes(el.name) && wizard && $('#wizard-form')) {
     readWizard($('#wizard-form'));
     render();
   }
+  // Guided questions: a question's radio (guided:…), a top-up choice or the "what is
+  // different" topics. Read the answers and redraw, since they decide what follows.
   if (
     wizard?.mode === 'guided' &&
     $('#wizard-form') &&
@@ -343,6 +433,8 @@ document.addEventListener('change', async e => {
     readGuidedForm($('#wizard-form'));
     render();
   }
+  // Node survey fields. Choosing a purity and distribution whose world is fully known
+  // (knownWorld) refills every count from that preset.
   if (
     wizard?.mode === 'extraction' &&
     $('#wizard-form') &&
@@ -356,11 +448,15 @@ document.addEventListener('change', async e => {
     }
     render();
   }
+  // An existing-supply item or rate, once committed: close the suggestions, read the rows
+  // into the settings and redraw.
   if (['supplyItem', 'supplyRate'].includes(el.name) && wizard && $('#wizard-form')) {
     hideSupplyOptions(el);
     wizard.mode === 'guided' ? readGuidedForm($('#wizard-form')) : readWizard($('#wizard-form'));
     render();
   }
+  // Ticking an alternate recipe in the picker: update the "· N selected" heading in place,
+  // and allow its preference box (altpref) only while it is ticked. No redraw.
   if (el.name === 'alt') {
     const p = el.closest('.alt-picker');
     const head = p?.querySelector('.alt-picker-head b');
@@ -372,6 +468,9 @@ document.addEventListener('change', async e => {
       if (!el.checked) star.checked = false;
     }
   }
+  // --- Storage and factory group editing ---
+  // A bay's name field in the layout editor. Redrawn whether or not the save worked, so a
+  // failed rename shows the saved name again.
   if (el.dataset.bayRename) {
     el.disabled = true;
     try {
@@ -382,6 +481,7 @@ document.addEventListener('change', async e => {
       render();
     }
   }
+  // A group's name field while editing groups; redrawn either way, like the bay name.
   if (el.dataset.groupRename) {
     el.disabled = true;
     try {
@@ -392,6 +492,8 @@ document.addEventListener('change', async e => {
       render();
     }
   }
+  // "+ Add to group…" select on a factory card: add the factory to that group with no
+  // rate (the whole output, or the remainder when it is in other groups too).
   if (el.dataset.assignAdd && el.value) {
     const key = el.dataset.assignAdd,
       groups = [
@@ -407,6 +509,9 @@ document.addEventListener('change', async e => {
       render();
     }
   }
+  // The per-minute rate beside a group in a factory card's group editor. Empty means the
+  // whole output or the remainder; anything else must be above 0, or a toast explains and
+  // the redraw shows the saved rate again.
   if (el.dataset.assignRate) {
     const key = el.dataset.assignRate,
       raw = el.value.trim();
@@ -434,6 +539,10 @@ document.addEventListener('change', async e => {
       render();
     }
   }
+  // --- Deliveries and restore ---
+  // A Space Elevator delivery count on the plan page: a whole number from 0 to the target.
+  // An invalid entry or a failed write resets the field to the saved count (without one:
+  // the handbook's initial count for the original profile, otherwise 0).
   if (el.dataset.delivery) {
     const d = calculated
         ? calculatedDelivery(el.dataset.delivery)
@@ -451,6 +560,10 @@ document.addEventListener('change', async e => {
       el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
     }
   }
+  // "Choose backup file" on the Backup page (#import-file): replace this profile's progress
+  // with a progress-only backup, after a confirmation. It waits for queued saves and posts
+  // itself rather than through save(), so it toasts its own errors; "Backup restored."
+  // only follows a successful response. Full-save imports (#import-saves) are in backup.js.
   if (el.id === 'import-file' && el.files[0]) {
     const file = el.files[0];
     try {
@@ -481,16 +594,20 @@ document.addEventListener('change', async e => {
   }
 });
 
+// Input events on search and filter boxes, as you type.
 document.addEventListener('input', e => {
+  // The find boxes on the factories, storage and plan pages: store the query and redraw.
   if (['factory-search', 'storage-search', 'plan-search'].includes(e.target.id)) {
     setQuery(e.target.value);
     render();
   }
+  // The alternate recipe picker's filter (wizard): hide rows in place, without a redraw.
   if (e.target.id === 'alt-filter') {
     const q = e.target.value.trim().toLowerCase();
     for (const row of document.querySelectorAll('.alt-row'))
       row.hidden = q !== '' && !row.dataset.altText.includes(q);
   }
+  // The per-item storage rate filter (wizard): the same, for the rate rows.
   if (e.target.id === 'rate-filter') {
     const q = e.target.value.trim().toLowerCase();
     for (const row of document.querySelectorAll('.rate-row'))
@@ -501,6 +618,9 @@ document.addEventListener('input', e => {
   if (['buildRate', 'storageRate'].includes(e.target.name)) refreshRatePlaceholders();
 });
 
+// Each per-item rate row shows its group's rate as the placeholder: 0 for delivered
+// items, the build rate (or the general rate when empty) for build materials, and the
+// general storage rate for the rest.
 function refreshRatePlaceholders() {
   const rows = document.querySelectorAll('.rate-row');
   if (!rows.length) return;
@@ -525,6 +645,8 @@ function refreshRatePlaceholders() {
 }
 
 // The item search: suggestions as you type, with the keyboard alone if you like.
+// This and the next two listeners drive the wizard's existing-supply item field
+// (wizard/supply.js): input fills the suggestions, keydown walks them, focusout closes.
 document.addEventListener('input', e => {
   if (e.target?.name === 'supplyItem' && wizard) {
     syncSupplyIcon(e.target);
@@ -532,6 +654,9 @@ document.addEventListener('input', e => {
   }
 });
 
+// Keyboard in the existing-supply item field: ↓ opens or walks the suggestions, ↑ walks
+// back, Enter picks the highlighted one (or the first), Escape closes the list.
+// Every other field and key is left alone.
 document.addEventListener('keydown', e => {
   const input = e.target;
   if (input?.name !== 'supplyItem' || !wizard) return;
@@ -572,6 +697,9 @@ document.addEventListener('focusout', e => {
   if (field && !field.contains(e.relatedTarget)) hideSupplyOptions(input);
 });
 
+// Submit 1 of 3 (then the editor forms below, then profiles.js): "Add task" under the
+// plan checklist adds a personal task to the current phase with a random custom-… id.
+// The button stays disabled after success because the redraw replaces the form.
 document.addEventListener('submit', async e => {
   if (e.target.id === 'add-task') {
     e.preventDefault();
@@ -597,9 +725,14 @@ document.addEventListener('submit', async e => {
   }
 });
 
+// Submit 2 of 3: the inline forms of the storage layout editor, the factory group
+// editor and the step edit form. Each ignores an empty name.
+// Index: add floor, rename floor, add bay, add container, add group, save step.
 document.addEventListener('submit', async e => {
   const f = e.target,
     read = () => String(new FormData(f).get('name') || '').trim();
+  // --- Storage layout editor ---
+  // "Add floor": a new floor with a random cf-… id.
   if (f.id === 'add-floor') {
     e.preventDefault();
     const name = read();
@@ -617,6 +750,7 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
+  // "Rename floor": renames the floor being shown.
   if (f.id === 'rename-floor') {
     e.preventDefault();
     const name = read();
@@ -626,6 +760,8 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
+  // "+ Add bay": a new bay on the floor being shown, named by the next free letter so
+  // existing addresses (and their progress) never move.
   if (f.id === 'add-bay') {
     e.preventDefault();
     const name = read();
@@ -640,6 +776,7 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
+  // "+ Add" under a bay: put an item in that bay (data-bay).
   if (f.classList.contains('add-container')) {
     e.preventDefault();
     const name = read();
@@ -661,6 +798,8 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
+  // --- Factory groups ---
+  // "+ Add group" in the group editor: a new, empty group with a random fg-… id.
   if (f.id === 'add-group') {
     e.preventDefault();
     const name = read();
@@ -678,6 +817,10 @@ document.addEventListener('submit', async e => {
       render();
     } catch {}
   }
+  // --- Build-plan step editing ---
+  // "Save step" in a step's edit form. A title or details equal to the plan's own text
+  // is saved as empty, meaning "no override"; the link likewise when it is the automatic
+  // one. The checkmark is untouched.
   if (f.dataset.taskEdit) {
     e.preventDefault();
     const id = f.dataset.taskEdit,
@@ -702,6 +845,7 @@ document.addEventListener('submit', async e => {
 });
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
+// Registered for the capture phase (the final true), since error events do not bubble.
 document.addEventListener(
   'error',
   e => {
@@ -711,6 +855,9 @@ document.addEventListener(
   true,
 );
 
+// The address hash is the page: sidebar links and navigate() in api.js both land here.
+// An unknown hash shows the plan. Clears the search and scrolls to the top; before the
+// first load (no state) nothing is drawn. Unsaved notes are not checked here.
 window.addEventListener('hashchange', () => {
   setView(
     [
@@ -731,6 +878,8 @@ window.addEventListener('hashchange', () => {
   window.scrollTo(0, 0);
 });
 
+// A click on the dialog's backdrop (the <dialog> element itself, not its content)
+// closes the detail dialog. Being on #detail, it runs before the document listeners.
 $('#detail').addEventListener('click', e => {
   if (e.target === $('#detail')) {
     $('#detail').close();
@@ -738,6 +887,8 @@ $('#detail').addEventListener('click', e => {
   }
 });
 
+// Ask before closing or reloading the tab while a save is still in flight (pending in
+// api.js). Unsaved note edits are not covered.
 window.addEventListener('beforeunload', e => {
   if (pending) {
     e.preventDefault();
@@ -745,14 +896,31 @@ window.addEventListener('beforeunload', e => {
   }
 });
 
+// Click 3 of 3 on document (profiles.js adds one more after it): the saves/profiles
+// page, the profile wizard and the account page.
+// Index: new save / profile, calculated factory and group build-order dialogs, the
+// alternate recipe picker, round up, duplicate / share / remove / open a profile,
+// wizard and guided navigation, the node survey, existing-supply rows, cancel wizard,
+// sign-in mode, sign out. Actions that leave the open profile call allowSwitch() first,
+// which asks before dropping unsaved notes.
 document.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
+  // --- Starting the wizard (startWizard checks for unsaved notes itself) ---
+  // "Create a save" on the profiles page (and in the wizard).
   if (b.hasAttribute('data-new-save')) startWizard();
+  // "Try another profile" on a save: the wizard for a new profile in that save.
   if (b.dataset.newProfile) startWizard(b.dataset.newProfile);
+  // --- Dialogs ---
+  // A calculated plan's factory name, "Details ↗" or "Open factory" link: its dialog.
   if (b.dataset.calcFactory) openCalculatedFactory(b.dataset.calcFactory);
+  // "Build order ↗" on a factory group with more than one factory.
   if (b.dataset.groupChain) openGroupChain(b.dataset.groupChain);
+  // "recipe ↗" beside an alternate in the recipe picker: show that recipe.
   if (b.dataset.altInfo) openAltRecipe(b.dataset.altInfo);
+  // --- Alternate recipe picker (wizard) ---
+  // "Select all" / "Clear all": tick or clear the rows the filter currently shows, keeping
+  // the preference boxes and the "· N selected" heading in step. In place, no redraw.
   if (b.hasAttribute('data-alt-all') || b.hasAttribute('data-alt-none')) {
     const on = b.hasAttribute('data-alt-all'),
       p = b.closest('.alt-picker');
@@ -767,6 +935,8 @@ document.addEventListener('click', async e => {
     p.querySelector('.alt-picker-head b').textContent =
       `Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;
   }
+  // "Planner's choice": calculate once with every alternate allowed, then tick exactly
+  // the alternates that plan uses. Only the wizard's settings change; nothing is saved.
   if (b.hasAttribute('data-alt-best') && wizard && !b.disabled) {
     b.disabled = true;
     const label = b.textContent;
@@ -789,6 +959,10 @@ document.addEventListener('click', async e => {
       b.textContent = label;
     }
   }
+  // --- Profile actions ---
+  // "Round up production" on a calculated plan: after the unsaved-notes check and any
+  // queued saves, the server creates a new profile with whole machines and it is opened.
+  // The old profile keeps its progress; the toast says how many checks need review.
   if (b.hasAttribute('data-round-up')) {
     if (!allowSwitch()) return;
     b.disabled = true;
@@ -809,6 +983,7 @@ document.addEventListener('click', async e => {
       b.textContent = 'Round up production';
     }
   }
+  // "Duplicate" on a profile card: copy the profile with its progress and open the copy.
   if (b.dataset.duplicateProfile) {
     if (!allowSwitch()) return;
     b.disabled = true;
@@ -829,6 +1004,8 @@ document.addEventListener('click', async e => {
       b.textContent = 'Duplicate';
     }
   }
+  // "Share" on a profile card: download that profile as a full-save file with its progress
+  // stripped (share=1), for someone else to import.
   if (b.dataset.shareProfile) {
     b.disabled = true;
     try {
@@ -852,6 +1029,9 @@ document.addEventListener('click', async e => {
       b.disabled = false;
     }
   }
+  // "Remove profile" on a profile card: after the unsaved-notes check, confirm by name
+  // (and say when its save goes too, as its last profile), then remove it and reload
+  // everything with boot(). Other profiles keep their progress.
   if (b.dataset.removeProfile) {
     if (!allowSwitch()) return;
     const sv = workspace.saves.find(s => s.id === b.dataset.removeSave),
@@ -880,6 +1060,8 @@ document.addEventListener('click', async e => {
       b.disabled = false;
     }
   }
+  // "Open profile" / "Continue current profile" on a profile card: make it the active
+  // profile on the server, load it and show its plan.
   if (b.dataset.openSave) {
     if (!allowSwitch()) return;
     b.disabled = true;
@@ -898,12 +1080,23 @@ document.addEventListener('click', async e => {
       b.disabled = false;
     }
   }
+  // --- Wizard navigation ---
+  // The five-step wizard's numbered tabs. moveWizard validates before going forward and
+  // calculates the preview on reaching step 5 (Review).
   if (b.dataset.wizardStep) await moveWizard(Number(b.dataset.wizardStep));
+  // "Back" in the five-step wizard (on step 1 that button is "Cancel" instead).
   if (b.hasAttribute('data-wizard-back')) await moveWizard(wizard.step - 1);
+  // "Back" in the guided questions.
   if (b.hasAttribute('data-guided-back')) await moveGuided(wizard.guidedStep - 1);
+  // "All settings →" in guided mode: the five-step wizard at that step, keeping every answer.
   if (b.dataset.guidedAdvanced) toAdvanced(Number(b.dataset.guidedAdvanced));
+  // "← Guided start" in the five-step wizard: back to the guided questions.
   if (b.hasAttribute('data-guided-start')) toGuided();
+  // --- Node survey (wizard extraction mode) ---
+  // "Work these out from my nodes →": open the survey, remembering where to return to.
   if (b.hasAttribute('data-open-extraction')) openExtraction();
+  // "Fill in the counts below": fill every count from the default world at that purity.
+  // It also forgets any pending "Undo reset".
   if (b.dataset.nodePreset && wizard) {
     const form = $('#wizard-form');
     if (form) readExtraction(form);
@@ -922,6 +1115,8 @@ document.addEventListener('click', async e => {
         '. Change any count that does not match your save.',
     );
   }
+  // "Reset all counts to zero". No confirmation, because "Undo reset" can bring the counts
+  // back (see resetExtraction).
   if (b.hasAttribute('data-node-reset') && wizard) {
     const form = $('#wizard-form');
     if (form) readExtraction(form);
@@ -931,18 +1126,27 @@ document.addEventListener('click', async e => {
       'Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.',
     );
   }
+  // "Undo reset": put back the counts from before the last reset.
   if (b.hasAttribute('data-node-undo') && wizard) {
     undoExtractionReset();
     render();
     toast('Put back the counts you had before the reset.');
   }
+  // The survey's numbered tabs, and its "Back" (from the first step it leaves the survey).
   if (b.dataset.extractionStep) await moveExtraction(Number(b.dataset.extractionStep));
   if (b.hasAttribute('data-extraction-back')) await moveExtraction(wizard.extractionStep - 1);
+  // "Leave these budgets alone": leave the survey without applying its counts.
   if (b.hasAttribute('data-extraction-cancel')) leaveExtraction();
+  // --- Existing supply rows (wizard) ---
+  // A suggestion under an item field: fill it in and focus the rate. Stop here, since
+  // pickSupplyOption has redrawn the page.
   if (b.dataset.supplyPick) {
     pickSupplyOption(b);
     return;
   }
+  // "Remove" on an existing-supply row: drop the row and rebuild existingSupply from the
+  // rest, keeping known items with a rate above 0. The preview no longer matches, so it
+  // is cleared.
   if (b.dataset.supplyRemove && wizard) {
     const form = $('#wizard-form');
     if (form) wizard.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
@@ -957,14 +1161,20 @@ document.addEventListener('click', async e => {
     wizard.preview = null;
     render();
   }
+  // "Cancel" in the wizard: drop it without a confirmation and show the profiles page.
+  // Nothing has been saved yet; the profile is only created on Review.
   if (b.hasAttribute('data-cancel-wizard')) {
     setWizard(null);
     navigate('profiles');
   }
+  // --- Account ---
+  // "Create an account" / "Back to sign in" under the sign-in form: switch the form.
   if (b.dataset.authMode) {
     setAuthMode(b.dataset.authMode);
     renderSignedOut();
   }
+  // "Sign out" on the account page: after the unsaved-notes check and any queued saves,
+  // sign out; boot() then shows the sign-in screen.
   if (b.hasAttribute('data-logout')) {
     if (!allowSwitch()) return;
     await writeQueue;

@@ -1,15 +1,28 @@
+// The Space Elevator phase in which a HUB tier becomes available: tiers 1-2 in Phase 1, 3-4 in
+// Phase 2 and so on, with 9 in Phase 5.
 const phaseForTier = t => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
 const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+// The generated guidance steps of a calculated profile for one phase, called by calcTasks in
+// app/views/calculated.js. `plan` is the profile's calculation snapshot, `state` its
+// progress (only `checks` is read), `data` is progression.json and `phase` '1'-'5' or
+// 'post' (planned as Phase 5). Returns task lists of { id, title, body }; ids are checklist
+// keys, so they must stay stable. Nothing here changes the plan or the progress.
+// progression.json: `entries` are HUB milestones and MAM nodes ({ id, name, tier, mam,
+// alternate, cost, recipes, requires }), `buildings` maps a machine name to the recipe that
+// builds it and `availability` gives the first phase in which an item can be made.
 export function progression(plan, state, data, phase) {
   const stage = Number(phase === 'post' ? 5 : phase),
     rows = plan.stages[stage]?.rows || [],
     checks = state.checks;
+  // An unlock counts as done only when the user ticked its step, never by guessing from phase.
   const unlocked = s => !!checks['unlock-' + s.id];
   const byName = n => data.entries.find(s => s.name === n);
   const known = n => {
     const s = byName(n);
     return s && unlocked(s);
   };
+  // Rows up to this phase that make item `n`, and whether their factory is ticked as running;
+  // used to say where a milestone's cost can come from.
   const sources = n =>
     Object.entries(plan.stages)
       .filter(([p]) => Number(p) <= stage)
@@ -28,7 +41,11 @@ export function progression(plan, state, data, phase) {
     Object.entries(s.cost)
       .map(([n, q]) => `${fmt(q)} ${n}: ${status(n)}`)
       .join('; ');
+  // `tasks` becomes powerTasks. calcTasks interleaves Phase 1's lists by position, so the order
+  // of the first pushes (power review, biomass, Solid Biofuel, burner bank) matters.
   const tasks = [];
+  // Milestones this phase needs: those unlocking a recipe or machine its rows use, a fixed set
+  // of basics, and phase-specific power and logistics unlocks, each with its prerequisites.
   const required = new Map();
   function add(s) {
     if (!s || required.has(s.id)) return;
@@ -59,6 +76,9 @@ export function progression(plan, state, data, phase) {
     for (const n of ['Caterium', 'Caterium Ingots', 'Caterium Electronics']) add(byName(n));
   if (rows.some(r => Object.keys(r.inputs).some(n => /Quartz|Silica|Crystal Oscillator/.test(n))))
     for (const n of ['Quartz', 'Quartz Crystals', 'Silica']) add(byName(n));
+  // Whether an unlock can be researched by this phase: a HUB milestone by its tier, a MAM node by
+  // the latest first-available phase of its cost items. Collectibles (hard drives, slugs,
+  // somersloops...) are ignored because they are gathered, not produced.
   const available = s =>
     s.mam
       ? Math.max(
@@ -79,6 +99,7 @@ export function progression(plan, state, data, phase) {
             .map(n => data.availability[n] || 1),
         ) <= stage
       : phaseForTier(s.tier) <= stage;
+  // Alternate recipes are left out: they come from hard drives, handled below.
   const milestones = [...required.values()].filter(s => !s.alternate && available(s));
   // Prerequisites before dependents; among otherwise independent unlocks favor costs with running supply.
   const readiness = s =>
@@ -93,6 +114,7 @@ export function progression(plan, state, data, phase) {
   );
   const ordered = [],
     seen = new Set();
+  // Depth-first, so every prerequisite in the list comes before what needs it.
   function visit(s) {
     if (seen.has(s.id)) return;
     seen.add(s.id);
@@ -108,6 +130,7 @@ export function progression(plan, state, data, phase) {
     title: `${s.mam ? 'MAM' : 'Tier ' + s.tier}: ${s.name}`,
     body: `${s.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${s.requires.length ? 'Prerequisites: ' + s.requires.map(id => data.entries.find(x => x.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(s) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
   }));
+  // One hard-drive step plus one unlock step per alternate recipe this phase's rows use.
   const alternates = rows.filter(r => r.alternate);
   const missing = alternates.filter(r => !checks['recipe-unlock-' + r.id]);
   const hardDrives = alternates.length
@@ -127,6 +150,8 @@ export function progression(plan, state, data, phase) {
         }),
       ]
     : [];
+  // The power advice below follows the unlocks the user has ticked, not the phase's target
+  // generation.
   const coal = known('Coal Power'),
     petroleum = known('Petroleum Power'),
     nuclear = known('Nuclear Power'),
@@ -148,6 +173,7 @@ export function progression(plan, state, data, phase) {
       powerNow +
       ' Full-phase generation shown in the calculator is a future target, not power already unlocked. Tick the relevant HUB/MAM unlocks to update this advice.',
   });
+  // Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet.
   if (stage === 1 || (!coal && !petroleum && !nuclear)) {
     tasks.push({
       id: 'startup-biomass',
@@ -236,6 +262,8 @@ export function progression(plan, state, data, phase) {
           ? 'Complete Nuclear Power and the needed enrichment unlocks. Build uranium-waste processing and sink the resulting plutonium rods before starting reactors. Ficsonium recycling is a Phase 5 upgrade.'
           : 'Complete the required Tier 9 conversion/quantum unlocks. Commission the full uranium → plutonium → Ficsonium waste chain before burning plutonium. Match underclocks and verify power for recycling during startup.',
     });
+  // Phase 1 only: the starter base, which calcTasks spreads around the power and milestone
+  // steps.
   const baseTasks =
     stage === 1
       ? [
@@ -291,6 +319,7 @@ export function progression(plan, state, data, phase) {
       body: `Research Alien Power Augmentation in the MAM (Alien Technology), then build ${a} Augmenter${a > 1 ? 's' : ''} at ${fmt(10)} Somersloops each — ${fmt(10 * a)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${a > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${fmt(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
     });
   }
+  // Shown only in the profile's starting phase.
   if (stage === Number(plan.settings.phase || 1) && (plan.settings.sloopReserved || []).length) {
     const labels = {
       shards:

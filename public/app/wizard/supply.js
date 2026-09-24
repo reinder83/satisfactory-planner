@@ -1,4 +1,8 @@
-// Existing-production rows and their item search.
+// Existing-production rows ("Production you already run") and their item search.
+// Shown on wizard step 1 and as the guided "What are you already producing?"
+// question. Two things are kept apart: wizard.supplyRows, the rows as typed
+// (possibly half-finished), and settings.existingSupply, the { item: rate } map
+// the planner receives. Keyboard and input handlers live in events/views.js.
 import { $, esc, itemIcon } from '../format.js';
 import { wizard, workspace } from '../session.js';
 import { render } from '../shell.js';
@@ -19,6 +23,8 @@ import { readWizard } from './wizard.js';
 // own works the same everywhere and can be driven from the keyboard.
 const SUPPLY_SUGGESTIONS = 8;
 
+// Up to SUPPLY_SUGGESTIONS catalog items for the typed text, case-insensitive:
+// names that start with it first, then names that merely contain it.
 function supplyMatches(query) {
   const q = String(query || '')
     .trim()
@@ -37,6 +43,8 @@ function supplyMatches(query) {
 // The rows being edited, which is not the same thing as the rows that count. A
 // half-finished row — a name with no rate yet — has to survive a re-render, or
 // picking a suggestion would erase what you just picked.
+// Created lazily from settings.existingSupply the first time it is needed, then
+// kept on the draft; readSupply and the Remove button (events/views.js) edit it.
 export function supplyRows(w) {
   if (!Array.isArray(w.supplyRows))
     w.supplyRows = Object.entries(w.settings.existingSupply || {}).map(([name, rate]) => ({
@@ -46,6 +54,8 @@ export function supplyRows(w) {
   return w.supplyRows;
 }
 
+// HTML for the rows plus one blank row to type into. `s` is unused: the rows come
+// from wizard.supplyRows. Each row pairs a supplyItem and a supplyRate input.
 export function supplyRowsHtml(s) {
   const rows = [...supplyRows(wizard), { name: '', rate: '' }];
   const known = new Set(workspace.catalog.supplyItems || []);
@@ -74,6 +84,9 @@ export function supplyRowsHtml(s) {
  </div>`;
 }
 
+// Returns null when the form has no supply list (another step), so callers
+// leave settings.existingSupply as it was; otherwise the credited map.
+// Side effect: replaces wizard.supplyRows with the non-empty rows as typed.
 // Name plus rate, paired by position. Every row is kept for editing; only the
 // ones naming a real item at a real rate are handed to the planner.
 export function readSupply(form, f) {
@@ -133,6 +146,7 @@ export function syncSupplyIcon(input) {
   if (name) wrap.insertAdjacentHTML('afterbegin', itemIcon(name));
 }
 
+// Close and empty a row's suggestion list.
 export function hideSupplyOptions(input) {
   const box = input?.closest('.supply-field')?.querySelector('.supply-options');
   if (box) {
@@ -144,6 +158,8 @@ export function hideSupplyOptions(input) {
 
 // Picking a suggestion commits it and moves to the rate, which is the next
 // thing you were going to type anyway.
+// Re-reads the whole form into the draft and re-renders; the row index is what
+// finds its rate field again afterwards.
 export function pickSupplyOption(button) {
   const field = button.closest('.supply-field'),
     input = field?.querySelector('input[name=supplyItem]');

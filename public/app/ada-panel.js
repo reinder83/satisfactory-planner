@@ -1,4 +1,7 @@
 // ADA, the sidebar assistant: remarks, muting and the poke easter egg.
+// This module gathers facts about the open profile and renders the panel; the remark
+// texts themselves are chosen in ../ada.js. Its buttons (data-ada-next, data-ada-mute,
+// clicks on the ◈ mark) are handled in events/views.js.
 import { adaEncore, adaRemarks, adaFault as makeFault } from '../ada.js';
 import { browserMode } from '../browser-api.js';
 import { esc, num, slug } from './format.js';
@@ -26,7 +29,10 @@ import { storageBays } from './views/storage.js';
 import { power } from './wizard/fields.js';
 import { guidedFlow } from './wizard/guided.js';
 
+// localStorage key for the mute switch ('muted' or 'on').
 const ADA_KEY = 'planner-ada';
+// Position in the remark cycle ("Another remark" advances it) and the ids of the remarks
+// it was counted against, so a changed situation starts the cycle over.
 export let adaIndex = 0;
 let adaSignature = '';
 export let adaMuted = adaStored();
@@ -39,6 +45,8 @@ export function setAdaMuted(value) {
   adaMuted = value;
 }
 
+// The easter egg: clicking ADA's ◈ mark five times in quick succession shows a
+// "transmission fault" line in place of the normal remark until it times out.
 export let adaFault = null;
 let adaFaultTimer;
 let adaPokes = 0;
@@ -63,6 +71,9 @@ export function adaStore() {
   } catch {}
 }
 
+// A snapshot of the open profile that ada.js picks remarks from: page, phase, progress
+// counts, feasibility, power, backups. It re-derives the counters the pages show from
+// the same checklist keys (factory-/calc-<stage>-<id>, slot-<address>-verified).
 function adaFacts() {
   const ts = currentSave.id ? planTasks() : [];
   const next = ts.find(t => !checked(t.id));
@@ -74,6 +85,7 @@ function adaFacts() {
   const slots = storageBays()
     .flatMap(b => b.items)
     .filter(i => i.name);
+  // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.js.
   const deliveries = calculated
     ? Object.entries(x.delivery || {}).map(([n, d]) => ({
         id: stage() + '-' + slug(n),
@@ -81,10 +93,12 @@ function adaFacts() {
         initial: 0,
       }))
     : plan.deliveries.filter(d => d.phase === phase());
+  // Same default as views/plan.js: the original handbook starts from its recorded amounts.
   const delivered = d =>
     state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
+  // Plain data only; ada.js decides which remarks apply.
   return {
     view,
     phaseLabel: phaseLabel(phase()),
@@ -116,6 +130,7 @@ function adaFacts() {
     groups: factoryGroupsState().groups.length,
     feasible: calculated ? x.feasible !== false : true,
     reason: calculated ? x.reason || '' : '',
+    // Raw resources this stage uses beyond the profile's resource limits.
     short: calculated
       ? (workspace.catalog?.raw || []).filter(
           n => (x.raw?.[n] || 0) > (calculated.settings.limits?.[n] ?? Infinity),
@@ -167,6 +182,8 @@ export function adaClearFault() {
   adaPokes = 0;
 }
 
+// Counts clicks on the ◈ mark (events/views.js); a gap over 2.5 s starts the count over.
+// From the fifth click on, each shows the next fault line, cleared after 12 seconds.
 export function adaPoke() {
   clearTimeout(adaFaultTimer);
   adaPokes = Date.now() - adaPokedAt > 2500 ? 1 : adaPokes + 1;
@@ -180,6 +197,8 @@ export function adaPoke() {
   render();
 }
 
+// HTML for the ADA panel in the sidebar, drawn by shell() on every render. Any error
+// yields '' so the assistant can never break the page around it.
 export function adaPanel() {
   try {
     if (adaMuted)

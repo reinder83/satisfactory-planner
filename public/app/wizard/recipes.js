@@ -1,9 +1,15 @@
-// Alternate recipe picker.
+// Alternate recipe picker, shown on wizard step 2 when Recipe access is "Pick
+// specific alternate recipes". Its buttons (Planner's choice, Select/Clear all,
+// the filter, the stars, "recipe ↗") are handled in events/views.js.
 import { dialog } from '../factory-detail.js';
 import { recipePanelHtml } from '../flow.js';
 import { esc } from '../format.js';
 import { workspace } from '../session.js';
 
+// HTML for the picker. Ticked boxes (name="alt") become s.alternateRecipes and
+// ticked stars (name="altpref") s.preferredRecipes, read back by readWizard. A
+// recipe your power or ingot preference already requires shows as a locked,
+// ticked box with no name, so it is never read back as a pick.
 export function altPickerHtml(s) {
   const picked = new Set(s.alternateRecipes || []);
   const list = workspace.catalog.alternates || [];
@@ -22,6 +28,8 @@ export function altPickerHtml(s) {
     .join('')}</div></div>`;
 }
 
+// The alternate ids a calculated plan actually uses, sorted. "Planner's choice"
+// (events/views.js) calculates with every alternate allowed and ticks these.
 // MAM recipes (Turbofuel, Compacted Coal) appear in plans with alternate:false, so match catalog ids too.
 export const alternatesUsed = plan => {
   const altIds = new Set((workspace?.catalog?.alternates || []).map(a => a.id));
@@ -34,6 +42,8 @@ export const alternatesUsed = plan => {
   ].sort();
 };
 
+// "recipe ↗": a dialog with the alternate beside the standard recipe(s) for its
+// first output, so the two can be compared.
 export function openAltRecipe(id) {
   const a = (workspace.catalog.alternates || []).find(x => x.id === id);
   if (!a) return;

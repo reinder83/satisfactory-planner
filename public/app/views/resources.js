@@ -1,8 +1,13 @@
-// Power & resources view for the original handbook.
+// Power & resources view (#resources) for the original handbook. A calculated profile gets
+// renderCalculatedResources in calculated.js instead. Much of the text here (coal limit,
+// rocket-fuel blocks, nuclear sequence) describes the owner's handbook and is fixed copy.
 import { esc, itemIcon, num, stat } from '../format.js';
 import { doneAttr, plan, stage } from '../session.js';
 import { header } from '../shell.js';
 
+// HTML for the handbook's resource page at the current stage: power tiles, the fresh
+// resource table against plan.capacities, and the power commissioning checklist, whose
+// boxes write the saved check keys `power-…` (handled by `data-check` in events/views.js).
 export function renderResources() {
   const raw = plan.resources[stage()],
     p = plan.plans[stage()];

@@ -1,10 +1,23 @@
 import { validateState } from './state.js';
+// Full-save export: a user's saves with their profiles, plans or handbooks and progress,
+// never accounts, passwords or sessions. Written by /api/export-saves in workspace.mjs and
+// browser-api.js and read back by their /api/import-saves, so saves move between editions.
+//   { format, version: 1, exportedAt, saves: [{ id, name, activeProfile, profiles: [
+//     { id, name, kind: 'calculated' | 'original', plan, handbook?, state }] }] }
+// The ids only keep activeProfile pointing at the right profile: both importers give every
+// save and profile a new id, so an import always adds copies and never overwrites.
 export const transferFormat = 'satisfactory-planner-saves';
+// Save and profile names are checked but kept exactly as exported, untrimmed.
 const title = x => {
   if (typeof x !== 'string' || !x.trim() || x.length > 80)
     throw Error('Invalid save or profile name.');
   return x;
 };
+// Checks a parsed export and returns a clean copy of the same shape, without exportedAt.
+// Throws plain Errors before anything is written. Each profile's progress goes through
+// validateState, so older state versions import and a state from a newer planner is refused
+// with its update message. Only version 1 of this wrapper exists. Plans and handbooks are
+// checked for shape only and otherwise copied as they are.
 export function validateTransfer(data) {
   if (
     data?.format !== transferFormat ||
@@ -23,6 +36,9 @@ export function validateTransfer(data) {
     const profiles = s.profiles.map(p => {
       if (!['calculated', 'original'].includes(p.kind) || typeof p.id !== 'string')
         throw Error('Invalid profile.');
+      // A calculated profile must bring its calculation snapshot, since profiles are never
+      // silently recalculated, with a stage for each of phases 1–5. An original profile must
+      // bring its own handbook rather than fall back to the current default.
       if (p.kind === 'calculated') {
         if (!p.plan?.settings || !p.plan?.stages || !Array.isArray(p.plan.warnings))
           throw Error('Missing calculation snapshot.');
@@ -33,6 +49,7 @@ export function validateTransfer(data) {
         }
       } else if (!p.handbook?.factories || !p.handbook?.phases || !p.handbook?.storage)
         throw Error('This original profile needs its full handbook export.');
+      // Handbook source links survive only as https URLs.
       const handbook = p.kind === 'original' ? structuredClone(p.handbook) : undefined;
       if (handbook)
         handbook.sources = (handbook.sources || []).filter(s => {
