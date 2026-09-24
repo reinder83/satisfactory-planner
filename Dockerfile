@@ -1,9 +1,17 @@
+# Build stage: minify the frontend into dist/web (see build.mjs).
+FROM node:24-alpine AS build
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+RUN node build.mjs web
+
 FROM node:24-alpine
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data
 WORKDIR /app
-COPY --chown=node:node package.json *.mjs recipes.json ./
+COPY --chown=node:node package.json server.mjs workspace.mjs planner.mjs optimizer.mjs docker-start.mjs recipes.json ./
 COPY --chown=node:node vendor ./vendor
-COPY --chown=node:node public ./public
+COPY --from=build --chown=node:node /src/dist/web ./public
 RUN mkdir -p /data && chown node:node /data
 USER root
 VOLUME ["/data"]

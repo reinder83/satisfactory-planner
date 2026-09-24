@@ -10,7 +10,9 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.mjs && node --check public/app.js && node --check planner.mjs && node --check workspace.mjs"
+    "check": "prettier --check .",
+    "format": "prettier --write .",
+    "build": "node build.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

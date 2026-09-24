@@ -28,7 +28,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `vendor/`, `THIRD_PARTY.md` | Bundled solver and attribution; retain licenses |
 | `server.mjs`, `workspace.mjs` | HTTP/authentication boundary, scoped saves, durable server persistence |
 | `docker-start.mjs`, `Dockerfile`, `compose*.yaml` | Container startup and Synology ownership support |
-| `build-browser.mjs` | Allowlisted static build; adapts calculator for browser execution |
+| `build.mjs` | Release build: minified Docker frontend (`dist/web`) and allowlisted Pages edition (`dist/satisfactory-planner`); adapts the calculator for browser execution |
 | `tests/`, `browser-check.mjs` | Server, calculator, interface and real-browser checks |
 | `.github/workflows/docker.yml` | Tests, Docker publishing, public-site publishing |
 
@@ -93,14 +93,17 @@ Keep the deal the feature rests on: the joke is in the tone, never in the number
 
 ## Development and verification
 
-Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The application has no frontend framework or bundler requirement.
+Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The application has no frontend framework. Source files stay readable: `npm start` serves `public/` unbuilt, and only `build.mjs` minifies, for publishing.
 
 ```sh
+npm ci
 node server.mjs
 npm run check
 npm test
-node build-browser.mjs
+npm run build
 ```
+
+`npm run check` is Prettier; run `npm run format` rather than hand-compacting code. `npm test` needs no installed packages. The VM-based interface tests load the `public/app/` modules through `tests/helpers/app-source.mjs`, which concatenates them in ES evaluation order: top-level names must stay unique across those modules, and a module changes another module's `let` only through that module's exported setter.
 
 The server defaults to port 8080. Set `HOST=127.0.0.1` for a local-only preview and `DATA_DIR` to an isolated temporary folder for experiments. Environment-variable syntax differs by shell. Check whether an existing server is running before starting another; never terminate unrelated processes.
 
@@ -109,7 +112,7 @@ For real-browser verification, CI installs Playwright separately:
 ```sh
 npm install --no-save --package-lock=false playwright@1.56.1
 npx playwright install --with-deps chromium
-node build-browser.mjs
+npm run build
 node browser-check.mjs
 ```
 
@@ -126,6 +129,6 @@ Use tests appropriate to the change. UI redesigns require real-browser inspectio
 
 Pushes to source `main` run checks and publish both editions. Pull requests run checks without deployment. The source workflow uses the repository-scoped `PAGES_DEPLOY_KEY` secret to push only built website files to the public repository; its own Pages workflow deploys them. Do not replace this with a broad personal token or make the private source public. No live data, private handbook targets, account records or workspace files belong in the public build.
 
-Frontend assets added during a redesign need entries in `build-browser.mjs` and must be available in Docker too. Preserve subpath-safe URLs and worker/WASM loading. Do not add a backend dependency to the public edition. Preserve PUID/PGID/TZ, privilege dropping and data-volume compatibility in Docker.
+Frontend assets added during a redesign need entries in the Pages allowlist in `build.mjs` and must be available in Docker too; a new script at the root of `public/` must be listed as shared or bundled there, or the build fails. Preserve subpath-safe URLs and worker/WASM loading. Do not add a backend dependency to the public edition. Preserve PUID/PGID/TZ, privilege dropping and data-volume compatibility in Docker.
 
 Work in the source repository; direct edits to generated public-site files will be overwritten. Pushing `main` is a live release, so check the user's requested publishing scope. Report what changed, verification performed and any remaining limitation. Update these guides when architecture or commands change.
