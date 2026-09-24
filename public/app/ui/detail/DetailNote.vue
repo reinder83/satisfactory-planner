@@ -11,6 +11,7 @@ import { state } from '../../session.js';
 const props = defineProps({
   noteKey: { type: String, required: true },
   label: { type: String, default: '' },
+  ariaLabel: { type: String, default: 'Factory notes' },
 });
 const text = ref(state.notes[props.noteKey] || '');
 </script>
@@ -21,7 +22,7 @@ const text = ref(state.notes[props.noteKey] || '');
     v-model="text"
     class="notes"
     maxlength="6000"
-    aria-label="Factory notes"
+    :aria-label="ariaLabel"
   ></textarea>
   <div v-if="label" class="note-save">
     <span class="small muted">{{ label }}</span

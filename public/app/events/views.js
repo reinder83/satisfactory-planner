@@ -1,7 +1,7 @@
-// Delegated DOM event handlers for the planner views: checklist, factories,
-// storage, dialogs and navigation.
-// The pages are HTML strings redrawn by render() in shell.js, so every listener sits on
-// document or window and dispatches on data-* attributes, element ids or form ids.
+// Delegated DOM event handlers: the controls shared by the Vue pages and the pages that are
+// still HTML strings redrawn by render() in shell.js (checkboxes, notes, dialog links), the
+// wizard, and navigation. Every listener sits on document or window and dispatches on
+// data-* attributes, element ids or form ids.
 // Progress changes go through save() in api.js: it queues the write, toasts a failure
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
 // (or put the control back); a success toast never follows a failed write.
@@ -10,19 +10,14 @@
 // Registration order matters where listeners share an event type: app.js imports this
 // module first, and tests/app-modules.test.mjs pins the order. In order: main page
 // click, change, search input, supply input, supply keydown, supply
-// focusout, editor submit, image error (capture), hashchange, #detail
+// focusout, image error (capture), hashchange, #detail
 // backdrop click, beforeunload, then the wizard submit in profiles.js.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
-import { bayCapacity } from '../../state.js';
 import { navigate, pending, post, save, toast } from '../api.js';
 import { openCalculatedFactory, openFactory } from '../factory-detail.js';
 import { $, num } from '../format.js';
 import {
-  floor,
-  layoutEditing,
   setActiveDetail,
-  setFloor,
-  setLayoutEditing,
   setQuery,
   setView,
   setWizard,
@@ -31,7 +26,6 @@ import {
   workspace,
 } from '../session.js';
 import { render } from '../shell.js';
-import { nextBayLetter, openSlot, slotKeys, storageBays } from '../views/storage.js';
 import {
   extractionOf,
   leaveExtraction,
@@ -59,10 +53,8 @@ import {
 } from '../wizard/wizard.js';
 
 // Click 1 of 2: buttons and links on the planner pages.
-// Index: dialogs (close, factory, container), storage room (complete room, floor tabs),
-// the storage layout toggle, storage layout (clear container, remove bay, remove floor),
-// notes. The build plan's and the factories pages' own controls are handled in their
-// components (ui/plan/, ui/factories/).
+// Index: dialogs (close, factory), notes. The pages' own controls are handled in their
+// components (ui/pages/ and the folders beside it).
 // The branches are separate ifs, each keyed on its own attribute.
 document.addEventListener('click', async e => {
   const target = e.target.closest('button,a');
@@ -77,79 +69,6 @@ document.addEventListener('click', async e => {
   // A handbook factory's name or "Details ↗" link (factory cards, flow diagrams, storage
   // details, other dialogs): open that factory's detail dialog.
   if (target.dataset.factory) openFactory(target.dataset.factory);
-  // A container tile in the storage room: open that address's detail dialog.
-  if (target.dataset.slot) openSlot(target.dataset.slot);
-  // --- Storage room ---
-  // "Complete room X" on a bay: tick every check of every named container in the bay in
-  // one write, then redraw. The button is disabled while saving.
-  if (target.dataset.completeBay) {
-    const bay = storageBays().find(b => b.id === target.dataset.completeBay);
-    if (bay) {
-      target.disabled = true;
-      try {
-        await save({
-          type: 'checks',
-          keys: bay.items.filter(x => x.name).flatMap(x => slotKeys(x.id)),
-          value: true,
-        });
-        render();
-        toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.');
-      } catch {
-      } finally {
-        target.disabled = false;
-      }
-    }
-  }
-  // A floor tab above the storage room: switch floor, clear the search, redraw.
-  if (target.dataset.floor) {
-    setFloor(target.dataset.floor);
-    setQuery('');
-    render();
-  }
-  // --- Edit-mode toggles (view state only, nothing is saved) ---
-  // "Edit layout" / "Done editing" on the storage page: show or hide the layout editor.
-  if (target.hasAttribute('data-toggle-layout')) {
-    setLayoutEditing(!layoutEditing);
-    render();
-  }
-  // --- Storage layout editing (storage page, after "Edit layout") ---
-  // ✕ on a container: take the item off that address. Its checkmarks stay saved with the
-  // address. Re-enabled only on failure, since a success redraws the button away.
-  if (target.dataset.clearSlot) {
-    target.disabled = true;
-    try {
-      await save({ type: 'storageSlotClear', key: target.dataset.clearSlot });
-      render();
-      toast('Container cleared. Its saved checkmarks are kept with the address.');
-    } catch {
-      target.disabled = false;
-    }
-  }
-  // "Remove bay" on an added bay (handbook bays have none), after a confirmation.
-  if (
-    target.dataset.removeBay &&
-    confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')
-  ) {
-    target.disabled = true;
-    try {
-      await save({ type: 'storageBayRemove', id: target.dataset.removeBay });
-      render();
-    } catch {
-      target.disabled = false;
-    }
-  }
-  // "Remove this floor" for an added floor, after a confirmation; then back to the ground
-  // floor. The button is rendered disabled while the floor still has bays.
-  if (target.dataset.removeFloor && confirm('Remove this added floor?')) {
-    target.disabled = true;
-    try {
-      await save({ type: 'storageFloorRemove', id: target.dataset.removeFloor });
-      setFloor('ground');
-      render();
-    } catch {
-      target.disabled = false;
-    }
-  }
   // --- Notes ---
   // "Save notes" under a notes box: phase notes (plan page), save-wide notes (Backup
   // page) and the notes in factory and container dialogs. data-save-note is the notes key
@@ -179,25 +98,11 @@ document.addEventListener('click', async e => {
 
 // Change events: checkboxes, selects and fields that save when committed, plus the
 // wizard fields that reshape its form.
-// Index: container Done, progress checkmarks, wizard redraws (settings, guided, node
-// survey, existing supply), alternate recipe ticks, bay renames.
+// Index: progress checkmarks, wizard redraws (settings, guided, node survey, existing
+// supply), alternate recipe ticks.
 document.addEventListener('change', async e => {
   const el = e.target;
   // --- Checkmarks ---
-  // "Done" on a storage container: set all of that address's checks in one write. A failed
-  // write unticks it again.
-  if (el.dataset.completeSlot) {
-    const value = el.checked;
-    el.disabled = true;
-    try {
-      await save({ type: 'checks', keys: slotKeys(el.dataset.completeSlot), value });
-      render();
-    } catch {
-      el.checked = !value;
-    } finally {
-      el.disabled = false;
-    }
-  }
   // Any progress checkbox: plan steps, a factory's "Running", calculated rows, storage and
   // commissioning checklists, the factory dialog's target check. A failed write puts the
   // box back.
@@ -265,28 +170,10 @@ document.addEventListener('change', async e => {
       if (!el.checked) star.checked = false;
     }
   }
-  // --- Storage layout editing ---
-  // A bay's name field in the layout editor. Redrawn whether or not the save worked, so a
-  // failed rename shows the saved name again.
-  if (el.dataset.bayRename) {
-    el.disabled = true;
-    try {
-      await save({ type: 'storageBayRename', id: el.dataset.bayRename, name: el.value });
-    } catch {
-    } finally {
-      el.disabled = false;
-      render();
-    }
-  }
 });
 
 // Input events on search and filter boxes, as you type.
 document.addEventListener('input', e => {
-  // The find box on the storage page: store the query and redraw.
-  if (e.target.id === 'storage-search') {
-    setQuery(e.target.value);
-    render();
-  }
   // The alternate recipe picker's filter (wizard): hide rows in place, without a redraw.
   if (e.target.id === 'alt-filter') {
     const q = e.target.value.trim().toLowerCase();
@@ -381,81 +268,6 @@ document.addEventListener('focusout', e => {
   if (input?.name !== 'supplyItem') return;
   const field = input.closest('.supply-field');
   if (field && !field.contains(e.relatedTarget)) hideSupplyOptions(input);
-});
-
-// Submit 1 of 2 (then profiles.js): the inline forms of the storage layout editor. Each
-// ignores an empty name.
-// Index: add floor, rename floor, add bay, add container.
-document.addEventListener('submit', async e => {
-  const f = e.target,
-    read = () => String(new FormData(f).get('name') || '').trim();
-  // --- Storage layout editor ---
-  // "Add floor": a new floor with a random cf-… id.
-  if (f.id === 'add-floor') {
-    e.preventDefault();
-    const name = read();
-    if (!name) return;
-    try {
-      await save({
-        type: 'storageFloorAdd',
-        id:
-          'cf-' +
-          Array.from(crypto.getRandomValues(new Uint8Array(6)), b =>
-            b.toString(16).padStart(2, '0'),
-          ).join(''),
-        label: name,
-      });
-      render();
-    } catch {}
-  }
-  // "Rename floor": renames the floor being shown.
-  if (f.id === 'rename-floor') {
-    e.preventDefault();
-    const name = read();
-    if (!name) return;
-    try {
-      await save({ type: 'storageFloorRename', id: floor, label: name });
-      render();
-    } catch {}
-  }
-  // "+ Add bay": a new bay on the floor being shown, named by the next free letter so
-  // existing addresses (and their progress) never move.
-  if (f.id === 'add-bay') {
-    e.preventDefault();
-    const name = read();
-    if (!name) return;
-    const letter = nextBayLetter();
-    if (!letter) {
-      toast('No free bay letters left.', true);
-      return;
-    }
-    try {
-      await save({ type: 'storageBayAdd', id: letter, name, floor });
-      render();
-    } catch {}
-  }
-  // "+ Add" under a bay: put an item in that bay (data-bay).
-  if (f.classList.contains('add-container')) {
-    e.preventDefault();
-    const name = read();
-    if (!name) return;
-    const bay = storageBays().find(b => b.id === f.dataset.bay);
-    if (!bay) return;
-    // Fill a free position first; a bay with none gets the next address after its last.
-    const free =
-      bay.items.find(x => !x.name)?.id ||
-      (bay.items.length < bayCapacity
-        ? bay.id + String(bay.items.length + 1).padStart(2, '0')
-        : null);
-    if (!free) {
-      toast('This bay holds the most addresses it can. Add another bay.', true);
-      return;
-    }
-    try {
-      await save({ type: 'storageSlotAssign', key: free, name });
-      render();
-    } catch {}
-  }
 });
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.

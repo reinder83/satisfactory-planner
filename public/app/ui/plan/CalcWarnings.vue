@@ -14,6 +14,7 @@ import { legacy } from '../bridge.js';
 const notices = computed(() =>
   legacy(() => {
     const x = calcStage();
+    if (!x) return { draft: null, headroom: '' };
     return {
       draft: !x.feasible && {
         reason: x.reason,

@@ -1,9 +1,8 @@
-// Detail dialogs in the shared #detail <dialog>. The factory dialogs (handbook and calculated)
-// and a factory group's build order are components in ui/detail/, opened by openFactory,
-// openCalculatedFactory and openGroupChain from the shared data-factory, data-calc-factory
-// and group-header click handlers. dialog() fills #detail with HTML for the dialogs that are
-// not components yet: the storage container (views/storage.js) and the wizard's alternate
-// recipe (wizard/recipes.js).
+// Detail dialogs in the shared #detail <dialog>. The factory dialogs (handbook and calculated),
+// a factory group's build order and the storage container are components in ui/detail/, opened
+// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.js).
+// dialog() fills #detail with HTML for the one dialog that is not a component yet: the
+// wizard's alternate recipe (wizard/recipes.js).
 import { $, itemIcon, num } from './format.js';
 import { FLUIDS } from './flow.js';
 import { html } from './html.js';

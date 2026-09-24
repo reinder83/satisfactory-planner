@@ -120,9 +120,7 @@ export const fromStart = stages =>
 
 // Checklist lookups. The id is a stable saved key (e.g. factory-<stage>-<id>,
 // calc-<stage>-<rowId>, slot-<address>-<step>) and must not change between releases.
-// doneAttr gives the `checked` attribute for a checkbox in an HTML template.
 export const checked = id => !!state.checks[id];
-export const doneAttr = id => (checked(id) ? 'checked' : '');
 export const phaseLabel = p => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
 
 // Opens a save/profile: fetches its state and plan from /api/context and resets the
@@ -159,8 +157,9 @@ export function setContext(c) {
 }
 
 // The calculated plan's data for the current stage (rows, delivery, power, raw use).
-// Only valid while `calculated` is set.
-export const calcStage = () => calculated.stages[stage()];
+// undefined while no calculated profile is open: a component of the profile just left can be
+// redrawn once more before render() swaps it for the new profile's page.
+export const calcStage = () => calculated?.stages[stage()];
 
 // Starts the app; run again after an import, profile removal, sign-in/out or a retry.
 // Signed out: shows the sign-in screen. No saves yet: opens the wizard with a blank

@@ -5,9 +5,11 @@ import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { currentSave } from '../../public/app/session.js';
 import { render } from '../../public/app/shell.js';
+import { openCalculatedFactory } from '../../public/app/factory-detail.js';
+import { invalidate } from '../../public/app/ui/bridge.js';
 import { showSignedOut } from '../../public/app/ui/mount.js';
 import { vuePage } from '../../public/app/ui/pages.js';
-import { $, $$, evil, go, handbook, open, page, stubFetch } from './setup.mjs';
+import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.mjs';
 
 // User text inserted as markup would create an <x-evil> element. (innerHTML cannot tell:
 // a textarea's contents are serialised unescaped.)
@@ -179,4 +181,33 @@ test('moving between a component page and a legacy page leaves nothing behind', 
   assert.equal($('#main h1').textContent, 'Power & resources');
   // A calculated profile's resources page is still the legacy one.
   assert.equal(vuePage('resources', {}), null);
+});
+
+// Opening the handbook from a calculated profile's page: anything that redraws before render()
+// swaps the page (a save finishing, the save indicator) reaches the calculated page and dialog
+// once more, with no calculated plan open.
+test('a calculated page survives a redraw after the handbook is opened', async () => {
+  const errors = [];
+  const onError = e => errors.push(e.reason ?? e.error);
+  process.on('unhandledRejection', onError);
+  try {
+    for (const view of ['plan', 'factories', 'storage']) {
+      page();
+      const plan = generated();
+      open({ calculated: plan });
+      go(view);
+      render();
+      openCalculatedFactory(plan.stages['3'].rows[0].id);
+      open();
+      invalidate();
+      await nextTick();
+      await new Promise(r => setTimeout(r, 0));
+      render();
+      await nextTick();
+      assert.ok($('#main h1'), view + ' shows the handbook page after render()');
+    }
+  } finally {
+    process.off('unhandledRejection', onError);
+  }
+  assert.deepEqual(errors, []);
 });

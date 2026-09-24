@@ -27,8 +27,11 @@ import GroupSections from '../factories/GroupSections.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 
+// null once the open profile is no longer a calculated one: until render() swaps this page
+// out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
+    if (!calculated) return null;
     const rows = (calcStage().rows || []).filter(r =>
       (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
     );
@@ -79,40 +82,42 @@ async function roundUp(e) {
 </script>
 
 <template>
-  <PageHeader
-    eyebrow="CALCULATED PRODUCTION"
-    title="Factory targets"
-    subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
-  />
-  <div v-if="!page.whole" class="notice blue">
-    Prefer extra production over underclocking?
-    <button class="btn primary" data-round-up @click="roundUp">Round up production</button>
-    <p>
-      Creates a recalculated profile revision. Your previous profile stays available; increased
-      factory requirements are marked for review.
-    </p>
-  </div>
-  <div v-else class="notice blue">
-    Whole-machine production: protect downstream supply first, refill storage, then sink surplus
-    solids. Liquid and nuclear balances remain controlled.
-  </div>
-  <CalcWarnings />
-  <div class="toolbar">
-    <input
-      id="factory-search"
-      class="search"
-      aria-label="Find a factory"
-      placeholder="Find a part or recipe…"
-      :value="page.query"
-      @input="search"
-    /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
-  </div>
-  <GroupEditPanel v-if="page.editing" />
-  <GroupSections :items="page.rows" :key-of="r => r.id">
-    <template #card="{ item, group }"><CalcFactoryCard :row="item" :group="group" /></template>
-  </GroupSections>
-  <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
-  <div class="cards">
-    <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
-  </div>
+  <template v-if="page">
+    <PageHeader
+      eyebrow="CALCULATED PRODUCTION"
+      title="Factory targets"
+      subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
+    />
+    <div v-if="!page.whole" class="notice blue">
+      Prefer extra production over underclocking?
+      <button class="btn primary" data-round-up @click="roundUp">Round up production</button>
+      <p>
+        Creates a recalculated profile revision. Your previous profile stays available; increased
+        factory requirements are marked for review.
+      </p>
+    </div>
+    <div v-else class="notice blue">
+      Whole-machine production: protect downstream supply first, refill storage, then sink surplus
+      solids. Liquid and nuclear balances remain controlled.
+    </div>
+    <CalcWarnings />
+    <div class="toolbar">
+      <input
+        id="factory-search"
+        class="search"
+        aria-label="Find a factory"
+        placeholder="Find a part or recipe…"
+        :value="page.query"
+        @input="search"
+      /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
+    </div>
+    <GroupEditPanel v-if="page.editing" />
+    <GroupSections :items="page.rows" :key-of="r => r.id">
+      <template #card="{ item, group }"><CalcFactoryCard :row="item" :group="group" /></template>
+    </GroupSections>
+    <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
+    <div class="cards">
+      <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
+    </div>
+  </template>
 </template>
