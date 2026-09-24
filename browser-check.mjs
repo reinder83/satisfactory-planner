@@ -17,7 +17,16 @@ try{
  const context=await browser.newContext(),page=await context.newPage();const errors=[];page.on('response',r=>{if(r.status()>=400)errors.push('HTTP '+r.status()+': '+new URL(r.url()).pathname);});page.on('pageerror',e=>{errors.push(e.message);console.log('Browser error:',e.message);});page.on('console',m=>{if(m.type()==='error')console.log('Console:',m.text());});
  await page.goto(base);await page.locator('#wizard-form').waitFor();
  assert.ok(await page.getByText('Saved in this browser',{exact:true}).count());
+ // A brand new browser workspace opens on the guided start. Answer its first
+ // question, then take the escape hatch: All settings must arrive at the step
+ // that owns the same question with the answer already carried across.
+ await page.locator('.guided-card').first().waitFor();
+ await page.locator('input[name="guided:phase"][value="2"]').check();
  await page.locator('[name=saveName]').fill('Browser test');
+ await page.locator('[data-guided-advanced]').click();
+ await page.locator('[data-wizard-step="1"]').waitFor();
+ assert.equal(await page.locator('[name=phase]').inputValue(),'2','the guided answer carried into All settings');
+ await page.locator('[name=phase]').selectOption('1');
  await page.locator('[data-wizard-step="2"]').click();await page.locator('[name=storage]').selectOption('construction');
  await page.locator('[data-wizard-step="3"]').click();await page.locator('[name=profileName]').fill('First profile');
  await page.locator('[data-wizard-step="5"]').click();console.log('Calculating browser plan');await page.getByRole('button',{name:'Create profile',exact:true}).waitFor({timeout:180000});
@@ -46,7 +55,7 @@ try{
  await api('/api/select',{saveId:first.id,profileId:first.activeProfile});assert.equal((await api('/api/state')).notes['phase-1'],'Remember my iron site');
  const exported=await api('/api/export-saves');assert.equal(exported.saves[0].profiles.length,2);
  await api('/api/import-saves',exported);assert.equal((await api('/api/workspace')).saves.length,2);
- const separate=await browser.newContext(),other=await separate.newPage();await other.goto(base);await other.locator('#wizard-form').waitFor();assert.equal(await other.locator('[name=saveName]').inputValue(),'');
+ const separate=await browser.newContext(),other=await separate.newPage();await other.goto(base);await other.locator('#wizard-form').waitFor();await other.locator('.guided-card').first().waitFor();assert.equal(await other.locator('[name=saveName]').inputValue(),'','a separate browser profile starts at the guided start with nothing filled in');
  // Cross-tab transactions must preserve independent checks.
  const tab=await context.newPage();await tab.goto(base);await tab.locator('#main').waitFor();
  const write=(p,k)=>p.evaluate(async k=>(await import('./browser-api.js')).browserRequest('/api/update',{body:JSON.stringify({type:'check',key:k,value:true})}),k);

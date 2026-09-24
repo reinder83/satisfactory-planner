@@ -77,7 +77,7 @@ export async function openWorkspace({dataDir,initialState,validateState,mutate})
    throttle(req);const b=await body(req);const saveName=b.saveId?null:name(b.saveName),profileName=name(b.name);const plan=b.kind==='original'?null:calculate(b.settings);const profileId=id();let saveId=b.saveId||id();
    const carried=await commit(d=>{let save=d.saves.find(s=>s.id===saveId&&s.userId===u.id);if(b.saveId&&!save)fail('Save not found.',404);if(!save){if(d.saves.filter(s=>s.userId===u.id).length>=50)fail('You can create up to 50 saves.');save={id:saveId,name:saveName,userId:u.id,activeProfile:profileId,profiles:[]};d.saves.push(save);}if(save.profiles.length>=30)fail('You can keep up to 30 profiles per save.');
     const source=b.carryFrom?save.profiles.find(p=>p.id===b.carryFrom):null;if(b.carryFrom&&!source)fail('The profile to carry progress from was not found.',404);
-    const started=newProfileState(plan,source?.state||null,source?.plan||null,b.carry);
+    const started=newProfileState(plan,source?.state||null,source?.plan||null,b.carry,b.built);
     save.profiles.push({id:profileId,name:profileName,kind:plan?'calculated':'original',plan,state:started.state});save.activeProfile=profileId;d.users.find(x=>x.id===u.id).activeSave=saveId;return started;});
    return response({saveId,profileId,reviewCount:carried.reviewCount,carriedChecks:carried.carried,workspace:summary(db.users.find(x=>x.id===u.id))},201);
   }
