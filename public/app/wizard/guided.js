@@ -16,8 +16,7 @@ import {
 import { $, itemIcon, num } from '../format.js';
 import { html, raw } from '../html.js';
 import { wizard, workspace } from '../session.js';
-import { header, render } from '../shell.js';
-import { browserNotice } from '../views/backup.js';
+import { browserNotice, header, render } from '../shell.js';
 import { field, help } from './fields.js';
 import { readSupply, supplyRowsHtml } from './supply.js';
 import { calculateWizard, readWizard, wizardBusy } from './wizard.js';

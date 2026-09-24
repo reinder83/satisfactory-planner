@@ -1,7 +1,7 @@
 // Form controls shared by the wizard steps. Each returns Html (see html.js); the
 // `name` a control gets is the key readWizard (wizard.js) reads back, and doubles
 // as the helpText key for its ⓘ tooltip. Also imported outside the wizard
-// (power by flow.js, calculated.js and ada-panel.js; field by views/account.js).
+// (power by flow.js, calculated.js and ada-panel.js).
 import { helpText } from '../../preferences.js';
 import { num } from '../format.js';
 import { html, raw } from '../html.js';

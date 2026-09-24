@@ -46,8 +46,6 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'window beforeunload',
     'document click',
     'document submit',
-    'document click',
-    'document change',
     'rendered',
   ]);
 });

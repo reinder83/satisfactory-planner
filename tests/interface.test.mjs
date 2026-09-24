@@ -123,15 +123,9 @@ function ui() {
 }
 test('original and calculated views render; wizard exposes all settings and safe names', () => {
   const c = ui();
-  for (const route of [
-    'renderPlan',
-    'renderFactories',
-    'renderStorage',
-    'renderResources',
-    'renderBackup',
-    'renderProfiles',
-    'renderAccount',
-  ])
+  // Profiles, account, backup and the handbook's resources page are Vue components, tested
+  // in tests/ui/pages.test.mjs.
+  for (const route of ['renderPlan', 'renderFactories', 'renderStorage'])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
@@ -147,7 +141,6 @@ test('original and calculated views render; wizard exposes all settings and safe
     'renderCalculatedPlan',
     'renderCalculatedFactories',
     'renderCalculatedResources',
-    'renderCalculatedBackup',
     'renderStorage',
   ])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
@@ -169,8 +162,9 @@ test('every page escapes user text exactly once', () => {
     c,
   );
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
-  const shared = ['renderStorage', 'renderBackup', 'renderProfiles', 'renderAccount'];
-  const original = render([...shared, 'renderPlan', 'renderFactories', 'renderResources']);
+  // The pages that are Vue components are covered by tests/ui/pages.test.mjs.
+  const shared = ['renderStorage'];
+  const original = render([...shared, 'renderPlan', 'renderFactories']);
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
   const calculatedPages = render([
     ...shared,
@@ -228,7 +222,6 @@ test('every page escapes user text exactly once', () => {
   const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
   for (const [route, page] of all.filter(([r]) =>
     [
-      'renderProfiles',
       'renderCalculatedPlan',
       'renderWizard 1',
       'renderWizard guided',
@@ -241,9 +234,7 @@ test('every page escapes user text exactly once', () => {
     assert.ok(page.includes(escaped), route);
   // A note keeps its text, and the textarea gains no leading space from the formatting.
   assert.ok(
-    original
-      .find(([r]) => r === 'renderBackup')[1]
-      .includes('aria-label="Save-wide notes">' + escaped),
+    original.find(([r]) => r === 'renderPlan')[1].includes('aria-label="Phase notes">' + escaped),
   );
 });
 

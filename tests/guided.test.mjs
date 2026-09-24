@@ -826,8 +826,6 @@ test('a plan saved before existing production existed still renders every page',
     'renderCalculatedFactories',
     'renderCalculatedResources',
     'renderStorage',
-    'renderCalculatedBackup',
-    'renderProfiles',
   ]) {
     const html = vm.runInContext(view + '()', c);
     assert.ok(typeof html === 'string' && html.length > 100, view + ' rendered nothing');
@@ -1167,14 +1165,7 @@ test('the resource tables show the ore beside its name', () => {
       calc.includes('icons/' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.png'),
       n + ' icon on the calculated page',
     );
-  vm.runInContext(
-    `calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};`,
-    c,
-  );
-  assert.ok(
-    vm.runInContext('renderResources()', c).includes('resource-name'),
-    'and on the original handbook page',
-  );
+  // The original handbook's resources page is a Vue component: tests/ui/pages.test.mjs.
 });
 
 test('a node count means a count, and an unsurveyed resource is called out', () => {

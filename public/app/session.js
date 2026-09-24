@@ -6,8 +6,7 @@ import { pending, request, writeQueue } from './api.js';
 import { $ } from './format.js';
 import { html } from './html.js';
 import { render } from './shell.js';
-import { unmountShell } from './ui/mount.js';
-import { renderSignedOut } from './views/account.js';
+import { showSignedOut, unmountShell } from './ui/mount.js';
 import { startWizard } from './wizard/wizard.js';
 
 // progression.json (unlocks and milestones), read by views/calculated.js and flow.js.
@@ -23,7 +22,7 @@ export let currentProfile;
 export let calculated = null;
 // The in-progress wizard (settings being edited, step, preview) while #wizard is open.
 export let wizard = null;
-// Which form the signed-out screen shows ('login' or 'register'); see views/account.js.
+// Which form the signed-out screen shows ('login' or 'register'); see ui/SignedOut.vue.
 export let authMode = 'login';
 // plan.json as fetched at boot; the fallback when a profile carries no handbook of its own.
 let basePlan;
@@ -168,7 +167,8 @@ export async function boot() {
     workspace = await request('/api/workspace');
     if (!workspace.user) {
       authMode = 'login';
-      renderSignedOut();
+      state = null;
+      showSignedOut($('#app'));
       return;
     }
     [plan, progressionData] = await Promise.all([

@@ -11,25 +11,13 @@
 // module first, and tests/app-modules.test.mjs pins the order. In order: main page
 // click, change, search input, supply input, supply keydown, supply
 // focusout, add-task submit, editor submit, image error (capture), hashchange, #detail
-// backdrop click, beforeunload, then the profiles/wizard/account click.
+// backdrop click, beforeunload, then the wizard submit in profiles.js.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { bayCapacity } from '../../state.js';
-import {
-  allowSwitch,
-  downloadJson,
-  navigate,
-  pending,
-  post,
-  request,
-  save,
-  scopeHeaders,
-  toast,
-  writeQueue,
-} from '../api.js';
+import { allowSwitch, navigate, pending, post, save, toast, writeQueue } from '../api.js';
 import { openFactory, openGroupChain } from '../factory-detail.js';
-import { $, num, slug } from '../format.js';
+import { $, num } from '../format.js';
 import {
-  boot,
   calculated,
   currentProfile,
   factoryEditing,
@@ -40,7 +28,6 @@ import {
   plan,
   planEditing,
   setActiveDetail,
-  setAuthMode,
   setEditingTask,
   setFactoryEditing,
   setFactoryFilter,
@@ -49,7 +36,6 @@ import {
   setLayoutEditing,
   setPlanEditing,
   setQuery,
-  setState,
   setView,
   setWizard,
   setWorkspace,
@@ -59,7 +45,6 @@ import {
 } from '../session.js';
 import { render } from '../shell.js';
 import { autoTaskLink, basePlanTasks, planTasks } from '../tasks.js';
-import { renderSignedOut } from '../views/account.js';
 import { calculatedDelivery, openCalculatedFactory } from '../views/calculated.js';
 import { membershipsOf } from '../views/factories.js';
 import { nextBayLetter, openSlot, slotKeys, storageBays } from '../views/storage.js';
@@ -311,8 +296,7 @@ document.addEventListener('click', async e => {
 // wizard fields that reshape its form.
 // Index: container Done, progress checkmarks, working phase, factory filter, hide
 // completed, wizard redraws (settings, guided, node survey, existing supply), alternate
-// recipe ticks, bay and group renames, group assignment and rate, elevator deliveries,
-// restore a progress backup. The full-save import picker is handled in backup.js.
+// recipe ticks, bay and group renames, group assignment and rate, elevator deliveries.
 document.addEventListener('change', async e => {
   const el = e.target;
   // --- Checkmarks ---
@@ -498,38 +482,6 @@ document.addEventListener('change', async e => {
       render();
     } catch {
       el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
-    }
-  }
-  // "Choose backup file" on the Backup page (#import-file): replace this profile's progress
-  // with a progress-only backup, after a confirmation. It waits for queued saves and posts
-  // itself rather than through save(), so it toasts its own errors; "Backup restored."
-  // only follows a successful response. Full-save imports (#import-saves) are in backup.js.
-  if (el.id === 'import-file' && el.files[0]) {
-    const file = el.files[0];
-    try {
-      if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
-      const data = JSON.parse(await file.text());
-      if (!confirm('Replace current progress with this backup?')) {
-        el.value = '';
-        return;
-      }
-      await writeQueue;
-      setState(
-        await request('/api/import', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Planner-Request': '1',
-            ...scopeHeaders(),
-          },
-          body: JSON.stringify(data),
-        }),
-      );
-      render();
-      toast('Backup restored.');
-    } catch (err) {
-      toast(err.message || 'Could not restore backup.', true);
-      el.value = '';
     }
   }
 });
@@ -836,21 +788,16 @@ window.addEventListener('beforeunload', e => {
   }
 });
 
-// Click 2 of 2 on document (profiles.js adds one more after it): the saves/profiles
-// page, the profile wizard and the account page.
-// Index: new save / profile, calculated factory and group build-order dialogs, the
-// alternate recipe picker, round up, duplicate / share / remove / open a profile,
-// wizard and guided navigation, the node survey, existing-supply rows, cancel wizard,
-// sign-in mode, sign out. Actions that leave the open profile call allowSwitch() first,
-// which asks before dropping unsaved notes.
+// Click 2 of 2 on document: the profile wizard and the dialogs it and the calculated pages
+// open. Index: new save (also on the Vue profiles page), calculated factory and group
+// build-order dialogs, the alternate recipe picker, round up, wizard and guided navigation,
+// the node survey, existing-supply rows, cancel wizard.
 document.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
   // --- Starting the wizard (startWizard checks for unsaved notes itself) ---
   // "Create a save" on the profiles page (and in the wizard).
   if (b.hasAttribute('data-new-save')) startWizard();
-  // "Try another profile" on a save: the wizard for a new profile in that save.
-  if (b.dataset.newProfile) startWizard(b.dataset.newProfile);
   // --- Dialogs ---
   // A calculated plan's factory name, "Details ↗" or "Open factory" link: its dialog.
   if (b.dataset.calcFactory) openCalculatedFactory(b.dataset.calcFactory);
@@ -921,103 +868,6 @@ document.addEventListener('click', async e => {
       toast(err.message, true);
       b.disabled = false;
       b.textContent = 'Round up production';
-    }
-  }
-  // "Duplicate" on a profile card: copy the profile with its progress and open the copy.
-  if (b.dataset.duplicateProfile) {
-    if (!allowSwitch()) return;
-    b.disabled = true;
-    b.textContent = 'Copying…';
-    try {
-      await writeQueue;
-      const r = await post('/api/duplicate-profile', {
-        saveId: b.dataset.duplicateSave,
-        profileId: b.dataset.duplicateProfile,
-      });
-      setWorkspace(r.workspace);
-      await loadContext(r.saveId, r.profileId);
-      navigate('plan');
-      toast('Copy created and opened. Changes here leave the original profile untouched.');
-    } catch (err) {
-      toast(err.message, true);
-      b.disabled = false;
-      b.textContent = 'Duplicate';
-    }
-  }
-  // "Share" on a profile card: download that profile as a full-save file with its progress
-  // stripped (share=1), for someone else to import.
-  if (b.dataset.shareProfile) {
-    b.disabled = true;
-    try {
-      await writeQueue;
-      const sv = workspace.saves.find(s => s.id === b.dataset.shareSave),
-        pr = sv?.profiles.find(p => p.id === b.dataset.shareProfile);
-      const data = await request(
-        '/api/export-saves?save=' +
-          encodeURIComponent(b.dataset.shareSave) +
-          '&profile=' +
-          encodeURIComponent(b.dataset.shareProfile) +
-          '&share=1',
-      );
-      downloadJson(data, (slug(pr?.name || 'profile') || 'profile') + '-share.json');
-      toast(
-        'Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.',
-      );
-    } catch (err) {
-      toast(err.message, true);
-    } finally {
-      b.disabled = false;
-    }
-  }
-  // "Remove profile" on a profile card: after the unsaved-notes check, confirm by name
-  // (and say when its save goes too, as its last profile), then remove it and reload
-  // everything with boot(). Other profiles keep their progress.
-  if (b.dataset.removeProfile) {
-    if (!allowSwitch()) return;
-    const sv = workspace.saves.find(s => s.id === b.dataset.removeSave),
-      pr = sv?.profiles.find(p => p.id === b.dataset.removeProfile);
-    if (!pr) return;
-    if (
-      !confirm(
-        'Are you sure? Remove "' +
-          pr.name +
-          '" and its progress and notes?' +
-          (sv.profiles.length === 1
-            ? ' This also removes the empty save.'
-            : ' Other profiles keep their progress.'),
-      )
-    )
-      return;
-    b.disabled = true;
-    try {
-      await writeQueue;
-      await post('/api/remove-profile', { saveId: sv.id, profileId: pr.id, confirmed: true });
-      await boot();
-      if (workspace.saves.length) navigate('profiles');
-      toast('Profile removed.');
-    } catch (err) {
-      toast(err.message, true);
-      b.disabled = false;
-    }
-  }
-  // "Open profile" / "Continue current profile" on a profile card: make it the active
-  // profile on the server, load it and show its plan.
-  if (b.dataset.openSave) {
-    if (!allowSwitch()) return;
-    b.disabled = true;
-    try {
-      await writeQueue;
-      setWorkspace(
-        await post('/api/select', {
-          saveId: b.dataset.openSave,
-          profileId: b.dataset.openProfile,
-        }),
-      );
-      await loadContext(b.dataset.openSave, b.dataset.openProfile);
-      navigate('plan');
-    } catch (err) {
-      toast(err.message, true);
-      b.disabled = false;
     }
   }
   // --- Wizard navigation ---
@@ -1106,20 +956,5 @@ document.addEventListener('click', async e => {
   if (b.hasAttribute('data-cancel-wizard')) {
     setWizard(null);
     navigate('profiles');
-  }
-  // --- Account ---
-  // "Create an account" / "Back to sign in" under the sign-in form: switch the form.
-  if (b.dataset.authMode) {
-    setAuthMode(b.dataset.authMode);
-    renderSignedOut();
-  }
-  // "Sign out" on the account page: after the unsaved-notes check and any queued saves,
-  // sign out; boot() then shows the sign-in screen.
-  if (b.hasAttribute('data-logout')) {
-    if (!allowSwitch()) return;
-    await writeQueue;
-    await post('/api/logout', {});
-    setAuthMode('login');
-    await boot();
   }
 });
