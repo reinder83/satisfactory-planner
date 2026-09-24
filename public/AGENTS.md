@@ -17,7 +17,7 @@ The owner chose Vue on 2026-09-24. It lands in stages, one pull request each, an
 3. Build plan: checklist, step editing, removed steps, deliveries, notes (both profile kinds) (done: `ui/pages/PlanPage.vue`, `ui/pages/CalculatedPlanPage.vue` and their parts in `ui/plan/`).
 4. Factories on both profile kinds: cards, groups and the group editor, and the dialogs for a handbook factory (with its flow and oil campus), a calculated factory and a group's build order (done: `ui/pages/FactoriesPage.vue`, `ui/pages/CalculatedFactoriesPage.vue`, `ui/factories/`, and `ui/detail/` mounted into `#detail` by `ui/detail.js`). The calculated factories page and dialog came forward from stage 6, because they share the cards, groups and flow diagram.
 5. Storage room: floors, bays, layout editing, container dialog, workshop (done: `ui/pages/StoragePage.vue`, `ui/storage/`, `ui/detail/SlotDialog.vue`).
-6. Calculated resources.
+6. Calculated resources (done: `ui/pages/CalculatedResourcesPage.vue`, with the notices from `ui/plan/CalcWarnings.vue`). The wizard is now the only legacy page.
 7. The wizard: five steps, guided start, node survey, supply search, recipe picker.
 8. Cleanup: remove the legacy page rendering, `html.js` and the leftover delegated handlers, and the rebuild workarounds in `render()`.
 
