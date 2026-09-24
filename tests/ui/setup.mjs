@@ -22,6 +22,19 @@ export const generated = () =>
       ]),
     )),
   );
+// The server's item catalog (planner.mjs catalog(): raw resources, budgets, goals, …), made
+// once per test file in Node for the same reason.
+let catalogData;
+export const catalog = () =>
+  structuredClone(
+    (catalogData ??= JSON.parse(
+      execFileSync(process.execPath, [
+        '--input-type=module',
+        '-e',
+        "import('./planner.mjs').then(m => process.stdout.write(JSON.stringify(m.catalog())))",
+      ]),
+    )),
+  );
 export const evil = '<x-evil onclick=alert(1)> & "quoted"';
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];

@@ -3,7 +3,6 @@
 import { navigate, post, toast } from '../api.js';
 import { plural } from '../format.js';
 import { loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.js';
-import { moveExtraction } from '../wizard/extraction.js';
 import { guidedBuiltKeys, guidedFlow, moveGuided } from '../wizard/guided.js';
 import { calcProgress, moveWizard, readCarry, wizardError } from '../wizard/wizard.js';
 
@@ -20,18 +19,12 @@ document.addEventListener('submit', async e => {
   b.disabled = true;
   try {
     // --- Profile wizard ---
-    // Enter or the primary button. In the node survey and the guided questions it moves to
-    // the next step; in the five-step wizard it moves on until Review (step 5), where it
-    // creates the profile. The move functions disable the buttons themselves while they
+    // Enter or the primary button. In the guided questions it moves to the next step; in
+    // the five-step wizard it moves on until Review (step 5), where it creates the profile.
+    // The node survey handles its own submit (ui/pages/SurveyPage.vue). The move functions disable the buttons themselves while they
     // calculate, so this one is re-enabled before handing over.
     if (f.id === 'wizard-form') {
       const w = wizard;
-      // Node survey: next survey step; past the last it applies the counts.
-      if (w.mode === 'extraction') {
-        b.disabled = false;
-        await moveExtraction(w.extractionStep + 1);
-        return;
-      }
       // Guided questions: the next question, or calculate the preview after the last one.
       if (w.mode === 'guided' && w.guidedStep <= guidedFlow().length) {
         b.disabled = false;

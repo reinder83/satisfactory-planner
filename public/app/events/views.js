@@ -12,7 +12,6 @@
 // click, change, search input, supply input, supply keydown, supply
 // focusout, image error (capture), hashchange, #detail
 // backdrop click, beforeunload, then the wizard submit in profiles.js.
-import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { navigate, pending, post, save, toast } from '../api.js';
 import { openCalculatedFactory, openFactory } from '../factory-detail.js';
 import { $, num } from '../format.js';
@@ -26,15 +25,7 @@ import {
   workspace,
 } from '../session.js';
 import { render } from '../shell.js';
-import {
-  extractionOf,
-  leaveExtraction,
-  moveExtraction,
-  openExtraction,
-  readExtraction,
-  resetExtraction,
-  undoExtractionReset,
-} from '../wizard/extraction.js';
+import { openExtraction } from '../wizard/extraction.js';
 import { moveGuided, readGuidedForm, toAdvanced, toGuided } from '../wizard/guided.js';
 import { alternatesUsed, openAltRecipe } from '../wizard/recipes.js';
 import {
@@ -98,8 +89,8 @@ document.addEventListener('click', async e => {
 
 // Change events: checkboxes, selects and fields that save when committed, plus the
 // wizard fields that reshape its form.
-// Index: progress checkmarks, wizard redraws (settings, guided, node survey, existing
-// supply), alternate recipe ticks.
+// Index: progress checkmarks, wizard redraws (settings, guided, existing supply),
+// alternate recipe ticks. The node survey handles its own (ui/pages/SurveyPage.vue).
 document.addEventListener('change', async e => {
   const el = e.target;
   // --- Checkmarks ---
@@ -133,21 +124,6 @@ document.addEventListener('change', async e => {
     (String(el.name).startsWith('guided:') || el.name === 'topup' || el.name === 'topic')
   ) {
     readGuidedForm($('#wizard-form'));
-    render();
-  }
-  // Node survey fields. Choosing a purity and distribution whose world is fully known
-  // (knownWorld) refills every count from that preset.
-  if (
-    wizard?.mode === 'extraction' &&
-    $('#wizard-form') &&
-    /^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))
-  ) {
-    readExtraction($('#wizard-form'));
-    if (['purity', 'distribution'].includes(el.name)) {
-      const s = wizard.settings;
-      if (knownWorld(s.purity, s.distribution))
-        wizard.extraction = presetSurvey(s.purity, extractionOf(wizard), s.distribution);
-    }
     render();
   }
   // An existing-supply item or rate, once committed: close the suggestions, read the rows
@@ -324,8 +300,8 @@ window.addEventListener('beforeunload', e => {
 
 // Click 2 of 2 on document: the profile wizard and the dialogs it and the calculated pages
 // open. Index: new save (also on the Vue profiles page), the calculated factory dialog, the
-// alternate recipe picker, wizard and guided navigation, the node survey, existing-supply
-// rows, cancel wizard.
+// alternate recipe picker, wizard and guided navigation, opening the node survey (whose own
+// controls are in ui/pages/SurveyPage.vue), existing-supply rows, cancel wizard.
 document.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -390,51 +366,9 @@ document.addEventListener('click', async e => {
   if (b.dataset.guidedAdvanced) toAdvanced(Number(b.dataset.guidedAdvanced));
   // "← Guided start" in the five-step wizard: back to the guided questions.
   if (b.hasAttribute('data-guided-start')) toGuided();
-  // --- Node survey (wizard extraction mode) ---
+  // --- Node survey ---
   // "Work these out from my nodes →": open the survey, remembering where to return to.
   if (b.hasAttribute('data-open-extraction')) openExtraction();
-  // "Fill in the counts below": fill every count from the default world at that purity.
-  // It also forgets any pending "Undo reset".
-  if (b.dataset.nodePreset && wizard) {
-    const form = $('#wizard-form');
-    if (form) readExtraction(form);
-    wizard.extraction = presetSurvey(
-      b.dataset.nodePreset,
-      extractionOf(wizard),
-      wizard.settings.distribution,
-    );
-    wizard.extractionUndo = null;
-    // Keep the profile's recorded purity in step with the counts it now holds.
-    wizard.settings.purity = b.dataset.nodePreset;
-    render();
-    toast(
-      'Filled in the default world at ' +
-        (nodePresets.find(([v]) => v === b.dataset.nodePreset)?.[1] || 'that purity') +
-        '. Change any count that does not match your save.',
-    );
-  }
-  // "Reset all counts to zero". No confirmation, because "Undo reset" can bring the counts
-  // back (see resetExtraction).
-  if (b.hasAttribute('data-node-reset') && wizard) {
-    const form = $('#wizard-form');
-    if (form) readExtraction(form);
-    resetExtraction();
-    render();
-    toast(
-      'Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.',
-    );
-  }
-  // "Undo reset": put back the counts from before the last reset.
-  if (b.hasAttribute('data-node-undo') && wizard) {
-    undoExtractionReset();
-    render();
-    toast('Put back the counts you had before the reset.');
-  }
-  // The survey's numbered tabs, and its "Back" (from the first step it leaves the survey).
-  if (b.dataset.extractionStep) await moveExtraction(Number(b.dataset.extractionStep));
-  if (b.hasAttribute('data-extraction-back')) await moveExtraction(wizard.extractionStep - 1);
-  // "Leave these budgets alone": leave the survey without applying its counts.
-  if (b.hasAttribute('data-extraction-cancel')) leaveExtraction();
   // --- Existing supply rows (wizard) ---
   // A suggestion under an item field: fill it in and focus the rate. Stop here, since
   // pickSupplyOption has redrawn the page.
