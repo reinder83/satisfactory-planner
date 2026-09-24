@@ -4,7 +4,8 @@
 // clicks on the ◈ mark) are handled in events/views.js.
 import { adaEncore, adaRemarks, adaFault as makeFault } from '../ada.js';
 import { browserMode } from '../browser-api.js';
-import { esc, num, slug } from './format.js';
+import { num, slug } from './format.js';
+import { html } from './html.js';
 import {
   calcStage,
   calculated,
@@ -202,10 +203,28 @@ export function adaPoke() {
 export function adaPanel() {
   try {
     if (adaMuted)
-      return `<div class="ada is-muted"><span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button></div>`;
+      return html`<div class="ada is-muted">
+        <span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span
+        ><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button>
+      </div>`;
     const r = adaCurrent();
     if (!r) return '';
-    return `<section class="ada" data-tone="${r.tone}" aria-label="ADA"><div class="ada-head"><span class="ada-mark" aria-hidden="true">◈</span><div><b>${esc(r.name || 'ADA')}</b><div class="eyebrow">${r.name ? 'Transmission fault' : 'Artificial Directory and Assistant'}</div></div></div><p class="ada-line" id="ada-line" role="status" aria-live="polite">${esc(r.text)}</p><div class="ada-tools"><button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button><button class="btn quiet" type="button" data-ada-mute="on">Mute</button></div></section>`;
+    return html`<section class="ada" data-tone="${r.tone}" aria-label="ADA">
+      <div class="ada-head">
+        <span class="ada-mark" aria-hidden="true">◈</span>
+        <div>
+          <b>${r.name || 'ADA'}</b>
+          <div class="eyebrow">
+            ${r.name ? 'Transmission fault' : 'Artificial Directory and Assistant'}
+          </div>
+        </div>
+      </div>
+      <p class="ada-line" id="ada-line" role="status" aria-live="polite">${r.text}</p>
+      <div class="ada-tools">
+        <button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button
+        ><button class="btn quiet" type="button" data-ada-mute="on">Mute</button>
+      </div>
+    </section>`;
   } catch {
     return '';
   }

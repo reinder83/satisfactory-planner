@@ -1239,7 +1239,11 @@ test('the survey steps are tabs, and jumping between them keeps what was typed',
     'Resource wells',
     'Your budgets',
   ].entries()) {
-    assert.ok(html.includes(`>${i + 1}. ${label}</button>`), label + ' is a button');
+    assert.match(
+      html,
+      new RegExp(String.raw`>\s*${i + 1}\. ${label}\s*</button>`),
+      label + ' is a button',
+    );
   }
   // Jumping forward and back reads the screen being left, so counts survive.
   c.formStub = { querySelector: () => null, reportValidity: () => true };

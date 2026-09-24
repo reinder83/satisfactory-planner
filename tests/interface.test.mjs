@@ -156,6 +156,98 @@ test('original and calculated views render; wizard exposes all settings and safe
   assert.ok(vm.runInContext('renderCalculatedPlan()', c).includes('Phase 1'));
 });
 
+// Markup that was escaped as text: a tag shown on the page, or an entity escaped twice.
+// Either means a string of markup reached html`` without raw() or its own html``.
+const ESCAPED_MARKUP =
+  /&lt;\/?(?:a|article|aside|b|br|button|div|form|h[1-6]|img|input|label|li|main|nav|option|p|section|select|small|span|strong|table|tbody|td|textarea|th|thead|tr|ul)\b|&amp;(?:amp|lt|gt|quot|#39);/;
+test('every page escapes user text exactly once', () => {
+  const c = ui();
+  const evil = '<x-evil onclick=alert(1)> & "quoted"';
+  c.evil = evil;
+  vm.runInContext(
+    `currentSave={id:'s',name:evil};currentProfile={id:'original',kind:'original',name:evil};workspace.saves=[{id:'s',name:evil,profiles:[{id:'original',kind:'original',name:evil,completed:0,phase:'3'},{id:'p',kind:'calculated',name:evil,completed:1,phase:'4',settings:{purity:evil,multiplier:1,powerFactor:1}}]}];workspace.accountsEnabled=true;workspace.user={id:'owner',username:evil};state.notes={global:evil,'phase-3':evil};`,
+    c,
+  );
+  const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
+  const shared = ['shell', 'renderStorage', 'renderBackup', 'renderProfiles', 'renderAccount'];
+  const original = render([...shared, 'renderPlan', 'renderFactories', 'renderResources']);
+  vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
+  const calculatedPages = render([
+    ...shared,
+    'renderCalculatedPlan',
+    'renderCalculatedFactories',
+    'renderCalculatedResources',
+  ]);
+  // The wizard's five steps and the guided start, adding a profile to the save.
+  const wizardPages = [1, 2, 3, 4, 5, 'guided'].flatMap(step => {
+    vm.runInContext(
+      `wizard={step:${step === 'guided' ? 1 : step},saveId:'s',saveName:evil,name:evil,settings:structuredClone(generated.settings),preview:generated,carryFrom:null,carry:{},mode:${step === 'guided' ? "'guided'" : "'advanced'"},guidedStep:1,guidedAsk:null,tutorial:'doing'};`,
+      c,
+    );
+    return render(['renderWizard']).map(([r, page]) => [r + ' ' + step, page]);
+  });
+  // Edit modes and dialogs, with the hostile text in every user-editable place they show.
+  vm.runInContext(
+    `calculated=null;currentProfile={id:'original',kind:'original',name:evil};state.customTasks=[{id:'custom-1',phase:'3',title:evil,body:evil}];state.factoryGroups={groups:[{id:'fg-a',name:evil}],assignments:{wire:[{group:'fg-a',rate:null}],computer:[{group:'fg-a',rate:null}]}};state.storageEdits={bays:[{id:'S',name:evil,floor:'ground'}],slots:{S01:evil},bayNames:{A:evil}};state.notes['factory-computer']=evil;state.notes['slot-S01']=evil;planEditing=true;factoryEditing=true;layoutEditing=true;`,
+    c,
+  );
+  const dialog = open => vm.runInContext(`${open};document.querySelector('#detail').innerHTML`, c);
+  const editing = [
+    ...render(['renderPlan', 'renderFactories', 'renderStorage']).map(([r, p]) => [
+      r + ' editing',
+      p,
+    ]),
+    ['task edit form', vm.runInContext(`editingTask='custom-1';renderPlan()`, c)],
+    ['factory dialog', dialog(`openFactory('computer')`)],
+    ['oil campus dialog', dialog(`openFactory('plastic')`)],
+    ['group chain dialog', dialog(`openGroupChain('fg-a')`)],
+    ['container dialog', dialog(`openSlot('S01')`)],
+  ];
+  vm.runInContext(
+    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};editingTask=null;`,
+    c,
+  );
+  editing.push(
+    [
+      'calculated factory dialog',
+      dialog(`openCalculatedFactory(generated.stages['3'].rows[0].id)`),
+    ],
+    ['alternate recipe dialog', dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`)],
+    ...render(['renderCalculatedPlan', 'renderCalculatedFactories']).map(([r, p]) => [
+      r + ' editing',
+      p,
+    ]),
+  );
+  const all = [...original, ...calculatedPages, ...wizardPages, ...editing];
+  for (const [route, page] of all) {
+    assert.equal(typeof page, 'string', route);
+    assert.ok(!page.includes('<x-evil'), route + ' inserted user text as markup');
+    assert.doesNotMatch(page, ESCAPED_MARKUP, route + ' escaped its own markup');
+  }
+  // The escaped name is there, once-escaped, on the pages that show it.
+  const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
+  for (const [route, page] of all.filter(([r]) =>
+    [
+      'shell',
+      'renderProfiles',
+      'renderCalculatedPlan',
+      'renderWizard 1',
+      'renderWizard guided',
+      'task edit form',
+      'factory dialog',
+      'container dialog',
+      'group chain dialog',
+    ].includes(r),
+  ))
+    assert.ok(page.includes(escaped), route);
+  // A note keeps its text, and the textarea gains no leading space from the formatting.
+  assert.ok(
+    original
+      .find(([r]) => r === 'renderBackup')[1]
+      .includes('aria-label="Save-wide notes">' + escaped),
+  );
+});
+
 test('storage layout edits render custom floors, bays and assignments; missing edits render the handbook', () => {
   const c = ui();
   vm.runInContext(`floor='ground'`, c);
@@ -1146,7 +1238,11 @@ test('the wizard chooses what the target time applies to and Review shows what a
     /value="final" selected/,
     'the saved choice is shown',
   );
-  assert.match(vm.runInContext(`help('phaseTime')`, c), /final phase/, 'the choice is explained');
+  assert.match(
+    vm.runInContext(`String(help('phaseTime'))`, c),
+    /final phase/,
+    'the choice is explained',
+  );
 
   vm.runInContext(
     `wizard.step=5;wizard.preview={...generated,settings:{...generated.settings,phase:'1'},stages:{...generated.stages,1:{...generated.stages[1],hours:5.21,aheadOf:9.92}}};`,
@@ -1194,13 +1290,13 @@ test('the expansion table only claims an addition where there is one', () => {
   assert.equal(rows.length, 5, 'every phase is listed');
   assert.match(
     rows[0],
-    /<td>—<\/td><td>—<\/td>/,
+    /<td>—<\/td>\s*<td>—<\/td>/,
     'a phase without the line has nothing to show and nothing to add',
   );
-  assert.match(rows[1], /<td>4<\/td><td>\+4<\/td>/, 'the phase that first builds it adds four');
-  assert.match(rows[2], /<td>4<\/td><td>—<\/td>/, 'an unchanged phase adds nothing');
-  assert.match(rows[3], /<td>9<\/td><td>\+5<\/td>/, 'growth shows only the extra machines');
-  assert.match(rows[4], /<td>—<\/td><td>—<\/td>/, 'a phase that drops the line adds nothing');
+  assert.match(rows[1], /<td>4<\/td>\s*<td>\+4<\/td>/, 'the phase that first builds it adds four');
+  assert.match(rows[2], /<td>4<\/td>\s*<td>—<\/td>/, 'an unchanged phase adds nothing');
+  assert.match(rows[3], /<td>9<\/td>\s*<td>\+5<\/td>/, 'growth shows only the extra machines');
+  assert.match(rows[4], /<td>—<\/td>\s*<td>—<\/td>/, 'a phase that drops the line adds nothing');
   assert.ok(
     !vm.runInContext(`calcExpansionRows('iron')`, c).includes('Keep available'),
     'no phase claims capacity is being kept',
@@ -1272,7 +1368,7 @@ test('a profile only offers the phases it was created for', () => {
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
   assert.match(
     rows[0],
-    /<td>3<\/td><td>4<\/td><td>\+4<\/td>/,
+    /<td>3<\/td>\s*<td>4<\/td>\s*<td>\+4<\/td>/,
     'the starting phase builds its own machines from scratch',
   );
 });

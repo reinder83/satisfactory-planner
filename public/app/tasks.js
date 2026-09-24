@@ -3,7 +3,8 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
-import { esc, itemIcon } from './format.js';
+import { itemIcon } from './format.js';
+import { html, raw } from './html.js';
 import {
   calcStage,
   calculated,
@@ -76,12 +77,16 @@ function taskLinkHtml(t) {
   if (calculated) {
     const row = (calcStage().rows || []).find(r => r.id === linked);
     return row
-      ? `<button class="btn quiet task-link" data-calc-factory="${row.id}">Open factory: ${esc(row.name)} ↗</button>`
+      ? html`<button class="btn quiet task-link" data-calc-factory="${row.id}">
+          Open factory: ${row.name} ↗
+        </button>`
       : '';
   }
   const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
   return f
-    ? `<button class="btn quiet task-link" data-factory="${f.id}">Open factory: ${esc(f.name)} ↗</button>`
+    ? html`<button class="btn quiet task-link" data-factory="${f.id}">
+        Open factory: ${f.name} ↗
+      </button>`
     : '';
 }
 
@@ -93,7 +98,29 @@ function taskEditForm(t) {
     ? (calcStage().rows || []).map(r => [r.id, r.name])
     : plan.factories.filter(f => f.stages[stage()]).map(f => [f.id, f.name]);
   const current = taskEditsState().links[t.id] || autoTaskLink(t.id);
-  return `<form class="task task-edit" data-task-edit="${t.id}"><label class="field">Step title<input name="title" maxlength="240" required value="${esc(t.title)}"></label><label class="field">Details<textarea name="body" class="notes" maxlength="6000">${esc(t.body || '')}</textarea></label><label class="field">Linked factory<select name="link"><option value="">No linked factory</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label><div class="task-edit-actions"><button class="btn primary" type="submit">Save step</button> <button class="btn" type="button" data-cancel-task-edit>Cancel</button></div><p class="small muted">Restore the original text by clearing a field. The step keeps its checkmark either way.</p></form>`;
+  return html`<form class="task task-edit" data-task-edit="${t.id}">
+    <label class="field"
+      >Step title<input name="title" maxlength="240" required value="${t.title}"
+    /></label>
+    <label class="field"
+      >Details<textarea name="body" class="notes" maxlength="6000">${t.body || ''}</textarea>
+    </label>
+    <label class="field"
+      >Linked factory<select name="link">
+        <option value="">No linked factory</option>
+        ${options.map(
+          ([v, l]) => html`<option value="${v}" ${v === current && raw('selected')}>${l}</option>`,
+        )}
+      </select></label
+    >
+    <div class="task-edit-actions">
+      <button class="btn primary" type="submit">Save step</button>
+      <button class="btn" type="button" data-cancel-task-edit>Cancel</button>
+    </div>
+    <p class="small muted">
+      Restore the original text by clearing a field. The step keeps its checkmark either way.
+    </p>
+  </form>`;
 }
 
 // A step's icon says what kind of work it is at a glance: a linked or calculated
@@ -189,9 +216,22 @@ function taskIconItem(t) {
 function taskIconHtml(t) {
   const item = taskIconItem(t);
   if (item)
-    return `<span class="task-icon" data-kind="item" aria-hidden="true">${itemIcon(item)}</span>`;
+    return html`<span class="task-icon" data-kind="item" aria-hidden="true"
+      >${itemIcon(item)}</span
+    >`;
   const kind = taskKind(t);
-  return `<span class="task-icon" data-kind="${kind}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${TASK_GLYPHS[kind]}</svg></span>`;
+  return html`<span class="task-icon" data-kind="${kind}" aria-hidden="true"
+    ><svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      ${raw(TASK_GLYPHS[kind])}
+    </svg></span
+  >`;
 }
 
 // HTML for one checklist step: checkbox (data-check=<step id>, the saved checklist key),
@@ -199,15 +239,49 @@ function taskIconHtml(t) {
 // the edit form for the step being edited. Also used by views/storage.js.
 export function taskHtml(t) {
   if (planEditing && editingTask === t.id) return taskEditForm(t);
-  const tools = planEditing
-    ? `<span class="task-tools"><button class="btn quiet" data-move-task="${t.id}" data-dir="-1" aria-label="Move up: ${esc(t.title)}">↑</button><button class="btn quiet" data-move-task="${t.id}" data-dir="1" aria-label="Move down: ${esc(t.title)}">↓</button><button class="btn quiet" data-edit-task="${t.id}">Edit</button><button class="btn quiet danger" data-remove-step="${t.id}">Remove</button></span>`
-    : '';
-  return `<article class="task ${planEditing ? 'is-editing' : ''}"><input type="checkbox" data-check="${t.id}" aria-label="Complete: ${esc(t.title)}" ${doneAttr(t.id)}>${taskIconHtml(t)}<details data-task="${t.id}"><summary>${esc(t.title)}</summary><p>${esc(t.body || 'Your own task for this phase.')}</p>${taskLinkHtml(t)}${t.id.startsWith('custom-') && !planEditing ? `<button class="delete-task" data-remove="${t.id}">Delete personal task</button>` : ''}</details>${tools}</article>`;
+  const tools =
+    planEditing &&
+    html`<span class="task-tools"
+      ><button
+        class="btn quiet"
+        data-move-task="${t.id}"
+        data-dir="-1"
+        aria-label="Move up: ${t.title}"
+      >
+        ↑</button
+      ><button
+        class="btn quiet"
+        data-move-task="${t.id}"
+        data-dir="1"
+        aria-label="Move down: ${t.title}"
+      >
+        ↓</button
+      ><button class="btn quiet" data-edit-task="${t.id}">Edit</button
+      ><button class="btn quiet danger" data-remove-step="${t.id}">Remove</button></span
+    >`;
+  return html`<article class="task ${planEditing ? 'is-editing' : ''}">
+    <input
+      type="checkbox"
+      data-check="${t.id}"
+      aria-label="Complete: ${t.title}"
+      ${raw(doneAttr(t.id))}
+    />${taskIconHtml(t)}
+    <details data-task="${t.id}">
+      <summary>${t.title}</summary>
+      <p>${t.body || 'Your own task for this phase.'}</p>
+      ${taskLinkHtml(t)}${t.id.startsWith('custom-') &&
+      !planEditing &&
+      html`<button class="delete-task" data-remove="${t.id}">Delete personal task</button>`}
+    </details>
+    ${tools}
+  </article>`;
 }
 
 // HTML for the "Edit steps" / "Done editing" toggle (data-toggle-plan-edit).
 export function planEditToolbar() {
-  return `<button class="btn ${planEditing ? 'primary' : ''}" data-toggle-plan-edit>${planEditing ? 'Done editing' : 'Edit steps'}</button>`;
+  return html`<button class="btn ${planEditing ? 'primary' : ''}" data-toggle-plan-edit>
+    ${planEditing ? 'Done editing' : 'Edit steps'}
+  </button>`;
 }
 
 // Applies the "Hide completed" toggle and the step search to a list of steps.
@@ -224,18 +298,28 @@ function filteredPlanTasks(ts) {
 // or an empty-state message that says why nothing is shown.
 export function checklistHtml(ts) {
   const shown = filteredPlanTasks(ts);
-  const tools = ts.length
-    ? `<div class="checklist-tools"><input id="plan-search" class="search" placeholder="Find a step…" aria-label="Find a step" value="${esc(query)}"><label class="check-row small"><input type="checkbox" id="hide-done" ${hideDone ? 'checked' : ''}>Hide completed</label><span class="small muted">${shown.length === ts.length ? '' : shown.length + ' of ' + ts.length + ' steps'}</span></div>`
-    : '';
   const empty = !ts.length
     ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
     : query.trim()
       ? 'No steps match this search.'
       : 'Every step of this phase is completed. Untick “Hide completed” to review them.';
-  return (
-    tools +
-    `<div class="checklist">${shown.map(taskHtml).join('') || `<div class="empty-state">${empty}</div>`}</div>`
-  );
+  return html`${ts.length > 0 &&
+    html`<div class="checklist-tools">
+      <input
+        id="plan-search"
+        class="search"
+        placeholder="Find a step…"
+        aria-label="Find a step"
+        value="${query}"
+      /><label class="check-row small"
+        ><input type="checkbox" id="hide-done" ${hideDone && raw('checked')} />Hide completed</label
+      ><span class="small muted"
+        >${shown.length !== ts.length && shown.length + ' of ' + ts.length + ' steps'}</span
+      >
+    </div>`}
+    <div class="checklist">
+      ${shown.length ? shown.map(taskHtml) : html`<div class="empty-state">${empty}</div>`}
+    </div>`;
 }
 
 // HTML for the "Removed steps" panel shown while editing, with a Restore button per
@@ -245,7 +329,16 @@ export function removedStepsHtml() {
   const removed = new Set(taskEditsState().removed);
   const list = basePlanTasks().filter(t => removed.has(t.id));
   if (!list.length) return '';
-  return `<details class="panel removed-steps"><summary>Removed steps in this phase (${list.length})</summary>${list.map(t => `<div class="removed-step"><span>${taskIconHtml(t)}${esc(t.title)}</span><button class="btn quiet" data-restore-task="${t.id}">Restore</button></div>`).join('')}</details>`;
+  return html`<details class="panel removed-steps">
+    <summary>Removed steps in this phase (${list.length})</summary>
+    ${list.map(
+      t =>
+        html`<div class="removed-step">
+          <span>${taskIconHtml(t)}${t.title}</span
+          ><button class="btn quiet" data-restore-task="${t.id}">Restore</button>
+        </div>`,
+    )}
+  </details>`;
 }
 
 // Handbook steps for the current phase from plan.json, plus personal tasks.

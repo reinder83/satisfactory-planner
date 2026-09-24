@@ -10,8 +10,9 @@
 //    fills <main> with the view for the current hash route (#plan, #factories, ...).
 //    Views live in app/views/*.js; a calculated profile uses app/views/calculated.js for
 //    plan/factories/resources instead, and #wizard is app/wizard/.
-// 3. Views are plain functions returning HTML strings that render() assigns to innerHTML,
-//    so every user-provided text goes through esc() from app/format.js first.
+// 3. Views are plain functions returning HTML that render() assigns to innerHTML. They build
+//    it with the html`` tag from app/html.js, which escapes every interpolated value, so
+//    user-provided text is safe without an esc() call at each place it is shown.
 // 4. User actions are handled by delegated listeners on document in app/events/*.js,
 //    matched on data-* attributes (data-check, data-save-note, ...) and form ids.
 //    A hashchange listener in events/views.js switches the view; navigate() in api.js too.
