@@ -2,7 +2,7 @@
 // helpers the legacy pages share: the heading row and the browser edition's notice.
 import { $ } from './format.js';
 import { html } from './html.js';
-import { calculated, view } from './session.js';
+import { calculated, view, wizard } from './session.js';
 import { invalidate } from './ui/bridge.js';
 import { mountPage, mountShell, unmountPage } from './ui/mount.js';
 import { vuePage } from './ui/pages.js';
@@ -49,7 +49,7 @@ export function render() {
   const selection = document.activeElement?.selectionStart;
   mountShell($('#app'));
   invalidate();
-  const component = vuePage(view, calculated);
+  const component = vuePage(view, calculated, wizard);
   if (component) {
     mountPage($('#main'), component);
     return;

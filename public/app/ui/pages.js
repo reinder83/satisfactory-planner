@@ -11,9 +11,12 @@ import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
 import StoragePage from './pages/StoragePage.vue';
+import SurveyPage from './pages/SurveyPage.vue';
 
-// The component for `view`, or null while it is still a legacy page (the wizard).
-export function vuePage(view, calculated) {
+// The component for `view`, or null while it is still a legacy page. The wizard's node
+// survey (`draft`, the wizard draft, in mode 'extraction') is a component; its five steps and
+// guided start are still legacy (renderWizard).
+export function vuePage(view, calculated, draft) {
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
   if (view === 'storage') return StoragePage;
@@ -21,5 +24,6 @@ export function vuePage(view, calculated) {
   if (view === 'account') return AccountPage;
   if (view === 'backup') return BackupPage;
   if (view === 'resources') return calculated ? CalculatedResourcesPage : ResourcesPage;
+  if (view === 'wizard' && draft?.mode === 'extraction') return SurveyPage;
   return null;
 }

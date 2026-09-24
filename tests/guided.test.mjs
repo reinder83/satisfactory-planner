@@ -1085,35 +1085,7 @@ test('the survey is recorded on the profile but never read by the solver', () =>
   assert.throws(() => calculate({ extraction: { used: { Nope: 5 } } }), /not a raw resource/);
 });
 
-test('the survey renders four screens and links to the map', () => {
-  const c = ui();
-  guided(c, `wizard.mode='extraction';wizard.extractionStep=1;`);
-  const seen = [];
-  for (let step = 1; step <= 4; step++) {
-    const html = vm.runInContext(`wizard.extractionStep=${step};renderWizard()`, c);
-    assert.ok(html.includes('wizard-form'), 'step ' + step);
-    assert.ok(html.includes('extraction-panel'), 'step ' + step + ' is the survey');
-    seen.push(html);
-  }
-  // Where the numbers come from, and that uploading a save is the user's call.
-  assert.match(seen[0], /satisfactory-calculator\.com\/en\/interactive-map/);
-  assert.match(seen[0], /upload your save/i);
-  assert.match(seen[0], /never sends your save anywhere/i);
-  assert.match(seen[0], /name="mark"/);
-  assert.match(seen[0], /name="clock"/);
-  // Ten ores, three purities each.
-  assert.equal((seen[1].match(/name="node:[^"]+:pure"/g) || []).length, minedResources.length);
-  assert.ok(seen[1].includes('icons/iron-ore.png'), 'with the ore icons');
-  // Oil nodes and wells are asked separately, and water is explained rather than asked.
-  assert.match(seen[2], /name="node:Crude Oil:pure"/);
-  assert.match(seen[2], /name="well:Crude Oil:pure"/);
-  assert.match(seen[2], /name="well:Nitrogen Gas:pure"/);
-  assert.ok(!seen[2].includes('name="node:Water'), 'water is not counted');
-  assert.match(seen[2], /Water is not counted/i);
-  // The last screen totals it and takes off what is committed.
-  assert.match(seen[3], /name="used:Iron Ore"/);
-  assert.match(seen[3], /Use these budgets/);
-});
+// The survey screens themselves are tested in tests/ui/survey.test.mjs.
 
 test('applying the survey writes the budgets and confirms them', () => {
   const c = ui();
@@ -1144,111 +1116,6 @@ test('applying the survey writes the budgets and confirms them', () => {
 });
 
 // The resource tables' ore icons: tests/ui/pages.test.mjs.
-
-test('a node count means a count, and an unsurveyed resource is called out', () => {
-  const c = ui();
-  guided(c, `wizard.mode='extraction';wizard.extractionStep=2;`);
-  const nodes = vm.runInContext('renderWizard()', c);
-  // Zero in a node box is "my world has none of that purity" — which is what an
-  // all-pure world puts in the first two columns. It is not the "unallocated,
-  // not absent" that a zero *budget* means for a resource-rich map.
-  assert.ok(
-    !nodes.includes('unallocated, not absent'),
-    'the budget wording does not belong on a count',
-  );
-  assert.match(nodes, /Zero means zero/);
-  assert.match(nodes, /the plan cannot mine/);
-  // Surveying only some resources is flagged before it turns into an
-  // unexplainable infeasible plan.
-  const partial = blankExtraction();
-  partial.nodes = { 'Iron Ore': { impure: 39, normal: 42, pure: 46 } };
-  c.partialSurvey = partial;
-  vm.runInContext(`wizard.extraction=partialSurvey;wizard.extractionStep=4;`, c);
-  const budgets = vm.runInContext('renderWizard()', c);
-  assert.match(budgets, /<b>11 resources have no nodes entered:<\/b>/);
-  assert.match(budgets, /Copper Ore/);
-  assert.ok(!budgets.includes('>Iron Ore</b>'), 'the one that was surveyed is not listed');
-  assert.match(budgets, /go back and fill them in/);
-  // A complete survey says nothing.
-  c.fullSurvey = defaultSurvey();
-  vm.runInContext(`wizard.extraction=fullSurvey;`, c);
-  assert.ok(!vm.runInContext('renderWizard()', c).includes('no nodes entered'));
-  // An all-pure world is a complete survey, zeros and all.
-  const allPure = blankExtraction();
-  for (const [name, [i, n, p]] of Object.entries(nodeCounts))
-    (name === 'Nitrogen Gas' ? allPure.wells : allPure.nodes)[name] = {
-      impure: 0,
-      normal: 0,
-      pure: i + n + p,
-    };
-  c.pureSurvey = allPure;
-  vm.runInContext(`wizard.extraction=pureSurvey;`, c);
-  assert.ok(
-    !vm.runInContext('renderWizard()', c).includes('no nodes entered'),
-    'zero impure and zero normal is an answer, not an omission',
-  );
-});
-
-test('the survey steps are tabs, and jumping between them keeps what was typed', async () => {
-  const c = ui();
-  guided(
-    c,
-    `wizard.mode='extraction';wizard.extractionStep=1;wizard.extractionReturn={mode:'advanced',step:4};`,
-  );
-  const html = vm.runInContext('renderWizard()', c);
-  // The same clickable bar the five-step wizard uses, not a read-only trail.
-  assert.equal((html.match(/data-extraction-step="/g) || []).length, 4);
-  assert.ok(html.includes('class="wizard-progress"'), 'styled as the wizard tabs');
-  assert.ok(!html.includes('guided-progress'), 'and not as the guided dots');
-  assert.match(html, /data-extraction-step="1" aria-current="step"/);
-  for (const [i, label] of [
-    'How you mine',
-    'Ore nodes',
-    'Resource wells',
-    'Your budgets',
-  ].entries()) {
-    assert.match(
-      html,
-      new RegExp(String.raw`>\s*${i + 1}\. ${label}\s*</button>`),
-      label + ' is a button',
-    );
-  }
-  // Jumping forward and back reads the screen being left, so counts survive.
-  c.formStub = { querySelector: () => null, reportValidity: () => true };
-  vm.runInContext(
-    `FormData=class{constructor(){}get(){return null;}getAll(){return [];}has(){return false;}*[Symbol.iterator](){yield ['node:Iron Ore:pure','46'];}}`,
-    c,
-  );
-  vm.runInContext(
-    'render=()=>{};document={querySelector:()=>formStub,querySelectorAll:()=>[],addEventListener(){}};',
-    c,
-  );
-  await vm.runInContext('moveExtraction(4)', c);
-  assert.equal(
-    vm.runInContext('wizard.extractionStep', c),
-    4,
-    'jumped straight to the last screen',
-  );
-  assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c),
-    46,
-    'and read the screen it left',
-  );
-  await vm.runInContext('moveExtraction(2)', c);
-  assert.equal(vm.runInContext('wizard.extractionStep', c), 2, 'and back again');
-  assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c), 46);
-  // A tab never applies the budgets; only the submit button past the last step does.
-  assert.ok(
-    !vm.runInContext('wizard.settings.extraction', c),
-    'no tab click has applied the survey',
-  );
-  await vm.runInContext('moveExtraction(2)', c);
-  assert.equal(
-    vm.runInContext('wizard.extractionStep', c),
-    2,
-    'clicking the current tab is a no-op',
-  );
-});
 
 test('every node preset reproduces that purity setting’s shipped budget', () => {
   // The purity settings shift nodes up and down the scale rather than adding or
@@ -1290,144 +1157,14 @@ test('every node preset reproduces that purity setting’s shipped budget', () =
   );
 });
 
-test('the survey asks the two World Randomization settings and fills what it can', () => {
-  const c = ui();
-  guided(
-    c,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='vanilla';wizard.settings.distribution='original';`,
-  );
-  const nodes = vm.runInContext('renderWizard()', c);
-  // The same pair the game shows, with the same options in the same order.
-  assert.match(nodes, /Resource node randomization/);
-  assert.match(nodes, /Resource node purity/);
-  assert.match(nodes, /name="distribution"/);
-  assert.match(nodes, /name="purity"/);
-  for (const [, label] of distributions)
-    assert.ok(nodes.includes('>' + label + '<'), 'distribution option ' + label);
-  for (const [, label] of purities)
-    assert.ok(nodes.includes('>' + label + '<'), 'purity option ' + label);
-  // Opening the survey with a known world starts from it rather than from blank.
-  assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].normal`, c),
-    42,
-    'prefilled from the purity already chosen',
-  );
-  assert.match(nodes, /counts below are the map's node totals at <b>Default<\/b>/);
-  // The same bar is on the oil screen, which the same settings also fill.
-  assert.ok(vm.runInContext(`wizard.extractionStep=3;renderWizard()`, c).includes('name="purity"'));
-
-  // A purity with no fixed layout starts empty and says why.
-  const c2 = ui();
-  guided(
-    c2,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='random';wizard.settings.distribution='original';`,
-  );
-  const random = vm.runInContext('renderWizard()', c2);
-  assert.match(random, /No preset for these settings/);
-  assert.match(random, /no fixed split to rearrange/);
-  assert.equal(
-    vm.runInContext(`JSON.stringify(wizard.extraction.nodes)`, c2),
-    '{}',
-    'nothing is invented',
-  );
-
-  // Nor does a resource-rich distribution, and that one names the seed.
-  const c3 = ui();
-  guided(
-    c3,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='pure';wizard.settings.distribution='advanced';`,
-  );
-  const rich = vm.runInContext('renderWizard()', c3);
-  assert.match(rich, /No preset for these settings/);
-  assert.match(rich, /a third apart from one seed to the next/);
-  assert.match(rich, /resource-rich distribution changes how many nodes/);
-  assert.equal(vm.runInContext(`JSON.stringify(wizard.extraction.nodes)`, c3), '{}');
-
-  // Counts already on screen under a world we have no table for are flagged as
-  // the default world's rather than quietly passed off as the user's.
-  vm.runInContext(`wizard.extraction=presetSurvey('pure',wizard.extraction);`, c3);
-  assert.match(vm.runInContext('renderWizard()', c3), /still the <b>map's totals at All Pure<\/b>/);
-});
-
-test('the survey can be emptied, so a hand counter is never correcting a preset', async () => {
-  const c = ui();
-  guided(
-    c,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='pure';wizard.extraction=presetSurvey('pure',{mark:2,clock:1},'original');wizard.extraction.used={'Iron Ore':500};`,
-  );
-  assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c),
-    127,
-    'starts filled',
-  );
-  // The button is offered on both counting screens, not only the one with ores.
-  for (const step of [2, 3]) {
-    vm.runInContext('wizard.extractionStep=' + step, c);
-    assert.match(vm.runInContext('renderWizard()', c), /data-node-reset/, 'step ' + step);
-  }
-  // Pressed for real, through the app's own click listener. The first version of
-  // this button was gated on confirm(), which a browser may answer false without
-  // ever showing a dialog — so the button did nothing and no test noticed. This
-  // one asks nothing and is undoable instead, and is exercised by being clicked.
-  await clickButton(c, 'data-node-reset');
-  const e = vm.runInContext('JSON.stringify(wizard.extraction)', c);
-  assert.equal(
-    e,
-    JSON.stringify({ mark: 2, clock: 1, nodes: {}, wells: {}, used: {} }),
-    'emptied but still Mk.2 at 100%',
-  );
-  // An empty survey is nobody's world, so the screen offers to fill it again.
-  assert.equal(matchingPreset(JSON.parse(e)), '', 'no preset claims an empty survey');
-  vm.runInContext('wizard.extractionStep=2', c);
-  const cleared = vm.runInContext('renderWizard()', c);
-  assert.match(cleared, /Fill in the counts below/);
-  // Nothing is lost by a misclick: the undo is offered in place of the reset.
-  assert.match(cleared, /data-node-undo/, 'undo offered');
-  assert.doesNotMatch(cleared, /data-node-reset/, 'and not both at once');
-  await clickButton(c, 'data-node-undo');
-  assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c), 127, 'put back');
-  assert.equal(
-    vm.runInContext(`wizard.extraction.used['Iron Ore']`, c),
-    500,
-    'including what was committed',
-  );
-  assert.equal(vm.runInContext('wizard.extractionUndo', c), null, 'and spent');
-  assert.match(vm.runInContext('renderWizard()', c), /data-node-reset/, 'reset offered again');
-
-  // Filling from the world settings is the other wholesale change, so it takes
-  // the undo with it rather than leaving a button that would undo the fill.
-  await clickButton(c, 'data-node-reset');
-  await clickButton(c, 'data-node-preset', { nodePreset: 'pure' });
-  assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c),
-    127,
-    'filled from the preset',
-  );
-  assert.equal(vm.runInContext('wizard.extractionUndo', c), null, 'undo spent by the fill');
-
-  // And leaving the survey does too, so the undo cannot outlive the screen.
-  await clickButton(c, 'data-node-reset');
-  vm.runInContext('leaveExtraction()', c);
-  assert.equal(vm.runInContext('wizard.extractionUndo', c), null, 'undo cleared on the way out');
-});
-
 test('a resource-rich world is described, never counted for the user', () => {
   // Direction is the only thing every published count of these worlds agrees
   // on, so it is the only thing the screen says. No numbers, and nothing filled.
   for (const d of ['basic', 'advanced', 'fossil']) {
     assert.ok(richShape[d], d + ' is described');
     assert.ok(!/[0-9]/.test(richShape[d]), d + ' promises no numbers');
-    const c = ui();
-    guided(
-      c,
-      `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='pure';wizard.settings.distribution='${d}';`,
-    );
-    const html = vm.runInContext('renderWizard()', c);
-    assert.match(html, /No preset for these settings/, d);
-    assert.ok(html.includes(richShape[d].slice(0, 40)), d + ' shape shown');
-    assert.match(html, /Which way it goes is consistent; how far is not/, d);
     assert.equal(
-      vm.runInContext('JSON.stringify(wizard.extraction.nodes)', c),
+      JSON.stringify(startingSurvey({ purity: 'pure', distribution: d }).nodes),
       '{}',
       d + ' fills nothing',
     );
@@ -1436,7 +1173,6 @@ test('a resource-rich world is described, never counted for the user', () => {
   // The default and shuffled worlds are not described this way: they are counted.
   for (const d of ['original', 'randomized']) assert.equal(richShape[d], undefined, d);
 });
-
 test('well yields do not survive the shuffle, so Random leaves the wells alone', () => {
   // A well is randomized as a whole, and the map's seventeen wells hold
   // different numbers of satellites, so whichever resource lands on the
@@ -1488,75 +1224,29 @@ test('Random shuffles where the nodes are, not how many of each there are', () =
   for (const d of ['basic', 'advanced', 'fossil'])
     for (const purity of presetPurities)
       assert.equal(knownWorld(purity, d), false, d + ' + ' + purity);
-
-  // Random with All Pure fills in, and says why it can.
-  const c = ui();
-  guided(
-    c,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='pure';wizard.settings.distribution='randomized';`,
-  );
-  const html = vm.runInContext('renderWizard()', c);
+  // Random with All Pure fills the ordinary nodes but not the wells; with the map's
+  // own split it fills nothing. (What the screen says about each: tests/ui/survey.test.mjs.)
+  const pure = startingSurvey({ purity: 'pure', distribution: 'randomized' });
+  assert.equal(pure.nodes['Iron Ore'].pure, 127, 'filled from the shuffle-proof totals');
+  assert.equal(JSON.stringify(pure.wells), '{}', 'nitrogen not filled under Random');
   assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c),
-    127,
-    'filled from the shuffle-proof totals',
-  );
-  assert.match(html, /node totals at <b>All Pure<\/b>/);
-  assert.match(html, /Random moves nodes around the map/);
-  // The shuffle carries ordinary nodes but not the wells, and says so.
-  assert.match(html, /Nitrogen wells are left for you/);
-  assert.equal(
-    vm.runInContext(`JSON.stringify(wizard.extraction.wells)`, c),
+    JSON.stringify(startingSurvey({ purity: 'vanilla', distribution: 'randomized' }).nodes),
     '{}',
-    'nitrogen not filled under Random',
-  );
-
-  // Random with the map's own split explains that only the split is missing.
-  const c2 = ui();
-  guided(
-    c2,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='vanilla';wizard.settings.distribution='randomized';`,
-  );
-  const split = vm.runInContext('renderWizard()', c2);
-  assert.match(split, /Only the purity split is missing/);
-  assert.match(split, /same number of nodes for each resource as the default map/);
-  assert.match(split, /If you actually chose All Pure, Average or All Impure/);
-  assert.equal(
-    vm.runInContext(`JSON.stringify(wizard.extraction.nodes)`, c2),
-    '{}',
-    'so nothing is filled in',
+    'the split is missing, so nothing is filled in',
   );
 });
-
 test('changing a world setting refills the counts, and leaves alone what it cannot know', () => {
-  const c = ui();
-  guided(
-    c,
-    `wizard.mode='extraction';wizard.extractionStep=2;wizard.settings.purity='vanilla';wizard.settings.distribution='original';`,
-  );
   // An oil well count is the user's own: the known table has none.
   const kept = blankExtraction();
   kept.wells = { 'Crude Oil': { impure: 0, normal: 6, pure: 0 } };
   kept.nodes = { 'Iron Ore': { impure: 39, normal: 42, pure: 46 } };
-  c.keptSurvey = kept;
-  vm.runInContext(
-    `wizard.extraction=keptSurvey;wizard.settings.purity='pure';wizard.extraction=presetSurvey('pure',wizard.extraction);`,
-    c,
-  );
-  assert.equal(
-    vm.runInContext(`wizard.extraction.wells['Crude Oil'].normal`, c),
-    6,
-    'the oil wells the user counted survive',
-  );
-  assert.equal(
-    vm.runInContext(`wizard.extraction.nodes['Iron Ore'].pure`, c),
-    127,
-    'and the rest is refilled',
-  );
-  assert.equal(vm.runInContext(`wizard.extraction.nodes['Iron Ore'].impure`, c), 0);
+  const e = presetSurvey('pure', kept);
+  assert.equal(e.wells['Crude Oil'].normal, 6, 'the oil wells the user counted survive');
+  assert.equal(e.nodes['Iron Ore'].pure, 127, 'and the rest is refilled');
+  assert.equal(e.nodes['Iron Ore'].impure, 0);
   // Nitrogen is a well, so it is filled there rather than as a node.
-  assert.equal(vm.runInContext(`wizard.extraction.nodes['Nitrogen Gas']`, c), undefined);
-  assert.equal(vm.runInContext(`wizard.extraction.wells['Nitrogen Gas'].pure`, c), 45);
-  // And the bar now reports the world it matches.
-  assert.match(vm.runInContext('renderWizard()', c), /node totals at <b>All Pure<\/b>/);
+  assert.equal(e.nodes['Nitrogen Gas'], undefined);
+  assert.equal(e.wells['Nitrogen Gas'].pure, 45);
+  // And the counts now match that world, which the screen names.
+  assert.equal(matchingPreset(e), 'pure');
 });

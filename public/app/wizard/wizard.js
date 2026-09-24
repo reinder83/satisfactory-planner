@@ -2,7 +2,8 @@
 // each step, reading the form back into the draft, moving between steps and
 // calculating the Review preview. The draft is the `wizard` object in
 // session.js (set with setWizard). The guided start (guided.js) and the resource
-// survey (extraction.js) edit the same draft and are drawn from renderWizard.
+// survey (extraction.js) edit the same draft; renderWizard draws the guided start,
+// and the survey is a component (ui/pages/SurveyPage.vue).
 // Events: form submit is in events/profiles.js (Continue, and "Create profile"
 // on step 5, which posts /api/profiles); step buttons are in events/views.js.
 import { browserMode } from '../../browser-api.js';
@@ -24,7 +25,6 @@ import { html, raw } from '../html.js';
 import { setWizard, wizard, workspace } from '../session.js';
 import { browserNotice, header, render } from '../shell.js';
 import { draftOptions } from '../views/calculated.js';
-import { renderExtraction } from './extraction.js';
 import { field, help, option, power, selectField } from './fields.js';
 import { guidedFlow, renderGuided } from './guided.js';
 import { altPickerHtml } from './recipes.js';
@@ -246,8 +246,9 @@ export function startWizard(saveId = null) {
   navigate('wizard');
 }
 
-// HTML for the wizard view (shell.js calls it for #wizard). Delegates to the
-// survey or the guided start when those are active; otherwise draws the current
+// HTML for the wizard view (shell.js calls it for #wizard, except in the survey,
+// which is ui/pages/SurveyPage.vue). Delegates to the guided start when that is
+// active; otherwise draws the current
 // five-step screen inside #wizard-form. Every input's name is the key readWizard
 // reads; where a label and a setting differ, readWizard does the conversion.
 export function renderWizard() {
@@ -258,7 +259,6 @@ export function renderWizard() {
         ><a class="btn" href="#profiles">Existing saves</a>`,
     );
   const w = wizard;
-  if (w.mode === 'extraction') return renderExtraction();
   // Past its last question (after calculating) the guided start shows this
   // wizard's Review, so both modes end on the same screen.
   if (w.mode === 'guided' && w.guidedStep <= guidedFlow().length) return renderGuided();
