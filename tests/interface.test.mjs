@@ -169,7 +169,7 @@ test('every page escapes user text exactly once', () => {
     c,
   );
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
-  const shared = ['shell', 'renderStorage', 'renderBackup', 'renderProfiles', 'renderAccount'];
+  const shared = ['renderStorage', 'renderBackup', 'renderProfiles', 'renderAccount'];
   const original = render([...shared, 'renderPlan', 'renderFactories', 'renderResources']);
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
   const calculatedPages = render([
@@ -228,7 +228,6 @@ test('every page escapes user text exactly once', () => {
   const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
   for (const [route, page] of all.filter(([r]) =>
     [
-      'shell',
       'renderProfiles',
       'renderCalculatedPlan',
       'renderWizard 1',
@@ -568,26 +567,22 @@ test('every build-plan step carries an icon for the kind of work it is', () => {
 
 test('ADA comments on the plan from the sidebar and can be muted', () => {
   const c = ui();
-  const panel = vm.runInContext('shell()', c);
-  assert.match(panel, /class="ada" data-tone="calm"/);
-  assert.match(panel, /Artificial Directory and Assistant/);
-  assert.match(panel, /data-ada-next/);
+  // What the panel shows; its markup is covered by tests/ui/shell.test.mjs.
+  const ada = () => JSON.parse(vm.runInContext('JSON.stringify(adaView())', c));
+  const panel = ada();
+  assert.equal(panel.tone, 'calm');
+  assert.equal(panel.name, '', 'a normal remark has no fault name');
   assert.match(
-    panel,
+    panel.text,
     /Zero of \d+ steps ticked for Phase 3/,
     'the opening line is the most relevant one',
   );
-  // A renamed step is the user's own text wherever ADA repeats it.
+  // A renamed step is the user's own text wherever ADA repeats it (the component escapes it).
   vm.runInContext(
     "state.taskEdits={titles:{[planTasks()[0].id]:'Weld the <boat>'}};adaSignature='';",
     c,
   );
-  const renamed = vm.runInContext('shell()', c);
-  assert.match(renamed, /Weld the &lt;boat&gt;/);
-  assert.ok(
-    !renamed.includes('<boat>'),
-    'ADA speaks the user’s text escaped, like every other name',
-  );
+  assert.match(ada().text, /Weld the <boat>/);
   // Cycling walks the whole list and wraps round to the first line.
   const seen = [...Array(8)].map((_, i) =>
     vm.runInContext('adaIndex=' + i + ';adaCurrent().text', c),
@@ -599,10 +594,10 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
     "calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};calculated.stages['3'].feasible=false;calculated.stages['3'].reason='Iron Ore budget exceeded.';adaSignature='';",
     c,
   );
-  const draft = vm.runInContext('shell()', c);
-  assert.match(draft, /data-tone="warn"/);
+  const draft = ada();
+  assert.equal(draft.tone, 'warn');
   assert.match(
-    draft,
+    draft.text,
     /planning draft, not a plan[^]*Iron Ore budget exceeded\./,
     'ADA repeats the planner’s own reason',
   );
@@ -624,29 +619,24 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   );
   // Prod the badge five times and the corporate voice slips.
   vm.runInContext('adaIndex=0;for(let i=0;i<4;i++)adaPoke();', c);
-  assert.ok(!vm.runInContext('shell()', c).includes('???'), 'four prods are within tolerance');
+  assert.notEqual(ada().name, '???', 'four prods are within tolerance');
   vm.runInContext('adaPoke()', c);
-  const fault = vm.runInContext('shell()', c);
-  assert.match(fault, /data-tone="fault"/);
-  assert.match(fault, /<b>\?\?\?<\/b>/);
-  assert.match(fault, /Transmission fault/);
-  const again = vm.runInContext('adaPoke();shell()', c);
+  const fault = ada();
+  assert.equal(fault.tone, 'fault');
+  assert.equal(fault.name, '???');
+  vm.runInContext('adaPoke()', c);
   assert.notEqual(
     vm.runInContext('adaCurrent().text', c),
     vm.runInContext('makeFault(1).text', c),
     'prodding again advances the transmission',
   );
-  assert.match(again, /data-tone="fault"/);
+  assert.equal(ada().tone, 'fault');
   // Anything else hands the terminal back, and no timer is left running.
   vm.runInContext('adaClearFault();', c);
-  const back = vm.runInContext('shell()', c);
-  assert.ok(!back.includes('???') && back.includes('Artificial Directory and Assistant'));
-  // Muted: no remark, and a way back.
+  assert.equal(ada().name, '');
+  // Muted: no remark.
   vm.runInContext('adaMuted=true;', c);
-  const muted = vm.runInContext('shell()', c);
-  assert.match(muted, /ADA muted/);
-  assert.match(muted, /data-ada-mute="off"/);
-  assert.ok(!muted.includes('data-ada-next'), 'a muted assistant says nothing');
+  assert.deepEqual(ada(), { muted: true });
   vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", c);
 });
 

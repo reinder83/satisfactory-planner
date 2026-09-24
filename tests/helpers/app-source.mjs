@@ -6,10 +6,14 @@
 // (depth-first, dependencies before dependents) and strips the import/export syntax.
 //
 // Imports of the shared modules below are not followed: each test supplies their
-// exports as VM globals, as it did when the app was a single file.
+// exports as VM globals, as it did when the app was a single file. Nor is the Vue layer
+// (the vue package and public/app/ui/): these tests draw pages through the legacy render
+// functions, so every name imported from it becomes a do-nothing function. Components are
+// tested with Vitest in tests/ui/ instead.
 import fs from 'node:fs';
 
 const PUBLIC = new URL('../../public/', import.meta.url);
+const UI = new URL('app/ui/', PUBLIC).href;
 const SHARED = new Set([
   'browser-api.js',
   'preferences.js',
@@ -22,18 +26,26 @@ const IMPORT = /^import\s(?:[^;]*?\sfrom\s)?'([^']+)';\r?\n/gm;
 export function appSource() {
   const seen = new Set();
   const ordered = [];
+  const stubs = new Set();
+  // A Vue-layer file is not included, but the plain modules it imports are, so that
+  // module state the components read (ADA's, for one) is there for the tests.
   const visit = url => {
     if (seen.has(url.href)) return;
     seen.add(url.href);
     const text = fs.readFileSync(url, 'utf8');
-    for (const [, specifier] of text.matchAll(IMPORT)) {
+    const ui = url.href.startsWith(UI);
+    for (const [statement, specifier] of text.matchAll(IMPORT)) {
+      if (specifier === 'vue') continue;
       const dependency = new URL(specifier, url);
+      if (dependency.href.startsWith(UI) && !ui)
+        for (const name of statement.match(/\{([^}]*)\}/)?.[1].split(',') || [])
+          if (name.trim()) stubs.add(name.trim());
       if (!SHARED.has(dependency.href.slice(PUBLIC.href.length))) visit(dependency);
     }
-    ordered.push(text.replace(IMPORT, '').replace(/^export /gm, ''));
+    if (!ui) ordered.push(text.replace(IMPORT, '').replace(/^export /gm, ''));
   };
   visit(new URL('app.js', PUBLIC));
-  const source = ordered
+  const source = [...[...stubs].map(name => `function ${name}() {}`), ...ordered]
     .join('\n')
     .replaceAll(
       'import.meta.url',

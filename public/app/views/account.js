@@ -5,6 +5,7 @@ import { html } from '../html.js';
 import { authMode, setState, workspace } from '../session.js';
 import { header } from '../shell.js';
 import { renderBrowserBackup } from './backup.js';
+import { unmountShell } from '../ui/mount.js';
 import { field } from '../wizard/fields.js';
 
 // HTML for the #auth-form (submitted in events/profiles.js). `mode` is 'setup' (turn
@@ -92,6 +93,7 @@ export function renderAccount() {
 // is offered only when the server allows registration. Clears the open profile's state.
 export function renderSignedOut() {
   setState(null);
+  unmountShell();
   $('#app').innerHTML = String(
     html`<main class="signin">
       <div class="brand"><img src="./favicon.svg" alt="" />Project Assembly</div>

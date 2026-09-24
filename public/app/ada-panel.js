@@ -1,11 +1,9 @@
 // ADA, the sidebar assistant: remarks, muting and the poke easter egg.
 // This module gathers facts about the open profile and renders the panel; the remark
-// texts themselves are chosen in ../ada.js. Its buttons (data-ada-next, data-ada-mute,
-// clicks on the ◈ mark) are handled in events/views.js.
+// texts themselves are chosen in ../ada.js. The panel and its buttons are ui/AdaPanel.vue.
 import { adaEncore, adaRemarks, adaFault as makeFault } from '../ada.js';
 import { browserMode } from '../browser-api.js';
 import { num, slug } from './format.js';
-import { html } from './html.js';
 import {
   calcStage,
   calculated,
@@ -198,34 +196,16 @@ export function adaPoke() {
   render();
 }
 
-// HTML for the ADA panel in the sidebar, drawn by shell() on every render. Any error
-// yields '' so the assistant can never break the page around it.
-export function adaPanel() {
+// What the ADA panel shows, drawn by ui/AdaPanel.vue: { muted: true } while muted,
+// otherwise the current remark's { tone, name, text } (name is set only for a fault line),
+// or null when there is nothing to say. Any error yields null, so the assistant can never
+// break the page around it.
+export function adaView() {
   try {
-    if (adaMuted)
-      return html`<div class="ada is-muted">
-        <span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span
-        ><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button>
-      </div>`;
+    if (adaMuted) return { muted: true };
     const r = adaCurrent();
-    if (!r) return '';
-    return html`<section class="ada" data-tone="${r.tone}" aria-label="ADA">
-      <div class="ada-head">
-        <span class="ada-mark" aria-hidden="true">◈</span>
-        <div>
-          <b>${r.name || 'ADA'}</b>
-          <div class="eyebrow">
-            ${r.name ? 'Transmission fault' : 'Artificial Directory and Assistant'}
-          </div>
-        </div>
-      </div>
-      <p class="ada-line" id="ada-line" role="status" aria-live="polite">${r.text}</p>
-      <div class="ada-tools">
-        <button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button
-        ><button class="btn quiet" type="button" data-ada-mute="on">Mute</button>
-      </div>
-    </section>`;
+    return r ? { tone: r.tone, name: r.name || '', text: r.text } : null;
   } catch {
-    return '';
+    return null;
   }
 }

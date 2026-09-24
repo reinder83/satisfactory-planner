@@ -8,23 +8,12 @@
 // Shared UI state lives in session.js and is changed through its setX() setters.
 
 // Registration order matters where listeners share an event type: app.js imports this
-// module first, and tests/app-modules.test.mjs pins the order. In order: ADA badge
-// click, main page click, change, search input, supply input, supply keydown, supply
+// module first, and tests/app-modules.test.mjs pins the order. In order: main page
+// click, change, search input, supply input, supply keydown, supply
 // focusout, add-task submit, editor submit, image error (capture), hashchange, #detail
 // backdrop click, beforeunload, then the profiles/wizard/account click.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { bayCapacity } from '../../state.js';
-import {
-  adaClearFault,
-  adaCurrent,
-  adaFault,
-  adaIndex,
-  adaMuted,
-  adaPoke,
-  adaStore,
-  setAdaIndex,
-  setAdaMuted,
-} from '../ada-panel.js';
 import {
   allowSwitch,
   downloadJson,
@@ -100,15 +89,7 @@ import {
   wizardError,
 } from '../wizard/wizard.js';
 
-// The badge is decoration, not a control: it is hidden from assistive software
-// and nothing is only reachable through it.
-// Click 1 of 3 on document: poking ADA's ◈ badge (adaPoke counts rapid pokes and, at
-// five, stages a "transmission fault" remark). Ignored while ADA is muted.
-document.addEventListener('click', e => {
-  if (e.target.closest('.ada-mark') && !adaMuted) adaPoke();
-});
-
-// Click 2 of 3: buttons and links on the planner pages.
+// Click 1 of 2: buttons and links on the planner pages.
 // Index: dialogs (close, factory, container), storage room (complete room, floor tabs),
 // ADA panel (another remark, mute), edit-mode toggles, build-plan step editing (move,
 // edit, cancel, remove, restore), factory groups (remove, unassign), storage layout
@@ -154,32 +135,6 @@ document.addEventListener('click', async e => {
   if (target.dataset.floor) {
     setFloor(target.dataset.floor);
     setQuery('');
-    render();
-  }
-  // --- ADA panel (sidebar) ---
-  // "Another remark": end a transmission fault, or show the next remark in place without
-  // redrawing the page.
-  if (target.hasAttribute('data-ada-next')) {
-    // A fault redraws the whole panel, since the name above the line changes too.
-    if (adaFault) {
-      adaClearFault();
-      render();
-    } else {
-      setAdaIndex(adaIndex + 1);
-      const r = adaCurrent(),
-        line = $('#ada-line');
-      if (r && line) {
-        line.textContent = r.text;
-        const host = line.closest('.ada');
-        if (host) host.dataset.tone = r.tone;
-      }
-    }
-  }
-  // ADA's "Mute" / "Unmute": remember the choice in localStorage (adaStore) and redraw.
-  if (target.dataset.adaMute) {
-    setAdaMuted(target.dataset.adaMute === 'on');
-    adaStore();
-    adaClearFault();
     render();
   }
   // --- Edit-mode toggles (view state only, nothing is saved) ---
@@ -391,21 +346,6 @@ document.addEventListener('change', async e => {
     }
   }
   // --- Page controls ---
-  // The "Working phase" select in the sidebar: save the profile's selected phase, clear
-  // the search and redraw; on failure it shows the saved phase again. There is no
-  // unsaved-notes check, so an unsaved phase note edit is lost in the redraw.
-  if (el.id === 'phase-picker') {
-    el.disabled = true;
-    try {
-      await save({ type: 'phase', value: el.value });
-      setQuery('');
-      render();
-    } catch {
-      el.value = phase();
-    } finally {
-      el.disabled = false;
-    }
-  }
   // The factory status filter on the factories page (view state only).
   if (el.id === 'factory-filter') {
     setFactoryFilter(el.value);
@@ -896,7 +836,7 @@ window.addEventListener('beforeunload', e => {
   }
 });
 
-// Click 3 of 3 on document (profiles.js adds one more after it): the saves/profiles
+// Click 2 of 2 on document (profiles.js adds one more after it): the saves/profiles
 // page, the profile wizard and the account page.
 // Index: new save / profile, calculated factory and group build-order dialogs, the
 // alternate recipe picker, round up, duplicate / share / remove / open a profile,

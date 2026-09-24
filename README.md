@@ -188,15 +188,17 @@ The preserved original handbook retains its previous assumptions and corrected r
 
 Node.js 22 or newer is sufficient. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
 
-The source is plain, readable ES modules; `npm start` serves `public/` as it is, so development needs no build step and `npm test` needs no installed packages. The two dev dependencies are Prettier (formatting) and esbuild (the release build):
+The frontend is readable ES modules and Vue components (`public/app/ui/`). `npm start` serves `public/` as it is: outside production it runs Vite inside the planner's own server, which compiles the `.vue` files on request and reloads the browser on edits, so there is still no separate build or dev server to run. Install the packages first:
 
 ```sh
-npm ci            # installs Prettier and esbuild
+npm ci            # Vue, Vite, Vitest, Prettier and esbuild
 npm run check     # formatting; `npm run format` fixes it
-npm test
+npm test          # node --test for the logic and pages, Vitest for the components
 npm start
 npm run build     # minified editions in dist/web (Docker) and dist/satisfactory-planner (Pages)
 ```
+
+With `NODE_ENV=production` (as in the Docker image) the server serves `public/` as plain files and never loads Vite; that `public/` is the `dist/web` build.
 
 The frontend lives in `public/`: `app.js` is the entry point and `public/app/` holds the UI modules (one per view under `views/`, the profile wizard under `wizard/`, delegated event handlers under `events/`). The release build bundles `public/app/` into a single minified `app.js` and minifies the other scripts and the stylesheet file by file. The Docker image runs that build in its first stage and serves `dist/web`; the Pages workflow publishes `dist/satisfactory-planner`. The server-side modules in the image (`server.mjs`, `planner.mjs`, …) are not minified.
 

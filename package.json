@@ -9,13 +9,21 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && vitest run",
     "check": "prettier --check .",
     "format": "prettier --write .",
     "build": "node build.mjs"
   },
   "devDependencies": {
-    "esbuild": "0.25.10",
-    "prettier": "3.6.2"
+    "@vitejs/plugin-vue": "6.0.9",
+    "@vue/test-utils": "2.5.1",
+    "esbuild": "0.28.2",
+    "happy-dom": "20.14.5",
+    "prettier": "3.6.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  },
+  "dependencies": {
+    "vue": "3.5.43"
   }
 }

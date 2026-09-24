@@ -93,7 +93,7 @@ Keep the deal the feature rests on: the joke is in the tone, never in the number
 
 ## Development and verification
 
-Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The application has no frontend framework. Source files stay readable: `npm start` serves `public/` unbuilt, and only `build.mjs` minifies, for publishing.
+Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The frontend is being migrated to Vue 3 in stages; see "Vue migration" in `public/AGENTS.md`. Source files stay readable: `npm start` serves `public/` unbuilt, compiling the `.vue` files through Vite in middleware mode (see `devFrontend` in `server.mjs`) unless `NODE_ENV=production`, and only `build.mjs` minifies, for publishing.
 
 ```sh
 npm ci
@@ -103,7 +103,7 @@ npm test
 npm run build
 ```
 
-`npm run check` is Prettier; run `npm run format` rather than hand-compacting code. `npm test` needs no installed packages. The VM-based interface tests load the `public/app/` modules through `tests/helpers/app-source.mjs`, which concatenates them in ES evaluation order: top-level names must stay unique across those modules, and a module changes another module's `let` only through that module's exported setter.
+`npm run check` is Prettier; run `npm run format` rather than hand-compacting code. `npm test` runs `node --test` on `tests/*.test.mjs` and then Vitest on the component tests in `tests/ui/`; it needs `npm ci`. The VM-based interface tests load the `public/app/` modules through `tests/helpers/app-source.mjs`, which concatenates them in ES evaluation order: top-level names must stay unique across those modules, and a module changes another module's `let` only through that module's exported setter. The harness leaves out the Vue layer (`vue` and `public/app/ui/`), follows its imports of plain modules, and replaces the names plain modules import from it with do-nothing functions.
 
 The server defaults to port 8080. Set `HOST=127.0.0.1` for a local-only preview and `DATA_DIR` to an isolated temporary folder for experiments. Environment-variable syntax differs by shell. Check whether an existing server is running before starting another; never terminate unrelated processes.
 
