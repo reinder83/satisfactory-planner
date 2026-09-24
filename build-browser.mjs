@@ -1,35 +1,96 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {catalog} from './planner.mjs';
-const root=path.dirname(fileURLToPath(import.meta.url));
-const out=path.join(root,'dist','satisfactory-planner');
-if(path.dirname(path.dirname(out))!==root)throw Error('Invalid build directory');
-await fs.rm(path.join(root,'dist'),{recursive:true,force:true});
-await fs.mkdir(out,{recursive:true});
+import { fileURLToPath } from 'node:url';
+import { catalog } from './planner.mjs';
+const root = path.dirname(fileURLToPath(import.meta.url));
+// Source edits for the browser edition must all apply, or the build would ship server-only code.
+const replaceOnce = (text, from, to) => {
+  if (!text.includes(from)) throw Error('Browser build: source no longer contains ' + from);
+  return text.replace(from, to);
+};
+const out = path.join(root, 'dist', 'satisfactory-planner');
+if (path.dirname(path.dirname(out)) !== root) throw Error('Invalid build directory');
+await fs.rm(path.join(root, 'dist'), { recursive: true, force: true });
+await fs.mkdir(out, { recursive: true });
 // Explicit allowlist: server data, credentials and private handbook targets never enter the public build.
-const files=['app.js','ada.js','style.css','index.html','favicon.svg','preferences.js','progression.js','progression.json','state.js','transfer.js','browser-api.js','browser-store.js'];
-for(const file of files)await fs.copyFile(path.join(root,'public',file),path.join(out,file));
-await fs.cp(path.join(root,'public/icons'),path.join(out,'icons'),{recursive:true});
-await fs.cp(path.join(root,'public/fonts'),path.join(out,'fonts'),{recursive:true});
-let html=await fs.readFile(path.join(out,'index.html'),'utf8');
-html=html.replaceAll('href="/','href="./').replaceAll('src="/','src="./').replace('<script type="module"','<script src="./browser-mode.js"></script><script type="module"');
-await fs.writeFile(path.join(out,'index.html'),html);
-await fs.writeFile(path.join(out,'browser-mode.js'),'globalThis.PLANNER_BROWSER=true;\n');
-const handbook=JSON.parse(await fs.readFile(path.join(root,'public/plan.json'),'utf8'));
-await fs.writeFile(path.join(out,'plan.json'),JSON.stringify({version:'public-template-v1',storage:handbook.storage,storageTasks:[],phases:{3:[],4:[],5:[],post:[]},factories:[],completion:[],deliveries:[],resources:{},capacities:{},plans:{},power:{},knownChecks:{},sources:[]}));
-await fs.copyFile(path.join(root,'recipes.json'),path.join(out,'recipes.json'));
-await fs.writeFile(path.join(out,'catalog.json'),JSON.stringify(catalog()));
-let planner=await fs.readFile(path.join(root,'planner.mjs'),'utf8');
-planner=planner.replace("import fs from 'node:fs';",'').replace("from './public/preferences.js'","from './preferences.js'").replace("JSON.parse(fs.readFileSync(new URL('./recipes.json',import.meta.url)))","await (await fetch(new URL('./recipes.json',import.meta.url))).json()");
-await fs.writeFile(path.join(out,'planner.mjs'),planner);
-let optimizer=await fs.readFile(path.join(root,'optimizer.mjs'),'utf8');
-optimizer=optimizer.replace("'./vendor/highs.cjs'","'./highs.mjs'").replace('await loadHighs()','await loadHighs({locateFile:name=>new URL(name,import.meta.url).href})');
-await fs.writeFile(path.join(out,'optimizer.mjs'),optimizer);
-await fs.writeFile(path.join(out,'highs.mjs'),(await fs.readFile(path.join(root,'vendor/highs.cjs'),'utf8'))+'\nexport default Module;\n');
-await fs.copyFile(path.join(root,'vendor/highs.wasm'),path.join(out,'highs.wasm'));
-await fs.copyFile(path.join(root,'vendor/HIGHS-LICENSE'),path.join(out,'HIGHS-LICENSE'));
-await fs.writeFile(path.join(out,'calculator-worker.js'),"const ready=import('./planner.mjs');\nself.onmessage=async({data})=>{try{const {calculate}=await ready;self.postMessage({id:data.id,result:calculate(data.settings,phase=>self.postMessage({id:data.id,phase}))});}catch(e){self.postMessage({id:data.id,error:e.message});}};\n");
-await fs.writeFile(path.join(root,'dist','.nojekyll'),'');
-await fs.writeFile(path.join(root,'dist','index.html'),'<!doctype html><meta charset="utf-8"><title>Satisfactory Planner</title><a href="./satisfactory-planner/">Open Satisfactory Planner</a>');
+const files = [
+  'app.js',
+  'ada.js',
+  'style.css',
+  'index.html',
+  'favicon.svg',
+  'preferences.js',
+  'progression.js',
+  'progression.json',
+  'state.js',
+  'transfer.js',
+  'browser-api.js',
+  'browser-store.js',
+];
+for (const file of files) await fs.copyFile(path.join(root, 'public', file), path.join(out, file));
+await fs.cp(path.join(root, 'public/icons'), path.join(out, 'icons'), { recursive: true });
+await fs.cp(path.join(root, 'public/fonts'), path.join(out, 'fonts'), { recursive: true });
+let html = await fs.readFile(path.join(out, 'index.html'), 'utf8');
+html = html
+  .replaceAll('href="/', 'href="./')
+  .replaceAll('src="/', 'src="./')
+  .replace(
+    '<script type="module"',
+    '<script src="./browser-mode.js"></script><script type="module"',
+  );
+await fs.writeFile(path.join(out, 'index.html'), html);
+await fs.writeFile(path.join(out, 'browser-mode.js'), 'globalThis.PLANNER_BROWSER=true;\n');
+const handbook = JSON.parse(await fs.readFile(path.join(root, 'public/plan.json'), 'utf8'));
+await fs.writeFile(
+  path.join(out, 'plan.json'),
+  JSON.stringify({
+    version: 'public-template-v1',
+    storage: handbook.storage,
+    storageTasks: [],
+    phases: { 3: [], 4: [], 5: [], post: [] },
+    factories: [],
+    completion: [],
+    deliveries: [],
+    resources: {},
+    capacities: {},
+    plans: {},
+    power: {},
+    knownChecks: {},
+    sources: [],
+  }),
+);
+await fs.copyFile(path.join(root, 'recipes.json'), path.join(out, 'recipes.json'));
+await fs.writeFile(path.join(out, 'catalog.json'), JSON.stringify(catalog()));
+let planner = await fs.readFile(path.join(root, 'planner.mjs'), 'utf8');
+planner = replaceOnce(planner, "import fs from 'node:fs';", '');
+planner = replaceOnce(planner, "from './public/preferences.js'", "from './preferences.js'");
+planner = replaceOnce(
+  planner,
+  "JSON.parse(fs.readFileSync(new URL('./recipes.json', import.meta.url)))",
+  "await (await fetch(new URL('./recipes.json',import.meta.url))).json()",
+);
+await fs.writeFile(path.join(out, 'planner.mjs'), planner);
+let optimizer = await fs.readFile(path.join(root, 'optimizer.mjs'), 'utf8');
+optimizer = replaceOnce(optimizer, "'./vendor/highs.cjs'", "'./highs.mjs'");
+optimizer = replaceOnce(
+  optimizer,
+  'await loadHighs()',
+  'await loadHighs({locateFile:name=>new URL(name,import.meta.url).href})',
+);
+await fs.writeFile(path.join(out, 'optimizer.mjs'), optimizer);
+await fs.writeFile(
+  path.join(out, 'highs.mjs'),
+  (await fs.readFile(path.join(root, 'vendor/highs.cjs'), 'utf8')) + '\nexport default Module;\n',
+);
+await fs.copyFile(path.join(root, 'vendor/highs.wasm'), path.join(out, 'highs.wasm'));
+await fs.copyFile(path.join(root, 'vendor/HIGHS-LICENSE'), path.join(out, 'HIGHS-LICENSE'));
+await fs.writeFile(
+  path.join(out, 'calculator-worker.js'),
+  "const ready=import('./planner.mjs');\nself.onmessage=async({data})=>{try{const {calculate}=await ready;self.postMessage({id:data.id,result:calculate(data.settings,phase=>self.postMessage({id:data.id,phase}))});}catch(e){self.postMessage({id:data.id,error:e.message});}};\n",
+);
+await fs.writeFile(path.join(root, 'dist', '.nojekyll'), '');
+await fs.writeFile(
+  path.join(root, 'dist', 'index.html'),
+  '<!doctype html><meta charset="utf-8"><title>Satisfactory Planner</title><a href="./satisfactory-planner/">Open Satisfactory Planner</a>',
+);
 console.log('Browser edition built in dist/satisfactory-planner');

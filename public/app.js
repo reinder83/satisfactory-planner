@@ -1,827 +1,2597 @@
-import {browserMode,browserRequest} from './browser-api.js';
-import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor,guidedQuestions,guidedStandingQuestion,guidedTopupItems,GUIDED_TOPUP_RATE,tutorialKeys,purities3,minerMarks,clockChoices,minedResources,blankCounts,blankExtraction,nodeYield,wellYield,resourcePool,extractionLimits,nodePresets,presetSurvey,matchingPreset,startingSurvey,knownWorld,presetPurities,richShape} from './preferences.js';
-import {progression} from './progression.js';
-import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from './state.js';
-import {adaRemarks,adaEncore,adaFault as makeFault} from './ada.js';
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
-const num3=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:3});
-const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-const plural=(n,word)=>num(n)+' '+word+(n===1?'':'s');
+import { browserMode, browserRequest } from './browser-api.js';
+import {
+  droneFuels,
+  storageOptions,
+  distributions,
+  purities,
+  powerOptions,
+  resourceDefaults,
+  helpText,
+  wantsStorage,
+  storageRateFor,
+  guidedQuestions,
+  guidedStandingQuestion,
+  guidedTopupItems,
+  GUIDED_TOPUP_RATE,
+  tutorialKeys,
+  purities3,
+  minerMarks,
+  clockChoices,
+  minedResources,
+  blankCounts,
+  blankExtraction,
+  nodeYield,
+  wellYield,
+  resourcePool,
+  extractionLimits,
+  nodePresets,
+  presetSurvey,
+  matchingPreset,
+  startingSurvey,
+  knownWorld,
+  presetPurities,
+  richShape,
+} from './preferences.js';
+import { progression } from './progression.js';
+import {
+  carryOptions,
+  pickedRecipeUnlocks,
+  bayCapacity,
+  bayOfSlot,
+  slotPosition,
+} from './state.js';
+import { adaRemarks, adaEncore, adaFault as makeFault } from './ada.js';
+const $ = s => document.querySelector(s);
+const esc = s =>
+  String(s ?? '').replace(
+    /[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+const num = n => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const num3 = n => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+const slug = s =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+const plural = (n, word) => num(n) + ' ' + word + (n === 1 ? '' : 's');
 let progressionData;
-let workspace,currentSave,currentProfile,calculated=null,wizard=null,authMode='login';
-const ADA_KEY='planner-ada';
-let adaIndex=0,adaSignature='',adaMuted=adaStored(),adaFault=null,adaFaultTimer,adaPokes=0,adaPokedAt=0;
-let basePlan,plan,state,view='plan',query='',floor='ground',factoryFilter='all',hideDone=false,activeDetail=null,pending=0,toastTimer,layoutEditing=false,planEditing=false,editingTask=null,factoryEditing=false;
+let workspace,
+  currentSave,
+  currentProfile,
+  calculated = null,
+  wizard = null,
+  authMode = 'login';
+const ADA_KEY = 'planner-ada';
+let adaIndex = 0,
+  adaSignature = '',
+  adaMuted = adaStored(),
+  adaFault = null,
+  adaFaultTimer,
+  adaPokes = 0,
+  adaPokedAt = 0;
+let basePlan,
+  plan,
+  state,
+  view = 'plan',
+  query = '',
+  floor = 'ground',
+  factoryFilter = 'all',
+  hideDone = false,
+  activeDetail = null,
+  pending = 0,
+  toastTimer,
+  layoutEditing = false,
+  planEditing = false,
+  editingTask = null,
+  factoryEditing = false;
 // A profile records the phase it was created for. Earlier phases are already
 // behind the user, so their steps and targets are not theirs to build.
-const startPhase=()=>calculated?String(calculated.settings?.phase||'1'):'3';
-const phase=()=>{const p=state.settings.phase;return p!=='post'&&Number(p)<Number(startPhase())?startPhase():p;};
-const stage=()=>phase()==='post'?'5':phase();
-const phaseOptions=()=>!currentSave.id?['1','2','3','4','5','post']:[...['1','2','3','4','5'].filter(p=>Number(p)>=Number(startPhase())),'post'];
-const fromStart=stages=>Object.entries(stages||{}).filter(([ph])=>Number(ph)>=Number(startPhase()));
-const checked=id=>!!state.checks[id];
-const doneAttr=id=>checked(id)?'checked':'';
-const phaseLabel=p=>p==='post'?'Post Phase 5':'Phase '+p;
-function toast(message,error=false){const el=$('#toast');el.textContent=message;el.className='show'+(error?' error':'');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.className='',error?9000:3500);}
-async function request(path,options={}){if(browserMode&&path.startsWith('/api/'))return browserRequest(path,options);const r=await fetch(browserMode?new URL('.'+path,import.meta.url):path,{cache:'no-store',...options});let data;try{data=await r.json();}catch{throw new Error('The server returned an unreadable response.');}if(!r.ok)throw new Error(data.error||'Request failed.');return data;}
-let writeQueue=Promise.resolve();
-function save(op){
- const scope={...scopeHeaders()};
- pending++;saveIndicator();
- const run=writeQueue.then(async()=>{const next=await request('/api/update',{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...scope},body:JSON.stringify(op)});if(scope['X-Save-Id']===currentSave.id&&scope['X-Profile-Id']===currentProfile.id)state=next;return next;});
- writeQueue=run.catch(()=>{});
- return run.catch(e=>{toast(e.message,true);throw e;}).finally(()=>{pending--;saveIndicator();});
+const startPhase = () => (calculated ? String(calculated.settings?.phase || '1') : '3');
+const phase = () => {
+  const p = state.settings.phase;
+  return p !== 'post' && Number(p) < Number(startPhase()) ? startPhase() : p;
+};
+const stage = () => (phase() === 'post' ? '5' : phase());
+const phaseOptions = () =>
+  !currentSave.id
+    ? ['1', '2', '3', '4', '5', 'post']
+    : [...['1', '2', '3', '4', '5'].filter(p => Number(p) >= Number(startPhase())), 'post'];
+const fromStart = stages =>
+  Object.entries(stages || {}).filter(([ph]) => Number(ph) >= Number(startPhase()));
+const checked = id => !!state.checks[id];
+const doneAttr = id => (checked(id) ? 'checked' : '');
+const phaseLabel = p => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
+function toast(message, error = false) {
+  const el = $('#toast');
+  el.textContent = message;
+  el.className = 'show' + (error ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.className = ''), error ? 9000 : 3500);
 }
-function saveIndicator(){const el=$('#saved');if(el)el.textContent=pending?'Saving…':browserMode?'Saved in this browser':'Saved on server';}
-function taskEditsState(){const e=state?.taskEdits||{};return {order:e.order||{},removed:e.removed||[],titles:e.titles||{},bodies:e.bodies||{},links:e.links||{}};}
-function applyTaskEdits(base){
- const e=taskEditsState(),removed=new Set(e.removed);
- const visible=base.filter(t=>!removed.has(t.id)).map(t=>({...t,title:e.titles[t.id]||t.title,body:e.bodies[t.id]||t.body}));
- const ord=e.order[phase()];
- if(!ord?.length)return visible;
- const pos=new Map(ord.map((id,i)=>[id,i]));
- return [...visible.filter(t=>pos.has(t.id)).sort((a,b)=>pos.get(a.id)-pos.get(b.id)),...visible.filter(t=>!pos.has(t.id))];
+async function request(path, options = {}) {
+  if (browserMode && path.startsWith('/api/')) return browserRequest(path, options);
+  const r = await fetch(browserMode ? new URL('.' + path, import.meta.url) : path, {
+    cache: 'no-store',
+    ...options,
+  });
+  let data;
+  try {
+    data = await r.json();
+  } catch {
+    throw new Error('The server returned an unreadable response.');
+  }
+  if (!r.ok) throw new Error(data.error || 'Request failed.');
+  return data;
 }
-function basePlanTasks(){return calculated?[...calcTasks(),...state.customTasks.filter(t=>t.phase===phase())]:tasks();}
-function planTasks(){return applyTaskEdits(basePlanTasks());}
-const autoTaskLink=id=>id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1]||'';
-function taskLinkHtml(t){
- const linked=taskEditsState().links[t.id]||autoTaskLink(t.id);
- if(!linked)return '';
- if(calculated){const row=(calcStage().rows||[]).find(r=>r.id===linked);return row?`<button class="btn quiet task-link" data-calc-factory="${row.id}">Open factory: ${esc(row.name)} ↗</button>`:'';}
- const f=plan.factories.find(x=>x.id===linked&&x.stages[stage()]);
- return f?`<button class="btn quiet task-link" data-factory="${f.id}">Open factory: ${esc(f.name)} ↗</button>`:'';
+let writeQueue = Promise.resolve();
+function save(op) {
+  const scope = { ...scopeHeaders() };
+  pending++;
+  saveIndicator();
+  const run = writeQueue.then(async () => {
+    const next = await request('/api/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...scope },
+      body: JSON.stringify(op),
+    });
+    if (scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id)
+      state = next;
+    return next;
+  });
+  writeQueue = run.catch(() => {});
+  return run
+    .catch(e => {
+      toast(e.message, true);
+      throw e;
+    })
+    .finally(() => {
+      pending--;
+      saveIndicator();
+    });
 }
-function taskEditForm(t){
- const options=calculated?(calcStage().rows||[]).map(r=>[r.id,r.name]):plan.factories.filter(f=>f.stages[stage()]).map(f=>[f.id,f.name]);
- const current=taskEditsState().links[t.id]||autoTaskLink(t.id);
- return `<form class="task task-edit" data-task-edit="${t.id}"><label class="field">Step title<input name="title" maxlength="240" required value="${esc(t.title)}"></label><label class="field">Details<textarea name="body" class="notes" maxlength="6000">${esc(t.body||'')}</textarea></label><label class="field">Linked factory<select name="link"><option value="">No linked factory</option>${options.map(([v,l])=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(l)}</option>`).join('')}</select></label><div class="task-edit-actions"><button class="btn primary" type="submit">Save step</button> <button class="btn" type="button" data-cancel-task-edit>Cancel</button></div><p class="small muted">Restore the original text by clearing a field. The step keeps its checkmark either way.</p></form>`;
+function saveIndicator() {
+  const el = $('#saved');
+  if (el)
+    el.textContent = pending
+      ? 'Saving…'
+      : browserMode
+        ? 'Saved in this browser'
+        : 'Saved on server';
+}
+function taskEditsState() {
+  const e = state?.taskEdits || {};
+  return {
+    order: e.order || {},
+    removed: e.removed || [],
+    titles: e.titles || {},
+    bodies: e.bodies || {},
+    links: e.links || {},
+  };
+}
+function applyTaskEdits(base) {
+  const e = taskEditsState(),
+    removed = new Set(e.removed);
+  const visible = base
+    .filter(t => !removed.has(t.id))
+    .map(t => ({ ...t, title: e.titles[t.id] || t.title, body: e.bodies[t.id] || t.body }));
+  const ord = e.order[phase()];
+  if (!ord?.length) return visible;
+  const pos = new Map(ord.map((id, i) => [id, i]));
+  return [
+    ...visible.filter(t => pos.has(t.id)).sort((a, b) => pos.get(a.id) - pos.get(b.id)),
+    ...visible.filter(t => !pos.has(t.id)),
+  ];
+}
+function basePlanTasks() {
+  return calculated
+    ? [...calcTasks(), ...state.customTasks.filter(t => t.phase === phase())]
+    : tasks();
+}
+function planTasks() {
+  return applyTaskEdits(basePlanTasks());
+}
+const autoTaskLink = id => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
+function taskLinkHtml(t) {
+  const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
+  if (!linked) return '';
+  if (calculated) {
+    const row = (calcStage().rows || []).find(r => r.id === linked);
+    return row
+      ? `<button class="btn quiet task-link" data-calc-factory="${row.id}">Open factory: ${esc(row.name)} ↗</button>`
+      : '';
+  }
+  const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
+  return f
+    ? `<button class="btn quiet task-link" data-factory="${f.id}">Open factory: ${esc(f.name)} ↗</button>`
+    : '';
+}
+function taskEditForm(t) {
+  const options = calculated
+    ? (calcStage().rows || []).map(r => [r.id, r.name])
+    : plan.factories.filter(f => f.stages[stage()]).map(f => [f.id, f.name]);
+  const current = taskEditsState().links[t.id] || autoTaskLink(t.id);
+  return `<form class="task task-edit" data-task-edit="${t.id}"><label class="field">Step title<input name="title" maxlength="240" required value="${esc(t.title)}"></label><label class="field">Details<textarea name="body" class="notes" maxlength="6000">${esc(t.body || '')}</textarea></label><label class="field">Linked factory<select name="link"><option value="">No linked factory</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label><div class="task-edit-actions"><button class="btn primary" type="submit">Save step</button> <button class="btn" type="button" data-cancel-task-edit>Cancel</button></div><p class="small muted">Restore the original text by clearing a field. The step keeps its checkmark either way.</p></form>`;
 }
 // A step's icon says what kind of work it is at a glance: a linked or calculated
 // production line shows the part it makes, every other step a category glyph.
-const TASK_GLYPHS={
- production:'<path d="M3 20.5h18M5.5 20.5v-9l4 2.6v-2.6l4 2.6v-2.6l4 2.6v6.4M17.5 9.2V4h2.2v5.2"/>',
- build:'<path d="M3.5 3.5h17v17h-17zM3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17"/>',
- power:'<path d="M13.4 2.5 4.8 13.6h5.3l-.9 7.9 8.6-11.1h-5.3z"/>',
- biomass:'<path d="M20.5 3.5C9.5 3.5 4 8.8 4 14.8a5.2 5.2 0 0 0 5.2 5.2c6 0 11.3-5.5 11.3-16.5Z"/><path d="M5.5 19C9 13 13.2 9.7 18.5 7.4"/>',
- nuclear:'<circle cx="12" cy="12" r="1.9"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7" transform="rotate(120 12 12)"/>',
- fluid:'<path d="M12 3.2c4 5 6.4 8.1 6.4 11a6.4 6.4 0 1 1-12.8 0c0-2.9 2.4-6 6.4-11Z"/>',
- milestone:'<rect x="4" y="10.4" width="16" height="10.6" rx="1.4"/><path d="M8.2 10.4V7.2A3.9 3.9 0 0 1 16 6.6"/><path d="M12 14.3v3"/>',
- research:'<path d="M9.4 3.2v6.4l-4.8 8.6A2 2 0 0 0 6.3 21.2h11.4a2 2 0 0 0 1.7-3L14.6 9.6V3.2"/><path d="M7.9 3.2h8.2M7.3 15.2h9.4"/>',
- harddrive:'<rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="12" cy="12" r="3.3"/><circle cx="12" cy="12" r=".5"/>',
- storage:'<rect x="3.2" y="5.6" width="17.6" height="13.4" rx="1.2"/><path d="M3.2 10.4h17.6M12 10.4V19M7.6 5.6v4.8M16.4 5.6v4.8"/>',
- delivery:'<path d="M12 2.4c3 2.7 4.7 6.4 4.7 10.5v3H7.3v-3C7.3 8.8 9 5.1 12 2.4Z"/><path d="M7.3 12.8 4 15.6v3.6l3.3-1.7M16.7 12.8 20 15.6v3.6l-3.3-1.7M10.4 21.3h3.2"/><circle cx="12" cy="9.4" r="1.6"/>',
- logistics:'<path d="M3.5 17.5h5.2a4.2 4.2 0 0 0 4.2-4.2v-2.6a4.2 4.2 0 0 1 4.2-4.2h3.4"/><path d="m17.4 3.4 3.1 3.1-3.1 3.1"/>',
- portal:'<circle cx="12" cy="12" r="8.8"/><circle cx="12" cy="12" r="4.4"/><path d="M12 3.2v2.6M12 18.2v2.6M3.2 12h2.6M18.2 12h2.6"/>',
- survey:'<circle cx="10.6" cy="10.6" r="6.6"/><path d="m15.4 15.4 5.1 5.1"/>',
- retire:'<circle cx="12" cy="12" r="8.8"/><path d="m5.8 5.8 12.4 12.4"/>',
- note:'<path d="m4 20.2.9-4.2L16 4.9l3.3 3.3L8.2 19.3z"/><path d="m14.4 6.5 3.3 3.3"/>'
+const TASK_GLYPHS = {
+  production:
+    '<path d="M3 20.5h18M5.5 20.5v-9l4 2.6v-2.6l4 2.6v-2.6l4 2.6v6.4M17.5 9.2V4h2.2v5.2"/>',
+  build: '<path d="M3.5 3.5h17v17h-17zM3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17"/>',
+  power: '<path d="M13.4 2.5 4.8 13.6h5.3l-.9 7.9 8.6-11.1h-5.3z"/>',
+  biomass:
+    '<path d="M20.5 3.5C9.5 3.5 4 8.8 4 14.8a5.2 5.2 0 0 0 5.2 5.2c6 0 11.3-5.5 11.3-16.5Z"/><path d="M5.5 19C9 13 13.2 9.7 18.5 7.4"/>',
+  nuclear:
+    '<circle cx="12" cy="12" r="1.9"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9.2" ry="3.7" transform="rotate(120 12 12)"/>',
+  fluid: '<path d="M12 3.2c4 5 6.4 8.1 6.4 11a6.4 6.4 0 1 1-12.8 0c0-2.9 2.4-6 6.4-11Z"/>',
+  milestone:
+    '<rect x="4" y="10.4" width="16" height="10.6" rx="1.4"/><path d="M8.2 10.4V7.2A3.9 3.9 0 0 1 16 6.6"/><path d="M12 14.3v3"/>',
+  research:
+    '<path d="M9.4 3.2v6.4l-4.8 8.6A2 2 0 0 0 6.3 21.2h11.4a2 2 0 0 0 1.7-3L14.6 9.6V3.2"/><path d="M7.9 3.2h8.2M7.3 15.2h9.4"/>',
+  harddrive:
+    '<rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="12" cy="12" r="3.3"/><circle cx="12" cy="12" r=".5"/>',
+  storage:
+    '<rect x="3.2" y="5.6" width="17.6" height="13.4" rx="1.2"/><path d="M3.2 10.4h17.6M12 10.4V19M7.6 5.6v4.8M16.4 5.6v4.8"/>',
+  delivery:
+    '<path d="M12 2.4c3 2.7 4.7 6.4 4.7 10.5v3H7.3v-3C7.3 8.8 9 5.1 12 2.4Z"/><path d="M7.3 12.8 4 15.6v3.6l3.3-1.7M16.7 12.8 20 15.6v3.6l-3.3-1.7M10.4 21.3h3.2"/><circle cx="12" cy="9.4" r="1.6"/>',
+  logistics:
+    '<path d="M3.5 17.5h5.2a4.2 4.2 0 0 0 4.2-4.2v-2.6a4.2 4.2 0 0 1 4.2-4.2h3.4"/><path d="m17.4 3.4 3.1 3.1-3.1 3.1"/>',
+  portal:
+    '<circle cx="12" cy="12" r="8.8"/><circle cx="12" cy="12" r="4.4"/><path d="M12 3.2v2.6M12 18.2v2.6M3.2 12h2.6M18.2 12h2.6"/>',
+  survey: '<circle cx="10.6" cy="10.6" r="6.6"/><path d="m15.4 15.4 5.1 5.1"/>',
+  retire: '<circle cx="12" cy="12" r="8.8"/><path d="m5.8 5.8 12.4 12.4"/>',
+  note: '<path d="m4 20.2.9-4.2L16 4.9l3.3 3.3L8.2 19.3z"/><path d="m14.4 6.5 3.3 3.3"/>',
 };
 // Generated step identifiers are stable, so match those before reading the
 // wording of a handbook step or a personal one.
-const TASK_ID_KINDS=[[/^custom-/,'note'],[/^recipe-unlock-|^hard-drives-/,'harddrive'],[/^retire-/,'retire'],[/^portal-supply/,'portal'],[/^drone-fuel-/,'logistics'],[/^startup-(?:biomass|solid-biofuel|burner-bank)/,'biomass'],[/^startup-nuclear-/,'nuclear'],[/^startup-aluminum-/,'fluid'],[/^startup-\d+-power-review$|^startup-coal-unlock$|^startup-fuel-|^preferred-power-/,'power'],[/^early-base-hub$/,'build'],[/^early-base-logistics$/,'logistics'],[/^early-base-reserves$/,'storage'],[/^early-base-/,'production']];
-const TASK_TEXT_KINDS=[[/retire|dismantle|decommission/,'retire'],[/portal/,'portal'],[/nuclear|uranium|plutonium|ficsonium|radioactive/,'nuclear'],[/drone/,'logistics'],[/deliver|elevator/,'delivery'],[/survey|verify|resilience|review|\btest\b/,'survey'],[/power|generator|fuel|coal/,'power'],[/storage|container/,'storage'],[/unlock|milestone|research/,'milestone'],[/logistic|belt|train|sorter|collectable/,'logistics'],[/aluminum|water/,'fluid'],[/concrete|construction|foundation|workshop|hub/,'build']];
-function taskKind(t){
- const id=t.id||'';
- if(id.startsWith('unlock-'))return /^mam:/i.test(t.title||'')?'research':'milestone';
- for(const [re,kind] of TASK_ID_KINDS)if(re.test(id))return kind;
- const text=(id+' '+(t.title||'')).toLowerCase();
- for(const [re,kind] of TASK_TEXT_KINDS)if(re.test(text))return kind;
- return 'production';
+const TASK_ID_KINDS = [
+  [/^custom-/, 'note'],
+  [/^recipe-unlock-|^hard-drives-/, 'harddrive'],
+  [/^retire-/, 'retire'],
+  [/^portal-supply/, 'portal'],
+  [/^drone-fuel-/, 'logistics'],
+  [/^startup-(?:biomass|solid-biofuel|burner-bank)/, 'biomass'],
+  [/^startup-nuclear-/, 'nuclear'],
+  [/^startup-aluminum-/, 'fluid'],
+  [/^startup-\d+-power-review$|^startup-coal-unlock$|^startup-fuel-|^preferred-power-/, 'power'],
+  [/^early-base-hub$/, 'build'],
+  [/^early-base-logistics$/, 'logistics'],
+  [/^early-base-reserves$/, 'storage'],
+  [/^early-base-/, 'production'],
+];
+const TASK_TEXT_KINDS = [
+  [/retire|dismantle|decommission/, 'retire'],
+  [/portal/, 'portal'],
+  [/nuclear|uranium|plutonium|ficsonium|radioactive/, 'nuclear'],
+  [/drone/, 'logistics'],
+  [/deliver|elevator/, 'delivery'],
+  [/survey|verify|resilience|review|\btest\b/, 'survey'],
+  [/power|generator|fuel|coal/, 'power'],
+  [/storage|container/, 'storage'],
+  [/unlock|milestone|research/, 'milestone'],
+  [/logistic|belt|train|sorter|collectable/, 'logistics'],
+  [/aluminum|water/, 'fluid'],
+  [/concrete|construction|foundation|workshop|hub/, 'build'],
+];
+function taskKind(t) {
+  const id = t.id || '';
+  if (id.startsWith('unlock-')) return /^mam:/i.test(t.title || '') ? 'research' : 'milestone';
+  for (const [re, kind] of TASK_ID_KINDS) if (re.test(id)) return kind;
+  const text = (id + ' ' + (t.title || '')).toLowerCase();
+  for (const [re, kind] of TASK_TEXT_KINDS) if (re.test(text)) return kind;
+  return 'production';
 }
 // The part a step makes, taken from its linked factory: calculated production
 // steps link themselves, a handbook or personal step uses the chosen link.
-function taskIconItem(t){
- const linked=taskEditsState().links[t.id]||autoTaskLink(t.id);
- if(!linked)return '';
- if(calculated){const row=(calcStage().rows||[]).find(r=>r.id===linked);return row&&Object.keys(row.outputs||{})[0]||'';}
- const f=plan.factories.find(x=>x.id===linked&&x.stages[stage()]);
- return f?f.name:'';
+function taskIconItem(t) {
+  const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
+  if (!linked) return '';
+  if (calculated) {
+    const row = (calcStage().rows || []).find(r => r.id === linked);
+    return (row && Object.keys(row.outputs || {})[0]) || '';
+  }
+  const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
+  return f ? f.name : '';
 }
-function taskIconHtml(t){
- const item=taskIconItem(t);
- if(item)return `<span class="task-icon" data-kind="item" aria-hidden="true">${itemIcon(item)}</span>`;
- const kind=taskKind(t);
- return `<span class="task-icon" data-kind="${kind}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${TASK_GLYPHS[kind]}</svg></span>`;
+function taskIconHtml(t) {
+  const item = taskIconItem(t);
+  if (item)
+    return `<span class="task-icon" data-kind="item" aria-hidden="true">${itemIcon(item)}</span>`;
+  const kind = taskKind(t);
+  return `<span class="task-icon" data-kind="${kind}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${TASK_GLYPHS[kind]}</svg></span>`;
 }
-function taskHtml(t){
- if(planEditing&&editingTask===t.id)return taskEditForm(t);
- const tools=planEditing?`<span class="task-tools"><button class="btn quiet" data-move-task="${t.id}" data-dir="-1" aria-label="Move up: ${esc(t.title)}">↑</button><button class="btn quiet" data-move-task="${t.id}" data-dir="1" aria-label="Move down: ${esc(t.title)}">↓</button><button class="btn quiet" data-edit-task="${t.id}">Edit</button><button class="btn quiet danger" data-remove-step="${t.id}">Remove</button></span>`:'';
- return `<article class="task ${planEditing?'is-editing':''}"><input type="checkbox" data-check="${t.id}" aria-label="Complete: ${esc(t.title)}" ${doneAttr(t.id)}>${taskIconHtml(t)}<details data-task="${t.id}"><summary>${esc(t.title)}</summary><p>${esc(t.body||'Your own task for this phase.')}</p>${taskLinkHtml(t)}${t.id.startsWith('custom-')&&!planEditing?`<button class="delete-task" data-remove="${t.id}">Delete personal task</button>`:''}</details>${tools}</article>`;
+function taskHtml(t) {
+  if (planEditing && editingTask === t.id) return taskEditForm(t);
+  const tools = planEditing
+    ? `<span class="task-tools"><button class="btn quiet" data-move-task="${t.id}" data-dir="-1" aria-label="Move up: ${esc(t.title)}">↑</button><button class="btn quiet" data-move-task="${t.id}" data-dir="1" aria-label="Move down: ${esc(t.title)}">↓</button><button class="btn quiet" data-edit-task="${t.id}">Edit</button><button class="btn quiet danger" data-remove-step="${t.id}">Remove</button></span>`
+    : '';
+  return `<article class="task ${planEditing ? 'is-editing' : ''}"><input type="checkbox" data-check="${t.id}" aria-label="Complete: ${esc(t.title)}" ${doneAttr(t.id)}>${taskIconHtml(t)}<details data-task="${t.id}"><summary>${esc(t.title)}</summary><p>${esc(t.body || 'Your own task for this phase.')}</p>${taskLinkHtml(t)}${t.id.startsWith('custom-') && !planEditing ? `<button class="delete-task" data-remove="${t.id}">Delete personal task</button>` : ''}</details>${tools}</article>`;
 }
-function planEditToolbar(){return `<button class="btn ${planEditing?'primary':''}" data-toggle-plan-edit>${planEditing?'Done editing':'Edit steps'}</button>`;}
-function filteredPlanTasks(ts){
- const q=query.trim().toLowerCase();
- return ts.filter(t=>(!hideDone||!checked(t.id))&&(!q||(t.title+' '+(t.body||'')).toLowerCase().includes(q)));
+function planEditToolbar() {
+  return `<button class="btn ${planEditing ? 'primary' : ''}" data-toggle-plan-edit>${planEditing ? 'Done editing' : 'Edit steps'}</button>`;
 }
-function checklistHtml(ts){
- const shown=filteredPlanTasks(ts);
- const tools=ts.length?`<div class="checklist-tools"><input id="plan-search" class="search" placeholder="Find a step…" aria-label="Find a step" value="${esc(query)}"><label class="check-row small"><input type="checkbox" id="hide-done" ${hideDone?'checked':''}>Hide completed</label><span class="small muted">${shown.length===ts.length?'':shown.length+' of '+ts.length+' steps'}</span></div>`:'';
- const empty=!ts.length?'Every step of this phase is removed. Use Removed steps below to restore them.':query.trim()?'No steps match this search.':'Every step of this phase is completed. Untick “Hide completed” to review them.';
- return tools+`<div class="checklist">${shown.map(taskHtml).join('')||`<div class="empty-state">${empty}</div>`}</div>`;
+function filteredPlanTasks(ts) {
+  const q = query.trim().toLowerCase();
+  return ts.filter(
+    t =>
+      (!hideDone || !checked(t.id)) &&
+      (!q || (t.title + ' ' + (t.body || '')).toLowerCase().includes(q)),
+  );
 }
-function removedStepsHtml(){
- if(!planEditing)return '';
- const removed=new Set(taskEditsState().removed);
- const list=basePlanTasks().filter(t=>removed.has(t.id));
- if(!list.length)return '';
- return `<details class="panel removed-steps"><summary>Removed steps in this phase (${list.length})</summary>${list.map(t=>`<div class="removed-step"><span>${taskIconHtml(t)}${esc(t.title)}</span><button class="btn quiet" data-restore-task="${t.id}">Restore</button></div>`).join('')}</details>`;
+function checklistHtml(ts) {
+  const shown = filteredPlanTasks(ts);
+  const tools = ts.length
+    ? `<div class="checklist-tools"><input id="plan-search" class="search" placeholder="Find a step…" aria-label="Find a step" value="${esc(query)}"><label class="check-row small"><input type="checkbox" id="hide-done" ${hideDone ? 'checked' : ''}>Hide completed</label><span class="small muted">${shown.length === ts.length ? '' : shown.length + ' of ' + ts.length + ' steps'}</span></div>`
+    : '';
+  const empty = !ts.length
+    ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
+    : query.trim()
+      ? 'No steps match this search.'
+      : 'Every step of this phase is completed. Untick “Hide completed” to review them.';
+  return (
+    tools +
+    `<div class="checklist">${shown.map(taskHtml).join('') || `<div class="empty-state">${empty}</div>`}</div>`
+  );
 }
-function stat(label,value,caption){return `<div class="stat"><span class="eyebrow">${label}</span><strong>${value}</strong><small>${caption}</small></div>`;}
-function tasks(){return [...plan.phases[phase()],...state.customTasks.filter(t=>t.phase===phase())];}
-function header(eyebrow,title,subtitle='',badge=''){return `<div class="heading-row"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1>${subtitle?`<div class="subtitle">${subtitle}</div>`:''}</div>${badge?`<span class="badge orange">${badge}</span>`:''}</div>`;}
-function profileFooter(){
- if(calculated){const s=calculated.settings;const date=new Date(calculated.createdAt);return `${esc(currentProfile.name)}<br>${esc(purities.find(([id])=>id===s.purity)?.[1]||s.purity)} purity · ${num(s.multiplier)}× elevator parts<br>${num(s.powerFactor)}× power consumption${Number.isNaN(date.getTime())?'':'<br>Plan created '+esc(date.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}))}`;}
- if(currentProfile?.kind==='original')return `${esc(currentProfile.name)}<br>Pure nodes · 50× elevator parts<br>Half power consumption<br>Plan revised 13 September 2026`;
- return 'Create or select a profile';
+function removedStepsHtml() {
+  if (!planEditing) return '';
+  const removed = new Set(taskEditsState().removed);
+  const list = basePlanTasks().filter(t => removed.has(t.id));
+  if (!list.length) return '';
+  return `<details class="panel removed-steps"><summary>Removed steps in this phase (${list.length})</summary>${list.map(t => `<div class="removed-step"><span>${taskIconHtml(t)}${esc(t.title)}</span><button class="btn quiet" data-restore-task="${t.id}">Restore</button></div>`).join('')}</details>`;
+}
+function stat(label, value, caption) {
+  return `<div class="stat"><span class="eyebrow">${label}</span><strong>${value}</strong><small>${caption}</small></div>`;
+}
+function tasks() {
+  return [...plan.phases[phase()], ...state.customTasks.filter(t => t.phase === phase())];
+}
+function header(eyebrow, title, subtitle = '', badge = '') {
+  return `<div class="heading-row"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1>${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}</div>${badge ? `<span class="badge orange">${badge}</span>` : ''}</div>`;
+}
+function profileFooter() {
+  if (calculated) {
+    const s = calculated.settings;
+    const date = new Date(calculated.createdAt);
+    return `${esc(currentProfile.name)}<br>${esc(purities.find(([id]) => id === s.purity)?.[1] || s.purity)} purity · ${num(s.multiplier)}× elevator parts<br>${num(s.powerFactor)}× power consumption${Number.isNaN(date.getTime()) ? '' : '<br>Plan created ' + esc(date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }))}`;
+  }
+  if (currentProfile?.kind === 'original')
+    return `${esc(currentProfile.name)}<br>Pure nodes · 50× elevator parts<br>Half power consumption<br>Plan revised 13 September 2026`;
+  return 'Create or select a profile';
 }
 // ── ADA ────────────────────────────────────────────────
 // The assistant reads the same counters the pages show; it is a voice over the
 // plan, never a second source of truth for it.
 // The mute switch is a view preference rather than progress, so it stays in
 // this browser and never touches a saved profile.
-function adaStored(){try{return localStorage.getItem(ADA_KEY)==='muted';}catch{return false;}}
-function adaStore(){try{localStorage.setItem(ADA_KEY,adaMuted?'muted':'on');}catch{}}
-function adaFacts(){
- const ts=currentSave.id?planTasks():[];
- const next=ts.find(t=>!checked(t.id));
- const x=calculated?calcStage():null;
- const rows=calculated?(x.rows||[]):plan.factories.filter(f=>f.stages[stage()]);
- const runningKey=calculated?(r=>'calc-'+stage()+'-'+r.id):(f=>'factory-'+stage()+'-'+f.id);
- const slots=storageBays().flatMap(b=>b.items).filter(i=>i.name);
- const deliveries=calculated?Object.entries(x.delivery||{}).map(([n,d])=>({id:stage()+'-'+slug(n),target:d.target,initial:0})):plan.deliveries.filter(d=>d.phase===phase());
- const delivered=d=>state.deliveries[d.id]??(currentProfile.id==='original'?d.initial:0);
- const spareMW=calculated?(calculated.settings.availablePowerGW||0)*1000:0;
- const headroom=calculated?(x.additionalHeadroomMW||0):0;
- return {
-  view,phaseLabel:phaseLabel(phase()),browserMode,planEditing,
-  guided:wizard?.mode==='guided',guidedStep:wizard?.guidedStep||0,guidedTotal:wizard?guidedFlow().length:0,
-  tutorialDone:wizard?.tutorial==='done',
-  supplyDeclared:Object.keys(wizard?.settings?.existingSupply||{}).length,
-  kind:currentSave.id?(currentProfile?.kind||'original'):'none',
-  save:currentSave.name||'this save',profile:currentProfile?.name||'Pioneer',
-  steps:{done:ts.filter(t=>checked(t.id)).length,total:ts.length},
-  next:next?.title||'',
-  retireOpen:ts.filter(t=>t.id.startsWith('retire-')&&!checked(t.id)).length,
-  factories:{done:rows.filter(r=>checked(runningKey(r))).length,total:rows.length},
-  storage:{done:slots.filter(i=>checked('slot-'+i.id+'-verified')).length,total:slots.length},
-  deliveries:{open:deliveries.filter(d=>delivered(d)<d.target).length,total:deliveries.length},
-  hasPhaseNote:!!state.notes['phase-'+phase()],
-  customTasks:state.customTasks.filter(t=>t.phase===phase()).length,
-  removedSteps:taskEditsState().removed.length,
-  groups:factoryGroupsState().groups.length,
-  feasible:calculated?x.feasible!==false:true,
-  reason:calculated?x.reason||'':'',
-  short:calculated?(workspace.catalog?.raw||[]).filter(n=>(x.raw?.[n]||0)>(calculated.settings.limits?.[n]??Infinity)):[],
-  power:headroom>0.01?{required:power(x.requiredMW||0),spare:power(spareMW),headroom:power(headroom),tight:true}:null,
-  hours:calculated&&x.hours?num(x.hours)+' h':'',
-  profiles:workspace.saves.find(s=>s.id===currentSave.id)?.profiles.length||0,
-  backupDays:workspace.lastBackup?Math.max(0,Math.floor((Date.now()-new Date(workspace.lastBackup).getTime())/86400000)):null,
-  post:phase()==='post',startPhase:startPhase(),
-  assumptions:calculated?(calculated.warnings||[]).length:0
- };
+function adaStored() {
+  try {
+    return localStorage.getItem(ADA_KEY) === 'muted';
+  } catch {
+    return false;
+  }
+}
+function adaStore() {
+  try {
+    localStorage.setItem(ADA_KEY, adaMuted ? 'muted' : 'on');
+  } catch {}
+}
+function adaFacts() {
+  const ts = currentSave.id ? planTasks() : [];
+  const next = ts.find(t => !checked(t.id));
+  const x = calculated ? calcStage() : null;
+  const rows = calculated ? x.rows || [] : plan.factories.filter(f => f.stages[stage()]);
+  const runningKey = calculated
+    ? r => 'calc-' + stage() + '-' + r.id
+    : f => 'factory-' + stage() + '-' + f.id;
+  const slots = storageBays()
+    .flatMap(b => b.items)
+    .filter(i => i.name);
+  const deliveries = calculated
+    ? Object.entries(x.delivery || {}).map(([n, d]) => ({
+        id: stage() + '-' + slug(n),
+        target: d.target,
+        initial: 0,
+      }))
+    : plan.deliveries.filter(d => d.phase === phase());
+  const delivered = d =>
+    state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
+  const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
+  const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
+  return {
+    view,
+    phaseLabel: phaseLabel(phase()),
+    browserMode,
+    planEditing,
+    guided: wizard?.mode === 'guided',
+    guidedStep: wizard?.guidedStep || 0,
+    guidedTotal: wizard ? guidedFlow().length : 0,
+    tutorialDone: wizard?.tutorial === 'done',
+    supplyDeclared: Object.keys(wizard?.settings?.existingSupply || {}).length,
+    kind: currentSave.id ? currentProfile?.kind || 'original' : 'none',
+    save: currentSave.name || 'this save',
+    profile: currentProfile?.name || 'Pioneer',
+    steps: { done: ts.filter(t => checked(t.id)).length, total: ts.length },
+    next: next?.title || '',
+    retireOpen: ts.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
+    factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
+    storage: {
+      done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,
+      total: slots.length,
+    },
+    deliveries: {
+      open: deliveries.filter(d => delivered(d) < d.target).length,
+      total: deliveries.length,
+    },
+    hasPhaseNote: !!state.notes['phase-' + phase()],
+    customTasks: state.customTasks.filter(t => t.phase === phase()).length,
+    removedSteps: taskEditsState().removed.length,
+    groups: factoryGroupsState().groups.length,
+    feasible: calculated ? x.feasible !== false : true,
+    reason: calculated ? x.reason || '' : '',
+    short: calculated
+      ? (workspace.catalog?.raw || []).filter(
+          n => (x.raw?.[n] || 0) > (calculated.settings.limits?.[n] ?? Infinity),
+        )
+      : [],
+    power:
+      headroom > 0.01
+        ? {
+            required: power(x.requiredMW || 0),
+            spare: power(spareMW),
+            headroom: power(headroom),
+            tight: true,
+          }
+        : null,
+    hours: calculated && x.hours ? num(x.hours) + ' h' : '',
+    profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
+    backupDays: workspace.lastBackup
+      ? Math.max(0, Math.floor((Date.now() - new Date(workspace.lastBackup).getTime()) / 86400000))
+      : null,
+    post: phase() === 'post',
+    startPhase: startPhase(),
+    assumptions: calculated ? (calculated.warnings || []).length : 0,
+  };
 }
 // A changed situation deserves the most relevant line, so the cycle restarts
 // whenever the set of applicable remarks changes. Cycling past the end of the
 // list is not an error: ADA has something to say about that too.
-function adaCurrent(){
- if(adaFault)return adaFault;
- const facts=adaFacts(),list=adaRemarks(facts);
- if(!list.length)return null;
- const signature=list.map(r=>r.id).join('|');
- if(signature!==adaSignature){adaSignature=signature;adaIndex=0;}
- const lap=Math.floor(adaIndex/list.length),at=adaIndex%list.length;
- return lap>0&&!at?adaEncore(lap,facts):list[at];
+function adaCurrent() {
+  if (adaFault) return adaFault;
+  const facts = adaFacts(),
+    list = adaRemarks(facts);
+  if (!list.length) return null;
+  const signature = list.map(r => r.id).join('|');
+  if (signature !== adaSignature) {
+    adaSignature = signature;
+    adaIndex = 0;
+  }
+  const lap = Math.floor(adaIndex / list.length),
+    at = adaIndex % list.length;
+  return lap > 0 && !at ? adaEncore(lap, facts) : list[at];
 }
 // Prodding the badge is the only way to reach these, and the last one restores
 // normal service, so nobody is stranded in a corrupted transmission.
-function adaClearFault(){clearTimeout(adaFaultTimer);adaFault=null;adaPokes=0;}
-function adaPoke(){
- clearTimeout(adaFaultTimer);
- adaPokes=Date.now()-adaPokedAt>2500?1:adaPokes+1;adaPokedAt=Date.now();
- if(adaPokes<5)return;
- adaFault=makeFault(adaPokes-4);
- adaFaultTimer=setTimeout(()=>{adaClearFault();render();},12000);
- render();
+function adaClearFault() {
+  clearTimeout(adaFaultTimer);
+  adaFault = null;
+  adaPokes = 0;
 }
-function adaPanel(){
- try{
-  if(adaMuted)return `<div class="ada is-muted"><span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button></div>`;
-  const r=adaCurrent();if(!r)return '';
-  return `<section class="ada" data-tone="${r.tone}" aria-label="ADA"><div class="ada-head"><span class="ada-mark" aria-hidden="true">◈</span><div><b>${esc(r.name||'ADA')}</b><div class="eyebrow">${r.name?'Transmission fault':'Artificial Directory and Assistant'}</div></div></div><p class="ada-line" id="ada-line" role="status" aria-live="polite">${esc(r.text)}</p><div class="ada-tools"><button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button><button class="btn quiet" type="button" data-ada-mute="on">Mute</button></div></section>`;
- }catch{return '';}
+function adaPoke() {
+  clearTimeout(adaFaultTimer);
+  adaPokes = Date.now() - adaPokedAt > 2500 ? 1 : adaPokes + 1;
+  adaPokedAt = Date.now();
+  if (adaPokes < 5) return;
+  adaFault = makeFault(adaPokes - 4);
+  adaFaultTimer = setTimeout(() => {
+    adaClearFault();
+    render();
+  }, 12000);
+  render();
 }
-const shell=()=>`<div class="layout"><aside class="sidebar"><div class="brand"><img src="./favicon.svg" alt=""><div>Project Assembly<div class="eyebrow">FICSIT compliance terminal</div></div></div><nav class="nav" aria-label="Main navigation">${[['plan','◫','Build plan'],['factories','▥','Factories'],['storage','▦','Storage room'],['resources','↗','Power & resources'],['backup','⇅','Backup & notes']].map(([id,icon,label])=>`<a href="#${id}" class="${view===id?'active':''}" ${view===id?'aria-current="page"':''}><span class="navicon" aria-hidden="true">${icon}</span>${label}</a>`).join('')}</nav>${adaPanel()}<div class="save-status"><span class="dot"></span><span id="saved">${browserMode?'Saved in this browser':'Saved on server'}</span></div><div class="sidebar-foot">${profileFooter()}</div></aside><div><header class="topbar"><div class="breadcrumbs"><a href="#profiles">${esc(currentSave.name)}</a> <span aria-hidden="true"> / </span> ${phaseLabel(phase())}</div><label class="small">Working on <select id="phase-picker" aria-label="Working phase" ${!currentSave.id?'disabled':''}>${phaseOptions().map(p=>`<option value="${p}" ${phase()===p?'selected':''}>${phaseLabel(p)}</option>`).join('')}</select></label></header><main id="main" class="workspace" tabindex="-1"></main></div></div>`;
-function render(){
- const open=[...document.querySelectorAll('details[open][data-task]')].map(x=>x.dataset.task);
- const focused=document.activeElement?.id;const selection=document.activeElement?.selectionStart;
- $('#app').innerHTML=shell();
- const routes={profiles:renderProfiles,wizard:renderWizard,account:renderAccount,plan:calculated?renderCalculatedPlan:renderPlan,factories:calculated?renderCalculatedFactories:renderFactories,storage:renderStorage,resources:calculated?renderCalculatedResources:renderResources,backup:renderBackup};
- $('#main').innerHTML=routes[view]();
- open.forEach(id=>document.querySelector(`details[data-task="${id}"]`)?.setAttribute('open',''));
- if(focused&&document.getElementById(focused)){const e=document.getElementById(focused);e.focus({preventScroll:true});if(typeof selection==='number'&&e.setSelectionRange)e.setSelectionRange(selection,selection);}
- saveIndicator();
+function adaPanel() {
+  try {
+    if (adaMuted)
+      return `<div class="ada is-muted"><span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span><button class="btn quiet" type="button" data-ada-mute="off">Unmute</button></div>`;
+    const r = adaCurrent();
+    if (!r) return '';
+    return `<section class="ada" data-tone="${r.tone}" aria-label="ADA"><div class="ada-head"><span class="ada-mark" aria-hidden="true">◈</span><div><b>${esc(r.name || 'ADA')}</b><div class="eyebrow">${r.name ? 'Transmission fault' : 'Artificial Directory and Assistant'}</div></div></div><p class="ada-line" id="ada-line" role="status" aria-live="polite">${esc(r.text)}</p><div class="ada-tools"><button class="btn quiet" type="button" id="ada-next" data-ada-next>Another remark</button><button class="btn quiet" type="button" data-ada-mute="on">Mute</button></div></section>`;
+  } catch {
+    return '';
+  }
 }
-function renderPlan(){
- const ts=planTasks(),done=ts.filter(t=>checked(t.id)).length,next=ts.find(t=>!checked(t.id)),pct=ts.length?Math.round(done/ts.length*100):100;
- const fs=plan.factories.filter(f=>f.stages[stage()]);const built=fs.filter(f=>checked('factory-'+stage()+'-'+f.id)).length;
- const slots=storageBays().flatMap(b=>b.items).filter(x=>x.name),ready=slots.filter(x=>checked('slot-'+x.id+'-verified')).length;
- return header('THE NEXT BUILD',phaseLabel(phase())+' field plan',phase()==='post'?'Storage first. Keep the network running, then finish the remaining items.':'Build the supply chain in order. Check off each step when it is verified in your save.','YOUR SAVE · YOUR PACE')+
- `<div class="stats">${stat('Phase checklist',done+' <span class="fraction">/ '+ts.length+'</span>','Steps completed')}${stat('Factory targets',built+' <span class="fraction">/ '+fs.length+'</span>','Marked running at this phase')}${stat('Storage ready',ready+' <span class="fraction">/ '+slots.length+'</span>','Item positions verified')}${stat('Planned power',num(plan.power[stage()])+' <span class="fraction">GW</span>','Gross capacity at this stage')}</div>
+const shell = () =>
+  `<div class="layout"><aside class="sidebar"><div class="brand"><img src="./favicon.svg" alt=""><div>Project Assembly<div class="eyebrow">FICSIT compliance terminal</div></div></div><nav class="nav" aria-label="Main navigation">${[
+    ['plan', '◫', 'Build plan'],
+    ['factories', '▥', 'Factories'],
+    ['storage', '▦', 'Storage room'],
+    ['resources', '↗', 'Power & resources'],
+    ['backup', '⇅', 'Backup & notes'],
+  ]
+    .map(
+      ([id, icon, label]) =>
+        `<a href="#${id}" class="${view === id ? 'active' : ''}" ${view === id ? 'aria-current="page"' : ''}><span class="navicon" aria-hidden="true">${icon}</span>${label}</a>`,
+    )
+    .join(
+      '',
+    )}</nav>${adaPanel()}<div class="save-status"><span class="dot"></span><span id="saved">${browserMode ? 'Saved in this browser' : 'Saved on server'}</span></div><div class="sidebar-foot">${profileFooter()}</div></aside><div><header class="topbar"><div class="breadcrumbs"><a href="#profiles">${esc(currentSave.name)}</a> <span aria-hidden="true"> / </span> ${phaseLabel(phase())}</div><label class="small">Working on <select id="phase-picker" aria-label="Working phase" ${!currentSave.id ? 'disabled' : ''}>${phaseOptions()
+    .map(p => `<option value="${p}" ${phase() === p ? 'selected' : ''}>${phaseLabel(p)}</option>`)
+    .join(
+      '',
+    )}</select></label></header><main id="main" class="workspace" tabindex="-1"></main></div></div>`;
+function render() {
+  const open = [...document.querySelectorAll('details[open][data-task]')].map(x => x.dataset.task);
+  const focused = document.activeElement?.id;
+  const selection = document.activeElement?.selectionStart;
+  $('#app').innerHTML = shell();
+  const routes = {
+    profiles: renderProfiles,
+    wizard: renderWizard,
+    account: renderAccount,
+    plan: calculated ? renderCalculatedPlan : renderPlan,
+    factories: calculated ? renderCalculatedFactories : renderFactories,
+    storage: renderStorage,
+    resources: calculated ? renderCalculatedResources : renderResources,
+    backup: renderBackup,
+  };
+  $('#main').innerHTML = routes[view]();
+  open.forEach(id =>
+    document.querySelector(`details[data-task="${id}"]`)?.setAttribute('open', ''),
+  );
+  if (focused && document.getElementById(focused)) {
+    const e = document.getElementById(focused);
+    e.focus({ preventScroll: true });
+    if (typeof selection === 'number' && e.setSelectionRange)
+      e.setSelectionRange(selection, selection);
+  }
+  saveIndicator();
+}
+function renderPlan() {
+  const ts = planTasks(),
+    done = ts.filter(t => checked(t.id)).length,
+    next = ts.find(t => !checked(t.id)),
+    pct = ts.length ? Math.round((done / ts.length) * 100) : 100;
+  const fs = plan.factories.filter(f => f.stages[stage()]);
+  const built = fs.filter(f => checked('factory-' + stage() + '-' + f.id)).length;
+  const slots = storageBays()
+      .flatMap(b => b.items)
+      .filter(x => x.name),
+    ready = slots.filter(x => checked('slot-' + x.id + '-verified')).length;
+  return (
+    header(
+      'THE NEXT BUILD',
+      phaseLabel(phase()) + ' field plan',
+      phase() === 'post'
+        ? 'Storage first. Keep the network running, then finish the remaining items.'
+        : 'Build the supply chain in order. Check off each step when it is verified in your save.',
+      'YOUR SAVE · YOUR PACE',
+    ) +
+    `<div class="stats">${stat('Phase checklist', done + ' <span class="fraction">/ ' + ts.length + '</span>', 'Steps completed')}${stat('Factory targets', built + ' <span class="fraction">/ ' + fs.length + '</span>', 'Marked running at this phase')}${stat('Storage ready', ready + ' <span class="fraction">/ ' + slots.length + '</span>', 'Item positions verified')}${stat('Planned power', num(plan.power[stage()]) + ' <span class="fraction">GW</span>', 'Gross capacity at this stage')}</div>
  <div class="split"><section><div class="section-head"><h2>Build sequence</h2><span class="head-tools"><span class="small muted">${pct}% complete</span> ${planEditToolbar()}</span></div><div class="progress-track"><span style="width:${pct}%"></span></div>${checklistHtml(ts)}${removedStepsHtml()}<form id="add-task" class="inline-form"><input name="title" maxlength="240" required placeholder="Add a task for this phase…" aria-label="Personal task"><button class="btn" type="submit">Add task</button></form>
- <section class="panel"><h2>Phase notes</h2><p class="small muted">Locations, train routes, things to check on your next session.</p><textarea id="phase-note" class="notes" maxlength="6000" aria-label="Phase notes">${esc(state.notes['phase-'+phase()]||'')}</textarea><div class="note-save"><span class="small muted">Saved only when you click Save notes.</span><button class="btn" data-save-note="phase-${phase()}" data-input="phase-note">Save notes</button></div></section></section>
- <aside class="side-panels"><section class="panel next-card"><div class="step-no">${next?'NEXT UNFINISHED STEP':'PHASE CHECKLIST COMPLETE'}</div><h2>${esc(next?.title||'Ready for the next phase')}</h2><p>${esc(next?.body||'Verify the delivery, then choose your next phase using the selector above.')}</p><a class="btn primary full" href="#factories">Open factory targets →</a></section>
- <section class="panel"><h2>${phase()==='post'?'Post-game priority':'Elevator delivery'}</h2>${phase()==='post'?'<p>Protect the storage allowances. Reduce former elevator exports when the new completion factories need those resources. Sink the remaining surplus.</p><a class="btn" href="#factories">Completion modules →</a>':plan.deliveries.filter(d=>d.phase===phase()).map(deliveryHtml).join('')}</section>
- <section class="panel accent"><h3>Keep the corrections together</h3><p class="small">Resource conversion is included. The old coal and temporary fuel plants retire; 44.425 GW of turbofuel stays. Storage includes collectables Q/R and the workshop underneath.</p><a class="btn quiet" href="#resources">Review the resource gate →</a></section></aside></div>`;
+ <section class="panel"><h2>Phase notes</h2><p class="small muted">Locations, train routes, things to check on your next session.</p><textarea id="phase-note" class="notes" maxlength="6000" aria-label="Phase notes">${esc(state.notes['phase-' + phase()] || '')}</textarea><div class="note-save"><span class="small muted">Saved only when you click Save notes.</span><button class="btn" data-save-note="phase-${phase()}" data-input="phase-note">Save notes</button></div></section></section>
+ <aside class="side-panels"><section class="panel next-card"><div class="step-no">${next ? 'NEXT UNFINISHED STEP' : 'PHASE CHECKLIST COMPLETE'}</div><h2>${esc(next?.title || 'Ready for the next phase')}</h2><p>${esc(next?.body || 'Verify the delivery, then choose your next phase using the selector above.')}</p><a class="btn primary full" href="#factories">Open factory targets →</a></section>
+ <section class="panel"><h2>${phase() === 'post' ? 'Post-game priority' : 'Elevator delivery'}</h2>${
+   phase() === 'post'
+     ? '<p>Protect the storage allowances. Reduce former elevator exports when the new completion factories need those resources. Sink the remaining surplus.</p><a class="btn" href="#factories">Completion modules →</a>'
+     : plan.deliveries
+         .filter(d => d.phase === phase())
+         .map(deliveryHtml)
+         .join('')
+ }</section>
+ <section class="panel accent"><h3>Keep the corrections together</h3><p class="small">Resource conversion is included. The old coal and temporary fuel plants retire; 44.425 GW of turbofuel stays. Storage includes collectables Q/R and the workshop underneath.</p><a class="btn quiet" href="#resources">Review the resource gate →</a></section></aside></div>`
+  );
 }
-function deliveryHtml(d){const v=state.deliveries[d.id]??(currentProfile.id==='original'?d.initial:0);return `<div class="delivery"><label for="delivery-${d.id}">${esc(d.name)}</label><div><input id="delivery-${d.id}" data-delivery="${d.id}" type="number" min="0" max="${d.target}" step="1" value="${v}"><small>/ ${num(d.target)}</small></div><div class="progress-track"><span style="width:${Math.min(100,v/d.target*100)}%"></span></div><span class="small muted">${d.rate?`${num(d.rate)}/min net · ${num(Math.max(0,d.target-v)/d.rate)} minutes remaining`:'Phase 3 delivery already complete'}</span></div>`;}
-const siteOf=f=>['Plastic','Rubber'].includes(f.name)?'oil':f.nuclear?'nuclear':null;
-function factoryGroupsState(){const g=state?.factoryGroups||{};return {groups:g.groups||[],assignments:g.assignments||{}};}
-const membershipsOf=key=>factoryGroupsState().assignments[key]||[];
-function allocationHtml(key,groupId,total,machines,unit='/min'){
- const ms=membershipsOf(key),m=ms.find(x=>x.group===groupId);
- if(!m||(ms.length===1&&m.rate==null))return '';
- const rate=m.rate==null?Math.max(0,total-ms.reduce((a,x)=>a+(x.rate||0),0)):m.rate;
- const share=total>0?Math.min(1,rate/total):0;
- return `<div class="small allocation">${m.rate==null?'Remaining here: ':'Here: '}${num(rate)}${unit} of ${num(total)}${unit}${machines&&share<1?` · ≈ ${num(machines*share)} of ${num(machines)} machines`:''}</div>`;
+function deliveryHtml(d) {
+  const v = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
+  return `<div class="delivery"><label for="delivery-${d.id}">${esc(d.name)}</label><div><input id="delivery-${d.id}" data-delivery="${d.id}" type="number" min="0" max="${d.target}" step="1" value="${v}"><small>/ ${num(d.target)}</small></div><div class="progress-track"><span style="width:${Math.min(100, (v / d.target) * 100)}%"></span></div><span class="small muted">${d.rate ? `${num(d.rate)}/min net · ${num(Math.max(0, d.target - v) / d.rate)} minutes remaining` : 'Phase 3 delivery already complete'}</span></div>`;
 }
-function assignEditor(key){
- const g=factoryGroupsState();
- if(!g.groups.length)return '<p class="small muted">Create a group above to place this factory.</p>';
- const ms=membershipsOf(key);
- const avail=g.groups.filter(gr=>!ms.some(m=>m.group===gr.id));
- return `<div class="assign-editor">${ms.map(m=>`<div class="assign-row"><span>${esc(g.groups.find(x=>x.id===m.group)?.name||'')}</span><input type="number" min="0" step="any" data-assign-rate="${key}" data-group="${m.group}" placeholder="all / remainder" value="${m.rate??''}" aria-label="Production per minute in ${esc(g.groups.find(x=>x.id===m.group)?.name||'this group')}"><button class="btn quiet danger" data-unassign="${key}" data-group="${m.group}" aria-label="Remove from ${esc(g.groups.find(x=>x.id===m.group)?.name||'group')}">✕</button></div>`).join('')}${avail.length&&ms.length<12?`<select data-assign-add="${key}" aria-label="Add to a group"><option value="">+ Add to group…</option>${avail.map(gr=>`<option value="${gr.id}">${esc(gr.name)}</option>`).join('')}</select>`:''}</div>`;
+const siteOf = f => (['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : null);
+function factoryGroupsState() {
+  const g = state?.factoryGroups || {};
+  return { groups: g.groups || [], assignments: g.assignments || {} };
 }
-function groupEditPanel(){return `<section class="panel edit-panel"><h2>Factory groups</h2><form id="add-group" class="inline-form"><input id="new-group-name" name="name" maxlength="80" required placeholder="New group (e.g. Cable factory)…" aria-label="New group name"><button class="btn primary" type="submit">+ Add group</button></form><p class="small muted">Group production into the physical sites of your world. A factory can join several groups with a production split — for example Wire: 300/min at the cable factory and the remainder beside stitched plates. Leave the rate empty for the whole output or the remainder. Removing a group keeps every factory and its progress.</p></section>`;}
-function groupSections(list,keyOf,cardFn){
- return factoryGroupsState().groups.map(gr=>{
-  const members=list.filter(x=>membershipsOf(keyOf(x)).some(m=>m.group===gr.id));
-  if(!members.length&&!factoryEditing)return '';
-  return `<section class="site-group user-group"><header class="site-head"><div><span class="eyebrow">FACTORY GROUP · ${members.length} ${members.length===1?'FACTORY':'FACTORIES'}</span>${factoryEditing?`<input class="bay-rename" data-group-rename="${gr.id}" value="${esc(gr.name)}" maxlength="80" aria-label="Rename group ${esc(gr.name)}">`:`<h2>${esc(gr.name)}</h2>`}</div>${factoryEditing?`<button class="btn danger" data-remove-group="${gr.id}">Remove group</button>`:members.length>1?`<button class="btn" data-group-chain="${gr.id}">Build order ↗</button>`:''}</header><div class="cards">${members.map(x=>cardFn(x,gr.id)).join('')||'<div class="empty-state">Empty group. Add factories with the group selector on their cards.</div>'}</div></section>`;
- }).join('');
+const membershipsOf = key => factoryGroupsState().assignments[key] || [];
+function allocationHtml(key, groupId, total, machines, unit = '/min') {
+  const ms = membershipsOf(key),
+    m = ms.find(x => x.group === groupId);
+  if (!m || (ms.length === 1 && m.rate == null)) return '';
+  const rate =
+    m.rate == null ? Math.max(0, total - ms.reduce((a, x) => a + (x.rate || 0), 0)) : m.rate;
+  const share = total > 0 ? Math.min(1, rate / total) : 0;
+  return `<div class="small allocation">${m.rate == null ? 'Remaining here: ' : 'Here: '}${num(rate)}${unit} of ${num(total)}${unit}${machines && share < 1 ? ` · ≈ ${num(machines * share)} of ${num(machines)} machines` : ''}</div>`;
 }
-function factoryEditToolbar(){return `<button class="btn ${factoryEditing?'primary':''}" data-toggle-factory-edit>${factoryEditing?'Done editing':'Edit groups'}</button>`;}
-function factoryCard(f,groupId=null){
- const r=f.stages[stage()],id='factory-'+stage()+'-'+f.id;
- return `<article class="factory-card ${checked(id)?'done':''}"><div class="card-top"><span class="card-icon">${itemIcon(f.name)}</span><div class="card-main"><button class="name" data-factory="${f.id}">${esc(f.name)}</button><div class="output">${num(r.output)} <span>/min</span></div></div>${f.local?'<span class="badge">Local</span>':f.conversion?'<span class="badge orange">Convert</span>':''}</div><div class="recipe">${esc(r.recipe.replace('Alternate: ',''))}</div><div class="small">${r.machines?`${num(r.machines)} × ${esc(r.machine)}`:'See shared oil campus'} <span class="muted">· storage ${num(r.storage)}/min</span></div>${groupId?allocationHtml(f.id,groupId,r.output,r.machines):''}<footer><label class="check-row"><input type="checkbox" data-check="${id}" ${doneAttr(id)}>Running</label><button class="btn quiet" data-factory="${f.id}">Details ↗</button></footer>${factoryEditing?assignEditor(f.id):''}</article>`;
+function assignEditor(key) {
+  const g = factoryGroupsState();
+  if (!g.groups.length)
+    return '<p class="small muted">Create a group above to place this factory.</p>';
+  const ms = membershipsOf(key);
+  const avail = g.groups.filter(gr => !ms.some(m => m.group === gr.id));
+  return `<div class="assign-editor">${ms.map(m => `<div class="assign-row"><span>${esc(g.groups.find(x => x.id === m.group)?.name || '')}</span><input type="number" min="0" step="any" data-assign-rate="${key}" data-group="${m.group}" placeholder="all / remainder" value="${m.rate ?? ''}" aria-label="Production per minute in ${esc(g.groups.find(x => x.id === m.group)?.name || 'this group')}"><button class="btn quiet danger" data-unassign="${key}" data-group="${m.group}" aria-label="Remove from ${esc(g.groups.find(x => x.id === m.group)?.name || 'group')}">✕</button></div>`).join('')}${avail.length && ms.length < 12 ? `<select data-assign-add="${key}" aria-label="Add to a group"><option value="">+ Add to group…</option>${avail.map(gr => `<option value="${gr.id}">${esc(gr.name)}</option>`).join('')}</select>` : ''}</div>`;
 }
-function siteGroupHtml(site,members){
- if(!members.length)return '';
- const p=plan.plans[stage()];
- const label=site==='oil'?'Oil campus':'Nuclear site';
- const sub=site==='oil'?`One shared machine set produces these outputs together: ${num(p.oil.reduce((a,x)=>a+x.machines,0))} buildings · crude ${num(p.oilTotals.crude)}/min · water ${num(p.oilTotals.water)}/min. Open a card for the shared recipe table.`:'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.';
- return `<section class="site-group"><header class="site-head"><div><span class="eyebrow">SHARED SITE · ${members.length} OUTPUTS</span><h2>${label}</h2></div><p class="small muted">${sub}</p></header><div class="cards">${members.map(f=>factoryCard(f)).join('')}</div></section>`;
+function groupEditPanel() {
+  return `<section class="panel edit-panel"><h2>Factory groups</h2><form id="add-group" class="inline-form"><input id="new-group-name" name="name" maxlength="80" required placeholder="New group (e.g. Cable factory)…" aria-label="New group name"><button class="btn primary" type="submit">+ Add group</button></form><p class="small muted">Group production into the physical sites of your world. A factory can join several groups with a production split — for example Wire: 300/min at the cable factory and the remainder beside stitched plates. Leave the rate empty for the whole output or the remainder. Removing a group keeps every factory and its progress.</p></section>`;
 }
-function renderFactories(){
- const list=plan.factories.filter(f=>f.stages[stage()]).filter(f=>(f.name+' '+f.stages[stage()].recipe).toLowerCase().includes(query.toLowerCase())).filter(f=>factoryFilter==='all'||(factoryFilter==='todo'&&!checked('factory-'+stage()+'-'+f.id))||(factoryFilter==='done'&&checked('factory-'+stage()+'-'+f.id))||(factoryFilter==='local'&&f.local));
- const ungrouped=list.filter(f=>!membershipsOf(f.id).length);
- const singles=ungrouped.filter(f=>!siteOf(f)),oil=ungrouped.filter(f=>siteOf(f)==='oil'),nuclear=ungrouped.filter(f=>siteOf(f)==='nuclear');
- const groupsHtml=groupSections(list,f=>f.id,(f,gid)=>factoryCard(f,gid));
- return header('PRODUCTION LIBRARY','Factory targets','Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history.')+
- `${phase()==='post'?'<div class="notice">These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage items priority before committing all spare output to sinks.</div>':''}
- <div class="toolbar"><input id="factory-search" class="search" placeholder="Find a part or recipe…" aria-label="Find a factory" value="${esc(query)}"><select id="factory-filter" aria-label="Factory status">${[['all','All factories'],['todo','Not running yet'],['done','Running'],['local','Made beside consumers']].map(([v,l])=>`<option value="${v}" ${factoryFilter===v?'selected':''}>${l}</option>`).join('')}</select><span class="small muted">${list.length} targets</span>${factoryEditToolbar()}</div>
- ${factoryEditing?groupEditPanel():''}
+function groupSections(list, keyOf, cardFn) {
+  return factoryGroupsState()
+    .groups.map(gr => {
+      const members = list.filter(x => membershipsOf(keyOf(x)).some(m => m.group === gr.id));
+      if (!members.length && !factoryEditing) return '';
+      return `<section class="site-group user-group"><header class="site-head"><div><span class="eyebrow">FACTORY GROUP · ${members.length} ${members.length === 1 ? 'FACTORY' : 'FACTORIES'}</span>${factoryEditing ? `<input class="bay-rename" data-group-rename="${gr.id}" value="${esc(gr.name)}" maxlength="80" aria-label="Rename group ${esc(gr.name)}">` : `<h2>${esc(gr.name)}</h2>`}</div>${factoryEditing ? `<button class="btn danger" data-remove-group="${gr.id}">Remove group</button>` : members.length > 1 ? `<button class="btn" data-group-chain="${gr.id}">Build order ↗</button>` : ''}</header><div class="cards">${members.map(x => cardFn(x, gr.id)).join('') || '<div class="empty-state">Empty group. Add factories with the group selector on their cards.</div>'}</div></section>`;
+    })
+    .join('');
+}
+function factoryEditToolbar() {
+  return `<button class="btn ${factoryEditing ? 'primary' : ''}" data-toggle-factory-edit>${factoryEditing ? 'Done editing' : 'Edit groups'}</button>`;
+}
+function factoryCard(f, groupId = null) {
+  const r = f.stages[stage()],
+    id = 'factory-' + stage() + '-' + f.id;
+  return `<article class="factory-card ${checked(id) ? 'done' : ''}"><div class="card-top"><span class="card-icon">${itemIcon(f.name)}</span><div class="card-main"><button class="name" data-factory="${f.id}">${esc(f.name)}</button><div class="output">${num(r.output)} <span>/min</span></div></div>${f.local ? '<span class="badge">Local</span>' : f.conversion ? '<span class="badge orange">Convert</span>' : ''}</div><div class="recipe">${esc(r.recipe.replace('Alternate: ', ''))}</div><div class="small">${r.machines ? `${num(r.machines)} × ${esc(r.machine)}` : 'See shared oil campus'} <span class="muted">· storage ${num(r.storage)}/min</span></div>${groupId ? allocationHtml(f.id, groupId, r.output, r.machines) : ''}<footer><label class="check-row"><input type="checkbox" data-check="${id}" ${doneAttr(id)}>Running</label><button class="btn quiet" data-factory="${f.id}">Details ↗</button></footer>${factoryEditing ? assignEditor(f.id) : ''}</article>`;
+}
+function siteGroupHtml(site, members) {
+  if (!members.length) return '';
+  const p = plan.plans[stage()];
+  const label = site === 'oil' ? 'Oil campus' : 'Nuclear site';
+  const sub =
+    site === 'oil'
+      ? `One shared machine set produces these outputs together: ${num(p.oil.reduce((a, x) => a + x.machines, 0))} buildings · crude ${num(p.oilTotals.crude)}/min · water ${num(p.oilTotals.water)}/min. Open a card for the shared recipe table.`
+      : 'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.';
+  return `<section class="site-group"><header class="site-head"><div><span class="eyebrow">SHARED SITE · ${members.length} OUTPUTS</span><h2>${label}</h2></div><p class="small muted">${sub}</p></header><div class="cards">${members.map(f => factoryCard(f)).join('')}</div></section>`;
+}
+function renderFactories() {
+  const list = plan.factories
+    .filter(f => f.stages[stage()])
+    .filter(f =>
+      (f.name + ' ' + f.stages[stage()].recipe).toLowerCase().includes(query.toLowerCase()),
+    )
+    .filter(
+      f =>
+        factoryFilter === 'all' ||
+        (factoryFilter === 'todo' && !checked('factory-' + stage() + '-' + f.id)) ||
+        (factoryFilter === 'done' && checked('factory-' + stage() + '-' + f.id)) ||
+        (factoryFilter === 'local' && f.local),
+    );
+  const ungrouped = list.filter(f => !membershipsOf(f.id).length);
+  const singles = ungrouped.filter(f => !siteOf(f)),
+    oil = ungrouped.filter(f => siteOf(f) === 'oil'),
+    nuclear = ungrouped.filter(f => siteOf(f) === 'nuclear');
+  const groupsHtml = groupSections(
+    list,
+    f => f.id,
+    (f, gid) => factoryCard(f, gid),
+  );
+  return (
+    header(
+      'PRODUCTION LIBRARY',
+      'Factory targets',
+      'Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history.',
+    ) +
+    `${phase() === 'post' ? '<div class="notice">These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage items priority before committing all spare output to sinks.</div>' : ''}
+ <div class="toolbar"><input id="factory-search" class="search" placeholder="Find a part or recipe…" aria-label="Find a factory" value="${esc(query)}"><select id="factory-filter" aria-label="Factory status">${[
+   ['all', 'All factories'],
+   ['todo', 'Not running yet'],
+   ['done', 'Running'],
+   ['local', 'Made beside consumers'],
+ ]
+   .map(([v, l]) => `<option value="${v}" ${factoryFilter === v ? 'selected' : ''}>${l}</option>`)
+   .join(
+     '',
+   )}</select><span class="small muted">${list.length} targets</span>${factoryEditToolbar()}</div>
+ ${factoryEditing ? groupEditPanel() : ''}
  ${groupsHtml}
- ${siteGroupHtml('oil',oil)}${siteGroupHtml('nuclear',nuclear)}
- ${(groupsHtml||oil.length||nuclear.length)&&singles.length?'<p class="eyebrow">UNGROUPED FACTORIES</p>':''}<div class="cards">${singles.map(f=>factoryCard(f)).join('')||(list.length?'':'<div class="empty-state">No factories match this filter.</div>')}</div>
- ${phase()==='post'?`<section style="margin-top:32px"><h2>Additional completion modules</h2><div class="notice">These recipe inputs are additional to the main resource budget. Allocate their supply first. Gathered feedstock and byproducts still need handling.</div><div class="completion-grid">${plan.completion.filter(r=>r.name.toLowerCase().includes(query.toLowerCase())).map(r=>`<article class="completion-item"><label class="check-row"><input type="checkbox" data-check="completion-${r.id}" ${doneAttr('completion-'+r.id)}><strong>${esc(r.name)}</strong></label><p>${num(r.output)}/min · ${num(r.machines)} ${esc(r.machine)} · last at ${num(r.lastClock)}%<br>${esc(r.recipe)}</p><p><b>Inputs:</b> ${inputText(r.inputs)}${Object.keys(r.byproducts).length?`<br><b>Byproducts:</b> ${inputText(r.byproducts)}`:''}</p></article>`).join('')}</div></section>`:''}`;
+ ${siteGroupHtml('oil', oil)}${siteGroupHtml('nuclear', nuclear)}
+ ${(groupsHtml || oil.length || nuclear.length) && singles.length ? '<p class="eyebrow">UNGROUPED FACTORIES</p>' : ''}<div class="cards">${singles.map(f => factoryCard(f)).join('') || (list.length ? '' : '<div class="empty-state">No factories match this filter.</div>')}</div>
+ ${
+   phase() === 'post'
+     ? `<section style="margin-top:32px"><h2>Additional completion modules</h2><div class="notice">These recipe inputs are additional to the main resource budget. Allocate their supply first. Gathered feedstock and byproducts still need handling.</div><div class="completion-grid">${plan.completion
+         .filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
+         .map(
+           r =>
+             `<article class="completion-item"><label class="check-row"><input type="checkbox" data-check="completion-${r.id}" ${doneAttr('completion-' + r.id)}><strong>${esc(r.name)}</strong></label><p>${num(r.output)}/min · ${num(r.machines)} ${esc(r.machine)} · last at ${num(r.lastClock)}%<br>${esc(r.recipe)}</p><p><b>Inputs:</b> ${inputText(r.inputs)}${Object.keys(r.byproducts).length ? `<br><b>Byproducts:</b> ${inputText(r.byproducts)}` : ''}</p></article>`,
+         )
+         .join('')}</div></section>`
+     : ''
+ }`
+  );
 }
 // Items kept at a zero rate hold their container and address without reserving
 // production, so they belong on the storage map rather than in a rate list.
-function inputText(inputs){return Object.entries(inputs).filter(([,q])=>q).map(([n,q])=>esc(n)+' '+num(q)+'/min').join(' · ');}
-function storageEdits(){const e=state?.storageEdits||{};return {floors:e.floors||[],floorNames:e.floorNames||{},bays:e.bays||[],bayNames:e.bayNames||{},slots:e.slots||{},clearedSlots:e.clearedSlots||[]};}
-function storageFloors(){const e=storageEdits();return [...[['ground','Ground floor'],['upper','Upper floor'],['workshop','Workshop']].map(([id,label])=>({id,label:e.floorNames[id]||label,builtin:true})),...e.floors.map(f=>({id:f.id,label:e.floorNames[f.id]||f.label,builtin:false}))];}
-function nextBayLetter(){
- const used=new Set([...plan.storage.map(b=>b.id),...storageEdits().bays.map(b=>b.id)]);
- for(const l of 'STUVXYZABCDEFGHIJKLMNOPQRW')if(!used.has(l))return l;
- for(const a of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')for(const b of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')if(!used.has(a+b))return a+b;
- return null;
+function inputText(inputs) {
+  return Object.entries(inputs)
+    .filter(([, q]) => q)
+    .map(([n, q]) => esc(n) + ' ' + num(q) + '/min')
+    .join(' · ');
 }
-function storageBays(){
- const e=storageEdits(),cleared=new Set(e.clearedSlots);
- const selected=calculated?new Set(Object.values(calculated.stages).flatMap(p=>Object.keys(p.storage||{}))):null;
- const keepCollectables=calculated?(calculated.settings.collectables??(calculated.settings.storage==='all')):true;
- const merge=(baseName,id)=>cleared.has(id)?null:(e.slots[id]??baseName);
- // Eight printed positions per bay, and as many more as the highest address
- // anyone has filled there: a bay that runs out grows instead of turning items
- // away, and the printed addresses keep their place at the front.
- const bayLength=id=>Object.keys(e.slots).reduce((n,k)=>bayOfSlot(k)===id?Math.max(n,slotPosition(k)):n,8);
- const positions=(id,from)=>Array.from({length:Math.max(0,bayLength(id)-from)},(_,i)=>{const at=id+String(from+i+1).padStart(2,'0');return {id:at,name:merge(null,at)};});
- const base=plan.storage.map(b=>({...b,name:e.bayNames[b.id]||b.name,items:[...b.items.map(x=>{
-  const planned=selected?(x.name&&(selected.has(x.name)||(['Q','R'].includes(b.id)&&keepCollectables))?x.name:null):x.name;
-  return {...x,name:merge(planned,x.id)};
- }),...positions(b.id,b.items.length)]}));
- const custom=e.bays.map(b=>({id:b.id,name:e.bayNames[b.id]||b.name,floor:b.floor,custom:true,items:positions(b.id,0)}));
- return [...base,...custom].filter(b=>b.custom||!selected||b.items.some(x=>x.name));
+function storageEdits() {
+  const e = state?.storageEdits || {};
+  return {
+    floors: e.floors || [],
+    floorNames: e.floorNames || {},
+    bays: e.bays || [],
+    bayNames: e.bayNames || {},
+    slots: e.slots || {},
+    clearedSlots: e.clearedSlots || [],
+  };
 }
-const slotChecks=["built","labelled","connected","verified"];
-const slotKeys=id=>slotChecks.map(k=>"slot-"+id+"-"+k);
-const slotDone=id=>slotKeys(id).every(checked);
-function renderStorage(){
- const floors=storageFloors();
- if(!floors.some(f=>f.id===floor))floor=floors[0].id;
- const current=floors.find(f=>f.id===floor);
- const bays=storageBays();
- const floorBays=bays.filter(b=>b.floor===floor),display=floorBays.filter(b=>!query||b.items.some(x=>x.name&&(x.id+' '+x.name).toLowerCase().includes(query.toLowerCase())));
- // The wide grid reads like the hall itself: the rear row at the top, two bays
- // to a row with the aisle between them. A narrow screen gets a single column,
- // where that arrangement reads as a jumble, so the document keeps the bays in
- // address order and their hall positions are grid placement only. Keyboard
- // focus then follows the stacked order too.
- const placed=[...display].sort((a,b)=>Math.floor((b.id.charCodeAt(0)-65)/2)-Math.floor((a.id.charCodeAt(0)-65)/2)||a.id.localeCompare(b.id)).map(b=>b.id);
- const ordered=[...display].sort((a,b)=>a.id.localeCompare(b.id));
- const aisles=Array.from({length:Math.floor(placed.length/2)},(_,r)=>`<div class="aisle" style="--aisle-row:${r+1}">MAIN AISLE</div>`).join('');
- const floorTabs=`<div class="tabs">${floors.map(f=>`<button class="tab ${floor===f.id?'active':''}" data-floor="${f.id}">${esc(f.label)}</button>`).join('')}</div>`;
- const editPanel=layoutEditing?`<section class="panel edit-panel"><h2>Storage layout</h2><div class="edit-grid">
+function storageFloors() {
+  const e = storageEdits();
+  return [
+    ...[
+      ['ground', 'Ground floor'],
+      ['upper', 'Upper floor'],
+      ['workshop', 'Workshop'],
+    ].map(([id, label]) => ({ id, label: e.floorNames[id] || label, builtin: true })),
+    ...e.floors.map(f => ({ id: f.id, label: e.floorNames[f.id] || f.label, builtin: false })),
+  ];
+}
+function nextBayLetter() {
+  const used = new Set([...plan.storage.map(b => b.id), ...storageEdits().bays.map(b => b.id)]);
+  for (const l of 'STUVXYZABCDEFGHIJKLMNOPQRW') if (!used.has(l)) return l;
+  for (const a of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    for (const b of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(a + b)) return a + b;
+  return null;
+}
+function storageBays() {
+  const e = storageEdits(),
+    cleared = new Set(e.clearedSlots);
+  const selected = calculated
+    ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
+    : null;
+  const keepCollectables = calculated
+    ? (calculated.settings.collectables ?? calculated.settings.storage === 'all')
+    : true;
+  const merge = (baseName, id) => (cleared.has(id) ? null : (e.slots[id] ?? baseName));
+  // Eight printed positions per bay, and as many more as the highest address
+  // anyone has filled there: a bay that runs out grows instead of turning items
+  // away, and the printed addresses keep their place at the front.
+  const bayLength = id =>
+    Object.keys(e.slots).reduce(
+      (n, k) => (bayOfSlot(k) === id ? Math.max(n, slotPosition(k)) : n),
+      8,
+    );
+  const positions = (id, from) =>
+    Array.from({ length: Math.max(0, bayLength(id) - from) }, (_, i) => {
+      const at = id + String(from + i + 1).padStart(2, '0');
+      return { id: at, name: merge(null, at) };
+    });
+  const base = plan.storage.map(b => ({
+    ...b,
+    name: e.bayNames[b.id] || b.name,
+    items: [
+      ...b.items.map(x => {
+        const planned = selected
+          ? x.name && (selected.has(x.name) || (['Q', 'R'].includes(b.id) && keepCollectables))
+            ? x.name
+            : null
+          : x.name;
+        return { ...x, name: merge(planned, x.id) };
+      }),
+      ...positions(b.id, b.items.length),
+    ],
+  }));
+  const custom = e.bays.map(b => ({
+    id: b.id,
+    name: e.bayNames[b.id] || b.name,
+    floor: b.floor,
+    custom: true,
+    items: positions(b.id, 0),
+  }));
+  return [...base, ...custom].filter(b => b.custom || !selected || b.items.some(x => x.name));
+}
+const slotChecks = ['built', 'labelled', 'connected', 'verified'];
+const slotKeys = id => slotChecks.map(k => 'slot-' + id + '-' + k);
+const slotDone = id => slotKeys(id).every(checked);
+function renderStorage() {
+  const floors = storageFloors();
+  if (!floors.some(f => f.id === floor)) floor = floors[0].id;
+  const current = floors.find(f => f.id === floor);
+  const bays = storageBays();
+  const floorBays = bays.filter(b => b.floor === floor),
+    display = floorBays.filter(
+      b =>
+        !query ||
+        b.items.some(
+          x => x.name && (x.id + ' ' + x.name).toLowerCase().includes(query.toLowerCase()),
+        ),
+    );
+  // The wide grid reads like the hall itself: the rear row at the top, two bays
+  // to a row with the aisle between them. A narrow screen gets a single column,
+  // where that arrangement reads as a jumble, so the document keeps the bays in
+  // address order and their hall positions are grid placement only. Keyboard
+  // focus then follows the stacked order too.
+  const placed = [...display]
+    .sort(
+      (a, b) =>
+        Math.floor((b.id.charCodeAt(0) - 65) / 2) - Math.floor((a.id.charCodeAt(0) - 65) / 2) ||
+        a.id.localeCompare(b.id),
+    )
+    .map(b => b.id);
+  const ordered = [...display].sort((a, b) => a.id.localeCompare(b.id));
+  const aisles = Array.from(
+    { length: Math.floor(placed.length / 2) },
+    (_, r) => `<div class="aisle" style="--aisle-row:${r + 1}">MAIN AISLE</div>`,
+  ).join('');
+  const floorTabs = `<div class="tabs">${floors.map(f => `<button class="tab ${floor === f.id ? 'active' : ''}" data-floor="${f.id}">${esc(f.label)}</button>`).join('')}</div>`;
+  const editPanel = layoutEditing
+    ? `<section class="panel edit-panel"><h2>Storage layout</h2><div class="edit-grid">
   <form id="add-bay" class="inline-form"><input id="new-bay-name" name="name" maxlength="80" required placeholder="New bay on this floor…" aria-label="New bay name"><button class="btn primary" type="submit">+ Add bay</button></form>
   <form id="add-floor" class="inline-form"><input id="new-floor-name" name="name" maxlength="80" required placeholder="New floor (e.g. Basement overflow)" aria-label="New floor name"><button class="btn" type="submit">Add floor</button></form>
   <form id="rename-floor" class="inline-form"><input id="floor-rename-input" name="name" maxlength="80" required placeholder="Rename this floor…" aria-label="Rename this floor"><button class="btn" type="submit">Rename floor</button></form>
-  ${current.builtin?'':`<button class="btn danger" data-remove-floor="${current.id}" ${floorBays.length?'disabled':''}>${floorBays.length?'Remove its bays first':'Remove this floor'}</button>`}
- </div><p class="small muted">Handbook bays and their addresses stay put: rename them or fill reserved positions. Added bays get the next free letter so container addresses and progress stay stable. A bay with no free position takes extra containers at 09 and upwards. Removing a container keeps its saved checkmarks.</p></section>`:'';
- const notice=floor==='ground'?(currentProfile.id!=='original'?'<div class="notice blue">Optional storage template. Each position has its own checklist; nothing is assumed built.</div>':'<div class="notice blue"><b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.</div>'):floor==='upper'?'<div class="notice blue">Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay outside this room.</div>':'';
- const bayArea=`${notice}
- ${query?'<p class="small muted">Filtered view: showing matching bays only. Clear search to see the full floor arrangement.</p>':''}${ordered.length?'<p class="eyebrow floor-marker">REAR OF HALL ↑</p>':''}<div class="floor-grid">${aisles+ordered.map(b=>bayHtml(b,placed.indexOf(b.id))).join('')||(floor==='workshop'?'':`<div class="empty-state">${floorBays.length?'No matching item on this floor. Try another floor.':'No bays on this floor yet. Use Edit layout to add one.'}</div>`)}</div>${ordered.length?'<div class="entry floor-marker">↓ ENTRANCE / STAIRS</div><div class="small muted">Within each bay, 01–04 are the rear bank; 05–08 are the front bank. Read left to right on both banks. Grey positions remain unassigned. Positions from 09 are containers added beyond the printed bay.</div>':''}`;
- return header('ONE ITEM · ONE ADDRESS','Storage room',calculated?'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.':'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.')+
- `<div class="toolbar">${floorTabs}<input id="storage-search" class="search" aria-label="Find storage on this floor" placeholder="Find an item or address on this floor…" value="${esc(query)}"><button class="btn ${layoutEditing?'primary':''}" data-toggle-layout>${layoutEditing?'Done editing':'Edit layout'}</button></div>`+
- editPanel+(floor==='workshop'?renderWorkshop():'')+bayArea+
- `<section style="margin-top:28px"><h2>Storage build checklist</h2><div class="checklist">${(calculated?[{id:'calc-storage-layout',title:'Build and label the selected storage positions',body:'Use one container per selected item. Reserve its refill supply and route sinkable overflow to the AWESOME Sink; gathered items need manual replenishment.'}]:plan.storageTasks).map(taskHtml).join('')}</div></section>`;
+  ${current.builtin ? '' : `<button class="btn danger" data-remove-floor="${current.id}" ${floorBays.length ? 'disabled' : ''}>${floorBays.length ? 'Remove its bays first' : 'Remove this floor'}</button>`}
+ </div><p class="small muted">Handbook bays and their addresses stay put: rename them or fill reserved positions. Added bays get the next free letter so container addresses and progress stay stable. A bay with no free position takes extra containers at 09 and upwards. Removing a container keeps its saved checkmarks.</p></section>`
+    : '';
+  const notice =
+    floor === 'ground'
+      ? currentProfile.id !== 'original'
+        ? '<div class="notice blue">Optional storage template. Each position has its own checklist; nothing is assumed built.</div>'
+        : '<div class="notice blue"><b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.</div>'
+      : floor === 'upper'
+        ? '<div class="notice blue">Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay outside this room.</div>'
+        : '';
+  const bayArea = `${notice}
+ ${query ? '<p class="small muted">Filtered view: showing matching bays only. Clear search to see the full floor arrangement.</p>' : ''}${ordered.length ? '<p class="eyebrow floor-marker">REAR OF HALL ↑</p>' : ''}<div class="floor-grid">${aisles + ordered.map(b => bayHtml(b, placed.indexOf(b.id))).join('') || (floor === 'workshop' ? '' : `<div class="empty-state">${floorBays.length ? 'No matching item on this floor. Try another floor.' : 'No bays on this floor yet. Use Edit layout to add one.'}</div>`)}</div>${ordered.length ? '<div class="entry floor-marker">↓ ENTRANCE / STAIRS</div><div class="small muted">Within each bay, 01–04 are the rear bank; 05–08 are the front bank. Read left to right on both banks. Grey positions remain unassigned. Positions from 09 are containers added beyond the printed bay.</div>' : ''}`;
+  return (
+    header(
+      'ONE ITEM · ONE ADDRESS',
+      'Storage room',
+      calculated
+        ? 'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.'
+        : 'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.',
+    ) +
+    `<div class="toolbar">${floorTabs}<input id="storage-search" class="search" aria-label="Find storage on this floor" placeholder="Find an item or address on this floor…" value="${esc(query)}"><button class="btn ${layoutEditing ? 'primary' : ''}" data-toggle-layout>${layoutEditing ? 'Done editing' : 'Edit layout'}</button></div>` +
+    editPanel +
+    (floor === 'workshop' ? renderWorkshop() : '') +
+    bayArea +
+    `<section style="margin-top:28px"><h2>Storage build checklist</h2><div class="checklist">${(calculated ? [{ id: 'calc-storage-layout', title: 'Build and label the selected storage positions', body: 'Use one container per selected item. Reserve its refill supply and route sinkable overflow to the AWESOME Sink; gathered items need manual replenishment.' }] : plan.storageTasks).map(taskHtml).join('')}</div></section>`
+  );
 }
-function bayHtml(b,position=0){
- const items=b.items.filter(x=>x.name),done=items.filter(x=>slotDone(x.id)).length;
- const title=layoutEditing?`<input id="bay-name-${b.id}" class="bay-rename" data-bay-rename="${b.id}" value="${esc(b.name)}" maxlength="80" aria-label="Rename bay ${b.id}">`:`<h3>${esc(b.name)}</h3>`;
- const removeBay=layoutEditing&&b.custom?`<button class="btn danger" data-remove-bay="${b.id}">Remove bay</button>`:'';
- // A full bay still takes another container: it gets the next address instead of
- // the form disappearing, up to the addressable limit.
- const addContainer=layoutEditing&&b.items.length<bayCapacity?`<form class="inline-form add-container" data-bay="${b.id}"><input id="bay-draft-${b.id}" name="name" maxlength="120" required placeholder="${items.length<b.items.length?'Add container: item name…':'Add a position beyond '+b.items.at(-1).id+'…'}" aria-label="Add container to bay ${b.id}"><button class="btn" type="submit">+ Add</button></form>`:'';
- return `<section class="bay" style="--bay-row:${Math.floor(position/2)+1};--bay-col:${position%2?3:1}"><header class="bay-head"><span class="bay-letter">${b.id}</span>${title}</header><div class="bay-actions"><span class="small muted">${done}/${items.length} containers done</span><span>${removeBay} <button class="btn quiet" data-complete-bay="${b.id}" ${!items.length||done===items.length?'disabled':''}>Complete room ${b.id}</button></span></div><div class="bay-items">${b.items.map((x,i)=>`${i===4?'<div class="walkway">BAY WALKWAY</div>':''}${i===8?'<div class="walkway added">ADDED POSITIONS</div>':''}${x.name?`<div class="slot ${slotDone(x.id)?'done':''} ${query&&(x.id+' '+x.name).toLowerCase().includes(query.toLowerCase())?'match':''}">${layoutEditing?`<button class="slot-remove" data-clear-slot="${x.id}" aria-label="Clear container ${x.id}: ${esc(x.name)}">✕</button>`:''}<button class="slot-details" data-slot="${x.id}" aria-label="${x.id}: ${esc(x.name)}"><strong>${x.id}</strong><img class="item-icon" src="./icons/${slug(x.name)}.png" width="48" height="48" loading="lazy" alt=""><span>${esc(x.name)}</span></button><label class="slot-complete"><input type="checkbox" data-complete-slot="${x.id}" aria-label="Complete ${x.id}: ${esc(x.name)}" ${slotDone(x.id)?'checked':''}>Done</label></div>`:`<div class="slot empty"><strong>${x.id}</strong><span>Reserved</span></div>`}`).join('')}</div>${addContainer}</section>`;
+function bayHtml(b, position = 0) {
+  const items = b.items.filter(x => x.name),
+    done = items.filter(x => slotDone(x.id)).length;
+  const title = layoutEditing
+    ? `<input id="bay-name-${b.id}" class="bay-rename" data-bay-rename="${b.id}" value="${esc(b.name)}" maxlength="80" aria-label="Rename bay ${b.id}">`
+    : `<h3>${esc(b.name)}</h3>`;
+  const removeBay =
+    layoutEditing && b.custom
+      ? `<button class="btn danger" data-remove-bay="${b.id}">Remove bay</button>`
+      : '';
+  // A full bay still takes another container: it gets the next address instead of
+  // the form disappearing, up to the addressable limit.
+  const addContainer =
+    layoutEditing && b.items.length < bayCapacity
+      ? `<form class="inline-form add-container" data-bay="${b.id}"><input id="bay-draft-${b.id}" name="name" maxlength="120" required placeholder="${items.length < b.items.length ? 'Add container: item name…' : 'Add a position beyond ' + b.items.at(-1).id + '…'}" aria-label="Add container to bay ${b.id}"><button class="btn" type="submit">+ Add</button></form>`
+      : '';
+  return `<section class="bay" style="--bay-row:${Math.floor(position / 2) + 1};--bay-col:${position % 2 ? 3 : 1}"><header class="bay-head"><span class="bay-letter">${b.id}</span>${title}</header><div class="bay-actions"><span class="small muted">${done}/${items.length} containers done</span><span>${removeBay} <button class="btn quiet" data-complete-bay="${b.id}" ${!items.length || done === items.length ? 'disabled' : ''}>Complete room ${b.id}</button></span></div><div class="bay-items">${b.items.map((x, i) => `${i === 4 ? '<div class="walkway">BAY WALKWAY</div>' : ''}${i === 8 ? '<div class="walkway added">ADDED POSITIONS</div>' : ''}${x.name ? `<div class="slot ${slotDone(x.id) ? 'done' : ''} ${query && (x.id + ' ' + x.name).toLowerCase().includes(query.toLowerCase()) ? 'match' : ''}">${layoutEditing ? `<button class="slot-remove" data-clear-slot="${x.id}" aria-label="Clear container ${x.id}: ${esc(x.name)}">✕</button>` : ''}<button class="slot-details" data-slot="${x.id}" aria-label="${x.id}: ${esc(x.name)}"><strong>${x.id}</strong><img class="item-icon" src="./icons/${slug(x.name)}.png" width="48" height="48" loading="lazy" alt=""><span>${esc(x.name)}</span></button><label class="slot-complete"><input type="checkbox" data-complete-slot="${x.id}" aria-label="Complete ${x.id}: ${esc(x.name)}" ${slotDone(x.id) ? 'checked' : ''}>Done</label></div>` : `<div class="slot empty"><strong>${x.id}</strong><span>Reserved</span></div>`}`).join('')}</div>${addContainer}</section>`;
 }
-function renderWorkshop(){const items=[['bench','Craft Bench and Equipment Workshop','Side by side near the entrance.'],['tools','Tools and mobility equipment','Personal boxes on the left wall.'],['weapons','Weapons and spare wearables','Personal boxes on the right wall. Ammo and filters stay in G/H.'],['mam','MAM and inventory drop','Rear wall, with collected items routed to Q/R. Finish the sorter at a recovery chest.']];return `<div class="panel"><span class="eyebrow">GROUND-FLOOR REAR EXTENSION</span><h2 style="margin-top:10px">Workshop beneath Q/R</h2><p>The upper floor gets the new storage bays; the space underneath becomes your crafting area. No existing production-container addresses change.</p><div class="checklist">${items.map(([id,title,body])=>taskHtml({id:'workshop-'+id,title,body})).join('')}</div></div>`;}
-function renderResources(){const raw=plan.resources[stage()],p=plan.plans[stage()];return header('CAPACITY BEFORE CONSTRUCTION','Power & resources','These are planned full-stage requirements, not live readings from your save. Mining totals already include retained turbofuel, trucks and all new power.')+
- `<div class="stats">${stat('Gross generation',num(plan.power[stage()])+' GW','At this stage’s completion')}${stat('Production peak',num(p.manufacturingPeakGW)+' GW','Before the utility allowance')}${stat('Production average',num(p.manufacturingAvgGW)+' GW','Half-consumption setting')}${stat('Coal remaining',num(74400-raw.Coal)+'/min','Against all-pure mining limit')}</div>
- <div class="notice">Verify your randomized nitrogen wells can supply <b>${num(raw['Nitrogen Gas']||0)}/min</b> at this stage. The all-pure resource limits assume fully developed extraction and logistics. Additional completion modules are not included.</div>
- <div class="table-wrap"><table><thead><tr><th>Fresh resource</th><th>Required /min</th><th>Available /min</th><th>Remaining /min</th><th>Use</th></tr></thead><tbody>${Object.entries(raw).sort(([a],[b])=>a.localeCompare(b)).map(([n,q])=>{const cap=plan.capacities[n],fraction=cap?q/cap:0;return `<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td class="number">${num(q)}</td><td class="number">${cap?num(cap):n==='Water'?'Extraction limited':'Verify wells'}</td><td class="number ${cap&&fraction>.9?'warn':''}">${cap?num(cap-q):'—'}</td><td>${cap?`${num(fraction*100)}%<div class="resource-bar ${fraction>.9?'tight':''}"><span style="width:${Math.min(100,fraction*100)}%"></span></div>`:'—'}</td></tr>`;}).join('')}</tbody></table></div><p class="small muted">Crude availability counts 30 ordinary pure nodes; oil wells are additional. Water includes a 2,000/min reserve for retained turbofuel and resin processing.</p>
- <div class="backup-grid" style="margin-top:24px"><section class="panel"><h2>Power commissioning</h2><div class="checklist">${[['power-retained','Retained turbofuel: 44.425 GW'],['power-rocket-1','Rocket-fuel block 1: +72 GW'],['power-rocket-2','Rocket-fuel block 2: +72 GW'],['power-u4','Phase 4 uranium: +125 GW'],...Array.from({length:4},(_,i)=>['power-rocket-'+(i+3),'Rocket-fuel block '+(i+3)+': +72 GW']),['power-nuclear-final','Complete nuclear fleet: 437.5 GW total']].map(([id,title])=>`<label class="check-row"><input type="checkbox" data-check="${id}" ${doneAttr(id)}>${title}</label>`).join('')}</div></section>
+function renderWorkshop() {
+  const items = [
+    ['bench', 'Craft Bench and Equipment Workshop', 'Side by side near the entrance.'],
+    ['tools', 'Tools and mobility equipment', 'Personal boxes on the left wall.'],
+    [
+      'weapons',
+      'Weapons and spare wearables',
+      'Personal boxes on the right wall. Ammo and filters stay in G/H.',
+    ],
+    [
+      'mam',
+      'MAM and inventory drop',
+      'Rear wall, with collected items routed to Q/R. Finish the sorter at a recovery chest.',
+    ],
+  ];
+  return `<div class="panel"><span class="eyebrow">GROUND-FLOOR REAR EXTENSION</span><h2 style="margin-top:10px">Workshop beneath Q/R</h2><p>The upper floor gets the new storage bays; the space underneath becomes your crafting area. No existing production-container addresses change.</p><div class="checklist">${items.map(([id, title, body]) => taskHtml({ id: 'workshop-' + id, title, body })).join('')}</div></div>`;
+}
+function renderResources() {
+  const raw = plan.resources[stage()],
+    p = plan.plans[stage()];
+  return (
+    header(
+      'CAPACITY BEFORE CONSTRUCTION',
+      'Power & resources',
+      'These are planned full-stage requirements, not live readings from your save. Mining totals already include retained turbofuel, trucks and all new power.',
+    ) +
+    `<div class="stats">${stat('Gross generation', num(plan.power[stage()]) + ' GW', 'At this stage’s completion')}${stat('Production peak', num(p.manufacturingPeakGW) + ' GW', 'Before the utility allowance')}${stat('Production average', num(p.manufacturingAvgGW) + ' GW', 'Half-consumption setting')}${stat('Coal remaining', num(74400 - raw.Coal) + '/min', 'Against all-pure mining limit')}</div>
+ <div class="notice">Verify your randomized nitrogen wells can supply <b>${num(raw['Nitrogen Gas'] || 0)}/min</b> at this stage. The all-pure resource limits assume fully developed extraction and logistics. Additional completion modules are not included.</div>
+ <div class="table-wrap"><table><thead><tr><th>Fresh resource</th><th>Required /min</th><th>Available /min</th><th>Remaining /min</th><th>Use</th></tr></thead><tbody>${Object.entries(
+   raw,
+ )
+   .sort(([a], [b]) => a.localeCompare(b))
+   .map(([n, q]) => {
+     const cap = plan.capacities[n],
+       fraction = cap ? q / cap : 0;
+     return `<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td class="number">${num(q)}</td><td class="number">${cap ? num(cap) : n === 'Water' ? 'Extraction limited' : 'Verify wells'}</td><td class="number ${cap && fraction > 0.9 ? 'warn' : ''}">${cap ? num(cap - q) : '—'}</td><td>${cap ? `${num(fraction * 100)}%<div class="resource-bar ${fraction > 0.9 ? 'tight' : ''}"><span style="width:${Math.min(100, fraction * 100)}%"></span></div>` : '—'}</td></tr>`;
+   })
+   .join(
+     '',
+   )}</tbody></table></div><p class="small muted">Crude availability counts 30 ordinary pure nodes; oil wells are additional. Water includes a 2,000/min reserve for retained turbofuel and resin processing.</p>
+ <div class="backup-grid" style="margin-top:24px"><section class="panel"><h2>Power commissioning</h2><div class="checklist">${[['power-retained', 'Retained turbofuel: 44.425 GW'], ['power-rocket-1', 'Rocket-fuel block 1: +72 GW'], ['power-rocket-2', 'Rocket-fuel block 2: +72 GW'], ['power-u4', 'Phase 4 uranium: +125 GW'], ...Array.from({ length: 4 }, (_, i) => ['power-rocket-' + (i + 3), 'Rocket-fuel block ' + (i + 3) + ': +72 GW']), ['power-nuclear-final', 'Complete nuclear fleet: 437.5 GW total']].map(([id, title]) => `<label class="check-row"><input type="checkbox" data-check="${id}" ${doneAttr(id)}>${title}</label>`).join('')}</div></section>
  <section class="panel"><h2>One 72 GW rocket-fuel block</h2><p><b>Inputs/min:</b> 300 Crude, 800 Sulfur, 400 Coal, 600 Nitrogen and 1,000 Water.</p><p>10 Heavy Oil Residue refineries → 8 Diluted Fuel blenders → 8 Nitro Rocket Fuel blenders. Add 5 Residual Rubber refineries and 288 Fuel Generators at 100%.</p><p class="small muted">Produces 1,200 Rocket Fuel, 200 Compacted Coal and 100 Rubber/min. These byproducts are not credited against other factory contracts.</p><div class="notice blue">At Phase 5: (579.231 × 1.2 + 20) ÷ 0.8 ≈ <b>894 GW</b> preliminary requirement. Planned gross capacity: <b>913.925 GW</b>. Replace the 20 GW existing-load allowance with your measured load.</div></section></div>
- <section class="panel" style="margin-top:24px"><h2>Nuclear sequence</h2><p>Phase 4: 50 uranium reactors generate 500 waste/min. Process it into 2.5 Plutonium Fuel Rods/min and sink those rods.</p><p>Phase 5: 100 uranium reactors → 1,000 Uranium Waste/min → 5 Plutonium Fuel Rods/min → 50 plutonium reactors → 50 Plutonium Waste/min → 25 Ficsonium Fuel Rods/min → 25 Ficsonium reactors.</p><p class="small muted">Build downstream processing and burning capacity first. Final reactor cooling needs 42,000 Water/min, already included in the resource table. Keep radioactive buffers at the nuclear site.</p></section>`;}
-function renderBackup(){if(browserMode)return renderBrowserBackup();if(calculated)return renderCalculatedBackup();return portablePanel()+header('YOUR PROGRESS','Backup & notes','Progress is stored on the server, so the same Docker instance works across your devices.')+`<div class="backup-grid"><section class="panel"><h2>Download a backup</h2><p>Save a copy of your checkmarks, delivery counts, personal tasks and notes.</p><a class="btn primary" href="/api/export?save=${currentSave.id}&profile=${currentProfile.id}" download>Download progress JSON ↓</a><p class="small muted">The Docker volume keeps progress through container updates. This download gives you a separate copy.</p></section><section class="panel"><h2>Restore a backup</h2><p>Import a backup from this planner. It replaces current progress after confirmation; factory-plan data stays unchanged.</p><label class="btn">Choose backup file<input id="import-file" type="file" accept="application/json,.json" hidden></label><p class="small muted">Up to 2 MB. The previous state is also retained as workspace.json.bak on the server. The original progress file is kept during migration.</p></section></div><section class="panel" style="margin-top:24px"><h2>Save-wide notes</h2><textarea id="global-note" class="notes" maxlength="6000" aria-label="Save-wide notes">${esc(state.notes.global||'')}</textarea><div class="note-save"><span class="small muted">Seed, locations, routes and decisions.</span><button class="btn" data-save-note="global" data-input="global-note">Save notes</button></div></section><section class="panel"><h2>Plan assumptions</h2><p class="small">All tiers through 6 unlocked. Phase 3 Versatile Frameworks delivered. Pure nodes, 50× elevator costs, half consumption. Retire coal and temporary fuel; retain turbofuel. Phase 5 resource conversion and extra Reanimated SAM are included. Ground-floor storage shell is already built; individual containers are not assumed connected.</p><p class="small">The final extra storage modules need additional input allocations. After Phase 5, storage takes priority over maintaining full elevator-export rates for sinking. Gathered items require collection; equipment and inhalers are manually crafted.</p><div class="list-links">${plan.sources.map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.title)} ↗</a>`).join('')}</div></section>`;}
-const itemIcon=name=>name?`<img class="item-icon" src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/,''))}.png" width="42" height="42" loading="lazy" alt="">`:'';
+ <section class="panel" style="margin-top:24px"><h2>Nuclear sequence</h2><p>Phase 4: 50 uranium reactors generate 500 waste/min. Process it into 2.5 Plutonium Fuel Rods/min and sink those rods.</p><p>Phase 5: 100 uranium reactors → 1,000 Uranium Waste/min → 5 Plutonium Fuel Rods/min → 50 plutonium reactors → 50 Plutonium Waste/min → 25 Ficsonium Fuel Rods/min → 25 Ficsonium reactors.</p><p class="small muted">Build downstream processing and burning capacity first. Final reactor cooling needs 42,000 Water/min, already included in the resource table. Keep radioactive buffers at the nuclear site.</p></section>`
+  );
+}
+function renderBackup() {
+  if (browserMode) return renderBrowserBackup();
+  if (calculated) return renderCalculatedBackup();
+  return (
+    portablePanel() +
+    header(
+      'YOUR PROGRESS',
+      'Backup & notes',
+      'Progress is stored on the server, so the same Docker instance works across your devices.',
+    ) +
+    `<div class="backup-grid"><section class="panel"><h2>Download a backup</h2><p>Save a copy of your checkmarks, delivery counts, personal tasks and notes.</p><a class="btn primary" href="/api/export?save=${currentSave.id}&profile=${currentProfile.id}" download>Download progress JSON ↓</a><p class="small muted">The Docker volume keeps progress through container updates. This download gives you a separate copy.</p></section><section class="panel"><h2>Restore a backup</h2><p>Import a backup from this planner. It replaces current progress after confirmation; factory-plan data stays unchanged.</p><label class="btn">Choose backup file<input id="import-file" type="file" accept="application/json,.json" hidden></label><p class="small muted">Up to 2 MB. The previous state is also retained as workspace.json.bak on the server. The original progress file is kept during migration.</p></section></div><section class="panel" style="margin-top:24px"><h2>Save-wide notes</h2><textarea id="global-note" class="notes" maxlength="6000" aria-label="Save-wide notes">${esc(state.notes.global || '')}</textarea><div class="note-save"><span class="small muted">Seed, locations, routes and decisions.</span><button class="btn" data-save-note="global" data-input="global-note">Save notes</button></div></section><section class="panel"><h2>Plan assumptions</h2><p class="small">All tiers through 6 unlocked. Phase 3 Versatile Frameworks delivered. Pure nodes, 50× elevator costs, half consumption. Retire coal and temporary fuel; retain turbofuel. Phase 5 resource conversion and extra Reanimated SAM are included. Ground-floor storage shell is already built; individual containers are not assumed connected.</p><p class="small">The final extra storage modules need additional input allocations. After Phase 5, storage takes priority over maintaining full elevator-export rates for sinking. Gathered items require collection; equipment and inhalers are manually crafted.</p><div class="list-links">${plan.sources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noreferrer">${esc(s.title)} ↗</a>`).join('')}</div></section>`
+  );
+}
+const itemIcon = name =>
+  name
+    ? `<img class="item-icon" src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/, ''))}.png" width="42" height="42" loading="lazy" alt="">`
+    : '';
 // Belt/pipe logistics. Capacities are game constants; the unlocking milestone (tier, name) comes from progression.json.
-const FLUIDS=new Set(['Fuel','Rocket Fuel','Nitric Acid','Turbofuel','Ionized Fuel','Dark Matter Residue','Excited Photonic Matter','Heavy Oil Residue','Alumina Solution','Sulfuric Acid','Dissolved Silica','Nitrogen Gas','Water','Crude Oil','Liquid Biofuel']);
-const BELT_LANES=[{mark:'Mk.1',cap:60,entry:'Schematic_1-2_C'},{mark:'Mk.2',cap:120,entry:'Schematic_3-2_C'},{mark:'Mk.3',cap:270,entry:'Schematic_5-3_C'},{mark:'Mk.4',cap:480,entry:'Schematic_6-1_C'},{mark:'Mk.5',cap:780,entry:'Schematic_7-2_C'},{mark:'Mk.6',cap:1200,entry:'Schematic_9-5_C'}];
-const PIPE_LANES=[{mark:'Mk.1',cap:300,entry:'Schematic_3-1_C'},{mark:'Mk.2',cap:600,entry:'Schematic_6-5_C'}];
+const FLUIDS = new Set([
+  'Fuel',
+  'Rocket Fuel',
+  'Nitric Acid',
+  'Turbofuel',
+  'Ionized Fuel',
+  'Dark Matter Residue',
+  'Excited Photonic Matter',
+  'Heavy Oil Residue',
+  'Alumina Solution',
+  'Sulfuric Acid',
+  'Dissolved Silica',
+  'Nitrogen Gas',
+  'Water',
+  'Crude Oil',
+  'Liquid Biofuel',
+]);
+const BELT_LANES = [
+  { mark: 'Mk.1', cap: 60, entry: 'Schematic_1-2_C' },
+  { mark: 'Mk.2', cap: 120, entry: 'Schematic_3-2_C' },
+  { mark: 'Mk.3', cap: 270, entry: 'Schematic_5-3_C' },
+  { mark: 'Mk.4', cap: 480, entry: 'Schematic_6-1_C' },
+  { mark: 'Mk.5', cap: 780, entry: 'Schematic_7-2_C' },
+  { mark: 'Mk.6', cap: 1200, entry: 'Schematic_9-5_C' },
+];
+const PIPE_LANES = [
+  { mark: 'Mk.1', cap: 300, entry: 'Schematic_3-1_C' },
+  { mark: 'Mk.2', cap: 600, entry: 'Schematic_6-5_C' },
+];
 // Oil-campus recipes per machine at 100%, per minute; values from the bundled recipes.json dataset.
-const OIL_RECIPES={
- 'Plastic':{in:{'Crude Oil':30},out:{'Plastic':20,'Heavy Oil Residue':10}},
- 'Rubber':{in:{'Crude Oil':30},out:{'Rubber':20,'Heavy Oil Residue':20}},
- 'Residual Fuel':{in:{'Heavy Oil Residue':60},out:{'Fuel':40}},
- 'Residual Rubber':{in:{'Polymer Resin':40,'Water':40},out:{'Rubber':20}},
- 'Alternate: Heavy Oil Residue':{in:{'Crude Oil':30},out:{'Heavy Oil Residue':40,'Polymer Resin':20}},
- 'Alternate: Diluted Fuel':{in:{'Heavy Oil Residue':50,'Water':100},out:{'Fuel':100}},
- 'Alternate: Recycled Plastic':{in:{'Rubber':30,'Fuel':30},out:{'Plastic':60}},
- 'Alternate: Recycled Rubber':{in:{'Plastic':30,'Fuel':30},out:{'Rubber':60}}};
-const phaseForLaneTier=t=>t<=2?1:t<=4?2:t<=6?3:t<=8?4:5;
-function laneMilestone(l){const e=progressionData?.entries.find(x=>x.id===l.entry);return e?{name:e.name,tier:e.tier,phase:phaseForLaneTier(e.tier),marked:checked('unlock-'+e.id)}:null;}
-function bestLane(fluid,st){
- const lanes=fluid?PIPE_LANES:BELT_LANES;const stageNo=Number(st??stage());let best=lanes[0],ms=laneMilestone(lanes[0]);
- for(const l of lanes){const m=laneMilestone(l);if(!m||m.marked||m.phase<=stageNo){best=l;ms=m;}}
- const next=lanes[lanes.indexOf(best)+1];
- return {...best,fluid,unit:fluid?' m³/min':'/min',milestone:ms,next:next?{...next,milestone:laneMilestone(next)}:null};
+const OIL_RECIPES = {
+  Plastic: { in: { 'Crude Oil': 30 }, out: { Plastic: 20, 'Heavy Oil Residue': 10 } },
+  Rubber: { in: { 'Crude Oil': 30 }, out: { Rubber: 20, 'Heavy Oil Residue': 20 } },
+  'Residual Fuel': { in: { 'Heavy Oil Residue': 60 }, out: { Fuel: 40 } },
+  'Residual Rubber': { in: { 'Polymer Resin': 40, Water: 40 }, out: { Rubber: 20 } },
+  'Alternate: Heavy Oil Residue': {
+    in: { 'Crude Oil': 30 },
+    out: { 'Heavy Oil Residue': 40, 'Polymer Resin': 20 },
+  },
+  'Alternate: Diluted Fuel': { in: { 'Heavy Oil Residue': 50, Water: 100 }, out: { Fuel: 100 } },
+  'Alternate: Recycled Plastic': { in: { Rubber: 30, Fuel: 30 }, out: { Plastic: 60 } },
+  'Alternate: Recycled Rubber': { in: { Plastic: 30, Fuel: 30 }, out: { Rubber: 60 } },
+};
+const phaseForLaneTier = t => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
+function laneMilestone(l) {
+  const e = progressionData?.entries.find(x => x.id === l.entry);
+  return e
+    ? {
+        name: e.name,
+        tier: e.tier,
+        phase: phaseForLaneTier(e.tier),
+        marked: checked('unlock-' + e.id),
+      }
+    : null;
 }
-function lanePlan(rate,fluid,st){const lane=bestLane(fluid,st);const count=Math.max(1,Math.ceil(rate/lane.cap-1e-9));const last=rate-(count-1)*lane.cap;return {lane,count,last,full:count-(last<lane.cap-1e-9?1:0),spare:count*lane.cap-rate,word:fluid?'pipe':'belt'};}
-const machinesLabel=(count,machine)=>count>1?`1 of the ${num(count)} ${esc(machine.replace(/y$/,'ie'))}s`:`1 × ${esc(machine)}`;
-function recipeCell([n,q,link],out){
- const inner=`${n==='MW'?'':itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n)?' m³':n==='MW'?' MW':''}</b><small>${n==='MW'?'Power generation':esc(n)}</small></span>`;
- return link?`<button class="rail-cell${out?' out':''}" ${link}>${inner}</button>`:`<div class="rail-cell${out?' out':''}">${inner}</div>`;
-}
-function recipePanelHtml(m){
- const rc=m.recipe;if(!rc)return '';
- return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>what ${machinesLabel(m.machineCount,rc.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x=>recipeCell(x)).join('')||'<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x=>recipeCell(x,true)).join('')}</div></div></div>`;
-}
-function flowHtml(m){
- if(!m||(!m.inputs.length&&!m.outputs.length))return '';
- const inTile=i=>{const p=i.plan,load=Math.round(i.rate/(p.count*p.lane.cap)*100);
-  const inner=`${itemIcon(i.name)}<span class="rail-main"><b>${esc(i.name)}</b><small${load>=70?' class="hot"':''}>${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''} · ${load}% load</small></span><span class="rail-rate">${num(i.rate)}<small>${p.lane.unit}</small></span>`;
-  return i.link?`<button class="rail-tile" ${i.link}>${inner}</button>`:`<div class="rail-tile">${inner}</div>`;};
- const outRow=o=>{
-  const subs={consumer:`consumer${o.beltTxt?' · '+o.beltTxt:''}`,store:'protected module',ship:o.shipSub||'delivery',drone:'protected supply contract',sink:o.subTxt||'whole-machine rounding surplus',more:'combined smaller destinations'};
-  const name=o.link?`<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`:`<b class="${o.kind==='sink'||o.kind==='more'?'dim':''}">${esc(o.label)}</b>`;
-  const machCol=o.mach===undefined?'<span class="rail-mach"></span>':`<span class="rail-mach"><b>≈ ${o.mach<0.5?'<1':num(Math.ceil(o.mach-1e-9))}</b> × ${esc(m.machineName)}<small>${num(o.mach)} at 100% · ${m.local?'build beside it':'round up'}</small></span>`;
-  const rate=o.rateTxt??(o.rate!==undefined?`${num(o.rate)}<small>${o.unit||'/min'}</small>`:'');
-  return `<div class="rail-row ${o.kind}">${o.icon?itemIcon(o.icon):'<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre?esc(o.pre)+' · ':''}${subs[o.kind]||''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;};
- const bar=m.bar?`${m.inputs.length?'<div class="rail-arrow">↓</div>':''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length?'<div class="rail-arrow">↓</div>':''}`:'';
- return `<h3>Flow at ${phaseLabel(m.stage)}</h3>${recipePanelHtml(m)}${m.inputs.length?`<div class="rail-cap">Inputs · ${m.inputs.length} line${m.inputs.length>1?'s':''} in</div><div class="rail-grid">${m.inputs.map(inTile).join('')}</div>`:''}${bar}${m.outputs.length?`<div class="rail-caps"><span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(o=>o.mach!==undefined)?`<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>`:''}</div><div class="rail-rows">${m.outputs.map(outRow).join('')}</div>${m.bankNote||''}`:''}`;
-}
-function capFlowOutputs(list,unit='/min'){if(list.length<=10)return list;const rest=list.slice(9),sum=rest.reduce((s,x)=>s+(x.rate||0),0);return [...list.slice(0,9),{kind:'more',label:`+ ${rest.length} more destinations`,rate:sum,unit}];}
-function laneAdviceHtml(m){
- if(!m||!m.inputs.length)return '';
- const belts=bestLane(false,m.stage),pipes=bestLane(true,m.stage);
- const nextNote=belts.next?.milestone?` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${esc(belts.next.milestone.name)} in Phase ${belts.next.milestone.phase}.`:'';
- const rows=m.inputs.map(i=>{
-  const p=i.plan,l=p.lane,per=i.rate/m.equivalent,fed=Math.floor(l.cap/per+1e-9);
-  const parts=[`<b>${num(i.rate)}${l.unit}</b> → <b>${p.count} × ${l.mark} ${p.word}${p.count>1?'s':''}</b>${p.count>1?` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`:` (${Math.round(i.rate/l.cap*100)}% of ${num(l.cap)}${l.unit})`}.`];
-  if(m.machineCount>1)parts.push(fed<1?`Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`:m.machineCount>fed?`One full ${l.mark} ${p.word} feeds <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) — plan manifold rows of ${fed}.`:`One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`);
-  if(p.count>1&&p.spare>0.01){
-   const merge=m.sameItemConsumers(i.name).filter(x=>x.rate<=p.spare+0.01);
-   parts.push(`The last ${p.word} has <b>${num(p.spare)}${l.unit} spare</b> — ${merge.length?`enough to also carry ${merge.slice(0,2).map(x=>`<button class="btn quiet" ${x.attr}>${esc(x.label)} (${num(x.rate)}${l.unit}) ↗</button>`).join(' or ')} from the same bus`:'keep it as expansion headroom on this manifold'}.`);
+function bestLane(fluid, st) {
+  const lanes = fluid ? PIPE_LANES : BELT_LANES;
+  const stageNo = Number(st ?? stage());
+  let best = lanes[0],
+    ms = laneMilestone(lanes[0]);
+  for (const l of lanes) {
+    const m = laneMilestone(l);
+    if (!m || m.marked || m.phase <= stageNo) {
+      best = l;
+      ms = m;
+    }
   }
-  if(i.local)parts.push(i.local);
-  return `<div class="logi-row">${itemIcon(i.name)}<div><b>${esc(i.name)}</b>${parts.map(t=>`<p>${t}</p>`).join('')}</div></div>`;
- }).join('');
- return `<h3>Belts &amp; pipes</h3><p class="small muted">${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in your save yet, plan with the earlier mark.</p><div class="logi">${rows}</div>`;
+  const next = lanes[lanes.indexOf(best) + 1];
+  return {
+    ...best,
+    fluid,
+    unit: fluid ? ' m³/min' : '/min',
+    milestone: ms,
+    next: next ? { ...next, milestone: laneMilestone(next) } : null,
+  };
 }
-function handbookFlowModel(f,st,r,localInput,bankOnly=false){
- const fluidOut=FLUIDS.has(f.name);const unit=fluidOut?' m³/min':'/min';
- const eq=Math.max(r.machines-1+(r.lastClock??100)/100,0.01);const perOut=r.output/eq;
- const beltTxt=p=>`${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''}`;
- const mach=q=>bankOnly?undefined:q/perOut;
- const consumers=plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[f.name]).map(o=>{const q=o.stages[st].inputs[f.name];return {kind:'consumer',label:o.name,icon:o.name,link:`data-factory="${o.id}"`,rate:q,unit,mach:mach(q),beltTxt:f.local?'made on site':beltTxt(lanePlan(q,fluidOut,st))};}).sort((a,b)=>b.rate-a.rate);
- const outputs=[...consumers];
- if(f.nuclear&&!consumers.length)outputs.push({kind:'ship',label:'Nuclear power fleet',shipSub:'planned in Power & resources',icon:f.name,rateTxt:''});
- if(r.storage)outputs.push({kind:'store',label:'Storage refill',icon:f.name,rate:r.storage,unit,mach:mach(r.storage)});
- if(r.delivery)outputs.push({kind:'ship',label:'Space Elevator delivery',icon:f.name,rate:r.delivery,unit,mach:mach(r.delivery)});
- const surplus=Math.max(0,r.output-(r.demand??r.output));
- if(surplus>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:f.name,rate:surplus,unit});
- const inputs=bankOnly?[]:Object.entries(r.inputs||{}).map(([n,q])=>{const lp=localInput(n);const src=lp||plan.factories.find(x=>x.name===n&&x.stages[st]);return {name:n,rate:q,link:src?`data-factory="${src.id}"`:'',plan:lanePlan(q,FLUIDS.has(n),st),local:lp?`<button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q/lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`:''};});
- const capped=capFlowOutputs(outputs,unit);
- const splits=capped.filter(o=>o.mach!==undefined&&o.kind!=='sink');
- const splitTxt=splits.length>1?` · split ≈ ${splits.map(o=>num(Math.ceil(o.mach-1e-9))).join(' / ')} across the deliveries below`:'';
- const clock=(r.lastClock??100)<100?`@ 100% except the last at ${num(r.lastClock)}%`:'@ 100%';
- return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:!!f.local,
-  recipe:bankOnly?null:{name:String(r.recipe||'').replace('Alternate: ',''),machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:[[f.name,perOut]]},
-  bar:bankOnly?null:{sub:`${esc(String(r.recipe||'').replace('Alternate: ',''))} · ${clock} · ${num3(perOut)} ${esc(f.name)}/min out per machine${splitTxt}${f.local?' · built beside the consumers':''}`,outTxt:`${num(r.output)}<small>${unit}</small>`,outSub:f.local?'out · distributed':'out · '+beltTxt(lanePlan(r.output,fluidOut,st))},
-  sameItemConsumers:n=>plan.factories.filter(o=>o.id!==f.id&&o.stages[st]?.inputs?.[n]).map(o=>({label:o.name,rate:o.stages[st].inputs[n],attr:`data-factory="${o.id}"`}))};
+function lanePlan(rate, fluid, st) {
+  const lane = bestLane(fluid, st);
+  const count = Math.max(1, Math.ceil(rate / lane.cap - 1e-9));
+  const last = rate - (count - 1) * lane.cap;
+  return {
+    lane,
+    count,
+    last,
+    full: count - (last < lane.cap - 1e-9 ? 1 : 0),
+    spare: count * lane.cap - rate,
+    word: fluid ? 'pipe' : 'belt',
+  };
 }
-function calcFlowModel(r){
- const x=calcStage(),st=stage(),multi=Object.keys(r.outputs||{}).length>1;
- const eq=Math.max(r.equivalent||r.machines-1+(r.lastClock??100)/100||1,0.01);
- const beltTxt=p=>`${p.count} × ${p.lane.mark} ${p.word}${p.count>1?'s':''}`;
- const outputs=[];
- for(const n of Object.keys(r.outputs||{})){
-  const fluid=FLUIDS.has(n),unit=fluid?' m³/min':'/min',pre=multi?n:'',perOut=r.outputs[n]/eq;
-  const mach=q=>multi?undefined:q/perOut;
-  for(const o of (x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]))outputs.push({kind:'consumer',label:o.name,icon:Object.keys(o.outputs||{})[0]||n,link:`data-calc-factory="${o.id}"`,rate:o.inputs[n],unit,pre,mach:mach(o.inputs[n]),beltTxt:beltTxt(lanePlan(o.inputs[n],fluid,st))});
-  if(x.storage?.[n])outputs.push({kind:'store',label:'Protected storage',icon:n,rate:x.storage[n],unit,pre,mach:mach(x.storage[n])});
-  if(x.delivery?.[n]?.rate)outputs.push({kind:'ship',label:'Space Elevator delivery',icon:n,rate:x.delivery[n].rate,unit,pre,mach:mach(x.delivery[n].rate)});
-  if(x.drone?.[n])outputs.push({kind:'drone',label:'Drone fuel contract',icon:n,rate:x.drone[n],unit,pre,mach:mach(x.drone[n])});
-  if(st==='5'&&n==='Alien Power Matrix'&&x.matrixRate)outputs.push({kind:'ship',label:'Alien Power Augmenter fuel',shipSub:num(calculated.settings.fueledAugmenters)+' fueled augmenter'+(calculated.settings.fueledAugmenters>1?'s':''),icon:n,rate:x.matrixRate,unit,pre,mach:mach(x.matrixRate)});
-  if(st==='5'&&n==='Singularity Cell'&&calculated.settings.cellsPerMinute)outputs.push({kind:'ship',label:'Extra Singularity Cells',shipSub:'configured portal supply',icon:n,rate:calculated.settings.cellsPerMinute,unit,pre,mach:mach(calculated.settings.cellsPerMinute)});
-  if(n==='Plutonium Fuel Rod'&&x.plutoniumSink)outputs.push({kind:'sink',label:'AWESOME Sink',subTxt:'waste strategy — sink these rods',icon:n,rate:x.plutoniumSink,unit,pre});
-  if(x.surplus?.[n]>0.002)outputs.push({kind:'sink',label:'AWESOME Sink',icon:n,rate:x.surplus[n],unit,pre});
- }
- outputs.sort((a,b)=>(b.rate||0)-(a.rate||0));
- if(!outputs.length&&r.generationMW)outputs.push({kind:'ship',label:'Power grid',shipSub:'generation',rateTxt:power(r.generationMW)});
- const inputs=Object.entries(r.inputs||{}).map(([n,q])=>{const src=(x.rows||[]).find(o=>o.id!==r.id&&o.outputs?.[n]);return {name:n,rate:q,link:src?`data-calc-factory="${src.id}"`:'',plan:lanePlan(q,FLUIDS.has(n),st)};});
- const outName=Object.keys(r.outputs||{})[0];
- const capped=capFlowOutputs(outputs);
- const splits=capped.filter(o=>o.mach!==undefined&&o.kind!=='sink');
- const splitTxt=splits.length>1?` · split ≈ ${splits.map(o=>num(Math.ceil(o.mach-1e-9))).join(' / ')} across the deliveries below`:'';
- const clock=r.machines-eq>1e-7?'@ 100% + 1 adjustable':'@ 100%';
- const shared=Object.keys(r.outputs||{}).some(n=>(x.rows||[]).some(o=>o.id!==r.id&&o.outputs?.[n]));
- return {stage:st,inputs,outputs:capped,equivalent:eq,machineCount:r.machines,machineName:r.machine,local:false,
-  recipe:{name:r.name,machine:r.machine,ins:inputs.map(i=>[i.name,i.rate/eq,i.link]),outs:outName?Object.entries(r.outputs).map(([n,q])=>[n,q/eq]):[['MW',r.generationMW/eq]]},
-  bar:{sub:`${esc(r.name)} · ${clock}${outName&&!multi?` · ${num3(r.outputs[outName]/eq)} ${esc(outName)}/min out per machine`:''}${splitTxt}`,outTxt:outName?`${num(r.outputs[outName])}<small>${FLUIDS.has(outName)?' m³/min':'/min'}</small>`:power(r.generationMW),outSub:outName?(multi?'out · '+esc(outName)+' + byproducts':'out · '+beltTxt(lanePlan(r.outputs[outName],FLUIDS.has(outName),st))):'generation'},
-  bankNote:outputs.length?`<p class="small muted">Demand for the item across this phase's whole plan${shared?', supplied together with the other recipes producing it':''}.</p>`:'',
-  sameItemConsumers:n=>(x.rows||[]).filter(o=>o.id!==r.id&&o.inputs?.[n]).map(o=>({label:o.name,rate:o.inputs[n],attr:`data-calc-factory="${o.id}"`}))};
+const machinesLabel = (count, machine) =>
+  count > 1 ? `1 of the ${num(count)} ${esc(machine.replace(/y$/, 'ie'))}s` : `1 × ${esc(machine)}`;
+function recipeCell([n, q, link], out) {
+  const inner = `${n === 'MW' ? '' : itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n) ? ' m³' : n === 'MW' ? ' MW' : ''}</b><small>${n === 'MW' ? 'Power generation' : esc(n)}</small></span>`;
+  return link
+    ? `<button class="rail-cell${out ? ' out' : ''}" ${link}>${inner}</button>`
+    : `<div class="rail-cell${out ? ' out' : ''}">${inner}</div>`;
 }
-function dialog(title,subtitle,body,icon=''){const d=$('#detail');d.innerHTML=`<header class="dialog-head"><div class="dialog-title">${icon?`<span class="dialog-icon">${itemIcon(icon)}</span>`:''}<div><div class="eyebrow">${subtitle}</div><h2>${esc(title)}</h2></div></div><button class="close" aria-label="Close details" data-close>×</button></header><div class="dialog-body">${body}</div>`;if(!d.open)d.showModal();}
-function openFactory(id){
- const f=plan.factories.find(x=>x.id===id);if(!f)return;activeDetail={type:'factory',id};const r=f.stages[stage()]||Object.values(f.stages)[0];
- const oil=['Plastic','Rubber'].includes(f.name);
- let installed={};const history=Object.entries(f.stages).map(([ph,x])=>{
-  const campus=oil?(plan.plans[ph]?.oil||[]).reduce((a,c)=>a+c.machines,0):0;
-  const machines=oil?campus:x.machines,label=oil?'shared campus buildings':esc(x.machine);
-  const old=installed[label]||0;const added=Math.max(0,machines-old);installed[label]=Math.max(old,machines);
-  return `<tr><td>${ph}</td><td>${num(x.output)}</td><td>${num(x.storage)}</td><td>${num(machines)} ${label}</td><td>${added?`+${num(added)}`:'Keep capacity'}</td></tr>`;}).join('');
- const st=f.stages[stage()]?stage():Object.keys(f.stages)[0];
- const localInput=n=>plan.factories.find(x=>x.local&&x.name===n&&x.stages[st]);
- const flow=handbookFlowModel(f,st,r,localInput,oil);
- dialog(f.name,`${phaseLabel(st)} · Handbook page ${f.page}`,`
- <span class="badge orange">${esc(r.recipe)}</span><div class="stats">${stat('Output',num(r.output)+'/min','Total production')}${stat('Storage',num(r.storage)+'/min','Protected allowance')}${stat('Machines',oil?'Campus':num(r.machines),oil?'Shared oil processes':esc(r.machine))}</div>
- ${f.note?`<div class="notice blue">${esc(f.note)}</div>`:''}${f.local?'<div class="notice">Distributed production budget: build these machines beside the consumers listed below, plus the storage refill module. Independent site rounding can require additional machines.</div>':''}${flowHtml(flow)}${usageNotesHtml(f,st)}${f.nuclear?'<div class="notice">Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a generic storage surplus.</div>':''}
- ${oil?oilDetail(st):laneAdviceHtml(flow)+`<p class="small muted">${num(r.machines)} whole buildings. All at 100%, except the last at ${num(r.lastClock)}%. Peak production load ${num(r.peakMW)} MW; upstream factories and logistics are separate.${Object.keys(r.inputs).some(localInput)?' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.':''}</p>`}
- <h3>Expansion across phases</h3><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Output/min</th><th>Storage/min</th><th>Required</th><th>Add</th></tr></thead><tbody>${history}</tbody></table></div><p class="small muted">Keep larger earlier installed capacity. Recipe changes need their new input routes. Counts are running requirements, not a demolition instruction.${oil?' Campus buildings are shared with the other polymer export and produce both together; the shared oil campus stages above list machines per recipe. Phase 4 replaces the simple Phase 3 refineries with the recycled loops.':''}</p>
- <div class="detail-actions"><label class="check-row"><input type="checkbox" data-check="factory-${st}-${f.id}" ${doneAttr('factory-'+st+'-'+f.id)}>Running at Phase ${st} target</label></div>
- <h3>Factory notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+f.id]||'')}</textarea><div class="note-save"><span class="small muted">Location, transport, next expansion.</span><button class="btn" data-save-note="factory-${f.id}" data-input="detail-note">Save notes</button></div>`,f.name);
+function recipePanelHtml(m) {
+  const rc = m.recipe;
+  if (!rc) return '';
+  return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>what ${machinesLabel(m.machineCount, rc.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x => recipeCell(x)).join('') || '<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x => recipeCell(x, true)).join('')}</div></div></div>`;
 }
-function usageNotesHtml(f,st){
- const r=f.stages[st];
- const consumers=plan.factories.some(o=>o.id!==f.id&&o.stages[st]?.inputs?.[f.name]);
- const completion=phase()==='post'?plan.completion.filter(c=>c.inputs?.[f.name]):[];
- return (consumers||r.delivery?'':f.nuclear?`<p class="small muted">${esc(f.name)} is consumed by the nuclear power fleet, which is planned in <a href="#resources">Power &amp; resources</a> rather than as a factory target. Keep its flow inside the nuclear site.</p>`:r.storage?`<p class="small muted">No factory in this plan consumes ${esc(f.name)} directly; this capacity only refills the protected storage. The refill rate is a protected maximum, not continuous consumption — the machines idle once the container is full and only run while you take ${esc(f.name)} out.</p>`:'')+
- (completion.length?`<p class="small muted">Additional completion modules also use ${esc(f.name)}: ${completion.map(c=>esc(c.name)+' '+num(c.inputs[f.name])+'/min').join(' · ')}. Allocate their supply on top of this factory's budget.</p>`:'');
+function flowHtml(m) {
+  if (!m || (!m.inputs.length && !m.outputs.length)) return '';
+  const inTile = i => {
+    const p = i.plan,
+      load = Math.round((i.rate / (p.count * p.lane.cap)) * 100);
+    const inner = `${itemIcon(i.name)}<span class="rail-main"><b>${esc(i.name)}</b><small${load >= 70 ? ' class="hot"' : ''}>${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''} · ${load}% load</small></span><span class="rail-rate">${num(i.rate)}<small>${p.lane.unit}</small></span>`;
+    return i.link
+      ? `<button class="rail-tile" ${i.link}>${inner}</button>`
+      : `<div class="rail-tile">${inner}</div>`;
+  };
+  const outRow = o => {
+    const subs = {
+      consumer: `consumer${o.beltTxt ? ' · ' + o.beltTxt : ''}`,
+      store: 'protected module',
+      ship: o.shipSub || 'delivery',
+      drone: 'protected supply contract',
+      sink: o.subTxt || 'whole-machine rounding surplus',
+      more: 'combined smaller destinations',
+    };
+    const name = o.link
+      ? `<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`
+      : `<b class="${o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''}">${esc(o.label)}</b>`;
+    const machCol =
+      o.mach === undefined
+        ? '<span class="rail-mach"></span>'
+        : `<span class="rail-mach"><b>≈ ${o.mach < 0.5 ? '<1' : num(Math.ceil(o.mach - 1e-9))}</b> × ${esc(m.machineName)}<small>${num(o.mach)} at 100% · ${m.local ? 'build beside it' : 'round up'}</small></span>`;
+    const rate =
+      o.rateTxt ?? (o.rate !== undefined ? `${num(o.rate)}<small>${o.unit || '/min'}</small>` : '');
+    return `<div class="rail-row ${o.kind}">${o.icon ? itemIcon(o.icon) : '<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre ? esc(o.pre) + ' · ' : ''}${subs[o.kind] || ''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;
+  };
+  const bar = m.bar
+    ? `${m.inputs.length ? '<div class="rail-arrow">↓</div>' : ''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length ? '<div class="rail-arrow">↓</div>' : ''}`
+    : '';
+  return `<h3>Flow at ${phaseLabel(m.stage)}</h3>${recipePanelHtml(m)}${m.inputs.length ? `<div class="rail-cap">Inputs · ${m.inputs.length} line${m.inputs.length > 1 ? 's' : ''} in</div><div class="rail-grid">${m.inputs.map(inTile).join('')}</div>` : ''}${bar}${m.outputs.length ? `<div class="rail-caps"><span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(o => o.mach !== undefined) ? `<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>` : ''}</div><div class="rail-rows">${m.outputs.map(outRow).join('')}</div>${m.bankNote || ''}` : ''}`;
 }
-function oilDetail(st){
- const p=plan.plans[st];
- const stages=p.oil.map(x=>({...x,rc:OIL_RECIPES[x.recipe]||{in:{},out:{}}}));
- const pipeTxt=q=>{const pl=lanePlan(q,true,st);return `${pl.count} × ${pl.lane.mark} pipe${pl.count>1?'s':''}`;};
- const fuelConsumer=plan.factories.find(ff=>!['plastic','rubber'].includes(ff.id)&&ff.stages[st]?.inputs?.Fuel);
- const bank=`<div class="rail-cap">Campus inputs</div><div class="rail-grid">${[['Crude Oil',p.oilTotals.crude],['Water',p.oilTotals.water]].filter(([,q])=>q>0.01).map(([n,q])=>`<div class="rail-tile">${itemIcon(n)}<span class="rail-main"><b>${esc(n)}</b><small>${pipeTxt(q)}</small></span><span class="rail-rate">${num(q)}<small> m³/min</small></span></div>`).join('')}</div>`;
- const stageHtml=stages.map(x=>{
-  const tot=side=>Object.entries(x.rc[side]).map(([n,q])=>`${num(q*x.equivalent)}${FLUIDS.has(n)?' m³':''} ${esc(n)}`).join(' + ');
-  const dest=Object.keys(x.rc.out).map(n=>{
-   const parts=stages.filter(o=>o!==x&&o.rc.in[n]).map(o=>`the ${esc(o.recipe.replace('Alternate: ',''))} ${esc(o.machine.replace(/y$/,'ie'))}s`);
-   if(n==='Plastic'||n==='Rubber')parts.push('campus export');
-   if(n==='Fuel'){if(Number(p.oilTotals.generators)>0)parts.push(`${num(p.oilTotals.generators)} Fuel Generators (${num(p.oilTotals.grossGW)} GW gross)`);else if(p.oilTotals.fuel>0.01)parts.push(`export ${num(p.oilTotals.fuel)}/min${fuelConsumer?` to <button class="btn quiet" data-factory="${fuelConsumer.id}">${esc(fuelConsumer.name)} ↗</button>`:''}`);}
-   return parts.length?`${esc(n)} → ${parts.join(' + ')}`:'';
-  }).filter(Boolean).join('<br>');
-  const whole=Math.floor(x.equivalent+1e-7),frac=x.equivalent-whole;
-  const clock=frac>1e-7?`${num(whole)} at 100% + 1 at ≈ ${num(frac*100)}%`:`all at 100%`;
-  return `<div class="rail-arrow">↓</div><div class="rail-machine"><div class="rail-machine-main"><b>${num(x.machines)} × ${esc(x.machine)}</b><small>${esc(x.recipe)} · ${clock} · in ${tot('in')||'—'} · out ${tot('out')}</small></div></div><div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(x.recipe.replace('Alternate: ',''))}</span><span>what ${machinesLabel(x.machines,x.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${Object.entries(x.rc.in).map(c=>recipeCell(c)).join('')}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${Object.entries(x.rc.out).map(c=>recipeCell(c,true)).join('')}</div></div></div>${dest?`<p class="small muted">${dest}</p>`:''}`;
- }).join('');
- return `<h3>Shared oil campus · ${phaseLabel(st)}</h3><p>One campus makes Plastic and Rubber together. Crude never feeds the polymer machines directly${st==='3'?': the standard refineries turn it into the polymers plus Heavy Oil Residue, which becomes generator fuel.':': it becomes Heavy Oil Residue and Polymer Resin first, and the polymers come out of the fuel-driven recycled loops.'} Build the stages in this order; recipe cells are per machine at 100%, per minute.</p><p class="small muted">Flow rates here stay exactly balanced instead of rounded up: unpackaged fluids cannot overflow to the AWESOME Sink, and the loops feed themselves, so surplus fluid would back the chain up. Machine counts are whole — only each stage's last machine runs underclocked.</p>${bank}${stageHtml}<p>${st==='3'?`Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.`:`Export ${num(p.oilTotals.fuel)} Fuel/min; remaining fuel and recycled polymers are internal flows. <b>Seeding the loops:</b> run the Residual Rubber Refineries from resin first, feed that rubber with fuel into Recycled Plastic, then bring Recycled Rubber online — open the campus exports only once both loops are saturated.`}</p>`;
+function capFlowOutputs(list, unit = '/min') {
+  if (list.length <= 10) return list;
+  const rest = list.slice(9),
+    sum = rest.reduce((s, x) => s + (x.rate || 0), 0);
+  return [
+    ...list.slice(0, 9),
+    { kind: 'more', label: `+ ${rest.length} more destinations`, rate: sum, unit },
+  ];
 }
-function groupChainNodes(gid){
- if(calculated){
-  const x=calcStage();
-  return (x.rows||[]).filter(r=>membershipsOf(r.id).some(m=>m.group===gid)).map(r=>({id:r.id,attr:`data-calc-factory="${r.id}"`,name:r.name,machine:r.machine,machines:r.machines,inputs:r.inputs||{},outputs:r.outputs||{},mw:r.generationMW}));
- }
- const st=stage();
- return plan.factories.filter(f=>f.stages[st]&&membershipsOf(f.id).some(m=>m.group===gid)).map(f=>{const r=f.stages[st];return {id:f.id,attr:`data-factory="${f.id}"`,name:f.name,machine:r.machine,machines:r.machines,inputs:r.inputs||{},outputs:{[f.name]:r.output},recipe:r.recipe};});
+function laneAdviceHtml(m) {
+  if (!m || !m.inputs.length) return '';
+  const belts = bestLane(false, m.stage),
+    pipes = bestLane(true, m.stage);
+  const nextNote = belts.next?.milestone
+    ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${esc(belts.next.milestone.name)} in Phase ${belts.next.milestone.phase}.`
+    : '';
+  const rows = m.inputs
+    .map(i => {
+      const p = i.plan,
+        l = p.lane,
+        per = i.rate / m.equivalent,
+        fed = Math.floor(l.cap / per + 1e-9);
+      const parts = [
+        `<b>${num(i.rate)}${l.unit}</b> → <b>${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}</b>${p.count > 1 ? ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}` : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`}.`,
+      ];
+      if (m.machineCount > 1)
+        parts.push(
+          fed < 1
+            ? `Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`
+            : m.machineCount > fed
+              ? `One full ${l.mark} ${p.word} feeds <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) — plan manifold rows of ${fed}.`
+              : `One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`,
+        );
+      if (p.count > 1 && p.spare > 0.01) {
+        const merge = m.sameItemConsumers(i.name).filter(x => x.rate <= p.spare + 0.01);
+        parts.push(
+          `The last ${p.word} has <b>${num(p.spare)}${l.unit} spare</b> — ${
+            merge.length
+              ? `enough to also carry ${merge
+                  .slice(0, 2)
+                  .map(
+                    x =>
+                      `<button class="btn quiet" ${x.attr}>${esc(x.label)} (${num(x.rate)}${l.unit}) ↗</button>`,
+                  )
+                  .join(' or ')} from the same bus`
+              : 'keep it as expansion headroom on this manifold'
+          }.`,
+        );
+      }
+      if (i.local) parts.push(i.local);
+      return `<div class="logi-row">${itemIcon(i.name)}<div><b>${esc(i.name)}</b>${parts.map(t => `<p>${t}</p>`).join('')}</div></div>`;
+    })
+    .join('');
+  return `<h3>Belts &amp; pipes</h3><p class="small muted">${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in your save yet, plan with the earlier mark.</p><div class="logi">${rows}</div>`;
 }
-function openGroupChain(gid){
- const gr=factoryGroupsState().groups.find(g=>g.id===gid);if(!gr)return;activeDetail={type:'group',id:gid};
- const nodes=groupChainNodes(gid);
- if(!nodes.length)return dialog(gr.name,'Factory group · build order','<p class="small muted">No factories from this group produce anything in the current phase.</p>');
- const makers=n=>nodes.filter(o=>o.outputs[n]);
- const placed=[],placedSet=new Set(),loopSeeds=new Map(),pending=[...nodes];
- while(pending.length){
-  let idx=pending.findIndex(nd=>Object.keys(nd.inputs).every(n=>makers(n).every(m=>placedSet.has(m.id)||m===nd)));
-  let loop=false;
-  if(idx<0){
-   let bestCount=Infinity;idx=0;
-   pending.forEach((nd,i)=>{const c=Object.keys(nd.inputs).filter(n=>makers(n).some(m=>!placedSet.has(m.id)&&m!==nd)).length;if(c<bestCount){bestCount=c;idx=i;}});
-   loop=true;
+function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
+  const fluidOut = FLUIDS.has(f.name);
+  const unit = fluidOut ? ' m³/min' : '/min';
+  const eq = Math.max(r.machines - 1 + (r.lastClock ?? 100) / 100, 0.01);
+  const perOut = r.output / eq;
+  const beltTxt = p => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
+  const mach = q => (bankOnly ? undefined : q / perOut);
+  const consumers = plan.factories
+    .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[f.name])
+    .map(o => {
+      const q = o.stages[st].inputs[f.name];
+      return {
+        kind: 'consumer',
+        label: o.name,
+        icon: o.name,
+        link: `data-factory="${o.id}"`,
+        rate: q,
+        unit,
+        mach: mach(q),
+        beltTxt: f.local ? 'made on site' : beltTxt(lanePlan(q, fluidOut, st)),
+      };
+    })
+    .sort((a, b) => b.rate - a.rate);
+  const outputs = [...consumers];
+  if (f.nuclear && !consumers.length)
+    outputs.push({
+      kind: 'ship',
+      label: 'Nuclear power fleet',
+      shipSub: 'planned in Power & resources',
+      icon: f.name,
+      rateTxt: '',
+    });
+  if (r.storage)
+    outputs.push({
+      kind: 'store',
+      label: 'Storage refill',
+      icon: f.name,
+      rate: r.storage,
+      unit,
+      mach: mach(r.storage),
+    });
+  if (r.delivery)
+    outputs.push({
+      kind: 'ship',
+      label: 'Space Elevator delivery',
+      icon: f.name,
+      rate: r.delivery,
+      unit,
+      mach: mach(r.delivery),
+    });
+  const surplus = Math.max(0, r.output - (r.demand ?? r.output));
+  if (surplus > 0.002)
+    outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: f.name, rate: surplus, unit });
+  const inputs = bankOnly
+    ? []
+    : Object.entries(r.inputs || {}).map(([n, q]) => {
+        const lp = localInput(n);
+        const src = lp || plan.factories.find(x => x.name === n && x.stages[st]);
+        return {
+          name: n,
+          rate: q,
+          link: src ? `data-factory="${src.id}"` : '',
+          plan: lanePlan(q, FLUIDS.has(n), st),
+          local: lp
+            ? `<button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q / lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`
+            : '',
+        };
+      });
+  const capped = capFlowOutputs(outputs, unit);
+  const splits = capped.filter(o => o.mach !== undefined && o.kind !== 'sink');
+  const splitTxt =
+    splits.length > 1
+      ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach - 1e-9))).join(' / ')} across the deliveries below`
+      : '';
+  const clock =
+    (r.lastClock ?? 100) < 100 ? `@ 100% except the last at ${num(r.lastClock)}%` : '@ 100%';
+  return {
+    stage: st,
+    inputs,
+    outputs: capped,
+    equivalent: eq,
+    machineCount: r.machines,
+    machineName: r.machine,
+    local: !!f.local,
+    recipe: bankOnly
+      ? null
+      : {
+          name: String(r.recipe || '').replace('Alternate: ', ''),
+          machine: r.machine,
+          ins: inputs.map(i => [i.name, i.rate / eq, i.link]),
+          outs: [[f.name, perOut]],
+        },
+    bar: bankOnly
+      ? null
+      : {
+          sub: `${esc(String(r.recipe || '').replace('Alternate: ', ''))} · ${clock} · ${num3(perOut)} ${esc(f.name)}/min out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
+          outTxt: `${num(r.output)}<small>${unit}</small>`,
+          outSub: f.local
+            ? 'out · distributed'
+            : 'out · ' + beltTxt(lanePlan(r.output, fluidOut, st)),
+        },
+    sameItemConsumers: n =>
+      plan.factories
+        .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[n])
+        .map(o => ({
+          label: o.name,
+          rate: o.stages[st].inputs[n],
+          attr: `data-factory="${o.id}"`,
+        })),
+  };
+}
+function calcFlowModel(r) {
+  const x = calcStage(),
+    st = stage(),
+    multi = Object.keys(r.outputs || {}).length > 1;
+  const eq = Math.max(r.equivalent || r.machines - 1 + (r.lastClock ?? 100) / 100 || 1, 0.01);
+  const beltTxt = p => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
+  const outputs = [];
+  for (const n of Object.keys(r.outputs || {})) {
+    const fluid = FLUIDS.has(n),
+      unit = fluid ? ' m³/min' : '/min',
+      pre = multi ? n : '',
+      perOut = r.outputs[n] / eq;
+    const mach = q => (multi ? undefined : q / perOut);
+    for (const o of (x.rows || []).filter(o => o.id !== r.id && o.inputs?.[n]))
+      outputs.push({
+        kind: 'consumer',
+        label: o.name,
+        icon: Object.keys(o.outputs || {})[0] || n,
+        link: `data-calc-factory="${o.id}"`,
+        rate: o.inputs[n],
+        unit,
+        pre,
+        mach: mach(o.inputs[n]),
+        beltTxt: beltTxt(lanePlan(o.inputs[n], fluid, st)),
+      });
+    if (x.storage?.[n])
+      outputs.push({
+        kind: 'store',
+        label: 'Protected storage',
+        icon: n,
+        rate: x.storage[n],
+        unit,
+        pre,
+        mach: mach(x.storage[n]),
+      });
+    if (x.delivery?.[n]?.rate)
+      outputs.push({
+        kind: 'ship',
+        label: 'Space Elevator delivery',
+        icon: n,
+        rate: x.delivery[n].rate,
+        unit,
+        pre,
+        mach: mach(x.delivery[n].rate),
+      });
+    if (x.drone?.[n])
+      outputs.push({
+        kind: 'drone',
+        label: 'Drone fuel contract',
+        icon: n,
+        rate: x.drone[n],
+        unit,
+        pre,
+        mach: mach(x.drone[n]),
+      });
+    if (st === '5' && n === 'Alien Power Matrix' && x.matrixRate)
+      outputs.push({
+        kind: 'ship',
+        label: 'Alien Power Augmenter fuel',
+        shipSub:
+          num(calculated.settings.fueledAugmenters) +
+          ' fueled augmenter' +
+          (calculated.settings.fueledAugmenters > 1 ? 's' : ''),
+        icon: n,
+        rate: x.matrixRate,
+        unit,
+        pre,
+        mach: mach(x.matrixRate),
+      });
+    if (st === '5' && n === 'Singularity Cell' && calculated.settings.cellsPerMinute)
+      outputs.push({
+        kind: 'ship',
+        label: 'Extra Singularity Cells',
+        shipSub: 'configured portal supply',
+        icon: n,
+        rate: calculated.settings.cellsPerMinute,
+        unit,
+        pre,
+        mach: mach(calculated.settings.cellsPerMinute),
+      });
+    if (n === 'Plutonium Fuel Rod' && x.plutoniumSink)
+      outputs.push({
+        kind: 'sink',
+        label: 'AWESOME Sink',
+        subTxt: 'waste strategy — sink these rods',
+        icon: n,
+        rate: x.plutoniumSink,
+        unit,
+        pre,
+      });
+    if (x.surplus?.[n] > 0.002)
+      outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: n, rate: x.surplus[n], unit, pre });
   }
-  const nd=pending.splice(idx,1)[0];
-  if(loop)loopSeeds.set(nd.id,Object.keys(nd.inputs).filter(n=>makers(n).some(m=>!placedSet.has(m.id)&&m!==nd)));
-  placed.push(nd);placedSet.add(nd.id);
- }
- const stageNo=new Map(placed.map((nd,i)=>[nd.id,i+1]));
- const others=calculated?(calcStage().rows||[]):plan.factories.filter(f=>f.stages[stage()]).map(f=>({id:f.id,name:f.name,inputs:f.stages[stage()].inputs||{}}));
- const html=placed.map((nd,i)=>{
-  const loopIns=loopSeeds.get(nd.id)||[];
-  const needs=Object.entries(nd.inputs).map(([n,q])=>{
-   const from=makers(n).filter(m=>m!==nd);
-   const src=loopIns.includes(n)?'<b class="chain-loop">loop — seed a starter batch</b>':from.length?'stage '+Math.min(...from.map(m=>stageNo.get(m.id))):'outside the group';
-   return `${esc(n)} ${num(q)}${FLUIDS.has(n)?' m³':''}/min <span class="muted">· ${src}</span>`;
-  }).join('<br>');
-  const feeds=Object.keys(nd.outputs).map(n=>{
-   const inGroup=nodes.filter(o=>o!==nd&&o.inputs[n]).map(o=>`stage ${stageNo.get(o.id)} · ${esc(o.name)}`);
-   const outside=others.filter(o=>o.id!==nd.id&&o.inputs?.[n]&&!nodes.some(g=>g.id===o.id)).length;
-   const parts=[...inGroup];if(outside)parts.push(`${outside} ${outside===1?'factory':'factories'} outside the group`);
-   return `${esc(n)} → ${parts.join(' · ')||'storage, export or sink'}`;
-  }).join('<br>')||(nd.mw?'Power grid':'—');
-  return `<div class="chain-stage"><span class="chain-no">${String(i+1).padStart(2,'0')}</span><div class="chain-body"><div class="chain-title"><button class="rail-link" ${nd.attr}>${esc(nd.name)} ↗</button><span class="muted">${num(nd.machines)} × ${esc(nd.machine)}</span></div>${needs?`<p class="small"><b>Needs</b><br>${needs}</p>`:'<p class="small muted">No belt or pipe inputs.</p>'}<p class="small"><b>Feeds</b><br>${feeds}</p></div></div>`;
- }).join('');
- const split=nodes.some(nd=>membershipsOf(nd.id).some(m=>m.group===gid&&m.rate!=null));
- dialog(gr.name,`Factory group · build order · ${phaseLabel(stage())}`,`<p class="small muted">Stages are ordered so suppliers come before their consumers. An input marked <b>loop</b> is produced by a later stage: run that stage from a starter batch first, then close the loop.</p><div class="chain">${html}</div>${split?'<p class="small muted">Rates are the whole plan’s totals; this group’s production split is shown on the factory cards.</p>':''}`);
+  outputs.sort((a, b) => (b.rate || 0) - (a.rate || 0));
+  if (!outputs.length && r.generationMW)
+    outputs.push({
+      kind: 'ship',
+      label: 'Power grid',
+      shipSub: 'generation',
+      rateTxt: power(r.generationMW),
+    });
+  const inputs = Object.entries(r.inputs || {}).map(([n, q]) => {
+    const src = (x.rows || []).find(o => o.id !== r.id && o.outputs?.[n]);
+    return {
+      name: n,
+      rate: q,
+      link: src ? `data-calc-factory="${src.id}"` : '',
+      plan: lanePlan(q, FLUIDS.has(n), st),
+    };
+  });
+  const outName = Object.keys(r.outputs || {})[0];
+  const capped = capFlowOutputs(outputs);
+  const splits = capped.filter(o => o.mach !== undefined && o.kind !== 'sink');
+  const splitTxt =
+    splits.length > 1
+      ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach - 1e-9))).join(' / ')} across the deliveries below`
+      : '';
+  const clock = r.machines - eq > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%';
+  const shared = Object.keys(r.outputs || {}).some(n =>
+    (x.rows || []).some(o => o.id !== r.id && o.outputs?.[n]),
+  );
+  return {
+    stage: st,
+    inputs,
+    outputs: capped,
+    equivalent: eq,
+    machineCount: r.machines,
+    machineName: r.machine,
+    local: false,
+    recipe: {
+      name: r.name,
+      machine: r.machine,
+      ins: inputs.map(i => [i.name, i.rate / eq, i.link]),
+      outs: outName
+        ? Object.entries(r.outputs).map(([n, q]) => [n, q / eq])
+        : [['MW', r.generationMW / eq]],
+    },
+    bar: {
+      sub: `${esc(r.name)} · ${clock}${outName && !multi ? ` · ${num3(r.outputs[outName] / eq)} ${esc(outName)}/min out per machine` : ''}${splitTxt}`,
+      outTxt: outName
+        ? `${num(r.outputs[outName])}<small>${FLUIDS.has(outName) ? ' m³/min' : '/min'}</small>`
+        : power(r.generationMW),
+      outSub: outName
+        ? multi
+          ? 'out · ' + esc(outName) + ' + byproducts'
+          : 'out · ' + beltTxt(lanePlan(r.outputs[outName], FLUIDS.has(outName), st))
+        : 'generation',
+    },
+    bankNote: outputs.length
+      ? `<p class="small muted">Demand for the item across this phase's whole plan${shared ? ', supplied together with the other recipes producing it' : ''}.</p>`
+      : '',
+    sameItemConsumers: n =>
+      (x.rows || [])
+        .filter(o => o.id !== r.id && o.inputs?.[n])
+        .map(o => ({ label: o.name, rate: o.inputs[n], attr: `data-calc-factory="${o.id}"` })),
+  };
 }
-function openSlot(id){const b=storageBays().find(b=>b.items.some(x=>x.id===id));const x=b?.items.find(x=>x.id===id);if(!x?.name)return;activeDetail={type:'slot',id};const factory=calculated?calcStage().rows?.find(r=>r.outputs[x.name]):plan.factories.find(f=>f.name===x.name);const index=Number(id.slice(b.id.length));dialog(x.name,`${id} · ${esc(storageFloors().find(f=>f.id===b.floor)?.label||b.floor)} · Bay ${b.id}`,`<p><b>${esc(b.name)}</b><br>${index<=4?'Rear':'Front'} bank, position ${(index-1)%4+1} from the left on the floor plan.</p><div class="check-columns">${[['built','Container placed'],['labelled','Sign and address labelled'],['connected','Correct supply connected'],['verified','Flow and overflow verified']].map(([k,l])=>`<label class="check-row"><input type="checkbox" data-check="slot-${id}-${k}" ${doneAttr('slot-'+id+'-'+k)}>${l}</label>`).join('')}</div>${factory?`<div class="detail-actions"><button class="btn" ${calculated?'data-calc-factory':'data-factory'}="${factory.id}">Open production target →</button></div>`:'<p class="small muted">Collected or completion item. Reserve its own supply; this storage position does not add production capacity.</p>'}<h3>Container notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">${esc(state.notes['slot-'+id]||'')}</textarea><div class="note-save"><span class="small muted">Belt source, splitter setting or remaining work.</span><button class="btn" data-save-note="slot-${id}" data-input="detail-note">Save notes</button></div>`,x.name);}
+function dialog(title, subtitle, body, icon = '') {
+  const d = $('#detail');
+  d.innerHTML = `<header class="dialog-head"><div class="dialog-title">${icon ? `<span class="dialog-icon">${itemIcon(icon)}</span>` : ''}<div><div class="eyebrow">${subtitle}</div><h2>${esc(title)}</h2></div></div><button class="close" aria-label="Close details" data-close>×</button></header><div class="dialog-body">${body}</div>`;
+  if (!d.open) d.showModal();
+}
+function openFactory(id) {
+  const f = plan.factories.find(x => x.id === id);
+  if (!f) return;
+  activeDetail = { type: 'factory', id };
+  const r = f.stages[stage()] || Object.values(f.stages)[0];
+  const oil = ['Plastic', 'Rubber'].includes(f.name);
+  let installed = {};
+  const history = Object.entries(f.stages)
+    .map(([ph, x]) => {
+      const campus = oil ? (plan.plans[ph]?.oil || []).reduce((a, c) => a + c.machines, 0) : 0;
+      const machines = oil ? campus : x.machines,
+        label = oil ? 'shared campus buildings' : esc(x.machine);
+      const old = installed[label] || 0;
+      const added = Math.max(0, machines - old);
+      installed[label] = Math.max(old, machines);
+      return `<tr><td>${ph}</td><td>${num(x.output)}</td><td>${num(x.storage)}</td><td>${num(machines)} ${label}</td><td>${added ? `+${num(added)}` : 'Keep capacity'}</td></tr>`;
+    })
+    .join('');
+  const st = f.stages[stage()] ? stage() : Object.keys(f.stages)[0];
+  const localInput = n => plan.factories.find(x => x.local && x.name === n && x.stages[st]);
+  const flow = handbookFlowModel(f, st, r, localInput, oil);
+  dialog(
+    f.name,
+    `${phaseLabel(st)} · Handbook page ${f.page}`,
+    `
+ <span class="badge orange">${esc(r.recipe)}</span><div class="stats">${stat('Output', num(r.output) + '/min', 'Total production')}${stat('Storage', num(r.storage) + '/min', 'Protected allowance')}${stat('Machines', oil ? 'Campus' : num(r.machines), oil ? 'Shared oil processes' : esc(r.machine))}</div>
+ ${f.note ? `<div class="notice blue">${esc(f.note)}</div>` : ''}${f.local ? '<div class="notice">Distributed production budget: build these machines beside the consumers listed below, plus the storage refill module. Independent site rounding can require additional machines.</div>' : ''}${flowHtml(flow)}${usageNotesHtml(f, st)}${f.nuclear ? '<div class="notice">Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a generic storage surplus.</div>' : ''}
+ ${oil ? oilDetail(st) : laneAdviceHtml(flow) + `<p class="small muted">${num(r.machines)} whole buildings. All at 100%, except the last at ${num(r.lastClock)}%. Peak production load ${num(r.peakMW)} MW; upstream factories and logistics are separate.${Object.keys(r.inputs).some(localInput) ? ' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.' : ''}</p>`}
+ <h3>Expansion across phases</h3><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Output/min</th><th>Storage/min</th><th>Required</th><th>Add</th></tr></thead><tbody>${history}</tbody></table></div><p class="small muted">Keep larger earlier installed capacity. Recipe changes need their new input routes. Counts are running requirements, not a demolition instruction.${oil ? ' Campus buildings are shared with the other polymer export and produce both together; the shared oil campus stages above list machines per recipe. Phase 4 replaces the simple Phase 3 refineries with the recycled loops.' : ''}</p>
+ <div class="detail-actions"><label class="check-row"><input type="checkbox" data-check="factory-${st}-${f.id}" ${doneAttr('factory-' + st + '-' + f.id)}>Running at Phase ${st} target</label></div>
+ <h3>Factory notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-' + f.id] || '')}</textarea><div class="note-save"><span class="small muted">Location, transport, next expansion.</span><button class="btn" data-save-note="factory-${f.id}" data-input="detail-note">Save notes</button></div>`,
+    f.name,
+  );
+}
+function usageNotesHtml(f, st) {
+  const r = f.stages[st];
+  const consumers = plan.factories.some(o => o.id !== f.id && o.stages[st]?.inputs?.[f.name]);
+  const completion = phase() === 'post' ? plan.completion.filter(c => c.inputs?.[f.name]) : [];
+  return (
+    (consumers || r.delivery
+      ? ''
+      : f.nuclear
+        ? `<p class="small muted">${esc(f.name)} is consumed by the nuclear power fleet, which is planned in <a href="#resources">Power &amp; resources</a> rather than as a factory target. Keep its flow inside the nuclear site.</p>`
+        : r.storage
+          ? `<p class="small muted">No factory in this plan consumes ${esc(f.name)} directly; this capacity only refills the protected storage. The refill rate is a protected maximum, not continuous consumption — the machines idle once the container is full and only run while you take ${esc(f.name)} out.</p>`
+          : '') +
+    (completion.length
+      ? `<p class="small muted">Additional completion modules also use ${esc(f.name)}: ${completion.map(c => esc(c.name) + ' ' + num(c.inputs[f.name]) + '/min').join(' · ')}. Allocate their supply on top of this factory's budget.</p>`
+      : '')
+  );
+}
+function oilDetail(st) {
+  const p = plan.plans[st];
+  const stages = p.oil.map(x => ({ ...x, rc: OIL_RECIPES[x.recipe] || { in: {}, out: {} } }));
+  const pipeTxt = q => {
+    const pl = lanePlan(q, true, st);
+    return `${pl.count} × ${pl.lane.mark} pipe${pl.count > 1 ? 's' : ''}`;
+  };
+  const fuelConsumer = plan.factories.find(
+    ff => !['plastic', 'rubber'].includes(ff.id) && ff.stages[st]?.inputs?.Fuel,
+  );
+  const bank = `<div class="rail-cap">Campus inputs</div><div class="rail-grid">${[
+    ['Crude Oil', p.oilTotals.crude],
+    ['Water', p.oilTotals.water],
+  ]
+    .filter(([, q]) => q > 0.01)
+    .map(
+      ([n, q]) =>
+        `<div class="rail-tile">${itemIcon(n)}<span class="rail-main"><b>${esc(n)}</b><small>${pipeTxt(q)}</small></span><span class="rail-rate">${num(q)}<small> m³/min</small></span></div>`,
+    )
+    .join('')}</div>`;
+  const stageHtml = stages
+    .map(x => {
+      const tot = side =>
+        Object.entries(x.rc[side])
+          .map(([n, q]) => `${num(q * x.equivalent)}${FLUIDS.has(n) ? ' m³' : ''} ${esc(n)}`)
+          .join(' + ');
+      const dest = Object.keys(x.rc.out)
+        .map(n => {
+          const parts = stages
+            .filter(o => o !== x && o.rc.in[n])
+            .map(
+              o =>
+                `the ${esc(o.recipe.replace('Alternate: ', ''))} ${esc(o.machine.replace(/y$/, 'ie'))}s`,
+            );
+          if (n === 'Plastic' || n === 'Rubber') parts.push('campus export');
+          if (n === 'Fuel') {
+            if (Number(p.oilTotals.generators) > 0)
+              parts.push(
+                `${num(p.oilTotals.generators)} Fuel Generators (${num(p.oilTotals.grossGW)} GW gross)`,
+              );
+            else if (p.oilTotals.fuel > 0.01)
+              parts.push(
+                `export ${num(p.oilTotals.fuel)}/min${fuelConsumer ? ` to <button class="btn quiet" data-factory="${fuelConsumer.id}">${esc(fuelConsumer.name)} ↗</button>` : ''}`,
+              );
+          }
+          return parts.length ? `${esc(n)} → ${parts.join(' + ')}` : '';
+        })
+        .filter(Boolean)
+        .join('<br>');
+      const whole = Math.floor(x.equivalent + 1e-7),
+        frac = x.equivalent - whole;
+      const clock =
+        frac > 1e-7 ? `${num(whole)} at 100% + 1 at ≈ ${num(frac * 100)}%` : `all at 100%`;
+      return `<div class="rail-arrow">↓</div><div class="rail-machine"><div class="rail-machine-main"><b>${num(x.machines)} × ${esc(x.machine)}</b><small>${esc(x.recipe)} · ${clock} · in ${tot('in') || '—'} · out ${tot('out')}</small></div></div><div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(x.recipe.replace('Alternate: ', ''))}</span><span>what ${machinesLabel(x.machines, x.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${Object.entries(
+        x.rc.in,
+      )
+        .map(c => recipeCell(c))
+        .join(
+          '',
+        )}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${Object.entries(
+        x.rc.out,
+      )
+        .map(c => recipeCell(c, true))
+        .join('')}</div></div></div>${dest ? `<p class="small muted">${dest}</p>` : ''}`;
+    })
+    .join('');
+  return `<h3>Shared oil campus · ${phaseLabel(st)}</h3><p>One campus makes Plastic and Rubber together. Crude never feeds the polymer machines directly${st === '3' ? ': the standard refineries turn it into the polymers plus Heavy Oil Residue, which becomes generator fuel.' : ': it becomes Heavy Oil Residue and Polymer Resin first, and the polymers come out of the fuel-driven recycled loops.'} Build the stages in this order; recipe cells are per machine at 100%, per minute.</p><p class="small muted">Flow rates here stay exactly balanced instead of rounded up: unpackaged fluids cannot overflow to the AWESOME Sink, and the loops feed themselves, so surplus fluid would back the chain up. Machine counts are whole — only each stage's last machine runs underclocked.</p>${bank}${stageHtml}<p>${st === '3' ? `Burn all ${num(p.oilTotals.fuel)} Fuel/min in ${p.oilTotals.generators} generators (last underclocked), giving ${num(p.oilTotals.grossGW)} GW gross. This additional Phase 3 byproduct power is not counted in later capacity totals.` : `Export ${num(p.oilTotals.fuel)} Fuel/min; remaining fuel and recycled polymers are internal flows. <b>Seeding the loops:</b> run the Residual Rubber Refineries from resin first, feed that rubber with fuel into Recycled Plastic, then bring Recycled Rubber online — open the campus exports only once both loops are saturated.`}</p>`;
+}
+function groupChainNodes(gid) {
+  if (calculated) {
+    const x = calcStage();
+    return (x.rows || [])
+      .filter(r => membershipsOf(r.id).some(m => m.group === gid))
+      .map(r => ({
+        id: r.id,
+        attr: `data-calc-factory="${r.id}"`,
+        name: r.name,
+        machine: r.machine,
+        machines: r.machines,
+        inputs: r.inputs || {},
+        outputs: r.outputs || {},
+        mw: r.generationMW,
+      }));
+  }
+  const st = stage();
+  return plan.factories
+    .filter(f => f.stages[st] && membershipsOf(f.id).some(m => m.group === gid))
+    .map(f => {
+      const r = f.stages[st];
+      return {
+        id: f.id,
+        attr: `data-factory="${f.id}"`,
+        name: f.name,
+        machine: r.machine,
+        machines: r.machines,
+        inputs: r.inputs || {},
+        outputs: { [f.name]: r.output },
+        recipe: r.recipe,
+      };
+    });
+}
+function openGroupChain(gid) {
+  const gr = factoryGroupsState().groups.find(g => g.id === gid);
+  if (!gr) return;
+  activeDetail = { type: 'group', id: gid };
+  const nodes = groupChainNodes(gid);
+  if (!nodes.length)
+    return dialog(
+      gr.name,
+      'Factory group · build order',
+      '<p class="small muted">No factories from this group produce anything in the current phase.</p>',
+    );
+  const makers = n => nodes.filter(o => o.outputs[n]);
+  const placed = [],
+    placedSet = new Set(),
+    loopSeeds = new Map(),
+    pending = [...nodes];
+  while (pending.length) {
+    let idx = pending.findIndex(nd =>
+      Object.keys(nd.inputs).every(n => makers(n).every(m => placedSet.has(m.id) || m === nd)),
+    );
+    let loop = false;
+    if (idx < 0) {
+      let bestCount = Infinity;
+      idx = 0;
+      pending.forEach((nd, i) => {
+        const c = Object.keys(nd.inputs).filter(n =>
+          makers(n).some(m => !placedSet.has(m.id) && m !== nd),
+        ).length;
+        if (c < bestCount) {
+          bestCount = c;
+          idx = i;
+        }
+      });
+      loop = true;
+    }
+    const nd = pending.splice(idx, 1)[0];
+    if (loop)
+      loopSeeds.set(
+        nd.id,
+        Object.keys(nd.inputs).filter(n => makers(n).some(m => !placedSet.has(m.id) && m !== nd)),
+      );
+    placed.push(nd);
+    placedSet.add(nd.id);
+  }
+  const stageNo = new Map(placed.map((nd, i) => [nd.id, i + 1]));
+  const others = calculated
+    ? calcStage().rows || []
+    : plan.factories
+        .filter(f => f.stages[stage()])
+        .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()].inputs || {} }));
+  const html = placed
+    .map((nd, i) => {
+      const loopIns = loopSeeds.get(nd.id) || [];
+      const needs = Object.entries(nd.inputs)
+        .map(([n, q]) => {
+          const from = makers(n).filter(m => m !== nd);
+          const src = loopIns.includes(n)
+            ? '<b class="chain-loop">loop — seed a starter batch</b>'
+            : from.length
+              ? 'stage ' + Math.min(...from.map(m => stageNo.get(m.id)))
+              : 'outside the group';
+          return `${esc(n)} ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min <span class="muted">· ${src}</span>`;
+        })
+        .join('<br>');
+      const feeds =
+        Object.keys(nd.outputs)
+          .map(n => {
+            const inGroup = nodes
+              .filter(o => o !== nd && o.inputs[n])
+              .map(o => `stage ${stageNo.get(o.id)} · ${esc(o.name)}`);
+            const outside = others.filter(
+              o => o.id !== nd.id && o.inputs?.[n] && !nodes.some(g => g.id === o.id),
+            ).length;
+            const parts = [...inGroup];
+            if (outside)
+              parts.push(`${outside} ${outside === 1 ? 'factory' : 'factories'} outside the group`);
+            return `${esc(n)} → ${parts.join(' · ') || 'storage, export or sink'}`;
+          })
+          .join('<br>') || (nd.mw ? 'Power grid' : '—');
+      return `<div class="chain-stage"><span class="chain-no">${String(i + 1).padStart(2, '0')}</span><div class="chain-body"><div class="chain-title"><button class="rail-link" ${nd.attr}>${esc(nd.name)} ↗</button><span class="muted">${num(nd.machines)} × ${esc(nd.machine)}</span></div>${needs ? `<p class="small"><b>Needs</b><br>${needs}</p>` : '<p class="small muted">No belt or pipe inputs.</p>'}<p class="small"><b>Feeds</b><br>${feeds}</p></div></div>`;
+    })
+    .join('');
+  const split = nodes.some(nd => membershipsOf(nd.id).some(m => m.group === gid && m.rate != null));
+  dialog(
+    gr.name,
+    `Factory group · build order · ${phaseLabel(stage())}`,
+    `<p class="small muted">Stages are ordered so suppliers come before their consumers. An input marked <b>loop</b> is produced by a later stage: run that stage from a starter batch first, then close the loop.</p><div class="chain">${html}</div>${split ? '<p class="small muted">Rates are the whole plan’s totals; this group’s production split is shown on the factory cards.</p>' : ''}`,
+  );
+}
+function openSlot(id) {
+  const b = storageBays().find(b => b.items.some(x => x.id === id));
+  const x = b?.items.find(x => x.id === id);
+  if (!x?.name) return;
+  activeDetail = { type: 'slot', id };
+  const factory = calculated
+    ? calcStage().rows?.find(r => r.outputs[x.name])
+    : plan.factories.find(f => f.name === x.name);
+  const index = Number(id.slice(b.id.length));
+  dialog(
+    x.name,
+    `${id} · ${esc(storageFloors().find(f => f.id === b.floor)?.label || b.floor)} · Bay ${b.id}`,
+    `<p><b>${esc(b.name)}</b><br>${index <= 4 ? 'Rear' : 'Front'} bank, position ${((index - 1) % 4) + 1} from the left on the floor plan.</p><div class="check-columns">${[
+      ['built', 'Container placed'],
+      ['labelled', 'Sign and address labelled'],
+      ['connected', 'Correct supply connected'],
+      ['verified', 'Flow and overflow verified'],
+    ]
+      .map(
+        ([k, l]) =>
+          `<label class="check-row"><input type="checkbox" data-check="slot-${id}-${k}" ${doneAttr('slot-' + id + '-' + k)}>${l}</label>`,
+      )
+      .join(
+        '',
+      )}</div>${factory ? `<div class="detail-actions"><button class="btn" ${calculated ? 'data-calc-factory' : 'data-factory'}="${factory.id}">Open production target →</button></div>` : '<p class="small muted">Collected or completion item. Reserve its own supply; this storage position does not add production capacity.</p>'}<h3>Container notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">${esc(state.notes['slot-' + id] || '')}</textarea><div class="note-save"><span class="small muted">Belt source, splitter setting or remaining work.</span><button class="btn" data-save-note="slot-${id}" data-input="detail-note">Save notes</button></div>`,
+    x.name,
+  );
+}
 // The badge is decoration, not a control: it is hidden from assistive software
 // and nothing is only reachable through it.
-document.addEventListener('click',e=>{if(e.target.closest('.ada-mark')&&!adaMuted)adaPoke();});
-document.addEventListener('click',async e=>{
- const target=e.target.closest('button,a');if(!target)return;
- if(target.hasAttribute('data-close')){$('#detail').close();activeDetail=null;}
- if(target.dataset.factory)openFactory(target.dataset.factory);
- if(target.dataset.slot)openSlot(target.dataset.slot);
- if(target.dataset.completeBay){const bay=storageBays().find(b=>b.id===target.dataset.completeBay);if(bay){target.disabled=true;try{await save({type:'checks',keys:bay.items.filter(x=>x.name).flatMap(x=>slotKeys(x.id)),value:true});render();toast('Room '+bay.id+' completed. You can uncheck individual containers if needed.');}catch{}finally{target.disabled=false;}}}
- if(target.dataset.floor){floor=target.dataset.floor;query='';render();}
- if(target.hasAttribute('data-ada-next')){
-  // A fault redraws the whole panel, since the name above the line changes too.
-  if(adaFault){adaClearFault();render();}
-  else{adaIndex++;const r=adaCurrent(),line=$('#ada-line');if(r&&line){line.textContent=r.text;const host=line.closest('.ada');if(host)host.dataset.tone=r.tone;}}
- }
- if(target.dataset.adaMute){adaMuted=target.dataset.adaMute==='on';adaStore();adaClearFault();render();}
- if(target.hasAttribute('data-toggle-layout')){layoutEditing=!layoutEditing;render();}
- if(target.hasAttribute('data-toggle-plan-edit')){planEditing=!planEditing;editingTask=null;render();}
- if(target.hasAttribute('data-toggle-factory-edit')){factoryEditing=!factoryEditing;render();}
- if(target.dataset.moveTask){
-  const ids=planTasks().map(t=>t.id),i=ids.indexOf(target.dataset.moveTask),j=i+Number(target.dataset.dir);
-  if(i>=0&&j>=0&&j<ids.length){[ids[i],ids[j]]=[ids[j],ids[i]];try{await save({type:'taskOrder',phase:phase(),ids});render();}catch{}}
- }
- if(target.dataset.editTask){editingTask=target.dataset.editTask;render();}
- if(target.hasAttribute('data-cancel-task-edit')){editingTask=null;render();}
- if(target.dataset.removeStep){
-  const id=target.dataset.removeStep;
-  if(id.startsWith('custom-')){if(confirm('Delete this personal task?')){try{await save({type:'removeTask',id});render();}catch{}}}
-  else if(confirm('Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.')){try{await save({type:'taskRemove',id});render();}catch{}}
- }
- if(target.dataset.restoreTask){try{await save({type:'taskRestore',id:target.dataset.restoreTask});render();}catch{}}
- if(target.dataset.removeGroup&&confirm('Remove this group? The factories stay in the list and keep their progress.')){try{await save({type:'factoryGroupRemove',id:target.dataset.removeGroup});render();}catch{}}
- if(target.dataset.unassign){
-  const key=target.dataset.unassign,groups=membershipsOf(key).filter(m=>m.group!==target.dataset.group).map(m=>({group:m.group,rate:m.rate}));
-  try{await save({type:'factoryAssign',key,groups});render();}catch{}
- }
- if(target.dataset.clearSlot){target.disabled=true;try{await save({type:'storageSlotClear',key:target.dataset.clearSlot});render();toast('Container cleared. Its saved checkmarks are kept with the address.');}catch{target.disabled=false;}}
- if(target.dataset.removeBay&&confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')){target.disabled=true;try{await save({type:'storageBayRemove',id:target.dataset.removeBay});render();}catch{target.disabled=false;}}
- if(target.dataset.removeFloor&&confirm('Remove this added floor?')){target.disabled=true;try{await save({type:'storageFloorRemove',id:target.dataset.removeFloor});floor='ground';render();}catch{target.disabled=false;}}
- if(target.dataset.saveNote){const noteDialog=target.closest('dialog');target.disabled=true;try{await save({type:'note',key:target.dataset.saveNote,value:document.getElementById(target.dataset.input).value});if(noteDialog?.open&&noteDialog.contains(target)){noteDialog.close();activeDetail=null;}toast('Notes saved.');}catch{}finally{target.disabled=false;}}
- if(target.dataset.remove&&confirm('Delete this personal task?')){try{await save({type:'removeTask',id:target.dataset.remove});render();}catch{}}
+document.addEventListener('click', e => {
+  if (e.target.closest('.ada-mark') && !adaMuted) adaPoke();
 });
-document.addEventListener('change',async e=>{
- const el=e.target;
- if(el.dataset.completeSlot){const value=el.checked;el.disabled=true;try{await save({type:'checks',keys:slotKeys(el.dataset.completeSlot),value});render();}catch{el.checked=!value;}finally{el.disabled=false;}}
- if(el.dataset.check){const value=el.checked;el.disabled=true;try{await save({type:'check',key:el.dataset.check,value});render();}catch{el.checked=!value;}finally{el.disabled=false;}}
- if(el.id==='phase-picker'){el.disabled=true;try{await save({type:'phase',value:el.value});query='';render();}catch{el.value=phase();}finally{el.disabled=false;}}
- if(el.id==='factory-filter'){factoryFilter=el.value;render();}
- if(el.id==='hide-done'){hideDone=el.checked;render();}
- if(['recipes','mainPower','pureIngots'].includes(el.name)&&wizard&&$('#wizard-form')){readWizard($('#wizard-form'));render();}
- if(wizard?.mode==='guided'&&$('#wizard-form')&&(String(el.name).startsWith('guided:')||el.name==='topup'||el.name==='topic')){readGuidedForm($('#wizard-form'));render();}
- if(wizard?.mode==='extraction'&&$('#wizard-form')&&/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))){
-  readExtraction($('#wizard-form'));
-  if(['purity','distribution'].includes(el.name)){
-   const s=wizard.settings;
-   if(knownWorld(s.purity,s.distribution))wizard.extraction=presetSurvey(s.purity,extractionOf(wizard),s.distribution);
+document.addEventListener('click', async e => {
+  const target = e.target.closest('button,a');
+  if (!target) return;
+  if (target.hasAttribute('data-close')) {
+    $('#detail').close();
+    activeDetail = null;
   }
-  render();
- }
- if(['supplyItem','supplyRate'].includes(el.name)&&wizard&&$('#wizard-form')){hideSupplyOptions(el);wizard.mode==='guided'?readGuidedForm($('#wizard-form')):readWizard($('#wizard-form'));render();}
- if(el.name==='alt'){const p=el.closest('.alt-picker');const head=p?.querySelector('.alt-picker-head b');if(head)head.textContent=`Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;const star=el.closest('.alt-row')?.querySelector('input[name=altpref]');if(star){star.disabled=!el.checked;if(!el.checked)star.checked=false;}}
- if(el.dataset.bayRename){el.disabled=true;try{await save({type:'storageBayRename',id:el.dataset.bayRename,name:el.value});}catch{}finally{el.disabled=false;render();}}
- if(el.dataset.groupRename){el.disabled=true;try{await save({type:'factoryGroupRename',id:el.dataset.groupRename,name:el.value});}catch{}finally{el.disabled=false;render();}}
- if(el.dataset.assignAdd&&el.value){
-  const key=el.dataset.assignAdd,groups=[...membershipsOf(key).map(m=>({group:m.group,rate:m.rate})),{group:el.value,rate:null}];
-  el.disabled=true;try{await save({type:'factoryAssign',key,groups});}catch{}finally{el.disabled=false;render();}
- }
- if(el.dataset.assignRate){
-  const key=el.dataset.assignRate,raw=el.value.trim();let rate=null;
-  if(raw!==''){rate=Number(raw);if(!Number.isFinite(rate)||rate<=0){toast('Enter a rate above 0, or leave the field empty for the whole output or the remainder.',true);render();return;}}
-  const groups=membershipsOf(key).map(m=>m.group===el.dataset.group?{group:m.group,rate}:{group:m.group,rate:m.rate});
-  el.disabled=true;try{await save({type:'factoryAssign',key,groups});}catch{}finally{el.disabled=false;render();}
- }
- if(el.dataset.delivery){const d=calculated?calculatedDelivery(el.dataset.delivery):plan.deliveries.find(x=>x.id===el.dataset.delivery),v=Number(el.value);if(!Number.isInteger(v)||v<0||v>d.target){toast('Enter a whole number between 0 and '+num(d.target)+'.',true);el.value=state.deliveries[d.id]??(currentProfile.id==='original'?d.initial:0);return;}try{await save({type:'delivery',key:d.id,value:v});render();}catch{el.value=state.deliveries[d.id]??(currentProfile.id==='original'?d.initial:0);}}
- if(el.id==='import-file'&&el.files[0]){const file=el.files[0];try{if(file.size>2*1024*1024)throw new Error('Choose a backup smaller than 2 MB.');const data=JSON.parse(await file.text());if(!confirm('Replace current progress with this backup?')){el.value='';return;}await writeQueue;state=await request('/api/import',{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...scopeHeaders()},body:JSON.stringify(data)});render();toast('Backup restored.');}catch(err){toast(err.message||'Could not restore backup.',true);el.value='';}}
+  if (target.dataset.factory) openFactory(target.dataset.factory);
+  if (target.dataset.slot) openSlot(target.dataset.slot);
+  if (target.dataset.completeBay) {
+    const bay = storageBays().find(b => b.id === target.dataset.completeBay);
+    if (bay) {
+      target.disabled = true;
+      try {
+        await save({
+          type: 'checks',
+          keys: bay.items.filter(x => x.name).flatMap(x => slotKeys(x.id)),
+          value: true,
+        });
+        render();
+        toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.');
+      } catch {
+      } finally {
+        target.disabled = false;
+      }
+    }
+  }
+  if (target.dataset.floor) {
+    floor = target.dataset.floor;
+    query = '';
+    render();
+  }
+  if (target.hasAttribute('data-ada-next')) {
+    // A fault redraws the whole panel, since the name above the line changes too.
+    if (adaFault) {
+      adaClearFault();
+      render();
+    } else {
+      adaIndex++;
+      const r = adaCurrent(),
+        line = $('#ada-line');
+      if (r && line) {
+        line.textContent = r.text;
+        const host = line.closest('.ada');
+        if (host) host.dataset.tone = r.tone;
+      }
+    }
+  }
+  if (target.dataset.adaMute) {
+    adaMuted = target.dataset.adaMute === 'on';
+    adaStore();
+    adaClearFault();
+    render();
+  }
+  if (target.hasAttribute('data-toggle-layout')) {
+    layoutEditing = !layoutEditing;
+    render();
+  }
+  if (target.hasAttribute('data-toggle-plan-edit')) {
+    planEditing = !planEditing;
+    editingTask = null;
+    render();
+  }
+  if (target.hasAttribute('data-toggle-factory-edit')) {
+    factoryEditing = !factoryEditing;
+    render();
+  }
+  if (target.dataset.moveTask) {
+    const ids = planTasks().map(t => t.id),
+      i = ids.indexOf(target.dataset.moveTask),
+      j = i + Number(target.dataset.dir);
+    if (i >= 0 && j >= 0 && j < ids.length) {
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      try {
+        await save({ type: 'taskOrder', phase: phase(), ids });
+        render();
+      } catch {}
+    }
+  }
+  if (target.dataset.editTask) {
+    editingTask = target.dataset.editTask;
+    render();
+  }
+  if (target.hasAttribute('data-cancel-task-edit')) {
+    editingTask = null;
+    render();
+  }
+  if (target.dataset.removeStep) {
+    const id = target.dataset.removeStep;
+    if (id.startsWith('custom-')) {
+      if (confirm('Delete this personal task?')) {
+        try {
+          await save({ type: 'removeTask', id });
+          render();
+        } catch {}
+      }
+    } else if (
+      confirm(
+        'Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.',
+      )
+    ) {
+      try {
+        await save({ type: 'taskRemove', id });
+        render();
+      } catch {}
+    }
+  }
+  if (target.dataset.restoreTask) {
+    try {
+      await save({ type: 'taskRestore', id: target.dataset.restoreTask });
+      render();
+    } catch {}
+  }
+  if (
+    target.dataset.removeGroup &&
+    confirm('Remove this group? The factories stay in the list and keep their progress.')
+  ) {
+    try {
+      await save({ type: 'factoryGroupRemove', id: target.dataset.removeGroup });
+      render();
+    } catch {}
+  }
+  if (target.dataset.unassign) {
+    const key = target.dataset.unassign,
+      groups = membershipsOf(key)
+        .filter(m => m.group !== target.dataset.group)
+        .map(m => ({ group: m.group, rate: m.rate }));
+    try {
+      await save({ type: 'factoryAssign', key, groups });
+      render();
+    } catch {}
+  }
+  if (target.dataset.clearSlot) {
+    target.disabled = true;
+    try {
+      await save({ type: 'storageSlotClear', key: target.dataset.clearSlot });
+      render();
+      toast('Container cleared. Its saved checkmarks are kept with the address.');
+    } catch {
+      target.disabled = false;
+    }
+  }
+  if (
+    target.dataset.removeBay &&
+    confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')
+  ) {
+    target.disabled = true;
+    try {
+      await save({ type: 'storageBayRemove', id: target.dataset.removeBay });
+      render();
+    } catch {
+      target.disabled = false;
+    }
+  }
+  if (target.dataset.removeFloor && confirm('Remove this added floor?')) {
+    target.disabled = true;
+    try {
+      await save({ type: 'storageFloorRemove', id: target.dataset.removeFloor });
+      floor = 'ground';
+      render();
+    } catch {
+      target.disabled = false;
+    }
+  }
+  if (target.dataset.saveNote) {
+    const noteDialog = target.closest('dialog');
+    target.disabled = true;
+    try {
+      await save({
+        type: 'note',
+        key: target.dataset.saveNote,
+        value: document.getElementById(target.dataset.input).value,
+      });
+      if (noteDialog?.open && noteDialog.contains(target)) {
+        noteDialog.close();
+        activeDetail = null;
+      }
+      toast('Notes saved.');
+    } catch {
+    } finally {
+      target.disabled = false;
+    }
+  }
+  if (target.dataset.remove && confirm('Delete this personal task?')) {
+    try {
+      await save({ type: 'removeTask', id: target.dataset.remove });
+      render();
+    } catch {}
+  }
 });
-document.addEventListener('input',e=>{if(['factory-search','storage-search','plan-search'].includes(e.target.id)){query=e.target.value;render();}
- if(e.target.id==='alt-filter'){const q=e.target.value.trim().toLowerCase();for(const row of document.querySelectorAll('.alt-row'))row.hidden=q!==''&&!row.dataset.altText.includes(q);}
- if(e.target.id==='rate-filter'){const q=e.target.value.trim().toLowerCase();for(const row of document.querySelectorAll('.rate-row'))row.hidden=q!==''&&!row.dataset.rateText.includes(q);}
- // Each per-item box shows the rate its group would give it, so editing either
- // group rate has to refresh the placeholders the list is already showing.
- if(['buildRate','storageRate'].includes(e.target.name))refreshRatePlaceholders();});
-function refreshRatePlaceholders(){
- const rows=document.querySelectorAll('.rate-row');if(!rows.length)return;
- const read=name=>{const value=document.querySelector('[name='+name+']')?.value;return value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value):null;};
- const general=read('storageRate'),build=read('buildRate')??general;
- for(const row of rows){
-  const rate=row.dataset.rateGroup==='delivered'?0:row.dataset.rateGroup==='build'?build:general;
-  const input=row.querySelector('input');
-  if(input&&rate!==null)input.placeholder=num(rate);
- }
+document.addEventListener('change', async e => {
+  const el = e.target;
+  if (el.dataset.completeSlot) {
+    const value = el.checked;
+    el.disabled = true;
+    try {
+      await save({ type: 'checks', keys: slotKeys(el.dataset.completeSlot), value });
+      render();
+    } catch {
+      el.checked = !value;
+    } finally {
+      el.disabled = false;
+    }
+  }
+  if (el.dataset.check) {
+    const value = el.checked;
+    el.disabled = true;
+    try {
+      await save({ type: 'check', key: el.dataset.check, value });
+      render();
+    } catch {
+      el.checked = !value;
+    } finally {
+      el.disabled = false;
+    }
+  }
+  if (el.id === 'phase-picker') {
+    el.disabled = true;
+    try {
+      await save({ type: 'phase', value: el.value });
+      query = '';
+      render();
+    } catch {
+      el.value = phase();
+    } finally {
+      el.disabled = false;
+    }
+  }
+  if (el.id === 'factory-filter') {
+    factoryFilter = el.value;
+    render();
+  }
+  if (el.id === 'hide-done') {
+    hideDone = el.checked;
+    render();
+  }
+  if (['recipes', 'mainPower', 'pureIngots'].includes(el.name) && wizard && $('#wizard-form')) {
+    readWizard($('#wizard-form'));
+    render();
+  }
+  if (
+    wizard?.mode === 'guided' &&
+    $('#wizard-form') &&
+    (String(el.name).startsWith('guided:') || el.name === 'topup' || el.name === 'topic')
+  ) {
+    readGuidedForm($('#wizard-form'));
+    render();
+  }
+  if (
+    wizard?.mode === 'extraction' &&
+    $('#wizard-form') &&
+    /^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))
+  ) {
+    readExtraction($('#wizard-form'));
+    if (['purity', 'distribution'].includes(el.name)) {
+      const s = wizard.settings;
+      if (knownWorld(s.purity, s.distribution))
+        wizard.extraction = presetSurvey(s.purity, extractionOf(wizard), s.distribution);
+    }
+    render();
+  }
+  if (['supplyItem', 'supplyRate'].includes(el.name) && wizard && $('#wizard-form')) {
+    hideSupplyOptions(el);
+    wizard.mode === 'guided' ? readGuidedForm($('#wizard-form')) : readWizard($('#wizard-form'));
+    render();
+  }
+  if (el.name === 'alt') {
+    const p = el.closest('.alt-picker');
+    const head = p?.querySelector('.alt-picker-head b');
+    if (head)
+      head.textContent = `Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;
+    const star = el.closest('.alt-row')?.querySelector('input[name=altpref]');
+    if (star) {
+      star.disabled = !el.checked;
+      if (!el.checked) star.checked = false;
+    }
+  }
+  if (el.dataset.bayRename) {
+    el.disabled = true;
+    try {
+      await save({ type: 'storageBayRename', id: el.dataset.bayRename, name: el.value });
+    } catch {
+    } finally {
+      el.disabled = false;
+      render();
+    }
+  }
+  if (el.dataset.groupRename) {
+    el.disabled = true;
+    try {
+      await save({ type: 'factoryGroupRename', id: el.dataset.groupRename, name: el.value });
+    } catch {
+    } finally {
+      el.disabled = false;
+      render();
+    }
+  }
+  if (el.dataset.assignAdd && el.value) {
+    const key = el.dataset.assignAdd,
+      groups = [
+        ...membershipsOf(key).map(m => ({ group: m.group, rate: m.rate })),
+        { group: el.value, rate: null },
+      ];
+    el.disabled = true;
+    try {
+      await save({ type: 'factoryAssign', key, groups });
+    } catch {
+    } finally {
+      el.disabled = false;
+      render();
+    }
+  }
+  if (el.dataset.assignRate) {
+    const key = el.dataset.assignRate,
+      raw = el.value.trim();
+    let rate = null;
+    if (raw !== '') {
+      rate = Number(raw);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        toast(
+          'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
+          true,
+        );
+        render();
+        return;
+      }
+    }
+    const groups = membershipsOf(key).map(m =>
+      m.group === el.dataset.group ? { group: m.group, rate } : { group: m.group, rate: m.rate },
+    );
+    el.disabled = true;
+    try {
+      await save({ type: 'factoryAssign', key, groups });
+    } catch {
+    } finally {
+      el.disabled = false;
+      render();
+    }
+  }
+  if (el.dataset.delivery) {
+    const d = calculated
+        ? calculatedDelivery(el.dataset.delivery)
+        : plan.deliveries.find(x => x.id === el.dataset.delivery),
+      v = Number(el.value);
+    if (!Number.isInteger(v) || v < 0 || v > d.target) {
+      toast('Enter a whole number between 0 and ' + num(d.target) + '.', true);
+      el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
+      return;
+    }
+    try {
+      await save({ type: 'delivery', key: d.id, value: v });
+      render();
+    } catch {
+      el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
+    }
+  }
+  if (el.id === 'import-file' && el.files[0]) {
+    const file = el.files[0];
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
+      const data = JSON.parse(await file.text());
+      if (!confirm('Replace current progress with this backup?')) {
+        el.value = '';
+        return;
+      }
+      await writeQueue;
+      state = await request('/api/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Planner-Request': '1',
+          ...scopeHeaders(),
+        },
+        body: JSON.stringify(data),
+      });
+      render();
+      toast('Backup restored.');
+    } catch (err) {
+      toast(err.message || 'Could not restore backup.', true);
+      el.value = '';
+    }
+  }
+});
+document.addEventListener('input', e => {
+  if (['factory-search', 'storage-search', 'plan-search'].includes(e.target.id)) {
+    query = e.target.value;
+    render();
+  }
+  if (e.target.id === 'alt-filter') {
+    const q = e.target.value.trim().toLowerCase();
+    for (const row of document.querySelectorAll('.alt-row'))
+      row.hidden = q !== '' && !row.dataset.altText.includes(q);
+  }
+  if (e.target.id === 'rate-filter') {
+    const q = e.target.value.trim().toLowerCase();
+    for (const row of document.querySelectorAll('.rate-row'))
+      row.hidden = q !== '' && !row.dataset.rateText.includes(q);
+  }
+  // Each per-item box shows the rate its group would give it, so editing either
+  // group rate has to refresh the placeholders the list is already showing.
+  if (['buildRate', 'storageRate'].includes(e.target.name)) refreshRatePlaceholders();
+});
+function refreshRatePlaceholders() {
+  const rows = document.querySelectorAll('.rate-row');
+  if (!rows.length) return;
+  const read = name => {
+    const value = document.querySelector('[name=' + name + ']')?.value;
+    return value !== undefined && value !== '' && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
+  };
+  const general = read('storageRate'),
+    build = read('buildRate') ?? general;
+  for (const row of rows) {
+    const rate =
+      row.dataset.rateGroup === 'delivered'
+        ? 0
+        : row.dataset.rateGroup === 'build'
+          ? build
+          : general;
+    const input = row.querySelector('input');
+    if (input && rate !== null) input.placeholder = num(rate);
+  }
 }
 // The item search: suggestions as you type, with the keyboard alone if you like.
-document.addEventListener('input',e=>{if(e.target?.name==='supplyItem'&&wizard){syncSupplyIcon(e.target);showSupplyOptions(e.target);}});
-document.addEventListener('keydown',e=>{
- const input=e.target;if(input?.name!=='supplyItem'||!wizard)return;
- const box=input.closest('.supply-field')?.querySelector('.supply-options');
- const options=box&&!box.hidden?[...box.querySelectorAll('.supply-option')]:[];
- if(e.key==='Escape'){if(options.length){e.preventDefault();hideSupplyOptions(input);}return;}
- if(e.key==='ArrowDown'&&!options.length){showSupplyOptions(input);e.preventDefault();return;}
- if(!options.length)return;
- const at=options.findIndex(o=>o.getAttribute('aria-selected')==='true');
- if(e.key==='ArrowDown'||e.key==='ArrowUp'){
-  e.preventDefault();
-  const next=e.key==='ArrowDown'?(at+1)%options.length:(at<=0?options.length-1:at-1);
-  options.forEach((o,i)=>o.setAttribute('aria-selected',String(i===next)));
-  options[next].scrollIntoView({block:'nearest'});
- }else if(e.key==='Enter'){
-  // Enter picks the highlighted suggestion rather than submitting the step.
-  e.preventDefault();pickSupplyOption(options[at>=0?at:0]);
- }
+document.addEventListener('input', e => {
+  if (e.target?.name === 'supplyItem' && wizard) {
+    syncSupplyIcon(e.target);
+    showSupplyOptions(e.target);
+  }
+});
+document.addEventListener('keydown', e => {
+  const input = e.target;
+  if (input?.name !== 'supplyItem' || !wizard) return;
+  const box = input.closest('.supply-field')?.querySelector('.supply-options');
+  const options = box && !box.hidden ? [...box.querySelectorAll('.supply-option')] : [];
+  if (e.key === 'Escape') {
+    if (options.length) {
+      e.preventDefault();
+      hideSupplyOptions(input);
+    }
+    return;
+  }
+  if (e.key === 'ArrowDown' && !options.length) {
+    showSupplyOptions(input);
+    e.preventDefault();
+    return;
+  }
+  if (!options.length) return;
+  const at = options.findIndex(o => o.getAttribute('aria-selected') === 'true');
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const next =
+      e.key === 'ArrowDown' ? (at + 1) % options.length : at <= 0 ? options.length - 1 : at - 1;
+    options.forEach((o, i) => o.setAttribute('aria-selected', String(i === next)));
+    options[next].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    // Enter picks the highlighted suggestion rather than submitting the step.
+    e.preventDefault();
+    pickSupplyOption(options[at >= 0 ? at : 0]);
+  }
 });
 // Leaving the row closes its list; moving inside it (input to suggestion) does not.
-document.addEventListener('focusout',e=>{
- const input=e.target;if(input?.name!=='supplyItem')return;
- const field=input.closest('.supply-field');
- if(field&&!field.contains(e.relatedTarget))hideSupplyOptions(input);
+document.addEventListener('focusout', e => {
+  const input = e.target;
+  if (input?.name !== 'supplyItem') return;
+  const field = input.closest('.supply-field');
+  if (field && !field.contains(e.relatedTarget)) hideSupplyOptions(input);
 });
-document.addEventListener('submit',async e=>{if(e.target.id==='add-task'){e.preventDefault();const title=new FormData(e.target).get('title').trim();if(!title)return;const btn=e.target.querySelector('button');btn.disabled=true;try{await save({type:'addTask',id:'custom-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),phase:phase(),title});render();}catch{btn.disabled=false;}}});
-document.addEventListener('submit',async e=>{
- const f=e.target,read=()=>String(new FormData(f).get('name')||'').trim();
- if(f.id==='add-floor'){e.preventDefault();const name=read();if(!name)return;try{await save({type:'storageFloorAdd',id:'cf-'+Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>b.toString(16).padStart(2,'0')).join(''),label:name});render();}catch{}}
- if(f.id==='rename-floor'){e.preventDefault();const name=read();if(!name)return;try{await save({type:'storageFloorRename',id:floor,label:name});render();}catch{}}
- if(f.id==='add-bay'){e.preventDefault();const name=read();if(!name)return;const letter=nextBayLetter();if(!letter){toast('No free bay letters left.',true);return;}try{await save({type:'storageBayAdd',id:letter,name,floor});render();}catch{}}
- if(f.classList.contains('add-container')){e.preventDefault();const name=read();if(!name)return;const bay=storageBays().find(b=>b.id===f.dataset.bay);if(!bay)return;
-  // Fill a free position first; a bay with none gets the next address after its last.
-  const free=bay.items.find(x=>!x.name)?.id||(bay.items.length<bayCapacity?bay.id+String(bay.items.length+1).padStart(2,'0'):null);
-  if(!free){toast('This bay holds the most addresses it can. Add another bay.',true);return;}
-  try{await save({type:'storageSlotAssign',key:free,name});render();}catch{}}
- if(f.id==='add-group'){e.preventDefault();const name=read();if(!name)return;try{await save({type:'factoryGroupAdd',id:'fg-'+Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>b.toString(16).padStart(2,'0')).join(''),name});render();}catch{}}
- if(f.dataset.taskEdit){
-  e.preventDefault();
-  const id=f.dataset.taskEdit,fd=new FormData(f);
-  const base=basePlanTasks().find(t=>t.id===id);
-  const title=String(fd.get('title')||'').trim(),body=String(fd.get('body')||'').trim(),link=String(fd.get('link')||'');
-  if(!title)return;
-  try{
-   await save({type:'taskEdit',id,title:base&&title===base.title?'':title,body:base&&body===String(base.body||'').trim()?'':body,link:link===autoTaskLink(id)?'':link});
-   editingTask=null;render();
-  }catch{}
- }
+document.addEventListener('submit', async e => {
+  if (e.target.id === 'add-task') {
+    e.preventDefault();
+    const title = new FormData(e.target).get('title').trim();
+    if (!title) return;
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    try {
+      await save({
+        type: 'addTask',
+        id:
+          'custom-' +
+          Array.from(crypto.getRandomValues(new Uint8Array(16)), b =>
+            b.toString(16).padStart(2, '0'),
+          ).join(''),
+        phase: phase(),
+        title,
+      });
+      render();
+    } catch {
+      btn.disabled = false;
+    }
+  }
+});
+document.addEventListener('submit', async e => {
+  const f = e.target,
+    read = () => String(new FormData(f).get('name') || '').trim();
+  if (f.id === 'add-floor') {
+    e.preventDefault();
+    const name = read();
+    if (!name) return;
+    try {
+      await save({
+        type: 'storageFloorAdd',
+        id:
+          'cf-' +
+          Array.from(crypto.getRandomValues(new Uint8Array(6)), b =>
+            b.toString(16).padStart(2, '0'),
+          ).join(''),
+        label: name,
+      });
+      render();
+    } catch {}
+  }
+  if (f.id === 'rename-floor') {
+    e.preventDefault();
+    const name = read();
+    if (!name) return;
+    try {
+      await save({ type: 'storageFloorRename', id: floor, label: name });
+      render();
+    } catch {}
+  }
+  if (f.id === 'add-bay') {
+    e.preventDefault();
+    const name = read();
+    if (!name) return;
+    const letter = nextBayLetter();
+    if (!letter) {
+      toast('No free bay letters left.', true);
+      return;
+    }
+    try {
+      await save({ type: 'storageBayAdd', id: letter, name, floor });
+      render();
+    } catch {}
+  }
+  if (f.classList.contains('add-container')) {
+    e.preventDefault();
+    const name = read();
+    if (!name) return;
+    const bay = storageBays().find(b => b.id === f.dataset.bay);
+    if (!bay) return;
+    // Fill a free position first; a bay with none gets the next address after its last.
+    const free =
+      bay.items.find(x => !x.name)?.id ||
+      (bay.items.length < bayCapacity
+        ? bay.id + String(bay.items.length + 1).padStart(2, '0')
+        : null);
+    if (!free) {
+      toast('This bay holds the most addresses it can. Add another bay.', true);
+      return;
+    }
+    try {
+      await save({ type: 'storageSlotAssign', key: free, name });
+      render();
+    } catch {}
+  }
+  if (f.id === 'add-group') {
+    e.preventDefault();
+    const name = read();
+    if (!name) return;
+    try {
+      await save({
+        type: 'factoryGroupAdd',
+        id:
+          'fg-' +
+          Array.from(crypto.getRandomValues(new Uint8Array(6)), b =>
+            b.toString(16).padStart(2, '0'),
+          ).join(''),
+        name,
+      });
+      render();
+    } catch {}
+  }
+  if (f.dataset.taskEdit) {
+    e.preventDefault();
+    const id = f.dataset.taskEdit,
+      fd = new FormData(f);
+    const base = basePlanTasks().find(t => t.id === id);
+    const title = String(fd.get('title') || '').trim(),
+      body = String(fd.get('body') || '').trim(),
+      link = String(fd.get('link') || '');
+    if (!title) return;
+    try {
+      await save({
+        type: 'taskEdit',
+        id,
+        title: base && title === base.title ? '' : title,
+        body: base && body === String(base.body || '').trim() ? '' : body,
+        link: link === autoTaskLink(id) ? '' : link,
+      });
+      editingTask = null;
+      render();
+    } catch {}
+  }
 });
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
-document.addEventListener('error',e=>{const t=e.target;if(t?.tagName==='IMG'&&t.classList?.contains('item-icon'))t.style.visibility='hidden';},true);
-window.addEventListener('hashchange',()=>{view=['plan','factories','storage','resources','backup','profiles','wizard','account'].includes(location.hash.slice(1))?location.hash.slice(1):'plan';query='';if(state)render();window.scrollTo(0,0);});
-$('#detail').addEventListener('click',e=>{if(e.target===$('#detail')){$('#detail').close();activeDetail=null;}});
-window.addEventListener('beforeunload',e=>{if(pending){e.preventDefault();e.returnValue='';}});
-function scopeHeaders(){return {'X-Save-Id':currentSave?.id||'','X-Profile-Id':currentProfile?.id||''};}
-async function post(endpoint,data,scope=true,extra={}){return request(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-Planner-Request':'1',...(scope?scopeHeaders():{})},body:JSON.stringify(data),...extra});}
-async function loadContext(saveId,profileId){await writeQueue;const c=await request('/api/context?save='+encodeURIComponent(saveId)+'&profile='+encodeURIComponent(profileId));currentSave=c.save;currentProfile=c.profile;state=c.state;calculated=c.plan;plan=c.handbook||basePlan||plan;query='';activeDetail=null;planEditing=false;editingTask=null;factoryEditing=false;layoutEditing=false;$('#detail').close();}
-function navigate(v){view=v;if(location.hash==='#'+v)render();else location.hash=v;}
-function hasUnsavedNotes(){return [...document.querySelectorAll('textarea.notes')].some(el=>{const button=document.querySelector(`[data-input="${el.id}"]`);return button&&el.value!==(state.notes[button.dataset.saveNote]||'');});}
-function allowSwitch(){return !hasUnsavedNotes()||confirm('You have notes that have not been saved. Leave without saving those edits?');}
-function renderProfiles(){return (browserMode?browserNotice():'')+header('YOUR FACTORY WORLDS','Saves & profiles','Each save keeps separate progress for every profile. Switching back restores its checklist, deliveries and notes.')+`<div class="toolbar"><button class="btn primary" data-new-save>Create a save</button>${browserMode?'<a class="btn" href="#backup">Backups & transfer</a>':`<a class="btn" href="#account">${workspace.accountsEnabled?'Your account':'Set up user accounts'}</a>`}</div>${workspace.saves.map(s=>`<section class="panel save-panel"><div class="section-head"><h2>${esc(s.name)}</h2><button class="btn" data-new-profile="${s.id}">Try another profile</button></div><div class="profile-cards">${s.profiles.map(p=>`<article class="profile-card ${s.id===currentSave.id&&p.id===currentProfile.id?'selected':''}"><div class="eyebrow">${p.kind==='original'?'PRESERVED HANDBOOK':'CALCULATED PROFILE'}</div><h3>${esc(p.name)}</h3><p>${p.settings?`${esc(p.settings.purity)} purity · ${num(p.settings.multiplier)}× elevator · ${num(p.settings.powerFactor)}× power`:'50× elevator · pure ingots · nuclear recycling'}</p><p class="small">${p.completed} checks complete · ${phaseLabel(p.phase)}</p><button class="btn ${s.id===currentSave.id&&p.id===currentProfile.id?'':'primary'}" data-open-save="${s.id}" data-open-profile="${p.id}">${s.id===currentSave.id&&p.id===currentProfile.id?'Continue current profile':'Open profile'}</button> <button class="btn" data-duplicate-profile="${p.id}" data-duplicate-save="${s.id}">Duplicate</button> <button class="btn" data-share-profile="${p.id}" data-share-save="${s.id}">Share</button> <button class="btn" data-remove-profile="${p.id}" data-remove-save="${s.id}">Remove profile</button></article>`).join('')}</div></section>`).join('')}<p class="small muted">Duplicate copies a profile with its progress so you can try changes without touching the original. Share downloads a file with the plan, storage layout, factory groups and step edits — without your checkmarks or notes — that anyone can import under Backup → Import saves.</p><section class="panel"><h2>Rename the current save or profile</h2><form id="rename-form" class="inline-form"><select name="target" aria-label="What to rename"><option value="save">Save</option><option value="profile">Profile</option></select><input name="name" required maxlength="80" aria-label="New name" placeholder="New name"><button class="btn">Rename</button></form><p class="small muted">Renaming does not change progress. Profiles keep a frozen calculation so later planner updates cannot silently change your targets.</p></section>`;}
-const option=(value,label,selected)=>`<option value="${value}" ${value===String(selected)?'selected':''}>${label}</option>`;
-function help(key){return helpText[key]?`<span class="setting-help" tabindex="0" aria-label="${esc(helpText[key])}">ⓘ<span role="tooltip">${esc(helpText[key])}</span></span>`:'';}
-const power= mw=>num(mw>1000?mw/1000:mw)+(mw>1000?' GW':' MW');
-function altPickerHtml(s){
- const picked=new Set(s.alternateRecipes||[]);
- const list=workspace.catalog.alternates||[];
- return `<div class="alt-picker"><div class="alt-picker-head"><b>Alternate recipes · ${picked.size} selected</b><span class="alt-tools"><button type="button" class="btn quiet" data-alt-best title="Recalculates with every alternate allowed and ticks only the recipes the optimal plan uses">Planner’s choice</button><button type="button" class="btn quiet" data-alt-all>Select all</button><button type="button" class="btn quiet" data-alt-none>Clear all</button></span><input id="alt-filter" type="search" placeholder="Filter by recipe or product…" aria-label="Filter alternate recipes"></div><p class="small muted">Only the recipes you tick are allowed in the plan. Hard-drive alternates are unlocked from crash sites; Turbofuel and Compacted Coal are researched in the MAM instead. Recipes your other choices depend on are selected automatically: a turbofuel-based power route locks its MAM recipes, and requiring pure ingots locks the pure recipes. Raw-resource conversion recipes are not alternates — they follow the SAM conversion setting and Tier 9 unlocks. Selecting none plans with standard recipes only. <b>Planner’s choice</b> recalculates with every alternate allowed and ticks only the recipes the optimal plan actually uses — each ticked recipe costs one hard drive. Select all and Clear all apply to the rows currently shown by the filter.</p><p class="alt-force-hint"><span class="alt-force-star">★</span><span><b>Force a recipe:</b> tick it, then click its star. The plan will use <b>no other recipe</b> for that product once the starred one is available.</span></p><div class="alt-list">${list.map(a=>{const outs=Object.keys(a.outputs);const why=a.mam&&!['auto','coal','fuel'].includes(s.mainPower||'auto')?'power preference':a.pure&&s.pureIngots===true?'ingot preference':'';const pref=new Set(s.preferredRecipes||[]);return `<div class="alt-row" data-alt-text="${esc((a.name+' '+outs.join(' ')).toLowerCase())}"><label class="check-row">${why?`<input type="checkbox" checked disabled aria-label="${esc(a.name)} is required by your ${why}">`:`<input type="checkbox" name="alt" value="${esc(a.id)}" ${picked.has(a.id)?'checked':''}>`}<span>${esc(a.name)}<small class="muted"> · ${esc(outs.join(', '))} · ${a.mam?'MAM research':'Phase '+a.phase}${why?' · required by your '+why:''}</small></span></label>${why?'':`<label class="alt-pref" title="Force this recipe: the plan will not use any other recipe for ${esc(outs[0])} once this one is available"><input type="checkbox" name="altpref" value="${esc(a.id)}" ${pref.has(a.id)?'checked':''} ${picked.has(a.id)?'':'disabled'} aria-label="Force ${esc(a.name)} as the only ${esc(outs[0])} recipe"><span>★</span></label>`}<button type="button" class="btn quiet alt-info" data-alt-info="${esc(a.id)}" aria-label="Show the ${esc(a.name)} recipe">recipe ↗</button></div>`;}).join('')}</div></div>`;
+document.addEventListener(
+  'error',
+  e => {
+    const t = e.target;
+    if (t?.tagName === 'IMG' && t.classList?.contains('item-icon')) t.style.visibility = 'hidden';
+  },
+  true,
+);
+window.addEventListener('hashchange', () => {
+  view = [
+    'plan',
+    'factories',
+    'storage',
+    'resources',
+    'backup',
+    'profiles',
+    'wizard',
+    'account',
+  ].includes(location.hash.slice(1))
+    ? location.hash.slice(1)
+    : 'plan';
+  query = '';
+  if (state) render();
+  window.scrollTo(0, 0);
+});
+$('#detail').addEventListener('click', e => {
+  if (e.target === $('#detail')) {
+    $('#detail').close();
+    activeDetail = null;
+  }
+});
+window.addEventListener('beforeunload', e => {
+  if (pending) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+function scopeHeaders() {
+  return { 'X-Save-Id': currentSave?.id || '', 'X-Profile-Id': currentProfile?.id || '' };
+}
+async function post(endpoint, data, scope = true, extra = {}) {
+  return request(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Planner-Request': '1',
+      ...(scope ? scopeHeaders() : {}),
+    },
+    body: JSON.stringify(data),
+    ...extra,
+  });
+}
+async function loadContext(saveId, profileId) {
+  await writeQueue;
+  const c = await request(
+    '/api/context?save=' + encodeURIComponent(saveId) + '&profile=' + encodeURIComponent(profileId),
+  );
+  currentSave = c.save;
+  currentProfile = c.profile;
+  state = c.state;
+  calculated = c.plan;
+  plan = c.handbook || basePlan || plan;
+  query = '';
+  activeDetail = null;
+  planEditing = false;
+  editingTask = null;
+  factoryEditing = false;
+  layoutEditing = false;
+  $('#detail').close();
+}
+function navigate(v) {
+  view = v;
+  if (location.hash === '#' + v) render();
+  else location.hash = v;
+}
+function hasUnsavedNotes() {
+  return [...document.querySelectorAll('textarea.notes')].some(el => {
+    const button = document.querySelector(`[data-input="${el.id}"]`);
+    return button && el.value !== (state.notes[button.dataset.saveNote] || '');
+  });
+}
+function allowSwitch() {
+  return (
+    !hasUnsavedNotes() ||
+    confirm('You have notes that have not been saved. Leave without saving those edits?')
+  );
+}
+function renderProfiles() {
+  return (
+    (browserMode ? browserNotice() : '') +
+    header(
+      'YOUR FACTORY WORLDS',
+      'Saves & profiles',
+      'Each save keeps separate progress for every profile. Switching back restores its checklist, deliveries and notes.',
+    ) +
+    `<div class="toolbar"><button class="btn primary" data-new-save>Create a save</button>${browserMode ? '<a class="btn" href="#backup">Backups & transfer</a>' : `<a class="btn" href="#account">${workspace.accountsEnabled ? 'Your account' : 'Set up user accounts'}</a>`}</div>${workspace.saves.map(s => `<section class="panel save-panel"><div class="section-head"><h2>${esc(s.name)}</h2><button class="btn" data-new-profile="${s.id}">Try another profile</button></div><div class="profile-cards">${s.profiles.map(p => `<article class="profile-card ${s.id === currentSave.id && p.id === currentProfile.id ? 'selected' : ''}"><div class="eyebrow">${p.kind === 'original' ? 'PRESERVED HANDBOOK' : 'CALCULATED PROFILE'}</div><h3>${esc(p.name)}</h3><p>${p.settings ? `${esc(p.settings.purity)} purity · ${num(p.settings.multiplier)}× elevator · ${num(p.settings.powerFactor)}× power` : '50× elevator · pure ingots · nuclear recycling'}</p><p class="small">${p.completed} checks complete · ${phaseLabel(p.phase)}</p><button class="btn ${s.id === currentSave.id && p.id === currentProfile.id ? '' : 'primary'}" data-open-save="${s.id}" data-open-profile="${p.id}">${s.id === currentSave.id && p.id === currentProfile.id ? 'Continue current profile' : 'Open profile'}</button> <button class="btn" data-duplicate-profile="${p.id}" data-duplicate-save="${s.id}">Duplicate</button> <button class="btn" data-share-profile="${p.id}" data-share-save="${s.id}">Share</button> <button class="btn" data-remove-profile="${p.id}" data-remove-save="${s.id}">Remove profile</button></article>`).join('')}</div></section>`).join('')}<p class="small muted">Duplicate copies a profile with its progress so you can try changes without touching the original. Share downloads a file with the plan, storage layout, factory groups and step edits — without your checkmarks or notes — that anyone can import under Backup → Import saves.</p><section class="panel"><h2>Rename the current save or profile</h2><form id="rename-form" class="inline-form"><select name="target" aria-label="What to rename"><option value="save">Save</option><option value="profile">Profile</option></select><input name="name" required maxlength="80" aria-label="New name" placeholder="New name"><button class="btn">Rename</button></form><p class="small muted">Renaming does not change progress. Profiles keep a frozen calculation so later planner updates cannot silently change your targets.</p></section>`
+  );
+}
+const option = (value, label, selected) =>
+  `<option value="${value}" ${value === String(selected) ? 'selected' : ''}>${label}</option>`;
+function help(key) {
+  return helpText[key]
+    ? `<span class="setting-help" tabindex="0" aria-label="${esc(helpText[key])}">ⓘ<span role="tooltip">${esc(helpText[key])}</span></span>`
+    : '';
+}
+const power = mw => num(mw > 1000 ? mw / 1000 : mw) + (mw > 1000 ? ' GW' : ' MW');
+function altPickerHtml(s) {
+  const picked = new Set(s.alternateRecipes || []);
+  const list = workspace.catalog.alternates || [];
+  return `<div class="alt-picker"><div class="alt-picker-head"><b>Alternate recipes · ${picked.size} selected</b><span class="alt-tools"><button type="button" class="btn quiet" data-alt-best title="Recalculates with every alternate allowed and ticks only the recipes the optimal plan uses">Planner’s choice</button><button type="button" class="btn quiet" data-alt-all>Select all</button><button type="button" class="btn quiet" data-alt-none>Clear all</button></span><input id="alt-filter" type="search" placeholder="Filter by recipe or product…" aria-label="Filter alternate recipes"></div><p class="small muted">Only the recipes you tick are allowed in the plan. Hard-drive alternates are unlocked from crash sites; Turbofuel and Compacted Coal are researched in the MAM instead. Recipes your other choices depend on are selected automatically: a turbofuel-based power route locks its MAM recipes, and requiring pure ingots locks the pure recipes. Raw-resource conversion recipes are not alternates — they follow the SAM conversion setting and Tier 9 unlocks. Selecting none plans with standard recipes only. <b>Planner’s choice</b> recalculates with every alternate allowed and ticks only the recipes the optimal plan actually uses — each ticked recipe costs one hard drive. Select all and Clear all apply to the rows currently shown by the filter.</p><p class="alt-force-hint"><span class="alt-force-star">★</span><span><b>Force a recipe:</b> tick it, then click its star. The plan will use <b>no other recipe</b> for that product once the starred one is available.</span></p><div class="alt-list">${list
+    .map(a => {
+      const outs = Object.keys(a.outputs);
+      const why =
+        a.mam && !['auto', 'coal', 'fuel'].includes(s.mainPower || 'auto')
+          ? 'power preference'
+          : a.pure && s.pureIngots === true
+            ? 'ingot preference'
+            : '';
+      const pref = new Set(s.preferredRecipes || []);
+      return `<div class="alt-row" data-alt-text="${esc((a.name + ' ' + outs.join(' ')).toLowerCase())}"><label class="check-row">${why ? `<input type="checkbox" checked disabled aria-label="${esc(a.name)} is required by your ${why}">` : `<input type="checkbox" name="alt" value="${esc(a.id)}" ${picked.has(a.id) ? 'checked' : ''}>`}<span>${esc(a.name)}<small class="muted"> · ${esc(outs.join(', '))} · ${a.mam ? 'MAM research' : 'Phase ' + a.phase}${why ? ' · required by your ' + why : ''}</small></span></label>${why ? '' : `<label class="alt-pref" title="Force this recipe: the plan will not use any other recipe for ${esc(outs[0])} once this one is available"><input type="checkbox" name="altpref" value="${esc(a.id)}" ${pref.has(a.id) ? 'checked' : ''} ${picked.has(a.id) ? '' : 'disabled'} aria-label="Force ${esc(a.name)} as the only ${esc(outs[0])} recipe"><span>★</span></label>`}<button type="button" class="btn quiet alt-info" data-alt-info="${esc(a.id)}" aria-label="Show the ${esc(a.name)} recipe">recipe ↗</button></div>`;
+    })
+    .join('')}</div></div>`;
 }
 // MAM recipes (Turbofuel, Compacted Coal) appear in plans with alternate:false, so match catalog ids too.
-const alternatesUsed=plan=>{const altIds=new Set((workspace?.catalog?.alternates||[]).map(a=>a.id));return [...new Set(Object.values(plan?.stages||{}).flatMap(st=>(st.rows||[]).filter(r=>r.alternate||altIds.has(r.id)).map(r=>r.id)))].sort();};
-function openAltRecipe(id){
- const a=(workspace.catalog.alternates||[]).find(x=>x.id===id);if(!a)return;
- const primary=Object.keys(a.outputs)[0];
- const standards=(workspace.catalog.standardRecipes||[]).filter(r=>r.outputs[primary]);
- const panel=rc=>recipePanelHtml({machineCount:1,recipe:{name:rc.name.replace('Alternate: ',''),machine:rc.machine,ins:Object.entries(rc.inputs||{}),outs:Object.entries(rc.outputs||{})}});
- dialog(a.name,a.mam?`MAM research · unlocked in the MAM, not from hard drives · ${esc(a.machine)}`:`Alternate recipe · available from Phase ${a.phase} · ${esc(a.machine)}`,`${panel(a)}${standards.length?`<h3>Standard ${standards.length>1?'recipes':'recipe'} for ${esc(primary)}</h3>${standards.map(panel).join('')}`:`<p class="small muted">No standard recipe produces ${esc(primary)}.</p>`}<p class="small muted">Rates are per machine at 100%, per minute. Alternates are unlocked with hard drives in game; ticking a recipe is a planning allowance, not an in-game unlock.</p>`,primary);
+const alternatesUsed = plan => {
+  const altIds = new Set((workspace?.catalog?.alternates || []).map(a => a.id));
+  return [
+    ...new Set(
+      Object.values(plan?.stages || {}).flatMap(st =>
+        (st.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
+      ),
+    ),
+  ].sort();
+};
+function openAltRecipe(id) {
+  const a = (workspace.catalog.alternates || []).find(x => x.id === id);
+  if (!a) return;
+  const primary = Object.keys(a.outputs)[0];
+  const standards = (workspace.catalog.standardRecipes || []).filter(r => r.outputs[primary]);
+  const panel = rc =>
+    recipePanelHtml({
+      machineCount: 1,
+      recipe: {
+        name: rc.name.replace('Alternate: ', ''),
+        machine: rc.machine,
+        ins: Object.entries(rc.inputs || {}),
+        outs: Object.entries(rc.outputs || {}),
+      },
+    });
+  dialog(
+    a.name,
+    a.mam
+      ? `MAM research · unlocked in the MAM, not from hard drives · ${esc(a.machine)}`
+      : `Alternate recipe · available from Phase ${a.phase} · ${esc(a.machine)}`,
+    `${panel(a)}${standards.length ? `<h3>Standard ${standards.length > 1 ? 'recipes' : 'recipe'} for ${esc(primary)}</h3>${standards.map(panel).join('')}` : `<p class="small muted">No standard recipe produces ${esc(primary)}.</p>`}<p class="small muted">Rates are per machine at 100%, per minute. Alternates are unlocked with hard drives in game; ticking a recipe is a planning allowance, not an in-game unlock.</p>`,
+    primary,
+  );
 }
-function field(label,key,value,type='number',extra=''){return `<label class="field">${label} ${help(key)}<input name="${key}" type="${type}" value="${esc(value)}" ${extra}></label>`;}
-function selectField(label,key,options,value){return `<label class="field">${label} ${help(key)}<select name="${key}">${options.map(([v,l])=>option(v,l,value)).join('')}</select></label>`;}
+function field(label, key, value, type = 'number', extra = '') {
+  return `<label class="field">${label} ${help(key)}<input name="${key}" type="${type}" value="${esc(value)}" ${extra}></label>`;
+}
+function selectField(label, key, options, value) {
+  return `<label class="field">${label} ${help(key)}<select name="${key}">${options.map(([v, l]) => option(v, l, value)).join('')}</select></label>`;
+}
 // Everything a new profile can inherit from the profile it continues, so a new
 // plan for a save you already play does not start from an empty checklist.
-function carryPanelHtml(w){
- const save=workspace.saves.find(s=>s.id===w.saveId);
- if(!save?.profiles.length)return '';
- const source=save.profiles.find(p=>p.id===w.carryFrom)||save.profiles[0];
- const picks=w.carry||{},picked=pickedRecipeUnlocks(w.preview).length;
- return `<section class="panel carry-panel"><h3>Continue the progress in this save</h3><p>A new profile is a new plan for the same world, so it can start from what you have already done. Nothing is moved — the profile you carry from keeps all of it.</p><label class="field">Carry progress from <select name="carryFrom">${save.profiles.map(p=>option(esc(p.id),esc(p.name),source.id)).join('')}</select></label><div class="carry-list">${carryOptions.filter(([key])=>key!=='picked'||picked>0).map(([key,label,detail])=>`<label class="check-row"><input type="checkbox" name="carry" value="${key}" ${picks[key]?'checked':''}><span><b>${esc(label)}</b>${key==='picked'?' ('+num(picked)+')':''}<br><small class="muted">${esc(detail)}</small></span></label>`).join('')}</div><p class="small muted">Production lines this plan expands are carried unticked for review. Steps this plan does not contain stay with the profile you carried from.</p></section>`;
+function carryPanelHtml(w) {
+  const save = workspace.saves.find(s => s.id === w.saveId);
+  if (!save?.profiles.length) return '';
+  const source = save.profiles.find(p => p.id === w.carryFrom) || save.profiles[0];
+  const picks = w.carry || {},
+    picked = pickedRecipeUnlocks(w.preview).length;
+  return `<section class="panel carry-panel"><h3>Continue the progress in this save</h3><p>A new profile is a new plan for the same world, so it can start from what you have already done. Nothing is moved — the profile you carry from keeps all of it.</p><label class="field">Carry progress from <select name="carryFrom">${save.profiles.map(p => option(esc(p.id), esc(p.name), source.id)).join('')}</select></label><div class="carry-list">${carryOptions
+    .filter(([key]) => key !== 'picked' || picked > 0)
+    .map(
+      ([key, label, detail]) =>
+        `<label class="check-row"><input type="checkbox" name="carry" value="${key}" ${picks[key] ? 'checked' : ''}><span><b>${esc(label)}</b>${key === 'picked' ? ' (' + num(picked) + ')' : ''}<br><small class="muted">${esc(detail)}</small></span></label>`,
+    )
+    .join(
+      '',
+    )}</div><p class="small muted">Production lines this plan expands are carried unticked for review. Steps this plan does not contain stay with the profile you carried from.</p></section>`;
 }
 // Per-item storage rates. Blank means "use the rate for its group", so the list
 // stays readable at a glance: only the items you singled out carry a number.
-function storageRatesHtml(s){
- const items=(workspace.catalog.storageItems||[]).filter(i=>wantsStorage(i.name,s.storage));
- if(!items.length)return '';
- const over=s.storageOverrides||{},set=items.filter(i=>over[i.name]!==undefined).length;
- return `<details class="panel rate-picker" ${set?'open':''}><summary>Per-item storage rates${set?' · '+num(set)+' set':''} ${help('storageOverrides')}</summary><p class="small muted">Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container and address without reserving any production for it. Space Elevator parts start at 0: deliveries and later project parts already consume them, so a standing buffer would be production nobody draws from. ${num(items.length)} items are in your selected storage supply.</p><input id="rate-filter" type="search" placeholder="Filter by item…" aria-label="Filter storage items"><div class="rate-list">${items.map(i=>`<label class="rate-row field" data-rate-text="${esc(i.name.toLowerCase())}" data-rate-group="${i.build?'build':i.delivered?'delivered':'other'}"><span>${esc(i.name)}${i.build?' <small class="muted">· construction</small>':i.delivered?' <small class="muted">· delivered</small>':''}</span><input name="rate:${esc(i.name)}" type="number" min="0" max="300" step="0.1" value="${over[i.name]??''}" placeholder="${num(storageRateFor({...s,storageOverrides:{}},i.name))}" aria-label="Storage refill for ${esc(i.name)} per minute"></label>`).join('')}</div></details>`;
+function storageRatesHtml(s) {
+  const items = (workspace.catalog.storageItems || []).filter(i => wantsStorage(i.name, s.storage));
+  if (!items.length) return '';
+  const over = s.storageOverrides || {},
+    set = items.filter(i => over[i.name] !== undefined).length;
+  return `<details class="panel rate-picker" ${set ? 'open' : ''}><summary>Per-item storage rates${set ? ' · ' + num(set) + ' set' : ''} ${help('storageOverrides')}</summary><p class="small muted">Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container and address without reserving any production for it. Space Elevator parts start at 0: deliveries and later project parts already consume them, so a standing buffer would be production nobody draws from. ${num(items.length)} items are in your selected storage supply.</p><input id="rate-filter" type="search" placeholder="Filter by item…" aria-label="Filter storage items"><div class="rate-list">${items.map(i => `<label class="rate-row field" data-rate-text="${esc(i.name.toLowerCase())}" data-rate-group="${i.build ? 'build' : i.delivered ? 'delivered' : 'other'}"><span>${esc(i.name)}${i.build ? ' <small class="muted">· construction</small>' : i.delivered ? ' <small class="muted">· delivered</small>' : ''}</span><input name="rate:${esc(i.name)}" type="number" min="0" max="300" step="0.1" value="${over[i.name] ?? ''}" placeholder="${num(storageRateFor({ ...s, storageOverrides: {} }, i.name))}" aria-label="Storage refill for ${esc(i.name)} per minute"></label>`).join('')}</div></details>`;
 }
-function readCarry(form,data){
- const w=wizard;if(!form?.querySelector('.carry-list'))return;
- const f=data||new FormData(form),on=new Set(f.getAll('carry').map(String));
- w.carryFrom=f.get('carryFrom')||null;w.carry=Object.fromEntries(carryOptions.map(([key])=>[key,on.has(key)]));
+function readCarry(form, data) {
+  const w = wizard;
+  if (!form?.querySelector('.carry-list')) return;
+  const f = data || new FormData(form),
+    on = new Set(f.getAll('carry').map(String));
+  w.carryFrom = f.get('carryFrom') || null;
+  w.carry = Object.fromEntries(carryOptions.map(([key]) => [key, on.has(key)]));
 }
-function startWizard(saveId=null){if(!allowSwitch())return;const existing=workspace.saves.find(s=>s.id===saveId);const selected=existing?.profiles.find(p=>p.id===existing.activeProfile);const previous=selected?.settings||(selected?.kind==='original'?{phase:'3',purity:'pure',distribution:'randomized',multiplier:50,powerFactor:0.5,availablePowerGW:0,recipes:'all',pureIngots:true,sam:'needed',nuclear:'recycle',uraniumReactors:1,storage:'all',storageRate:1,cellsPerMinute:20,goal:'timed',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.pureLimits}}:null);wizard={step:1,saveId,saveName:existing?.name||'',name:'',settings:previous?structuredClone(previous):{phase:'3',purity:'vanilla',distribution:'original',multiplier:1,powerFactor:1,availablePowerGW:0,recipes:'standard',pureIngots:false,sam:'needed',nuclear:'none',uraniumReactors:1,storage:'construction',storageRate:1,cellsPerMinute:0,goal:'balanced',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.limits}},preview:null,carryFrom:existing?.activeProfile||null,carry:Object.fromEntries(carryOptions.map(([key])=>[key,true])),
- // The guided start asks a handful of plain questions and writes the same
- // settings object; All settings is the wizard exactly as it was. A save you
- // already play arrives with settings worth keeping, so it is asked what
- // changed rather than everything again.
- mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};
- if(!previous)wizard.settings.storageOverrides={Concrete:GUIDED_TOPUP_RATE};
- if(browserMode&&!previous)wizard.settings.phase='1';navigate('wizard');}
+function startWizard(saveId = null) {
+  if (!allowSwitch()) return;
+  const existing = workspace.saves.find(s => s.id === saveId);
+  const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
+  const previous =
+    selected?.settings ||
+    (selected?.kind === 'original'
+      ? {
+          phase: '3',
+          purity: 'pure',
+          distribution: 'randomized',
+          multiplier: 50,
+          powerFactor: 0.5,
+          availablePowerGW: 0,
+          recipes: 'all',
+          pureIngots: true,
+          sam: 'needed',
+          nuclear: 'recycle',
+          uraniumReactors: 1,
+          storage: 'all',
+          storageRate: 1,
+          cellsPerMinute: 20,
+          goal: 'timed',
+          hours: 8,
+          roundRates: true,
+          wholeMachines: true,
+          limitsConfirmed: false,
+          limits: { ...workspace.catalog.pureLimits },
+        }
+      : null);
+  wizard = {
+    step: 1,
+    saveId,
+    saveName: existing?.name || '',
+    name: '',
+    settings: previous
+      ? structuredClone(previous)
+      : {
+          phase: '3',
+          purity: 'vanilla',
+          distribution: 'original',
+          multiplier: 1,
+          powerFactor: 1,
+          availablePowerGW: 0,
+          recipes: 'standard',
+          pureIngots: false,
+          sam: 'needed',
+          nuclear: 'none',
+          uraniumReactors: 1,
+          storage: 'construction',
+          storageRate: 1,
+          cellsPerMinute: 0,
+          goal: 'balanced',
+          hours: 8,
+          roundRates: true,
+          wholeMachines: true,
+          limitsConfirmed: false,
+          limits: { ...workspace.catalog.limits },
+        },
+    preview: null,
+    carryFrom: existing?.activeProfile || null,
+    carry: Object.fromEntries(carryOptions.map(([key]) => [key, true])),
+    // The guided start asks a handful of plain questions and writes the same
+    // settings object; All settings is the wizard exactly as it was. A save you
+    // already play arrives with settings worth keeping, so it is asked what
+    // changed rather than everything again.
+    mode: 'guided',
+    guidedStep: 1,
+    guidedAsk: null,
+    usedGuided: false,
+    tutorial: 'doing',
+  };
+  if (!previous) wizard.settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
+  if (browserMode && !previous) wizard.settings.phase = '1';
+  navigate('wizard');
+}
 // The somersloop ledger. Augmenters and their fuel change the calculation; the hand-fed lines
 // do not — their inputs are gathered, never belted — so those only reserve sloops and add steps.
-function sloopLedgerHtml(s){
- const uses=workspace.catalog.sloopUses||[],reserved=s.sloopReserved||[];
- const committed=10*(s.augmenters||0)+reserved.length+(s.amplifySloops||0),have=s.somersloops||0;
- const boost=Math.round((0.1*((s.augmenters||0)-(s.fueledAugmenters||0))+0.3*(s.fueledAugmenters||0))*100);
- return `<div class="notice blue"><b>Somersloop ledger.</b> ${(s.augmenters||0)?`${s.augmenters} augmenter${s.augmenters>1?'s':''} cost ${10*s.augmenters} sloops and give Phase 5 ${num(500*s.augmenters)} MW plus a ${boost}% multiplier on the grid's base production. ${(s.fueledAugmenters||0)?`Fueling ${s.fueledAugmenters} of them adds ${num(5*s.fueledAugmenters)} Alien Power Matrix/min to the plan — the rate is derived here, never entered.`:'Unfueled augmenters need no Alien Power Matrix.'}`:'Enter augmenters to include their power in Phase 5.'} Committed: <b>${committed}</b> of ${have} available.${committed>have?' <span class="warn">More than you have.</span>':''}</div>
- ${(s.amplifySloops||0)?`<p class="small muted">Production amplification will place up to ${num(s.amplifySloops)} somersloops in this plan's own machines. An amplified machine keeps its inputs, doubles its output and draws four times the power, so it trades power for ore and buildings. The budget applies to each phase's plan rather than adding up across phases, because every phase is a self-contained steady state.</p>`:`<p class="small muted">Production amplification is off. Somersloops in your production lines cut ore and buildings, but finding and reaching them is a hunt — leave this at 0 to plan without it, exactly as before.</p>`}
+function sloopLedgerHtml(s) {
+  const uses = workspace.catalog.sloopUses || [],
+    reserved = s.sloopReserved || [];
+  const committed = 10 * (s.augmenters || 0) + reserved.length + (s.amplifySloops || 0),
+    have = s.somersloops || 0;
+  const boost = Math.round(
+    (0.1 * ((s.augmenters || 0) - (s.fueledAugmenters || 0)) + 0.3 * (s.fueledAugmenters || 0)) *
+      100,
+  );
+  return `<div class="notice blue"><b>Somersloop ledger.</b> ${s.augmenters || 0 ? `${s.augmenters} augmenter${s.augmenters > 1 ? 's' : ''} cost ${10 * s.augmenters} sloops and give Phase 5 ${num(500 * s.augmenters)} MW plus a ${boost}% multiplier on the grid's base production. ${s.fueledAugmenters || 0 ? `Fueling ${s.fueledAugmenters} of them adds ${num(5 * s.fueledAugmenters)} Alien Power Matrix/min to the plan — the rate is derived here, never entered.` : 'Unfueled augmenters need no Alien Power Matrix.'}` : 'Enter augmenters to include their power in Phase 5.'} Committed: <b>${committed}</b> of ${have} available.${committed > have ? ' <span class="warn">More than you have.</span>' : ''}</div>
+ ${s.amplifySloops || 0 ? `<p class="small muted">Production amplification will place up to ${num(s.amplifySloops)} somersloops in this plan's own machines. An amplified machine keeps its inputs, doubles its output and draws four times the power, so it trades power for ore and buildings. The budget applies to each phase's plan rather than adding up across phases, because every phase is a self-contained steady state.</p>` : `<p class="small muted">Production amplification is off. Somersloops in your production lines cut ore and buildings, but finding and reaching them is a hunt — leave this at 0 to plan without it, exactly as before.</p>`}
  <p class="eyebrow">SOMERSLOOPS PARKED IN HAND-FED LINES</p>
- <div>${uses.map(([id,label])=>`<label class="check-row"><input type="checkbox" name="sloop" value="${id}" ${reserved.includes(id)?'checked':''}>${esc(label)}</label>`).join('')}</div>
+ <div>${uses.map(([id, label]) => `<label class="check-row"><input type="checkbox" name="sloop" value="${id}" ${reserved.includes(id) ? 'checked' : ''}>${esc(label)}</label>`).join('')}</div>
  <p class="small muted">These double the output of a finite, hand-gathered input, so they are usually the best sloop you will ever spend: the world's power slugs are worth twice as many Power Shards through an amplified Constructor. Their inputs are carried in by hand, so they stay out of the production balance and only reserve a sloop and add a checklist step. The Crafting Bench cannot be amplified — the constructor recipe is the one that doubles.</p>`;
 }
 // What the plan actually drew from the production you already run. It asks for
 // at most what you declared: the rest of that line's output is yours, and the
 // plan neither needs nor counts it.
-function supplyNoticeHtml(p){
- const declared=p.settings?.existingSupply||{};
- if(!Object.keys(declared).length)return '';
- const start=Number(p.settings.phase||1);
- const used={};
- for(const [ph,st] of Object.entries(p.stages))if(Number(ph)>=start)for(const [n,q] of Object.entries(st.supplied||{}))used[n]=Math.max(used[n]||0,q);
- const dropped=Object.entries(p.stages).filter(([ph,st])=>st.supplyDropped&&Number(ph)>=start).map(([ph])=>ph);
- const lines=Object.entries(declared).map(([n,q])=>{
-  const drawn=used[n]||0;
-  return `<li>${itemIcon(n)}<span><b>${esc(n)}</b> ${num(q)}/min declared${drawn>0.002?` · the plan draws up to ${num(drawn)}/min of it, and builds no line for it`:' · this plan has no use for it, so nothing changes'}</span></li>`;
- }).join('');
- return `<div class="notice blue supply-notice"><b>Crediting production you already run.</b> These lines are not planned again, and neither is the chain behind them.
+function supplyNoticeHtml(p) {
+  const declared = p.settings?.existingSupply || {};
+  if (!Object.keys(declared).length) return '';
+  const start = Number(p.settings.phase || 1);
+  const used = {};
+  for (const [ph, st] of Object.entries(p.stages))
+    if (Number(ph) >= start)
+      for (const [n, q] of Object.entries(st.supplied || {})) used[n] = Math.max(used[n] || 0, q);
+  const dropped = Object.entries(p.stages)
+    .filter(([ph, st]) => st.supplyDropped && Number(ph) >= start)
+    .map(([ph]) => ph);
+  const lines = Object.entries(declared)
+    .map(([n, q]) => {
+      const drawn = used[n] || 0;
+      return `<li>${itemIcon(n)}<span><b>${esc(n)}</b> ${num(q)}/min declared${drawn > 0.002 ? ` · the plan draws up to ${num(drawn)}/min of it, and builds no line for it` : ' · this plan has no use for it, so nothing changes'}</span></li>`;
+    })
+    .join('');
+  return `<div class="notice blue supply-notice"><b>Crediting production you already run.</b> These lines are not planned again, and neither is the chain behind them.
  <ul class="supply-summary">${lines}</ul>
  <p class="small">Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure should be entered net of them — the same rule that makes "spare existing power" spare.</p>
- ${dropped.length?`<p class="small"><b>Phase ${dropped.join(' and ')}</b> could not be fitted to whole machines while crediting them, so ${dropped.length>1?'those phases are':'that phase is'} planned as if you built all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead of whole machines usually keeps the credit.</p>`:''}</div>`;
+ ${dropped.length ? `<p class="small"><b>Phase ${dropped.join(' and ')}</b> could not be fitted to whole machines while crediting them, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead of whole machines usually keeps the credit.</p>` : ''}</div>`;
 }
 // Fueling an augmenter trades an Alien Power Matrix line for 20% more grid power. The answer
 // depends on the plan's own scale, so show the like-for-like comparison rather than a rule of thumb.
-function fuelVerdictHtml(p){
- const v=p.stages?.[5]?.fuelVerdict;if(!v)return '';
- if(!v.unfueledFeasible)return `<div class="notice blue"><b>Fueled augmenters are carrying this plan.</b> Phase 5 does not fit its budgets without them, so the ${num(v.matrixRate)} Alien Power Matrix/min is doing real work.</div>`;
- const worth=v.worthIt,delta=v.buildings-v.buildingsUnfueled;
- return `<div class="notice ${worth?'blue':''}"><b>${worth?'Fueling these augmenters pays off.':'Fueling these augmenters costs more than it returns.'}</b>
- Producing ${num(v.matrixRate)} Alien Power Matrix/min takes Phase 5 from ${num(v.buildingsUnfueled)} buildings to ${num(v.buildings)} (${delta>0?'+':''}${num(delta)}) and from ${power(v.requiredMWUnfueled)} to ${power(v.requiredMW)} of demand, while the boost raises available power from ${power(v.availableMWUnfueled)} to ${power(v.availableMW)}.
- ${worth?'The extra 20% is worth more than the fuel line costs at this scale.':`At this scale the fuel line costs more than the extra 20% returns. Build the augmenter${p.settings.augmenters>1?'s':''} unfueled, or put 4 somersloops in the Alien Power Matrix encoder — that halves the whole chain behind it and moves the break-even down.`}</div>`;
+function fuelVerdictHtml(p) {
+  const v = p.stages?.[5]?.fuelVerdict;
+  if (!v) return '';
+  if (!v.unfueledFeasible)
+    return `<div class="notice blue"><b>Fueled augmenters are carrying this plan.</b> Phase 5 does not fit its budgets without them, so the ${num(v.matrixRate)} Alien Power Matrix/min is doing real work.</div>`;
+  const worth = v.worthIt,
+    delta = v.buildings - v.buildingsUnfueled;
+  return `<div class="notice ${worth ? 'blue' : ''}"><b>${worth ? 'Fueling these augmenters pays off.' : 'Fueling these augmenters costs more than it returns.'}</b>
+ Producing ${num(v.matrixRate)} Alien Power Matrix/min takes Phase 5 from ${num(v.buildingsUnfueled)} buildings to ${num(v.buildings)} (${delta > 0 ? '+' : ''}${num(delta)}) and from ${power(v.requiredMWUnfueled)} to ${power(v.requiredMW)} of demand, while the boost raises available power from ${power(v.availableMWUnfueled)} to ${power(v.availableMW)}.
+ ${worth ? 'The extra 20% is worth more than the fuel line costs at this scale.' : `At this scale the fuel line costs more than the extra 20% returns. Build the augmenter${p.settings.augmenters > 1 ? 's' : ''} unfueled, or put 4 somersloops in the Alien Power Matrix encoder — that halves the whole chain behind it and moves the break-even down.`}</div>`;
 }
 // --- The guided start -------------------------------------------------------
 // A short illustrated sequence that writes the same settings object the
@@ -833,77 +2603,108 @@ function fuelVerdictHtml(p){
 // little as possible", and inline SVG themes with currentColor, needs no build
 // allowlist entry and raises no attribution question. The concrete questions
 // use the item icons already bundled and attributed in icons/sources.json.
-const GUIDED_GLYPHS={
- minimal:'<path d="M4 20h4v-6H4zM10 20h4v-9h-4z"/><path d="M17 5v9M17 14l-2.5-3M17 14l2.5-3"/>',
- balanced:'<path d="M12 4v16M6 20h12"/><path d="M3 9h18"/><path d="M6 9l-3 5h6zM18 9l-3 5h6z"/>',
- timed:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/>',
- maximum:'<path d="M4 18a8 8 0 0 1 16 0"/><path d="M12 18l5-6"/><path d="M12 18h.01"/>',
- standard:'<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 10h8M8 14h5"/>',
- alternates:'<path d="M5 19V9a3 3 0 0 1 3-3h11"/><path d="M16 3l3 3-3 3"/><path d="M5 19h6a3 3 0 0 0 3-3v-1"/>',
- custom:'<path d="M4 7h9M4 12h9M4 17h6"/><path d="M15 15l2.5 2.5L22 13"/>',
- 'stock-none':'<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M9 12h6" opacity=".35"/>',
- 'stock-build':'<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M8 12h8M8 15h8"/>',
- 'stock-all':'<path d="M3 13h8v7H3zM13 13h8v7h-8z"/><path d="M8 4h8v7H8z"/>',
- whole:'<rect x="3" y="7" width="5" height="11"/><rect x="9.5" y="7" width="5" height="11"/><rect x="16" y="7" width="5" height="11"/><path d="M3 4h18"/>',
- precise:'<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/><path d="M12 4v2M20 12h-2M12 20v-2M4 12h2"/>',
- tutorial:'<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/>',
- 'tutorial-done':'<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>'
+const GUIDED_GLYPHS = {
+  minimal: '<path d="M4 20h4v-6H4zM10 20h4v-9h-4z"/><path d="M17 5v9M17 14l-2.5-3M17 14l2.5-3"/>',
+  balanced: '<path d="M12 4v16M6 20h12"/><path d="M3 9h18"/><path d="M6 9l-3 5h6zM18 9l-3 5h6z"/>',
+  timed: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/>',
+  maximum: '<path d="M4 18a8 8 0 0 1 16 0"/><path d="M12 18l5-6"/><path d="M12 18h.01"/>',
+  standard: '<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 10h8M8 14h5"/>',
+  alternates:
+    '<path d="M5 19V9a3 3 0 0 1 3-3h11"/><path d="M16 3l3 3-3 3"/><path d="M5 19h6a3 3 0 0 0 3-3v-1"/>',
+  custom: '<path d="M4 7h9M4 12h9M4 17h6"/><path d="M15 15l2.5 2.5L22 13"/>',
+  'stock-none':
+    '<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M9 12h6" opacity=".35"/>',
+  'stock-build': '<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M8 12h8M8 15h8"/>',
+  'stock-all': '<path d="M3 13h8v7H3zM13 13h8v7h-8z"/><path d="M8 4h8v7H8z"/>',
+  whole:
+    '<rect x="3" y="7" width="5" height="11"/><rect x="9.5" y="7" width="5" height="11"/><rect x="16" y="7" width="5" height="11"/><path d="M3 4h18"/>',
+  precise:
+    '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/><path d="M12 4v2M20 12h-2M12 20v-2M4 12h2"/>',
+  tutorial: '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/>',
+  'tutorial-done':
+    '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>',
 };
-const guidedGlyph=name=>`<span class="guided-art" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${GUIDED_GLYPHS[name]||GUIDED_GLYPHS.balanced}</svg></span>`;
-const guidedItemArt=items=>`<span class="guided-art items" aria-hidden="true">${items.slice(0,4).map(n=>itemIcon(n)).join('')}</span>`;
+const guidedGlyph = name =>
+  `<span class="guided-art" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced}</svg></span>`;
+const guidedItemArt = items =>
+  `<span class="guided-art items" aria-hidden="true">${items
+    .slice(0, 4)
+    .map(n => itemIcon(n))
+    .join('')}</span>`;
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
-function guidedFlow(){
- const w=wizard,list=[];
- for(const q of guidedQuestions){
-  list.push(q);
-  if(q.id==='phase'&&!w.saveId)list.push(guidedStandingQuestion(String(w.settings.phase||'3')));
- }
- return w.guidedAsk?list.filter(q=>w.guidedAsk.includes(q.id)):list;
+function guidedFlow() {
+  const w = wizard,
+    list = [];
+  for (const q of guidedQuestions) {
+    list.push(q);
+    if (q.id === 'phase' && !w.saveId)
+      list.push(guidedStandingQuestion(String(w.settings.phase || '3')));
+  }
+  return w.guidedAsk ? list.filter(q => w.guidedAsk.includes(q.id)) : list;
 }
-const guidedAnswer=q=>{
- const w=wizard,s=w.settings;
- if(q.id==='tutorial')return w.tutorial||'doing';
- if(q.id==='standing')return w.standing||'none';
- if(q.id==='exact')return s.wholeMachines===false?'precise':'whole';
- if(q.id==='stock')return q.options.some(o=>o.value===s.storage)?s.storage:'construction';
- return String(s[q.id]??'');
+const guidedAnswer = q => {
+  const w = wizard,
+    s = w.settings;
+  if (q.id === 'tutorial') return w.tutorial || 'doing';
+  if (q.id === 'standing') return w.standing || 'none';
+  if (q.id === 'exact') return s.wholeMachines === false ? 'precise' : 'whole';
+  if (q.id === 'stock')
+    return q.options.some(o => o.value === s.storage) ? s.storage : 'construction';
+  return String(s[q.id] ?? '');
 };
-function guidedCardsHtml(q){
- const picked=guidedAnswer(q);
- return `<div class="guided-grid">${q.options.map(o=>`<label class="guided-card${o.value===picked?' is-picked':''}">
-  <input type="radio" name="guided:${q.id}" value="${esc(o.value)}" aria-label="${esc(o.label+'. '+o.detail)}" ${o.value===picked?'checked':''}>
-  ${o.items?guidedItemArt(o.items):guidedGlyph(o.glyph)}
+function guidedCardsHtml(q) {
+  const picked = guidedAnswer(q);
+  return `<div class="guided-grid">${q.options
+    .map(
+      o => `<label class="guided-card${o.value === picked ? ' is-picked' : ''}">
+  <input type="radio" name="guided:${q.id}" value="${esc(o.value)}" aria-label="${esc(o.label + '. ' + o.detail)}" ${o.value === picked ? 'checked' : ''}>
+  ${o.items ? guidedItemArt(o.items) : guidedGlyph(o.glyph)}
   <strong>${esc(o.label)}</strong><p>${esc(o.detail)}</p>
-  ${o.handoff?'<span class="badge">Opens All settings</span>':''}
- </label>`).join('')}</div>`;
+  ${o.handoff ? '<span class="badge">Opens All settings</span>' : ''}
+ </label>`,
+    )
+    .join('')}</div>`;
 }
 // The materials you carry out by hand. A floor for one of them costs about 1%
 // more buildings; the general construction rate that would reach the same
 // number costs 81-425%, because it applies to all eighteen at once.
-function guidedTopupHtml(s){
- if(s.storage==='none')return '';
- const over=s.storageOverrides||{};
- return `<fieldset class="guided-topup"><legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
+function guidedTopupHtml(s) {
+  if (s.storage === 'none') return '';
+  const over = s.storageOverrides || {};
+  return `<fieldset class="guided-topup"><legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
  <p class="small muted">Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and 19 Iron Plate a minute into storage. These get a guaranteed ${num(GUIDED_TOPUP_RATE)}/min on top, which costs about 1% more buildings each. Concrete is picked for you because it is the one the plan leaves least spare.</p>
- <div class="guided-chips">${guidedTopupItems.map(n=>`<label class="guided-chip${over[n]!==undefined?' is-picked':''}"><input type="checkbox" name="topup" value="${esc(n)}" aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${esc(n)} a minute" ${over[n]!==undefined?'checked':''}>${itemIcon(n)}<span>${esc(n)}</span></label>`).join('')}</div></fieldset>`;
+ <div class="guided-chips">${guidedTopupItems.map(n => `<label class="guided-chip${over[n] !== undefined ? ' is-picked' : ''}"><input type="checkbox" name="topup" value="${esc(n)}" aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${esc(n)} a minute" ${over[n] !== undefined ? 'checked' : ''}>${itemIcon(n)}<span>${esc(n)}</span></label>`).join('')}</div></fieldset>`;
 }
 // A second profile for a save you already play starts from the settings of the
 // profile you are on, so the useful question is what changed rather than all of
 // them again.
-function guidedTopicsHtml(){
- const w=wizard,s=w.settings,save=workspace.saves.find(x=>x.id===w.saveId);
- const from=save?.profiles.find(p=>p.id===(w.carryFrom||save.activeProfile))||save?.profiles[0];
- const known=[['Phase','Phase '+(s.phase||'3')],['Goal',(workspace.catalog.goals.find(g=>g.id===s.goal)||{}).name||s.goal],
-  ['Recipes',s.recipes==='all'?'All alternates':s.recipes==='custom'?num((s.alternateRecipes||[]).length)+' picked':'Standard only'],
-  ['Stocked',(storageOptions.find(([v])=>v===s.storage)||[,s.storage])[1]],
-  ['Machines',s.wholeMachines===false?'Exact ratios':'Whole machines']];
- return `<h2>What is different this time?</h2>
- <p>Starting from the settings of <b>${esc(from?.name||'this save')}</b>. Tick only what changes; the rest is kept as it is.</p>
- <div class="guided-known">${known.map(([k,v])=>`<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>
- <div class="guided-topics">${guidedQuestions.map(q=>`<label class="check-row"><input type="checkbox" name="topic" value="${q.id}" ${q.id==='phase'?'checked':''}>${esc(q.title)}</label>`).join('')}</div>
- <p class="small muted">Progress from ${esc(from?.name||'the other profile')} can be carried over on the Review step, including the production lines this plan does not expand.</p>`;
+function guidedTopicsHtml() {
+  const w = wizard,
+    s = w.settings,
+    save = workspace.saves.find(x => x.id === w.saveId);
+  const from =
+    save?.profiles.find(p => p.id === (w.carryFrom || save.activeProfile)) || save?.profiles[0];
+  const known = [
+    ['Phase', 'Phase ' + (s.phase || '3')],
+    ['Goal', (workspace.catalog.goals.find(g => g.id === s.goal) || {}).name || s.goal],
+    [
+      'Recipes',
+      s.recipes === 'all'
+        ? 'All alternates'
+        : s.recipes === 'custom'
+          ? num((s.alternateRecipes || []).length) + ' picked'
+          : 'Standard only',
+    ],
+    ['Stocked', (storageOptions.find(([v]) => v === s.storage) || [, s.storage])[1]],
+    ['Machines', s.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
+  ];
+  return `<h2>What is different this time?</h2>
+ <p>Starting from the settings of <b>${esc(from?.name || 'this save')}</b>. Tick only what changes; the rest is kept as it is.</p>
+ <div class="guided-known">${known.map(([k, v]) => `<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>
+ <div class="guided-topics">${guidedQuestions.map(q => `<label class="check-row"><input type="checkbox" name="topic" value="${q.id}" ${q.id === 'phase' ? 'checked' : ''}>${esc(q.title)}</label>`).join('')}</div>
+ <p class="small muted">Progress from ${esc(from?.name || 'the other profile')} can be carried over on the Review step, including the production lines this plan does not expand.</p>`;
 }
 // Production you already run, entered as a rate. Matching an existing factory
 // against the plan's own rows does not work — your Modular Frame line is
@@ -917,206 +2718,292 @@ function guidedTopicsHtml(){
 // popup is browser chrome, so it cannot be themed, cannot be read back, and
 // Chrome suppresses it outright on an input with autocomplete off. A list we
 // own works the same everywhere and can be driven from the keyboard.
-const SUPPLY_SUGGESTIONS=8;
-function supplyMatches(query){
- const q=String(query||'').trim().toLowerCase();
- if(!q)return [];
- const starts=[],contains=[];
- for(const n of workspace.catalog.supplyItems||[]){
-  const l=n.toLowerCase();
-  if(l.startsWith(q))starts.push(n);else if(l.includes(q))contains.push(n);
- }
- return [...starts,...contains].slice(0,SUPPLY_SUGGESTIONS);
+const SUPPLY_SUGGESTIONS = 8;
+function supplyMatches(query) {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase();
+  if (!q) return [];
+  const starts = [],
+    contains = [];
+  for (const n of workspace.catalog.supplyItems || []) {
+    const l = n.toLowerCase();
+    if (l.startsWith(q)) starts.push(n);
+    else if (l.includes(q)) contains.push(n);
+  }
+  return [...starts, ...contains].slice(0, SUPPLY_SUGGESTIONS);
 }
 // The rows being edited, which is not the same thing as the rows that count. A
 // half-finished row — a name with no rate yet — has to survive a re-render, or
 // picking a suggestion would erase what you just picked.
-function supplyRows(w){
- if(!Array.isArray(w.supplyRows))w.supplyRows=Object.entries(w.settings.existingSupply||{}).map(([name,rate])=>({name,rate:String(rate)}));
- return w.supplyRows;
+function supplyRows(w) {
+  if (!Array.isArray(w.supplyRows))
+    w.supplyRows = Object.entries(w.settings.existingSupply || {}).map(([name, rate]) => ({
+      name,
+      rate: String(rate),
+    }));
+  return w.supplyRows;
 }
-function supplyRowsHtml(s){
- const rows=[...supplyRows(wizard),{name:'',rate:''}];
- const known=new Set(workspace.catalog.supplyItems||[]);
- // The icon is kept in step while you type too, so it appears the moment what
- // you have typed is a real item rather than only once the field is committed.
- const hint=r=>!r.name.trim()?''
-  :!known.has(r.name.trim())?'<span class="supply-hint warn">No item of that name — pick one from the list.</span>'
-  :!String(r.rate).trim()?'<span class="supply-hint">Add a rate and this line is credited; leave it blank and it is not.</span>'
-  :'';
- const row=(r,i)=>`<div class="supply-row" data-supply-row="${i}">
+function supplyRowsHtml(s) {
+  const rows = [...supplyRows(wizard), { name: '', rate: '' }];
+  const known = new Set(workspace.catalog.supplyItems || []);
+  // The icon is kept in step while you type too, so it appears the moment what
+  // you have typed is a real item rather than only once the field is committed.
+  const hint = r =>
+    !r.name.trim()
+      ? ''
+      : !known.has(r.name.trim())
+        ? '<span class="supply-hint warn">No item of that name — pick one from the list.</span>'
+        : !String(r.rate).trim()
+          ? '<span class="supply-hint">Add a rate and this line is credited; leave it blank and it is not.</span>'
+          : '';
+  const row = (r, i) => `<div class="supply-row" data-supply-row="${i}">
   <div class="supply-field">
-   <label class="field">Item<span class="supply-input${known.has(r.name.trim())?' has-icon':''}" data-icon="${known.has(r.name.trim())?esc(r.name.trim()):''}">${known.has(r.name.trim())?itemIcon(r.name.trim()):''}<input name="supplyItem" value="${esc(r.name)}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Search item" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="supply-options-${i}" aria-label="Search for an item you already produce"></span></label>
+   <label class="field">Item<span class="supply-input${known.has(r.name.trim()) ? ' has-icon' : ''}" data-icon="${known.has(r.name.trim()) ? esc(r.name.trim()) : ''}">${known.has(r.name.trim()) ? itemIcon(r.name.trim()) : ''}<input name="supplyItem" value="${esc(r.name)}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Search item" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="supply-options-${i}" aria-label="Search for an item you already produce"></span></label>
    <div class="supply-options" id="supply-options-${i}" role="listbox" hidden></div>
   </div>
   <label class="field">Per minute<input name="supplyRate" type="number" min="0" max="1000000" step="any" value="${esc(r.rate)}" aria-label="Rate you already produce, per minute"></label>
-  <button type="button" class="btn quiet supply-remove${r.name.trim()?'':' is-blank'}" data-supply-remove="${i}" ${r.name.trim()?`aria-label="Remove ${esc(r.name)}"`:'tabindex="-1" aria-hidden="true"'}>Remove</button>
+  <button type="button" class="btn quiet supply-remove${r.name.trim() ? '' : ' is-blank'}" data-supply-remove="${i}" ${r.name.trim() ? `aria-label="Remove ${esc(r.name)}"` : 'tabindex="-1" aria-hidden="true"'}>Remove</button>
   ${hint(r)}
  </div>`;
- return `<div class="supply-picker">
+  return `<div class="supply-picker">
   <div class="supply-list">${rows.map(row).join('')}</div>
   <p class="small muted">The plan credits these and builds only the remainder — and it does not build the chain behind them either. What you make it with is your business: the recipe and machine count do not have to match anything this plan would choose. Their ore and their power are already spent in your world, so enter your resource budgets and spare power net of them, exactly as for any other existing factory.</p>
  </div>`;
 }
 // Name plus rate, paired by position. Every row is kept for editing; only the
 // ones naming a real item at a real rate are handed to the planner.
-function readSupply(form,f){
- if(!form?.querySelector?.('.supply-list'))return null;
- const known=new Set(workspace.catalog.supplyItems||[]);
- const names=f.getAll('supplyItem').map(x=>String(x));
- const rates=f.getAll('supplyRate').map(x=>String(x));
- const rows=names.map((name,i)=>({name,rate:rates[i]??''})).filter(r=>r.name.trim()||String(r.rate).trim());
- wizard.supplyRows=rows;
- const out={};
- for(const r of rows){
-  const name=r.name.trim(),q=Number(r.rate);
-  if(known.has(name)&&String(r.rate).trim()!==''&&Number.isFinite(q)&&q>0)out[name]=q;
- }
- return out;
+function readSupply(form, f) {
+  if (!form?.querySelector?.('.supply-list')) return null;
+  const known = new Set(workspace.catalog.supplyItems || []);
+  const names = f.getAll('supplyItem').map(x => String(x));
+  const rates = f.getAll('supplyRate').map(x => String(x));
+  const rows = names
+    .map((name, i) => ({ name, rate: rates[i] ?? '' }))
+    .filter(r => r.name.trim() || String(r.rate).trim());
+  wizard.supplyRows = rows;
+  const out = {};
+  for (const r of rows) {
+    const name = r.name.trim(),
+      q = Number(r.rate);
+    if (known.has(name) && String(r.rate).trim() !== '' && Number.isFinite(q) && q > 0)
+      out[name] = q;
+  }
+  return out;
 }
 // Fill a row's suggestion list in place. Re-rendering the whole screen on every
 // keystroke would take the focus with it.
-function showSupplyOptions(input){
- const field=input.closest('.supply-field');if(!field)return;
- const box=field.querySelector('.supply-options');if(!box)return;
- const matches=supplyMatches(input.value).filter(n=>n.toLowerCase()!==input.value.trim().toLowerCase());
- if(!matches.length){hideSupplyOptions(input);return;}
- box.innerHTML=matches.map(n=>`<button type="button" role="option" aria-selected="false" class="supply-option" data-supply-pick="${esc(n)}">${itemIcon(n)}<span>${esc(n)}</span></button>`).join('');
- box.hidden=false;input.setAttribute('aria-expanded','true');
+function showSupplyOptions(input) {
+  const field = input.closest('.supply-field');
+  if (!field) return;
+  const box = field.querySelector('.supply-options');
+  if (!box) return;
+  const matches = supplyMatches(input.value).filter(
+    n => n.toLowerCase() !== input.value.trim().toLowerCase(),
+  );
+  if (!matches.length) {
+    hideSupplyOptions(input);
+    return;
+  }
+  box.innerHTML = matches
+    .map(
+      n =>
+        `<button type="button" role="option" aria-selected="false" class="supply-option" data-supply-pick="${esc(n)}">${itemIcon(n)}<span>${esc(n)}</span></button>`,
+    )
+    .join('');
+  box.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
 }
 // Typing updates the suggestion list without redrawing the screen, so the icon
 // beside the field has to be kept in step the same way.
-function syncSupplyIcon(input){
- const wrap=input.closest('.supply-input');if(!wrap)return;
- const typed=input.value.trim();
- const name=(workspace.catalog.supplyItems||[]).includes(typed)?typed:'';
- if(wrap.dataset.icon===name)return;
- wrap.dataset.icon=name;
- wrap.querySelector('.item-icon')?.remove();
- wrap.classList.toggle('has-icon',!!name);
- if(name)wrap.insertAdjacentHTML('afterbegin',itemIcon(name));
+function syncSupplyIcon(input) {
+  const wrap = input.closest('.supply-input');
+  if (!wrap) return;
+  const typed = input.value.trim();
+  const name = (workspace.catalog.supplyItems || []).includes(typed) ? typed : '';
+  if (wrap.dataset.icon === name) return;
+  wrap.dataset.icon = name;
+  wrap.querySelector('.item-icon')?.remove();
+  wrap.classList.toggle('has-icon', !!name);
+  if (name) wrap.insertAdjacentHTML('afterbegin', itemIcon(name));
 }
-function hideSupplyOptions(input){
- const box=input?.closest('.supply-field')?.querySelector('.supply-options');
- if(box){box.hidden=true;box.innerHTML='';}
- input?.setAttribute('aria-expanded','false');
+function hideSupplyOptions(input) {
+  const box = input?.closest('.supply-field')?.querySelector('.supply-options');
+  if (box) {
+    box.hidden = true;
+    box.innerHTML = '';
+  }
+  input?.setAttribute('aria-expanded', 'false');
 }
 // Picking a suggestion commits it and moves to the rate, which is the next
 // thing you were going to type anyway.
-function pickSupplyOption(button){
- const field=button.closest('.supply-field'),input=field?.querySelector('input[name=supplyItem]');
- if(!input)return;
- // Read the row before closing the list: emptying it orphans this button.
- const index=Number(button.closest('.supply-row')?.dataset.supplyRow??-1);
- input.value=button.dataset.supplyPick;
- hideSupplyOptions(input);
- const form=$('#wizard-form');
- if(form)wizard.mode==='guided'?readGuidedForm(form):readWizard(form);
- render();
- [...document.querySelectorAll('.supply-row')][index]?.querySelector('input[name=supplyRate]')?.focus();
+function pickSupplyOption(button) {
+  const field = button.closest('.supply-field'),
+    input = field?.querySelector('input[name=supplyItem]');
+  if (!input) return;
+  // Read the row before closing the list: emptying it orphans this button.
+  const index = Number(button.closest('.supply-row')?.dataset.supplyRow ?? -1);
+  input.value = button.dataset.supplyPick;
+  hideSupplyOptions(input);
+  const form = $('#wizard-form');
+  if (form) wizard.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
+  render();
+  [...document.querySelectorAll('.supply-row')][index]
+    ?.querySelector('input[name=supplyRate]')
+    ?.focus();
 }
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
 // the only ones a guided answer can tick: everything else it learns is a rate,
 // which changes the plan rather than its progress.
-function guidedBuiltKeys(w){return w.tutorial==='done'?[...tutorialKeys]:[];}
-function readGuided(form){
- const w=wizard,s=w.settings,f=new FormData(form);
- if(form.querySelector?.('.guided-topics')){const on=f.getAll('topic').map(String);w.guidedAsk=guidedQuestions.filter(q=>on.includes(q.id)).map(q=>q.id);}
- for(const q of guidedFlow()){
-  if(!q.options)continue;
-  const value=f.get('guided:'+q.id);if(value===null)continue;
-  const option=q.options.find(o=>o.value===String(value));if(!option)continue;
-  if(q.id==='tutorial')w.tutorial=option.value;
-  Object.assign(s,option.set);
- }
- {const supply=readSupply(form,f);if(supply)s.existingSupply=supply;}
- if(f.has('hours'))s.hours=Number(f.get('hours'));
- // A guided plan never raises the general construction rate: it is the single
- // most expensive control in the app and the per-item floors below do the same
- // job for a fortieth of the buildings.
- if(form.querySelector?.('.guided-topup')){
-  s.storageRate=1;s.buildRate=1;
-  const chosen=f.getAll('topup').map(String).filter(n=>guidedTopupItems.includes(n));
-  const over={};for(const n of chosen)over[n]=GUIDED_TOPUP_RATE;
-  s.storageOverrides=over;
- }
- if(s.goal!=='timed')s.phaseTime='every';
- if(s.storage==='none')s.storageOverrides={};
- w.preview=null;
+function guidedBuiltKeys(w) {
+  return w.tutorial === 'done' ? [...tutorialKeys] : [];
 }
-function guidedProgressHtml(flow,index){
- return `<div class="guided-progress" role="list">${flow.map((q,i)=>`<span role="listitem" class="${i===index?'current':i<index?'done':''}" ${i===index?'aria-current="step"':''}><i></i>${esc(q.short||q.title.replace(/\?$/,''))}</span>`).join('')}</div>`;
+function readGuided(form) {
+  const w = wizard,
+    s = w.settings,
+    f = new FormData(form);
+  if (form.querySelector?.('.guided-topics')) {
+    const on = f.getAll('topic').map(String);
+    w.guidedAsk = guidedQuestions.filter(q => on.includes(q.id)).map(q => q.id);
+  }
+  for (const q of guidedFlow()) {
+    if (!q.options) continue;
+    const value = f.get('guided:' + q.id);
+    if (value === null) continue;
+    const option = q.options.find(o => o.value === String(value));
+    if (!option) continue;
+    if (q.id === 'tutorial') w.tutorial = option.value;
+    Object.assign(s, option.set);
+  }
+  {
+    const supply = readSupply(form, f);
+    if (supply) s.existingSupply = supply;
+  }
+  if (f.has('hours')) s.hours = Number(f.get('hours'));
+  // A guided plan never raises the general construction rate: it is the single
+  // most expensive control in the app and the per-item floors below do the same
+  // job for a fortieth of the buildings.
+  if (form.querySelector?.('.guided-topup')) {
+    s.storageRate = 1;
+    s.buildRate = 1;
+    const chosen = f
+      .getAll('topup')
+      .map(String)
+      .filter(n => guidedTopupItems.includes(n));
+    const over = {};
+    for (const n of chosen) over[n] = GUIDED_TOPUP_RATE;
+    s.storageOverrides = over;
+  }
+  if (s.goal !== 'timed') s.phaseTime = 'every';
+  if (s.storage === 'none') s.storageOverrides = {};
+  w.preview = null;
 }
-function renderGuided(){
- const w=wizard,s=w.settings,flow=guidedFlow();
- const topics=w.saveId&&w.guidedAsk===null;
- const index=topics?-1:Math.min(w.guidedStep-1,flow.length-1);
- const q=topics?null:flow[index];
- let content;
- if(topics)content=guidedTopicsHtml();
- else if(!q)content='<h2>Ready to calculate</h2>';
- else content=`<h2>${esc(q.title)}</h2><p>${esc(q.lead)}</p>`
-  +(q.kind==='supply'?supplyRowsHtml(s):guidedCardsHtml(q))
-  +(q.id==='goal'&&s.goal==='timed'?`<div class="form-grid guided-follow">${field('Hours per phase','hours',s.hours??8,'number','min="0.25" max="2000" step="0.25" required')}</div>`:'')
-  +(q.id==='stock'?guidedTopupHtml(s):'');
- const last=topics?false:index>=flow.length-1;
- const advancedStep=q?.step||1;
- return (browserMode?browserNotice():'')
-  +header('A FEW QUESTIONS',w.saveId?'Add a profile to '+esc(w.saveName):'Create your factory plan','Answer what matters and the planner fills in the rest. Every setting is still there under All settings.')
-  +(topics?'':guidedProgressHtml(flow,index))
-  +`<form id="wizard-form" class="panel wizard-panel guided-panel">
-   ${topics?'':`<label class="field guided-name">${w.saveId?'Profile name':'Save name'}<input name="${w.saveId?'profileName':'saveName'}" type="text" value="${esc(w.saveId?w.name:w.saveName)}" ${w.saveId?'':'required'} maxlength="80" placeholder="${w.saveId?'Named after your goal if left blank':'My Satisfactory save'}"></label>`}
+function guidedProgressHtml(flow, index) {
+  return `<div class="guided-progress" role="list">${flow.map((q, i) => `<span role="listitem" class="${i === index ? 'current' : i < index ? 'done' : ''}" ${i === index ? 'aria-current="step"' : ''}><i></i>${esc(q.short || q.title.replace(/\?$/, ''))}</span>`).join('')}</div>`;
+}
+function renderGuided() {
+  const w = wizard,
+    s = w.settings,
+    flow = guidedFlow();
+  const topics = w.saveId && w.guidedAsk === null;
+  const index = topics ? -1 : Math.min(w.guidedStep - 1, flow.length - 1);
+  const q = topics ? null : flow[index];
+  let content;
+  if (topics) content = guidedTopicsHtml();
+  else if (!q) content = '<h2>Ready to calculate</h2>';
+  else
+    content =
+      `<h2>${esc(q.title)}</h2><p>${esc(q.lead)}</p>` +
+      (q.kind === 'supply' ? supplyRowsHtml(s) : guidedCardsHtml(q)) +
+      (q.id === 'goal' && s.goal === 'timed'
+        ? `<div class="form-grid guided-follow">${field('Hours per phase', 'hours', s.hours ?? 8, 'number', 'min="0.25" max="2000" step="0.25" required')}</div>`
+        : '') +
+      (q.id === 'stock' ? guidedTopupHtml(s) : '');
+  const last = topics ? false : index >= flow.length - 1;
+  const advancedStep = q?.step || 1;
+  return (
+    (browserMode ? browserNotice() : '') +
+    header(
+      'A FEW QUESTIONS',
+      w.saveId ? 'Add a profile to ' + esc(w.saveName) : 'Create your factory plan',
+      'Answer what matters and the planner fills in the rest. Every setting is still there under All settings.',
+    ) +
+    (topics ? '' : guidedProgressHtml(flow, index)) +
+    `<form id="wizard-form" class="panel wizard-panel guided-panel">
+   ${topics ? '' : `<label class="field guided-name">${w.saveId ? 'Profile name' : 'Save name'}<input name="${w.saveId ? 'profileName' : 'saveName'}" type="text" value="${esc(w.saveId ? w.name : w.saveName)}" ${w.saveId ? '' : 'required'} maxlength="80" placeholder="${w.saveId ? 'Named after your goal if left blank' : 'My Satisfactory save'}"></label>`}
    ${content}
    <div class="wizard-actions">
-    <button type="button" class="btn" ${topics||w.guidedStep<=1?'data-cancel-wizard':'data-guided-back'}>${topics||w.guidedStep<=1?'Cancel':'Back'}</button>
+    <button type="button" class="btn" ${topics || w.guidedStep <= 1 ? 'data-cancel-wizard' : 'data-guided-back'}>${topics || w.guidedStep <= 1 ? 'Cancel' : 'Back'}</button>
     <span class="guided-escape"><button type="button" class="btn quiet" data-guided-advanced="${advancedStep}">All settings →</button>
-    <button class="btn primary" type="submit">${last?'Calculate plan':'Continue →'}</button></span>
+    <button class="btn primary" type="submit">${last ? 'Calculate plan' : 'Continue →'}</button></span>
    </div>
    <p id="wizard-error" class="form-error" role="alert"></p>
-  </form>`;
+  </form>`
+  );
 }
-async function moveGuided(target){
- const w=wizard,form=$('#wizard-form');
- if(wizardBusy||!w)return;
- if(target>w.guidedStep&&form&&!form.reportValidity())return;
- // "What is different this time?" chooses which questions follow, so leaving it
- // starts that list at the beginning rather than stepping past it.
- const wasTopics=!!w.saveId&&w.guidedAsk===null;
- if(form)readGuidedForm(form);
- const flow=guidedFlow();
- if(wasTopics&&flow.length){w.guidedStep=1;render();return;}
- if(target<1){w.guidedStep=1;render();return;}
- // A choice that only All settings can answer hands over rather than pretending
- // to ask it here: picking recipes one by one, or confirming resource budgets
- // before maximum output.
- const previous=flow[Math.min(w.guidedStep-1,flow.length-1)];
- const handoff=previous?.options?.find(o=>o.value===guidedAnswer(previous))?.handoff;
- if(handoff&&target>w.guidedStep){toAdvanced(handoff);return;}
- if(target<=flow.length){w.guidedStep=target;render();return;}
- await calculateWizard(form);
+async function moveGuided(target) {
+  const w = wizard,
+    form = $('#wizard-form');
+  if (wizardBusy || !w) return;
+  if (target > w.guidedStep && form && !form.reportValidity()) return;
+  // "What is different this time?" chooses which questions follow, so leaving it
+  // starts that list at the beginning rather than stepping past it.
+  const wasTopics = !!w.saveId && w.guidedAsk === null;
+  if (form) readGuidedForm(form);
+  const flow = guidedFlow();
+  if (wasTopics && flow.length) {
+    w.guidedStep = 1;
+    render();
+    return;
+  }
+  if (target < 1) {
+    w.guidedStep = 1;
+    render();
+    return;
+  }
+  // A choice that only All settings can answer hands over rather than pretending
+  // to ask it here: picking recipes one by one, or confirming resource budgets
+  // before maximum output.
+  const previous = flow[Math.min(w.guidedStep - 1, flow.length - 1)];
+  const handoff = previous?.options?.find(o => o.value === guidedAnswer(previous))?.handoff;
+  if (handoff && target > w.guidedStep) {
+    toAdvanced(handoff);
+    return;
+  }
+  if (target <= flow.length) {
+    w.guidedStep = target;
+    render();
+    return;
+  }
+  await calculateWizard(form);
 }
-function readGuidedForm(form){
- const w=wizard,f=new FormData(form);
- if(f.has('saveName'))w.saveName=String(f.get('saveName'));
- if(f.has('profileName'))w.name=String(f.get('profileName'));
- readGuided(form);
+function readGuidedForm(form) {
+  const w = wizard,
+    f = new FormData(form);
+  if (f.has('saveName')) w.saveName = String(f.get('saveName'));
+  if (f.has('profileName')) w.name = String(f.get('profileName'));
+  readGuided(form);
 }
 // Switching to All settings keeps every answer: both modes write the same
 // settings object, so nothing is recalculated or lost either way.
-function toAdvanced(step){
- const w=wizard;const form=$('#wizard-form');
- if(form&&w.mode==='guided')readGuidedForm(form);
- w.mode='advanced';w.usedGuided=true;w.step=Math.min(Math.max(step||1,1),4);
- render();
+function toAdvanced(step) {
+  const w = wizard;
+  const form = $('#wizard-form');
+  if (form && w.mode === 'guided') readGuidedForm(form);
+  w.mode = 'advanced';
+  w.usedGuided = true;
+  w.step = Math.min(Math.max(step || 1, 1), 4);
+  render();
 }
-function toGuided(){
- const w=wizard;const form=$('#wizard-form');
- if(form&&w.mode!=='guided')readWizard(form);
- w.mode='guided';
- const flow=guidedFlow();
- if(!(w.guidedStep>=1))w.guidedStep=1;
- w.guidedStep=Math.min(w.guidedStep,Math.max(flow.length,1));
- render();
+function toGuided() {
+  const w = wizard;
+  const form = $('#wizard-form');
+  if (form && w.mode !== 'guided') readWizard(form);
+  w.mode = 'guided';
+  const flow = guidedFlow();
+  if (!(w.guidedStep >= 1)) w.guidedStep = 1;
+  w.guidedStep = Math.min(w.guidedStep, Math.max(flow.length, 1));
+  render();
 }
 // --- Working out the resource budgets ---------------------------------------
 // The thirteen budget boxes want a rate per minute, which nobody knows. What a
@@ -1128,391 +3015,1201 @@ function toGuided(){
 // Four short screens rather than one long one: where the numbers come from and
 // how you mine, then the ores, then oil and gas, then the total with whatever
 // is already spoken for taken off it.
-const EXTRACTION_STEPS=['How you mine','Ore nodes','Resource wells','Your budgets'];
-const MAP_URL='https://satisfactory-calculator.com/en/interactive-map';
-function extractionOf(w){
- if(!w.extraction)w.extraction=w.settings.extraction?structuredClone(w.settings.extraction):startingSurvey(w.settings);
- return w.extraction;
+const EXTRACTION_STEPS = ['How you mine', 'Ore nodes', 'Resource wells', 'Your budgets'];
+const MAP_URL = 'https://satisfactory-calculator.com/en/interactive-map';
+function extractionOf(w) {
+  if (!w.extraction)
+    w.extraction = w.settings.extraction
+      ? structuredClone(w.settings.extraction)
+      : startingSurvey(w.settings);
+  return w.extraction;
 }
-const countRow=(kind,name,counts)=>purities3.map(([key,label])=>
- `<label class="field count-cell"><span>${label}</span><input name="${kind}:${esc(name)}:${key}" type="number" min="0" max="10000" step="1" value="${esc(counts[key]||0)}" aria-label="${label} ${esc(name)} ${kind==='well'?'well satellites':'nodes'}"></label>`).join('');
-function extractionTableHtml(kind,names,e){
- const map=kind==='well'?e.wells:e.nodes;
- return `<div class="count-table">${names.map(name=>{
-  const counts={...blankCounts(),...(map[name]||{})};
-  const total=kind==='well'
-   ? purities3.reduce((a,[k])=>a+(Number(counts[k])||0)*wellYield(k,e),0)
-   : purities3.reduce((a,[k])=>a+(Number(counts[k])||0)*nodeYield(name,k,e),0);
-  return `<div class="count-row">
+const countRow = (kind, name, counts) =>
+  purities3
+    .map(
+      ([key, label]) =>
+        `<label class="field count-cell"><span>${label}</span><input name="${kind}:${esc(name)}:${key}" type="number" min="0" max="10000" step="1" value="${esc(counts[key] || 0)}" aria-label="${label} ${esc(name)} ${kind === 'well' ? 'well satellites' : 'nodes'}"></label>`,
+    )
+    .join('');
+function extractionTableHtml(kind, names, e) {
+  const map = kind === 'well' ? e.wells : e.nodes;
+  return `<div class="count-table">${names
+    .map(name => {
+      const counts = { ...blankCounts(), ...(map[name] || {}) };
+      const total =
+        kind === 'well'
+          ? purities3.reduce((a, [k]) => a + (Number(counts[k]) || 0) * wellYield(k, e), 0)
+          : purities3.reduce((a, [k]) => a + (Number(counts[k]) || 0) * nodeYield(name, k, e), 0);
+      return `<div class="count-row">
    <span class="count-name">${itemIcon(name)}<span>${esc(name)}</span></span>
-   ${countRow(kind,name,counts)}
-   <span class="count-total">${total?num(Math.round(total))+'/min':'—'}</span>
-  </div>`;}).join('')}</div>`;
+   ${countRow(kind, name, counts)}
+   <span class="count-total">${total ? num(Math.round(total)) + '/min' : '—'}</span>
+  </div>`;
+    })
+    .join('')}</div>`;
 }
 // The two World Randomization settings, exactly as the game presents them.
 // They are on All settings step 1 too — this is the same pair, shown here
 // because here is where they decide what the counts should be.
-const presetBarHtml=()=>{
- const s=wizard.settings,e=extractionOf(wizard);
- const known=knownWorld(s.purity,s.distribution);
- // Random is a shuffle: it moves nodes but not how many of each resource there
- // are. So it costs us only the purity split, and only for the settings that
- // keep the map's own split.
- const splitShuffled=s.distribution==='randomized'&&!known&&presetPurities.includes(s.purity);
- const active=matchingPreset(e);
- const label=(nodePresets.find(([v])=>v===active)||[,''])[1];
- const shuffleNote=s.distribution==='randomized'?' Random moves nodes around the map; as far as the community has established, it does not change how many of each resource there are. Nitrogen wells are left for you: a well is randomized whole and the map’s wells hold different numbers of satellites, so a shuffle can still leave you more or less nitrogen than the default map.':'';
- return `<div class="node-presets"><span class="eyebrow">Your world settings ${help('nodePresets')}</span>
- <div class="form-grid">${selectField('Resource node randomization','distribution',distributions,s.distribution)}${selectField('Resource node purity','purity',purities,s.purity)}</div>
- ${known&&active===s.purity
-  ?`<p class="small">The counts below are the map's node totals at <b>${esc(label)}</b>.${shuffleNote} Change any that do not match your save.</p>`
-  :known
-  ?`<p class="small">Your world's node counts are known for these settings. <button type="button" class="btn quiet" data-node-preset="${esc(s.purity)}">Fill in the counts below</button></p>`
-  :splitShuffled
-  ?`<div class="notice"><b>Only the purity split is missing.</b> Random shuffles which resource sits at each location, so your world holds the same number of nodes for each resource as the default map — but it shuffles their purities too, and <b>${esc((purities.find(([v])=>v===s.purity)||[,''])[1])}</b> keeps whatever split the shuffle produced. How many are impure, normal and pure is therefore yours to count. If you actually chose All Pure, Average or All Impure, pick that above and the counts fill in.${active?` The counts below are still the map's totals at <b>${esc(label)}</b> — the totals are right, the split is not.`:''}</div>`
-  :`<div class="notice"><b>No preset for these settings.</b> ${richShape[s.distribution]
-    ?`A resource-rich distribution changes how many nodes each resource has, and the players who have counted these worlds get answers a third apart from one seed to the next — so filling anything in here would be a guess wearing a number. ${esc(richShape[s.distribution])} Which way it goes is consistent; how far is not.`
-    :'A random or hand-set purity has no fixed split to rearrange.'} Count yours on the map linked on the first screen, or upload your save there and it will count them for you.${active?` The counts below are still the <b>map's totals at ${esc(label)}</b>, so check them against your save.`:''}</div>`}
- <p class="small">${wizard.extractionUndo
-  ?`<button type="button" class="btn quiet" data-node-undo>Undo reset</button> <span class="muted">Every count was cleared. This puts back what was there before.</span>`
-  :`<button type="button" class="btn quiet" data-node-reset>Reset all counts to zero</button> <span class="muted">Clears every ore, well and committed amount so you can enter your own. You can undo it.</span>`}</p>
- <p class="small muted">The purity settings do not move nodes or add any, they shift every node up or down the purity scale, so a known purity is the known node count rearranged. Oil wells are not in that table — count those yourself.</p></div>`;};
+const presetBarHtml = () => {
+  const s = wizard.settings,
+    e = extractionOf(wizard);
+  const known = knownWorld(s.purity, s.distribution);
+  // Random is a shuffle: it moves nodes but not how many of each resource there
+  // are. So it costs us only the purity split, and only for the settings that
+  // keep the map's own split.
+  const splitShuffled =
+    s.distribution === 'randomized' && !known && presetPurities.includes(s.purity);
+  const active = matchingPreset(e);
+  const label = (nodePresets.find(([v]) => v === active) || [, ''])[1];
+  const shuffleNote =
+    s.distribution === 'randomized'
+      ? ' Random moves nodes around the map; as far as the community has established, it does not change how many of each resource there are. Nitrogen wells are left for you: a well is randomized whole and the map’s wells hold different numbers of satellites, so a shuffle can still leave you more or less nitrogen than the default map.'
+      : '';
+  return `<div class="node-presets"><span class="eyebrow">Your world settings ${help('nodePresets')}</span>
+ <div class="form-grid">${selectField('Resource node randomization', 'distribution', distributions, s.distribution)}${selectField('Resource node purity', 'purity', purities, s.purity)}</div>
+ ${
+   known && active === s.purity
+     ? `<p class="small">The counts below are the map's node totals at <b>${esc(label)}</b>.${shuffleNote} Change any that do not match your save.</p>`
+     : known
+       ? `<p class="small">Your world's node counts are known for these settings. <button type="button" class="btn quiet" data-node-preset="${esc(s.purity)}">Fill in the counts below</button></p>`
+       : splitShuffled
+         ? `<div class="notice"><b>Only the purity split is missing.</b> Random shuffles which resource sits at each location, so your world holds the same number of nodes for each resource as the default map — but it shuffles their purities too, and <b>${esc((purities.find(([v]) => v === s.purity) || [, ''])[1])}</b> keeps whatever split the shuffle produced. How many are impure, normal and pure is therefore yours to count. If you actually chose All Pure, Average or All Impure, pick that above and the counts fill in.${active ? ` The counts below are still the map's totals at <b>${esc(label)}</b> — the totals are right, the split is not.` : ''}</div>`
+         : `<div class="notice"><b>No preset for these settings.</b> ${
+             richShape[s.distribution]
+               ? `A resource-rich distribution changes how many nodes each resource has, and the players who have counted these worlds get answers a third apart from one seed to the next — so filling anything in here would be a guess wearing a number. ${esc(richShape[s.distribution])} Which way it goes is consistent; how far is not.`
+               : 'A random or hand-set purity has no fixed split to rearrange.'
+           } Count yours on the map linked on the first screen, or upload your save there and it will count them for you.${active ? ` The counts below are still the <b>map's totals at ${esc(label)}</b>, so check them against your save.` : ''}</div>`
+ }
+ <p class="small">${
+   wizard.extractionUndo
+     ? `<button type="button" class="btn quiet" data-node-undo>Undo reset</button> <span class="muted">Every count was cleared. This puts back what was there before.</span>`
+     : `<button type="button" class="btn quiet" data-node-reset>Reset all counts to zero</button> <span class="muted">Clears every ore, well and committed amount so you can enter your own. You can undo it.</span>`
+ }</p>
+ <p class="small muted">The purity settings do not move nodes or add any, they shift every node up or down the purity scale, so a known purity is the known node count rearranged. Oil wells are not in that table — count those yourself.</p></div>`;
+};
 // Back to an empty survey. Every count goes, including what was already
 // committed; the miner mark and clock stay, because they are equipment rather
 // than counts and have no meaningful zero. The old counts are kept aside so the
 // clearing can be undone, which is why no confirmation is asked for.
-function resetExtraction(){
- const previous=extractionOf(wizard);
- wizard.extractionUndo=JSON.parse(JSON.stringify(previous));
- wizard.extraction={...blankExtraction(),mark:previous.mark,clock:previous.clock};
+function resetExtraction() {
+  const previous = extractionOf(wizard);
+  wizard.extractionUndo = JSON.parse(JSON.stringify(previous));
+  wizard.extraction = { ...blankExtraction(), mark: previous.mark, clock: previous.clock };
 }
-function undoExtractionReset(){
- if(!wizard.extractionUndo)return;
- wizard.extraction=wizard.extractionUndo;
- wizard.extractionUndo=null;
+function undoExtractionReset() {
+  if (!wizard.extractionUndo) return;
+  wizard.extraction = wizard.extractionUndo;
+  wizard.extractionUndo = null;
 }
-function renderExtraction(){
- const w=wizard,e=extractionOf(w),step=w.extractionStep;
- const sample=(name,purity)=>num(Math.round(nodeYield(name,purity,e)));
- let content='';
- if(step===1)content=`<h2>Where your numbers come from</h2>
+function renderExtraction() {
+  const w = wizard,
+    e = extractionOf(w),
+    step = w.extractionStep;
+  const sample = (name, purity) => num(Math.round(nodeYield(name, purity, e)));
+  let content = '';
+  if (step === 1)
+    content = `<h2>Where your numbers come from</h2>
   <div class="notice blue"><b>You do not have to count nodes by hand.</b> Open the
   <a href="${MAP_URL}" target="_blank" rel="noreferrer">Satisfactory Calculator interactive map</a>, upload your save file there, and it lists every resource node your world holds — including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens.
   <p class="small">Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.</p></div>
   <h2>How you will mine them</h2>
   <p>Extraction depends on the miner and its clock speed far more than on anything else. Plan for the miner this phase can build and power, not the one you happen to have running today.</p>
   <div class="form-grid">
-   ${selectField('Miner','mark',minerMarks.map(([v,l])=>[String(v),l]),String(e.mark))}
-   ${selectField('Clock speed','clock',clockChoices.map(([v,l])=>[String(v),l]),String(e.clock))}
+   ${selectField(
+     'Miner',
+     'mark',
+     minerMarks.map(([v, l]) => [String(v), l]),
+     String(e.mark),
+   )}
+   ${selectField(
+     'Clock speed',
+     'clock',
+     clockChoices.map(([v, l]) => [String(v), l]),
+     String(e.clock),
+   )}
   </div>
-  <div class="notice"><b>At these settings</b> one iron node gives ${sample('Iron Ore','impure')}/min impure, ${sample('Iron Ore','normal')}/min normal and ${sample('Iron Ore','pure')}/min pure. A crude oil node gives ${sample('Crude Oil','normal')}/min normal, and one resource-well satellite ${num(Math.round(wellYield('normal',e)))}/min.</div>`;
- if(step===2)content=`<h2>Your ore nodes</h2>${presetBarHtml()}
+  <div class="notice"><b>At these settings</b> one iron node gives ${sample('Iron Ore', 'impure')}/min impure, ${sample('Iron Ore', 'normal')}/min normal and ${sample('Iron Ore', 'pure')}/min pure. A crude oil node gives ${sample('Crude Oil', 'normal')}/min normal, and one resource-well satellite ${num(Math.round(wellYield('normal', e)))}/min.</div>`;
+  if (step === 2)
+    content = `<h2>Your ore nodes</h2>${presetBarHtml()}
   <p>How many nodes of each purity your world holds for each ore. ${help('extractionNodes')} Zero means zero: a purity your world has none of, or an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter everything you intend to work.</p>
-  ${extractionTableHtml('node',minedResources,e)}`;
- if(step===3)content=`<h2>Resource wells</h2>${presetBarHtml()}
+  ${extractionTableHtml('node', minedResources, e)}`;
+  if (step === 3)
+    content = `<h2>Resource wells</h2>${presetBarHtml()}
   <p>Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells. ${help('extractionWells')}</p>
-  <h3>Crude oil nodes</h3>${extractionTableHtml('node',['Crude Oil'],e)}
-  <h3>Resource well satellites</h3>${extractionTableHtml('well',['Crude Oil','Nitrogen Gas'],e)}
+  <h3>Crude oil nodes</h3>${extractionTableHtml('node', ['Crude Oil'], e)}
+  <h3>Resource well satellites</h3>${extractionTableHtml('well', ['Crude Oil', 'Nitrogen Gas'], e)}
   <div class="notice blue">${itemIcon('Water')} <b>Water is not counted.</b> Extractors sit on any lake or ocean and there is far more coastline than a factory can draw on, so a node count would be a fiction. The planner keeps its standing water allowance of ${num(w.settings.limits.Water)}/min, which you can still change in All settings if you want to model a genuinely constrained site.</div>`;
- if(step===4){
-  const rows=[...minedResources,'Crude Oil','Nitrogen Gas'];
-  // Leaving a resource at zero is a legitimate answer, and it is also exactly
-  // what a half-finished survey looks like. The plan that follows would simply
-  // fail to fit, so name them here rather than let that be a surprise.
-  const empty=rows.filter(n=>resourcePool(e,n)<=0);
-  const emptyNotice=empty.length?`<div class="notice"><b>${empty.length===1?'One resource has':num(empty.length)+' resources have'} no nodes entered:</b> ${empty.map(esc).join(', ')}. A zero budget means this plan may not use that resource at all — a fine answer for something you have genuinely not found, but if you simply have not counted them yet, go back and fill them in or the plan will not fit.</div>`:'';
-  content=`<h2>Your budgets</h2>
+  if (step === 4) {
+    const rows = [...minedResources, 'Crude Oil', 'Nitrogen Gas'];
+    // Leaving a resource at zero is a legitimate answer, and it is also exactly
+    // what a half-finished survey looks like. The plan that follows would simply
+    // fail to fit, so name them here rather than let that be a surprise.
+    const empty = rows.filter(n => resourcePool(e, n) <= 0);
+    const emptyNotice = empty.length
+      ? `<div class="notice"><b>${empty.length === 1 ? 'One resource has' : num(empty.length) + ' resources have'} no nodes entered:</b> ${empty.map(esc).join(', ')}. A zero budget means this plan may not use that resource at all — a fine answer for something you have genuinely not found, but if you simply have not counted them yet, go back and fill them in or the plan will not fit.</div>`
+      : '';
+    content = `<h2>Your budgets</h2>
   <p>What those nodes yield, less anything already committed to factories this plan does not include. That deduction is what makes a budget mean <em>free for this plan to use</em>. ${help('extractionUsed')}</p>
   <div class="table-wrap"><table><thead><tr><th>Resource</th><th>Whole pool /min</th><th>Already committed /min</th><th>Budget /min</th></tr></thead><tbody>
-  ${rows.map(name=>{
-   const pool=Math.round(resourcePool(e,name)),used=Number(e.used?.[name])||0,left=Math.max(0,pool-used);
-   return `<tr><td class="resource-name">${itemIcon(name)}<span>${esc(name)}</span></td>
-    <td class="number">${pool?num(pool):'—'}</td>
-    <td><input class="used-input" name="used:${esc(name)}" type="number" min="0" max="10000000" step="any" value="${used||''}" placeholder="0" aria-label="${esc(name)} already committed per minute"></td>
-    <td class="number ${pool&&used>pool?'warn':''}">${pool?num(left):'—'}</td></tr>`;}).join('')}
+  ${rows
+    .map(name => {
+      const pool = Math.round(resourcePool(e, name)),
+        used = Number(e.used?.[name]) || 0,
+        left = Math.max(0, pool - used);
+      return `<tr><td class="resource-name">${itemIcon(name)}<span>${esc(name)}</span></td>
+    <td class="number">${pool ? num(pool) : '—'}</td>
+    <td><input class="used-input" name="used:${esc(name)}" type="number" min="0" max="10000000" step="any" value="${used || ''}" placeholder="0" aria-label="${esc(name)} already committed per minute"></td>
+    <td class="number ${pool && used > pool ? 'warn' : ''}">${pool ? num(left) : '—'}</td></tr>`;
+    })
+    .join('')}
   </tbody></table></div>
   ${emptyNotice}
   <p class="small muted">Production you already run is a different question, asked separately: that one credits finished parts, this one takes raw extraction off the top. Use this for ore feeding factories the plan will not rebuild, and the other for parts the plan would otherwise make again.</p>`;
- }
- const last=step>=EXTRACTION_STEPS.length;
- return (browserMode?browserNotice():'')
-  +header('YOUR WORLD','Work out your resource budgets','Count what your world holds; the planner turns it into the rates it plans against.')
-  +`<div class="wizard-progress">${EXTRACTION_STEPS.map((n,i)=>`<button type="button" class="${step===i+1?'current':''}" data-extraction-step="${i+1}" ${step===i+1?'aria-current="step"':''}>${i+1}. ${esc(n)}</button>`).join('')}</div>
+  }
+  const last = step >= EXTRACTION_STEPS.length;
+  return (
+    (browserMode ? browserNotice() : '') +
+    header(
+      'YOUR WORLD',
+      'Work out your resource budgets',
+      'Count what your world holds; the planner turns it into the rates it plans against.',
+    ) +
+    `<div class="wizard-progress">${EXTRACTION_STEPS.map((n, i) => `<button type="button" class="${step === i + 1 ? 'current' : ''}" data-extraction-step="${i + 1}" ${step === i + 1 ? 'aria-current="step"' : ''}>${i + 1}. ${esc(n)}</button>`).join('')}</div>
   <form id="wizard-form" class="panel wizard-panel extraction-panel">${content}
    <div class="wizard-actions">
-    <button type="button" class="btn" data-extraction-back>${step<=1?'Cancel':'Back'}</button>
-    <span class="guided-escape">${step>1?'<button type="button" class="btn quiet" data-extraction-cancel>Leave these budgets alone</button>':''}
-    <button class="btn primary" type="submit">${last?'Use these budgets':'Continue →'}</button></span>
+    <button type="button" class="btn" data-extraction-back>${step <= 1 ? 'Cancel' : 'Back'}</button>
+    <span class="guided-escape">${step > 1 ? '<button type="button" class="btn quiet" data-extraction-cancel>Leave these budgets alone</button>' : ''}
+    <button class="btn primary" type="submit">${last ? 'Use these budgets' : 'Continue →'}</button></span>
    </div>
    <p id="wizard-error" class="form-error" role="alert"></p>
-  </form>`;
+  </form>`
+  );
 }
 // Every screen writes straight into the survey, so moving between them keeps
 // what was typed even before the budgets are applied.
-function readExtraction(form){
- const w=wizard,e=extractionOf(w),f=new FormData(form);
- const raw=new Set(workspace.catalog.raw||[]);
- for(const [k,v] of f){
-  if(k==='purity'||k==='distribution')w.settings[k]=String(v);
-  else if(k==='mark')e.mark=Number(v);
-  else if(k==='clock')e.clock=Number(v);
-  else if(k.startsWith('node:')||k.startsWith('well:')){
-   const [kind,name,purity]=k.split(':');
-   if(!raw.has(name)||!purities3.some(([p])=>p===purity))continue;
-   const map=kind==='well'?(e.wells??={}):(e.nodes??={});
-   const row=map[name]||blankCounts();
-   row[purity]=Math.max(0,Math.floor(Number(v)||0));
-   if(row.impure||row.normal||row.pure)map[name]=row;else delete map[name];
+function readExtraction(form) {
+  const w = wizard,
+    e = extractionOf(w),
+    f = new FormData(form);
+  const raw = new Set(workspace.catalog.raw || []);
+  for (const [k, v] of f) {
+    if (k === 'purity' || k === 'distribution') w.settings[k] = String(v);
+    else if (k === 'mark') e.mark = Number(v);
+    else if (k === 'clock') e.clock = Number(v);
+    else if (k.startsWith('node:') || k.startsWith('well:')) {
+      const [kind, name, purity] = k.split(':');
+      if (!raw.has(name) || !purities3.some(([p]) => p === purity)) continue;
+      const map = kind === 'well' ? (e.wells ??= {}) : (e.nodes ??= {});
+      const row = map[name] || blankCounts();
+      row[purity] = Math.max(0, Math.floor(Number(v) || 0));
+      if (row.impure || row.normal || row.pure) map[name] = row;
+      else delete map[name];
+    } else if (k.startsWith('used:')) {
+      const name = k.slice(5);
+      if (!raw.has(name)) continue;
+      const q = Number(v);
+      if (String(v).trim() !== '' && Number.isFinite(q) && q > 0) (e.used ??= {})[name] = q;
+      else delete e.used?.[name];
+    }
   }
-  else if(k.startsWith('used:')){
-   const name=k.slice(5);if(!raw.has(name))continue;
-   const q=Number(v);
-   if(String(v).trim()!==''&&Number.isFinite(q)&&q>0)(e.used??={})[name]=q;else delete e.used?.[name];
-  }
- }
 }
-async function moveExtraction(target){
- const w=wizard,form=$('#wizard-form');
- if(wizardBusy||!w||target===w.extractionStep)return;
- if(form&&target>w.extractionStep&&!form.reportValidity())return;
- if(form)readExtraction(form);
- if(target<1){leaveExtraction();return;}
- if(target<=EXTRACTION_STEPS.length){w.extractionStep=target;render();return;}
- // Applying the survey replaces the budgets and the confirmation that went with
- // them: these are counted numbers now, not the starting estimates.
- w.settings.limits=extractionLimits(w.extraction,w.settings.limits);
- w.settings.extraction=structuredClone(w.extraction);
- w.settings.limitsConfirmed=true;
- w.preview=null;
- leaveExtraction();
- toast('Resource budgets set from your nodes. You can still edit any of them in All settings.');
+async function moveExtraction(target) {
+  const w = wizard,
+    form = $('#wizard-form');
+  if (wizardBusy || !w || target === w.extractionStep) return;
+  if (form && target > w.extractionStep && !form.reportValidity()) return;
+  if (form) readExtraction(form);
+  if (target < 1) {
+    leaveExtraction();
+    return;
+  }
+  if (target <= EXTRACTION_STEPS.length) {
+    w.extractionStep = target;
+    render();
+    return;
+  }
+  // Applying the survey replaces the budgets and the confirmation that went with
+  // them: these are counted numbers now, not the starting estimates.
+  w.settings.limits = extractionLimits(w.extraction, w.settings.limits);
+  w.settings.extraction = structuredClone(w.extraction);
+  w.settings.limitsConfirmed = true;
+  w.preview = null;
+  leaveExtraction();
+  toast('Resource budgets set from your nodes. You can still edit any of them in All settings.');
 }
 // Back to whatever opened the survey, with the five-step wizard as the default.
-function leaveExtraction(){
- const w=wizard;
- w.mode=w.extractionReturn?.mode||'advanced';
- w.step=w.extractionReturn?.step||4;
- if(w.extractionReturn?.guidedStep)w.guidedStep=w.extractionReturn.guidedStep;
- w.extractionReturn=null;w.extractionUndo=null;
- render();
+function leaveExtraction() {
+  const w = wizard;
+  w.mode = w.extractionReturn?.mode || 'advanced';
+  w.step = w.extractionReturn?.step || 4;
+  if (w.extractionReturn?.guidedStep) w.guidedStep = w.extractionReturn.guidedStep;
+  w.extractionReturn = null;
+  w.extractionUndo = null;
+  render();
 }
-function openExtraction(){
- const w=wizard,form=$('#wizard-form');
- if(form)w.mode==='guided'?readGuidedForm(form):readWizard(form);
- w.extractionReturn={mode:w.mode,step:w.step,guidedStep:w.guidedStep};
- w.mode='extraction';w.extractionStep=1;
- render();
+function openExtraction() {
+  const w = wizard,
+    form = $('#wizard-form');
+  if (form) w.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
+  w.extractionReturn = { mode: w.mode, step: w.step, guidedStep: w.guidedStep };
+  w.mode = 'extraction';
+  w.extractionStep = 1;
+  render();
 }
-function renderWizard(){
- if(!wizard)return header('NEW PROFILE','Choose a save first')+'<button class="btn primary" data-new-save>Create a save</button><a class="btn" href="#profiles">Existing saves</a>';
- const w=wizard,s=w.settings;let content='';
- if(w.mode==='extraction')return renderExtraction();
- if(w.mode==='guided'&&w.guidedStep<=guidedFlow().length)return renderGuided();
- if(w.step===1)content=`<h2>Your save and game settings</h2><p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p><div class="form-grid">${field('Save name','saveName',w.saveName,'text','required maxlength="80" '+(w.saveId?'readonly':''))}${selectField('Currently working on','phase',['1','2','3','4','5'].map(x=>[x,'Phase '+x]),s.phase)}${selectField('Resource purity','purity',purities,s.purity)}${selectField('Node distribution','distribution',distributions,s.distribution)}${field('World seed (optional)','worldSeed',s.worldSeed||'','number','min="-2147483648" max="2147483647" step="1"')}${field('Elevator requirement multiplier','multiplier',s.multiplier,'number','min="0.1" max="1000" step="0.1" required')}${field('Power consumption multiplier','powerFactor',s.powerFactor,'number','min="0" max="10" step="0.1" required')}${field('Spare existing power (MW)','availablePowerMW',s.availablePowerGW*1000,'number','min="0" max="10000000" step="1" required')}${field('Total installed power (MW)','installedPowerMW',(s.installedPowerGW??s.availablePowerGW)*1000,'number','min="0" max="10000000" step="1" required')}${field('Other settings / mod notes','modNotes',s.modNotes||'','text','maxlength="500"')}</div><h3>Production you already run ${help('existingSupply')}</h3>${supplyRowsHtml(s)}<p class="small muted">Other settings are notes only. Modified recipes, production boosts and modded items are not simulated. Phase plans assume the necessary milestones and MAM research are unlocked by commissioning.</p>`;
- if(w.step===2)content=`<h2>How do you want to build?</h2><div class="form-grid">${selectField('Recipe access','recipes',[['standard','Standard recipes'],['all','Allow all alternate recipes as they become available'],['custom','Pick specific alternate recipes']],s.recipes)}${selectField('Ingot factories','pureIngots',[['false','Let the planner choose'],['true','Require pure ingot recipes when unlocked']],String(s.pureIngots))}${selectField('SAM resource conversion','sam',[['avoid','Avoid ore / gas conversion'],['needed','Only to meet resource limits or improve maximum output'],['allow','Allow whenever useful']],s.sam)}${field('Extra utilities power (%)','utilityPercent',s.utilityPercent??20,'number','min="0" max="200" step="1" required')}${selectField('Drone fuel','droneFuel',droneFuels.map(n=>[n,n==='none'?'No dedicated drone fuel':n]),s.droneFuel||'none')}${field('Drone fuel supply (items/min, entire fleet)','droneFuelRate',s.droneFuelRate??10,'number','min="0.01" max="10000" step="any" required')}${field('Phase 4 battery bridge /min (ionized fuel only)','droneBridgeRate',s.droneBridgeRate??10,'number','min="0.01" max="10000" step="any" required')}${selectField('Preferred main power','mainPower',powerOptions,s.mainPower||'auto')}${selectField('Nuclear goal','nuclear',[['none','No nuclear power'],['sink','Uranium power; sink plutonium fuel rods'],['recycle','Full waste recycling in Phase 5']],s.nuclear)}${field('Minimum uranium reactors from Phase 4','uraniumReactors',s.uraniumReactors,'number','min="1" max="1000" step="1" required')}${selectField('Storage supply','storage',storageOptions,s.storage)}${selectField('Collectables storage','collectables',[['false','No collectables bays'],['true','Include leaves, wood, slugs, food, protein and DNA']],String(s.collectables??(s.storage==='all')))}${field('Construction materials refill /min','buildRate',s.buildRate??s.storageRate,'number','min="0" max="300" step="0.1" required')}${field('Other items refill /min','storageRate',s.storageRate,'number','min="0.1" max="300" step="0.1" required')}${field('Extra Singularity Cells /min in Phase 5','cellsPerMinute',s.cellsPerMinute,'number','min="0" max="1000" step="0.1" required')}${field('Somersloops available to spend','somersloops',s.somersloops??0,'number','min="0" max="106" step="1" required')}${field('Alien Power Augmenters in Phase 5','augmenters',s.augmenters??0,'number','min="0" max="10" step="1" required')}${field('Of those, fueled with Alien Power Matrix','fueledAugmenters',s.fueledAugmenters??0,'number','min="0" max="10" step="1" required')}${field('Somersloops for production amplification','amplifySloops',s.amplifySloops??0,'number','min="0" max="106" step="1" required')}</div>${sloopLedgerHtml(s)}${storageRatesHtml(s)}${s.recipes==='custom'?altPickerHtml(s):''}<div class="notice blue">SAM conversion controls raw resource conversion, not SAM ingredients required by late-game parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have an unlimited automatic source.</div><p class="small muted">Each Main Portal consumes <b>2 Singularity Cells/min</b> to maintain its connection; the Satellite Portal does not consume cells. <b>10/min supplies five connections</b> (the standard recipe produces 10/min). Reserve portal operating power separately. <a href="https://satisfactory.wiki.gg/wiki/Portal" target="_blank" rel="noreferrer">Portal reference</a>. Nuclear waste and unpackaged fluids stay outside the storage room.</p>`;
- if(w.step===3){const recommended=s.multiplier>5?'timed':'balanced';content=`<h2>Choose your production goal</h2><p>${s.multiplier>5?'Your elevator multiplier makes completion time a useful starting point.':'Balanced progression is a practical starting point for these settings.'} Storage and your selected preferences apply to every option.</p><div class="goal-grid">${workspace.catalog.goals.map(g=>`<label class="goal-card"><input type="radio" name="goal" value="${g.id}" ${s.goal===g.id?'checked':''}><strong>${g.name}</strong>${recommended===g.id?'<span class="badge orange">Suggested</span>':''}<p>${g.description}</p></label>`).join('')}</div><div class="form-grid">${field('Profile name','profileName',w.name||workspace.catalog.goals.find(g=>g.id===s.goal).name,'text','required maxlength="80"')}${field('Hours per phase (target-time option)','hours',s.hours,'number','min="0.25" max="2000" step="0.25" required')}${selectField('Target time applies to','phaseTime',[['every','Every phase'],['final','The final phase; earlier phases run as fast as their kept buildings allow']],s.phaseTime||'every')}</div><label class="check-row"><input type="checkbox" name="roundRates" ${s.roundRates?'checked':''}>Round delivery rates to convenient numbers (may change completion time)</label><label class="check-row"><input type="checkbox" name="wholeMachines" ${s.wholeMachines!==false?'checked':''}>Run solid-part machines at 100%; send surplus to storage, then the sink</label><p class="small muted">Inputs and byproducts are recalculated. Fluid, generator and nuclear/recycling lines may still need balancing. Recipe choices are selected first, then whole-machine counts are fitted within your budgets.</p><p class="small muted">Maximum output means fastest simultaneous elevator completion, within your resource budgets. It does not maximize sink points. Rounding is ignored for maximum output.</p>`;}
- if(w.step===4)content=`<h2>Available resource budgets</h2><p><button type="button" class="btn primary" data-open-extraction>Work these out from my nodes →</button> <span class="small muted">Count what your world holds and the planner turns it into these rates.</span></p><p>Enter the extraction you can allocate to this new plan, per minute, after existing factories and power fuel. Starter values are full-map estimates at endgame extraction, not resources already connected.</p><div class="notice blue">${esc(resourceDefaults(s.purity,s.distribution).description)} ${s.worldSeed?'Recorded seed: '+esc(s.worldSeed)+'. ':''}<a href="https://satisfactoryworldseed.com/" target="_blank" rel="noreferrer">Look up your seed totals</a> · <a href="https://satisfactory.wiki.gg/wiki/Resource_Node" target="_blank" rel="noreferrer">Node reference</a>. Resource-rich counts cannot be filled accurately without your seed: enter the lookup totals below. Oil-well extraction may be added after its unlock.</div><div class="resource-inputs">${workspace.catalog.raw.map(n=>field(n,'limit:'+n,s.limits[n],'number','min="0" max="10000000" step="any" required')).join('')}</div><label class="check-row"><input name="limitsConfirmed" type="checkbox" ${s.limitsConfirmed?'checked':''}>I have checked these budgets for my save (required for maximum output)</label>`;
- if(w.step===5){const p=w.preview;content=`<h2>Review ${esc(w.name)}</h2><p>Nothing has been created yet. Your other profiles and their progress stay intact.</p><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Delivery time</th><th>Buildings</th><th>New generation</th><th>Budget</th></tr></thead><tbody>${Object.entries(p.stages).filter(([ph])=>Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<tr><td>${ph}</td><td>${x.hours?num(x.hours)+' h':'—'}${x.aheadOf!==undefined?` <span class="badge">was ${num(x.aheadOf)} h</span>`:''}</td><td>${x.rows?num(x.rows.reduce((a,r)=>a+r.machines,0)):'—'}</td><td>${x.generationMW!==undefined?power(x.generationMW):'—'}</td><td>${x.feasible?'Within entered limits':'Needs adjustment'}</td></tr>`).join('')}</tbody></table></div>${supplyNoticeHtml(p)}${fuelVerdictHtml(p)}${Object.entries(p.stages).filter(([ph,x])=>!x.feasible&&Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<div class="notice"><b>Phase ${ph}:</b> ${esc(x.reason)}${draftOptions(x,p.settings)}</div>`).join('')}<details class="panel"><summary>Assumptions and calculation limits</summary>${p.warnings.map(x=>`<p class="small">${esc(x)}</p>`).join('')}</details><p class="small muted">You can save a plan that exceeds your budgets as a planning draft; its affected phases remain clearly flagged. Profiles are calculated snapshots. Create another profile to compare different settings.</p>${carryPanelHtml(w)}`;}
- return (browserMode?browserNotice():'')+header('SAVE → SETTINGS → GOALS → PLAN',w.saveId?'Add a profile to '+esc(w.saveName):'Create your factory plan')+`<div class="wizard-progress">${['Game settings','Preferences','Goals','Resources','Review'].map((n,i)=>`<button type="button" class="${w.step===i+1?'current':''}" data-wizard-step="${i+1}" ${w.step===i+1?'aria-current="step"':''}>${i+1}. ${n}</button>`).join('')}</div><form id="wizard-form" class="panel wizard-panel">${content}<div class="wizard-actions"><button type="button" class="btn" ${w.step===1?'data-cancel-wizard':'data-wizard-back'}>${w.step===1?'Cancel':'Back'}</button><span class="guided-escape">${w.step<5?'<button type="button" class="btn quiet" data-guided-start>← Guided start</button>':''}<button class="btn primary" type="submit">${w.step===5?'Create profile':w.step===4?'Calculate plan':'Continue →'}</button></span></div><p id="wizard-error" class="form-error" role="alert"></p></form>`;
+function renderWizard() {
+  if (!wizard)
+    return (
+      header('NEW PROFILE', 'Choose a save first') +
+      '<button class="btn primary" data-new-save>Create a save</button><a class="btn" href="#profiles">Existing saves</a>'
+    );
+  const w = wizard,
+    s = w.settings;
+  let content = '';
+  if (w.mode === 'extraction') return renderExtraction();
+  if (w.mode === 'guided' && w.guidedStep <= guidedFlow().length) return renderGuided();
+  if (w.step === 1)
+    content = `<h2>Your save and game settings</h2><p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p><div class="form-grid">${field('Save name', 'saveName', w.saveName, 'text', 'required maxlength="80" ' + (w.saveId ? 'readonly' : ''))}${selectField(
+      'Currently working on',
+      'phase',
+      ['1', '2', '3', '4', '5'].map(x => [x, 'Phase ' + x]),
+      s.phase,
+    )}${selectField('Resource purity', 'purity', purities, s.purity)}${selectField('Node distribution', 'distribution', distributions, s.distribution)}${field('World seed (optional)', 'worldSeed', s.worldSeed || '', 'number', 'min="-2147483648" max="2147483647" step="1"')}${field('Elevator requirement multiplier', 'multiplier', s.multiplier, 'number', 'min="0.1" max="1000" step="0.1" required')}${field('Power consumption multiplier', 'powerFactor', s.powerFactor, 'number', 'min="0" max="10" step="0.1" required')}${field('Spare existing power (MW)', 'availablePowerMW', s.availablePowerGW * 1000, 'number', 'min="0" max="10000000" step="1" required')}${field('Total installed power (MW)', 'installedPowerMW', (s.installedPowerGW ?? s.availablePowerGW) * 1000, 'number', 'min="0" max="10000000" step="1" required')}${field('Other settings / mod notes', 'modNotes', s.modNotes || '', 'text', 'maxlength="500"')}</div><h3>Production you already run ${help('existingSupply')}</h3>${supplyRowsHtml(s)}<p class="small muted">Other settings are notes only. Modified recipes, production boosts and modded items are not simulated. Phase plans assume the necessary milestones and MAM research are unlocked by commissioning.</p>`;
+  if (w.step === 2)
+    content = `<h2>How do you want to build?</h2><div class="form-grid">${selectField(
+      'Recipe access',
+      'recipes',
+      [
+        ['standard', 'Standard recipes'],
+        ['all', 'Allow all alternate recipes as they become available'],
+        ['custom', 'Pick specific alternate recipes'],
+      ],
+      s.recipes,
+    )}${selectField(
+      'Ingot factories',
+      'pureIngots',
+      [
+        ['false', 'Let the planner choose'],
+        ['true', 'Require pure ingot recipes when unlocked'],
+      ],
+      String(s.pureIngots),
+    )}${selectField(
+      'SAM resource conversion',
+      'sam',
+      [
+        ['avoid', 'Avoid ore / gas conversion'],
+        ['needed', 'Only to meet resource limits or improve maximum output'],
+        ['allow', 'Allow whenever useful'],
+      ],
+      s.sam,
+    )}${field('Extra utilities power (%)', 'utilityPercent', s.utilityPercent ?? 20, 'number', 'min="0" max="200" step="1" required')}${selectField(
+      'Drone fuel',
+      'droneFuel',
+      droneFuels.map(n => [n, n === 'none' ? 'No dedicated drone fuel' : n]),
+      s.droneFuel || 'none',
+    )}${field('Drone fuel supply (items/min, entire fleet)', 'droneFuelRate', s.droneFuelRate ?? 10, 'number', 'min="0.01" max="10000" step="any" required')}${field('Phase 4 battery bridge /min (ionized fuel only)', 'droneBridgeRate', s.droneBridgeRate ?? 10, 'number', 'min="0.01" max="10000" step="any" required')}${selectField('Preferred main power', 'mainPower', powerOptions, s.mainPower || 'auto')}${selectField(
+      'Nuclear goal',
+      'nuclear',
+      [
+        ['none', 'No nuclear power'],
+        ['sink', 'Uranium power; sink plutonium fuel rods'],
+        ['recycle', 'Full waste recycling in Phase 5'],
+      ],
+      s.nuclear,
+    )}${field('Minimum uranium reactors from Phase 4', 'uraniumReactors', s.uraniumReactors, 'number', 'min="1" max="1000" step="1" required')}${selectField('Storage supply', 'storage', storageOptions, s.storage)}${selectField(
+      'Collectables storage',
+      'collectables',
+      [
+        ['false', 'No collectables bays'],
+        ['true', 'Include leaves, wood, slugs, food, protein and DNA'],
+      ],
+      String(s.collectables ?? s.storage === 'all'),
+    )}${field('Construction materials refill /min', 'buildRate', s.buildRate ?? s.storageRate, 'number', 'min="0" max="300" step="0.1" required')}${field('Other items refill /min', 'storageRate', s.storageRate, 'number', 'min="0.1" max="300" step="0.1" required')}${field('Extra Singularity Cells /min in Phase 5', 'cellsPerMinute', s.cellsPerMinute, 'number', 'min="0" max="1000" step="0.1" required')}${field('Somersloops available to spend', 'somersloops', s.somersloops ?? 0, 'number', 'min="0" max="106" step="1" required')}${field('Alien Power Augmenters in Phase 5', 'augmenters', s.augmenters ?? 0, 'number', 'min="0" max="10" step="1" required')}${field('Of those, fueled with Alien Power Matrix', 'fueledAugmenters', s.fueledAugmenters ?? 0, 'number', 'min="0" max="10" step="1" required')}${field('Somersloops for production amplification', 'amplifySloops', s.amplifySloops ?? 0, 'number', 'min="0" max="106" step="1" required')}</div>${sloopLedgerHtml(s)}${storageRatesHtml(s)}${s.recipes === 'custom' ? altPickerHtml(s) : ''}<div class="notice blue">SAM conversion controls raw resource conversion, not SAM ingredients required by late-game parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have an unlimited automatic source.</div><p class="small muted">Each Main Portal consumes <b>2 Singularity Cells/min</b> to maintain its connection; the Satellite Portal does not consume cells. <b>10/min supplies five connections</b> (the standard recipe produces 10/min). Reserve portal operating power separately. <a href="https://satisfactory.wiki.gg/wiki/Portal" target="_blank" rel="noreferrer">Portal reference</a>. Nuclear waste and unpackaged fluids stay outside the storage room.</p>`;
+  if (w.step === 3) {
+    const recommended = s.multiplier > 5 ? 'timed' : 'balanced';
+    content = `<h2>Choose your production goal</h2><p>${s.multiplier > 5 ? 'Your elevator multiplier makes completion time a useful starting point.' : 'Balanced progression is a practical starting point for these settings.'} Storage and your selected preferences apply to every option.</p><div class="goal-grid">${workspace.catalog.goals.map(g => `<label class="goal-card"><input type="radio" name="goal" value="${g.id}" ${s.goal === g.id ? 'checked' : ''}><strong>${g.name}</strong>${recommended === g.id ? '<span class="badge orange">Suggested</span>' : ''}<p>${g.description}</p></label>`).join('')}</div><div class="form-grid">${field('Profile name', 'profileName', w.name || workspace.catalog.goals.find(g => g.id === s.goal).name, 'text', 'required maxlength="80"')}${field('Hours per phase (target-time option)', 'hours', s.hours, 'number', 'min="0.25" max="2000" step="0.25" required')}${selectField(
+      'Target time applies to',
+      'phaseTime',
+      [
+        ['every', 'Every phase'],
+        ['final', 'The final phase; earlier phases run as fast as their kept buildings allow'],
+      ],
+      s.phaseTime || 'every',
+    )}</div><label class="check-row"><input type="checkbox" name="roundRates" ${s.roundRates ? 'checked' : ''}>Round delivery rates to convenient numbers (may change completion time)</label><label class="check-row"><input type="checkbox" name="wholeMachines" ${s.wholeMachines !== false ? 'checked' : ''}>Run solid-part machines at 100%; send surplus to storage, then the sink</label><p class="small muted">Inputs and byproducts are recalculated. Fluid, generator and nuclear/recycling lines may still need balancing. Recipe choices are selected first, then whole-machine counts are fitted within your budgets.</p><p class="small muted">Maximum output means fastest simultaneous elevator completion, within your resource budgets. It does not maximize sink points. Rounding is ignored for maximum output.</p>`;
+  }
+  if (w.step === 4)
+    content = `<h2>Available resource budgets</h2><p><button type="button" class="btn primary" data-open-extraction>Work these out from my nodes →</button> <span class="small muted">Count what your world holds and the planner turns it into these rates.</span></p><p>Enter the extraction you can allocate to this new plan, per minute, after existing factories and power fuel. Starter values are full-map estimates at endgame extraction, not resources already connected.</p><div class="notice blue">${esc(resourceDefaults(s.purity, s.distribution).description)} ${s.worldSeed ? 'Recorded seed: ' + esc(s.worldSeed) + '. ' : ''}<a href="https://satisfactoryworldseed.com/" target="_blank" rel="noreferrer">Look up your seed totals</a> · <a href="https://satisfactory.wiki.gg/wiki/Resource_Node" target="_blank" rel="noreferrer">Node reference</a>. Resource-rich counts cannot be filled accurately without your seed: enter the lookup totals below. Oil-well extraction may be added after its unlock.</div><div class="resource-inputs">${workspace.catalog.raw.map(n => field(n, 'limit:' + n, s.limits[n], 'number', 'min="0" max="10000000" step="any" required')).join('')}</div><label class="check-row"><input name="limitsConfirmed" type="checkbox" ${s.limitsConfirmed ? 'checked' : ''}>I have checked these budgets for my save (required for maximum output)</label>`;
+  if (w.step === 5) {
+    const p = w.preview;
+    content = `<h2>Review ${esc(w.name)}</h2><p>Nothing has been created yet. Your other profiles and their progress stay intact.</p><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Delivery time</th><th>Buildings</th><th>New generation</th><th>Budget</th></tr></thead><tbody>${Object.entries(
+      p.stages,
+    )
+      .filter(([ph]) => Number(ph) >= Number(p.settings.phase || 1))
+      .map(
+        ([ph, x]) =>
+          `<tr><td>${ph}</td><td>${x.hours ? num(x.hours) + ' h' : '—'}${x.aheadOf !== undefined ? ` <span class="badge">was ${num(x.aheadOf)} h</span>` : ''}</td><td>${x.rows ? num(x.rows.reduce((a, r) => a + r.machines, 0)) : '—'}</td><td>${x.generationMW !== undefined ? power(x.generationMW) : '—'}</td><td>${x.feasible ? 'Within entered limits' : 'Needs adjustment'}</td></tr>`,
+      )
+      .join('')}</tbody></table></div>${supplyNoticeHtml(p)}${fuelVerdictHtml(p)}${Object.entries(
+      p.stages,
+    )
+      .filter(([ph, x]) => !x.feasible && Number(ph) >= Number(p.settings.phase || 1))
+      .map(
+        ([ph, x]) =>
+          `<div class="notice"><b>Phase ${ph}:</b> ${esc(x.reason)}${draftOptions(x, p.settings)}</div>`,
+      )
+      .join(
+        '',
+      )}<details class="panel"><summary>Assumptions and calculation limits</summary>${p.warnings.map(x => `<p class="small">${esc(x)}</p>`).join('')}</details><p class="small muted">You can save a plan that exceeds your budgets as a planning draft; its affected phases remain clearly flagged. Profiles are calculated snapshots. Create another profile to compare different settings.</p>${carryPanelHtml(w)}`;
+  }
+  return (
+    (browserMode ? browserNotice() : '') +
+    header(
+      'SAVE → SETTINGS → GOALS → PLAN',
+      w.saveId ? 'Add a profile to ' + esc(w.saveName) : 'Create your factory plan',
+    ) +
+    `<div class="wizard-progress">${['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'].map((n, i) => `<button type="button" class="${w.step === i + 1 ? 'current' : ''}" data-wizard-step="${i + 1}" ${w.step === i + 1 ? 'aria-current="step"' : ''}>${i + 1}. ${n}</button>`).join('')}</div><form id="wizard-form" class="panel wizard-panel">${content}<div class="wizard-actions"><button type="button" class="btn" ${w.step === 1 ? 'data-cancel-wizard' : 'data-wizard-back'}>${w.step === 1 ? 'Cancel' : 'Back'}</button><span class="guided-escape">${w.step < 5 ? '<button type="button" class="btn quiet" data-guided-start>← Guided start</button>' : ''}<button class="btn primary" type="submit">${w.step === 5 ? 'Create profile' : w.step === 4 ? 'Calculate plan' : 'Continue →'}</button></span></div><p id="wizard-error" class="form-error" role="alert"></p></form>`
+  );
 }
-function readWizard(form){const f=new FormData(form),w=wizard,s=w.settings,oldPreset=s.purity+'|'+s.distribution;for(const [k,v]of f){if(k==='availablePowerMW')s.availablePowerGW=Number(v)/1000;if(k==='installedPowerMW')s.installedPowerGW=Number(v)/1000;if(k==='saveName')w.saveName=v;if(k==='profileName')w.name=v;else if(k.startsWith('limit:'))s.limits[k.slice(6)]=Number(v);else if(['utilityPercent','droneFuelRate','droneBridgeRate','multiplier','powerFactor','availablePowerGW','uraniumReactors','storageRate','buildRate','cellsPerMinute','somersloops','augmenters','fueledAugmenters','amplifySloops','hours'].includes(k))s[k]=Number(v);else if(k==='collectables')s.collectables=v==='true';else if(k==='pureIngots')s[k]=v==='true';else if(['phase','purity','distribution','recipes','sam','nuclear','storage','goal','phaseTime','modNotes','mainPower','worldSeed','droneFuel'].includes(k))s[k]=v;}
- if(form.querySelector('[name=sloop]'))s.sloopReserved=f.getAll('sloop').map(String);
- if(form.querySelector('.alt-list')){s.alternateRecipes=f.getAll('alt').map(String);s.preferredRecipes=f.getAll('altpref').map(String).filter(id=>s.alternateRecipes.includes(id));}
- {const supply=readSupply(form,f);if(supply)s.existingSupply=supply;}
- if(form.querySelector('.rate-list')){const over={};for(const [k,v] of f)if(k.startsWith('rate:')&&String(v).trim()!==''&&Number.isFinite(Number(v)))over[k.slice(5)]=Number(v);s.storageOverrides=over;}
- if(w.step===3){s.roundRates=f.has('roundRates');s.wholeMachines=f.has('wholeMachines');}if(w.step===4)s.limitsConfirmed=f.has('limitsConfirmed');
- readCarry(form,f);
- if(w.step===1&&oldPreset!==s.purity+'|'+s.distribution){s.limits=resourceDefaults(s.purity,s.distribution).limits;s.limitsConfirmed=false;}
- w.preview=null;
+function readWizard(form) {
+  const f = new FormData(form),
+    w = wizard,
+    s = w.settings,
+    oldPreset = s.purity + '|' + s.distribution;
+  for (const [k, v] of f) {
+    if (k === 'availablePowerMW') s.availablePowerGW = Number(v) / 1000;
+    if (k === 'installedPowerMW') s.installedPowerGW = Number(v) / 1000;
+    if (k === 'saveName') w.saveName = v;
+    if (k === 'profileName') w.name = v;
+    else if (k.startsWith('limit:')) s.limits[k.slice(6)] = Number(v);
+    else if (
+      [
+        'utilityPercent',
+        'droneFuelRate',
+        'droneBridgeRate',
+        'multiplier',
+        'powerFactor',
+        'availablePowerGW',
+        'uraniumReactors',
+        'storageRate',
+        'buildRate',
+        'cellsPerMinute',
+        'somersloops',
+        'augmenters',
+        'fueledAugmenters',
+        'amplifySloops',
+        'hours',
+      ].includes(k)
+    )
+      s[k] = Number(v);
+    else if (k === 'collectables') s.collectables = v === 'true';
+    else if (k === 'pureIngots') s[k] = v === 'true';
+    else if (
+      [
+        'phase',
+        'purity',
+        'distribution',
+        'recipes',
+        'sam',
+        'nuclear',
+        'storage',
+        'goal',
+        'phaseTime',
+        'modNotes',
+        'mainPower',
+        'worldSeed',
+        'droneFuel',
+      ].includes(k)
+    )
+      s[k] = v;
+  }
+  if (form.querySelector('[name=sloop]')) s.sloopReserved = f.getAll('sloop').map(String);
+  if (form.querySelector('.alt-list')) {
+    s.alternateRecipes = f.getAll('alt').map(String);
+    s.preferredRecipes = f
+      .getAll('altpref')
+      .map(String)
+      .filter(id => s.alternateRecipes.includes(id));
+  }
+  {
+    const supply = readSupply(form, f);
+    if (supply) s.existingSupply = supply;
+  }
+  if (form.querySelector('.rate-list')) {
+    const over = {};
+    for (const [k, v] of f)
+      if (k.startsWith('rate:') && String(v).trim() !== '' && Number.isFinite(Number(v)))
+        over[k.slice(5)] = Number(v);
+    s.storageOverrides = over;
+  }
+  if (w.step === 3) {
+    s.roundRates = f.has('roundRates');
+    s.wholeMachines = f.has('wholeMachines');
+  }
+  if (w.step === 4) s.limitsConfirmed = f.has('limitsConfirmed');
+  readCarry(form, f);
+  if (w.step === 1 && oldPreset !== s.purity + '|' + s.distribution) {
+    s.limits = resourceDefaults(s.purity, s.distribution).limits;
+    s.limitsConfirmed = false;
+  }
+  w.preview = null;
 }
-function authForm(mode){return `<form id="auth-form" class="panel auth-panel"><h2>${mode==='setup'?'Secure your existing save':mode==='register'?'Create your account':'Sign in'}</h2>${mode==='setup'?'<p>Your existing save and progress will belong to this account. Once enabled, visitors must sign in.</p><label class="field">Server setup token<input name="setupToken" required autocomplete="off"></label><p class="small muted">Read account-setup-token.txt in the server data folder. With Docker: docker compose exec planner cat /data/account-setup-token.txt</p>':''}${field('Username','username','','text','required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" autocomplete="username"')}${field('Password (12–128 characters)','password','','password','required minlength="12" maxlength="128" autocomplete="'+(mode==='login'?'current-password':'new-password')+'"')}${mode==='setup'?'<label class="check-row"><input type="checkbox" name="registration">Allow other people to register their own accounts</label>':''}<button class="btn primary">${mode==='setup'?'Enable accounts':mode==='register'?'Create account':'Sign in'}</button><p id="auth-error" class="form-error" role="alert"></p></form>`;}
-function renderAccount(){if(browserMode)return renderBrowserBackup();return header('YOUR ACCOUNT',workspace.accountsEnabled?esc(workspace.user.username):'User accounts',workspace.accountsEnabled?'Your saves are visible only to your account.':'Local mode currently shares one workspace. Enable accounts before sharing this server.')+(workspace.accountsEnabled?'<section class="panel"><p>Each account has its own named saves, profiles and progress.</p><button class="btn" data-logout>Sign out</button><p class="small muted">Use HTTPS when serving this app beyond localhost. Your host manages account access and backups.</p></section>':authForm('setup'));}
-function renderSignedOut(){state=null;$('#app').innerHTML=`<main class="signin"><div class="brand"><img src="./favicon.svg" alt="">Project Assembly</div><h1>Your factory notebook</h1>${authForm(authMode)}${workspace.registration?`<button class="btn quiet" data-auth-mode="${authMode==='login'?'register':'login'}">${authMode==='login'?'Create an account':'Back to sign in'}</button>`:''}</main>`;}
-const calcStage=()=>calculated.stages[stage()];
-function calculatedDelivery(id){const d=Object.entries(calcStage().delivery||{}).find(([n])=>id===stage()+'-'+slug(n));return d?{id,name:d[0],...d[1],initial:0}:null;}
-let wizardBusy=false;
+function authForm(mode) {
+  return `<form id="auth-form" class="panel auth-panel"><h2>${mode === 'setup' ? 'Secure your existing save' : mode === 'register' ? 'Create your account' : 'Sign in'}</h2>${mode === 'setup' ? '<p>Your existing save and progress will belong to this account. Once enabled, visitors must sign in.</p><label class="field">Server setup token<input name="setupToken" required autocomplete="off"></label><p class="small muted">Read account-setup-token.txt in the server data folder. With Docker: docker compose exec planner cat /data/account-setup-token.txt</p>' : ''}${field('Username', 'username', '', 'text', 'required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" autocomplete="username"')}${field('Password (12–128 characters)', 'password', '', 'password', 'required minlength="12" maxlength="128" autocomplete="' + (mode === 'login' ? 'current-password' : 'new-password') + '"')}${mode === 'setup' ? '<label class="check-row"><input type="checkbox" name="registration">Allow other people to register their own accounts</label>' : ''}<button class="btn primary">${mode === 'setup' ? 'Enable accounts' : mode === 'register' ? 'Create account' : 'Sign in'}</button><p id="auth-error" class="form-error" role="alert"></p></form>`;
+}
+function renderAccount() {
+  if (browserMode) return renderBrowserBackup();
+  return (
+    header(
+      'YOUR ACCOUNT',
+      workspace.accountsEnabled ? esc(workspace.user.username) : 'User accounts',
+      workspace.accountsEnabled
+        ? 'Your saves are visible only to your account.'
+        : 'Local mode currently shares one workspace. Enable accounts before sharing this server.',
+    ) +
+    (workspace.accountsEnabled
+      ? '<section class="panel"><p>Each account has its own named saves, profiles and progress.</p><button class="btn" data-logout>Sign out</button><p class="small muted">Use HTTPS when serving this app beyond localhost. Your host manages account access and backups.</p></section>'
+      : authForm('setup'))
+  );
+}
+function renderSignedOut() {
+  state = null;
+  $('#app').innerHTML =
+    `<main class="signin"><div class="brand"><img src="./favicon.svg" alt="">Project Assembly</div><h1>Your factory notebook</h1>${authForm(authMode)}${workspace.registration ? `<button class="btn quiet" data-auth-mode="${authMode === 'login' ? 'register' : 'login'}">${authMode === 'login' ? 'Create an account' : 'Back to sign in'}</button>` : ''}</main>`;
+}
+const calcStage = () => calculated.stages[stage()];
+function calculatedDelivery(id) {
+  const d = Object.entries(calcStage().delivery || {}).find(
+    ([n]) => id === stage() + '-' + slug(n),
+  );
+  return d ? { id, name: d[0], ...d[1], initial: 0 } : null;
+}
+let wizardBusy = false;
 // The public edition reports each phase from the calculator worker; the server edition shows the static label.
-const calcProgress=(button,label)=>{if(button)button.textContent=label;return {onProgress:phase=>{if(button)button.textContent=`${label} Phase ${phase} of 5…`;}};};
-function wizardError(form,err){
- const el=form?.querySelector('.form-error');if(!el){toast(err.message,true);return;}
- if(/timed out/i.test(err.message))el.innerHTML=`${esc(err.message)}<span class="error-options"><b>Ways to get a plan:</b><span>Try again — speed varies with your device and other open tabs.</span><span>In the recipe picker, use <b>Planner’s choice</b> or untick alternates you don’t need; many recipes for the same product slow the search the most.</span><span>In Goals, turn off whole-machine production — exact balancing calculates much faster.</span><span>Lower the elevator multiplier or allow more hours per phase.</span></span>`;
- else el.textContent=err.message;
+const calcProgress = (button, label) => {
+  if (button) button.textContent = label;
+  return {
+    onProgress: phase => {
+      if (button) button.textContent = `${label} Phase ${phase} of 5…`;
+    },
+  };
+};
+function wizardError(form, err) {
+  const el = form?.querySelector('.form-error');
+  if (!el) {
+    toast(err.message, true);
+    return;
+  }
+  if (/timed out/i.test(err.message))
+    el.innerHTML = `${esc(err.message)}<span class="error-options"><b>Ways to get a plan:</b><span>Try again — speed varies with your device and other open tabs.</span><span>In the recipe picker, use <b>Planner’s choice</b> or untick alternates you don’t need; many recipes for the same product slow the search the most.</span><span>In Goals, turn off whole-machine production — exact balancing calculates much faster.</span><span>Lower the elevator multiplier or allow more hours per phase.</span></span>`;
+  else el.textContent = err.message;
 }
-async function moveWizard(target){
- if(wizardBusy||!wizard||target===wizard.step||target<1||target>5)return;
- const form=$('#wizard-form');if(target>wizard.step&&!form.reportValidity())return;
- readWizard(form);
- if(target!==5){wizard.step=target;render();return;}
- await calculateWizard(form);
+async function moveWizard(target) {
+  if (wizardBusy || !wizard || target === wizard.step || target < 1 || target > 5) return;
+  const form = $('#wizard-form');
+  if (target > wizard.step && !form.reportValidity()) return;
+  readWizard(form);
+  if (target !== 5) {
+    wizard.step = target;
+    render();
+    return;
+  }
+  await calculateWizard(form);
 }
 // Shared by both modes: the guided questions and the five-step wizard reach the
 // same Review with the same settings, so they calculate through one path.
-async function calculateWizard(form){
- wizardBusy=true;const buttons=document.querySelectorAll('[data-wizard-step],[data-guided-advanced],#wizard-form button');buttons.forEach(b=>b.disabled=true);
- const submit=form?.querySelector('button[type="submit"]'),label=submit?.textContent;
- try{wizard.name=wizard.name.trim()||workspace.catalog.goals.find(g=>g.id===wizard.settings.goal).name;wizard.preview=await post('/api/preview',{settings:wizard.settings},true,calcProgress(submit,'Calculating…'));wizard.step=5;wizard.guidedStep=guidedFlow().length+1;render();}
- catch(err){wizardError(form,err);if(submit)submit.textContent=label;}
- finally{wizardBusy=false;buttons.forEach(b=>b.disabled=false);}
+async function calculateWizard(form) {
+  wizardBusy = true;
+  const buttons = document.querySelectorAll(
+    '[data-wizard-step],[data-guided-advanced],#wizard-form button',
+  );
+  buttons.forEach(b => (b.disabled = true));
+  const submit = form?.querySelector('button[type="submit"]'),
+    label = submit?.textContent;
+  try {
+    wizard.name =
+      wizard.name.trim() || workspace.catalog.goals.find(g => g.id === wizard.settings.goal).name;
+    wizard.preview = await post(
+      '/api/preview',
+      { settings: wizard.settings },
+      true,
+      calcProgress(submit, 'Calculating…'),
+    );
+    wizard.step = 5;
+    wizard.guidedStep = guidedFlow().length + 1;
+    render();
+  } catch (err) {
+    wizardError(form, err);
+    if (submit) submit.textContent = label;
+  } finally {
+    wizardBusy = false;
+    buttons.forEach(b => (b.disabled = false));
+  }
 }
-function calcTasks(){const p=calcStage(),g=progression(calculated,state,progressionData,phase());const startup=stage()==='1'?[g.baseTasks[0],...g.powerTasks.slice(0,2),...g.baseTasks.slice(1,5),...g.milestoneTasks,...g.powerTasks.slice(2),...g.baseTasks.slice(5)]:[...g.powerTasks,...g.milestoneTasks];return [...startup,...g.hardDrives,...(p.rows||[]).map(r=>({id:'calc-'+stage()+'-'+r.id,title:r.name,body:`${machineSetup(r).summary} ${machineSetup(r).partial?'Adjustable machine: ≈ '+num(machineSetup(r).clock)+'% → ≈ '+machineSetup(r).lastOutput+'. Open factory details for an easier rounded option.':'Each machine: '+machineSetup(r).fullOutput+'.'} ${r.amplified?`Insert ${r.slots} somersloop${r.slots>1?'s':''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. `:''}Inputs /min: ${Object.entries(r.inputs).map(([n,q])=>n+' '+num(q)).join(', ')||'none'}. Outputs /min: ${Object.entries(r.outputs).map(([n,q])=>n+' '+num(q)).join(', ')||power(r.generationMW)}.`})),{id:'calc-'+stage()+'-storage',title:'Connect protected storage and overflow',body:'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.'},...(g.retire||[])];}
+function calcTasks() {
+  const p = calcStage(),
+    g = progression(calculated, state, progressionData, phase());
+  const startup =
+    stage() === '1'
+      ? [
+          g.baseTasks[0],
+          ...g.powerTasks.slice(0, 2),
+          ...g.baseTasks.slice(1, 5),
+          ...g.milestoneTasks,
+          ...g.powerTasks.slice(2),
+          ...g.baseTasks.slice(5),
+        ]
+      : [...g.powerTasks, ...g.milestoneTasks];
+  return [
+    ...startup,
+    ...g.hardDrives,
+    ...(p.rows || []).map(r => ({
+      id: 'calc-' + stage() + '-' + r.id,
+      title: r.name,
+      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${r.slots > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs /min: ${
+        Object.entries(r.inputs)
+          .map(([n, q]) => n + ' ' + num(q))
+          .join(', ') || 'none'
+      }. Outputs /min: ${
+        Object.entries(r.outputs)
+          .map(([n, q]) => n + ' ' + num(q))
+          .join(', ') || power(r.generationMW)
+      }.`,
+    })),
+    {
+      id: 'calc-' + stage() + '-storage',
+      title: 'Connect protected storage and overflow',
+      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
+    },
+    ...(g.retire || []),
+  ];
+}
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
-function draftOptions(x,s){
- const fixes=[];
- if(x.shortfalls?.length)fixes.push(`Raise the short budget${x.shortfalls.length>1?'s':''} (Resources): ${x.shortfalls.map(f=>`${esc(f.name)} to about ${num(f.needed)}/min (entered: ${num(f.budget)}/min)`).join('; ')}.`);
- if(x.wholeMachinesOnly)fixes.push('Keep these budgets instead: untick “Run solid-part machines at 100%” (Goals). Precise balancing fits, with one adjustable machine per production line.');
- if(x.minHours)fixes.push(s?.goal==='timed'?`Raise “Hours per phase” (Goals) to at least ${num(x.minHours)} h.`:`Switch the goal (Goals) to “Target completion time” with at least ${num(x.minHours)} hours per phase.`);
- else if(x.shortfalls?.length&&!x.wholeMachinesOnly)fixes.push(s?.goal==='maximum'?'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).':`More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${s?.roundRates?', or untick delivery-rate rounding (Goals)':''}.`);
- if(x.shortfalls?.length&&s?.recipes==='standard')fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
- if(x.shortfalls?.length&&s?.sam==='avoid')fixes.push('Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.');
- return fixes.length?`<p><b>Options</b></p><ul>${fixes.map(f=>`<li>${f}</li>`).join('')}</ul>`:'';
+function draftOptions(x, s) {
+  const fixes = [];
+  if (x.shortfalls?.length)
+    fixes.push(
+      `Raise the short budget${x.shortfalls.length > 1 ? 's' : ''} (Resources): ${x.shortfalls.map(f => `${esc(f.name)} to about ${num(f.needed)}/min (entered: ${num(f.budget)}/min)`).join('; ')}.`,
+    );
+  if (x.wholeMachinesOnly)
+    fixes.push(
+      'Keep these budgets instead: untick “Run solid-part machines at 100%” (Goals). Precise balancing fits, with one adjustable machine per production line.',
+    );
+  if (x.minHours)
+    fixes.push(
+      s?.goal === 'timed'
+        ? `Raise “Hours per phase” (Goals) to at least ${num(x.minHours)} h.`
+        : `Switch the goal (Goals) to “Target completion time” with at least ${num(x.minHours)} hours per phase.`,
+    );
+  else if (x.shortfalls?.length && !x.wholeMachinesOnly)
+    fixes.push(
+      s?.goal === 'maximum'
+        ? 'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).'
+        : `More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${s?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
+    );
+  if (x.shortfalls?.length && s?.recipes === 'standard')
+    fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
+  if (x.shortfalls?.length && s?.sam === 'avoid')
+    fixes.push(
+      'Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.',
+    );
+  return fixes.length
+    ? `<p><b>Options</b></p><ul>${fixes.map(f => `<li>${f}</li>`).join('')}</ul>`
+    : '';
 }
-function calcWarnings(){const x=calcStage();const options=x.feasible?'':draftOptions(x,calculated?.settings);return `${!x.feasible?`<div class="notice"><b>Planning draft — resource budget exceeded or recipe combination unavailable.</b> ${esc(x.reason)}${options&&options+'<p class="small">Profiles are calculated snapshots: create a new profile with adjusted settings to apply an option.</p>'}</div>`:''}${x.additionalHeadroomMW>0.01?`<div class="notice">Allow another ${power(x.additionalHeadroomMW)} for whole-building power headroom. Phase 1 needs biomass or existing generation.</div>`:''}`;}
-function renderCalculatedPlan(){const x=calcStage(),ts=planTasks(),done=ts.filter(t=>checked(t.id)).length;return header('CALCULATED BUILD SEQUENCE',phaseLabel(phase()),esc(currentProfile.name))+calcWarnings()+`<div class="stats">${stat('Progress',done+'/'+ts.length,'Checklist steps')}${stat('Delivery time',num(x.hours)+' h','At steady state; excludes construction')}${stat('Buildings',num(x.rows?.reduce((a,r)=>a+r.machines,0)),'Includes new power generation')}${stat('New power',power(x.generationMW),'Existing spare power is separate')}</div>${phase()==='post'?'<div class="notice blue">Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former elevator exports as needed and sink spare parts.</div>':''}<div class="split"><section><div class="section-head"><h2>Build sequence</h2>${planEditToolbar()}</div><p class="small muted">Start with construction stock and currently available power. Mark HUB, MAM and recipe unlocks as you complete them; these carry across phases. Milestone cost guidance updates from factories marked running. Full-phase factory targets follow the startup and unlock steps.</p>${checklistHtml(ts)}${removedStepsHtml()}<form id="add-task" class="inline-form"><input name="title" maxlength="240" required placeholder="Add a task…" aria-label="Personal task"><button class="btn">Add task</button></form><h2>Phase notes</h2><textarea id="phase-note" class="notes" maxlength="6000">${esc(state.notes['phase-'+phase()]||'')}</textarea><button class="btn" data-save-note="phase-${phase()}" data-input="phase-note">Save notes</button></section><aside><section class="panel"><h2>Elevator delivery</h2>${Object.entries(x.delivery||{}).map(([n,d])=>deliveryHtml({id:stage()+'-'+slug(n),name:n,...d,initial:0})).join('')}</section><section class="panel"><h2>Profile assumptions</h2>${calculated.warnings.map(w=>`<p class="small">${esc(w)}</p>`).join('')}</section></aside></div>`;}
-function calcFactoryCard(r,groupId=null){
- const total=Object.values(r.outputs||{})[0]||0;
- return `<article class="factory-card"><div class="card-top"><span class="card-icon">${itemIcon(Object.keys(r.outputs)[0])}</span><div class="card-main"><button class="name" data-calc-factory="${r.id}">${esc(r.name)}</button><div class="output">${num(r.machines)} <span>${esc(r.machine)}</span></div></div></div><p>${Object.entries(r.outputs).map(([n,q])=>`${esc(n)}: ${num(q)}/min`).join('<br>')||power(r.generationMW)}</p>${groupId?allocationHtml(r.id,groupId,total||r.generationMW,r.machines,total?'/min':' MW'):''}<footer><label class="check-row"><input type="checkbox" data-check="calc-${stage()}-${r.id}" ${doneAttr('calc-'+stage()+'-'+r.id)}>Running</label><button class="btn quiet" data-calc-factory="${r.id}">Details ↗</button></footer>${factoryEditing?assignEditor(r.id):''}</article>`;
+function calcWarnings() {
+  const x = calcStage();
+  const options = x.feasible ? '' : draftOptions(x, calculated?.settings);
+  return `${!x.feasible ? `<div class="notice"><b>Planning draft — resource budget exceeded or recipe combination unavailable.</b> ${esc(x.reason)}${options && options + '<p class="small">Profiles are calculated snapshots: create a new profile with adjusted settings to apply an option.</p>'}</div>` : ''}${x.additionalHeadroomMW > 0.01 ? `<div class="notice">Allow another ${power(x.additionalHeadroomMW)} for whole-building power headroom. Phase 1 needs biomass or existing generation.</div>` : ''}`;
 }
-function renderCalculatedFactories(){const x=calcStage(),rows=(x.rows||[]).filter(r=>(r.name+' '+Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()));
- const ungrouped=rows.filter(r=>!membershipsOf(r.id).length);
- const groupsHtml=groupSections(rows,r=>r.id,(r,gid)=>calcFactoryCard(r,gid));
- return header('CALCULATED PRODUCTION','Factory targets','Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site.')+(!calculated.settings.wholeMachines?'<div class="notice blue">Prefer extra production over underclocking? <button class="btn primary" data-round-up>Round up production</button><p>Creates a recalculated profile revision. Your previous profile stays available; increased factory requirements are marked for review.</p></div>':'<div class="notice blue">Whole-machine production: protect downstream supply first, refill storage, then sink surplus solids. Liquid and nuclear balances remain controlled.</div>')+calcWarnings()+`<div class="toolbar"><input id="factory-search" class="search" aria-label="Find a factory" placeholder="Find a part or recipe…" value="${esc(query)}"><span>${rows.length} production lines</span>${factoryEditToolbar()}</div>${factoryEditing?groupEditPanel():''}${groupsHtml}${groupsHtml&&ungrouped.length?'<p class="eyebrow">UNGROUPED PRODUCTION LINES</p>':''}<div class="cards">${ungrouped.map(r=>calcFactoryCard(r)).join('')}</div>`;}
-function machineSetup(r){
- const equivalent=r.equivalent||r.machines-1+r.lastClock/100,whole=Math.floor(equivalent+1e-7),fraction=Math.max(0,equivalent-whole),partial=fraction>1e-7;
- const rates=Object.fromEntries(Object.entries(r.outputs||{}).map(([n,q])=>[n,q/equivalent]));
- const fullOutput=Object.entries(rates).map(([n,q])=>`${num(q)} ${n}/min`).join(' · ')||`${num(r.generationMW/equivalent)} MW`;
- const lastOutput=Object.entries(rates).map(([n,q])=>`${num(q*fraction)} ${n}/min`).join(' · ')||`${num(r.generationMW/equivalent*fraction)} MW`;
- const summary=`${r.machines} ${r.machine} total: ${partial?(whole?whole+' at 100% + ':'')+'1 adjustable machine':whole+' at 100% (no underclock needed)'}.`;
- const sensitive=/uranium|plutonium|ficsonium|waste|non-fissile/i.test([r.name,...Object.keys(r.inputs||{}),...Object.keys(r.outputs||{})].join(' '));
- let easy=null;
- if(partial&&!sensitive){
-  // Round the final clock upward to a whole percent, never silently underproduce.
-  let clock=Math.ceil(fraction*100-1e-7);
-  const primary=Object.entries(rates)[0];
-  if(primary){const target=Math.ceil(primary[1]*fraction-1e-7),candidate=target/primary[1]*100;if(candidate<=100&&Math.abs(candidate-Math.round(candidate))<1e-7)clock=Math.max(clock,Math.round(candidate));}
-  const extra=clock/100-fraction;
-  if(extra>1e-7)easy={clock,output:Object.fromEntries(Object.entries(rates).map(([n,q])=>[n,q*clock/100])),inputs:Object.fromEntries(Object.entries(r.inputs||{}).map(([n,q])=>[n,q/equivalent*extra])),extraOutputs:Object.fromEntries(Object.entries(rates).map(([n,q])=>[n,q*extra]))};
- }
- return {summary,whole,partial,fullOutput,lastOutput,clock:fraction*100,easy};
+function renderCalculatedPlan() {
+  const x = calcStage(),
+    ts = planTasks(),
+    done = ts.filter(t => checked(t.id)).length;
+  return (
+    header('CALCULATED BUILD SEQUENCE', phaseLabel(phase()), esc(currentProfile.name)) +
+    calcWarnings() +
+    `<div class="stats">${stat('Progress', done + '/' + ts.length, 'Checklist steps')}${stat('Delivery time', num(x.hours) + ' h', 'At steady state; excludes construction')}${stat('Buildings', num(x.rows?.reduce((a, r) => a + r.machines, 0)), 'Includes new power generation')}${stat('New power', power(x.generationMW), 'Existing spare power is separate')}</div>${phase() === 'post' ? '<div class="notice blue">Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former elevator exports as needed and sink spare parts.</div>' : ''}<div class="split"><section><div class="section-head"><h2>Build sequence</h2>${planEditToolbar()}</div><p class="small muted">Start with construction stock and currently available power. Mark HUB, MAM and recipe unlocks as you complete them; these carry across phases. Milestone cost guidance updates from factories marked running. Full-phase factory targets follow the startup and unlock steps.</p>${checklistHtml(ts)}${removedStepsHtml()}<form id="add-task" class="inline-form"><input name="title" maxlength="240" required placeholder="Add a task…" aria-label="Personal task"><button class="btn">Add task</button></form><h2>Phase notes</h2><textarea id="phase-note" class="notes" maxlength="6000">${esc(state.notes['phase-' + phase()] || '')}</textarea><button class="btn" data-save-note="phase-${phase()}" data-input="phase-note">Save notes</button></section><aside><section class="panel"><h2>Elevator delivery</h2>${Object.entries(
+      x.delivery || {},
+    )
+      .map(([n, d]) => deliveryHtml({ id: stage() + '-' + slug(n), name: n, ...d, initial: 0 }))
+      .join(
+        '',
+      )}</section><section class="panel"><h2>Profile assumptions</h2>${calculated.warnings.map(w => `<p class="small">${esc(w)}</p>`).join('')}</section></aside></div>`
+  );
 }
-function setupHtml(r){const m=machineSetup(r);return `<h3>Machine setup</h3><p><b>${esc(m.summary)}</b></p><table><thead><tr><th>Machines</th><th>Clock each</th><th>Output per machine</th></tr></thead><tbody>${m.whole?`<tr><td>${m.whole} full-speed</td><td>100%</td><td>${esc(m.fullOutput)}</td></tr>`:''}${m.partial?`<tr><td>1 adjustable</td><td>≈ ${num(m.clock)}%</td><td>≈ ${esc(m.lastOutput)}</td></tr>`:''}</tbody></table>${m.easy&&!calculated?.settings.wholeMachines?`<div class="notice blue"><b>Easier optional setting: set only the adjustable machine to ${m.easy.clock}%.</b><p>Its output: ${inputText(m.easy.output)||num(r.generationMW/(r.equivalent||1)*m.easy.clock/100)+' MW'}.</p><p>Extra inputs needed: ${inputText(m.easy.inputs)}.<br>Extra outputs/byproducts: ${inputText(m.easy.extraOutputs)||'Additional generation'}.</p><p>This is extra capacity, not a recalculated balanced plan. Supply the extra inputs and handle every extra output before using it. The totals below remain the original calculated targets.</p></div>`:''}${m.partial?'<p class="small muted">Calculated percentages and outputs are displayed rounded. Keep the calculated setting for tightly balanced recycling; do not round nuclear or waste-processing lines independently.</p>':''}`;}
+function calcFactoryCard(r, groupId = null) {
+  const total = Object.values(r.outputs || {})[0] || 0;
+  return `<article class="factory-card"><div class="card-top"><span class="card-icon">${itemIcon(Object.keys(r.outputs)[0])}</span><div class="card-main"><button class="name" data-calc-factory="${r.id}">${esc(r.name)}</button><div class="output">${num(r.machines)} <span>${esc(r.machine)}</span></div></div></div><p>${
+    Object.entries(r.outputs)
+      .map(([n, q]) => `${esc(n)}: ${num(q)}/min`)
+      .join('<br>') || power(r.generationMW)
+  }</p>${groupId ? allocationHtml(r.id, groupId, total || r.generationMW, r.machines, total ? '/min' : ' MW') : ''}<footer><label class="check-row"><input type="checkbox" data-check="calc-${stage()}-${r.id}" ${doneAttr('calc-' + stage() + '-' + r.id)}>Running</label><button class="btn quiet" data-calc-factory="${r.id}">Details ↗</button></footer>${factoryEditing ? assignEditor(r.id) : ''}</article>`;
+}
+function renderCalculatedFactories() {
+  const x = calcStage(),
+    rows = (x.rows || []).filter(r =>
+      (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
+    );
+  const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
+  const groupsHtml = groupSections(
+    rows,
+    r => r.id,
+    (r, gid) => calcFactoryCard(r, gid),
+  );
+  return (
+    header(
+      'CALCULATED PRODUCTION',
+      'Factory targets',
+      'Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site.',
+    ) +
+    (!calculated.settings.wholeMachines
+      ? '<div class="notice blue">Prefer extra production over underclocking? <button class="btn primary" data-round-up>Round up production</button><p>Creates a recalculated profile revision. Your previous profile stays available; increased factory requirements are marked for review.</p></div>'
+      : '<div class="notice blue">Whole-machine production: protect downstream supply first, refill storage, then sink surplus solids. Liquid and nuclear balances remain controlled.</div>') +
+    calcWarnings() +
+    `<div class="toolbar"><input id="factory-search" class="search" aria-label="Find a factory" placeholder="Find a part or recipe…" value="${esc(query)}"><span>${rows.length} production lines</span>${factoryEditToolbar()}</div>${factoryEditing ? groupEditPanel() : ''}${groupsHtml}${groupsHtml && ungrouped.length ? '<p class="eyebrow">UNGROUPED PRODUCTION LINES</p>' : ''}<div class="cards">${ungrouped.map(r => calcFactoryCard(r)).join('')}</div>`
+  );
+}
+function machineSetup(r) {
+  const equivalent = r.equivalent || r.machines - 1 + r.lastClock / 100,
+    whole = Math.floor(equivalent + 1e-7),
+    fraction = Math.max(0, equivalent - whole),
+    partial = fraction > 1e-7;
+  const rates = Object.fromEntries(
+    Object.entries(r.outputs || {}).map(([n, q]) => [n, q / equivalent]),
+  );
+  const fullOutput =
+    Object.entries(rates)
+      .map(([n, q]) => `${num(q)} ${n}/min`)
+      .join(' · ') || `${num(r.generationMW / equivalent)} MW`;
+  const lastOutput =
+    Object.entries(rates)
+      .map(([n, q]) => `${num(q * fraction)} ${n}/min`)
+      .join(' · ') || `${num((r.generationMW / equivalent) * fraction)} MW`;
+  const summary = `${r.machines} ${r.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
+  const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(
+    [r.name, ...Object.keys(r.inputs || {}), ...Object.keys(r.outputs || {})].join(' '),
+  );
+  let easy = null;
+  if (partial && !sensitive) {
+    // Round the final clock upward to a whole percent, never silently underproduce.
+    let clock = Math.ceil(fraction * 100 - 1e-7);
+    const primary = Object.entries(rates)[0];
+    if (primary) {
+      const target = Math.ceil(primary[1] * fraction - 1e-7),
+        candidate = (target / primary[1]) * 100;
+      if (candidate <= 100 && Math.abs(candidate - Math.round(candidate)) < 1e-7)
+        clock = Math.max(clock, Math.round(candidate));
+    }
+    const extra = clock / 100 - fraction;
+    if (extra > 1e-7)
+      easy = {
+        clock,
+        output: Object.fromEntries(Object.entries(rates).map(([n, q]) => [n, (q * clock) / 100])),
+        inputs: Object.fromEntries(
+          Object.entries(r.inputs || {}).map(([n, q]) => [n, (q / equivalent) * extra]),
+        ),
+        extraOutputs: Object.fromEntries(Object.entries(rates).map(([n, q]) => [n, q * extra])),
+      };
+  }
+  return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
+}
+function setupHtml(r) {
+  const m = machineSetup(r);
+  return `<h3>Machine setup</h3><p><b>${esc(m.summary)}</b></p><table><thead><tr><th>Machines</th><th>Clock each</th><th>Output per machine</th></tr></thead><tbody>${m.whole ? `<tr><td>${m.whole} full-speed</td><td>100%</td><td>${esc(m.fullOutput)}</td></tr>` : ''}${m.partial ? `<tr><td>1 adjustable</td><td>≈ ${num(m.clock)}%</td><td>≈ ${esc(m.lastOutput)}</td></tr>` : ''}</tbody></table>${m.easy && !calculated?.settings.wholeMachines ? `<div class="notice blue"><b>Easier optional setting: set only the adjustable machine to ${m.easy.clock}%.</b><p>Its output: ${inputText(m.easy.output) || num(((r.generationMW / (r.equivalent || 1)) * m.easy.clock) / 100) + ' MW'}.</p><p>Extra inputs needed: ${inputText(m.easy.inputs)}.<br>Extra outputs/byproducts: ${inputText(m.easy.extraOutputs) || 'Additional generation'}.</p><p>This is extra capacity, not a recalculated balanced plan. Supply the extra inputs and handle every extra output before using it. The totals below remain the original calculated targets.</p></div>` : ''}${m.partial ? '<p class="small muted">Calculated percentages and outputs are displayed rounded. Keep the calculated setting for tightly balanced recycling; do not round nuclear or waste-processing lines independently.</p>' : ''}`;
+}
 // Phases where a line is not built yet, or needs no more machines, have nothing
 // to add: say so with a dash rather than claiming capacity is being kept.
-function calcExpansionRows(id){
- let installed=0;
- return fromStart(calculated.stages).map(([ph,p])=>{
-  const required=p.rows?.find(x=>x.id===id)?.machines||0;
-  const add=Math.max(0,required-installed);
-  installed=Math.max(installed,required);
-  return `<tr><td>${ph}</td><td>${required||'—'}</td><td>${add?'+'+add:'—'}</td></tr>`;
- }).join('');
+function calcExpansionRows(id) {
+  let installed = 0;
+  return fromStart(calculated.stages)
+    .map(([ph, p]) => {
+      const required = p.rows?.find(x => x.id === id)?.machines || 0;
+      const add = Math.max(0, required - installed);
+      installed = Math.max(installed, required);
+      return `<tr><td>${ph}</td><td>${required || '—'}</td><td>${add ? '+' + add : '—'}</td></tr>`;
+    })
+    .join('');
 }
-function openCalculatedFactory(id){const r=calcStage().rows?.find(r=>r.id===id);if(!r)return;const flow=calcFlowModel(r);const dialogIcon=Object.keys(r.outputs||{})[0]||'';dialog(r.name,phaseLabel(phase()),`${flowHtml(flow)}${setupHtml(r)}${laneAdviceHtml(flow)}<h3>Outputs per minute</h3><p>${inputText(r.outputs)||power(r.generationMW)}</p><h3>Expansion by phase</h3><table><thead><tr><th>Phase</th><th>Machines</th><th>Add</th></tr></thead><tbody>${calcExpansionRows(id)}</tbody></table><p class="small muted">The optimizer may choose a different recipe in another phase. Keep earlier buildings until the replacement chain runs. Screws and wire can be made beside consumers.</p><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+id]||'')}</textarea><button class="btn" data-save-note="factory-${id}" data-input="detail-note">Save notes</button>`,dialogIcon);}
-function renderCalculatedResources(){const x=calcStage();return header('CHECK BEFORE EXPANDING','Power & resources','New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.')+calcWarnings()+`<div class="stats">${stat('New generation',power(x.generationMW),'Fuel and recycling included')}${stat('Whole-machine peak',power(x.peakMW),'At selected consumption multiplier')}${stat('With utility allowance',power(x.requiredMW),(calculated.settings.utilityPercent??20)+'% for transport and utilities; verify actual load')}${stat('Existing spare power',power(calculated.settings.availablePowerGW*1000),'Not total installed generation')}${x.sloopsUsed?stat('Somersloops in production',num(x.sloopsUsed),'Amplified machines: double output, four times the power'):''}${x.augmenters?stat('With augmenter boost',power(x.availableMW),num(x.augmenters)+' augmenter'+(x.augmenters>1?'s':'')+' · '+num(x.augmenterMW)+' MW plus '+Math.round(x.boost*100)+'% of base production'):''}</div><div class="table-wrap"><table><thead><tr><th>Resource</th><th>Required /min</th><th>Budget /min</th><th>Remaining</th></tr></thead><tbody>${workspace.catalog.raw.map(n=>`<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td>${num(x.raw?.[n])}</td><td>${num(calculated.settings.limits[n])}</td><td class="${(x.raw?.[n]||0)>calculated.settings.limits[n]?'warn':''}">${num(calculated.settings.limits[n]-(x.raw?.[n]||0))}</td></tr>`).join('')}</tbody></table></div><div class="backup-grid"><section class="panel"><h2>Dedicated drone fuel /min</h2><p>${inputText(x.drone||{})||'No dedicated drone fuel in this phase.'}</p><h2>Protected storage /min</h2><p>${inputText(x.storage||{})||'No storage production requested.'}</p><h2>From production you already run</h2><p>${inputText(x.supplied||{})||'None credited in this phase.'}</p>${Object.keys(x.supplied||{}).length?'<p class="small muted">The plan does not build these lines or the chain behind them. Their extraction is assumed to be outside the budgets above.</p>':''}</section><section class="panel"><h2>Conversion and byproducts</h2><p>${x.conversions?.map(esc).join('<br>')||'No raw-resource conversion required.'}</p><p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p><p>Surplus solids: ${inputText(x.surplus||{})||'None'}</p><p class="small muted">Liquid and radioactive material balances are enforced. Do not let storage or overflow block recycling.</p></section></div>`;}
-document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
- if(b.hasAttribute('data-new-save'))startWizard();
- if(b.dataset.newProfile)startWizard(b.dataset.newProfile);
- if(b.dataset.calcFactory)openCalculatedFactory(b.dataset.calcFactory);
- if(b.dataset.groupChain)openGroupChain(b.dataset.groupChain);
- if(b.dataset.altInfo)openAltRecipe(b.dataset.altInfo);
- if(b.hasAttribute('data-alt-all')||b.hasAttribute('data-alt-none')){
-  const on=b.hasAttribute('data-alt-all'),p=b.closest('.alt-picker');
-  for(const box of p.querySelectorAll('.alt-row:not([hidden]) input[name=alt]')){box.checked=on;const star=box.closest('.alt-row').querySelector('input[name=altpref]');if(star){star.disabled=!on;if(!on)star.checked=false;}}
-  p.querySelector('.alt-picker-head b').textContent=`Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;
- }
- if(b.hasAttribute('data-alt-best')&&wizard&&!b.disabled){
-  b.disabled=true;const label=b.textContent;
-  try{
-   readWizard($('#wizard-form'));
-   const preview=await post('/api/preview',{settings:{...wizard.settings,recipes:'all'}},true,calcProgress(b,'Calculating…'));
-   wizard.settings.alternateRecipes=alternatesUsed(preview);
-   render();
-   toast(`Selected ${wizard.settings.alternateRecipes.length} alternate recipes the planner uses with your current settings.`);
-  }catch(err){wizardError($('#wizard-form'),err);b.disabled=false;b.textContent=label;}
- }
- if(b.hasAttribute('data-round-up')){if(!allowSwitch())return;b.disabled=true;try{await writeQueue;const r=await post('/api/round-up',{},true,calcProgress(b,'Recalculating…'));workspace=r.workspace;await loadContext(r.saveId,r.profileId);render();toast('Created rounded profile. '+r.reviewCount+' completed factory checks need review; previous progress is preserved.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Round up production';}}
- if(b.dataset.duplicateProfile){if(!allowSwitch())return;b.disabled=true;b.textContent='Copying…';try{await writeQueue;const r=await post('/api/duplicate-profile',{saveId:b.dataset.duplicateSave,profileId:b.dataset.duplicateProfile});workspace=r.workspace;await loadContext(r.saveId,r.profileId);navigate('plan');toast('Copy created and opened. Changes here leave the original profile untouched.');}catch(err){toast(err.message,true);b.disabled=false;b.textContent='Duplicate';}}
- if(b.dataset.shareProfile){b.disabled=true;try{await writeQueue;const sv=workspace.saves.find(s=>s.id===b.dataset.shareSave),pr=sv?.profiles.find(p=>p.id===b.dataset.shareProfile);const data=await request('/api/export-saves?save='+encodeURIComponent(b.dataset.shareSave)+'&profile='+encodeURIComponent(b.dataset.shareProfile)+'&share=1');downloadJson(data,(slug(pr?.name||'profile')||'profile')+'-share.json');toast('Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.');}catch(err){toast(err.message,true);}finally{b.disabled=false;}}
- if(b.dataset.removeProfile){if(!allowSwitch())return;const sv=workspace.saves.find(s=>s.id===b.dataset.removeSave),pr=sv?.profiles.find(p=>p.id===b.dataset.removeProfile);if(!pr)return;if(!confirm('Are you sure? Remove "'+pr.name+'" and its progress and notes?'+(sv.profiles.length===1?' This also removes the empty save.':' Other profiles keep their progress.')))return;b.disabled=true;try{await writeQueue;await post('/api/remove-profile',{saveId:sv.id,profileId:pr.id,confirmed:true});await boot();if(workspace.saves.length)navigate('profiles');toast('Profile removed.');}catch(err){toast(err.message,true);b.disabled=false;}}
- if(b.dataset.openSave){if(!allowSwitch())return;b.disabled=true;try{await writeQueue;workspace=await post('/api/select',{saveId:b.dataset.openSave,profileId:b.dataset.openProfile});await loadContext(b.dataset.openSave,b.dataset.openProfile);navigate('plan');}catch(err){toast(err.message,true);b.disabled=false;}}
- if(b.dataset.wizardStep)await moveWizard(Number(b.dataset.wizardStep));
- if(b.hasAttribute('data-wizard-back'))await moveWizard(wizard.step-1);
- if(b.hasAttribute('data-guided-back'))await moveGuided(wizard.guidedStep-1);
- if(b.dataset.guidedAdvanced)toAdvanced(Number(b.dataset.guidedAdvanced));
- if(b.hasAttribute('data-guided-start'))toGuided();
- if(b.hasAttribute('data-open-extraction'))openExtraction();
- if(b.dataset.nodePreset&&wizard){
-  const form=$('#wizard-form');if(form)readExtraction(form);
-  wizard.extraction=presetSurvey(b.dataset.nodePreset,extractionOf(wizard),wizard.settings.distribution);
-  wizard.extractionUndo=null;
-  // Keep the profile's recorded purity in step with the counts it now holds.
-  wizard.settings.purity=b.dataset.nodePreset;
-  render();
-  toast('Filled in the default world at '+(nodePresets.find(([v])=>v===b.dataset.nodePreset)?.[1]||'that purity')+'. Change any count that does not match your save.');
- }
- if(b.hasAttribute('data-node-reset')&&wizard){
-  const form=$('#wizard-form');if(form)readExtraction(form);
-  resetExtraction();
-  render();
-  toast('Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.');
- }
- if(b.hasAttribute('data-node-undo')&&wizard){
-  undoExtractionReset();
-  render();
-  toast('Put back the counts you had before the reset.');
- }
- if(b.dataset.extractionStep)await moveExtraction(Number(b.dataset.extractionStep));
- if(b.hasAttribute('data-extraction-back'))await moveExtraction(wizard.extractionStep-1);
- if(b.hasAttribute('data-extraction-cancel'))leaveExtraction();
- if(b.dataset.supplyPick){pickSupplyOption(b);return;}
- if(b.dataset.supplyRemove&&wizard){
-  const form=$('#wizard-form');if(form)wizard.mode==='guided'?readGuidedForm(form):readWizard(form);
-  const rows=supplyRows(wizard);rows.splice(Number(b.dataset.supplyRemove),1);
-  wizard.settings.existingSupply=Object.fromEntries(rows.filter(r=>Number(r.rate)>0).map(r=>[r.name.trim(),Number(r.rate)]).filter(([n])=>(workspace.catalog.supplyItems||[]).includes(n)));
-  wizard.preview=null;render();
- }
- if(b.hasAttribute('data-cancel-wizard')){wizard=null;navigate('profiles');}
- if(b.dataset.authMode){authMode=b.dataset.authMode;renderSignedOut();}
- if(b.hasAttribute('data-logout')){if(!allowSwitch())return;await writeQueue;await post('/api/logout',{});authMode='login';await boot();}
+function openCalculatedFactory(id) {
+  const r = calcStage().rows?.find(r => r.id === id);
+  if (!r) return;
+  const flow = calcFlowModel(r);
+  const dialogIcon = Object.keys(r.outputs || {})[0] || '';
+  dialog(
+    r.name,
+    phaseLabel(phase()),
+    `${flowHtml(flow)}${setupHtml(r)}${laneAdviceHtml(flow)}<h3>Outputs per minute</h3><p>${inputText(r.outputs) || power(r.generationMW)}</p><h3>Expansion by phase</h3><table><thead><tr><th>Phase</th><th>Machines</th><th>Add</th></tr></thead><tbody>${calcExpansionRows(id)}</tbody></table><p class="small muted">The optimizer may choose a different recipe in another phase. Keep earlier buildings until the replacement chain runs. Screws and wire can be made beside consumers.</p><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-' + id] || '')}</textarea><button class="btn" data-save-note="factory-${id}" data-input="detail-note">Save notes</button>`,
+    dialogIcon,
+  );
+}
+function renderCalculatedResources() {
+  const x = calcStage();
+  return (
+    header(
+      'CHECK BEFORE EXPANDING',
+      'Power & resources',
+      'New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.',
+    ) +
+    calcWarnings() +
+    `<div class="stats">${stat('New generation', power(x.generationMW), 'Fuel and recycling included')}${stat('Whole-machine peak', power(x.peakMW), 'At selected consumption multiplier')}${stat('With utility allowance', power(x.requiredMW), (calculated.settings.utilityPercent ?? 20) + '% for transport and utilities; verify actual load')}${stat('Existing spare power', power(calculated.settings.availablePowerGW * 1000), 'Not total installed generation')}${x.sloopsUsed ? stat('Somersloops in production', num(x.sloopsUsed), 'Amplified machines: double output, four times the power') : ''}${x.augmenters ? stat('With augmenter boost', power(x.availableMW), num(x.augmenters) + ' augmenter' + (x.augmenters > 1 ? 's' : '') + ' · ' + num(x.augmenterMW) + ' MW plus ' + Math.round(x.boost * 100) + '% of base production') : ''}</div><div class="table-wrap"><table><thead><tr><th>Resource</th><th>Required /min</th><th>Budget /min</th><th>Remaining</th></tr></thead><tbody>${workspace.catalog.raw.map(n => `<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td>${num(x.raw?.[n])}</td><td>${num(calculated.settings.limits[n])}</td><td class="${(x.raw?.[n] || 0) > calculated.settings.limits[n] ? 'warn' : ''}">${num(calculated.settings.limits[n] - (x.raw?.[n] || 0))}</td></tr>`).join('')}</tbody></table></div><div class="backup-grid"><section class="panel"><h2>Dedicated drone fuel /min</h2><p>${inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.'}</p><h2>Protected storage /min</h2><p>${inputText(x.storage || {}) || 'No storage production requested.'}</p><h2>From production you already run</h2><p>${inputText(x.supplied || {}) || 'None credited in this phase.'}</p>${Object.keys(x.supplied || {}).length ? '<p class="small muted">The plan does not build these lines or the chain behind them. Their extraction is assumed to be outside the budgets above.</p>' : ''}</section><section class="panel"><h2>Conversion and byproducts</h2><p>${x.conversions?.map(esc).join('<br>') || 'No raw-resource conversion required.'}</p><p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p><p>Surplus solids: ${inputText(x.surplus || {}) || 'None'}</p><p class="small muted">Liquid and radioactive material balances are enforced. Do not let storage or overflow block recycling.</p></section></div>`
+  );
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.hasAttribute('data-new-save')) startWizard();
+  if (b.dataset.newProfile) startWizard(b.dataset.newProfile);
+  if (b.dataset.calcFactory) openCalculatedFactory(b.dataset.calcFactory);
+  if (b.dataset.groupChain) openGroupChain(b.dataset.groupChain);
+  if (b.dataset.altInfo) openAltRecipe(b.dataset.altInfo);
+  if (b.hasAttribute('data-alt-all') || b.hasAttribute('data-alt-none')) {
+    const on = b.hasAttribute('data-alt-all'),
+      p = b.closest('.alt-picker');
+    for (const box of p.querySelectorAll('.alt-row:not([hidden]) input[name=alt]')) {
+      box.checked = on;
+      const star = box.closest('.alt-row').querySelector('input[name=altpref]');
+      if (star) {
+        star.disabled = !on;
+        if (!on) star.checked = false;
+      }
+    }
+    p.querySelector('.alt-picker-head b').textContent =
+      `Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;
+  }
+  if (b.hasAttribute('data-alt-best') && wizard && !b.disabled) {
+    b.disabled = true;
+    const label = b.textContent;
+    try {
+      readWizard($('#wizard-form'));
+      const preview = await post(
+        '/api/preview',
+        { settings: { ...wizard.settings, recipes: 'all' } },
+        true,
+        calcProgress(b, 'Calculating…'),
+      );
+      wizard.settings.alternateRecipes = alternatesUsed(preview);
+      render();
+      toast(
+        `Selected ${wizard.settings.alternateRecipes.length} alternate recipes the planner uses with your current settings.`,
+      );
+    } catch (err) {
+      wizardError($('#wizard-form'), err);
+      b.disabled = false;
+      b.textContent = label;
+    }
+  }
+  if (b.hasAttribute('data-round-up')) {
+    if (!allowSwitch()) return;
+    b.disabled = true;
+    try {
+      await writeQueue;
+      const r = await post('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
+      workspace = r.workspace;
+      await loadContext(r.saveId, r.profileId);
+      render();
+      toast(
+        'Created rounded profile. ' +
+          r.reviewCount +
+          ' completed factory checks need review; previous progress is preserved.',
+      );
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+      b.textContent = 'Round up production';
+    }
+  }
+  if (b.dataset.duplicateProfile) {
+    if (!allowSwitch()) return;
+    b.disabled = true;
+    b.textContent = 'Copying…';
+    try {
+      await writeQueue;
+      const r = await post('/api/duplicate-profile', {
+        saveId: b.dataset.duplicateSave,
+        profileId: b.dataset.duplicateProfile,
+      });
+      workspace = r.workspace;
+      await loadContext(r.saveId, r.profileId);
+      navigate('plan');
+      toast('Copy created and opened. Changes here leave the original profile untouched.');
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+      b.textContent = 'Duplicate';
+    }
+  }
+  if (b.dataset.shareProfile) {
+    b.disabled = true;
+    try {
+      await writeQueue;
+      const sv = workspace.saves.find(s => s.id === b.dataset.shareSave),
+        pr = sv?.profiles.find(p => p.id === b.dataset.shareProfile);
+      const data = await request(
+        '/api/export-saves?save=' +
+          encodeURIComponent(b.dataset.shareSave) +
+          '&profile=' +
+          encodeURIComponent(b.dataset.shareProfile) +
+          '&share=1',
+      );
+      downloadJson(data, (slug(pr?.name || 'profile') || 'profile') + '-share.json');
+      toast(
+        'Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.',
+      );
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      b.disabled = false;
+    }
+  }
+  if (b.dataset.removeProfile) {
+    if (!allowSwitch()) return;
+    const sv = workspace.saves.find(s => s.id === b.dataset.removeSave),
+      pr = sv?.profiles.find(p => p.id === b.dataset.removeProfile);
+    if (!pr) return;
+    if (
+      !confirm(
+        'Are you sure? Remove "' +
+          pr.name +
+          '" and its progress and notes?' +
+          (sv.profiles.length === 1
+            ? ' This also removes the empty save.'
+            : ' Other profiles keep their progress.'),
+      )
+    )
+      return;
+    b.disabled = true;
+    try {
+      await writeQueue;
+      await post('/api/remove-profile', { saveId: sv.id, profileId: pr.id, confirmed: true });
+      await boot();
+      if (workspace.saves.length) navigate('profiles');
+      toast('Profile removed.');
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+    }
+  }
+  if (b.dataset.openSave) {
+    if (!allowSwitch()) return;
+    b.disabled = true;
+    try {
+      await writeQueue;
+      workspace = await post('/api/select', {
+        saveId: b.dataset.openSave,
+        profileId: b.dataset.openProfile,
+      });
+      await loadContext(b.dataset.openSave, b.dataset.openProfile);
+      navigate('plan');
+    } catch (err) {
+      toast(err.message, true);
+      b.disabled = false;
+    }
+  }
+  if (b.dataset.wizardStep) await moveWizard(Number(b.dataset.wizardStep));
+  if (b.hasAttribute('data-wizard-back')) await moveWizard(wizard.step - 1);
+  if (b.hasAttribute('data-guided-back')) await moveGuided(wizard.guidedStep - 1);
+  if (b.dataset.guidedAdvanced) toAdvanced(Number(b.dataset.guidedAdvanced));
+  if (b.hasAttribute('data-guided-start')) toGuided();
+  if (b.hasAttribute('data-open-extraction')) openExtraction();
+  if (b.dataset.nodePreset && wizard) {
+    const form = $('#wizard-form');
+    if (form) readExtraction(form);
+    wizard.extraction = presetSurvey(
+      b.dataset.nodePreset,
+      extractionOf(wizard),
+      wizard.settings.distribution,
+    );
+    wizard.extractionUndo = null;
+    // Keep the profile's recorded purity in step with the counts it now holds.
+    wizard.settings.purity = b.dataset.nodePreset;
+    render();
+    toast(
+      'Filled in the default world at ' +
+        (nodePresets.find(([v]) => v === b.dataset.nodePreset)?.[1] || 'that purity') +
+        '. Change any count that does not match your save.',
+    );
+  }
+  if (b.hasAttribute('data-node-reset') && wizard) {
+    const form = $('#wizard-form');
+    if (form) readExtraction(form);
+    resetExtraction();
+    render();
+    toast(
+      'Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.',
+    );
+  }
+  if (b.hasAttribute('data-node-undo') && wizard) {
+    undoExtractionReset();
+    render();
+    toast('Put back the counts you had before the reset.');
+  }
+  if (b.dataset.extractionStep) await moveExtraction(Number(b.dataset.extractionStep));
+  if (b.hasAttribute('data-extraction-back')) await moveExtraction(wizard.extractionStep - 1);
+  if (b.hasAttribute('data-extraction-cancel')) leaveExtraction();
+  if (b.dataset.supplyPick) {
+    pickSupplyOption(b);
+    return;
+  }
+  if (b.dataset.supplyRemove && wizard) {
+    const form = $('#wizard-form');
+    if (form) wizard.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
+    const rows = supplyRows(wizard);
+    rows.splice(Number(b.dataset.supplyRemove), 1);
+    wizard.settings.existingSupply = Object.fromEntries(
+      rows
+        .filter(r => Number(r.rate) > 0)
+        .map(r => [r.name.trim(), Number(r.rate)])
+        .filter(([n]) => (workspace.catalog.supplyItems || []).includes(n)),
+    );
+    wizard.preview = null;
+    render();
+  }
+  if (b.hasAttribute('data-cancel-wizard')) {
+    wizard = null;
+    navigate('profiles');
+  }
+  if (b.dataset.authMode) {
+    authMode = b.dataset.authMode;
+    renderSignedOut();
+  }
+  if (b.hasAttribute('data-logout')) {
+    if (!allowSwitch()) return;
+    await writeQueue;
+    await post('/api/logout', {});
+    authMode = 'login';
+    await boot();
+  }
 });
-document.addEventListener('submit',async e=>{
- const f=e.target;if(!['wizard-form','auth-form','rename-form'].includes(f.id))return;e.preventDefault();const b=f.querySelector('button[type="submit"]')||f.querySelector('button');b.disabled=true;
- try{
-  if(f.id==='wizard-form'){
-   const w=wizard;
-   if(w.mode==='extraction'){b.disabled=false;await moveExtraction(w.extractionStep+1);return;}
-   if(w.mode==='guided'&&w.guidedStep<=guidedFlow().length){b.disabled=false;await moveGuided(w.guidedStep+1);return;}
-   if(w.step<5){b.disabled=false;await moveWizard(w.step+1);return;}
-   if(w.step===5){
-    readCarry(f);
-    const r=await post('/api/profiles',{saveId:w.saveId,saveName:w.saveName,name:w.name,settings:w.settings,carryFrom:w.saveId?w.carryFrom:null,carry:w.carry,built:guidedBuiltKeys(w,f)},true,calcProgress(b,'Saving profile…'));
-    workspace=r.workspace;await loadContext(r.saveId,r.profileId);wizard=null;navigate('plan');
-    const carried=[r.carriedChecks?plural(r.carriedChecks,'step')+' carried over':'',r.reviewCount?plural(r.reviewCount,'expanded production line')+' left for review':''].filter(Boolean).join('; ');
-    toast('Profile created'+(carried?': '+carried+'. ':'. ')+'Your other progress is unchanged.');return;
-   }
-
-  }else if(f.id==='auth-form'){
-   const data=Object.fromEntries(new FormData(f));data.registration=new FormData(f).has('registration');const mode=workspace.accountsEnabled?authMode:'setup';await post('/api/'+mode,data,false);await boot();
-  }else{workspace=await post('/api/rename',Object.fromEntries(new FormData(f)));const s=workspace.saves.find(s=>s.id===currentSave.id);currentSave.name=s.name;currentProfile.name=s.profiles.find(p=>p.id===currentProfile.id).name;render();}
- }catch(err){if(f.id==='wizard-form')wizardError(f,err);else{const el=f.querySelector('.form-error');if(el)el.textContent=err.message;else toast(err.message,true);}b.disabled=false;if(f.id==='wizard-form')b.textContent=wizard.mode==='guided'&&wizard.guidedStep<=guidedFlow().length?(wizard.guidedStep>=guidedFlow().length?'Calculate plan':'Continue →'):wizard.step===5?'Create profile':wizard.step===4?'Calculate plan':'Continue →';}
+document.addEventListener('submit', async e => {
+  const f = e.target;
+  if (!['wizard-form', 'auth-form', 'rename-form'].includes(f.id)) return;
+  e.preventDefault();
+  const b = f.querySelector('button[type="submit"]') || f.querySelector('button');
+  b.disabled = true;
+  try {
+    if (f.id === 'wizard-form') {
+      const w = wizard;
+      if (w.mode === 'extraction') {
+        b.disabled = false;
+        await moveExtraction(w.extractionStep + 1);
+        return;
+      }
+      if (w.mode === 'guided' && w.guidedStep <= guidedFlow().length) {
+        b.disabled = false;
+        await moveGuided(w.guidedStep + 1);
+        return;
+      }
+      if (w.step < 5) {
+        b.disabled = false;
+        await moveWizard(w.step + 1);
+        return;
+      }
+      if (w.step === 5) {
+        readCarry(f);
+        const r = await post(
+          '/api/profiles',
+          {
+            saveId: w.saveId,
+            saveName: w.saveName,
+            name: w.name,
+            settings: w.settings,
+            carryFrom: w.saveId ? w.carryFrom : null,
+            carry: w.carry,
+            built: guidedBuiltKeys(w, f),
+          },
+          true,
+          calcProgress(b, 'Saving profile…'),
+        );
+        workspace = r.workspace;
+        await loadContext(r.saveId, r.profileId);
+        wizard = null;
+        navigate('plan');
+        const carried = [
+          r.carriedChecks ? plural(r.carriedChecks, 'step') + ' carried over' : '',
+          r.reviewCount
+            ? plural(r.reviewCount, 'expanded production line') + ' left for review'
+            : '',
+        ]
+          .filter(Boolean)
+          .join('; ');
+        toast(
+          'Profile created' +
+            (carried ? ': ' + carried + '. ' : '. ') +
+            'Your other progress is unchanged.',
+        );
+        return;
+      }
+    } else if (f.id === 'auth-form') {
+      const data = Object.fromEntries(new FormData(f));
+      data.registration = new FormData(f).has('registration');
+      const mode = workspace.accountsEnabled ? authMode : 'setup';
+      await post('/api/' + mode, data, false);
+      await boot();
+    } else {
+      workspace = await post('/api/rename', Object.fromEntries(new FormData(f)));
+      const s = workspace.saves.find(s => s.id === currentSave.id);
+      currentSave.name = s.name;
+      currentProfile.name = s.profiles.find(p => p.id === currentProfile.id).name;
+      render();
+    }
+  } catch (err) {
+    if (f.id === 'wizard-form') wizardError(f, err);
+    else {
+      const el = f.querySelector('.form-error');
+      if (el) el.textContent = err.message;
+      else toast(err.message, true);
+    }
+    b.disabled = false;
+    if (f.id === 'wizard-form')
+      b.textContent =
+        wizard.mode === 'guided' && wizard.guidedStep <= guidedFlow().length
+          ? wizard.guidedStep >= guidedFlow().length
+            ? 'Calculate plan'
+            : 'Continue →'
+          : wizard.step === 5
+            ? 'Create profile'
+            : wizard.step === 4
+              ? 'Calculate plan'
+              : 'Continue →';
+  }
 });
-async function boot(){try{
- workspace=await request('/api/workspace');if(!workspace.user){authMode='login';renderSignedOut();return;}
- [plan,progressionData]=await Promise.all([request('/plan.json'),request('/progression.json')]);basePlan=plan;const save=workspace.saves.find(s=>s.id===workspace.activeSave)||workspace.saves[0];
- if(save){await loadContext(save.id,save.activeProfile);view=['plan','factories','storage','resources','backup','profiles','wizard','account'].includes(location.hash.slice(1))?location.hash.slice(1):'plan';if(view==='wizard'&&!wizard)view='profiles';render();}
- else{currentSave={id:'',name:'New save'};currentProfile={id:'',name:'Choose a profile'};state={settings:{phase:browserMode?'1':'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=null;startWizard();}
- }catch(e){$('#app').innerHTML=`<section class="loading"><h1>Could not open the planner</h1><p>${esc(e.message)}</p><button class="btn" id="retry">Try again</button></section>`;$('#retry').onclick=boot;}}
-function browserNotice(){return `<div class="notice blue">Your saves stay in this browser on this device. Clearing site data or using private browsing can remove them. Export a full backup before switching devices or website addresses. <a href="#backup">Backups & transfer</a></div>`;}
-function portablePanel(){return `<section class="panel"><h2>Full saves & transfer</h2><p>Export all your saves, profile calculations, checkmarks and notes. Account passwords and sessions are excluded. Import adds copies without replacing existing saves.</p><button class="btn primary" data-export-saves>Export all saves</button> <label class="btn">Import saves<input id="import-saves" type="file" accept="application/json,.json" hidden></label></section>`;}
-function renderBrowserBackup(){return header('SAVED ON THIS DEVICE','Backups & transfer','No account or server is needed. Saves do not sync automatically between browsers.')+browserNotice()+portablePanel()+`<section class="panel"><h2>Keep a backup</h2><p>${workspace.lastBackup?'Last export: '+esc(new Date(workspace.lastBackup).toLocaleString()):'No full backup has been exported from this browser yet.'} Export after major changes and before clearing browser data.</p><button class="btn" data-persist-storage>Request persistent browser storage</button><p class="small">This reduces automatic eviction when supported. It cannot protect against manually clearing site data.</p><p>To move from Docker, update the Docker app and use Backup & notes → Export all saves, then import that file here. A legacy progress-only export is not a full save.</p><h2>Self-hosted edition</h2><p>The Docker edition keeps server storage and user accounts for access across devices. Browser storage remains local to each visitor.</p></section>`;}
-function downloadJson(data,name){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-document.addEventListener('click',async e=>{
- const button=e.target.closest('button');if(!button)return;
- if(button.hasAttribute('data-export-saves')){button.disabled=true;try{await writeQueue;downloadJson(await request('/api/export-saves'),'satisfactory-full-saves.json');workspace=await request('/api/workspace');toast('Full save backup downloaded.');}catch(err){toast(err.message,true);}finally{button.disabled=false;}}
- if(button.hasAttribute('data-persist-storage')){try{const granted=await navigator.storage?.persist?.();toast(granted?'Persistent browser storage enabled.':'Browser did not grant persistence. Keep downloaded backups.');}catch(err){toast(err.message,true);}}
+async function boot() {
+  try {
+    workspace = await request('/api/workspace');
+    if (!workspace.user) {
+      authMode = 'login';
+      renderSignedOut();
+      return;
+    }
+    [plan, progressionData] = await Promise.all([
+      request('/plan.json'),
+      request('/progression.json'),
+    ]);
+    basePlan = plan;
+    const save = workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
+    if (save) {
+      await loadContext(save.id, save.activeProfile);
+      view = [
+        'plan',
+        'factories',
+        'storage',
+        'resources',
+        'backup',
+        'profiles',
+        'wizard',
+        'account',
+      ].includes(location.hash.slice(1))
+        ? location.hash.slice(1)
+        : 'plan';
+      if (view === 'wizard' && !wizard) view = 'profiles';
+      render();
+    } else {
+      currentSave = { id: '', name: 'New save' };
+      currentProfile = { id: '', name: 'Choose a profile' };
+      state = {
+        settings: { phase: browserMode ? '1' : '3' },
+        checks: {},
+        notes: {},
+        deliveries: {},
+        customTasks: [],
+      };
+      calculated = null;
+      startWizard();
+    }
+  } catch (e) {
+    $('#app').innerHTML =
+      `<section class="loading"><h1>Could not open the planner</h1><p>${esc(e.message)}</p><button class="btn" id="retry">Try again</button></section>`;
+    $('#retry').onclick = boot;
+  }
+}
+function browserNotice() {
+  return `<div class="notice blue">Your saves stay in this browser on this device. Clearing site data or using private browsing can remove them. Export a full backup before switching devices or website addresses. <a href="#backup">Backups & transfer</a></div>`;
+}
+function portablePanel() {
+  return `<section class="panel"><h2>Full saves & transfer</h2><p>Export all your saves, profile calculations, checkmarks and notes. Account passwords and sessions are excluded. Import adds copies without replacing existing saves.</p><button class="btn primary" data-export-saves>Export all saves</button> <label class="btn">Import saves<input id="import-saves" type="file" accept="application/json,.json" hidden></label></section>`;
+}
+function renderBrowserBackup() {
+  return (
+    header(
+      'SAVED ON THIS DEVICE',
+      'Backups & transfer',
+      'No account or server is needed. Saves do not sync automatically between browsers.',
+    ) +
+    browserNotice() +
+    portablePanel() +
+    `<section class="panel"><h2>Keep a backup</h2><p>${workspace.lastBackup ? 'Last export: ' + esc(new Date(workspace.lastBackup).toLocaleString()) : 'No full backup has been exported from this browser yet.'} Export after major changes and before clearing browser data.</p><button class="btn" data-persist-storage>Request persistent browser storage</button><p class="small">This reduces automatic eviction when supported. It cannot protect against manually clearing site data.</p><p>To move from Docker, update the Docker app and use Backup & notes → Export all saves, then import that file here. A legacy progress-only export is not a full save.</p><h2>Self-hosted edition</h2><p>The Docker edition keeps server storage and user accounts for access across devices. Browser storage remains local to each visitor.</p></section>`
+  );
+}
+function downloadJson(data, name) {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.addEventListener('click', async e => {
+  const button = e.target.closest('button');
+  if (!button) return;
+  if (button.hasAttribute('data-export-saves')) {
+    button.disabled = true;
+    try {
+      await writeQueue;
+      downloadJson(await request('/api/export-saves'), 'satisfactory-full-saves.json');
+      workspace = await request('/api/workspace');
+      toast('Full save backup downloaded.');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+  if (button.hasAttribute('data-persist-storage')) {
+    try {
+      const granted = await navigator.storage?.persist?.();
+      toast(
+        granted
+          ? 'Persistent browser storage enabled.'
+          : 'Browser did not grant persistence. Keep downloaded backups.',
+      );
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
 });
-document.addEventListener('change',async e=>{
- if(e.target.id!=='import-saves'||!e.target.files[0])return;const file=e.target.files[0];
- try{if(file.size>50*1024*1024)throw Error('Choose a save export smaller than 50 MB.');const data=JSON.parse(await file.text());if(!confirm('Import these saves as new copies? Existing saves will be kept.'))return;await writeQueue;await post('/api/import-saves',data,false);await boot();navigate('profiles');toast('Imported saves. Existing progress was kept.');}catch(err){toast(err.message,true);}finally{e.target.value='';}
+document.addEventListener('change', async e => {
+  if (e.target.id !== 'import-saves' || !e.target.files[0]) return;
+  const file = e.target.files[0];
+  try {
+    if (file.size > 50 * 1024 * 1024) throw Error('Choose a save export smaller than 50 MB.');
+    const data = JSON.parse(await file.text());
+    if (!confirm('Import these saves as new copies? Existing saves will be kept.')) return;
+    await writeQueue;
+    await post('/api/import-saves', data, false);
+    await boot();
+    navigate('profiles');
+    toast('Imported saves. Existing progress was kept.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    e.target.value = '';
+  }
 });
-function renderCalculatedBackup(){if(browserMode)return renderBrowserBackup();return portablePanel()+header('THIS PROFILE','Backup & notes','Checkmarks, deliveries and notes belong to '+esc(currentSave.name)+' / '+esc(currentProfile.name))+`<div class="backup-grid"><section class="panel"><h2>Download progress</h2><a class="btn primary" href="/api/export?save=${currentSave.id}&profile=${currentProfile.id}" download>Download progress JSON</a><p class="small muted">For all accounts, profiles and calculation snapshots, back up the Docker data volume. This download contains only this profile’s progress.</p></section><section class="panel"><h2>Restore this profile</h2><p>Restore replaces only this profile’s progress, after confirmation.</p><label class="btn">Choose backup<input id="import-file" type="file" accept="application/json,.json" hidden></label></section></div><section class="panel"><h2>Save-wide notes for this profile</h2><textarea id="global-note" class="notes" maxlength="6000">${esc(state.notes.global||'')}</textarea><button class="btn" data-save-note="global" data-input="global-note">Save notes</button></section><section class="panel"><h2>Calculation assumptions</h2>${calculated.warnings.map(x=>`<p>${esc(x)}</p>`).join('')}<a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer">Recipe data source</a></section>`;}
+function renderCalculatedBackup() {
+  if (browserMode) return renderBrowserBackup();
+  return (
+    portablePanel() +
+    header(
+      'THIS PROFILE',
+      'Backup & notes',
+      'Checkmarks, deliveries and notes belong to ' +
+        esc(currentSave.name) +
+        ' / ' +
+        esc(currentProfile.name),
+    ) +
+    `<div class="backup-grid"><section class="panel"><h2>Download progress</h2><a class="btn primary" href="/api/export?save=${currentSave.id}&profile=${currentProfile.id}" download>Download progress JSON</a><p class="small muted">For all accounts, profiles and calculation snapshots, back up the Docker data volume. This download contains only this profile’s progress.</p></section><section class="panel"><h2>Restore this profile</h2><p>Restore replaces only this profile’s progress, after confirmation.</p><label class="btn">Choose backup<input id="import-file" type="file" accept="application/json,.json" hidden></label></section></div><section class="panel"><h2>Save-wide notes for this profile</h2><textarea id="global-note" class="notes" maxlength="6000">${esc(state.notes.global || '')}</textarea><button class="btn" data-save-note="global" data-input="global-note">Save notes</button></section><section class="panel"><h2>Calculation assumptions</h2>${calculated.warnings.map(x => `<p>${esc(x)}</p>`).join('')}<a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer">Recipe data source</a></section>`
+  );
+}
 boot();

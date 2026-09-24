@@ -4,6 +4,16 @@
   "private": true,
   "type": "module",
   "description": "A self-hosted Satisfactory build and storage planner",
-  "engines": { "node": ">=22" },
-  "scripts": { "start": "node server.mjs", "test": "node --test tests/*.test.mjs", "check": "node --check server.mjs && node --check public/app.js && node --check planner.mjs && node --check workspace.mjs" }
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.mjs && node --check public/app.js && node --check planner.mjs && node --check workspace.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "prettier": "3.6.2"
+  }
 }
