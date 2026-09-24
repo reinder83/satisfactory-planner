@@ -1,35 +1,22 @@
-// Views for a calculated profile: factories and resources (#factories and #resources
-// when `calculated` is set; render() in shell.js picks these over the handbook views), and
-// the checklist steps of its plan page (ui/pages/CalculatedPlanPage.vue). Everything reads the profile's frozen calculation snapshot through calcStage();
-// nothing here recalculates. storage.js and backup.js serve both profile kinds themselves.
+// For a calculated profile: the resources page (#resources when `calculated` is set;
+// render() in shell.js picks it over the handbook's), the checklist steps of its plan page
+// (ui/pages/CalculatedPlanPage.vue), and the machine setup and expansion its factory dialog
+// shows (ui/detail/CalcFactoryDialog.vue). Everything reads the profile's frozen calculation
+// snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.js';
-import { dialog } from '../factory-detail.js';
-import { calcFlowModel, flowHtml, laneAdviceHtml } from '../flow.js';
 import { itemIcon, num, stat } from '../format.js';
-import { html, raw } from '../html.js';
+import { html } from '../html.js';
 import {
   calcStage,
   calculated,
-  doneAttr,
-  factoryEditing,
   fromStart,
   phase,
-  phaseLabel,
   progressionData,
-  query,
   stage,
   state,
   workspace,
 } from '../session.js';
 import { header } from '../shell.js';
-import {
-  allocationHtml,
-  assignEditor,
-  factoryEditToolbar,
-  groupEditPanel,
-  groupSections,
-  membershipsOf,
-} from './factories.js';
 import { inputText } from './storage.js';
 import { power } from '../wizard/fields.js';
 
@@ -126,8 +113,8 @@ export function draftOptions(x, s) {
 }
 
 // HTML notices for the current phase: the infeasible-draft warning with its options, and
-// extra power headroom for whole buildings. Shown on the calculated factories and resources
-// pages; ui/plan/CalcWarnings.vue shows them on the plan.
+// extra power headroom for whole buildings, on the calculated resources page;
+// ui/plan/CalcWarnings.vue shows them on the plan and factories pages.
 function calcWarnings() {
   const x = calcStage();
   const options = x.feasible ? '' : draftOptions(x, calculated?.settings);
@@ -147,92 +134,12 @@ function calcWarnings() {
   </div>`}`;
 }
 
-// HTML card for one calculated production row. Its Running box writes `calc-<stage>-<row id>`,
-// the same key as the row's checklist step. `data-calc-factory` opens openCalculatedFactory.
-// A power-generation row has no outputs, so its group share is measured in MW.
-function calcFactoryCard(r, groupId = null) {
-  const total = Object.values(r.outputs || {})[0] || 0;
-  const outputs = Object.entries(r.outputs).map(([n, q]) => `${n}: ${num(q)}/min`);
-  const check = 'calc-' + stage() + '-' + r.id;
-  return html`<article class="factory-card">
-    <div class="card-top">
-      <span class="card-icon">${itemIcon(Object.keys(r.outputs)[0])}</span>
-      <div class="card-main">
-        <button class="name" data-calc-factory="${r.id}">${r.name}</button>
-        <div class="output">${num(r.machines)} <span>${r.machine}</span></div>
-      </div>
-    </div>
-    <p>
-      ${outputs.length
-        ? outputs.flatMap((o, i) => (i ? [html`<br />`, o] : [o]))
-        : power(r.generationMW)}
-    </p>
-    ${groupId &&
-    allocationHtml(r.id, groupId, total || r.generationMW, r.machines, total ? '/min' : ' MW')}
-    <footer>
-      <label class="check-row"
-        ><input type="checkbox" data-check="${check}" ${raw(doneAttr(check))} />Running</label
-      ><button class="btn quiet" data-calc-factory="${r.id}">Details ↗</button>
-    </footer>
-    ${factoryEditing && assignEditor(r.id)}
-  </article>`;
-}
-
-// HTML for #factories on a calculated profile: rows matching the search, user groups first,
-// then the ungrouped rows. Without whole-machine production it offers `data-round-up`, which
-// events/views.js sends to /api/round-up to create a recalculated profile revision.
-export function renderCalculatedFactories() {
-  const x = calcStage(),
-    rows = (x.rows || []).filter(r =>
-      (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
-    );
-  const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
-  const groupsHtml = groupSections(
-    rows,
-    r => r.id,
-    (r, gid) => calcFactoryCard(r, gid),
-  );
-  return String(
-    html`${header(
-        'CALCULATED PRODUCTION',
-        'Factory targets',
-        'Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site.',
-      )}
-      ${!calculated.settings.wholeMachines
-        ? html`<div class="notice blue">
-            Prefer extra production over underclocking?
-            <button class="btn primary" data-round-up>Round up production</button>
-            <p>
-              Creates a recalculated profile revision. Your previous profile stays available;
-              increased factory requirements are marked for review.
-            </p>
-          </div>`
-        : html`<div class="notice blue">
-            Whole-machine production: protect downstream supply first, refill storage, then sink
-            surplus solids. Liquid and nuclear balances remain controlled.
-          </div>`}
-      ${calcWarnings()}
-      <div class="toolbar">
-        <input
-          id="factory-search"
-          class="search"
-          aria-label="Find a factory"
-          placeholder="Find a part or recipe…"
-          value="${query}"
-        /><span>${rows.length} production lines</span>${factoryEditToolbar()}
-      </div>
-      ${factoryEditing && groupEditPanel()}${groupsHtml}${groupsHtml.length > 0 &&
-      ungrouped.length > 0 &&
-      html`<p class="eyebrow">UNGROUPED PRODUCTION LINES</p>`}
-      <div class="cards">${ungrouped.map(r => calcFactoryCard(r))}</div>`,
-  );
-}
-
 // How to build row `r`: how many machines run at 100% and whether one last machine runs
 // underclocked, with per-machine output text. `easy` is an optional rounded-up clock for
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear
-// or waste lines, whose balance must stay exact. Used by calcTasks and setupHtml.
-function machineSetup(r) {
+// or waste lines, whose balance must stay exact. Used by calcTasks and
+// ui/detail/CalcFactoryDialog.vue.
+export function machineSetup(r) {
   const equivalent = r.equivalent || r.machines - 1 + r.lastClock / 100,
     whole = Math.floor(equivalent + 1e-7),
     fraction = Math.max(0, equivalent - whole),
@@ -277,117 +184,18 @@ function machineSetup(r) {
   return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
 }
 
-// HTML "Machine setup" section of a calculated factory's dialog, from machineSetup. The
-// easier setting is hidden when the profile already runs whole machines.
-function setupHtml(r) {
-  const m = machineSetup(r);
-  return html`<h3>Machine setup</h3>
-    <p><b>${m.summary}</b></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Machines</th>
-          <th>Clock each</th>
-          <th>Output per machine</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${m.whole > 0 &&
-        html`<tr>
-          <td>${m.whole} full-speed</td>
-          <td>100%</td>
-          <td>${m.fullOutput}</td>
-        </tr>`}${m.partial &&
-        html`<tr>
-          <td>1 adjustable</td>
-          <td>≈ ${num(m.clock)}%</td>
-          <td>≈ ${m.lastOutput}</td>
-        </tr>`}
-      </tbody>
-    </table>
-    ${m.easy &&
-    !calculated?.settings.wholeMachines &&
-    html`<div class="notice blue">
-      <b>Easier optional setting: set only the adjustable machine to ${m.easy.clock}%.</b>
-      <p>
-        Its output:
-        ${inputText(m.easy.output) ||
-        num(((r.generationMW / (r.equivalent || 1)) * m.easy.clock) / 100) + ' MW'}.
-      </p>
-      <p>
-        Extra inputs needed: ${inputText(m.easy.inputs)}.<br />Extra outputs/byproducts:
-        ${inputText(m.easy.extraOutputs) || 'Additional generation'}.
-      </p>
-      <p>
-        This is extra capacity, not a recalculated balanced plan. Supply the extra inputs and handle
-        every extra output before using it. The totals below remain the original calculated targets.
-      </p>
-    </div>`}
-    ${m.partial &&
-    html`<p class="small muted">
-      Calculated percentages and outputs are displayed rounded. Keep the calculated setting for
-      tightly balanced recycling; do not round nuclear or waste-processing lines independently.
-    </p>`}`;
-}
-
 // Phases where a line is not built yet, or needs no more machines, have nothing
 // to add: say so with a dash rather than claiming capacity is being kept.
-// Table rows per phase from the profile's start phase on: machines required for row `id`
-// and how many to add over the most installed so far.
-function calcExpansionRows(id) {
+// One row per phase from the profile's start phase on: { phase, required, add }, the machines
+// required for row `id` and how many to add over the most installed so far.
+export function calcExpansion(id) {
   let installed = 0;
-  const rows = fromStart(calculated.stages).map(([ph, p]) => {
+  return fromStart(calculated.stages).map(([ph, p]) => {
     const required = p.rows?.find(x => x.id === id)?.machines || 0;
     const add = Math.max(0, required - installed);
     installed = Math.max(installed, required);
-    return html`<tr>
-      <td>${ph}</td>
-      <td>${required || '—'}</td>
-      <td>${add ? '+' + add : '—'}</td>
-    </tr>`;
+    return { phase: ph, required: required || '—', add: add ? '+' + add : '—' };
   });
-  return html`${rows}`;
-}
-
-// Opens the detail dialog for calculated row `id` (a `data-calc-factory` click in
-// events/views.js): flow diagram, machine setup, lane advice, outputs, expansion by phase,
-// and the note saved under `factory-<row id>`.
-export function openCalculatedFactory(id) {
-  const r = calcStage().rows?.find(r => r.id === id);
-  if (!r) return;
-  const flow = calcFlowModel(r);
-  const dialogIcon = Object.keys(r.outputs || {})[0] || '';
-  dialog(
-    r.name,
-    phaseLabel(phase()),
-    html`${flowHtml(flow)}${setupHtml(r)}${laneAdviceHtml(flow)}
-      <h3>Outputs per minute</h3>
-      <p>${inputText(r.outputs) || power(r.generationMW)}</p>
-      <h3>Expansion by phase</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Phase</th>
-            <th>Machines</th>
-            <th>Add</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${calcExpansionRows(id)}
-        </tbody>
-      </table>
-      <p class="small muted">
-        The optimizer may choose a different recipe in another phase. Keep earlier buildings until
-        the replacement chain runs. Screws and wire can be made beside consumers.
-      </p>
-      <textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">
-${state.notes['factory-' + id] || ''}</textarea
-      >
-      <button class="btn" data-save-note="factory-${id}" data-input="detail-note">
-        Save notes
-      </button>`,
-    dialogIcon,
-  );
 }
 
 // HTML for #resources on a calculated profile: power tiles (somersloop and augmenter tiles

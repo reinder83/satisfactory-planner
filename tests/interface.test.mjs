@@ -123,9 +123,9 @@ function ui() {
 }
 test('original and calculated views render; wizard exposes all settings and safe names', () => {
   const c = ui();
-  // Profiles, account, backup, both plan pages and the handbook's resources page are Vue
-  // components, tested in tests/ui/.
-  for (const route of ['renderFactories', 'renderStorage'])
+  // Profiles, account, backup, the plan and factories pages and the handbook's resources
+  // page are Vue components, tested in tests/ui/.
+  for (const route of ['renderStorage'])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};wizard={step:1,saveName:'World <one>',name:'Balanced',settings:structuredClone(generated.settings),preview:generated};`,
@@ -137,7 +137,7 @@ test('original and calculated views render; wizard exposes all settings and safe
     assert.ok(!text.includes('value="World <one>"'));
   }
   assert.match(vm.runInContext('wizard.step=4;renderWizard()', c), /limitsConfirmed/);
-  for (const route of ['renderCalculatedFactories', 'renderCalculatedResources', 'renderStorage'])
+  for (const route of ['renderCalculatedResources', 'renderStorage'])
     assert.ok(vm.runInContext(route + '()', c).length > 100, route);
   assert.ok(!vm.runInContext('renderStorage()', c).includes('<b>Ground floor is built.</b>'));
 });
@@ -157,13 +157,9 @@ test('every page escapes user text exactly once', () => {
   const render = routes => routes.map(route => [route, vm.runInContext(route + '()', c)]);
   // The pages that are Vue components are covered by tests/ui/.
   const shared = ['renderStorage'];
-  const original = render([...shared, 'renderFactories']);
+  const original = render(shared);
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  const calculatedPages = render([
-    ...shared,
-    'renderCalculatedFactories',
-    'renderCalculatedResources',
-  ]);
+  const calculatedPages = render([...shared, 'renderCalculatedResources']);
   // The wizard's five steps and the guided start, adding a profile to the save.
   const wizardPages = [1, 2, 3, 4, 5, 'guided'].flatMap(step => {
     vm.runInContext(
@@ -179,21 +175,14 @@ test('every page escapes user text exactly once', () => {
   );
   const dialog = open => vm.runInContext(`${open};document.querySelector('#detail').innerHTML`, c);
   const editing = [
-    ...render(['renderFactories', 'renderStorage']).map(([r, p]) => [r + ' editing', p]),
-    ['factory dialog', dialog(`openFactory('computer')`)],
-    ['oil campus dialog', dialog(`openFactory('plastic')`)],
-    ['group chain dialog', dialog(`openGroupChain('fg-a')`)],
+    ...render(['renderStorage']).map(([r, p]) => [r + ' editing', p]),
     ['container dialog', dialog(`openSlot('S01')`)],
   ];
   vm.runInContext(`calculated=generated;currentProfile={id:'p',kind:'calculated',name:evil};`, c);
-  editing.push(
-    [
-      'calculated factory dialog',
-      dialog(`openCalculatedFactory(generated.stages['3'].rows[0].id)`),
-    ],
-    ['alternate recipe dialog', dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`)],
-    ...render(['renderCalculatedFactories']).map(([r, p]) => [r + ' editing', p]),
-  );
+  editing.push([
+    'alternate recipe dialog',
+    dialog(`openAltRecipe(workspace.catalog.alternates[0].id)`),
+  ]);
   const all = [...original, ...calculatedPages, ...wizardPages, ...editing];
   for (const [route, page] of all) {
     assert.equal(typeof page, 'string', route);
@@ -203,13 +192,7 @@ test('every page escapes user text exactly once', () => {
   // The escaped name is there, once-escaped, on the pages that show it.
   const escaped = '&lt;x-evil onclick=alert(1)&gt; &amp; &quot;quoted&quot;';
   for (const [route, page] of all.filter(([r]) =>
-    [
-      'renderWizard 1',
-      'renderWizard guided',
-      'factory dialog',
-      'container dialog',
-      'group chain dialog',
-    ].includes(r),
+    ['renderWizard 1', 'renderWizard guided', 'container dialog'].includes(r),
   ))
     assert.ok(page.includes(escaped), route);
 });
@@ -347,69 +330,8 @@ test('machine instructions separate total, full-speed and adjustable machines', 
   assert.match(full.summary, /3 at 100%/);
 });
 
-test('shared sites group their outputs above the individual factory list', () => {
-  const c = ui();
-  const p3 = vm.runInContext('renderFactories()', c);
-  assert.match(p3, /Oil campus/);
-  assert.match(p3, /SHARED SITE · 2 OUTPUTS/);
-  assert.equal(
-    (p3.match(/data-factory="plastic"/g) || []).length,
-    2,
-    'Plastic appears only inside the oil campus group',
-  );
-  assert.ok(
-    p3.indexOf('Oil campus') < p3.indexOf('UNGROUPED FACTORIES'),
-    'shared sites render above the main grid',
-  );
-  assert.ok(!p3.includes('Nuclear site'), 'no nuclear factories at Phase 3');
-  vm.runInContext(`state.settings.phase='5'`, c);
-  const p5 = vm.runInContext('renderFactories()', c);
-  assert.match(p5, /Nuclear site/);
-  assert.match(p5, /data-factory="uranium-fuel-rod"/);
-  vm.runInContext(`query='plastic'`, c);
-  const filtered = vm.runInContext('renderFactories()', c);
-  assert.match(filtered, /Oil campus/);
-  assert.ok(
-    !filtered.includes('Nuclear site') && !filtered.includes('UNGROUPED FACTORIES'),
-    'empty groups and labels disappear when filtering',
-  );
-  assert.ok(!filtered.includes('No factories match'), 'no empty state while a group still matches');
-  vm.runInContext(`query='';state.settings.phase='3'`, c);
-});
-// The build plan's edit mode is tested with its components in tests/ui/plan.test.mjs.
-test('factory edit mode renders controls, groups and splits', () => {
-  const c = ui();
-  vm.runInContext(
-    `state.factoryGroups={groups:[{id:'fg-cable01',name:'Cable factory'},{id:'fg-plates1',name:'Stitched plates'}],assignments:{wire:[{group:'fg-cable01',rate:300},{group:'fg-plates1',rate:null}]}};`,
-    c,
-  );
-  const grouped = vm.runInContext('renderFactories()', c);
-  assert.match(grouped, /Cable factory/);
-  assert.match(grouped, /FACTORY GROUP · 1 FACTORY/);
-  assert.match(grouped, /Here: 300\/min/, 'a split shows the allocated production');
-  assert.match(grouped, /Remaining here:/, 'the rateless membership shows the remainder');
-  const editing = vm.runInContext('factoryEditing=true;renderFactories()', c);
-  assert.match(editing, /id="add-group"/);
-  assert.match(editing, /data-group-rename="fg-cable01"/);
-  assert.match(editing, /data-assign-rate="wire"/);
-  assert.match(editing, /data-unassign="wire"/);
-  vm.runInContext(
-    `factoryEditing=false;state.factoryGroups=undefined;calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  vm.runInContext(
-    `state.factoryGroups={groups:[{id:'fg-north1',name:'North site'}],assignments:{'iron-ingot':[{group:'fg-north1',rate:null}]}};`,
-    c,
-  );
-  const calcGroups = vm.runInContext('factoryEditing=true;renderCalculatedFactories()', c);
-  assert.match(calcGroups, /North site/);
-  assert.match(calcGroups, /data-assign-add=/);
-  vm.runInContext(
-    `factoryEditing=false;calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,
-    c,
-  );
-});
-
+// The factories pages, their group editor and the factory and group build-order dialogs are
+// components, tested in tests/ui/factories.test.mjs.
 test('ADA comments on the plan from the sidebar and can be muted', () => {
   const c = ui();
   // What the panel shows; its markup is covered by tests/ui/shell.test.mjs.
@@ -485,114 +407,6 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", c);
 });
 
-test('factory details list where a local item is needed', () => {
-  const c = ui();
-  vm.runInContext(`openFactory('wire')`, c);
-  const wire = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(wire, /Delivers · Phase 3/);
-  assert.match(wire, /Machines per delivery/, 'delivery rows show machine counts per consumer');
-  assert.match(wire, /data-factory="cable"/, 'consumers link to their own factory page');
-  assert.match(wire, /Storage refill/);
-  vm.runInContext(`openFactory('screws')`, c);
-  const screws = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(screws, /Storage refill/);
-  assert.match(
-    screws,
-    /only refills the protected storage/,
-    'items without factory consumers say so',
-  );
-  vm.runInContext(`openFactory('smart-plating')`, c);
-  const plating = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(
-    plating,
-    /data-factory="modular-engine"/,
-    'non-local factories get the breakdown too',
-  );
-  assert.ok(!plating.includes('only refills the protected storage'));
-  vm.runInContext(`openFactory('modular-engine')`, c);
-  assert.match(
-    vm.runInContext(`document.querySelector('#detail').innerHTML`, c),
-    /Space Elevator delivery/,
-  );
-  vm.runInContext(`state.settings.phase='5';openFactory('uranium-fuel-rod')`, c);
-  const rod = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(
-    rod,
-    /nuclear power fleet/,
-    'nuclear items point at the power plan instead of claiming storage',
-  );
-  assert.ok(!rod.includes('only refills the protected storage'));
-  vm.runInContext(`state.settings.phase='3';openFactory('reinforced-iron-plate')`, c);
-  const rip = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(
-    rip,
-    /Local: ≈ 47 × Constructor at this site/,
-    'local inputs show on-site machine counts',
-  );
-  assert.match(rip, /data-factory="wire"/);
-  assert.match(
-    rip,
-    /Recipe · Stitched Iron Plate/,
-    'the per-machine recipe panel names the chosen recipe',
-  );
-  vm.runInContext(`openFactory('plastic')`, c);
-  const plastic = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(
-    plastic,
-    /179 shared campus buildings/,
-    'oil expansion counts the shared campus instead of 0 refineries',
-  );
-  assert.match(plastic, /\+1[.,]242/, 'campus growth between phases is shown as added buildings');
-  assert.match(plastic, /Campus inputs/, 'the campus layout lists crude and water supply');
-  assert.match(plastic, /Fuel Generators/, 'phase 3 fuel byproduct points at the generator bank');
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  const calc = vm.runInContext(
-    `(()=>{const x=calcStage();const r=x.rows.find(r=>Object.keys(r.outputs).some(n=>x.rows.some(o=>o.id!==r.id&&o.inputs[n])));openCalculatedFactory(r.id);return document.querySelector('#detail').innerHTML;})()`,
-    c,
-  );
-  assert.match(calc, /Delivers · /);
-  assert.match(calc, /data-calc-factory=/);
-});
-test('group build order stages suppliers before consumers with needs and feeds', () => {
-  const c = ui();
-  vm.runInContext(
-    `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
-  );
-  const names = vm.runInContext(
-    `(()=>{
-  const x=calcStage();
-  const consumer=x.rows.find(r=>x.rows.some(o=>o.id!==r.id&&Object.keys(o.outputs||{}).some(n=>r.inputs?.[n])));
-  const supplier=x.rows.find(o=>o.id!==consumer.id&&Object.keys(o.outputs||{}).some(n=>consumer.inputs[n]));
-  state.factoryGroups={groups:[{id:'fg-test01',name:'Chain test'}],assignments:{[supplier.id]:[{group:'fg-test01',rate:null}],[consumer.id]:[{group:'fg-test01',rate:null}]}};
-  openGroupChain('fg-test01');
-  return {supplier:supplier.name,consumer:consumer.name};
- })()`,
-    c,
-  );
-  const chain = vm.runInContext(`document.querySelector('#detail').innerHTML`, c);
-  assert.match(chain, /build order/i);
-  assert.match(chain, /Needs|No belt or pipe inputs/);
-  assert.match(chain, /Feeds/);
-  assert.match(chain, /data-calc-factory=/, 'chain stages link to the factory dialogs');
-  assert.ok(
-    chain.indexOf('>' + names.supplier.replace(/&/g, '&amp;')) <=
-      chain.indexOf('>' + names.consumer.replace(/&/g, '&amp;')),
-    'supplier stage comes before its consumer',
-  );
-  assert.match(
-    vm.runInContext('renderCalculatedFactories()', c),
-    /data-group-chain="fg-test01"/,
-    'group headers offer the build order view',
-  );
-  vm.runInContext(
-    `calculated=null;state.factoryGroups=undefined;currentProfile={id:'original',kind:'original',name:'Original'};`,
-    c,
-  );
-});
 test('storage follows the selected contract, preserves addresses and displays small power in MW', () => {
   const c = ui();
   vm.runInContext(
@@ -1121,21 +935,14 @@ test('the expansion table only claims an addition where there is one', () => {
     `calculated={stages:{1:{rows:[]},2:{rows:[{id:'iron',machines:4}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:9}]},5:{rows:[]}}};`,
     c,
   );
-  const rows = vm.runInContext(`calcExpansionRows('iron')`, c).split('</tr>').filter(Boolean);
+  const rows = JSON.parse(vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c));
   assert.equal(rows.length, 5, 'every phase is listed');
-  assert.match(
-    rows[0],
-    /<td>—<\/td>\s*<td>—<\/td>/,
-    'a phase without the line has nothing to show and nothing to add',
-  );
-  assert.match(rows[1], /<td>4<\/td>\s*<td>\+4<\/td>/, 'the phase that first builds it adds four');
-  assert.match(rows[2], /<td>4<\/td>\s*<td>—<\/td>/, 'an unchanged phase adds nothing');
-  assert.match(rows[3], /<td>9<\/td>\s*<td>\+5<\/td>/, 'growth shows only the extra machines');
-  assert.match(rows[4], /<td>—<\/td>\s*<td>—<\/td>/, 'a phase that drops the line adds nothing');
-  assert.ok(
-    !vm.runInContext(`calcExpansionRows('iron')`, c).includes('Keep available'),
-    'no phase claims capacity is being kept',
-  );
+  const cells = rows.map(r => [r.required, r.add]);
+  assert.deepEqual(cells[0], ['—', '—'], 'a phase without the line has nothing to show or add');
+  assert.deepEqual(cells[1], [4, '+4'], 'the phase that first builds it adds four');
+  assert.deepEqual(cells[2], [4, '—'], 'an unchanged phase adds nothing');
+  assert.deepEqual(cells[3], [9, '+5'], 'growth shows only the extra machines');
+  assert.deepEqual(cells[4], ['—', '—'], 'a phase that drops the line adds nothing');
 });
 
 test('a profile only offers the phases it was created for', () => {
@@ -1199,11 +1006,11 @@ test('a profile only offers the phases it was created for', () => {
     `calculated={settings:{phase:'3'},stages:{1:{rows:[{id:'iron',machines:9}]},2:{rows:[{id:'iron',machines:9}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:6}]},5:{rows:[]}}};`,
     c,
   );
-  const rows = vm.runInContext(`calcExpansionRows('iron')`, c).split('</tr>').filter(Boolean);
+  const rows = JSON.parse(vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c));
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
-  assert.match(
+  assert.deepEqual(
     rows[0],
-    /<td>3<\/td>\s*<td>4<\/td>\s*<td>\+4<\/td>/,
+    { phase: '3', required: 4, add: '+4' },
     'the starting phase builds its own machines from scratch',
   );
 });

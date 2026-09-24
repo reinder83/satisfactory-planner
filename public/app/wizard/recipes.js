@@ -2,7 +2,8 @@
 // specific alternate recipes". Its buttons (Planner's choice, Select/Clear all,
 // the filter, the stars, "recipe ↗") are handled in events/views.js.
 import { dialog } from '../factory-detail.js';
-import { recipePanelHtml } from '../flow.js';
+import { FLUIDS, machinesLabel } from '../flow.js';
+import { itemIcon, num3 } from '../format.js';
 import { html, raw } from '../html.js';
 import { workspace } from '../session.js';
 
@@ -123,6 +124,34 @@ export const alternatesUsed = plan => {
   ].sort();
 };
 
+// HTML for a "Recipe · …" panel: one machine's inputs → outputs at 100%, per minute, as
+// [item, rate] pairs. The factory dialogs draw the same panel with ui/detail/RecipePanel.vue.
+function recipePanelHtml(rc) {
+  const cell = ([n, q], out) =>
+    html`<div class="rail-cell${out ? ' out' : ''}">
+      ${itemIcon(n)}<span class="rail-main"
+        ><b>${num3(q)}${FLUIDS.has(n) ? ' m³' : ''}</b><small>${n}</small></span
+      >
+    </div>`;
+  return html`<div class="rail-recipe">
+    <div class="rail-recipe-head">
+      <span>Recipe · ${rc.name}</span
+      ><span>what ${machinesLabel(1, rc.machine)} makes @ 100% · per minute</span>
+    </div>
+    <div class="rail-recipe-body">
+      <div class="rail-recipe-ins">
+        ${rc.ins.length
+          ? rc.ins.map(x => cell(x))
+          : html`<div class="rail-cell">
+              <span class="rail-main"><small>No belt or pipe inputs</small></span>
+            </div>`}
+      </div>
+      <span class="rail-recipe-arrow">→</span>
+      <div class="rail-recipe-outs">${rc.outs.map(x => cell(x, true))}</div>
+    </div>
+  </div>`;
+}
+
 // "recipe ↗": a dialog with the alternate beside the standard recipe(s) for its
 // first output, so the two can be compared.
 export function openAltRecipe(id) {
@@ -132,13 +161,10 @@ export function openAltRecipe(id) {
   const standards = (workspace.catalog.standardRecipes || []).filter(r => r.outputs[primary]);
   const panel = rc =>
     recipePanelHtml({
-      machineCount: 1,
-      recipe: {
-        name: rc.name.replace('Alternate: ', ''),
-        machine: rc.machine,
-        ins: Object.entries(rc.inputs || {}),
-        outs: Object.entries(rc.outputs || {}),
-      },
+      name: rc.name.replace('Alternate: ', ''),
+      machine: rc.machine,
+      ins: Object.entries(rc.inputs || {}),
+      outs: Object.entries(rc.outputs || {}),
     });
   dialog(
     a.name,

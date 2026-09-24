@@ -1,5 +1,6 @@
 // Shared set-up for the component tests: a page with #app, and a save opened the way
 // loadContext() opens one, with a hostile name wherever user text appears.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { setContext, setProgressionData, setView, setWorkspace } from '../../public/app/session.js';
 import { unmountShell } from '../../public/app/ui/mount.js';
@@ -7,6 +8,20 @@ import { unmountShell } from '../../public/app/ui/mount.js';
 // Vitest runs from the repository root.
 export const handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
 setProgressionData(JSON.parse(fs.readFileSync('public/progression.json', 'utf8')));
+// A real calculated plan (planner.mjs with default settings), made once per test file. The
+// planner reads its data files through import.meta.url, which happy-dom does not give it, so
+// it runs in Node.
+let generatedPlan;
+export const generated = () =>
+  structuredClone(
+    (generatedPlan ??= JSON.parse(
+      execFileSync(process.execPath, [
+        '--input-type=module',
+        '-e',
+        "import('./planner.mjs').then(m => process.stdout.write(JSON.stringify(m.calculate({}))))",
+      ]),
+    )),
+  );
 export const evil = '<x-evil onclick=alert(1)> & "quoted"';
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
