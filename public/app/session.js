@@ -3,7 +3,8 @@
 // below, which every view reads directly and other modules change through the setters.
 import { browserMode } from '../browser-api.js';
 import { pending, request, writeQueue } from './api.js';
-import { $, esc } from './format.js';
+import { $ } from './format.js';
+import { html } from './html.js';
 import { render } from './shell.js';
 import { renderSignedOut } from './views/account.js';
 import { startWizard } from './wizard/wizard.js';
@@ -199,8 +200,13 @@ export async function boot() {
     }
   } catch (e) {
     // Any failure while opening replaces the page with an error and a retry button.
-    $('#app').innerHTML =
-      `<section class="loading"><h1>Could not open the planner</h1><p>${esc(e.message)}</p><button class="btn" id="retry">Try again</button></section>`;
+    $('#app').innerHTML = String(
+      html`<section class="loading">
+        <h1>Could not open the planner</h1>
+        <p>${e.message}</p>
+        <button class="btn" id="retry">Try again</button>
+      </section>`,
+    );
     $('#retry').onclick = boot;
   }
 }

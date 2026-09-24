@@ -1,4 +1,5 @@
 // Small DOM and text helpers shared by every screen.
+import { html } from './html.js';
 
 export const $ = s => document.querySelector(s);
 
@@ -24,9 +25,11 @@ export const slug = s =>
 
 export const plural = (n, word) => num(n) + ' ' + word + (n === 1 ? '' : 's');
 
-// HTML for a summary tile. Arguments are inserted as HTML; esc() user text first.
+// HTML for a summary tile. Plain strings are escaped; pass html`` for markup in a value.
 export function stat(label, value, caption) {
-  return `<div class="stat"><span class="eyebrow">${label}</span><strong>${value}</strong><small>${caption}</small></div>`;
+  return html`<div class="stat">
+    <span class="eyebrow">${label}</span><strong>${value}</strong><small>${caption}</small>
+  </div>`;
 }
 
 // HTML <img> for an item's bundled icon in icons/, or '' without a name. A trailing
@@ -34,5 +37,12 @@ export function stat(label, value, caption) {
 // events/views.js.
 export const itemIcon = name =>
   name
-    ? `<img class="item-icon" src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/, ''))}.png" width="42" height="42" loading="lazy" alt="">`
+    ? html`<img
+        class="item-icon"
+        src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/, ''))}.png"
+        width="42"
+        height="42"
+        loading="lazy"
+        alt=""
+      />`
     : '';

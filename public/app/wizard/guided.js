@@ -13,7 +13,8 @@ import {
   storageOptions,
   tutorialKeys,
 } from '../../preferences.js';
-import { $, esc, itemIcon, num } from '../format.js';
+import { $, itemIcon, num } from '../format.js';
+import { html, raw } from '../html.js';
 import { wizard, workspace } from '../session.js';
 import { header, render } from '../shell.js';
 import { browserNotice } from '../views/backup.js';
@@ -55,14 +56,24 @@ const GUIDED_GLYPHS = {
 
 // A card's inline SVG from GUIDED_GLYPHS, falling back to the balanced one.
 const guidedGlyph = name =>
-  `<span class="guided-art" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced}</svg></span>`;
+  html`<span class="guided-art" aria-hidden="true"
+    ><svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      ${raw(GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced)}
+    </svg></span
+  >`;
 
 // A card's artwork from up to four bundled item icons (the phase cards).
 const guidedItemArt = items =>
-  `<span class="guided-art items" aria-hidden="true">${items
-    .slice(0, 4)
-    .map(n => itemIcon(n))
-    .join('')}</span>`;
+  html`<span class="guided-art items" aria-hidden="true"
+    >${items.slice(0, 4).map(n => itemIcon(n))}</span
+  >`;
 
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
@@ -101,16 +112,24 @@ const guidedAnswer = q => {
 // A question's options as radio cards named "guided:<id>", read by readGuided.
 function guidedCardsHtml(q) {
   const picked = guidedAnswer(q);
-  return `<div class="guided-grid">${q.options
-    .map(
-      o => `<label class="guided-card${o.value === picked ? ' is-picked' : ''}">
-  <input type="radio" name="guided:${q.id}" value="${esc(o.value)}" aria-label="${esc(o.label + '. ' + o.detail)}" ${o.value === picked ? 'checked' : ''}>
-  ${o.items ? guidedItemArt(o.items) : guidedGlyph(o.glyph)}
-  <strong>${esc(o.label)}</strong><p>${esc(o.detail)}</p>
-  ${o.handoff ? '<span class="badge">Opens All settings</span>' : ''}
- </label>`,
-    )
-    .join('')}</div>`;
+  return html`<div class="guided-grid">
+    ${q.options.map(
+      o =>
+        html`<label class="guided-card${o.value === picked ? ' is-picked' : ''}">
+          <input
+            type="radio"
+            name="guided:${q.id}"
+            value="${o.value}"
+            aria-label="${o.label + '. ' + o.detail}"
+            ${o.value === picked && raw('checked')}
+          />
+          ${o.items ? guidedItemArt(o.items) : guidedGlyph(o.glyph)}
+          <strong>${o.label}</strong>
+          <p>${o.detail}</p>
+          ${o.handoff && html`<span class="badge">Opens All settings</span>`}
+        </label>`,
+    )}
+  </div>`;
 }
 
 // The materials you carry out by hand. A floor for one of them costs about 1%
@@ -121,9 +140,29 @@ function guidedCardsHtml(q) {
 function guidedTopupHtml(s) {
   if (s.storage === 'none') return '';
   const over = s.storageOverrides || {};
-  return `<fieldset class="guided-topup"><legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
- <p class="small muted">Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and 19 Iron Plate a minute into storage. These get a guaranteed ${num(GUIDED_TOPUP_RATE)}/min on top, which costs about 1% more buildings each. Concrete is picked for you because it is the one the plan leaves least spare.</p>
- <div class="guided-chips">${guidedTopupItems.map(n => `<label class="guided-chip${over[n] !== undefined ? ' is-picked' : ''}"><input type="checkbox" name="topup" value="${esc(n)}" aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${esc(n)} a minute" ${over[n] !== undefined ? 'checked' : ''}>${itemIcon(n)}<span>${esc(n)}</span></label>`).join('')}</div></fieldset>`;
+  return html`<fieldset class="guided-topup">
+    <legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
+    <p class="small muted">
+      Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and
+      19 Iron Plate a minute into storage. These get a guaranteed ${num(GUIDED_TOPUP_RATE)}/min on
+      top, which costs about 1% more buildings each. Concrete is picked for you because it is the
+      one the plan leaves least spare.
+    </p>
+    <div class="guided-chips">
+      ${guidedTopupItems.map(
+        n =>
+          html`<label class="guided-chip${over[n] !== undefined ? ' is-picked' : ''}"
+            ><input
+              type="checkbox"
+              name="topup"
+              value="${n}"
+              aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${n} a minute"
+              ${over[n] !== undefined && raw('checked')}
+            />${itemIcon(n)}<span>${n}</span></label
+          >`,
+      )}
+    </div>
+  </fieldset>`;
 }
 
 // A second profile for a save you already play starts from the settings of the
@@ -151,11 +190,29 @@ function guidedTopicsHtml() {
     ['Stocked', (storageOptions.find(([v]) => v === s.storage) || [, s.storage])[1]],
     ['Machines', s.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
   ];
-  return `<h2>What is different this time?</h2>
- <p>Starting from the settings of <b>${esc(from?.name || 'this save')}</b>. Tick only what changes; the rest is kept as it is.</p>
- <div class="guided-known">${known.map(([k, v]) => `<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>
- <div class="guided-topics">${guidedQuestions.map(q => `<label class="check-row"><input type="checkbox" name="topic" value="${q.id}" ${q.id === 'phase' ? 'checked' : ''}>${esc(q.title)}</label>`).join('')}</div>
- <p class="small muted">Progress from ${esc(from?.name || 'the other profile')} can be carried over on the Review step, including the production lines this plan does not expand.</p>`;
+  return html`<h2>What is different this time?</h2>
+    <p>
+      Starting from the settings of <b>${from?.name || 'this save'}</b>. Tick only what changes; the
+      rest is kept as it is.
+    </p>
+    <div class="guided-known">${known.map(([k, v]) => html`<span><b>${k}</b>${v}</span>`)}</div>
+    <div class="guided-topics">
+      ${guidedQuestions.map(
+        q =>
+          html`<label class="check-row"
+            ><input
+              type="checkbox"
+              name="topic"
+              value="${q.id}"
+              ${q.id === 'phase' && raw('checked')}
+            />${q.title}</label
+          >`,
+      )}
+    </div>
+    <p class="small muted">
+      Progress from ${from?.name || 'the other profile'} can be carried over on the Review step,
+      including the production lines this plan does not expand.
+    </p>`;
 }
 
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
@@ -215,7 +272,17 @@ function readGuided(form) {
 
 // The row of question names above the form, marking done and current ones.
 function guidedProgressHtml(flow, index) {
-  return `<div class="guided-progress" role="list">${flow.map((q, i) => `<span role="listitem" class="${i === index ? 'current' : i < index ? 'done' : ''}" ${i === index ? 'aria-current="step"' : ''}><i></i>${esc(q.short || q.title.replace(/\?$/, ''))}</span>`).join('')}</div>`;
+  return html`<div class="guided-progress" role="list">
+    ${flow.map(
+      (q, i) =>
+        html`<span
+          role="listitem"
+          class="${i === index ? 'current' : i < index ? 'done' : ''}"
+          ${i === index && raw('aria-current="step"')}
+          ><i></i>${q.short || q.title.replace(/\?$/, '')}</span
+        >`,
+    )}
+  </div>`;
 }
 
 // HTML for the guided screen: the "What is different" topics screen, the
@@ -231,35 +298,67 @@ export function renderGuided() {
   const q = topics ? null : flow[index];
   let content;
   if (topics) content = guidedTopicsHtml();
-  else if (!q) content = '<h2>Ready to calculate</h2>';
+  else if (!q) content = html`<h2>Ready to calculate</h2>`;
   else
-    content =
-      `<h2>${esc(q.title)}</h2><p>${esc(q.lead)}</p>` +
-      (q.kind === 'supply' ? supplyRowsHtml(s) : guidedCardsHtml(q)) +
-      (q.id === 'goal' && s.goal === 'timed'
-        ? `<div class="form-grid guided-follow">${field('Hours per phase', 'hours', s.hours ?? 8, 'number', 'min="0.25" max="2000" step="0.25" required')}</div>`
-        : '') +
-      (q.id === 'stock' ? guidedTopupHtml(s) : '');
+    content = html`<h2>${q.title}</h2>
+      <p>${q.lead}</p>
+      ${q.kind === 'supply' ? supplyRowsHtml(s) : guidedCardsHtml(q)}
+      ${q.id === 'goal' &&
+      s.goal === 'timed' &&
+      html`<div class="form-grid guided-follow">
+        ${field(
+          'Hours per phase',
+          'hours',
+          s.hours ?? 8,
+          'number',
+          'min="0.25" max="2000" step="0.25" required',
+        )}
+      </div>`}
+      ${q.id === 'stock' && guidedTopupHtml(s)}`;
   const last = topics ? false : index >= flow.length - 1;
   const advancedStep = q?.step || 1;
-  return (
-    (browserMode ? browserNotice() : '') +
-    header(
-      'A FEW QUESTIONS',
-      w.saveId ? 'Add a profile to ' + esc(w.saveName) : 'Create your factory plan',
-      'Answer what matters and the planner fills in the rest. Every setting is still there under All settings.',
-    ) +
-    (topics ? '' : guidedProgressHtml(flow, index)) +
-    `<form id="wizard-form" class="panel wizard-panel guided-panel">
-   ${topics ? '' : `<label class="field guided-name">${w.saveId ? 'Profile name' : 'Save name'}<input name="${w.saveId ? 'profileName' : 'saveName'}" type="text" value="${esc(w.saveId ? w.name : w.saveName)}" ${w.saveId ? '' : 'required'} maxlength="80" placeholder="${w.saveId ? 'Named after your goal if left blank' : 'My Satisfactory save'}"></label>`}
-   ${content}
-   <div class="wizard-actions">
-    <button type="button" class="btn" ${topics || w.guidedStep <= 1 ? 'data-cancel-wizard' : 'data-guided-back'}>${topics || w.guidedStep <= 1 ? 'Cancel' : 'Back'}</button>
-    <span class="guided-escape"><button type="button" class="btn quiet" data-guided-advanced="${advancedStep}">All settings →</button>
-    <button class="btn primary" type="submit">${last ? 'Calculate plan' : 'Continue →'}</button></span>
-   </div>
-   <p id="wizard-error" class="form-error" role="alert"></p>
-  </form>`
+  const first = topics || w.guidedStep <= 1;
+  return String(
+    html`${browserMode && browserNotice()}
+      ${header(
+        'A FEW QUESTIONS',
+        w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
+        'Answer what matters and the planner fills in the rest. Every setting is still there under All settings.',
+      )}
+      ${!topics && guidedProgressHtml(flow, index)}
+      <form id="wizard-form" class="panel wizard-panel guided-panel">
+        ${!topics &&
+        html`<label class="field guided-name"
+          >${w.saveId ? 'Profile name' : 'Save name'}<input
+            name="${w.saveId ? 'profileName' : 'saveName'}"
+            type="text"
+            value="${w.saveId ? w.name : w.saveName}"
+            ${!w.saveId && raw('required')}
+            maxlength="80"
+            placeholder="${w.saveId
+              ? 'Named after your goal if left blank'
+              : 'My Satisfactory save'}"
+        /></label>`}
+        ${content}
+        <div class="wizard-actions">
+          <button
+            type="button"
+            class="btn"
+            ${raw(first ? 'data-cancel-wizard' : 'data-guided-back')}
+          >
+            ${first ? 'Cancel' : 'Back'}
+          </button>
+          <span class="guided-escape"
+            ><button type="button" class="btn quiet" data-guided-advanced="${advancedStep}">
+              All settings →
+            </button>
+            <button class="btn primary" type="submit">
+              ${last ? 'Calculate plan' : 'Continue →'}
+            </button></span
+          >
+        </div>
+        <p id="wizard-error" class="form-error" role="alert"></p>
+      </form>`,
   );
 }
 

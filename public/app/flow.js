@@ -2,9 +2,11 @@
 // A flow model is a plain object describing one factory at one phase: what comes in (with the
 // belts or pipes that carry it), the machine bar, and where the output goes. It is built either
 // from the original handbook (handbookFlowModel, plan.json factories) or from a calculated plan
-// (calcFlowModel, planner rows), and rendered by flowHtml and laneAdviceHtml. The factory
+// (calcFlowModel, planner rows), and rendered by flowHtml and laneAdviceHtml. Fields that carry markup (link, attr, local, bar.outTxt,
+// bankNote) are Html; the rest are text. The factory
 // dialogs in factory-detail.js and views/calculated.js are the callers.
-import { esc, itemIcon, num, num3 } from './format.js';
+import { itemIcon, num, num3 } from './format.js';
+import { html, raw } from './html.js';
 import {
   calcStage,
   calculated,
@@ -133,19 +135,22 @@ export function lanePlan(rate, fluid, st) {
   };
 }
 
-// "1 of the 12 Refineries" or "1 × Refinery" (HTML-escaped): the recipe panel's rates are for
-// one machine. The y→ie swap pluralises Refinery and Foundry.
+// "1 of the 12 Refineries" or "1 × Refinery": the recipe panel's rates are for one machine.
+// The y→ie swap pluralises Refinery and Foundry.
 export const machinesLabel = (count, machine) =>
-  count > 1 ? `1 of the ${num(count)} ${esc(machine.replace(/y$/, 'ie'))}s` : `1 × ${esc(machine)}`;
+  count > 1 ? `1 of the ${num(count)} ${machine.replace(/y$/, 'ie')}s` : `1 × ${machine}`;
 
-// One item cell of a recipe panel: [item name, rate, optional data-* attribute string]. The
+// One item cell of a recipe panel: [item name, rate, optional data-* attribute (Html)]. The
 // attribute turns the cell into a button that opens the factory making that item. The pseudo item
 // 'MW' is a generator's power output. `out` styles it as an output.
 export function recipeCell([n, q, link], out) {
-  const inner = `${n === 'MW' ? '' : itemIcon(n)}<span class="rail-main"><b>${num3(q)}${FLUIDS.has(n) ? ' m³' : n === 'MW' ? ' MW' : ''}</b><small>${n === 'MW' ? 'Power generation' : esc(n)}</small></span>`;
+  const inner = html`${n !== 'MW' && itemIcon(n)}<span class="rail-main"
+      ><b>${num3(q)}${FLUIDS.has(n) ? ' m³' : n === 'MW' ? ' MW' : ''}</b
+      ><small>${n === 'MW' ? 'Power generation' : n}</small></span
+    >`;
   return link
-    ? `<button class="rail-cell${out ? ' out' : ''}" ${link}>${inner}</button>`
-    : `<div class="rail-cell${out ? ' out' : ''}">${inner}</div>`;
+    ? html`<button class="rail-cell${out ? ' out' : ''}" ${link}>${inner}</button>`
+    : html`<div class="rail-cell${out ? ' out' : ''}">${inner}</div>`;
 }
 
 // The "Recipe · …" panel: per-machine inputs → outputs at 100%. Reads m.recipe ({name, machine,
@@ -154,7 +159,23 @@ export function recipeCell([n, q, link], out) {
 export function recipePanelHtml(m) {
   const rc = m.recipe;
   if (!rc) return '';
-  return `<div class="rail-recipe"><div class="rail-recipe-head"><span>Recipe · ${esc(rc.name)}</span><span>what ${machinesLabel(m.machineCount, rc.machine)} makes @ 100% · per minute</span></div><div class="rail-recipe-body"><div class="rail-recipe-ins">${rc.ins.map(x => recipeCell(x)).join('') || '<div class="rail-cell"><span class="rail-main"><small>No belt or pipe inputs</small></span></div>'}</div><span class="rail-recipe-arrow">→</span><div class="rail-recipe-outs">${rc.outs.map(x => recipeCell(x, true)).join('')}</div></div></div>`;
+  return html`<div class="rail-recipe">
+    <div class="rail-recipe-head">
+      <span>Recipe · ${rc.name}</span
+      ><span>what ${machinesLabel(m.machineCount, rc.machine)} makes @ 100% · per minute</span>
+    </div>
+    <div class="rail-recipe-body">
+      <div class="rail-recipe-ins">
+        ${rc.ins.length
+          ? rc.ins.map(x => recipeCell(x))
+          : html`<div class="rail-cell">
+              <span class="rail-main"><small>No belt or pipe inputs</small></span>
+            </div>`}
+      </div>
+      <span class="rail-recipe-arrow">→</span>
+      <div class="rail-recipe-outs">${rc.outs.map(x => recipeCell(x, true))}</div>
+    </div>
+  </div>`;
 }
 
 // Renders a flow model as the "Flow at Phase N" section: recipe panel, input tiles, the machine
@@ -166,10 +187,15 @@ export function flowHtml(m) {
   const inTile = i => {
     const p = i.plan,
       load = Math.round((i.rate / (p.count * p.lane.cap)) * 100);
-    const inner = `${itemIcon(i.name)}<span class="rail-main"><b>${esc(i.name)}</b><small${load >= 70 ? ' class="hot"' : ''}>${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''} · ${load}% load</small></span><span class="rail-rate">${num(i.rate)}<small>${p.lane.unit}</small></span>`;
+    const inner = html`${itemIcon(i.name)}<span class="rail-main"
+        ><b>${i.name}</b
+        ><small ${load >= 70 && raw('class="hot"')}
+          >${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 && 's'} · ${load}% load</small
+        ></span
+      ><span class="rail-rate">${num(i.rate)}<small>${p.lane.unit}</small></span>`;
     return i.link
-      ? `<button class="rail-tile" ${i.link}>${inner}</button>`
-      : `<div class="rail-tile">${inner}</div>`;
+      ? html`<button class="rail-tile" ${i.link}>${inner}</button>`
+      : html`<div class="rail-tile">${inner}</div>`;
   };
   // A destination row. `kind` picks the caption: consumer (another factory), store (protected
   // storage), ship (elevator, power fleet, augmenters…), drone (fuel contract), sink (surplus to
@@ -185,23 +211,55 @@ export function flowHtml(m) {
       more: 'combined smaller destinations',
     };
     const name = o.link
-      ? `<button class="rail-link" ${o.link}>${esc(o.label)} ↗</button>`
-      : `<b class="${o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''}">${esc(o.label)}</b>`;
+      ? html`<button class="rail-link" ${o.link}>${o.label} ↗</button>`
+      : html`<b class="${o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''}">${o.label}</b>`;
     // Machines are rounded up per destination; under half a machine reads "<1".
     const machCol =
       o.mach === undefined
-        ? '<span class="rail-mach"></span>'
-        : `<span class="rail-mach"><b>≈ ${o.mach < 0.5 ? '<1' : num(Math.ceil(o.mach - 1e-9))}</b> × ${esc(m.machineName)}<small>${num(o.mach)} at 100% · ${m.local ? 'build beside it' : 'round up'}</small></span>`;
+        ? html`<span class="rail-mach"></span>`
+        : html`<span class="rail-mach"
+            ><b>≈ ${o.mach < 0.5 ? '<1' : num(Math.ceil(o.mach - 1e-9))}</b> ×
+            ${m.machineName}<small
+              >${num(o.mach)} at 100% · ${m.local ? 'build beside it' : 'round up'}</small
+            ></span
+          >`;
     const rate =
-      o.rateTxt ?? (o.rate !== undefined ? `${num(o.rate)}<small>${o.unit || '/min'}</small>` : '');
-    return `<div class="rail-row ${o.kind}">${o.icon ? itemIcon(o.icon) : '<span class="rail-noicon"></span>'}<span class="rail-main">${name}<small>${o.pre ? esc(o.pre) + ' · ' : ''}${subs[o.kind] || ''}</small></span>${machCol}<span class="rail-rate">${rate}</span></div>`;
+      o.rateTxt ??
+      (o.rate !== undefined ? html`${num(o.rate)}<small>${o.unit || '/min'}</small>` : '');
+    return html`<div class="rail-row ${o.kind}">
+      ${o.icon ? itemIcon(o.icon) : html`<span class="rail-noicon"></span>`}<span class="rail-main"
+        >${name}<small>${o.pre && o.pre + ' · '}${subs[o.kind] || ''}</small></span
+      >${machCol}<span class="rail-rate">${rate}</span>
+    </div>`;
   };
-  // The machine bar between inputs and outputs. m.bar's strings are built already escaped by the
-  // model functions, so they are inserted as they are.
-  const bar = m.bar
-    ? `${m.inputs.length ? '<div class="rail-arrow">↓</div>' : ''}<div class="rail-machine"><div class="rail-machine-main"><b>${num(m.machineCount)} × ${esc(m.machineName)}</b><small>${m.bar.sub}</small></div><div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div></div>${m.outputs.length ? '<div class="rail-arrow">↓</div>' : ''}`
-    : '';
-  return `<h3>Flow at ${phaseLabel(m.stage)}</h3>${recipePanelHtml(m)}${m.inputs.length ? `<div class="rail-cap">Inputs · ${m.inputs.length} line${m.inputs.length > 1 ? 's' : ''} in</div><div class="rail-grid">${m.inputs.map(inTile).join('')}</div>` : ''}${bar}${m.outputs.length ? `<div class="rail-caps"><span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(o => o.mach !== undefined) ? `<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>` : ''}</div><div class="rail-rows">${m.outputs.map(outRow).join('')}</div>${m.bankNote || ''}` : ''}`;
+  // The machine bar between inputs and outputs. m.bar's fields are Html or text.
+  const bar =
+    m.bar &&
+    html`${m.inputs.length > 0 && html`<div class="rail-arrow">↓</div>`}
+      <div class="rail-machine">
+        <div class="rail-machine-main">
+          <b>${num(m.machineCount)} × ${m.machineName}</b><small>${m.bar.sub}</small>
+        </div>
+        <div class="rail-machine-out"><b>${m.bar.outTxt}</b><small>${m.bar.outSub}</small></div>
+      </div>
+      ${m.outputs.length > 0 && html`<div class="rail-arrow">↓</div>`}`;
+  return html`<h3>Flow at ${phaseLabel(m.stage)}</h3>
+    ${recipePanelHtml(m)}
+    ${m.inputs.length > 0 &&
+    html`<div class="rail-cap">
+        Inputs · ${m.inputs.length} line${m.inputs.length > 1 && 's'} in
+      </div>
+      <div class="rail-grid">${m.inputs.map(inTile)}</div>`}
+    ${bar}
+    ${m.outputs.length > 0 &&
+    html`<div class="rail-caps">
+        <span class="rail-cap">Delivers · ${phaseLabel(m.stage)}</span>${m.outputs.some(
+          o => o.mach !== undefined,
+        ) &&
+        html`<span class="rail-cap">Machines per delivery · ${num(m.machineCount)} total</span>`}
+      </div>
+      <div class="rail-rows">${m.outputs.map(outRow)}</div>
+      ${m.bankNote}`}`;
 }
 
 // Keeps a destination list to at most ten rows: past that, the first nine stay and the rest become
@@ -225,49 +283,64 @@ export function laneAdviceHtml(m) {
   const belts = bestLane(false, m.stage),
     pipes = bestLane(true, m.stage);
   const nextNote = belts.next?.milestone
-    ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${esc(belts.next.milestone.name)} in Phase ${belts.next.milestone.phase}.`
+    ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`
     : '';
-  const rows = m.inputs
-    .map(i => {
-      // per: what one machine at 100% draws; fed: how many such machines one full lane supplies.
-      const p = i.plan,
-        l = p.lane,
-        per = i.rate / m.equivalent,
-        fed = Math.floor(l.cap / per + 1e-9);
-      const parts = [
-        `<b>${num(i.rate)}${l.unit}</b> → <b>${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}</b>${p.count > 1 ? ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}` : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`}.`,
-      ];
-      if (m.machineCount > 1)
-        parts.push(
-          fed < 1
-            ? `Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`
-            : m.machineCount > fed
-              ? `One full ${l.mark} ${p.word} feeds <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) — plan manifold rows of ${fed}.`
-              : `One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`,
+  const row = i => {
+    // per: what one machine at 100% draws; fed: how many such machines one full lane supplies.
+    const p = i.plan,
+      l = p.lane,
+      per = i.rate / m.equivalent,
+      fed = Math.floor(l.cap / per + 1e-9);
+    const lanes = `${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
+    const parts = [
+      html`<b>${num(i.rate)}${l.unit}</b> → <b>${lanes}</b>${p.count > 1
+          ? ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`
+          : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`}.`,
+    ];
+    if (m.machineCount > 1)
+      parts.push(
+        fed < 1
+          ? `Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`
+          : m.machineCount > fed
+            ? html`One full ${l.mark} ${p.word} feeds
+                <b>${fed} of the ${num(m.machineCount)} machines</b> (${num(per)}${l.unit} each) —
+                plan manifold rows of ${fed}.`
+            : `One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`,
+      );
+    // Other factories whose whole demand for this item fits in the spare capacity; at most two
+    // are offered as links, joined by " or ".
+    if (p.count > 1 && p.spare > 0.01) {
+      const merge = m
+        .sameItemConsumers(i.name)
+        .filter(x => x.rate <= p.spare + 0.01)
+        .slice(0, 2)
+        .map(
+          x =>
+            html`<button class="btn quiet" ${x.attr}>
+              ${x.label} (${num(x.rate)}${l.unit}) ↗
+            </button>`,
         );
-      // Other factories whose whole demand for this item fits in the spare capacity; at most two
-      // are offered as links.
-      if (p.count > 1 && p.spare > 0.01) {
-        const merge = m.sameItemConsumers(i.name).filter(x => x.rate <= p.spare + 0.01);
-        parts.push(
-          `The last ${p.word} has <b>${num(p.spare)}${l.unit} spare</b> — ${
-            merge.length
-              ? `enough to also carry ${merge
-                  .slice(0, 2)
-                  .map(
-                    x =>
-                      `<button class="btn quiet" ${x.attr}>${esc(x.label)} (${num(x.rate)}${l.unit}) ↗</button>`,
-                  )
-                  .join(' or ')} from the same bus`
-              : 'keep it as expansion headroom on this manifold'
-          }.`,
-        );
-      }
-      if (i.local) parts.push(i.local);
-      return `<div class="logi-row">${itemIcon(i.name)}<div><b>${esc(i.name)}</b>${parts.map(t => `<p>${t}</p>`).join('')}</div></div>`;
-    })
-    .join('');
-  return `<h3>Belts &amp; pipes</h3><p class="small muted">${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in your save yet, plan with the earlier mark.</p><div class="logi">${rows}</div>`;
+      parts.push(
+        html`The last ${p.word} has <b>${num(p.spare)}${l.unit} spare</b> —
+          ${merge.length
+            ? html`enough to also carry ${merge.flatMap((b, n) => (n ? [' or ', b] : [b]))} from the
+              same bus`
+            : 'keep it as expansion headroom on this manifold'}.`,
+      );
+    }
+    if (i.local) parts.push(i.local);
+    return html`<div class="logi-row">
+      ${itemIcon(i.name)}
+      <div><b>${i.name}</b>${parts.map(t => html`<p>${t}</p>`)}</div>
+    </div>`;
+  };
+  return html`<h3>Belts &amp; pipes</h3>
+    <p class="small muted">
+      ${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and
+      ${pipes.mark} pipes (${num(pipes.cap)} m³/min).${nextNote} If a milestone is not unlocked in
+      your save yet, plan with the earlier mark.
+    </p>
+    <div class="logi">${m.inputs.map(row)}</div>`;
 }
 
 // Flow model for an original-handbook factory (plan.json). `f` is the factory, `st` the phase key,
@@ -297,7 +370,7 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
         kind: 'consumer',
         label: o.name,
         icon: o.name,
-        link: `data-factory="${o.id}"`,
+        link: html`data-factory="${o.id}"`,
         rate: q,
         unit,
         mach: mach(q),
@@ -350,10 +423,13 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
         return {
           name: n,
           rate: q,
-          link: src ? `data-factory="${src.id}"` : '',
+          link: src ? html`data-factory="${src.id}"` : '',
           plan: lanePlan(q, FLUIDS.has(n), st),
           local: lp
-            ? `<button class="btn quiet" data-factory="${lp.id}">Local: ≈ ${num(Math.ceil(q / lp.stages[st].rate))} × ${esc(lp.stages[st].machine)} at this site ↗</button>`
+            ? html`<button class="btn quiet" data-factory="${lp.id}">
+                Local: ≈ ${num(Math.ceil(q / lp.stages[st].rate))} × ${lp.stages[st].machine} at
+                this site ↗
+              </button>`
             : '',
         };
       });
@@ -386,8 +462,8 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
     bar: bankOnly
       ? null
       : {
-          sub: `${esc(String(r.recipe || '').replace('Alternate: ', ''))} · ${clock} · ${num3(perOut)} ${esc(f.name)}/min out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
-          outTxt: `${num(r.output)}<small>${unit}</small>`,
+          sub: `${String(r.recipe || '').replace('Alternate: ', '')} · ${clock} · ${num3(perOut)} ${f.name}/min out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
+          outTxt: html`${num(r.output)}<small>${unit}</small>`,
           outSub: f.local
             ? 'out · distributed'
             : 'out · ' + beltTxt(lanePlan(r.output, fluidOut, st)),
@@ -399,7 +475,7 @@ export function handbookFlowModel(f, st, r, localInput, bankOnly = false) {
         .map(o => ({
           label: o.name,
           rate: o.stages[st].inputs[n],
-          attr: `data-factory="${o.id}"`,
+          attr: html`data-factory="${o.id}"`,
         })),
   };
 }
@@ -432,7 +508,7 @@ export function calcFlowModel(r) {
         kind: 'consumer',
         label: o.name,
         icon: Object.keys(o.outputs || {})[0] || n,
-        link: `data-calc-factory="${o.id}"`,
+        link: html`data-calc-factory="${o.id}"`,
         rate: o.inputs[n],
         unit,
         pre,
@@ -526,7 +602,7 @@ export function calcFlowModel(r) {
     return {
       name: n,
       rate: q,
-      link: src ? `data-calc-factory="${src.id}"` : '',
+      link: src ? html`data-calc-factory="${src.id}"` : '',
       plan: lanePlan(q, FLUIDS.has(n), st),
     };
   });
@@ -562,23 +638,26 @@ export function calcFlowModel(r) {
         : [['MW', r.generationMW / eq]],
     },
     bar: {
-      sub: `${esc(r.name)} · ${clock}${outName && !multi ? ` · ${num3(r.outputs[outName] / eq)} ${esc(outName)}/min out per machine` : ''}${splitTxt}`,
+      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${num3(r.outputs[outName] / eq)} ${outName}/min out per machine` : ''}${splitTxt}`,
       outTxt: outName
-        ? `${num(r.outputs[outName])}<small>${FLUIDS.has(outName) ? ' m³/min' : '/min'}</small>`
+        ? html`${num(r.outputs[outName])}<small>${FLUIDS.has(outName) ? ' m³/min' : '/min'}</small>`
         : power(r.generationMW),
       outSub: outName
         ? multi
-          ? 'out · ' + esc(outName) + ' + byproducts'
+          ? 'out · ' + outName + ' + byproducts'
           : 'out · ' + beltTxt(lanePlan(r.outputs[outName], FLUIDS.has(outName), st))
         : 'generation',
     },
     // Consumer, storage and delivery rates are the item's plan-wide demand, not this row's share.
     bankNote: outputs.length
-      ? `<p class="small muted">Demand for the item across this phase's whole plan${shared ? ', supplied together with the other recipes producing it' : ''}.</p>`
+      ? html`<p class="small muted">
+          Demand for the item across this phase's whole
+          plan${shared ? ', supplied together with the other recipes producing it' : ''}.
+        </p>`
       : '',
     sameItemConsumers: n =>
       (x.rows || [])
         .filter(o => o.id !== r.id && o.inputs?.[n])
-        .map(o => ({ label: o.name, rate: o.inputs[n], attr: `data-calc-factory="${o.id}"` })),
+        .map(o => ({ label: o.name, rate: o.inputs[n], attr: html`data-calc-factory="${o.id}"` })),
   };
 }

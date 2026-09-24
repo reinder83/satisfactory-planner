@@ -3,7 +3,8 @@
 // question. Two things are kept apart: wizard.supplyRows, the rows as typed
 // (possibly half-finished), and settings.existingSupply, the { item: rate } map
 // the planner receives. Keyboard and input handlers live in events/views.js.
-import { $, esc, itemIcon } from '../format.js';
+import { $, itemIcon } from '../format.js';
+import { html, raw } from '../html.js';
 import { wizard, workspace } from '../session.js';
 import { render } from '../shell.js';
 import { readGuidedForm } from './guided.js';
@@ -65,23 +66,67 @@ export function supplyRowsHtml(s) {
     !r.name.trim()
       ? ''
       : !known.has(r.name.trim())
-        ? '<span class="supply-hint warn">No item of that name — pick one from the list.</span>'
+        ? html`<span class="supply-hint warn">No item of that name — pick one from the list.</span>`
         : !String(r.rate).trim()
-          ? '<span class="supply-hint">Add a rate and this line is credited; leave it blank and it is not.</span>'
+          ? html`<span class="supply-hint"
+              >Add a rate and this line is credited; leave it blank and it is not.</span
+            >`
           : '';
-  const row = (r, i) => `<div class="supply-row" data-supply-row="${i}">
-  <div class="supply-field">
-   <label class="field">Item<span class="supply-input${known.has(r.name.trim()) ? ' has-icon' : ''}" data-icon="${known.has(r.name.trim()) ? esc(r.name.trim()) : ''}">${known.has(r.name.trim()) ? itemIcon(r.name.trim()) : ''}<input name="supplyItem" value="${esc(r.name)}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Search item" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="supply-options-${i}" aria-label="Search for an item you already produce"></span></label>
-   <div class="supply-options" id="supply-options-${i}" role="listbox" hidden></div>
-  </div>
-  <label class="field">Per minute<input name="supplyRate" type="number" min="0" max="1000000" step="any" value="${esc(r.rate)}" aria-label="Rate you already produce, per minute"></label>
-  <button type="button" class="btn quiet supply-remove${r.name.trim() ? '' : ' is-blank'}" data-supply-remove="${i}" ${r.name.trim() ? `aria-label="Remove ${esc(r.name)}"` : 'tabindex="-1" aria-hidden="true"'}>Remove</button>
-  ${hint(r)}
- </div>`;
-  return `<div class="supply-picker">
-  <div class="supply-list">${rows.map(row).join('')}</div>
-  <p class="small muted">The plan credits these and builds only the remainder — and it does not build the chain behind them either. What you make it with is your business: the recipe and machine count do not have to match anything this plan would choose. Their ore and their power are already spent in your world, so enter your resource budgets and spare power net of them, exactly as for any other existing factory.</p>
- </div>`;
+  const row = (r, i) => {
+    const name = r.name.trim(),
+      isItem = known.has(name);
+    return html`<div class="supply-row" data-supply-row="${i}">
+      <div class="supply-field">
+        <label class="field"
+          >Item<span
+            class="supply-input${isItem ? ' has-icon' : ''}"
+            data-icon="${isItem ? name : ''}"
+            >${isItem && itemIcon(name)}<input
+              name="supplyItem"
+              value="${r.name}"
+              maxlength="80"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Search item"
+              role="combobox"
+              aria-expanded="false"
+              aria-autocomplete="list"
+              aria-controls="supply-options-${i}"
+              aria-label="Search for an item you already produce" /></span
+        ></label>
+        <div class="supply-options" id="supply-options-${i}" role="listbox" hidden></div>
+      </div>
+      <label class="field"
+        >Per minute<input
+          name="supplyRate"
+          type="number"
+          min="0"
+          max="1000000"
+          step="any"
+          value="${r.rate}"
+          aria-label="Rate you already produce, per minute"
+      /></label>
+      <button
+        type="button"
+        class="btn quiet supply-remove${name ? '' : ' is-blank'}"
+        data-supply-remove="${i}"
+        ${name ? html`aria-label="Remove ${r.name}"` : raw('tabindex="-1" aria-hidden="true"')}
+      >
+        Remove
+      </button>
+      ${hint(r)}
+    </div>`;
+  };
+  return html`<div class="supply-picker">
+    <div class="supply-list">${rows.map(row)}</div>
+    <p class="small muted">
+      The plan credits these and builds only the remainder — and it does not build the chain behind
+      them either. What you make it with is your business: the recipe and machine count do not have
+      to match anything this plan would choose. Their ore and their power are already spent in your
+      world, so enter your resource budgets and spare power net of them, exactly as for any other
+      existing factory.
+    </p>
+  </div>`;
 }
 
 // Returns null when the form has no supply list (another step), so callers
@@ -122,12 +167,20 @@ export function showSupplyOptions(input) {
     hideSupplyOptions(input);
     return;
   }
-  box.innerHTML = matches
-    .map(
+  box.innerHTML = String(
+    html`${matches.map(
       n =>
-        `<button type="button" role="option" aria-selected="false" class="supply-option" data-supply-pick="${esc(n)}">${itemIcon(n)}<span>${esc(n)}</span></button>`,
-    )
-    .join('');
+        html`<button
+          type="button"
+          role="option"
+          aria-selected="false"
+          class="supply-option"
+          data-supply-pick="${n}"
+        >
+          ${itemIcon(n)}<span>${n}</span>
+        </button>`,
+    )}`,
+  );
   box.hidden = false;
   input.setAttribute('aria-expanded', 'true');
 }

@@ -4,7 +4,8 @@
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayCapacity, bayOfSlot, slotPosition } from '../../state.js';
 import { dialog } from '../factory-detail.js';
-import { esc, num, slug } from '../format.js';
+import { num, slug } from '../format.js';
+import { html, raw } from '../html.js';
 import {
   calcStage,
   calculated,
@@ -24,12 +25,12 @@ import { taskHtml } from '../tasks.js';
 
 // Items kept at a zero rate hold their container and address without reserving
 // production, so they belong on the storage map rather than in a rate list.
-// inputText: escaped "Item 12/min · Item 3/min" text for the non-zero entries of an
+// inputText: plain "Item 12/min · Item 3/min" text for the non-zero entries of an
 // item → rate map. Used across the factory, resource and detail views.
 export function inputText(inputs) {
   return Object.entries(inputs)
     .filter(([, q]) => q)
-    .map(([n, q]) => esc(n) + ' ' + num(q) + '/min')
+    .map(([n, q]) => n + ' ' + num(q) + '/min')
     .join(' · ');
 }
 
@@ -170,47 +171,146 @@ export function renderStorage() {
   const ordered = [...display].sort((a, b) => a.id.localeCompare(b.id));
   const aisles = Array.from(
     { length: Math.floor(placed.length / 2) },
-    (_, r) => `<div class="aisle" style="--aisle-row:${r + 1}">MAIN AISLE</div>`,
-  ).join('');
+    (_, r) => html`<div class="aisle" style="--aisle-row:${r + 1}">MAIN AISLE</div>`,
+  );
   // Floor tabs (`data-floor`) and, while editing the layout, the add/rename forms
   // (#add-bay, #add-floor, #rename-floor) and `data-remove-floor`, all in events/views.js.
-  const floorTabs = `<div class="tabs">${floors.map(f => `<button class="tab ${floor === f.id ? 'active' : ''}" data-floor="${f.id}">${esc(f.label)}</button>`).join('')}</div>`;
-  const editPanel = layoutEditing
-    ? `<section class="panel edit-panel"><h2>Storage layout</h2><div class="edit-grid">
-  <form id="add-bay" class="inline-form"><input id="new-bay-name" name="name" maxlength="80" required placeholder="New bay on this floor…" aria-label="New bay name"><button class="btn primary" type="submit">+ Add bay</button></form>
-  <form id="add-floor" class="inline-form"><input id="new-floor-name" name="name" maxlength="80" required placeholder="New floor (e.g. Basement overflow)" aria-label="New floor name"><button class="btn" type="submit">Add floor</button></form>
-  <form id="rename-floor" class="inline-form"><input id="floor-rename-input" name="name" maxlength="80" required placeholder="Rename this floor…" aria-label="Rename this floor"><button class="btn" type="submit">Rename floor</button></form>
-  ${current.builtin ? '' : `<button class="btn danger" data-remove-floor="${current.id}" ${floorBays.length ? 'disabled' : ''}>${floorBays.length ? 'Remove its bays first' : 'Remove this floor'}</button>`}
- </div><p class="small muted">Handbook bays and their addresses stay put: rename them or fill reserved positions. Added bays get the next free letter so container addresses and progress stay stable. A bay with no free position takes extra containers at 09 and upwards. Removing a container keeps its saved checkmarks.</p></section>`
-    : '';
+  const floorTabs = html`<div class="tabs">
+    ${floors.map(
+      f =>
+        html`<button class="tab ${floor === f.id ? 'active' : ''}" data-floor="${f.id}">
+          ${f.label}
+        </button>`,
+    )}
+  </div>`;
+  const editPanel =
+    layoutEditing &&
+    html`<section class="panel edit-panel">
+      <h2>Storage layout</h2>
+      <div class="edit-grid">
+        <form id="add-bay" class="inline-form">
+          <input
+            id="new-bay-name"
+            name="name"
+            maxlength="80"
+            required
+            placeholder="New bay on this floor…"
+            aria-label="New bay name"
+          /><button class="btn primary" type="submit">+ Add bay</button>
+        </form>
+        <form id="add-floor" class="inline-form">
+          <input
+            id="new-floor-name"
+            name="name"
+            maxlength="80"
+            required
+            placeholder="New floor (e.g. Basement overflow)"
+            aria-label="New floor name"
+          /><button class="btn" type="submit">Add floor</button>
+        </form>
+        <form id="rename-floor" class="inline-form">
+          <input
+            id="floor-rename-input"
+            name="name"
+            maxlength="80"
+            required
+            placeholder="Rename this floor…"
+            aria-label="Rename this floor"
+          /><button class="btn" type="submit">Rename floor</button>
+        </form>
+        ${!current.builtin &&
+        html`<button
+          class="btn danger"
+          data-remove-floor="${current.id}"
+          ${floorBays.length > 0 && raw('disabled')}
+        >
+          ${floorBays.length ? 'Remove its bays first' : 'Remove this floor'}
+        </button>`}
+      </div>
+      <p class="small muted">
+        Handbook bays and their addresses stay put: rename them or fill reserved positions. Added
+        bays get the next free letter so container addresses and progress stay stable. A bay with no
+        free position takes extra containers at 09 and upwards. Removing a container keeps its saved
+        checkmarks.
+      </p>
+    </section>`;
   // Floor notes. The ground-floor instructions describe the owner's built room, so only
   // the original profile gets them.
   const notice =
     floor === 'ground'
       ? currentProfile.id !== 'original'
-        ? '<div class="notice blue">Optional storage template. Each position has its own checklist; nothing is assumed built.</div>'
-        : '<div class="notice blue"><b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.</div>'
-      : floor === 'upper'
-        ? '<div class="notice blue">Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay outside this room.</div>'
-        : '';
+        ? html`<div class="notice blue">
+            Optional storage template. Each position has its own checklist; nothing is assumed
+            built.
+          </div>`
+        : html`<div class="notice blue">
+            <b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02
+            and Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused
+            Filter.
+          </div>`
+      : floor === 'upper' &&
+        html`<div class="notice blue">
+          Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged
+          fluids stay outside this room.
+        </div>`;
   // The bay grid itself, with its rear/entrance markers.
-  const bayArea = `${notice}
- ${query ? '<p class="small muted">Filtered view: showing matching bays only. Clear search to see the full floor arrangement.</p>' : ''}${ordered.length ? '<p class="eyebrow floor-marker">REAR OF HALL ↑</p>' : ''}<div class="floor-grid">${aisles + ordered.map(b => bayHtml(b, placed.indexOf(b.id))).join('') || (floor === 'workshop' ? '' : `<div class="empty-state">${floorBays.length ? 'No matching item on this floor. Try another floor.' : 'No bays on this floor yet. Use Edit layout to add one.'}</div>`)}</div>${ordered.length ? '<div class="entry floor-marker">↓ ENTRANCE / STAIRS</div><div class="small muted">Within each bay, 01–04 are the rear bank; 05–08 are the front bank. Read left to right on both banks. Grey positions remain unassigned. Positions from 09 are containers added beyond the printed bay.</div>' : ''}`;
+  const bayArea = html`${notice}
+    ${query &&
+    html`<p class="small muted">
+      Filtered view: showing matching bays only. Clear search to see the full floor arrangement.
+    </p>`}${ordered.length > 0 && html`<p class="eyebrow floor-marker">REAR OF HALL ↑</p>`}
+    <div class="floor-grid">
+      ${aisles.length || ordered.length
+        ? html`${aisles}${ordered.map(b => bayHtml(b, placed.indexOf(b.id)))}`
+        : floor !== 'workshop' &&
+          html`<div class="empty-state">
+            ${floorBays.length
+              ? 'No matching item on this floor. Try another floor.'
+              : 'No bays on this floor yet. Use Edit layout to add one.'}
+          </div>`}
+    </div>
+    ${ordered.length > 0 &&
+    html`<div class="entry floor-marker">↓ ENTRANCE / STAIRS</div>
+      <div class="small muted">
+        Within each bay, 01–04 are the rear bank; 05–08 are the front bank. Read left to right on
+        both banks. Grey positions remain unassigned. Positions from 09 are containers added beyond
+        the printed bay.
+      </div>`}`;
   // The build checklist is the handbook's storageTasks, or for a calculated profile one
   // step with the saved key `calc-storage-layout`.
-  return (
-    header(
-      'ONE ITEM · ONE ADDRESS',
-      'Storage room',
-      calculated
-        ? 'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.'
-        : 'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.',
-    ) +
-    `<div class="toolbar">${floorTabs}<input id="storage-search" class="search" aria-label="Find storage on this floor" placeholder="Find an item or address on this floor…" value="${esc(query)}"><button class="btn ${layoutEditing ? 'primary' : ''}" data-toggle-layout>${layoutEditing ? 'Done editing' : 'Edit layout'}</button></div>` +
-    editPanel +
-    (floor === 'workshop' ? renderWorkshop() : '') +
-    bayArea +
-    `<section style="margin-top:28px"><h2>Storage build checklist</h2><div class="checklist">${(calculated ? [{ id: 'calc-storage-layout', title: 'Build and label the selected storage positions', body: 'Use one container per selected item. Reserve its refill supply and route sinkable overflow to the AWESOME Sink; gathered items need manual replenishment.' }] : plan.storageTasks).map(taskHtml).join('')}</div></section>`
+  const tasks = calculated
+    ? [
+        {
+          id: 'calc-storage-layout',
+          title: 'Build and label the selected storage positions',
+          body: 'Use one container per selected item. Reserve its refill supply and route sinkable overflow to the AWESOME Sink; gathered items need manual replenishment.',
+        },
+      ]
+    : plan.storageTasks;
+  return String(
+    html`${header(
+        'ONE ITEM · ONE ADDRESS',
+        'Storage room',
+        calculated
+          ? 'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.'
+          : 'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.',
+      )}
+      <div class="toolbar">
+        ${floorTabs}<input
+          id="storage-search"
+          class="search"
+          aria-label="Find storage on this floor"
+          placeholder="Find an item or address on this floor…"
+          value="${query}"
+        /><button class="btn ${layoutEditing ? 'primary' : ''}" data-toggle-layout>
+          ${layoutEditing ? 'Done editing' : 'Edit layout'}
+        </button>
+      </div>
+      ${editPanel}${floor === 'workshop' && renderWorkshop()}${bayArea}
+      <section style="margin-top:28px">
+        <h2>Storage build checklist</h2>
+        <div class="checklist">${tasks.map(taskHtml)}</div>
+      </section>`,
   );
 }
 
@@ -218,24 +318,103 @@ export function renderStorage() {
 // column (two bays per row, aisle between). Hooks for events/views.js: `data-slot` opens a
 // container, `data-complete-slot` is its Done box, `data-complete-bay` completes the room,
 // and in layout editing `data-bay-rename`, `data-remove-bay` (added bays only),
-// `data-clear-slot` and the .add-container form (`data-bay`). Item names are user text: esc().
+// `data-clear-slot` and the .add-container form (`data-bay`).
 function bayHtml(b, position = 0) {
   const items = b.items.filter(x => x.name),
     done = items.filter(x => slotDone(x.id)).length;
   const title = layoutEditing
-    ? `<input id="bay-name-${b.id}" class="bay-rename" data-bay-rename="${b.id}" value="${esc(b.name)}" maxlength="80" aria-label="Rename bay ${b.id}">`
-    : `<h3>${esc(b.name)}</h3>`;
+    ? html`<input
+        id="bay-name-${b.id}"
+        class="bay-rename"
+        data-bay-rename="${b.id}"
+        value="${b.name}"
+        maxlength="80"
+        aria-label="Rename bay ${b.id}"
+      />`
+    : html`<h3>${b.name}</h3>`;
   const removeBay =
-    layoutEditing && b.custom
-      ? `<button class="btn danger" data-remove-bay="${b.id}">Remove bay</button>`
-      : '';
+    layoutEditing &&
+    b.custom &&
+    html`<button class="btn danger" data-remove-bay="${b.id}">Remove bay</button>`;
   // A full bay still takes another container: it gets the next address instead of
   // the form disappearing, up to the addressable limit.
   const addContainer =
-    layoutEditing && b.items.length < bayCapacity
-      ? `<form class="inline-form add-container" data-bay="${b.id}"><input id="bay-draft-${b.id}" name="name" maxlength="120" required placeholder="${items.length < b.items.length ? 'Add container: item name…' : 'Add a position beyond ' + b.items.at(-1).id + '…'}" aria-label="Add container to bay ${b.id}"><button class="btn" type="submit">+ Add</button></form>`
-      : '';
-  return `<section class="bay" style="--bay-row:${Math.floor(position / 2) + 1};--bay-col:${position % 2 ? 3 : 1}"><header class="bay-head"><span class="bay-letter">${b.id}</span>${title}</header><div class="bay-actions"><span class="small muted">${done}/${items.length} containers done</span><span>${removeBay} <button class="btn quiet" data-complete-bay="${b.id}" ${!items.length || done === items.length ? 'disabled' : ''}>Complete room ${b.id}</button></span></div><div class="bay-items">${b.items.map((x, i) => `${i === 4 ? '<div class="walkway">BAY WALKWAY</div>' : ''}${i === 8 ? '<div class="walkway added">ADDED POSITIONS</div>' : ''}${x.name ? `<div class="slot ${slotDone(x.id) ? 'done' : ''} ${query && (x.id + ' ' + x.name).toLowerCase().includes(query.toLowerCase()) ? 'match' : ''}">${layoutEditing ? `<button class="slot-remove" data-clear-slot="${x.id}" aria-label="Clear container ${x.id}: ${esc(x.name)}">✕</button>` : ''}<button class="slot-details" data-slot="${x.id}" aria-label="${x.id}: ${esc(x.name)}"><strong>${x.id}</strong><img class="item-icon" src="./icons/${slug(x.name)}.png" width="48" height="48" loading="lazy" alt=""><span>${esc(x.name)}</span></button><label class="slot-complete"><input type="checkbox" data-complete-slot="${x.id}" aria-label="Complete ${x.id}: ${esc(x.name)}" ${slotDone(x.id) ? 'checked' : ''}>Done</label></div>` : `<div class="slot empty"><strong>${x.id}</strong><span>Reserved</span></div>`}`).join('')}</div>${addContainer}</section>`;
+    layoutEditing &&
+    b.items.length < bayCapacity &&
+    html`<form class="inline-form add-container" data-bay="${b.id}">
+      <input
+        id="bay-draft-${b.id}"
+        name="name"
+        maxlength="120"
+        required
+        placeholder="${items.length < b.items.length
+          ? 'Add container: item name…'
+          : 'Add a position beyond ' + b.items.at(-1).id + '…'}"
+        aria-label="Add container to bay ${b.id}"
+      /><button class="btn" type="submit">+ Add</button>
+    </form>`;
+  const matches = x => query && (x.id + ' ' + x.name).toLowerCase().includes(query.toLowerCase());
+  const slot = x =>
+    x.name
+      ? html`<div class="slot ${slotDone(x.id) ? 'done' : ''} ${matches(x) ? 'match' : ''}">
+          ${layoutEditing &&
+          html`<button
+            class="slot-remove"
+            data-clear-slot="${x.id}"
+            aria-label="Clear container ${x.id}: ${x.name}"
+          >
+            ✕
+          </button>`}<button
+            class="slot-details"
+            data-slot="${x.id}"
+            aria-label="${x.id}: ${x.name}"
+          >
+            <strong>${x.id}</strong
+            ><img
+              class="item-icon"
+              src="./icons/${slug(x.name)}.png"
+              width="48"
+              height="48"
+              loading="lazy"
+              alt=""
+            /><span>${x.name}</span></button
+          ><label class="slot-complete"
+            ><input
+              type="checkbox"
+              data-complete-slot="${x.id}"
+              aria-label="Complete ${x.id}: ${x.name}"
+              ${slotDone(x.id) && raw('checked')}
+            />Done</label
+          >
+        </div>`
+      : html`<div class="slot empty"><strong>${x.id}</strong><span>Reserved</span></div>`;
+  return html`<section
+    class="bay"
+    style="--bay-row:${Math.floor(position / 2) + 1};--bay-col:${position % 2 ? 3 : 1}"
+  >
+    <header class="bay-head"><span class="bay-letter">${b.id}</span>${title}</header>
+    <div class="bay-actions">
+      <span class="small muted">${done}/${items.length} containers done</span
+      ><span
+        >${removeBay}
+        <button
+          class="btn quiet"
+          data-complete-bay="${b.id}"
+          ${(!items.length || done === items.length) && raw('disabled')}
+        >
+          Complete room ${b.id}
+        </button></span
+      >
+    </div>
+    <div class="bay-items">
+      ${b.items.map(
+        (x, i) =>
+          html`${i === 4 && html`<div class="walkway">BAY WALKWAY</div>`}${i === 8 &&
+          html`<div class="walkway added">ADDED POSITIONS</div>`}${slot(x)}`,
+      )}
+    </div>
+    ${addContainer}
+  </section>`;
 }
 
 // HTML for the workshop floor's panel: a fixed checklist with saved keys `workshop-<id>`.
@@ -254,8 +433,26 @@ function renderWorkshop() {
       'Rear wall, with collected items routed to Q/R. Finish the sorter at a recovery chest.',
     ],
   ];
-  return `<div class="panel"><span class="eyebrow">GROUND-FLOOR REAR EXTENSION</span><h2 style="margin-top:10px">Workshop beneath Q/R</h2><p>The upper floor gets the new storage bays; the space underneath becomes your crafting area. No existing production-container addresses change.</p><div class="checklist">${items.map(([id, title, body]) => taskHtml({ id: 'workshop-' + id, title, body })).join('')}</div></div>`;
+  return html`<div class="panel">
+    <span class="eyebrow">GROUND-FLOOR REAR EXTENSION</span>
+    <h2 style="margin-top:10px">Workshop beneath Q/R</h2>
+    <p>
+      The upper floor gets the new storage bays; the space underneath becomes your crafting area. No
+      existing production-container addresses change.
+    </p>
+    <div class="checklist">
+      ${items.map(([id, title, body]) => taskHtml({ id: 'workshop-' + id, title, body }))}
+    </div>
+  </div>`;
 }
+
+// The four steps of a container, as saved check keys `slot-<address>-<step>` and labels.
+const SLOT_STEPS = [
+  ['built', 'Container placed'],
+  ['labelled', 'Sign and address labelled'],
+  ['connected', 'Correct supply connected'],
+  ['verified', 'Flow and overflow verified'],
+];
 
 // Opens the detail dialog for container `id` (from a `data-slot` click in
 // events/views.js); does nothing for a reserved position. Shows the four
@@ -273,20 +470,46 @@ export function openSlot(id) {
   const index = Number(id.slice(b.id.length));
   dialog(
     x.name,
-    `${id} · ${esc(storageFloors().find(f => f.id === b.floor)?.label || b.floor)} · Bay ${b.id}`,
-    `<p><b>${esc(b.name)}</b><br>${index <= 4 ? 'Rear' : 'Front'} bank, position ${((index - 1) % 4) + 1} from the left on the floor plan.</p><div class="check-columns">${[
-      ['built', 'Container placed'],
-      ['labelled', 'Sign and address labelled'],
-      ['connected', 'Correct supply connected'],
-      ['verified', 'Flow and overflow verified'],
-    ]
-      .map(
-        ([k, l]) =>
-          `<label class="check-row"><input type="checkbox" data-check="slot-${id}-${k}" ${doneAttr('slot-' + id + '-' + k)}>${l}</label>`,
-      )
-      .join(
-        '',
-      )}</div>${factory ? `<div class="detail-actions"><button class="btn" ${calculated ? 'data-calc-factory' : 'data-factory'}="${factory.id}">Open production target →</button></div>` : '<p class="small muted">Collected or completion item. Reserve its own supply; this storage position does not add production capacity.</p>'}<h3>Container notes</h3><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">${esc(state.notes['slot-' + id] || '')}</textarea><div class="note-save"><span class="small muted">Belt source, splitter setting or remaining work.</span><button class="btn" data-save-note="slot-${id}" data-input="detail-note">Save notes</button></div>`,
+    `${id} · ${storageFloors().find(f => f.id === b.floor)?.label || b.floor} · Bay ${b.id}`,
+    html`<p>
+        <b>${b.name}</b><br />${index <= 4 ? 'Rear' : 'Front'} bank, position
+        ${((index - 1) % 4) + 1} from the left on the floor plan.
+      </p>
+      <div class="check-columns">
+        ${SLOT_STEPS.map(
+          ([k, l]) =>
+            html`<label class="check-row"
+              ><input
+                type="checkbox"
+                data-check="slot-${id}-${k}"
+                ${raw(doneAttr('slot-' + id + '-' + k))}
+              />${l}</label
+            >`,
+        )}
+      </div>
+      ${factory
+        ? html`<div class="detail-actions">
+            <button
+              class="btn"
+              ${raw(calculated ? 'data-calc-factory' : 'data-factory')}="${factory.id}"
+            >
+              Open production target →
+            </button>
+          </div>`
+        : html`<p class="small muted">
+            Collected or completion item. Reserve its own supply; this storage position does not add
+            production capacity.
+          </p>`}
+      <h3>Container notes</h3>
+      <textarea id="detail-note" class="notes" maxlength="6000" aria-label="Container notes">
+${state.notes['slot-' + id] || ''}</textarea
+      >
+      <div class="note-save">
+        <span class="small muted">Belt source, splitter setting or remaining work.</span
+        ><button class="btn" data-save-note="slot-${id}" data-input="detail-note">
+          Save notes
+        </button>
+      </div>`,
     x.name,
   );
 }
