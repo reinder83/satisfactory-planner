@@ -10,7 +10,7 @@
 // Registration order matters where listeners share an event type: app.js imports this
 // module first, and tests/app-modules.test.mjs pins the order. In order: main page
 // click, change, search input, supply input, supply keydown, supply
-// focusout, add-task submit, editor submit, image error (capture), hashchange, #detail
+// focusout, editor submit, image error (capture), hashchange, #detail
 // backdrop click, beforeunload, then the wizard submit in profiles.js.
 import { knownWorld, nodePresets, presetSurvey } from '../../preferences.js';
 import { bayCapacity } from '../../state.js';
@@ -18,23 +18,15 @@ import { allowSwitch, navigate, pending, post, save, toast, writeQueue } from '.
 import { openFactory, openGroupChain } from '../factory-detail.js';
 import { $, num } from '../format.js';
 import {
-  calculated,
-  currentProfile,
   factoryEditing,
   floor,
   layoutEditing,
   loadContext,
-  phase,
-  plan,
-  planEditing,
   setActiveDetail,
-  setEditingTask,
   setFactoryEditing,
   setFactoryFilter,
   setFloor,
-  setHideDone,
   setLayoutEditing,
-  setPlanEditing,
   setQuery,
   setView,
   setWizard,
@@ -44,8 +36,7 @@ import {
   workspace,
 } from '../session.js';
 import { render } from '../shell.js';
-import { autoTaskLink, basePlanTasks, planTasks } from '../tasks.js';
-import { calculatedDelivery, openCalculatedFactory } from '../views/calculated.js';
+import { openCalculatedFactory } from '../views/calculated.js';
 import { membershipsOf } from '../views/factories.js';
 import { nextBayLetter, openSlot, slotKeys, storageBays } from '../views/storage.js';
 import {
@@ -76,9 +67,9 @@ import {
 
 // Click 1 of 2: buttons and links on the planner pages.
 // Index: dialogs (close, factory, container), storage room (complete room, floor tabs),
-// ADA panel (another remark, mute), edit-mode toggles, build-plan step editing (move,
-// edit, cancel, remove, restore), factory groups (remove, unassign), storage layout
-// (clear container, remove bay, remove floor), notes, delete personal task.
+// edit-mode toggles, factory groups (remove, unassign), storage layout (clear container,
+// remove bay, remove floor), notes. The build plan's own controls are handled in its
+// components (ui/plan/).
 // The branches are separate ifs, each keyed on its own attribute.
 document.addEventListener('click', async e => {
   const target = e.target.closest('button,a');
@@ -128,72 +119,10 @@ document.addEventListener('click', async e => {
     setLayoutEditing(!layoutEditing);
     render();
   }
-  // "Edit steps" / "Done editing" on the plan checklist; either way closes any step form.
-  if (target.hasAttribute('data-toggle-plan-edit')) {
-    setPlanEditing(!planEditing);
-    setEditingTask(null);
-    render();
-  }
   // "Edit groups" / "Done editing" on the factories page: show or hide the group editor.
   if (target.hasAttribute('data-toggle-factory-edit')) {
     setFactoryEditing(!factoryEditing);
     render();
-  }
-  // --- Build-plan step editing (plan page, after "Edit steps") ---
-  // ↑ / ↓ beside a step (data-dir is -1 or 1): swap it with its neighbour and save this
-  // phase's whole order (taskOrder). Nothing happens at either end of the list.
-  if (target.dataset.moveTask) {
-    const ids = planTasks().map(t => t.id),
-      i = ids.indexOf(target.dataset.moveTask),
-      j = i + Number(target.dataset.dir);
-    if (i >= 0 && j >= 0 && j < ids.length) {
-      [ids[i], ids[j]] = [ids[j], ids[i]];
-      try {
-        await save({ type: 'taskOrder', phase: phase(), ids });
-        render();
-      } catch {}
-    }
-  }
-  // "Edit" beside a step: swap it for its edit form (taskEditForm in tasks.js). The form
-  // is saved by the data-task-edit branch of the editor submit listener below.
-  if (target.dataset.editTask) {
-    setEditingTask(target.dataset.editTask);
-    render();
-  }
-  // "Cancel" in a step's edit form: close it without saving.
-  if (target.hasAttribute('data-cancel-task-edit')) {
-    setEditingTask(null);
-    render();
-  }
-  // "Remove" beside a step, after a confirmation. A personal task (id custom-…) is
-  // deleted; a plan step is only hidden (taskRemove) and keeps its checkmark, so it can
-  // be put back from "Removed steps in this phase".
-  if (target.dataset.removeStep) {
-    const id = target.dataset.removeStep;
-    if (id.startsWith('custom-')) {
-      if (confirm('Delete this personal task?')) {
-        try {
-          await save({ type: 'removeTask', id });
-          render();
-        } catch {}
-      }
-    } else if (
-      confirm(
-        'Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.',
-      )
-    ) {
-      try {
-        await save({ type: 'taskRemove', id });
-        render();
-      } catch {}
-    }
-  }
-  // "Restore" in the "Removed steps in this phase" list: show a removed plan step again.
-  if (target.dataset.restoreTask) {
-    try {
-      await save({ type: 'taskRestore', id: target.dataset.restoreTask });
-      render();
-    } catch {}
   }
   // --- Factory groups (factories page, after "Edit groups") ---
   // "Remove group", after a confirmation: only the group goes; its factories and their
@@ -282,21 +211,13 @@ document.addEventListener('click', async e => {
       target.disabled = false;
     }
   }
-  // "Delete personal task" inside a personal task's details (outside edit mode), after a
-  // confirmation.
-  if (target.dataset.remove && confirm('Delete this personal task?')) {
-    try {
-      await save({ type: 'removeTask', id: target.dataset.remove });
-      render();
-    } catch {}
-  }
 });
 
 // Change events: checkboxes, selects and fields that save when committed, plus the
 // wizard fields that reshape its form.
-// Index: container Done, progress checkmarks, working phase, factory filter, hide
-// completed, wizard redraws (settings, guided, node survey, existing supply), alternate
-// recipe ticks, bay and group renames, group assignment and rate, elevator deliveries.
+// Index: container Done, progress checkmarks, working phase, factory filter, wizard
+// redraws (settings, guided, node survey, existing supply), alternate recipe ticks, bay
+// and group renames, group assignment and rate.
 document.addEventListener('change', async e => {
   const el = e.target;
   // --- Checkmarks ---
@@ -333,11 +254,6 @@ document.addEventListener('change', async e => {
   // The factory status filter on the factories page (view state only).
   if (el.id === 'factory-filter') {
     setFactoryFilter(el.value);
-    render();
-  }
-  // "Hide completed" above the plan checklist (view state only).
-  if (el.id === 'hide-done') {
-    setHideDone(el.checked);
     render();
   }
   // --- Profile wizard (nothing is saved until the profile is created) ---
@@ -463,33 +379,12 @@ document.addEventListener('change', async e => {
       render();
     }
   }
-  // --- Deliveries and restore ---
-  // A Space Elevator delivery count on the plan page: a whole number from 0 to the target.
-  // An invalid entry or a failed write resets the field to the saved count (without one:
-  // the handbook's initial count for the original profile, otherwise 0).
-  if (el.dataset.delivery) {
-    const d = calculated
-        ? calculatedDelivery(el.dataset.delivery)
-        : plan.deliveries.find(x => x.id === el.dataset.delivery),
-      v = Number(el.value);
-    if (!Number.isInteger(v) || v < 0 || v > d.target) {
-      toast('Enter a whole number between 0 and ' + num(d.target) + '.', true);
-      el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
-      return;
-    }
-    try {
-      await save({ type: 'delivery', key: d.id, value: v });
-      render();
-    } catch {
-      el.value = state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
-    }
-  }
 });
 
 // Input events on search and filter boxes, as you type.
 document.addEventListener('input', e => {
-  // The find boxes on the factories, storage and plan pages: store the query and redraw.
-  if (['factory-search', 'storage-search', 'plan-search'].includes(e.target.id)) {
+  // The find boxes on the factories and storage pages: store the query and redraw.
+  if (['factory-search', 'storage-search'].includes(e.target.id)) {
     setQuery(e.target.value);
     render();
   }
@@ -589,37 +484,9 @@ document.addEventListener('focusout', e => {
   if (field && !field.contains(e.relatedTarget)) hideSupplyOptions(input);
 });
 
-// Submit 1 of 3 (then the editor forms below, then profiles.js): "Add task" under the
-// plan checklist adds a personal task to the current phase with a random custom-… id.
-// The button stays disabled after success because the redraw replaces the form.
-document.addEventListener('submit', async e => {
-  if (e.target.id === 'add-task') {
-    e.preventDefault();
-    const title = new FormData(e.target).get('title').trim();
-    if (!title) return;
-    const btn = e.target.querySelector('button');
-    btn.disabled = true;
-    try {
-      await save({
-        type: 'addTask',
-        id:
-          'custom-' +
-          Array.from(crypto.getRandomValues(new Uint8Array(16)), b =>
-            b.toString(16).padStart(2, '0'),
-          ).join(''),
-        phase: phase(),
-        title,
-      });
-      render();
-    } catch {
-      btn.disabled = false;
-    }
-  }
-});
-
-// Submit 2 of 3: the inline forms of the storage layout editor, the factory group
-// editor and the step edit form. Each ignores an empty name.
-// Index: add floor, rename floor, add bay, add container, add group, save step.
+// Submit 1 of 2 (then profiles.js): the inline forms of the storage layout editor and the
+// factory group editor. Each ignores an empty name.
+// Index: add floor, rename floor, add bay, add container, add group.
 document.addEventListener('submit', async e => {
   const f = e.target,
     read = () => String(new FormData(f).get('name') || '').trim();
@@ -706,31 +573,6 @@ document.addEventListener('submit', async e => {
           ).join(''),
         name,
       });
-      render();
-    } catch {}
-  }
-  // --- Build-plan step editing ---
-  // "Save step" in a step's edit form. A title or details equal to the plan's own text
-  // is saved as empty, meaning "no override"; the link likewise when it is the automatic
-  // one. The checkmark is untouched.
-  if (f.dataset.taskEdit) {
-    e.preventDefault();
-    const id = f.dataset.taskEdit,
-      fd = new FormData(f);
-    const base = basePlanTasks().find(t => t.id === id);
-    const title = String(fd.get('title') || '').trim(),
-      body = String(fd.get('body') || '').trim(),
-      link = String(fd.get('link') || '');
-    if (!title) return;
-    try {
-      await save({
-        type: 'taskEdit',
-        id,
-        title: base && title === base.title ? '' : title,
-        body: base && body === String(base.body || '').trim() ? '' : body,
-        link: link === autoTaskLink(id) ? '' : link,
-      });
-      setEditingTask(null);
       render();
     } catch {}
   }

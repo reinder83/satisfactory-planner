@@ -1,5 +1,6 @@
-// Build-plan checklist steps: per-profile edits, links, icons and rendering.
-// Used by views/plan.js (handbook) and views/calculated.js (calculated profiles).
+// Build-plan checklist steps: per-profile edits, links and icons. The build plan's
+// components (ui/plan/) read them; views/storage.js draws its own checklists with
+// taskHtml until the storage page is a component too.
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
@@ -10,11 +11,9 @@ import {
   calculated,
   checked,
   doneAttr,
-  editingTask,
   hideDone,
   phase,
   plan,
-  planEditing,
   query,
   stage,
   state,
@@ -69,63 +68,35 @@ export function planTasks() {
 // Returns that row id, or '' for any other step.
 export const autoTaskLink = id => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
 
-// HTML for the "Open factory" button of a linked step, or '' when the step has no link
-// or the linked factory is not part of the current phase.
-function taskLinkHtml(t) {
+// The factory a step links to, as { calc, id, name } for its "Open factory" button
+// (calc: a calculated row, opened by data-calc-factory, otherwise a handbook factory,
+// opened by data-factory), or null when the step has no link or the linked factory is not
+// part of the current phase.
+export function taskLink(t) {
   const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
-  if (!linked) return '';
+  if (!linked) return null;
   if (calculated) {
     const row = (calcStage().rows || []).find(r => r.id === linked);
-    return row
-      ? html`<button class="btn quiet task-link" data-calc-factory="${row.id}">
-          Open factory: ${row.name} ↗
-        </button>`
-      : '';
+    return row ? { calc: true, id: row.id, name: row.name } : null;
   }
   const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
-  return f
-    ? html`<button class="btn quiet task-link" data-factory="${f.id}">
-        Open factory: ${f.name} ↗
-      </button>`
-    : '';
+  return f ? { calc: false, id: f.id, name: f.name } : null;
 }
 
-// HTML for the inline edit form that replaces a step while it is being edited. Submitted
-// as data-task-edit and handled in events/views.js, which stores only what differs from
-// the generated step.
-function taskEditForm(t) {
-  const options = calculated
-    ? (calcStage().rows || []).map(r => [r.id, r.name])
-    : plan.factories.filter(f => f.stages[stage()]).map(f => [f.id, f.name]);
-  const current = taskEditsState().links[t.id] || autoTaskLink(t.id);
-  return html`<form class="task task-edit" data-task-edit="${t.id}">
-    <label class="field"
-      >Step title<input name="title" maxlength="240" required value="${t.title}"
-    /></label>
-    <label class="field"
-      >Details<textarea name="body" class="notes" maxlength="6000">${t.body || ''}</textarea>
-    </label>
-    <label class="field"
-      >Linked factory<select name="link">
-        <option value="">No linked factory</option>
-        ${options.map(
-          ([v, l]) => html`<option value="${v}" ${v === current && raw('selected')}>${l}</option>`,
-        )}
-      </select></label
-    >
-    <div class="task-edit-actions">
-      <button class="btn primary" type="submit">Save step</button>
-      <button class="btn" type="button" data-cancel-task-edit>Cancel</button>
-    </div>
-    <p class="small muted">
-      Restore the original text by clearing a field. The step keeps its checkmark either way.
-    </p>
-  </form>`;
+// What a step's edit form offers: the factories of this phase as [id, name], and the one
+// the step links to now (its saved link, or the automatic one).
+export function taskLinkChoices(t) {
+  return {
+    options: calculated
+      ? (calcStage().rows || []).map(r => [r.id, r.name])
+      : plan.factories.filter(f => f.stages[stage()]).map(f => [f.id, f.name]),
+    current: taskEditsState().links[t.id] || autoTaskLink(t.id),
+  };
 }
 
 // A step's icon says what kind of work it is at a glance: a linked or calculated
 // production line shows the part it makes, every other step a category glyph.
-const TASK_GLYPHS = {
+export const TASK_GLYPHS = {
   production:
     '<path d="M3 20.5h18M5.5 20.5v-9l4 2.6v-2.6l4 2.6v-2.6l4 2.6v6.4M17.5 9.2V4h2.2v5.2"/>',
   build: '<path d="M3.5 3.5h17v17h-17zM3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17"/>',
@@ -190,7 +161,7 @@ const TASK_TEXT_KINDS = [
 
 // The TASK_GLYPHS key for a step. Unlock steps are MAM research when titled "MAM: ...",
 // otherwise HUB milestones; anything unmatched counts as production.
-function taskKind(t) {
+export function taskKind(t) {
   const id = t.id || '';
   if (id.startsWith('unlock-')) return /^mam:/i.test(t.title || '') ? 'research' : 'milestone';
   for (const [re, kind] of TASK_ID_KINDS) if (re.test(id)) return kind;
@@ -212,7 +183,14 @@ function taskIconItem(t) {
   return f ? f.name : '';
 }
 
-// HTML for a step's icon: the made item's bundled icon, otherwise the category glyph.
+// A step's icon: { item } for the made item's bundled icon, otherwise { kind } for its
+// TASK_GLYPHS category glyph (ui/plan/StepIcon.vue draws it).
+export function taskIcon(t) {
+  const item = taskIconItem(t);
+  return item ? { item } : { kind: taskKind(t) };
+}
+
+// HTML for a step's icon, for the storage page's checklists.
 function taskIconHtml(t) {
   const item = taskIconItem(t);
   if (item)
@@ -234,32 +212,12 @@ function taskIconHtml(t) {
   >`;
 }
 
-// HTML for one checklist step: checkbox (data-check=<step id>, the saved checklist key),
-// icon, expandable text and link. In edit mode it adds move/edit/remove tools, or shows
-// the edit form for the step being edited. Also used by views/storage.js.
+// HTML for one step of the storage page's checklists: checkbox (data-check=<step id>, the
+// saved checklist key, handled in events/views.js), icon and expandable text. Those steps
+// have no edits, links or personal tasks; the build plan draws its steps with
+// ui/plan/PlanStep.vue.
 export function taskHtml(t) {
-  if (planEditing && editingTask === t.id) return taskEditForm(t);
-  const tools =
-    planEditing &&
-    html`<span class="task-tools"
-      ><button
-        class="btn quiet"
-        data-move-task="${t.id}"
-        data-dir="-1"
-        aria-label="Move up: ${t.title}"
-      >
-        ↑</button
-      ><button
-        class="btn quiet"
-        data-move-task="${t.id}"
-        data-dir="1"
-        aria-label="Move down: ${t.title}"
-      >
-        ↓</button
-      ><button class="btn quiet" data-edit-task="${t.id}">Edit</button
-      ><button class="btn quiet danger" data-remove-step="${t.id}">Remove</button></span
-    >`;
-  return html`<article class="task ${planEditing ? 'is-editing' : ''}">
+  return html`<article class="task">
     <input
       type="checkbox"
       data-check="${t.id}"
@@ -268,77 +226,19 @@ export function taskHtml(t) {
     />${taskIconHtml(t)}
     <details data-task="${t.id}">
       <summary>${t.title}</summary>
-      <p>${t.body || 'Your own task for this phase.'}</p>
-      ${taskLinkHtml(t)}${t.id.startsWith('custom-') &&
-      !planEditing &&
-      html`<button class="delete-task" data-remove="${t.id}">Delete personal task</button>`}
+      <p>${t.body}</p>
     </details>
-    ${tools}
   </article>`;
 }
 
-// HTML for the "Edit steps" / "Done editing" toggle (data-toggle-plan-edit).
-export function planEditToolbar() {
-  return html`<button class="btn ${planEditing ? 'primary' : ''}" data-toggle-plan-edit>
-    ${planEditing ? 'Done editing' : 'Edit steps'}
-  </button>`;
-}
-
 // Applies the "Hide completed" toggle and the step search to a list of steps.
-function filteredPlanTasks(ts) {
+export function filteredPlanTasks(ts) {
   const q = query.trim().toLowerCase();
   return ts.filter(
     t =>
       (!hideDone || !checked(t.id)) &&
       (!q || (t.title + ' ' + (t.body || '')).toLowerCase().includes(q)),
   );
-}
-
-// HTML for the build-plan checklist: search/hide-completed tools, the filtered steps,
-// or an empty-state message that says why nothing is shown.
-export function checklistHtml(ts) {
-  const shown = filteredPlanTasks(ts);
-  const empty = !ts.length
-    ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
-    : query.trim()
-      ? 'No steps match this search.'
-      : 'Every step of this phase is completed. Untick “Hide completed” to review them.';
-  return html`${ts.length > 0 &&
-    html`<div class="checklist-tools">
-      <input
-        id="plan-search"
-        class="search"
-        placeholder="Find a step…"
-        aria-label="Find a step"
-        value="${query}"
-      /><label class="check-row small"
-        ><input type="checkbox" id="hide-done" ${hideDone && raw('checked')} />Hide completed</label
-      ><span class="small muted"
-        >${shown.length !== ts.length && shown.length + ' of ' + ts.length + ' steps'}</span
-      >
-    </div>`}
-    <div class="checklist">
-      ${shown.length ? shown.map(taskHtml) : html`<div class="empty-state">${empty}</div>`}
-    </div>`;
-}
-
-// HTML for the "Removed steps" panel shown while editing, with a Restore button per
-// step. Removed steps keep their checklist key and checkmark, so restoring loses nothing.
-export function removedStepsHtml() {
-  if (!planEditing) return '';
-  const removed = new Set(taskEditsState().removed);
-  const list = basePlanTasks().filter(t => removed.has(t.id));
-  if (!list.length) return '';
-  return html`<details class="panel removed-steps">
-    <summary>Removed steps in this phase (${list.length})</summary>
-    ${list.map(
-      t =>
-        html`<div class="removed-step">
-          <span>${taskIconHtml(t)}${t.title}</span
-          ><button class="btn quiet" data-restore-task="${t.id}">Restore</button>
-        </div>`,
-    )}
-  </details>`;
 }
 
 // Handbook steps for the current phase from plan.json, plus personal tasks.

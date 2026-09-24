@@ -821,12 +821,8 @@ test('a plan saved before existing production existed still renders every page',
     `calculated=legacyPlan;currentProfile={id:'p',kind:'calculated',name:'Older profile'};state={settings:{phase:'3'},checks:{['calc-3-'+legacyPlan.stages['3'].rows[0].id]:true},notes:{},deliveries:{},customTasks:[]};`,
     c,
   );
-  for (const view of [
-    'renderCalculatedPlan',
-    'renderCalculatedFactories',
-    'renderCalculatedResources',
-    'renderStorage',
-  ]) {
+  // The plan page is a component: tests/ui/plan.test.mjs renders it for this shape too.
+  for (const view of ['renderCalculatedFactories', 'renderCalculatedResources', 'renderStorage']) {
     const html = vm.runInContext(view + '()', c);
     assert.ok(typeof html === 'string' && html.length > 100, view + ' rendered nothing');
   }

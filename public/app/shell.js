@@ -6,13 +6,8 @@ import { calculated, view } from './session.js';
 import { invalidate } from './ui/bridge.js';
 import { mountPage, mountShell, unmountPage } from './ui/mount.js';
 import { vuePage } from './ui/pages.js';
-import {
-  renderCalculatedFactories,
-  renderCalculatedPlan,
-  renderCalculatedResources,
-} from './views/calculated.js';
+import { renderCalculatedFactories, renderCalculatedResources } from './views/calculated.js';
 import { renderFactories } from './views/factories.js';
-import { renderPlan } from './views/plan.js';
 import { renderStorage } from './views/storage.js';
 import { renderWizard } from './wizard/wizard.js';
 
@@ -40,11 +35,10 @@ export function browserNotice() {
 }
 
 // Hash route -> legacy view function returning HTML, for the pages that are not components
-// yet (ui/pages.js has those). A calculated profile has its own plan, factories and
-// resources pages.
+// yet (ui/pages.js has those). A calculated profile has its own factories and resources
+// pages.
 const legacyRoutes = () => ({
   wizard: renderWizard,
-  plan: calculated ? renderCalculatedPlan : renderPlan,
   factories: calculated ? renderCalculatedFactories : renderFactories,
   storage: renderStorage,
   resources: calculated ? renderCalculatedResources : null,

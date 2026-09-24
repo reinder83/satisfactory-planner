@@ -165,10 +165,10 @@ test('moving between a component page and a legacy page leaves nothing behind', 
   go('profiles');
   render();
   assert.equal($$('.profile-card').length, 2);
-  go('plan');
+  go('factories');
   render();
   assert.equal($$('.profile-card').length, 0, 'the component page is gone');
-  assert.match($('#main h1').textContent, /field plan/);
+  assert.equal($('#main h1').textContent, 'Factory targets');
   go('backup');
   render();
   assert.equal($$('#main h1').length, 1);
