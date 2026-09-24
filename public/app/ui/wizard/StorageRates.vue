@@ -1,0 +1,136 @@
+<!--
+  Per-item storage rates on All settings step 2, for the items the selected storage supply
+  stocks. Inputs named "rate:<item>" become settings.storageOverrides in readWizard; blank
+  means "use the rate for its group", so only the items singled out carry a number. Each
+  box's placeholder is the rate its group would give it: 0 for delivered items, the
+  construction rate (or the general one when that is empty) for construction materials, and
+  the general rate for the rest. Editing either group rate on the step refreshes them as you
+  type; a half-typed rate leaves the last usable placeholder in place.
+-->
+<script setup>
+import {
+  computed,
+  getCurrentInstance,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
+import { storageRateFor, wantsStorage } from '../../../preferences.js';
+import { num } from '../../format.js';
+import { wizard, workspace } from '../../session.js';
+import { legacy } from '../bridge.js';
+import HelpTip from '../form/HelpTip.vue';
+import { vValue } from '../form/value.js';
+
+const view = computed(() =>
+  legacy(() => {
+    if (!wizard) return null;
+    const s = wizard.settings;
+    const items = (workspace.catalog.storageItems || []).filter(i =>
+      wantsStorage(i.name, s.storage),
+    );
+    if (!items.length) return null;
+    const over = s.storageOverrides || {};
+    return {
+      set: items.filter(i => over[i.name] !== undefined).length,
+      rows: items.map(i => ({
+        name: i.name,
+        group: i.build ? 'build' : i.delivered ? 'delivered' : 'other',
+        value: over[i.name] ?? '',
+        placeholder: num(storageRateFor({ ...s, storageOverrides: {} }, i.name)),
+      })),
+    };
+  }),
+);
+
+// The placeholders on screen: from the draft on each redraw, then kept in step with the
+// group-rate fields as they are typed.
+const placeholders = reactive({});
+watch(
+  view,
+  v => {
+    for (const r of v?.rows || []) placeholders[r.name] = r.placeholder;
+  },
+  { immediate: true },
+);
+function groupRates(e) {
+  if (!['buildRate', 'storageRate'].includes(e.target.name)) return;
+  const form = e.currentTarget;
+  const read = name => {
+    const value = form.querySelector('[name=' + name + ']')?.value;
+    return value !== undefined && value !== '' && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
+  };
+  const general = read('storageRate'),
+    build = read('buildRate') ?? general;
+  for (const r of view.value?.rows || []) {
+    const rate = r.group === 'delivered' ? 0 : r.group === 'build' ? build : general;
+    if (rate !== null) placeholders[r.name] = num(rate);
+  }
+}
+// The group-rate fields sit elsewhere on the step, so listen on the step's form.
+// The component's root is the details, or its placeholder comment when there is none.
+const self = getCurrentInstance();
+let form = null;
+onMounted(() => {
+  form = self.proxy.$el?.parentElement?.closest('form');
+  form?.addEventListener('input', groupRates);
+});
+onBeforeUnmount(() => form?.removeEventListener('input', groupRates));
+
+const filter = ref('');
+const shown = r =>
+  filter.value.trim() === '' || r.name.toLowerCase().includes(filter.value.trim().toLowerCase());
+</script>
+
+<template>
+  <details v-if="view" class="panel rate-picker" :open="view.set > 0">
+    <summary>
+      Per-item storage rates{{ view.set > 0 ? ' · ' + num(view.set) + ' set' : '' }}
+      <HelpTip name="storageOverrides" />
+    </summary>
+    <p class="small muted">
+      Leave a box blank to use the rate for its group. Enter <b>0</b> to keep an item’s container
+      and address without reserving any production for it. Space Elevator parts start at 0:
+      deliveries and later project parts already consume them, so a standing buffer would be
+      production nobody draws from. {{ num(view.rows.length) }} items are in your selected storage
+      supply.
+    </p>
+    <input
+      id="rate-filter"
+      v-model="filter"
+      type="search"
+      placeholder="Filter by item…"
+      aria-label="Filter storage items"
+    />
+    <div class="rate-list">
+      <label
+        v-for="r in view.rows"
+        :key="r.name"
+        class="rate-row field"
+        :data-rate-text="r.name.toLowerCase()"
+        :data-rate-group="r.group"
+        :hidden="!shown(r)"
+        ><span
+          >{{ r.name
+          }}<template v-if="r.group === 'build'"
+            >{{ ' ' }}<small class="muted">· construction</small></template
+          ><template v-else-if="r.group === 'delivered'"
+            >{{ ' ' }}<small class="muted">· delivered</small></template
+          ></span
+        ><input
+          :name="'rate:' + r.name"
+          type="number"
+          min="0"
+          max="300"
+          step="0.1"
+          v-value="r.value"
+          :placeholder="placeholders[r.name]"
+          :aria-label="`Storage refill for ${r.name} per minute`"
+      /></label>
+    </div>
+  </details>
+</template>

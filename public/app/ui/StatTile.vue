@@ -1,4 +1,4 @@
-<!-- A summary tile (stat() in format.js for the legacy pages). The value slot takes markup
+<!-- A summary tile. The value slot takes markup
      such as a "/ total" fraction; otherwise `value` is shown as text. -->
 <script setup>
 defineProps({

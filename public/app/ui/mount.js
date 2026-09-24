@@ -38,7 +38,7 @@ export function mountPage(host, component) {
   page = { app, component, host };
 }
 
-// Before a legacy page is drawn into <main> again.
+// When <main> shows no page.
 export function unmountPage() {
   page?.app.unmount();
   page = null;

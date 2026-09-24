@@ -1,5 +1,5 @@
-<!-- The browser edition's notice that saves live in this browser (browserNotice() in
-     shell.js for the legacy pages). -->
+<!-- The browser edition's notice that saves live in this browser, at the top of the wizard,
+     guided-start and node-survey pages. -->
 <template>
   <div class="notice blue">
     Your saves stay in this browser on this device. Clearing site data or using private browsing can

@@ -1,6 +1,5 @@
-<!-- The header and body of the shared #detail dialog (dialog() in factory-detail.js for the
-     dialogs that are not components yet). `icon` is an item name for the header icon. The ×
-     is handled by the shared data-close handler in events/views.js. -->
+<!-- The header and body of the shared #detail dialog. `icon` is an item name for the header
+     icon. The × is handled by the shared data-close handler in events/views.js. -->
 <script setup>
 import ItemIcon from '../ItemIcon.vue';
 

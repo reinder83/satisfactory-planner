@@ -1,6 +1,4 @@
 // Small DOM and text helpers shared by every screen.
-import { html } from './html.js';
-
 export const $ = s => document.querySelector(s);
 
 // Escapes text for HTML text and quoted attributes. Views build HTML strings, so every
@@ -24,25 +22,3 @@ export const slug = s =>
     .replace(/^-|-$/g, '');
 
 export const plural = (n, word) => num(n) + ' ' + word + (n === 1 ? '' : 's');
-
-// HTML for a summary tile. Plain strings are escaped; pass html`` for markup in a value.
-export function stat(label, value, caption) {
-  return html`<div class="stat">
-    <span class="eyebrow">${label}</span><strong>${value}</strong><small>${caption}</small>
-  </div>`;
-}
-
-// HTML <img> for an item's bundled icon in icons/, or '' without a name. A trailing
-// "(...)" qualifier is dropped first. Missing icons are hidden by an error listener in
-// events/views.js.
-export const itemIcon = name =>
-  name
-    ? html`<img
-        class="item-icon"
-        src="./icons/${slug(String(name).replace(/\s*\([^)]*\)\s*$/, ''))}.png"
-        width="42"
-        height="42"
-        loading="lazy"
-        alt=""
-      />`
-    : '';
