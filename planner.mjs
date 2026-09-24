@@ -8,7 +8,7 @@ const MAM_RECIPES=['Recipe_Alternate_Turbofuel_C','Recipe_Alternate_EnrichedCoal
 export const powerNeedsTurbofuel=mainPower=>!['auto','coal','fuel'].includes(mainPower||'auto');
 const ALT_IDS=new Set(DATA.recipes.filter(r=>r.alternate).map(r=>r.id));
 export const RAW=['Iron Ore','Copper Ore','Limestone','Coal','Caterium Ore','Raw Quartz','Sulfur','Bauxite','Uranium','SAM','Crude Oil','Nitrogen Gas','Water'];
-export const DEFAULT_LIMITS={'Iron Ore':92100,'Copper Ore':36900,Limestone:69900,Coal:42300,'Caterium Ore':15000,'Raw Quartz':13500,Sulfur:10800,Bauxite:12300,Uranium:2100,SAM:10200,'Crude Oil':9900,'Nitrogen Gas':12000,Water:1000000};
+export const DEFAULT_LIMITS={'Iron Ore':92100,'Copper Ore':36900,Limestone:69300,Coal:42300,'Caterium Ore':15000,'Raw Quartz':13500,Sulfur:10800,Bauxite:12300,Uranium:2100,SAM:10200,'Crude Oil':9900,'Nitrogen Gas':12000,Water:1000000};
 export const PURE_LIMITS={'Iron Ore':152400,'Copper Ore':66000,Limestone:112800,Coal:74400,'Caterium Ore':20400,'Raw Quartz':20400,Sulfur:19200,Bauxite:20400,Uranium:6000,SAM:22800,'Crude Oil':18000,'Nitrogen Gas':13500,Water:1000000};
 export const DELIVERIES={1:{'Smart Plating':50},2:{'Smart Plating':1000,'Versatile Framework':1000,'Automated Wiring':100},3:{'Versatile Framework':2500,'Modular Engine':500,'Adaptive Control Unit':100},4:{'Assembly Director System':500,'Magnetic Field Generator':500,'Thermal Propulsion Rocket':250,'Nuclear Pasta':100},5:{'Nuclear Pasta':1000,'Biochemical Sculptor':1000,'AI Expansion Server':256,'Ballistic Warp Drive':200}};
 const err=message=>{throw Object.assign(new Error(message),{status:400});};
@@ -17,6 +17,61 @@ const number=(v,min,max,fallback)=>v===undefined?fallback:Number.isFinite(v)&&v>
 // Per-item storage rates. Only storable item names are accepted so a stale or
 // mistyped entry cannot silently reserve production for nothing.
 const storable=name=>!RAW.includes(name)&&!DATA.items[name]?.fluid&&!DATA.items[name]?.radioactive&&(DATA.items[name]?.sink||0)>0;
+// Production you already run, entered as a rate. Matching an existing factory
+// against the plan's own rows does not work: your Modular Frame line is whatever
+// recipe and machine count you happened to build, not the one this solve picks.
+// A rate is the thing you can actually read off your own factory.
+//
+// Its ore and its power are already spent in your world, so — exactly as for
+// spare existing power — the resource budgets and the spare-power figure are
+// entered net of it. Zero is dropped so an untouched profile stays untouched.
+const suppliable=name=>!RAW.includes(name)&&!!DATA.items[name];
+const supplyRates=raw=>{
+ if(raw===undefined)return {};
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))err('Invalid existing production rates.');
+ const entries=Object.entries(raw);
+ if(entries.length>200)err('Too many existing production rates.');
+ const out={};
+ for(const [name,rate] of entries){
+  if(!suppliable(name))err(`${name} cannot be entered as existing production.`);
+  const q=number(rate,0,1000000,0);
+  if(q>0)out[name]=q;
+ }
+ return out;
+};
+const counts3=raw=>{
+ const out={};
+ if(raw===undefined)return out;
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))err('Invalid node counts.');
+ if(Object.keys(raw).length>40)err('Invalid node counts.');
+ for(const [name,c] of Object.entries(raw)){
+  if(!RAW.includes(name))err(`${name} is not a raw resource.`);
+  if(!c||typeof c!=='object'||Array.isArray(c))err('Invalid node counts.');
+  const row={impure:number(c.impure,0,10000,0),normal:number(c.normal,0,10000,0),pure:number(c.pure,0,10000,0)};
+  if(row.impure||row.normal||row.pure)out[name]=row;
+ }
+ return out;
+};
+// How the resource budgets were arrived at: the nodes the world holds, the
+// miner they will be worked with, and whatever is already spoken for. Recorded
+// so the survey can be reopened; the plan itself still runs on `limits`.
+const extractionRecord=raw=>{
+ if(raw===undefined||raw===null)return null;
+ if(typeof raw!=='object'||Array.isArray(raw))err('Invalid extraction survey.');
+ const used={};
+ if(raw.used!==undefined){
+  if(!raw.used||typeof raw.used!=='object'||Array.isArray(raw.used))err('Invalid committed extraction.');
+  for(const [name,v] of Object.entries(raw.used)){
+   if(!RAW.includes(name))err(`${name} is not a raw resource.`);
+   const q=number(v,0,10000000,0);if(q>0)used[name]=q;
+  }
+ }
+ return {
+  mark:raw.mark===undefined?3:[1,2,3].includes(raw.mark)?raw.mark:err('Invalid miner mark.'),
+  clock:number(raw.clock,0.01,2.5,2.5),
+  nodes:counts3(raw.nodes),wells:counts3(raw.wells),used
+ };
+};
 const rateOverrides=raw=>{
  if(raw===undefined)return {};
  if(!raw||typeof raw!=='object'||Array.isArray(raw))err('Invalid per-item storage rates.');
@@ -40,7 +95,7 @@ const reservedUses=raw=>{
 };
 export function settings(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))err('Invalid settings.');
- const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),buildRate:number(input.buildRate,0,300,number(input.storageRate,0.1,300,1)),storageOverrides:rateOverrides(input.storageOverrides),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),installedPowerGW:number(input.installedPowerGW,0,10000,number(input.availablePowerGW,0,10000,0)),somersloops:number(input.somersloops,0,106,0),augmenters:number(input.augmenters,0,10,0),fueledAugmenters:number(input.fueledAugmenters,0,10,0),sloopReserved:reservedUses(input.sloopReserved),amplifySloops:number(input.amplifySloops,0,106,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),phaseTime:choice(input.phaseTime,['every','final'],'every'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
+ const s={utilityPercent:number(input.utilityPercent,0,200,20),droneFuel:choice(input.droneFuel,droneFuels,'none'),droneFuelRate:number(input.droneFuelRate,0.01,10000,10),droneBridgeRate:number(input.droneBridgeRate,0.01,10000,10),worldSeed:input.worldSeed===undefined||input.worldSeed===''?'':String(number(Number(input.worldSeed),-2147483648,2147483647,1)),mainPower:choice(input.mainPower,powerOptions.map(x=>x[0]),'auto'),collectables:input.collectables===true,phase:choice(String(input.phase||'3'),['1','2','3','4','5'],'3'),purity:choice(input.purity,purities.map(x=>x[0]),'vanilla'),distribution:choice(input.distribution,distributions.map(x=>x[0]),'original'),multiplier:number(input.multiplier,0.1,1000,1),powerFactor:number(input.powerFactor,0,10,1),availablePowerGW:number(input.availablePowerGW,0,10000,0),recipes:choice(input.recipes,['standard','all','custom'],'standard'),pureIngots:!!input.pureIngots,sam:choice(input.sam,['avoid','needed','allow'],'needed'),nuclear:choice(input.nuclear,['none','sink','recycle'],'none'),uraniumReactors:number(input.uraniumReactors,1,1000,1),storage:choice(input.storage,storageOptions.map(x=>x[0]),'construction'),storageRate:number(input.storageRate,0.1,300,1),buildRate:number(input.buildRate,0,300,number(input.storageRate,0.1,300,1)),storageOverrides:rateOverrides(input.storageOverrides),existingSupply:supplyRates(input.existingSupply),extraction:extractionRecord(input.extraction),cellsPerMinute:number(input.cellsPerMinute,0,1000,0),installedPowerGW:number(input.installedPowerGW,0,10000,number(input.availablePowerGW,0,10000,0)),somersloops:number(input.somersloops,0,106,0),augmenters:number(input.augmenters,0,10,0),fueledAugmenters:number(input.fueledAugmenters,0,10,0),sloopReserved:reservedUses(input.sloopReserved),amplifySloops:number(input.amplifySloops,0,106,0),goal:choice(input.goal,['minimal','balanced','timed','maximum'],'balanced'),phaseTime:choice(input.phaseTime,['every','final'],'every'),hours:number(input.hours,0.25,2000,8),roundRates:input.roundRates!==false,wholeMachines:input.wholeMachines===true,limitsConfirmed:!!input.limitsConfirmed,modNotes:typeof input.modNotes==='string'?input.modNotes.slice(0,500):''};
  if(s.droneFuel==='Plutonium Fuel Rod'&&s.nuclear==='none')err('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
  if(s.fueledAugmenters>s.augmenters)err('More fueled Alien Power Augmenters than augmenters.');
  if(s.installedPowerGW<s.availablePowerGW)err('Total installed generation cannot be less than the spare part of it.');
@@ -95,14 +150,32 @@ function generators(s,phase){
 }
 export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,recipeIds=null,caps=null,baseline=null}={}){
  if((s.wholeMachines||s.amplifySloops>0)&&!recipeIds){
-  const base=run({...s,wholeMachines:false,amplifySloops:0},phase,{maximum,conversion,ignoreLimits,caps});if(!base.feasible)return base;
+  const opts={maximum,conversion,ignoreLimits,caps};
+  const exact=t=>run({...t,wholeMachines:false,amplifySloops:0},phase,opts);
+  const twins=b=>Object.fromEntries([...b.rows].filter(r=>r.equivalent>=1).sort((x,y)=>y.equivalent-x.equivalent).slice(0,AMPLIFY_CANDIDATES[s.wholeMachines?'whole':'precise']).map(r=>[r.id,r.equivalent]));
+  const base=exact(s);if(!base.feasible)return base;
   const ids=new Set(base.rows.map(r=>r.id));
-  const baseline=Object.fromEntries([...base.rows].filter(r=>r.equivalent>=1).sort((a,b)=>b.equivalent-a.equivalent).slice(0,AMPLIFY_CANDIDATES[s.wholeMachines?'whole':'precise']).map(r=>[r.id,r.equivalent]));
-  const fit=run(s,phase,{maximum,conversion,ignoreLimits,caps,recipeIds:ids,baseline});
+  const baseline=twins(base);
+  let fit=run(s,phase,{...opts,recipeIds:ids,baseline});
+  // Crediting production you already run narrows the recipe network the exact solve picks, and a
+  // narrower network has less room to round up to whole machines. Widen it with the recipes this
+  // phase would have used without the credit before concluding anything — the supplied plan is
+  // still the smaller one, it just needs the slack. If even that will not round, drop the credit:
+  // telling the planner what you already built must never cost you a plan, the same rule
+  // amplification follows below.
+  if(!fit.feasible&&Object.keys(s.existingSupply).length){
+   const plainBase=exact({...s,existingSupply:{}});
+   if(plainBase.feasible){
+    const plainIds=new Set(plainBase.rows.map(r=>r.id));
+    const widened=run(s,phase,{...opts,recipeIds:new Set([...ids,...plainIds]),baseline});
+    if(widened.feasible)fit=widened;
+    else{const without=run({...s,existingSupply:{}},phase,{...opts,recipeIds:plainIds,baseline:twins(plainBase)});if(without.feasible)return {...without,supplyDropped:true};}
+   }
+  }
   // Amplification is optional by definition: the solver may always place no somersloops at all.
   // So a failure here is the integer search running out of time, never a real shortage — never let
   // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
-  if(!fit.feasible&&s.amplifySloops>0){const plain=run({...s,amplifySloops:0},phase,{maximum,conversion,ignoreLimits,caps,recipeIds:ids});if(plain.feasible)return {...plain,amplificationDropped:true};}
+  if(!fit.feasible&&s.amplifySloops>0){const plain=run({...s,amplifySloops:0},phase,{...opts,recipeIds:ids});if(plain.feasible)return {...plain,amplificationDropped:true};}
   return fit;
  }
  const selected=[...recipePool(s,phase,conversion),...generators(s,phase)].filter(r=>!recipeIds||recipeIds.has(r.id)||conversion&&Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water'));
@@ -153,6 +226,16 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
  if(caps)for(const r of pool){const cap=caps[r.id]??0;model.constraints["cap:"+r.id]={max:cap};model.variables[r.id]["cap:"+r.id]=1;}
  // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
  for(const n of RAW){if(!allItems.has(n))continue;model.constraints['limit:'+n]={max:ignoreLimits?1e7:s.limits[n]};model.variables['raw:'+n]={cost:0.0001,['item:'+n]:1,['limit:'+n]:1};}
+ // A line you already run is a capped, almost-free source of its product, so the
+ // plan builds only the remainder and drops the whole chain behind what you
+ // already make. Almost free rather than free: the solver still prefers not to
+ // draw supply it has no use for. An item this phase neither makes nor consumes
+ // is skipped, because crediting it would mean nothing.
+ for(const [n,rate] of Object.entries(s.existingSupply)){
+  if(!allItems.has(n))continue;
+  model.constraints['supply:'+n]={max:rate};
+  model.variables['supply:'+n]={cost:0.0001,['item:'+n]:1,['supply:'+n]:1};
+ }
  if(s.nuclear!=='none'&&phase>=4&&(s.nuclear==='sink'||phase===4))model.variables['sink-plutonium']={cost:0.0001,'item:Plutonium Fuel Rod':-1};
  if(maximum){const v={gain:1};for(const [n,d] of Object.entries(delivery))v['item:'+n]=-d.target/1000;model.variables.goal=v;}
  let solved=solve(model);
@@ -164,13 +247,14 @@ export function run(s,phase,{maximum=false,conversion=false,ignoreLimits=false,r
  }
  if(maximum)for(const d of Object.values(delivery))d.rate=(solved.goal||0)*d.target/1000;
  const rows=pool.filter(r=>(solved[r.id]||0)>1e-6).map(r=>{const eq=solved[r.id];const machines=Math.ceil(eq-1e-6);return {...r,equivalent:eq,machines,...(r.slots?{amplified:true,sloops:r.slots*machines}:{}),lastClock:Math.max(0,(eq-machines+1)*100),inputs:Object.fromEntries(Object.entries(r.inputs).map(([n,q])=>[n,q*eq])),outputs:Object.fromEntries(Object.entries(r.outputs).map(([n,q])=>[n,q*eq])),peakMW:r.power<0?0:machines*r.power*s.powerFactor,generationMW:r.power<0?-r.power*eq:0};});
+ const supplied=Object.fromEntries(Object.entries(s.existingSupply).map(([n])=>[n,solved['supply:'+n]||0]).filter(([,q])=>q>0.002));
  const raw=Object.fromEntries(RAW.map(n=>[n,solved['raw:'+n]||0]));const used={},made={};for(const r of rows){for(const [n,q] of Object.entries(r.inputs))used[n]=(used[n]||0)+q;for(const [n,q] of Object.entries(r.outputs))made[n]=(made[n]||0)+q;}
  const surplus=Object.fromEntries(Object.keys(made).map(n=>[n,Math.max(0,made[n]-(used[n]||0)-(storage[n]||0)-(delivery[n]?.rate||0)-(drone[n]||0)-(n==='Singularity Cell'&&phase===5?s.cellsPerMinute:0)-(n==='Alien Power Matrix'?matrix:0))]).filter(([n,q])=>q>0.002&&!DATA.items[n]?.radioactive&&!DATA.items[n]?.fluid&&DATA.items[n]?.sink>0));
  const peakMW=rows.reduce((a,r)=>a+r.peakMW,0),generationMW=rows.reduce((a,r)=>a+r.generationMW,0);
  // Order by dependency depth; recycling loops are commissioned as a connected group.
  const producers={};for(const r of rows)for(const n of Object.keys(r.outputs))(producers[n]??=[]).push(r);
  const seen=new Set(),visiting=new Set(),ordered=[];function visit(r){if(seen.has(r.id)||visiting.has(r.id))return;visiting.add(r.id);for(const n of Object.keys(r.inputs))for(const p of producers[n]||[])visit(p);visiting.delete(r.id);seen.add(r.id);ordered.push(r);}rows.forEach(visit);
- return {feasible:true,rows:ordered,raw,storage,drone,delivery,surplus,plutoniumSink:solved['sink-plutonium']||0,peakMW,generationMW,sloopsUsed:rows.reduce((a,r)=>a+(r.sloops||0),0),augmenters,fueledAugmenters:fueled,boost,augmenterMW:500*augmenters,matrixRate:matrix,availableMW:generationMW*(1+boost)+spareMW,requiredMW:peakMW*utilityFactor,additionalHeadroomMW:Math.max(0,peakMW*utilityFactor-generationMW*(1+boost)-spareMW),hours:Math.max(...Object.values(delivery).map(d=>d.rate?d.target/d.rate/60:Infinity)),conversions:rows.filter(r=>Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water')).map(r=>r.name)};
+ return {feasible:true,rows:ordered,raw,supplied,storage,drone,delivery,surplus,plutoniumSink:solved['sink-plutonium']||0,peakMW,generationMW,sloopsUsed:rows.reduce((a,r)=>a+(r.sloops||0),0),augmenters,fueledAugmenters:fueled,boost,augmenterMW:500*augmenters,matrixRate:matrix,availableMW:generationMW*(1+boost)+spareMW,requiredMW:peakMW*utilityFactor,additionalHeadroomMW:Math.max(0,peakMW*utilityFactor-generationMW*(1+boost)-spareMW),hours:Math.max(...Object.values(delivery).map(d=>d.rate?d.target/d.rate/60:Infinity)),conversions:rows.filter(r=>Object.keys(r.outputs).some(n=>RAW.includes(n)&&n!=='Water')).map(r=>r.name)};
 }
 export function calculate(input,onPhase){
  const s=settings(input);if(s.goal==='maximum'&&!s.limitsConfirmed)err('Confirm your available resource budgets before maximizing output.');
@@ -260,6 +344,12 @@ export function calculate(input,onPhase){
   if(s.amplifySloops>0)warnings.push(`Production amplification may place up to ${s.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`);
   if(dropped.length)warnings.push(`Phase ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length>1?'those phases are':'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`);
  }
+ {
+  const supplied=[...new Set(Object.values(stages).flatMap(x=>Object.keys(x.supplied||{})))].sort();
+  const lost=Object.entries(stages).filter(([,x])=>x.supplyDropped).map(([p])=>p);
+  if(supplied.length)warnings.push(`This plan draws on production you already run: ${supplied.join(', ')}. Those lines are not planned or built again, and the chain behind them is not planned either. Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure must be entered net of them, exactly as for any other existing factory.`);
+  if(lost.length)warnings.push(`Phase ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length>1?'those phases are':'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`);
+ }
  if(s.fueledAugmenters)warnings.push(`Fuel for ${s.fueledAugmenters} augmenter${s.fueledAugmenters>1?'s':''} adds ${5*s.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`);
  {
   const stuck=[...new Set(Object.values(stages).flatMap(x=>(x.rows||[]).flatMap(r=>Object.keys(r.outputs))).filter(n=>!DATA.items[n]?.fluid&&!DATA.items[n]?.radioactive&&!n.endsWith('Waste')&&!RAW.includes(n)&&!(DATA.items[n]?.sink>0)))];
@@ -274,7 +364,7 @@ export function calculate(input,onPhase){
  if(s.modNotes)warnings.push('Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.');
  return {engine:ENGINE,settings:s,stages,warnings,createdAt:new Date().toISOString()};
 }
-export const catalog=()=>({engine:ENGINE,alternates:DATA.recipes.filter(r=>r.alternate&&r.phase<=5).map(r=>({id:r.id,name:r.name.replace('Alternate: ',''),phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs,...(MAM_RECIPES.includes(r.id)?{mam:true}:{}),...(pureNames.includes(r.name)?{pure:true}:{})})).sort((a,b)=>a.name.localeCompare(b.name)),standardRecipes:DATA.recipes.filter(r=>!r.alternate).map(r=>({id:r.id,name:r.name,phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs})),storageOptions,storageItems:Object.keys(DATA.items).filter(storable).map(name=>({name,build:constructionItems.includes(name),delivered:elevatorParts.includes(name)})).sort((a,b)=>Number(b.build)-Number(a.build)||a.name.localeCompare(b.name)),distributions,purities,powerOptions,sloopUses:SLOOP_USES,raw:RAW,limits:DEFAULT_LIMITS,pureLimits:PURE_LIMITS,goals:[{id:'minimal',name:'Minimal construction',description:'24-hour deliveries; minimize production-building equivalents.'},{id:'balanced',name:'Balanced progression',description:'8-hour deliveries with the selected storage and recipe preferences.'},{id:'timed',name:'Target completion time',description:'Calculate rates from your chosen hours per phase.'},{id:'maximum',name:'Maximum elevator output',description:'Fastest simultaneous delivery within confirmed resource budgets.'}]});
+export const catalog=()=>({engine:ENGINE,alternates:DATA.recipes.filter(r=>r.alternate&&r.phase<=5).map(r=>({id:r.id,name:r.name.replace('Alternate: ',''),phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs,...(MAM_RECIPES.includes(r.id)?{mam:true}:{}),...(pureNames.includes(r.name)?{pure:true}:{})})).sort((a,b)=>a.name.localeCompare(b.name)),standardRecipes:DATA.recipes.filter(r=>!r.alternate).map(r=>({id:r.id,name:r.name,phase:r.phase,machine:r.machine,inputs:r.inputs,outputs:r.outputs})),storageOptions,supplyItems:[...new Set(DATA.recipes.filter(r=>r.phase<=5).flatMap(r=>Object.keys(r.outputs)))].filter(n=>!RAW.includes(n)&&!!DATA.items[n]).sort((a,b)=>a.localeCompare(b)),storageItems:Object.keys(DATA.items).filter(storable).map(name=>({name,build:constructionItems.includes(name),delivered:elevatorParts.includes(name)})).sort((a,b)=>Number(b.build)-Number(a.build)||a.name.localeCompare(b.name)),distributions,purities,powerOptions,sloopUses:SLOOP_USES,raw:RAW,limits:DEFAULT_LIMITS,pureLimits:PURE_LIMITS,goals:[{id:'minimal',name:'Minimal construction',description:'24-hour deliveries; minimize production-building equivalents.'},{id:'balanced',name:'Balanced progression',description:'8-hour deliveries with the selected storage and recipe preferences.'},{id:'timed',name:'Target completion time',description:'Calculate rates from your chosen hours per phase.'},{id:'maximum',name:'Maximum elevator output',description:'Fastest simultaneous delivery within confirmed resource budgets.'}]});
 
 
 

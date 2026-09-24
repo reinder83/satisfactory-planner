@@ -98,14 +98,36 @@ export function pickedRecipeUnlocks(plan){
  for(const row of planRows(plan).values())if(row.alternate)ids.add(row.id);
  return [...ids].filter(id=>safeKey('recipe-unlock-'+id));
 }
+// What a new profile may be told is already standing in the world. The guided
+// start asks this for a save you are not beginning from scratch: a production
+// line you already built, the HUB tutorial you already finished. These are the
+// checklist keys those records already use, so nothing new is stored and the
+// answer is as reversible as any other tick.
+//
+// Only three families are accepted, all of them facts about the world rather
+// than about this plan: a production row this very plan builds, an early-base
+// step, and an unlock. Anything else is dropped rather than rejected, so an
+// older or newer client cannot fail a profile it is otherwise allowed to make.
+const builtKeys=(raw,plan)=>{
+ if(raw===undefined)return [];
+ if(!Array.isArray(raw)||raw.length>2000)fail('Invalid list of finished work.');
+ const rows=planRows(plan);
+ return [...new Set(raw)].filter(k=>safeKey(k)&&(rows.has(k)||k.startsWith('early-base-')||k.startsWith('unlock-')));
+};
 // Build the starting progress for a newly created profile. Without a source
-// profile this is the blank state every earlier release produced.
-export function newProfileState(plan,source,sourcePlan,raw){
+// profile and without a list of finished work this is the blank state every
+// earlier release produced.
+export function newProfileState(plan,source,sourcePlan,raw,built){
  const state=initialState();
  state.settings.phase=plan?.settings?.phase||'3';
  if(plan)state.factoryGroups=defaultFactoryGroups(plan);
- if(!source)return {state:validateState(state),reviewCount:0,carried:0};
+ // Recorded before any carried records, so a source profile that deliberately
+ // left one of these unticked still wins below.
+ const standing=builtKeys(built,plan);
+ for(const key of standing)state.checks[key]=true;
+ if(!source){const clean=validateState(state);return {state:clean,reviewCount:0,carried:Object.values(clean.checks).filter(Boolean).length};}
  const picks=carryPicks(raw);
+ if(picks.factories)for(const key of standing)if(source.checks?.[key]===false)delete state.checks[key];
  // For a save you already play those picks are in-game unlocks, so their
  // confirmation steps start ticked. Records copied below still win, including a
  // step the previous profile left deliberately unticked.

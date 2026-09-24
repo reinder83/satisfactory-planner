@@ -1,5 +1,5 @@
 import {browserMode,browserRequest} from './browser-api.js';
-import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor} from './preferences.js';
+import {droneFuels,storageOptions,distributions,purities,powerOptions,resourceDefaults,helpText,wantsStorage,storageRateFor,guidedQuestions,guidedStandingQuestion,guidedTopupItems,GUIDED_TOPUP_RATE,tutorialKeys,purities3,minerMarks,clockChoices,minedResources,blankCounts,blankExtraction,nodeYield,wellYield,resourcePool,extractionLimits,nodePresets,presetSurvey,matchingPreset,startingSurvey,knownWorld,presetPurities,richShape} from './preferences.js';
 import {progression} from './progression.js';
 import {carryOptions,pickedRecipeUnlocks,bayCapacity,bayOfSlot,slotPosition} from './state.js';
 import {adaRemarks,adaEncore,adaFault as makeFault} from './ada.js';
@@ -157,6 +157,9 @@ function adaFacts(){
  const headroom=calculated?(x.additionalHeadroomMW||0):0;
  return {
   view,phaseLabel:phaseLabel(phase()),browserMode,planEditing,
+  guided:wizard?.mode==='guided',guidedStep:wizard?.guidedStep||0,guidedTotal:wizard?guidedFlow().length:0,
+  tutorialDone:wizard?.tutorial==='done',
+  supplyDeclared:Object.keys(wizard?.settings?.existingSupply||{}).length,
   kind:currentSave.id?(currentProfile?.kind||'original'):'none',
   save:currentSave.name||'this save',profile:currentProfile?.name||'Pioneer',
   steps:{done:ts.filter(t=>checked(t.id)).length,total:ts.length},
@@ -358,7 +361,7 @@ function renderWorkshop(){const items=[['bench','Craft Bench and Equipment Works
 function renderResources(){const raw=plan.resources[stage()],p=plan.plans[stage()];return header('CAPACITY BEFORE CONSTRUCTION','Power & resources','These are planned full-stage requirements, not live readings from your save. Mining totals already include retained turbofuel, trucks and all new power.')+
  `<div class="stats">${stat('Gross generation',num(plan.power[stage()])+' GW','At this stage’s completion')}${stat('Production peak',num(p.manufacturingPeakGW)+' GW','Before the utility allowance')}${stat('Production average',num(p.manufacturingAvgGW)+' GW','Half-consumption setting')}${stat('Coal remaining',num(74400-raw.Coal)+'/min','Against all-pure mining limit')}</div>
  <div class="notice">Verify your randomized nitrogen wells can supply <b>${num(raw['Nitrogen Gas']||0)}/min</b> at this stage. The all-pure resource limits assume fully developed extraction and logistics. Additional completion modules are not included.</div>
- <div class="table-wrap"><table><thead><tr><th>Fresh resource</th><th>Required /min</th><th>Available /min</th><th>Remaining /min</th><th>Use</th></tr></thead><tbody>${Object.entries(raw).sort(([a],[b])=>a.localeCompare(b)).map(([n,q])=>{const cap=plan.capacities[n],fraction=cap?q/cap:0;return `<tr><td>${esc(n)}</td><td class="number">${num(q)}</td><td class="number">${cap?num(cap):n==='Water'?'Extraction limited':'Verify wells'}</td><td class="number ${cap&&fraction>.9?'warn':''}">${cap?num(cap-q):'—'}</td><td>${cap?`${num(fraction*100)}%<div class="resource-bar ${fraction>.9?'tight':''}"><span style="width:${Math.min(100,fraction*100)}%"></span></div>`:'—'}</td></tr>`;}).join('')}</tbody></table></div><p class="small muted">Crude availability counts 30 ordinary pure nodes; oil wells are additional. Water includes a 2,000/min reserve for retained turbofuel and resin processing.</p>
+ <div class="table-wrap"><table><thead><tr><th>Fresh resource</th><th>Required /min</th><th>Available /min</th><th>Remaining /min</th><th>Use</th></tr></thead><tbody>${Object.entries(raw).sort(([a],[b])=>a.localeCompare(b)).map(([n,q])=>{const cap=plan.capacities[n],fraction=cap?q/cap:0;return `<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td class="number">${num(q)}</td><td class="number">${cap?num(cap):n==='Water'?'Extraction limited':'Verify wells'}</td><td class="number ${cap&&fraction>.9?'warn':''}">${cap?num(cap-q):'—'}</td><td>${cap?`${num(fraction*100)}%<div class="resource-bar ${fraction>.9?'tight':''}"><span style="width:${Math.min(100,fraction*100)}%"></span></div>`:'—'}</td></tr>`;}).join('')}</tbody></table></div><p class="small muted">Crude availability counts 30 ordinary pure nodes; oil wells are additional. Water includes a 2,000/min reserve for retained turbofuel and resin processing.</p>
  <div class="backup-grid" style="margin-top:24px"><section class="panel"><h2>Power commissioning</h2><div class="checklist">${[['power-retained','Retained turbofuel: 44.425 GW'],['power-rocket-1','Rocket-fuel block 1: +72 GW'],['power-rocket-2','Rocket-fuel block 2: +72 GW'],['power-u4','Phase 4 uranium: +125 GW'],...Array.from({length:4},(_,i)=>['power-rocket-'+(i+3),'Rocket-fuel block '+(i+3)+': +72 GW']),['power-nuclear-final','Complete nuclear fleet: 437.5 GW total']].map(([id,title])=>`<label class="check-row"><input type="checkbox" data-check="${id}" ${doneAttr(id)}>${title}</label>`).join('')}</div></section>
  <section class="panel"><h2>One 72 GW rocket-fuel block</h2><p><b>Inputs/min:</b> 300 Crude, 800 Sulfur, 400 Coal, 600 Nitrogen and 1,000 Water.</p><p>10 Heavy Oil Residue refineries → 8 Diluted Fuel blenders → 8 Nitro Rocket Fuel blenders. Add 5 Residual Rubber refineries and 288 Fuel Generators at 100%.</p><p class="small muted">Produces 1,200 Rocket Fuel, 200 Compacted Coal and 100 Rubber/min. These byproducts are not credited against other factory contracts.</p><div class="notice blue">At Phase 5: (579.231 × 1.2 + 20) ÷ 0.8 ≈ <b>894 GW</b> preliminary requirement. Planned gross capacity: <b>913.925 GW</b>. Replace the 20 GW existing-load allowance with your measured load.</div></section></div>
  <section class="panel" style="margin-top:24px"><h2>Nuclear sequence</h2><p>Phase 4: 50 uranium reactors generate 500 waste/min. Process it into 2.5 Plutonium Fuel Rods/min and sink those rods.</p><p>Phase 5: 100 uranium reactors → 1,000 Uranium Waste/min → 5 Plutonium Fuel Rods/min → 50 plutonium reactors → 50 Plutonium Waste/min → 25 Ficsonium Fuel Rods/min → 25 Ficsonium reactors.</p><p class="small muted">Build downstream processing and burning capacity first. Final reactor cooling needs 42,000 Water/min, already included in the resource table. Keep radioactive buffers at the nuclear site.</p></section>`;}
@@ -626,6 +629,16 @@ document.addEventListener('change',async e=>{
  if(el.id==='factory-filter'){factoryFilter=el.value;render();}
  if(el.id==='hide-done'){hideDone=el.checked;render();}
  if(['recipes','mainPower','pureIngots'].includes(el.name)&&wizard&&$('#wizard-form')){readWizard($('#wizard-form'));render();}
+ if(wizard?.mode==='guided'&&$('#wizard-form')&&(String(el.name).startsWith('guided:')||el.name==='topup'||el.name==='topic')){readGuidedForm($('#wizard-form'));render();}
+ if(wizard?.mode==='extraction'&&$('#wizard-form')&&/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))){
+  readExtraction($('#wizard-form'));
+  if(['purity','distribution'].includes(el.name)){
+   const s=wizard.settings;
+   if(knownWorld(s.purity,s.distribution))wizard.extraction=presetSurvey(s.purity,extractionOf(wizard),s.distribution);
+  }
+  render();
+ }
+ if(['supplyItem','supplyRate'].includes(el.name)&&wizard&&$('#wizard-form')){hideSupplyOptions(el);wizard.mode==='guided'?readGuidedForm($('#wizard-form')):readWizard($('#wizard-form'));render();}
  if(el.name==='alt'){const p=el.closest('.alt-picker');const head=p?.querySelector('.alt-picker-head b');if(head)head.textContent=`Alternate recipes · ${p.querySelectorAll('input[name=alt]:checked').length} selected`;const star=el.closest('.alt-row')?.querySelector('input[name=altpref]');if(star){star.disabled=!el.checked;if(!el.checked)star.checked=false;}}
  if(el.dataset.bayRename){el.disabled=true;try{await save({type:'storageBayRename',id:el.dataset.bayRename,name:el.value});}catch{}finally{el.disabled=false;render();}}
  if(el.dataset.groupRename){el.disabled=true;try{await save({type:'factoryGroupRename',id:el.dataset.groupRename,name:el.value});}catch{}finally{el.disabled=false;render();}}
@@ -658,6 +671,32 @@ function refreshRatePlaceholders(){
   if(input&&rate!==null)input.placeholder=num(rate);
  }
 }
+// The item search: suggestions as you type, with the keyboard alone if you like.
+document.addEventListener('input',e=>{if(e.target?.name==='supplyItem'&&wizard){syncSupplyIcon(e.target);showSupplyOptions(e.target);}});
+document.addEventListener('keydown',e=>{
+ const input=e.target;if(input?.name!=='supplyItem'||!wizard)return;
+ const box=input.closest('.supply-field')?.querySelector('.supply-options');
+ const options=box&&!box.hidden?[...box.querySelectorAll('.supply-option')]:[];
+ if(e.key==='Escape'){if(options.length){e.preventDefault();hideSupplyOptions(input);}return;}
+ if(e.key==='ArrowDown'&&!options.length){showSupplyOptions(input);e.preventDefault();return;}
+ if(!options.length)return;
+ const at=options.findIndex(o=>o.getAttribute('aria-selected')==='true');
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+  e.preventDefault();
+  const next=e.key==='ArrowDown'?(at+1)%options.length:(at<=0?options.length-1:at-1);
+  options.forEach((o,i)=>o.setAttribute('aria-selected',String(i===next)));
+  options[next].scrollIntoView({block:'nearest'});
+ }else if(e.key==='Enter'){
+  // Enter picks the highlighted suggestion rather than submitting the step.
+  e.preventDefault();pickSupplyOption(options[at>=0?at:0]);
+ }
+});
+// Leaving the row closes its list; moving inside it (input to suggestion) does not.
+document.addEventListener('focusout',e=>{
+ const input=e.target;if(input?.name!=='supplyItem')return;
+ const field=input.closest('.supply-field');
+ if(field&&!field.contains(e.relatedTarget))hideSupplyOptions(input);
+});
 document.addEventListener('submit',async e=>{if(e.target.id==='add-task'){e.preventDefault();const title=new FormData(e.target).get('title').trim();if(!title)return;const btn=e.target.querySelector('button');btn.disabled=true;try{await save({type:'addTask',id:'custom-'+Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join(''),phase:phase(),title});render();}catch{btn.disabled=false;}}});
 document.addEventListener('submit',async e=>{
  const f=e.target,read=()=>String(new FormData(f).get('name')||'').trim();
@@ -735,7 +774,14 @@ function readCarry(form,data){
  const f=data||new FormData(form),on=new Set(f.getAll('carry').map(String));
  w.carryFrom=f.get('carryFrom')||null;w.carry=Object.fromEntries(carryOptions.map(([key])=>[key,on.has(key)]));
 }
-function startWizard(saveId=null){if(!allowSwitch())return;const existing=workspace.saves.find(s=>s.id===saveId);const selected=existing?.profiles.find(p=>p.id===existing.activeProfile);const previous=selected?.settings||(selected?.kind==='original'?{phase:'3',purity:'pure',distribution:'randomized',multiplier:50,powerFactor:0.5,availablePowerGW:0,recipes:'all',pureIngots:true,sam:'needed',nuclear:'recycle',uraniumReactors:1,storage:'all',storageRate:1,cellsPerMinute:20,goal:'timed',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.pureLimits}}:null);wizard={step:1,saveId,saveName:existing?.name||'',name:'',settings:previous?structuredClone(previous):{phase:'3',purity:'vanilla',distribution:'original',multiplier:1,powerFactor:1,availablePowerGW:0,recipes:'standard',pureIngots:false,sam:'needed',nuclear:'none',uraniumReactors:1,storage:'construction',storageRate:1,cellsPerMinute:0,goal:'balanced',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.limits}},preview:null,carryFrom:existing?.activeProfile||null,carry:Object.fromEntries(carryOptions.map(([key])=>[key,true]))};if(browserMode&&!previous)wizard.settings.phase='1';navigate('wizard');}
+function startWizard(saveId=null){if(!allowSwitch())return;const existing=workspace.saves.find(s=>s.id===saveId);const selected=existing?.profiles.find(p=>p.id===existing.activeProfile);const previous=selected?.settings||(selected?.kind==='original'?{phase:'3',purity:'pure',distribution:'randomized',multiplier:50,powerFactor:0.5,availablePowerGW:0,recipes:'all',pureIngots:true,sam:'needed',nuclear:'recycle',uraniumReactors:1,storage:'all',storageRate:1,cellsPerMinute:20,goal:'timed',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.pureLimits}}:null);wizard={step:1,saveId,saveName:existing?.name||'',name:'',settings:previous?structuredClone(previous):{phase:'3',purity:'vanilla',distribution:'original',multiplier:1,powerFactor:1,availablePowerGW:0,recipes:'standard',pureIngots:false,sam:'needed',nuclear:'none',uraniumReactors:1,storage:'construction',storageRate:1,cellsPerMinute:0,goal:'balanced',hours:8,roundRates:true,wholeMachines:true,limitsConfirmed:false,limits:{...workspace.catalog.limits}},preview:null,carryFrom:existing?.activeProfile||null,carry:Object.fromEntries(carryOptions.map(([key])=>[key,true])),
+ // The guided start asks a handful of plain questions and writes the same
+ // settings object; All settings is the wizard exactly as it was. A save you
+ // already play arrives with settings worth keeping, so it is asked what
+ // changed rather than everything again.
+ mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};
+ if(!previous)wizard.settings.storageOverrides={Concrete:GUIDED_TOPUP_RATE};
+ if(browserMode&&!previous)wizard.settings.phase='1';navigate('wizard');}
 // The somersloop ledger. Augmenters and their fuel change the calculation; the hand-fed lines
 // do not — their inputs are gathered, never belted — so those only reserve sloops and add steps.
 function sloopLedgerHtml(s){
@@ -748,6 +794,25 @@ function sloopLedgerHtml(s){
  <div>${uses.map(([id,label])=>`<label class="check-row"><input type="checkbox" name="sloop" value="${id}" ${reserved.includes(id)?'checked':''}>${esc(label)}</label>`).join('')}</div>
  <p class="small muted">These double the output of a finite, hand-gathered input, so they are usually the best sloop you will ever spend: the world's power slugs are worth twice as many Power Shards through an amplified Constructor. Their inputs are carried in by hand, so they stay out of the production balance and only reserve a sloop and add a checklist step. The Crafting Bench cannot be amplified — the constructor recipe is the one that doubles.</p>`;
 }
+// What the plan actually drew from the production you already run. It asks for
+// at most what you declared: the rest of that line's output is yours, and the
+// plan neither needs nor counts it.
+function supplyNoticeHtml(p){
+ const declared=p.settings?.existingSupply||{};
+ if(!Object.keys(declared).length)return '';
+ const start=Number(p.settings.phase||1);
+ const used={};
+ for(const [ph,st] of Object.entries(p.stages))if(Number(ph)>=start)for(const [n,q] of Object.entries(st.supplied||{}))used[n]=Math.max(used[n]||0,q);
+ const dropped=Object.entries(p.stages).filter(([ph,st])=>st.supplyDropped&&Number(ph)>=start).map(([ph])=>ph);
+ const lines=Object.entries(declared).map(([n,q])=>{
+  const drawn=used[n]||0;
+  return `<li>${itemIcon(n)}<span><b>${esc(n)}</b> ${num(q)}/min declared${drawn>0.002?` · the plan draws up to ${num(drawn)}/min of it, and builds no line for it`:' · this plan has no use for it, so nothing changes'}</span></li>`;
+ }).join('');
+ return `<div class="notice blue supply-notice"><b>Crediting production you already run.</b> These lines are not planned again, and neither is the chain behind them.
+ <ul class="supply-summary">${lines}</ul>
+ <p class="small">Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure should be entered net of them — the same rule that makes "spare existing power" spare.</p>
+ ${dropped.length?`<p class="small"><b>Phase ${dropped.join(' and ')}</b> could not be fitted to whole machines while crediting them, so ${dropped.length>1?'those phases are':'that phase is'} planned as if you built all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead of whole machines usually keeps the credit.</p>`:''}</div>`;
+}
 // Fueling an augmenter trades an Alien Power Matrix line for 20% more grid power. The answer
 // depends on the plan's own scale, so show the like-for-like comparison rather than a rule of thumb.
 function fuelVerdictHtml(p){
@@ -758,19 +823,502 @@ function fuelVerdictHtml(p){
  Producing ${num(v.matrixRate)} Alien Power Matrix/min takes Phase 5 from ${num(v.buildingsUnfueled)} buildings to ${num(v.buildings)} (${delta>0?'+':''}${num(delta)}) and from ${power(v.requiredMWUnfueled)} to ${power(v.requiredMW)} of demand, while the boost raises available power from ${power(v.availableMWUnfueled)} to ${power(v.availableMW)}.
  ${worth?'The extra 20% is worth more than the fuel line costs at this scale.':`At this scale the fuel line costs more than the extra 20% returns. Build the augmenter${p.settings.augmenters>1?'s':''} unfueled, or put 4 somersloops in the Alien Power Matrix encoder — that halves the whole chain behind it and moves the break-even down.`}</div>`;
 }
+// --- The guided start -------------------------------------------------------
+// A short illustrated sequence that writes the same settings object the
+// five-step wizard writes, so a profile created here is indistinguishable from
+// one built by hand. "All settings" is offered on every screen and lands on the
+// advanced step that owns the same question, keeping the two continuous.
+//
+// Drawn in repo rather than bundled: there is no game artwork for "build as
+// little as possible", and inline SVG themes with currentColor, needs no build
+// allowlist entry and raises no attribution question. The concrete questions
+// use the item icons already bundled and attributed in icons/sources.json.
+const GUIDED_GLYPHS={
+ minimal:'<path d="M4 20h4v-6H4zM10 20h4v-9h-4z"/><path d="M17 5v9M17 14l-2.5-3M17 14l2.5-3"/>',
+ balanced:'<path d="M12 4v16M6 20h12"/><path d="M3 9h18"/><path d="M6 9l-3 5h6zM18 9l-3 5h6z"/>',
+ timed:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/>',
+ maximum:'<path d="M4 18a8 8 0 0 1 16 0"/><path d="M12 18l5-6"/><path d="M12 18h.01"/>',
+ standard:'<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M8 10h8M8 14h5"/>',
+ alternates:'<path d="M5 19V9a3 3 0 0 1 3-3h11"/><path d="M16 3l3 3-3 3"/><path d="M5 19h6a3 3 0 0 0 3-3v-1"/>',
+ custom:'<path d="M4 7h9M4 12h9M4 17h6"/><path d="M15 15l2.5 2.5L22 13"/>',
+ 'stock-none':'<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M9 12h6" opacity=".35"/>',
+ 'stock-build':'<path d="M4 8h16v11H4z"/><path d="M4 8l2-3h12l2 3"/><path d="M8 12h8M8 15h8"/>',
+ 'stock-all':'<path d="M3 13h8v7H3zM13 13h8v7h-8z"/><path d="M8 4h8v7H8z"/>',
+ whole:'<rect x="3" y="7" width="5" height="11"/><rect x="9.5" y="7" width="5" height="11"/><rect x="16" y="7" width="5" height="11"/><path d="M3 4h18"/>',
+ precise:'<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/><path d="M12 4v2M20 12h-2M12 20v-2M4 12h2"/>',
+ tutorial:'<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/>',
+ 'tutorial-done':'<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>'
+};
+const guidedGlyph=name=>`<span class="guided-art" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${GUIDED_GLYPHS[name]||GUIDED_GLYPHS.balanced}</svg></span>`;
+const guidedItemArt=items=>`<span class="guided-art items" aria-hidden="true">${items.slice(0,4).map(n=>itemIcon(n)).join('')}</span>`;
+// The questions actually asked. The tutorial/already-built question follows the
+// phase because it depends on the answer; for a save that already has profiles
+// the Review step's carry panel is the better instrument, so it is left out.
+function guidedFlow(){
+ const w=wizard,list=[];
+ for(const q of guidedQuestions){
+  list.push(q);
+  if(q.id==='phase'&&!w.saveId)list.push(guidedStandingQuestion(String(w.settings.phase||'3')));
+ }
+ return w.guidedAsk?list.filter(q=>w.guidedAsk.includes(q.id)):list;
+}
+const guidedAnswer=q=>{
+ const w=wizard,s=w.settings;
+ if(q.id==='tutorial')return w.tutorial||'doing';
+ if(q.id==='standing')return w.standing||'none';
+ if(q.id==='exact')return s.wholeMachines===false?'precise':'whole';
+ if(q.id==='stock')return q.options.some(o=>o.value===s.storage)?s.storage:'construction';
+ return String(s[q.id]??'');
+};
+function guidedCardsHtml(q){
+ const picked=guidedAnswer(q);
+ return `<div class="guided-grid">${q.options.map(o=>`<label class="guided-card${o.value===picked?' is-picked':''}">
+  <input type="radio" name="guided:${q.id}" value="${esc(o.value)}" aria-label="${esc(o.label+'. '+o.detail)}" ${o.value===picked?'checked':''}>
+  ${o.items?guidedItemArt(o.items):guidedGlyph(o.glyph)}
+  <strong>${esc(o.label)}</strong><p>${esc(o.detail)}</p>
+  ${o.handoff?'<span class="badge">Opens All settings</span>':''}
+ </label>`).join('')}</div>`;
+}
+// The materials you carry out by hand. A floor for one of them costs about 1%
+// more buildings; the general construction rate that would reach the same
+// number costs 81-425%, because it applies to all eighteen at once.
+function guidedTopupHtml(s){
+ if(s.storage==='none')return '';
+ const over=s.storageOverrides||{};
+ return `<fieldset class="guided-topup"><legend>Which of these do you keep running out of? ${help('guidedTopup')}</legend>
+ <p class="small muted">Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and 19 Iron Plate a minute into storage. These get a guaranteed ${num(GUIDED_TOPUP_RATE)}/min on top, which costs about 1% more buildings each. Concrete is picked for you because it is the one the plan leaves least spare.</p>
+ <div class="guided-chips">${guidedTopupItems.map(n=>`<label class="guided-chip${over[n]!==undefined?' is-picked':''}"><input type="checkbox" name="topup" value="${esc(n)}" aria-label="Guarantee ${num(GUIDED_TOPUP_RATE)} ${esc(n)} a minute" ${over[n]!==undefined?'checked':''}>${itemIcon(n)}<span>${esc(n)}</span></label>`).join('')}</div></fieldset>`;
+}
+// A second profile for a save you already play starts from the settings of the
+// profile you are on, so the useful question is what changed rather than all of
+// them again.
+function guidedTopicsHtml(){
+ const w=wizard,s=w.settings,save=workspace.saves.find(x=>x.id===w.saveId);
+ const from=save?.profiles.find(p=>p.id===(w.carryFrom||save.activeProfile))||save?.profiles[0];
+ const known=[['Phase','Phase '+(s.phase||'3')],['Goal',(workspace.catalog.goals.find(g=>g.id===s.goal)||{}).name||s.goal],
+  ['Recipes',s.recipes==='all'?'All alternates':s.recipes==='custom'?num((s.alternateRecipes||[]).length)+' picked':'Standard only'],
+  ['Stocked',(storageOptions.find(([v])=>v===s.storage)||[,s.storage])[1]],
+  ['Machines',s.wholeMachines===false?'Exact ratios':'Whole machines']];
+ return `<h2>What is different this time?</h2>
+ <p>Starting from the settings of <b>${esc(from?.name||'this save')}</b>. Tick only what changes; the rest is kept as it is.</p>
+ <div class="guided-known">${known.map(([k,v])=>`<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>
+ <div class="guided-topics">${guidedQuestions.map(q=>`<label class="check-row"><input type="checkbox" name="topic" value="${q.id}" ${q.id==='phase'?'checked':''}>${esc(q.title)}</label>`).join('')}</div>
+ <p class="small muted">Progress from ${esc(from?.name||'the other profile')} can be carried over on the Review step, including the production lines this plan does not expand.</p>`;
+}
+// Production you already run, entered as a rate. Matching an existing factory
+// against the plan's own rows does not work — your Modular Frame line is
+// whatever recipe and machine count you happened to build, not the one this
+// solve would pick — so the honest input is the number you can read off your
+// own factory. The planner credits it and drops the chain behind it.
+//
+// One row per declared item plus a blank one, so there is nothing to press
+// before typing and no way to leave a half-finished row behind.
+// Suggestions are drawn in the page rather than by a native <datalist>: that
+// popup is browser chrome, so it cannot be themed, cannot be read back, and
+// Chrome suppresses it outright on an input with autocomplete off. A list we
+// own works the same everywhere and can be driven from the keyboard.
+const SUPPLY_SUGGESTIONS=8;
+function supplyMatches(query){
+ const q=String(query||'').trim().toLowerCase();
+ if(!q)return [];
+ const starts=[],contains=[];
+ for(const n of workspace.catalog.supplyItems||[]){
+  const l=n.toLowerCase();
+  if(l.startsWith(q))starts.push(n);else if(l.includes(q))contains.push(n);
+ }
+ return [...starts,...contains].slice(0,SUPPLY_SUGGESTIONS);
+}
+// The rows being edited, which is not the same thing as the rows that count. A
+// half-finished row — a name with no rate yet — has to survive a re-render, or
+// picking a suggestion would erase what you just picked.
+function supplyRows(w){
+ if(!Array.isArray(w.supplyRows))w.supplyRows=Object.entries(w.settings.existingSupply||{}).map(([name,rate])=>({name,rate:String(rate)}));
+ return w.supplyRows;
+}
+function supplyRowsHtml(s){
+ const rows=[...supplyRows(wizard),{name:'',rate:''}];
+ const known=new Set(workspace.catalog.supplyItems||[]);
+ // The icon is kept in step while you type too, so it appears the moment what
+ // you have typed is a real item rather than only once the field is committed.
+ const hint=r=>!r.name.trim()?''
+  :!known.has(r.name.trim())?'<span class="supply-hint warn">No item of that name — pick one from the list.</span>'
+  :!String(r.rate).trim()?'<span class="supply-hint">Add a rate and this line is credited; leave it blank and it is not.</span>'
+  :'';
+ const row=(r,i)=>`<div class="supply-row" data-supply-row="${i}">
+  <div class="supply-field">
+   <label class="field">Item<span class="supply-input${known.has(r.name.trim())?' has-icon':''}" data-icon="${known.has(r.name.trim())?esc(r.name.trim()):''}">${known.has(r.name.trim())?itemIcon(r.name.trim()):''}<input name="supplyItem" value="${esc(r.name)}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Search item" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="supply-options-${i}" aria-label="Search for an item you already produce"></span></label>
+   <div class="supply-options" id="supply-options-${i}" role="listbox" hidden></div>
+  </div>
+  <label class="field">Per minute<input name="supplyRate" type="number" min="0" max="1000000" step="any" value="${esc(r.rate)}" aria-label="Rate you already produce, per minute"></label>
+  <button type="button" class="btn quiet supply-remove${r.name.trim()?'':' is-blank'}" data-supply-remove="${i}" ${r.name.trim()?`aria-label="Remove ${esc(r.name)}"`:'tabindex="-1" aria-hidden="true"'}>Remove</button>
+  ${hint(r)}
+ </div>`;
+ return `<div class="supply-picker">
+  <div class="supply-list">${rows.map(row).join('')}</div>
+  <p class="small muted">The plan credits these and builds only the remainder — and it does not build the chain behind them either. What you make it with is your business: the recipe and machine count do not have to match anything this plan would choose. Their ore and their power are already spent in your world, so enter your resource budgets and spare power net of them, exactly as for any other existing factory.</p>
+ </div>`;
+}
+// Name plus rate, paired by position. Every row is kept for editing; only the
+// ones naming a real item at a real rate are handed to the planner.
+function readSupply(form,f){
+ if(!form?.querySelector?.('.supply-list'))return null;
+ const known=new Set(workspace.catalog.supplyItems||[]);
+ const names=f.getAll('supplyItem').map(x=>String(x));
+ const rates=f.getAll('supplyRate').map(x=>String(x));
+ const rows=names.map((name,i)=>({name,rate:rates[i]??''})).filter(r=>r.name.trim()||String(r.rate).trim());
+ wizard.supplyRows=rows;
+ const out={};
+ for(const r of rows){
+  const name=r.name.trim(),q=Number(r.rate);
+  if(known.has(name)&&String(r.rate).trim()!==''&&Number.isFinite(q)&&q>0)out[name]=q;
+ }
+ return out;
+}
+// Fill a row's suggestion list in place. Re-rendering the whole screen on every
+// keystroke would take the focus with it.
+function showSupplyOptions(input){
+ const field=input.closest('.supply-field');if(!field)return;
+ const box=field.querySelector('.supply-options');if(!box)return;
+ const matches=supplyMatches(input.value).filter(n=>n.toLowerCase()!==input.value.trim().toLowerCase());
+ if(!matches.length){hideSupplyOptions(input);return;}
+ box.innerHTML=matches.map(n=>`<button type="button" role="option" aria-selected="false" class="supply-option" data-supply-pick="${esc(n)}">${itemIcon(n)}<span>${esc(n)}</span></button>`).join('');
+ box.hidden=false;input.setAttribute('aria-expanded','true');
+}
+// Typing updates the suggestion list without redrawing the screen, so the icon
+// beside the field has to be kept in step the same way.
+function syncSupplyIcon(input){
+ const wrap=input.closest('.supply-input');if(!wrap)return;
+ const typed=input.value.trim();
+ const name=(workspace.catalog.supplyItems||[]).includes(typed)?typed:'';
+ if(wrap.dataset.icon===name)return;
+ wrap.dataset.icon=name;
+ wrap.querySelector('.item-icon')?.remove();
+ wrap.classList.toggle('has-icon',!!name);
+ if(name)wrap.insertAdjacentHTML('afterbegin',itemIcon(name));
+}
+function hideSupplyOptions(input){
+ const box=input?.closest('.supply-field')?.querySelector('.supply-options');
+ if(box){box.hidden=true;box.innerHTML='';}
+ input?.setAttribute('aria-expanded','false');
+}
+// Picking a suggestion commits it and moves to the rate, which is the next
+// thing you were going to type anyway.
+function pickSupplyOption(button){
+ const field=button.closest('.supply-field'),input=field?.querySelector('input[name=supplyItem]');
+ if(!input)return;
+ // Read the row before closing the list: emptying it orphans this button.
+ const index=Number(button.closest('.supply-row')?.dataset.supplyRow??-1);
+ input.value=button.dataset.supplyPick;
+ hideSupplyOptions(input);
+ const form=$('#wizard-form');
+ if(form)wizard.mode==='guided'?readGuidedForm(form):readWizard(form);
+ render();
+ [...document.querySelectorAll('.supply-row')][index]?.querySelector('input[name=supplyRate]')?.focus();
+}
+// The checklist keys a new profile should start with. The Phase 1 HUB steps are
+// the only ones a guided answer can tick: everything else it learns is a rate,
+// which changes the plan rather than its progress.
+function guidedBuiltKeys(w){return w.tutorial==='done'?[...tutorialKeys]:[];}
+function readGuided(form){
+ const w=wizard,s=w.settings,f=new FormData(form);
+ if(form.querySelector?.('.guided-topics')){const on=f.getAll('topic').map(String);w.guidedAsk=guidedQuestions.filter(q=>on.includes(q.id)).map(q=>q.id);}
+ for(const q of guidedFlow()){
+  if(!q.options)continue;
+  const value=f.get('guided:'+q.id);if(value===null)continue;
+  const option=q.options.find(o=>o.value===String(value));if(!option)continue;
+  if(q.id==='tutorial')w.tutorial=option.value;
+  Object.assign(s,option.set);
+ }
+ {const supply=readSupply(form,f);if(supply)s.existingSupply=supply;}
+ if(f.has('hours'))s.hours=Number(f.get('hours'));
+ // A guided plan never raises the general construction rate: it is the single
+ // most expensive control in the app and the per-item floors below do the same
+ // job for a fortieth of the buildings.
+ if(form.querySelector?.('.guided-topup')){
+  s.storageRate=1;s.buildRate=1;
+  const chosen=f.getAll('topup').map(String).filter(n=>guidedTopupItems.includes(n));
+  const over={};for(const n of chosen)over[n]=GUIDED_TOPUP_RATE;
+  s.storageOverrides=over;
+ }
+ if(s.goal!=='timed')s.phaseTime='every';
+ if(s.storage==='none')s.storageOverrides={};
+ w.preview=null;
+}
+function guidedProgressHtml(flow,index){
+ return `<div class="guided-progress" role="list">${flow.map((q,i)=>`<span role="listitem" class="${i===index?'current':i<index?'done':''}" ${i===index?'aria-current="step"':''}><i></i>${esc(q.short||q.title.replace(/\?$/,''))}</span>`).join('')}</div>`;
+}
+function renderGuided(){
+ const w=wizard,s=w.settings,flow=guidedFlow();
+ const topics=w.saveId&&w.guidedAsk===null;
+ const index=topics?-1:Math.min(w.guidedStep-1,flow.length-1);
+ const q=topics?null:flow[index];
+ let content;
+ if(topics)content=guidedTopicsHtml();
+ else if(!q)content='<h2>Ready to calculate</h2>';
+ else content=`<h2>${esc(q.title)}</h2><p>${esc(q.lead)}</p>`
+  +(q.kind==='supply'?supplyRowsHtml(s):guidedCardsHtml(q))
+  +(q.id==='goal'&&s.goal==='timed'?`<div class="form-grid guided-follow">${field('Hours per phase','hours',s.hours??8,'number','min="0.25" max="2000" step="0.25" required')}</div>`:'')
+  +(q.id==='stock'?guidedTopupHtml(s):'');
+ const last=topics?false:index>=flow.length-1;
+ const advancedStep=q?.step||1;
+ return (browserMode?browserNotice():'')
+  +header('A FEW QUESTIONS',w.saveId?'Add a profile to '+esc(w.saveName):'Create your factory plan','Answer what matters and the planner fills in the rest. Every setting is still there under All settings.')
+  +(topics?'':guidedProgressHtml(flow,index))
+  +`<form id="wizard-form" class="panel wizard-panel guided-panel">
+   ${topics?'':`<label class="field guided-name">${w.saveId?'Profile name':'Save name'}<input name="${w.saveId?'profileName':'saveName'}" type="text" value="${esc(w.saveId?w.name:w.saveName)}" ${w.saveId?'':'required'} maxlength="80" placeholder="${w.saveId?'Named after your goal if left blank':'My Satisfactory save'}"></label>`}
+   ${content}
+   <div class="wizard-actions">
+    <button type="button" class="btn" ${topics||w.guidedStep<=1?'data-cancel-wizard':'data-guided-back'}>${topics||w.guidedStep<=1?'Cancel':'Back'}</button>
+    <span class="guided-escape"><button type="button" class="btn quiet" data-guided-advanced="${advancedStep}">All settings →</button>
+    <button class="btn primary" type="submit">${last?'Calculate plan':'Continue →'}</button></span>
+   </div>
+   <p id="wizard-error" class="form-error" role="alert"></p>
+  </form>`;
+}
+async function moveGuided(target){
+ const w=wizard,form=$('#wizard-form');
+ if(wizardBusy||!w)return;
+ if(target>w.guidedStep&&form&&!form.reportValidity())return;
+ // "What is different this time?" chooses which questions follow, so leaving it
+ // starts that list at the beginning rather than stepping past it.
+ const wasTopics=!!w.saveId&&w.guidedAsk===null;
+ if(form)readGuidedForm(form);
+ const flow=guidedFlow();
+ if(wasTopics&&flow.length){w.guidedStep=1;render();return;}
+ if(target<1){w.guidedStep=1;render();return;}
+ // A choice that only All settings can answer hands over rather than pretending
+ // to ask it here: picking recipes one by one, or confirming resource budgets
+ // before maximum output.
+ const previous=flow[Math.min(w.guidedStep-1,flow.length-1)];
+ const handoff=previous?.options?.find(o=>o.value===guidedAnswer(previous))?.handoff;
+ if(handoff&&target>w.guidedStep){toAdvanced(handoff);return;}
+ if(target<=flow.length){w.guidedStep=target;render();return;}
+ await calculateWizard(form);
+}
+function readGuidedForm(form){
+ const w=wizard,f=new FormData(form);
+ if(f.has('saveName'))w.saveName=String(f.get('saveName'));
+ if(f.has('profileName'))w.name=String(f.get('profileName'));
+ readGuided(form);
+}
+// Switching to All settings keeps every answer: both modes write the same
+// settings object, so nothing is recalculated or lost either way.
+function toAdvanced(step){
+ const w=wizard;const form=$('#wizard-form');
+ if(form&&w.mode==='guided')readGuidedForm(form);
+ w.mode='advanced';w.usedGuided=true;w.step=Math.min(Math.max(step||1,1),4);
+ render();
+}
+function toGuided(){
+ const w=wizard;const form=$('#wizard-form');
+ if(form&&w.mode!=='guided')readWizard(form);
+ w.mode='guided';
+ const flow=guidedFlow();
+ if(!(w.guidedStep>=1))w.guidedStep=1;
+ w.guidedStep=Math.min(w.guidedStep,Math.max(flow.length,1));
+ render();
+}
+// --- Working out the resource budgets ---------------------------------------
+// The thirteen budget boxes want a rate per minute, which nobody knows. What a
+// player can actually read off the interactive map is how many impure, normal
+// and pure nodes their world holds, so this asks for that and does the
+// arithmetic. It writes the same `limits` the boxes write; the survey itself is
+// kept on the profile only so it can be reopened and adjusted.
+//
+// Four short screens rather than one long one: where the numbers come from and
+// how you mine, then the ores, then oil and gas, then the total with whatever
+// is already spoken for taken off it.
+const EXTRACTION_STEPS=['How you mine','Ore nodes','Resource wells','Your budgets'];
+const MAP_URL='https://satisfactory-calculator.com/en/interactive-map';
+function extractionOf(w){
+ if(!w.extraction)w.extraction=w.settings.extraction?structuredClone(w.settings.extraction):startingSurvey(w.settings);
+ return w.extraction;
+}
+const countRow=(kind,name,counts)=>purities3.map(([key,label])=>
+ `<label class="field count-cell"><span>${label}</span><input name="${kind}:${esc(name)}:${key}" type="number" min="0" max="10000" step="1" value="${esc(counts[key]||0)}" aria-label="${label} ${esc(name)} ${kind==='well'?'well satellites':'nodes'}"></label>`).join('');
+function extractionTableHtml(kind,names,e){
+ const map=kind==='well'?e.wells:e.nodes;
+ return `<div class="count-table">${names.map(name=>{
+  const counts={...blankCounts(),...(map[name]||{})};
+  const total=kind==='well'
+   ? purities3.reduce((a,[k])=>a+(Number(counts[k])||0)*wellYield(k,e),0)
+   : purities3.reduce((a,[k])=>a+(Number(counts[k])||0)*nodeYield(name,k,e),0);
+  return `<div class="count-row">
+   <span class="count-name">${itemIcon(name)}<span>${esc(name)}</span></span>
+   ${countRow(kind,name,counts)}
+   <span class="count-total">${total?num(Math.round(total))+'/min':'—'}</span>
+  </div>`;}).join('')}</div>`;
+}
+// The two World Randomization settings, exactly as the game presents them.
+// They are on All settings step 1 too — this is the same pair, shown here
+// because here is where they decide what the counts should be.
+const presetBarHtml=()=>{
+ const s=wizard.settings,e=extractionOf(wizard);
+ const known=knownWorld(s.purity,s.distribution);
+ // Random is a shuffle: it moves nodes but not how many of each resource there
+ // are. So it costs us only the purity split, and only for the settings that
+ // keep the map's own split.
+ const splitShuffled=s.distribution==='randomized'&&!known&&presetPurities.includes(s.purity);
+ const active=matchingPreset(e);
+ const label=(nodePresets.find(([v])=>v===active)||[,''])[1];
+ const shuffleNote=s.distribution==='randomized'?' Random moves nodes around the map; as far as the community has established, it does not change how many of each resource there are. Nitrogen wells are left for you: a well is randomized whole and the map’s wells hold different numbers of satellites, so a shuffle can still leave you more or less nitrogen than the default map.':'';
+ return `<div class="node-presets"><span class="eyebrow">Your world settings ${help('nodePresets')}</span>
+ <div class="form-grid">${selectField('Resource node randomization','distribution',distributions,s.distribution)}${selectField('Resource node purity','purity',purities,s.purity)}</div>
+ ${known&&active===s.purity
+  ?`<p class="small">The counts below are the map's node totals at <b>${esc(label)}</b>.${shuffleNote} Change any that do not match your save.</p>`
+  :known
+  ?`<p class="small">Your world's node counts are known for these settings. <button type="button" class="btn quiet" data-node-preset="${esc(s.purity)}">Fill in the counts below</button></p>`
+  :splitShuffled
+  ?`<div class="notice"><b>Only the purity split is missing.</b> Random shuffles which resource sits at each location, so your world holds the same number of nodes for each resource as the default map — but it shuffles their purities too, and <b>${esc((purities.find(([v])=>v===s.purity)||[,''])[1])}</b> keeps whatever split the shuffle produced. How many are impure, normal and pure is therefore yours to count. If you actually chose All Pure, Average or All Impure, pick that above and the counts fill in.${active?` The counts below are still the map's totals at <b>${esc(label)}</b> — the totals are right, the split is not.`:''}</div>`
+  :`<div class="notice"><b>No preset for these settings.</b> ${richShape[s.distribution]
+    ?`A resource-rich distribution changes how many nodes each resource has, and the players who have counted these worlds get answers a third apart from one seed to the next — so filling anything in here would be a guess wearing a number. ${esc(richShape[s.distribution])} Which way it goes is consistent; how far is not.`
+    :'A random or hand-set purity has no fixed split to rearrange.'} Count yours on the map linked on the first screen, or upload your save there and it will count them for you.${active?` The counts below are still the <b>map's totals at ${esc(label)}</b>, so check them against your save.`:''}</div>`}
+ <p class="small">${wizard.extractionUndo
+  ?`<button type="button" class="btn quiet" data-node-undo>Undo reset</button> <span class="muted">Every count was cleared. This puts back what was there before.</span>`
+  :`<button type="button" class="btn quiet" data-node-reset>Reset all counts to zero</button> <span class="muted">Clears every ore, well and committed amount so you can enter your own. You can undo it.</span>`}</p>
+ <p class="small muted">The purity settings do not move nodes or add any, they shift every node up or down the purity scale, so a known purity is the known node count rearranged. Oil wells are not in that table — count those yourself.</p></div>`;};
+// Back to an empty survey. Every count goes, including what was already
+// committed; the miner mark and clock stay, because they are equipment rather
+// than counts and have no meaningful zero. The old counts are kept aside so the
+// clearing can be undone, which is why no confirmation is asked for.
+function resetExtraction(){
+ const previous=extractionOf(wizard);
+ wizard.extractionUndo=JSON.parse(JSON.stringify(previous));
+ wizard.extraction={...blankExtraction(),mark:previous.mark,clock:previous.clock};
+}
+function undoExtractionReset(){
+ if(!wizard.extractionUndo)return;
+ wizard.extraction=wizard.extractionUndo;
+ wizard.extractionUndo=null;
+}
+function renderExtraction(){
+ const w=wizard,e=extractionOf(w),step=w.extractionStep;
+ const sample=(name,purity)=>num(Math.round(nodeYield(name,purity,e)));
+ let content='';
+ if(step===1)content=`<h2>Where your numbers come from</h2>
+  <div class="notice blue"><b>You do not have to count nodes by hand.</b> Open the
+  <a href="${MAP_URL}" target="_blank" rel="noreferrer">Satisfactory Calculator interactive map</a>, upload your save file there, and it lists every resource node your world holds — including which are impure, normal and pure, and which resource wells you have found. Copy those counts into the next two screens.
+  <p class="small">Uploading a save to that site is your decision and happens entirely between you and them; this planner never sends your save anywhere. If you would rather not, the map also works without a save and shows the default world's nodes.</p></div>
+  <h2>How you will mine them</h2>
+  <p>Extraction depends on the miner and its clock speed far more than on anything else. Plan for the miner this phase can build and power, not the one you happen to have running today.</p>
+  <div class="form-grid">
+   ${selectField('Miner','mark',minerMarks.map(([v,l])=>[String(v),l]),String(e.mark))}
+   ${selectField('Clock speed','clock',clockChoices.map(([v,l])=>[String(v),l]),String(e.clock))}
+  </div>
+  <div class="notice"><b>At these settings</b> one iron node gives ${sample('Iron Ore','impure')}/min impure, ${sample('Iron Ore','normal')}/min normal and ${sample('Iron Ore','pure')}/min pure. A crude oil node gives ${sample('Crude Oil','normal')}/min normal, and one resource-well satellite ${num(Math.round(wellYield('normal',e)))}/min.</div>`;
+ if(step===2)content=`<h2>Your ore nodes</h2>${presetBarHtml()}
+  <p>How many nodes of each purity your world holds for each ore. ${help('extractionNodes')} Zero means zero: a purity your world has none of, or an ore you have not found. Whatever you leave at zero, the plan cannot mine — so enter everything you intend to work.</p>
+  ${extractionTableHtml('node',minedResources,e)}`;
+ if(step===3)content=`<h2>Resource wells</h2>${presetBarHtml()}
+  <p>Crude oil comes from ordinary nodes and from resource wells; nitrogen only from wells. ${help('extractionWells')}</p>
+  <h3>Crude oil nodes</h3>${extractionTableHtml('node',['Crude Oil'],e)}
+  <h3>Resource well satellites</h3>${extractionTableHtml('well',['Crude Oil','Nitrogen Gas'],e)}
+  <div class="notice blue">${itemIcon('Water')} <b>Water is not counted.</b> Extractors sit on any lake or ocean and there is far more coastline than a factory can draw on, so a node count would be a fiction. The planner keeps its standing water allowance of ${num(w.settings.limits.Water)}/min, which you can still change in All settings if you want to model a genuinely constrained site.</div>`;
+ if(step===4){
+  const rows=[...minedResources,'Crude Oil','Nitrogen Gas'];
+  // Leaving a resource at zero is a legitimate answer, and it is also exactly
+  // what a half-finished survey looks like. The plan that follows would simply
+  // fail to fit, so name them here rather than let that be a surprise.
+  const empty=rows.filter(n=>resourcePool(e,n)<=0);
+  const emptyNotice=empty.length?`<div class="notice"><b>${empty.length===1?'One resource has':num(empty.length)+' resources have'} no nodes entered:</b> ${empty.map(esc).join(', ')}. A zero budget means this plan may not use that resource at all — a fine answer for something you have genuinely not found, but if you simply have not counted them yet, go back and fill them in or the plan will not fit.</div>`:'';
+  content=`<h2>Your budgets</h2>
+  <p>What those nodes yield, less anything already committed to factories this plan does not include. That deduction is what makes a budget mean <em>free for this plan to use</em>. ${help('extractionUsed')}</p>
+  <div class="table-wrap"><table><thead><tr><th>Resource</th><th>Whole pool /min</th><th>Already committed /min</th><th>Budget /min</th></tr></thead><tbody>
+  ${rows.map(name=>{
+   const pool=Math.round(resourcePool(e,name)),used=Number(e.used?.[name])||0,left=Math.max(0,pool-used);
+   return `<tr><td class="resource-name">${itemIcon(name)}<span>${esc(name)}</span></td>
+    <td class="number">${pool?num(pool):'—'}</td>
+    <td><input class="used-input" name="used:${esc(name)}" type="number" min="0" max="10000000" step="any" value="${used||''}" placeholder="0" aria-label="${esc(name)} already committed per minute"></td>
+    <td class="number ${pool&&used>pool?'warn':''}">${pool?num(left):'—'}</td></tr>`;}).join('')}
+  </tbody></table></div>
+  ${emptyNotice}
+  <p class="small muted">Production you already run is a different question, asked separately: that one credits finished parts, this one takes raw extraction off the top. Use this for ore feeding factories the plan will not rebuild, and the other for parts the plan would otherwise make again.</p>`;
+ }
+ const last=step>=EXTRACTION_STEPS.length;
+ return (browserMode?browserNotice():'')
+  +header('YOUR WORLD','Work out your resource budgets','Count what your world holds; the planner turns it into the rates it plans against.')
+  +`<div class="wizard-progress">${EXTRACTION_STEPS.map((n,i)=>`<button type="button" class="${step===i+1?'current':''}" data-extraction-step="${i+1}" ${step===i+1?'aria-current="step"':''}>${i+1}. ${esc(n)}</button>`).join('')}</div>
+  <form id="wizard-form" class="panel wizard-panel extraction-panel">${content}
+   <div class="wizard-actions">
+    <button type="button" class="btn" data-extraction-back>${step<=1?'Cancel':'Back'}</button>
+    <span class="guided-escape">${step>1?'<button type="button" class="btn quiet" data-extraction-cancel>Leave these budgets alone</button>':''}
+    <button class="btn primary" type="submit">${last?'Use these budgets':'Continue →'}</button></span>
+   </div>
+   <p id="wizard-error" class="form-error" role="alert"></p>
+  </form>`;
+}
+// Every screen writes straight into the survey, so moving between them keeps
+// what was typed even before the budgets are applied.
+function readExtraction(form){
+ const w=wizard,e=extractionOf(w),f=new FormData(form);
+ const raw=new Set(workspace.catalog.raw||[]);
+ for(const [k,v] of f){
+  if(k==='purity'||k==='distribution')w.settings[k]=String(v);
+  else if(k==='mark')e.mark=Number(v);
+  else if(k==='clock')e.clock=Number(v);
+  else if(k.startsWith('node:')||k.startsWith('well:')){
+   const [kind,name,purity]=k.split(':');
+   if(!raw.has(name)||!purities3.some(([p])=>p===purity))continue;
+   const map=kind==='well'?(e.wells??={}):(e.nodes??={});
+   const row=map[name]||blankCounts();
+   row[purity]=Math.max(0,Math.floor(Number(v)||0));
+   if(row.impure||row.normal||row.pure)map[name]=row;else delete map[name];
+  }
+  else if(k.startsWith('used:')){
+   const name=k.slice(5);if(!raw.has(name))continue;
+   const q=Number(v);
+   if(String(v).trim()!==''&&Number.isFinite(q)&&q>0)(e.used??={})[name]=q;else delete e.used?.[name];
+  }
+ }
+}
+async function moveExtraction(target){
+ const w=wizard,form=$('#wizard-form');
+ if(wizardBusy||!w||target===w.extractionStep)return;
+ if(form&&target>w.extractionStep&&!form.reportValidity())return;
+ if(form)readExtraction(form);
+ if(target<1){leaveExtraction();return;}
+ if(target<=EXTRACTION_STEPS.length){w.extractionStep=target;render();return;}
+ // Applying the survey replaces the budgets and the confirmation that went with
+ // them: these are counted numbers now, not the starting estimates.
+ w.settings.limits=extractionLimits(w.extraction,w.settings.limits);
+ w.settings.extraction=structuredClone(w.extraction);
+ w.settings.limitsConfirmed=true;
+ w.preview=null;
+ leaveExtraction();
+ toast('Resource budgets set from your nodes. You can still edit any of them in All settings.');
+}
+// Back to whatever opened the survey, with the five-step wizard as the default.
+function leaveExtraction(){
+ const w=wizard;
+ w.mode=w.extractionReturn?.mode||'advanced';
+ w.step=w.extractionReturn?.step||4;
+ if(w.extractionReturn?.guidedStep)w.guidedStep=w.extractionReturn.guidedStep;
+ w.extractionReturn=null;w.extractionUndo=null;
+ render();
+}
+function openExtraction(){
+ const w=wizard,form=$('#wizard-form');
+ if(form)w.mode==='guided'?readGuidedForm(form):readWizard(form);
+ w.extractionReturn={mode:w.mode,step:w.step,guidedStep:w.guidedStep};
+ w.mode='extraction';w.extractionStep=1;
+ render();
+}
 function renderWizard(){
  if(!wizard)return header('NEW PROFILE','Choose a save first')+'<button class="btn primary" data-new-save>Create a save</button><a class="btn" href="#profiles">Existing saves</a>';
  const w=wizard,s=w.settings;let content='';
- if(w.step===1)content=`<h2>Your save and game settings</h2><p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p><div class="form-grid">${field('Save name','saveName',w.saveName,'text','required maxlength="80" '+(w.saveId?'readonly':''))}${selectField('Currently working on','phase',['1','2','3','4','5'].map(x=>[x,'Phase '+x]),s.phase)}${selectField('Resource purity','purity',purities,s.purity)}${selectField('Node distribution','distribution',distributions,s.distribution)}${field('World seed (optional)','worldSeed',s.worldSeed||'','number','min="-2147483648" max="2147483647" step="1"')}${field('Elevator requirement multiplier','multiplier',s.multiplier,'number','min="0.1" max="1000" step="0.1" required')}${field('Power consumption multiplier','powerFactor',s.powerFactor,'number','min="0" max="10" step="0.1" required')}${field('Spare existing power (MW)','availablePowerMW',s.availablePowerGW*1000,'number','min="0" max="10000000" step="1" required')}${field('Total installed power (MW)','installedPowerMW',(s.installedPowerGW??s.availablePowerGW)*1000,'number','min="0" max="10000000" step="1" required')}${field('Other settings / mod notes','modNotes',s.modNotes||'','text','maxlength="500"')}</div><p class="small muted">Other settings are notes only. Modified recipes, production boosts and modded items are not simulated. Phase plans assume the necessary milestones and MAM research are unlocked by commissioning.</p>`;
+ if(w.mode==='extraction')return renderExtraction();
+ if(w.mode==='guided'&&w.guidedStep<=guidedFlow().length)return renderGuided();
+ if(w.step===1)content=`<h2>Your save and game settings</h2><p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p><div class="form-grid">${field('Save name','saveName',w.saveName,'text','required maxlength="80" '+(w.saveId?'readonly':''))}${selectField('Currently working on','phase',['1','2','3','4','5'].map(x=>[x,'Phase '+x]),s.phase)}${selectField('Resource purity','purity',purities,s.purity)}${selectField('Node distribution','distribution',distributions,s.distribution)}${field('World seed (optional)','worldSeed',s.worldSeed||'','number','min="-2147483648" max="2147483647" step="1"')}${field('Elevator requirement multiplier','multiplier',s.multiplier,'number','min="0.1" max="1000" step="0.1" required')}${field('Power consumption multiplier','powerFactor',s.powerFactor,'number','min="0" max="10" step="0.1" required')}${field('Spare existing power (MW)','availablePowerMW',s.availablePowerGW*1000,'number','min="0" max="10000000" step="1" required')}${field('Total installed power (MW)','installedPowerMW',(s.installedPowerGW??s.availablePowerGW)*1000,'number','min="0" max="10000000" step="1" required')}${field('Other settings / mod notes','modNotes',s.modNotes||'','text','maxlength="500"')}</div><h3>Production you already run ${help('existingSupply')}</h3>${supplyRowsHtml(s)}<p class="small muted">Other settings are notes only. Modified recipes, production boosts and modded items are not simulated. Phase plans assume the necessary milestones and MAM research are unlocked by commissioning.</p>`;
  if(w.step===2)content=`<h2>How do you want to build?</h2><div class="form-grid">${selectField('Recipe access','recipes',[['standard','Standard recipes'],['all','Allow all alternate recipes as they become available'],['custom','Pick specific alternate recipes']],s.recipes)}${selectField('Ingot factories','pureIngots',[['false','Let the planner choose'],['true','Require pure ingot recipes when unlocked']],String(s.pureIngots))}${selectField('SAM resource conversion','sam',[['avoid','Avoid ore / gas conversion'],['needed','Only to meet resource limits or improve maximum output'],['allow','Allow whenever useful']],s.sam)}${field('Extra utilities power (%)','utilityPercent',s.utilityPercent??20,'number','min="0" max="200" step="1" required')}${selectField('Drone fuel','droneFuel',droneFuels.map(n=>[n,n==='none'?'No dedicated drone fuel':n]),s.droneFuel||'none')}${field('Drone fuel supply (items/min, entire fleet)','droneFuelRate',s.droneFuelRate??10,'number','min="0.01" max="10000" step="any" required')}${field('Phase 4 battery bridge /min (ionized fuel only)','droneBridgeRate',s.droneBridgeRate??10,'number','min="0.01" max="10000" step="any" required')}${selectField('Preferred main power','mainPower',powerOptions,s.mainPower||'auto')}${selectField('Nuclear goal','nuclear',[['none','No nuclear power'],['sink','Uranium power; sink plutonium fuel rods'],['recycle','Full waste recycling in Phase 5']],s.nuclear)}${field('Minimum uranium reactors from Phase 4','uraniumReactors',s.uraniumReactors,'number','min="1" max="1000" step="1" required')}${selectField('Storage supply','storage',storageOptions,s.storage)}${selectField('Collectables storage','collectables',[['false','No collectables bays'],['true','Include leaves, wood, slugs, food, protein and DNA']],String(s.collectables??(s.storage==='all')))}${field('Construction materials refill /min','buildRate',s.buildRate??s.storageRate,'number','min="0" max="300" step="0.1" required')}${field('Other items refill /min','storageRate',s.storageRate,'number','min="0.1" max="300" step="0.1" required')}${field('Extra Singularity Cells /min in Phase 5','cellsPerMinute',s.cellsPerMinute,'number','min="0" max="1000" step="0.1" required')}${field('Somersloops available to spend','somersloops',s.somersloops??0,'number','min="0" max="106" step="1" required')}${field('Alien Power Augmenters in Phase 5','augmenters',s.augmenters??0,'number','min="0" max="10" step="1" required')}${field('Of those, fueled with Alien Power Matrix','fueledAugmenters',s.fueledAugmenters??0,'number','min="0" max="10" step="1" required')}${field('Somersloops for production amplification','amplifySloops',s.amplifySloops??0,'number','min="0" max="106" step="1" required')}</div>${sloopLedgerHtml(s)}${storageRatesHtml(s)}${s.recipes==='custom'?altPickerHtml(s):''}<div class="notice blue">SAM conversion controls raw resource conversion, not SAM ingredients required by late-game parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have an unlimited automatic source.</div><p class="small muted">Each Main Portal consumes <b>2 Singularity Cells/min</b> to maintain its connection; the Satellite Portal does not consume cells. <b>10/min supplies five connections</b> (the standard recipe produces 10/min). Reserve portal operating power separately. <a href="https://satisfactory.wiki.gg/wiki/Portal" target="_blank" rel="noreferrer">Portal reference</a>. Nuclear waste and unpackaged fluids stay outside the storage room.</p>`;
  if(w.step===3){const recommended=s.multiplier>5?'timed':'balanced';content=`<h2>Choose your production goal</h2><p>${s.multiplier>5?'Your elevator multiplier makes completion time a useful starting point.':'Balanced progression is a practical starting point for these settings.'} Storage and your selected preferences apply to every option.</p><div class="goal-grid">${workspace.catalog.goals.map(g=>`<label class="goal-card"><input type="radio" name="goal" value="${g.id}" ${s.goal===g.id?'checked':''}><strong>${g.name}</strong>${recommended===g.id?'<span class="badge orange">Suggested</span>':''}<p>${g.description}</p></label>`).join('')}</div><div class="form-grid">${field('Profile name','profileName',w.name||workspace.catalog.goals.find(g=>g.id===s.goal).name,'text','required maxlength="80"')}${field('Hours per phase (target-time option)','hours',s.hours,'number','min="0.25" max="2000" step="0.25" required')}${selectField('Target time applies to','phaseTime',[['every','Every phase'],['final','The final phase; earlier phases run as fast as their kept buildings allow']],s.phaseTime||'every')}</div><label class="check-row"><input type="checkbox" name="roundRates" ${s.roundRates?'checked':''}>Round delivery rates to convenient numbers (may change completion time)</label><label class="check-row"><input type="checkbox" name="wholeMachines" ${s.wholeMachines!==false?'checked':''}>Run solid-part machines at 100%; send surplus to storage, then the sink</label><p class="small muted">Inputs and byproducts are recalculated. Fluid, generator and nuclear/recycling lines may still need balancing. Recipe choices are selected first, then whole-machine counts are fitted within your budgets.</p><p class="small muted">Maximum output means fastest simultaneous elevator completion, within your resource budgets. It does not maximize sink points. Rounding is ignored for maximum output.</p>`;}
- if(w.step===4)content=`<h2>Available resource budgets</h2><p>Enter the extraction you can allocate to this new plan, per minute, after existing factories and power fuel. Starter values are full-map estimates at endgame extraction, not resources already connected.</p><div class="notice blue">${esc(resourceDefaults(s.purity,s.distribution).description)} ${s.worldSeed?'Recorded seed: '+esc(s.worldSeed)+'. ':''}<a href="https://satisfactoryworldseed.com/" target="_blank" rel="noreferrer">Look up your seed totals</a> · <a href="https://satisfactory.wiki.gg/wiki/Resource_Node" target="_blank" rel="noreferrer">Node reference</a>. Resource-rich counts cannot be filled accurately without your seed: enter the lookup totals below. Oil-well extraction may be added after its unlock.</div><div class="resource-inputs">${workspace.catalog.raw.map(n=>field(n,'limit:'+n,s.limits[n],'number','min="0" max="10000000" step="any" required')).join('')}</div><label class="check-row"><input name="limitsConfirmed" type="checkbox" ${s.limitsConfirmed?'checked':''}>I have checked these budgets for my save (required for maximum output)</label>`;
- if(w.step===5){const p=w.preview;content=`<h2>Review ${esc(w.name)}</h2><p>Nothing has been created yet. Your other profiles and their progress stay intact.</p><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Delivery time</th><th>Buildings</th><th>New generation</th><th>Budget</th></tr></thead><tbody>${Object.entries(p.stages).filter(([ph])=>Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<tr><td>${ph}</td><td>${x.hours?num(x.hours)+' h':'—'}${x.aheadOf!==undefined?` <span class="badge">was ${num(x.aheadOf)} h</span>`:''}</td><td>${x.rows?num(x.rows.reduce((a,r)=>a+r.machines,0)):'—'}</td><td>${x.generationMW!==undefined?power(x.generationMW):'—'}</td><td>${x.feasible?'Within entered limits':'Needs adjustment'}</td></tr>`).join('')}</tbody></table></div>${fuelVerdictHtml(p)}${Object.entries(p.stages).filter(([ph,x])=>!x.feasible&&Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<div class="notice"><b>Phase ${ph}:</b> ${esc(x.reason)}${draftOptions(x,p.settings)}</div>`).join('')}<details class="panel"><summary>Assumptions and calculation limits</summary>${p.warnings.map(x=>`<p class="small">${esc(x)}</p>`).join('')}</details><p class="small muted">You can save a plan that exceeds your budgets as a planning draft; its affected phases remain clearly flagged. Profiles are calculated snapshots. Create another profile to compare different settings.</p>${carryPanelHtml(w)}`;}
- return (browserMode?browserNotice():'')+header('SAVE → SETTINGS → GOALS → PLAN',w.saveId?'Add a profile to '+esc(w.saveName):'Create your factory plan')+`<div class="wizard-progress">${['Game settings','Preferences','Goals','Resources','Review'].map((n,i)=>`<button type="button" class="${w.step===i+1?'current':''}" data-wizard-step="${i+1}" ${w.step===i+1?'aria-current="step"':''}>${i+1}. ${n}</button>`).join('')}</div><form id="wizard-form" class="panel wizard-panel">${content}<div class="wizard-actions"><button type="button" class="btn" ${w.step===1?'data-cancel-wizard':'data-wizard-back'}>${w.step===1?'Cancel':'Back'}</button><button class="btn primary" type="submit">${w.step===5?'Create profile':w.step===4?'Calculate plan':'Continue →'}</button></div><p id="wizard-error" class="form-error" role="alert"></p></form>`;
+ if(w.step===4)content=`<h2>Available resource budgets</h2><p><button type="button" class="btn primary" data-open-extraction>Work these out from my nodes →</button> <span class="small muted">Count what your world holds and the planner turns it into these rates.</span></p><p>Enter the extraction you can allocate to this new plan, per minute, after existing factories and power fuel. Starter values are full-map estimates at endgame extraction, not resources already connected.</p><div class="notice blue">${esc(resourceDefaults(s.purity,s.distribution).description)} ${s.worldSeed?'Recorded seed: '+esc(s.worldSeed)+'. ':''}<a href="https://satisfactoryworldseed.com/" target="_blank" rel="noreferrer">Look up your seed totals</a> · <a href="https://satisfactory.wiki.gg/wiki/Resource_Node" target="_blank" rel="noreferrer">Node reference</a>. Resource-rich counts cannot be filled accurately without your seed: enter the lookup totals below. Oil-well extraction may be added after its unlock.</div><div class="resource-inputs">${workspace.catalog.raw.map(n=>field(n,'limit:'+n,s.limits[n],'number','min="0" max="10000000" step="any" required')).join('')}</div><label class="check-row"><input name="limitsConfirmed" type="checkbox" ${s.limitsConfirmed?'checked':''}>I have checked these budgets for my save (required for maximum output)</label>`;
+ if(w.step===5){const p=w.preview;content=`<h2>Review ${esc(w.name)}</h2><p>Nothing has been created yet. Your other profiles and their progress stay intact.</p><div class="table-wrap"><table><thead><tr><th>Phase</th><th>Delivery time</th><th>Buildings</th><th>New generation</th><th>Budget</th></tr></thead><tbody>${Object.entries(p.stages).filter(([ph])=>Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<tr><td>${ph}</td><td>${x.hours?num(x.hours)+' h':'—'}${x.aheadOf!==undefined?` <span class="badge">was ${num(x.aheadOf)} h</span>`:''}</td><td>${x.rows?num(x.rows.reduce((a,r)=>a+r.machines,0)):'—'}</td><td>${x.generationMW!==undefined?power(x.generationMW):'—'}</td><td>${x.feasible?'Within entered limits':'Needs adjustment'}</td></tr>`).join('')}</tbody></table></div>${supplyNoticeHtml(p)}${fuelVerdictHtml(p)}${Object.entries(p.stages).filter(([ph,x])=>!x.feasible&&Number(ph)>=Number(p.settings.phase||1)).map(([ph,x])=>`<div class="notice"><b>Phase ${ph}:</b> ${esc(x.reason)}${draftOptions(x,p.settings)}</div>`).join('')}<details class="panel"><summary>Assumptions and calculation limits</summary>${p.warnings.map(x=>`<p class="small">${esc(x)}</p>`).join('')}</details><p class="small muted">You can save a plan that exceeds your budgets as a planning draft; its affected phases remain clearly flagged. Profiles are calculated snapshots. Create another profile to compare different settings.</p>${carryPanelHtml(w)}`;}
+ return (browserMode?browserNotice():'')+header('SAVE → SETTINGS → GOALS → PLAN',w.saveId?'Add a profile to '+esc(w.saveName):'Create your factory plan')+`<div class="wizard-progress">${['Game settings','Preferences','Goals','Resources','Review'].map((n,i)=>`<button type="button" class="${w.step===i+1?'current':''}" data-wizard-step="${i+1}" ${w.step===i+1?'aria-current="step"':''}>${i+1}. ${n}</button>`).join('')}</div><form id="wizard-form" class="panel wizard-panel">${content}<div class="wizard-actions"><button type="button" class="btn" ${w.step===1?'data-cancel-wizard':'data-wizard-back'}>${w.step===1?'Cancel':'Back'}</button><span class="guided-escape">${w.step<5?'<button type="button" class="btn quiet" data-guided-start>← Guided start</button>':''}<button class="btn primary" type="submit">${w.step===5?'Create profile':w.step===4?'Calculate plan':'Continue →'}</button></span></div><p id="wizard-error" class="form-error" role="alert"></p></form>`;
 }
 function readWizard(form){const f=new FormData(form),w=wizard,s=w.settings,oldPreset=s.purity+'|'+s.distribution;for(const [k,v]of f){if(k==='availablePowerMW')s.availablePowerGW=Number(v)/1000;if(k==='installedPowerMW')s.installedPowerGW=Number(v)/1000;if(k==='saveName')w.saveName=v;if(k==='profileName')w.name=v;else if(k.startsWith('limit:'))s.limits[k.slice(6)]=Number(v);else if(['utilityPercent','droneFuelRate','droneBridgeRate','multiplier','powerFactor','availablePowerGW','uraniumReactors','storageRate','buildRate','cellsPerMinute','somersloops','augmenters','fueledAugmenters','amplifySloops','hours'].includes(k))s[k]=Number(v);else if(k==='collectables')s.collectables=v==='true';else if(k==='pureIngots')s[k]=v==='true';else if(['phase','purity','distribution','recipes','sam','nuclear','storage','goal','phaseTime','modNotes','mainPower','worldSeed','droneFuel'].includes(k))s[k]=v;}
  if(form.querySelector('[name=sloop]'))s.sloopReserved=f.getAll('sloop').map(String);
  if(form.querySelector('.alt-list')){s.alternateRecipes=f.getAll('alt').map(String);s.preferredRecipes=f.getAll('altpref').map(String).filter(id=>s.alternateRecipes.includes(id));}
+ {const supply=readSupply(form,f);if(supply)s.existingSupply=supply;}
  if(form.querySelector('.rate-list')){const over={};for(const [k,v] of f)if(k.startsWith('rate:')&&String(v).trim()!==''&&Number.isFinite(Number(v)))over[k.slice(5)]=Number(v);s.storageOverrides=over;}
  if(w.step===3){s.roundRates=f.has('roundRates');s.wholeMachines=f.has('wholeMachines');}if(w.step===4)s.limitsConfirmed=f.has('limitsConfirmed');
  readCarry(form,f);
@@ -795,9 +1343,14 @@ async function moveWizard(target){
  const form=$('#wizard-form');if(target>wizard.step&&!form.reportValidity())return;
  readWizard(form);
  if(target!==5){wizard.step=target;render();return;}
- wizardBusy=true;const buttons=document.querySelectorAll('[data-wizard-step],#wizard-form button');buttons.forEach(b=>b.disabled=true);
- const submit=form.querySelector('button[type="submit"]'),label=submit?.textContent;
- try{wizard.name=wizard.name.trim()||workspace.catalog.goals.find(g=>g.id===wizard.settings.goal).name;wizard.preview=await post('/api/preview',{settings:wizard.settings},true,calcProgress(submit,'Calculating…'));wizard.step=5;render();}
+ await calculateWizard(form);
+}
+// Shared by both modes: the guided questions and the five-step wizard reach the
+// same Review with the same settings, so they calculate through one path.
+async function calculateWizard(form){
+ wizardBusy=true;const buttons=document.querySelectorAll('[data-wizard-step],[data-guided-advanced],#wizard-form button');buttons.forEach(b=>b.disabled=true);
+ const submit=form?.querySelector('button[type="submit"]'),label=submit?.textContent;
+ try{wizard.name=wizard.name.trim()||workspace.catalog.goals.find(g=>g.id===wizard.settings.goal).name;wizard.preview=await post('/api/preview',{settings:wizard.settings},true,calcProgress(submit,'Calculating…'));wizard.step=5;wizard.guidedStep=guidedFlow().length+1;render();}
  catch(err){wizardError(form,err);if(submit)submit.textContent=label;}
  finally{wizardBusy=false;buttons.forEach(b=>b.disabled=false);}
 }
@@ -854,7 +1407,7 @@ function calcExpansionRows(id){
  }).join('');
 }
 function openCalculatedFactory(id){const r=calcStage().rows?.find(r=>r.id===id);if(!r)return;const flow=calcFlowModel(r);const dialogIcon=Object.keys(r.outputs||{})[0]||'';dialog(r.name,phaseLabel(phase()),`${flowHtml(flow)}${setupHtml(r)}${laneAdviceHtml(flow)}<h3>Outputs per minute</h3><p>${inputText(r.outputs)||power(r.generationMW)}</p><h3>Expansion by phase</h3><table><thead><tr><th>Phase</th><th>Machines</th><th>Add</th></tr></thead><tbody>${calcExpansionRows(id)}</tbody></table><p class="small muted">The optimizer may choose a different recipe in another phase. Keep earlier buildings until the replacement chain runs. Screws and wire can be made beside consumers.</p><textarea id="detail-note" class="notes" maxlength="6000" aria-label="Factory notes">${esc(state.notes['factory-'+id]||'')}</textarea><button class="btn" data-save-note="factory-${id}" data-input="detail-note">Save notes</button>`,dialogIcon);}
-function renderCalculatedResources(){const x=calcStage();return header('CHECK BEFORE EXPANDING','Power & resources','New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.')+calcWarnings()+`<div class="stats">${stat('New generation',power(x.generationMW),'Fuel and recycling included')}${stat('Whole-machine peak',power(x.peakMW),'At selected consumption multiplier')}${stat('With utility allowance',power(x.requiredMW),(calculated.settings.utilityPercent??20)+'% for transport and utilities; verify actual load')}${stat('Existing spare power',power(calculated.settings.availablePowerGW*1000),'Not total installed generation')}${x.sloopsUsed?stat('Somersloops in production',num(x.sloopsUsed),'Amplified machines: double output, four times the power'):''}${x.augmenters?stat('With augmenter boost',power(x.availableMW),num(x.augmenters)+' augmenter'+(x.augmenters>1?'s':'')+' · '+num(x.augmenterMW)+' MW plus '+Math.round(x.boost*100)+'% of base production'):''}</div><div class="table-wrap"><table><thead><tr><th>Resource</th><th>Required /min</th><th>Budget /min</th><th>Remaining</th></tr></thead><tbody>${workspace.catalog.raw.map(n=>`<tr><td>${esc(n)}</td><td>${num(x.raw?.[n])}</td><td>${num(calculated.settings.limits[n])}</td><td class="${(x.raw?.[n]||0)>calculated.settings.limits[n]?'warn':''}">${num(calculated.settings.limits[n]-(x.raw?.[n]||0))}</td></tr>`).join('')}</tbody></table></div><div class="backup-grid"><section class="panel"><h2>Dedicated drone fuel /min</h2><p>${inputText(x.drone||{})||'No dedicated drone fuel in this phase.'}</p><h2>Protected storage /min</h2><p>${inputText(x.storage||{})||'No storage production requested.'}</p></section><section class="panel"><h2>Conversion and byproducts</h2><p>${x.conversions?.map(esc).join('<br>')||'No raw-resource conversion required.'}</p><p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p><p>Surplus solids: ${inputText(x.surplus||{})||'None'}</p><p class="small muted">Liquid and radioactive material balances are enforced. Do not let storage or overflow block recycling.</p></section></div>`;}
+function renderCalculatedResources(){const x=calcStage();return header('CHECK BEFORE EXPANDING','Power & resources','New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets.')+calcWarnings()+`<div class="stats">${stat('New generation',power(x.generationMW),'Fuel and recycling included')}${stat('Whole-machine peak',power(x.peakMW),'At selected consumption multiplier')}${stat('With utility allowance',power(x.requiredMW),(calculated.settings.utilityPercent??20)+'% for transport and utilities; verify actual load')}${stat('Existing spare power',power(calculated.settings.availablePowerGW*1000),'Not total installed generation')}${x.sloopsUsed?stat('Somersloops in production',num(x.sloopsUsed),'Amplified machines: double output, four times the power'):''}${x.augmenters?stat('With augmenter boost',power(x.availableMW),num(x.augmenters)+' augmenter'+(x.augmenters>1?'s':'')+' · '+num(x.augmenterMW)+' MW plus '+Math.round(x.boost*100)+'% of base production'):''}</div><div class="table-wrap"><table><thead><tr><th>Resource</th><th>Required /min</th><th>Budget /min</th><th>Remaining</th></tr></thead><tbody>${workspace.catalog.raw.map(n=>`<tr><td class="resource-name">${itemIcon(n)}<span>${esc(n)}</span></td><td>${num(x.raw?.[n])}</td><td>${num(calculated.settings.limits[n])}</td><td class="${(x.raw?.[n]||0)>calculated.settings.limits[n]?'warn':''}">${num(calculated.settings.limits[n]-(x.raw?.[n]||0))}</td></tr>`).join('')}</tbody></table></div><div class="backup-grid"><section class="panel"><h2>Dedicated drone fuel /min</h2><p>${inputText(x.drone||{})||'No dedicated drone fuel in this phase.'}</p><h2>Protected storage /min</h2><p>${inputText(x.storage||{})||'No storage production requested.'}</p><h2>From production you already run</h2><p>${inputText(x.supplied||{})||'None credited in this phase.'}</p>${Object.keys(x.supplied||{}).length?'<p class="small muted">The plan does not build these lines or the chain behind them. Their extraction is assumed to be outside the budgets above.</p>':''}</section><section class="panel"><h2>Conversion and byproducts</h2><p>${x.conversions?.map(esc).join('<br>')||'No raw-resource conversion required.'}</p><p>Plutonium rods to sink: ${num(x.plutoniumSink)}/min.</p><p>Surplus solids: ${inputText(x.surplus||{})||'None'}</p><p class="small muted">Liquid and radioactive material balances are enforced. Do not let storage or overflow block recycling.</p></section></div>`;}
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
  if(b.hasAttribute('data-new-save'))startWizard();
  if(b.dataset.newProfile)startWizard(b.dataset.newProfile);
@@ -883,6 +1436,40 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
  if(b.dataset.openSave){if(!allowSwitch())return;b.disabled=true;try{await writeQueue;workspace=await post('/api/select',{saveId:b.dataset.openSave,profileId:b.dataset.openProfile});await loadContext(b.dataset.openSave,b.dataset.openProfile);navigate('plan');}catch(err){toast(err.message,true);b.disabled=false;}}
  if(b.dataset.wizardStep)await moveWizard(Number(b.dataset.wizardStep));
  if(b.hasAttribute('data-wizard-back'))await moveWizard(wizard.step-1);
+ if(b.hasAttribute('data-guided-back'))await moveGuided(wizard.guidedStep-1);
+ if(b.dataset.guidedAdvanced)toAdvanced(Number(b.dataset.guidedAdvanced));
+ if(b.hasAttribute('data-guided-start'))toGuided();
+ if(b.hasAttribute('data-open-extraction'))openExtraction();
+ if(b.dataset.nodePreset&&wizard){
+  const form=$('#wizard-form');if(form)readExtraction(form);
+  wizard.extraction=presetSurvey(b.dataset.nodePreset,extractionOf(wizard),wizard.settings.distribution);
+  wizard.extractionUndo=null;
+  // Keep the profile's recorded purity in step with the counts it now holds.
+  wizard.settings.purity=b.dataset.nodePreset;
+  render();
+  toast('Filled in the default world at '+(nodePresets.find(([v])=>v===b.dataset.nodePreset)?.[1]||'that purity')+'. Change any count that does not match your save.');
+ }
+ if(b.hasAttribute('data-node-reset')&&wizard){
+  const form=$('#wizard-form');if(form)readExtraction(form);
+  resetExtraction();
+  render();
+  toast('Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.');
+ }
+ if(b.hasAttribute('data-node-undo')&&wizard){
+  undoExtractionReset();
+  render();
+  toast('Put back the counts you had before the reset.');
+ }
+ if(b.dataset.extractionStep)await moveExtraction(Number(b.dataset.extractionStep));
+ if(b.hasAttribute('data-extraction-back'))await moveExtraction(wizard.extractionStep-1);
+ if(b.hasAttribute('data-extraction-cancel'))leaveExtraction();
+ if(b.dataset.supplyPick){pickSupplyOption(b);return;}
+ if(b.dataset.supplyRemove&&wizard){
+  const form=$('#wizard-form');if(form)wizard.mode==='guided'?readGuidedForm(form):readWizard(form);
+  const rows=supplyRows(wizard);rows.splice(Number(b.dataset.supplyRemove),1);
+  wizard.settings.existingSupply=Object.fromEntries(rows.filter(r=>Number(r.rate)>0).map(r=>[r.name.trim(),Number(r.rate)]).filter(([n])=>(workspace.catalog.supplyItems||[]).includes(n)));
+  wizard.preview=null;render();
+ }
  if(b.hasAttribute('data-cancel-wizard')){wizard=null;navigate('profiles');}
  if(b.dataset.authMode){authMode=b.dataset.authMode;renderSignedOut();}
  if(b.hasAttribute('data-logout')){if(!allowSwitch())return;await writeQueue;await post('/api/logout',{});authMode='login';await boot();}
@@ -891,10 +1478,13 @@ document.addEventListener('submit',async e=>{
  const f=e.target;if(!['wizard-form','auth-form','rename-form'].includes(f.id))return;e.preventDefault();const b=f.querySelector('button[type="submit"]')||f.querySelector('button');b.disabled=true;
  try{
   if(f.id==='wizard-form'){
-   const w=wizard;if(w.step<5){b.disabled=false;await moveWizard(w.step+1);return;}
+   const w=wizard;
+   if(w.mode==='extraction'){b.disabled=false;await moveExtraction(w.extractionStep+1);return;}
+   if(w.mode==='guided'&&w.guidedStep<=guidedFlow().length){b.disabled=false;await moveGuided(w.guidedStep+1);return;}
+   if(w.step<5){b.disabled=false;await moveWizard(w.step+1);return;}
    if(w.step===5){
     readCarry(f);
-    const r=await post('/api/profiles',{saveId:w.saveId,saveName:w.saveName,name:w.name,settings:w.settings,carryFrom:w.saveId?w.carryFrom:null,carry:w.carry},true,calcProgress(b,'Saving profile…'));
+    const r=await post('/api/profiles',{saveId:w.saveId,saveName:w.saveName,name:w.name,settings:w.settings,carryFrom:w.saveId?w.carryFrom:null,carry:w.carry,built:guidedBuiltKeys(w,f)},true,calcProgress(b,'Saving profile…'));
     workspace=r.workspace;await loadContext(r.saveId,r.profileId);wizard=null;navigate('plan');
     const carried=[r.carriedChecks?plural(r.carriedChecks,'step')+' carried over':'',r.reviewCount?plural(r.reviewCount,'expanded production line')+' left for review':''].filter(Boolean).join('; ');
     toast('Profile created'+(carried?': '+carried+'. ':'. ')+'Your other progress is unchanged.');return;
@@ -903,7 +1493,7 @@ document.addEventListener('submit',async e=>{
   }else if(f.id==='auth-form'){
    const data=Object.fromEntries(new FormData(f));data.registration=new FormData(f).has('registration');const mode=workspace.accountsEnabled?authMode:'setup';await post('/api/'+mode,data,false);await boot();
   }else{workspace=await post('/api/rename',Object.fromEntries(new FormData(f)));const s=workspace.saves.find(s=>s.id===currentSave.id);currentSave.name=s.name;currentProfile.name=s.profiles.find(p=>p.id===currentProfile.id).name;render();}
- }catch(err){if(f.id==='wizard-form')wizardError(f,err);else{const el=f.querySelector('.form-error');if(el)el.textContent=err.message;else toast(err.message,true);}b.disabled=false;if(f.id==='wizard-form')b.textContent=wizard.step===5?'Create profile':wizard.step===4?'Calculate plan':'Continue →';}
+ }catch(err){if(f.id==='wizard-form')wizardError(f,err);else{const el=f.querySelector('.form-error');if(el)el.textContent=err.message;else toast(err.message,true);}b.disabled=false;if(f.id==='wizard-form')b.textContent=wizard.mode==='guided'&&wizard.guidedStep<=guidedFlow().length?(wizard.guidedStep>=guidedFlow().length?'Calculate plan':'Continue →'):wizard.step===5?'Create profile':wizard.step===4?'Calculate plan':'Continue →';}
 });
 async function boot(){try{
  workspace=await request('/api/workspace');if(!workspace.user){authMode='login';renderSignedOut();return;}

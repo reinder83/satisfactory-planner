@@ -576,3 +576,117 @@ button.rail-tile:hover{border-color:var(--accent)}
  .bay-head,.panel>h2:first-child,.panel>.section-head:first-child{background:#eee}
  .notice,.notice.blue{background:#f5f5f5;color:#333}
 }
+
+/* --- The guided start ---------------------------------------------------- */
+/* Picture-and-a-sentence cards instead of a labelled form row. Artwork is
+   either an item icon already bundled in icons/, or an inline SVG drawn in
+   app.js that inherits currentColor, so nothing here needs a new asset. */
+.guided-panel{max-width:1000px}
+.guided-name{max-width:420px;margin:0 0 22px}
+.guided-progress{display:flex;flex-wrap:wrap;gap:0 18px;margin:20px 0 4px;font-family:var(--head);font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.guided-progress span{display:flex;align-items:center;gap:7px}
+.guided-progress i{width:8px;height:8px;border:1px solid #3c4449;display:block}
+.guided-progress .done{color:var(--muted)}
+.guided-progress .done i{background:#3c4449;border-color:#3c4449}
+.guided-progress .current{color:var(--accent)}
+.guided-progress .current i{background:var(--accent);border-color:var(--accent)}
+.guided-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:18px 0}
+.guided-card{position:relative;display:flex;flex-direction:column;gap:9px;padding:17px 16px 16px;border:1px solid var(--line);background:var(--panel2);box-shadow:inset 0 1px 0 #2d343a;cursor:pointer}
+.guided-card:hover{border-color:var(--accent)}
+.guided-card:has(input:focus-visible){outline:2px solid var(--accent-hi);outline-offset:-3px}
+.guided-card:has(input:checked){border-color:var(--accent);background:linear-gradient(180deg,#1e1710,#14171a)}
+.guided-card input{position:absolute;top:14px;right:14px;width:17px;height:17px;margin:0}
+.guided-card strong{font-family:var(--head);font-size:17px;font-weight:700;letter-spacing:.05em;color:var(--bright);padding-right:26px}
+.guided-card p{margin:0;font-size:11.5px;line-height:1.6;color:#99a2a9}
+.guided-card .badge{align-self:flex-start;margin-top:2px}
+.guided-art{display:flex;align-items:center;gap:5px;height:44px;color:var(--accent)}
+.guided-art svg{width:40px;height:40px}
+.guided-card:has(input:checked) .guided-art{color:var(--accent-hi)}
+.guided-art.items{color:inherit}
+.guided-art.items .item-icon{width:36px;height:36px}
+.guided-follow{margin:6px 0 0;max-width:420px}
+/* The materials you carry out by hand. A floor for one of them costs about a
+   percent; the general construction rate that would reach the same number
+   costs far more, so the guided start never touches it. */
+.guided-topup{margin:22px 0 0;border:1px solid var(--line2);background:var(--panel2);padding:14px 16px 16px}
+.guided-topup legend{font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--bright);padding:0 6px}
+.guided-topup p{margin:0 0 12px}
+.guided-chips{display:flex;flex-wrap:wrap;gap:9px}
+.guided-chip{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 9px;border:1px solid var(--line);background:#0f1214;cursor:pointer;font-size:11.5px}
+.guided-chip:hover{border-color:var(--accent)}
+.guided-chip:has(input:checked){border-color:var(--accent);background:rgba(248,156,28,.08);color:var(--bright)}
+.guided-chip:has(input:focus-visible){outline:2px solid var(--accent-hi);outline-offset:-3px}
+.guided-chip input{width:15px;height:15px;margin:0;flex:none}
+.guided-chip .item-icon{width:24px;height:24px}
+.guided-known{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 20px}
+.guided-known span{display:flex;flex-direction:column;gap:2px;padding:8px 13px;border:1px solid var(--line2);background:var(--panel2);font-size:12px;color:var(--ink)}
+.guided-known b{font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--kicker);font-weight:400}
+.guided-topics{display:grid;gap:11px;margin:0 0 6px}
+.guided-escape{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+/* --- Production you already run ------------------------------------------- */
+/* A rate you can read off your own factory, rather than a checklist matched
+   against recipes this plan happened to choose. */
+.supply-picker{margin:18px 0 0}
+.supply-list{display:grid;gap:10px}
+.supply-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:6px 12px;align-items:end}
+.supply-row .field{margin:0}
+.supply-row .btn{white-space:nowrap}
+/* Kept in the layout and out of the tab order, so the fields of every row line
+   up whether or not that row can be removed yet. */
+.supply-remove.is-blank{visibility:hidden}
+/* Resource tables read faster with the ore beside its name. */
+.resource-name{display:flex;align-items:center;gap:9px}
+.resource-name .item-icon{width:26px;height:26px;flex:none}
+.supply-field{position:relative;min-width:0}
+/* The icon sits inside the field rather than beside it, so the row keeps the
+   same three columns whether or not an item has been chosen. */
+.supply-input{position:relative;display:block;margin-top:7px}
+.supply-input input{margin-top:0}
+.supply-input .item-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:22px;height:22px;pointer-events:none}
+.supply-input.has-icon input{padding-left:40px}
+/* Drawn in the page rather than by a native datalist, so it matches the rest of
+   the terminal and works the same in every browser. */
+.supply-options{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:2px;max-height:264px;overflow:auto;background:#0f1214;border:1px solid var(--accent);box-shadow:0 8px 0 rgba(0,0,0,.35)}
+.supply-options[hidden]{display:none}
+.supply-option{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;background:transparent;text-align:left;font-size:12px;color:var(--ink);cursor:pointer}
+.supply-option:hover,.supply-option[aria-selected=true]{background:rgba(248,156,28,.14);color:var(--bright)}
+.supply-option .item-icon{width:24px;height:24px;flex:none}
+.supply-hint{grid-column:1/-1;font-size:10.5px;letter-spacing:.04em;color:var(--dim)}
+.supply-hint.warn{color:var(--accent)}
+.supply-picker p{margin:12px 0 0}
+.supply-summary{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:7px}
+.supply-summary li{display:flex;align-items:center;gap:10px}
+.supply-summary .item-icon{width:26px;height:26px;flex:none}
+.supply-notice .small{margin-top:12px}
+@media (max-width:720px){
+ .guided-grid{grid-template-columns:1fr}
+ .guided-progress{gap:0 12px;font-size:10.5px;letter-spacing:.08em}
+ .guided-escape{width:100%;justify-content:space-between}
+ .supply-row{grid-template-columns:1fr;gap:6px}
+ .supply-remove.is-blank{display:none}
+ .supply-options{max-height:210px}
+}
+
+/* --- Working out resource budgets from your nodes ------------------------- */
+.extraction-panel{max-width:1000px}
+.extraction-panel h3{font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--bright);margin:22px 0 10px}
+.node-presets{margin:16px 0 4px;padding:12px 14px;border:1px solid var(--line2);background:var(--panel2)}
+.node-presets .eyebrow{display:block;margin-bottom:9px}
+.node-preset-buttons{display:flex;flex-wrap:wrap;gap:8px 16px}
+.node-preset-buttons .btn.is-active{color:var(--bright);border-bottom:2px solid var(--accent)}
+.node-presets p{margin:11px 0 0}
+.count-table{display:grid;gap:6px;margin:14px 0 4px}
+.count-row{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr)) minmax(0,.9fr);gap:12px;align-items:end;padding:8px 10px;background:var(--panel2);border:1px solid var(--line2)}
+.count-name{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--ink);min-width:0;padding-bottom:9px}
+.count-name .item-icon{width:28px;height:28px;flex:none}
+.count-name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.count-cell{margin:0}
+.count-cell input{text-align:center}
+.count-total{font-size:12px;color:var(--gold);text-align:right;padding-bottom:9px;white-space:nowrap}
+.used-input{width:100%;border:1px solid var(--line);background:#0f1214;box-shadow:inset 0 1px 0 #2d343a;padding:8px 10px;font-size:12.5px;color:var(--ink);text-align:right}
+.extraction-panel .notice .item-icon{width:26px;height:26px;vertical-align:middle;margin-right:6px}
+@media (max-width:860px){
+ .count-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+ .count-name{grid-column:1/-1;padding-bottom:0}
+ .count-total{grid-column:1/-1;text-align:left}
+}
