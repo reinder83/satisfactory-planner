@@ -57,7 +57,8 @@ const page = computed(() =>
   }),
 );
 
-// A question's answer, a top-up chip or a topic decides what follows: read and redraw.
+// A question's answer, a top-up chip or a topic decides what follows: read and redraw. A topic
+// is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
 function changed(e) {
   const name = String(e.target.name);
   if (name.startsWith('guided:') || name === 'topup' || name === 'topic') {

@@ -1,8 +1,9 @@
 <!--
   "What is different this time?": a second profile for a save you already play starts from
   the settings of the profile you are on, so it is asked what changed rather than every
-  question again. Shows those settings, and one "topic" box per question (the phase ticked);
-  readGuidedForm turns the ticked ones into wizard.guidedAsk, which narrows guidedFlow().
+  question again. Shows those settings, and one "topic" box per question (the phase ticked
+  until a change records the ticks in wizard.guidedTopics, so a redraw keeps them); Continue
+  (moveGuided) turns the ticked ones into wizard.guidedAsk, which narrows guidedFlow().
 -->
 <script setup>
 import { computed } from 'vue';
@@ -20,6 +21,7 @@ const view = computed(() =>
       save?.profiles.find(p => p.id === (w.carryFrom || save.activeProfile)) || save?.profiles[0];
     return {
       from: from?.name,
+      ticked: w.guidedTopics || ['phase'],
       known: [
         ['Phase', 'Phase ' + (s.phase || '3')],
         ['Goal', (workspace.catalog.goals.find(g => g.id === s.goal) || {}).name || s.goal],
@@ -53,7 +55,7 @@ const view = computed(() =>
   </div>
   <div class="guided-topics">
     <label v-for="q in guidedQuestions" :key="q.id" class="check-row"
-      ><input type="checkbox" name="topic" :value="q.id" :checked="q.id === 'phase'" />{{
+      ><input type="checkbox" name="topic" :value="q.id" :checked="view.ticked.includes(q.id)" />{{
         q.title
       }}</label
     >

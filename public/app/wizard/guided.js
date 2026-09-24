@@ -3,7 +3,7 @@
 // the settings each answer writes are data in preferences.js (guidedQuestions,
 // guidedStandingQuestion); this module sequences and reads them, and
 // ui/pages/GuidedPage.vue (with ui/guided/) draws them. Draft fields used:
-// guidedStep (1-based index into guidedFlow()), guidedAsk, tutorial.
+// guidedStep (1-based index into guidedFlow()), guidedAsk, guidedTopics, tutorial.
 import {
   GUIDED_TOPUP_RATE,
   guidedQuestions,
@@ -96,13 +96,17 @@ export function guidedBuiltKeys(w) {
 // wizard.settings: the same fields All settings writes (phase, goal, recipes,
 // pureIngots, storage, collectables, wholeMachines). The tutorial answer is kept
 // on the draft instead. Clears the preview, so Review must recalculate.
-function readGuided(form) {
+// On the "What is different" screen the ticked topics are kept as guidedTopics,
+// so a redraw keeps them; only `topics` (leaving the screen) makes them
+// guidedAsk, which ends that screen and narrows guidedFlow().
+function readGuided(form, topics) {
   const w = wizard,
     s = w.settings,
     f = new FormData(form);
   if (form.querySelector?.('.guided-topics')) {
     const on = f.getAll('topic').map(String);
-    w.guidedAsk = guidedQuestions.filter(q => on.includes(q.id)).map(q => q.id);
+    w.guidedTopics = guidedQuestions.filter(q => on.includes(q.id)).map(q => q.id);
+    if (topics) w.guidedAsk = w.guidedTopics;
   }
   for (const q of guidedFlow()) {
     if (!q.options) continue;
@@ -148,7 +152,7 @@ export async function moveGuided(target) {
   // "What is different this time?" chooses which questions follow, so leaving it
   // starts that list at the beginning rather than stepping past it.
   const wasTopics = !!w.saveId && w.guidedAsk === null;
-  if (form) readGuidedForm(form);
+  if (form) readGuidedForm(form, { topics: true });
   const flow = guidedFlow();
   if (wasTopics && flow.length) {
     w.guidedStep = 1;
@@ -178,13 +182,14 @@ export async function moveGuided(target) {
 }
 
 // readGuided plus the name box, which every guided screen but the topics one has.
-// Also used by the survey and supply code before they re-render.
-export function readGuidedForm(form) {
+// Also used by the survey and supply code before they re-render. `topics` applies
+// the ticked topics (see readGuided): Continue and All settings do, a change does not.
+export function readGuidedForm(form, { topics = false } = {}) {
   const w = wizard,
     f = new FormData(form);
   if (f.has('saveName')) w.saveName = String(f.get('saveName'));
   if (f.has('profileName')) w.name = String(f.get('profileName'));
-  readGuided(form);
+  readGuided(form, topics);
 }
 
 // Switching to All settings keeps every answer: both modes write the same
@@ -193,7 +198,7 @@ export function readGuidedForm(form) {
 export function toAdvanced(step) {
   const w = wizard;
   const form = $('#wizard-form');
-  if (form && w.mode === 'guided') readGuidedForm(form);
+  if (form && w.mode === 'guided') readGuidedForm(form, { topics: true });
   w.mode = 'advanced';
   w.usedGuided = true;
   w.step = Math.min(Math.max(step || 1, 1), 4);

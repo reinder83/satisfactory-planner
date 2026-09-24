@@ -603,6 +603,27 @@ test('a second profile for a save is asked what changed, naming the profile safe
   assert.equal($('input[name=profileName]').placeholder, 'Named after your goal if left blank');
 });
 
+test('ticking topics keeps the "what is different" screen; Continue asks exactly those', async () => {
+  guidedAt(1, { saveId: 's', saveName: 'World', carryFrom: 'p' });
+  await change('input[name=topic][value=phase]', false);
+  await change('input[name=topic][value=goal]', true);
+  await change('input[name=topic][value=exact]', true);
+  assert.ok($('.guided-topics'), 'still on the topic picker after ticking');
+  assert.equal(wizard.guidedAsk, null, 'nothing is applied before Continue');
+  await redraw();
+  const ticked = () => $$('input[name=topic]:checked').map(el => el.value);
+  assert.deepEqual(ticked(), ['goal', 'exact'], 'the ticks survive a redraw');
+  await submit();
+  assert.deepEqual(
+    guidedFlow().map(q => q.id),
+    ['goal', 'exact'],
+  );
+  assert.equal(wizard.guidedStep, 1);
+  assert.equal($('.guided-topics'), null);
+  assert.ok($('input[name="guided:goal"]'), 'the first chosen question is on screen');
+  assert.equal($$('.guided-progress [role=listitem]').length, 2);
+});
+
 test('the already-running question asks for a rate, with an item search we own', async () => {
   guidedAt(1);
   const at = guidedFlow().findIndex(q => q.id === 'supply') + 1;

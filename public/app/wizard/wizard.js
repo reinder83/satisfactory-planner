@@ -79,7 +79,7 @@ export function startWizard(saveId = null) {
   //   guidedStep, guidedAsk, tutorial  guided.js state; tutorial also feeds
   //                     guidedBuiltKeys and ada-panel.js
   //   usedGuided        set by toAdvanced; nothing reads it at present
-  // Added later: supplyRows (supply.js) and extraction, extractionStep,
+  // Added later: guidedTopics (guided.js), supplyRows (supply.js) and extraction, extractionStep,
   // extractionReturn, extractionUndo (extraction.js).
   setWizard({
     step: 1,
