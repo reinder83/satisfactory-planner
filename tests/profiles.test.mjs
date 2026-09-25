@@ -13,7 +13,7 @@ import {
   DEFAULT_LIMITS,
   DELIVERIES,
 } from '../planner.mjs';
-import { elevatorParts } from '../public/preferences.js';
+import { elevatorParts } from '../public/preferences.ts';
 async function start(dir) {
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise(r => server.listen(0, '127.0.0.1', r));

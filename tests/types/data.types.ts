@@ -27,8 +27,8 @@ import type {
   newProfileState,
   shareState,
   validateState,
-} from '../../public/state.js';
-import type { validateTransfer } from '../../public/transfer.js';
+} from '../../public/state.ts';
+import type { validateTransfer } from '../../public/transfer.ts';
 import handbook from '../../public/plan.json' with { type: 'json' };
 import progression from '../../public/progression.json' with { type: 'json' };
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };

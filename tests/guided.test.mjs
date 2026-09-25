@@ -7,9 +7,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createApp } from '../server.mjs';
 import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS } from '../planner.mjs';
-import { nodeCounts } from '../public/preferences.js';
-import { progression } from '../public/progression.js';
-import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.js';
+import { nodeCounts } from '../public/preferences.ts';
+import { progression } from '../public/progression.ts';
+import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { appSource } from './helpers/app-source.mjs';
 import {
   carryOptions,
@@ -19,7 +19,7 @@ import {
   slotPosition,
   newProfileState,
   initialState,
-} from '../public/state.js';
+} from '../public/state.ts';
 import {
   droneFuels,
   storageOptions,
@@ -56,10 +56,10 @@ import {
   presetPurities,
   uniformPurities,
   richShape,
-} from '../public/preferences.js';
+} from '../public/preferences.ts';
 
 const source = appSource();
-// The same VM harness the interface tests use: app.js runs with its imports
+// The same VM harness the interface tests use: app.ts runs with its imports
 // supplied as globals, so its render functions can be called directly.
 function ui() {
   const node = {

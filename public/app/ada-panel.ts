@@ -1,8 +1,14 @@
 // ADA, the sidebar assistant: remarks, muting and the poke easter egg.
 // This module gathers facts about the open profile and renders the panel; the remark
-// texts themselves are chosen in ../ada.js. The panel and its buttons are ui/AdaPanel.vue.
-import { adaEncore, adaRemarks, adaFault as makeFault } from '../ada.js';
-import { browserMode } from '../browser-api.js';
+// texts themselves are chosen in ../ada.ts. The panel and its buttons are ui/AdaPanel.vue.
+import {
+  adaEncore,
+  adaRemarks,
+  adaFault as makeFault,
+  type AdaFacts,
+  type AdaLine,
+} from '../ada.ts';
+import { browserMode } from '../browser-api.ts';
 import { num, slug } from './format.ts';
 import {
   calcStage,
@@ -45,13 +51,7 @@ export function setAdaMuted(value: boolean) {
   adaMuted = value;
 }
 
-// A line ADA says (ada.js): a remark, an encore or a fault line, which also has a name.
-export interface AdaLine {
-  id: string;
-  tone: string;
-  text: string;
-  name?: string;
-}
+export type { AdaLine };
 
 // The easter egg: clicking ADA's ◈ mark five times in quick succession shows a
 // "transmission fault" line in place of the normal remark until it times out.
@@ -79,10 +79,10 @@ export function adaStore() {
   } catch {}
 }
 
-// A snapshot of the open profile that ada.js picks remarks from: page, phase, progress
+// A snapshot of the open profile that ada.ts picks remarks from: page, phase, progress
 // counts, feasibility, power, backups. It re-derives the counters the pages show from
 // the same checklist keys (factory-/calc-<stage>-<id>, slot-<address>-verified).
-function adaFacts() {
+function adaFacts(): AdaFacts {
   const ts = currentSave.id ? planTasks() : [];
   const next = ts.find(t => !checked(t.id));
   // Read only with a calculated profile open; an empty stage stands in if its data is missing.
@@ -108,7 +108,7 @@ function adaFacts() {
     state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
-  // Plain data only; ada.js decides which remarks apply.
+  // Plain data only; ada.ts decides which remarks apply.
   return {
     view,
     phaseLabel: phaseLabel(phase()),

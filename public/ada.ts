@@ -4,11 +4,69 @@
 // not already contain. Lines are plain text and carry save, profile and step
 // names, so the caller escapes them before rendering.
 
+// What ADA knows about the open profile: plain counts and labels, built by adaFacts in
+// app/ada-panel.ts from the same checklist keys the pages count.
+export interface AdaFacts {
+  view: string;
+  phaseLabel: string;
+  browserMode: boolean;
+  planEditing: boolean;
+  guided: boolean;
+  guidedStep: number;
+  guidedTotal: number;
+  tutorialDone: boolean;
+  supplyDeclared: number;
+  // 'original', 'calculated', or 'none' without an open save.
+  kind: string;
+  save: string;
+  profile: string;
+  steps: { done: number; total: number };
+  next: string;
+  retireOpen: number;
+  factories: { done: number; total: number };
+  storage: { done: number; total: number };
+  deliveries: { open: number; total: number };
+  hasPhaseNote: boolean;
+  customTasks: number;
+  removedSteps: number;
+  groups: number;
+  feasible: boolean;
+  reason: string;
+  // Raw resources over their budget.
+  short: string[];
+  power: { required: string; spare: string; headroom: string; tight: boolean } | null;
+  hours: string;
+  profiles: number;
+  // Days since the browser edition's last full export, or null.
+  backupDays: number | null;
+  post: boolean;
+  startPhase: string;
+  assumptions: number;
+}
+
+// A line ADA says: a remark, an encore, or a fault line (which also has a name).
+export interface AdaLine {
+  id: string;
+  tone: string;
+  text: string;
+  name?: string;
+}
+
+// One remark: see the comment above RULES.
+interface AdaRule {
+  id: string;
+  on?: string[];
+  tone: 'calm' | 'warn' | 'praise';
+  lead?: boolean;
+  when: (f: AdaFacts) => unknown;
+  text: (f: AdaFacts) => string;
+}
+
 // Small text helpers: "3 steps", "A, B, C and 2 more", and a whole-number percentage.
-const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
-const names = (xs, max = 3) =>
+const plural = (n: number, word: string) => n + ' ' + word + (n === 1 ? '' : 's');
+const names = (xs: string[], max = 3) =>
   xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`;
-const share = (done, total) => (total ? Math.round((done / total) * 100) : 100);
+const share = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 100);
 
 // Ordered most useful first: the panel opens on the first line that applies and
 // cycles through the rest. `tone` only colors the panel.
@@ -16,7 +74,7 @@ const share = (done, total) => (total ? Math.round((done / total) * 100) : 100);
 // belongs to, compared with facts.view), `tone` (`calm`, `warn` or `praise`), optional
 // `lead`, `when(facts)` to decide whether it applies and `text(facts)` for the line.
 // adaRemarks sorts by rank() below; equal ranks keep this order.
-const RULES = [
+const RULES: AdaRule[] = [
   // Problems with the plan itself. Warnings rank above every page-specific remark, so these
   // lead on whatever page is open.
   {
@@ -40,8 +98,9 @@ const RULES = [
     on: ['resources'],
     tone: 'warn',
     when: f => f.power?.tight,
+    // Only after when() found the power figures.
     text: f =>
-      `${f.power.headroom} of whole-building power headroom is still unaccounted for: a ${f.power.required} draw against the ${f.power.spare} you listed as spare. Unpowered machines are simply very expensive furniture. Build the generation first.`,
+      `${f.power!.headroom} of whole-building power headroom is still unaccounted for: a ${f.power!.required} draw against the ${f.power!.spare} you listed as spare. Unpowered machines are simply very expensive furniture. Build the generation first.`,
   },
   // `lead` rules describe a state that makes everything else irrelevant and rank first.
   {
@@ -170,9 +229,10 @@ const RULES = [
     id: 'backup-old',
     on: ['backup'],
     tone: 'calm',
-    when: f => f.browserMode && f.backupDays >= 14,
+    when: f => f.browserMode && (f.backupDays ?? 0) >= 14,
+    // Only after when() found a backup age.
     text: f =>
-      `Last full backup: ${plural(f.backupDays, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
+      `Last full backup: ${plural(f.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
   // Page-specific hints: the profile list, factory groups, the wizard and Resources.
   {
@@ -324,7 +384,7 @@ const RULES = [
 ];
 
 // Always available, so ADA has something to say about a spotless save too.
-const IDLE = [
+const IDLE: ((f: AdaFacts) => string)[] = [
   f => `${f.phaseLabel}. Your factory is not a mess. It is an emergent layout.`,
   () => `A belt running at exactly 100% has no margin. Neither, I observe, does its pioneer.`,
   () => `I am contractually obliged to encourage you. Consider yourself encouraged.`,
@@ -356,7 +416,7 @@ const FAULTS = [
 ];
 
 // After a full lap of the remarks, ADA notices you are still clicking.
-const ENCORES = [
+const ENCORES: ((f: AdaFacts) => string)[] = [
   () =>
     `That is everything I hold on this save. The list refreshes when the factory does, not when you press the button.`,
   () =>
@@ -369,11 +429,12 @@ const ENCORES = [
 // are actually looking at; general observations come last.
 // Lower ranks first: lead -1, warn 0, a rule for the current page 1, a rule without `on` 2,
 // a rule for another page 3.
-const rank = (rule, view) =>
+const rank = (rule: AdaRule, view: string) =>
   rule.lead ? -1 : rule.tone === 'warn' ? 0 : !rule.on ? 2 : rule.on.includes(view) ? 1 : 3;
 // Wraps n around the list (negative n too), so encores and faults cycle rather than run out.
-const pick = (list, n) => list[((n % list.length) + list.length) % list.length];
-const safe = (fn, facts) => {
+// Both lists are fixed and not empty, so the pick always exists.
+const pick = <T>(list: T[], n: number): T => list[((n % list.length) + list.length) % list.length]!;
+const safe = (fn: (f: AdaFacts) => string, facts: AdaFacts) => {
   try {
     return fn(facts);
   } catch {
@@ -386,8 +447,12 @@ const safe = (fn, facts) => {
 // `facts` comes from adaFacts in app/ada-panel.ts. Returns every applicable rule as
 // { id, tone, text } in rank order, followed by all IDLE lines. The panel shows one at a time
 // and restarts at the top when the list of ids changes.
-export function adaRemarks(facts = {}) {
-  const out = [];
+//
+// The tests pass only the facts a rule reads, so facts may be partial: a rule reading one that
+// is missing throws and is skipped, the same as for unexpected data.
+export function adaRemarks(given: Partial<AdaFacts> = {}): AdaLine[] {
+  const facts = given as AdaFacts;
+  const out: AdaLine[] = [];
   for (const rule of [...RULES].sort((a, b) => rank(a, facts.view) - rank(b, facts.view))) {
     try {
       if (rule.when(facts)) out.push({ id: rule.id, tone: rule.tone, text: rule.text(facts) });
@@ -403,11 +468,11 @@ export function adaRemarks(facts = {}) {
 
 // `lap` counts completed passes through the remarks, starting at 1.
 // Shown by the panel in place of the first remark on every lap after the first.
-export function adaEncore(lap, facts = {}) {
+export function adaEncore(lap: number, facts: Partial<AdaFacts> = {}): AdaLine {
   return {
     id: 'encore-' + lap,
     tone: 'calm',
-    text: safe(pick(ENCORES, Math.max(0, lap - 1)), facts),
+    text: safe(pick(ENCORES, Math.max(0, lap - 1)), facts as AdaFacts),
   };
 }
 
@@ -415,7 +480,7 @@ export function adaEncore(lap, facts = {}) {
 // a patient pioneer always ends back in corporate good standing.
 // The panel calls this from the fifth quick poke on (poke = pokes - 4); past the last fault
 // it wraps round to the first.
-export function adaFault(poke) {
+export function adaFault(poke: number): AdaLine {
   return {
     id: 'fault-' + poke,
     tone: 'fault',

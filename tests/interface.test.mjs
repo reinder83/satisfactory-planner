@@ -31,12 +31,12 @@ import {
   knownWorld,
   presetPurities,
   uniformPurities,
-} from '../public/preferences.js';
+} from '../public/preferences.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { progression } from '../public/progression.js';
+import { progression } from '../public/progression.ts';
 import {
   carryOptions,
   initialState,
@@ -44,8 +44,8 @@ import {
   bayCapacity,
   bayOfSlot,
   slotPosition,
-} from '../public/state.js';
-import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.js';
+} from '../public/state.ts';
+import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { calculate, catalog } from '../planner.mjs';
 import { appSource } from './helpers/app-source.mjs';
 const source = appSource();

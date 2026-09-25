@@ -1,5 +1,5 @@
-import { validateTransfer, transferFormat } from './public/transfer.js';
-import { shareState, newProfileState } from './public/state.js';
+import { validateTransfer, transferFormat } from './public/transfer.ts';
+import { shareState, newProfileState } from './public/state.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
@@ -31,7 +31,7 @@ const authCookie = token =>
 //     saves:    [{ id, name, userId, activeProfile, profiles: [
 //                 { id, name, kind: 'original' | 'calculated', plan, handbook?, state }] }],
 //     sessions: [{ hash: sha256(token), userId, expires }] }
-// state is the progress object from public/state.js. The 'owner' user always exists; with
+// state is the progress object from public/state.ts. The 'owner' user always exists; with
 // accounts disabled every request acts as the owner.
 //
 // Routes (all JSON; POST checks happen in server.mjs first):
@@ -308,7 +308,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         });
       return response({ ok: true }, 200, { 'Set-Cookie': authCookie('') });
     }
-    // Full-save export (public/transfer.js format) of all the user's saves, or of one save
+    // Full-save export (public/transfer.ts format) of all the user's saves, or of one save
     // with ?save=, or one profile with ?profile=. share=1 strips progress with shareState.
     // An original profile without its own handbook is exported with the current plan.json,
     // so the export can be imported where that default differs. Read-only.

@@ -11,7 +11,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { browserMode } from '../../../browser-api.js';
+import { browserMode } from '../../../browser-api.ts';
 import { navigate } from '../../api.ts';
 import { setWizard, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';

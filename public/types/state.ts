@@ -1,11 +1,11 @@
-// A profile's saved progress (public/state.js). Two shapes:
+// A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
 //                  version (1–4). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
 // Keys and value limits are enforced by validateState at run time; these types only
-// describe the shape. Checklist and note keys must never be renamed (see state.js).
+// describe the shape. Checklist and note keys must never be renamed (see state.ts).
 import type { Phase } from './common.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
@@ -96,7 +96,7 @@ export interface SavedState {
   factoryGroups?: Partial<FactoryGroups>;
 }
 
-// The operations /api/update accepts (mutate in state.js). Each is validated there.
+// The operations /api/update accepts (mutate in state.ts). Each is validated there.
 export type UpdateOp =
   | { type: 'check'; key: string; value: boolean }
   | { type: 'checks'; keys: string[]; value: boolean }

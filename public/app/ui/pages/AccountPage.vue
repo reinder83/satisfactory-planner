@@ -4,7 +4,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { browserMode } from '../../../browser-api.js';
+import { browserMode } from '../../../browser-api.ts';
 import { allowSwitch, post, writeQueue } from '../../api.ts';
 import { boot, setAuthMode, workspace } from '../../session.ts';
 import AuthForm from '../AuthForm.vue';

@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { browserMode } from '../../browser-api.js';
-import { purities } from '../../preferences.js';
+import { browserMode } from '../../browser-api.ts';
+import { purities } from '../../preferences.ts';
 import { pending, save } from '../api.ts';
 import { num } from '../format.ts';
 import {

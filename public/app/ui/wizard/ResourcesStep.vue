@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { resourceDefaults } from '../../../preferences.js';
+import { resourceDefaults } from '../../../preferences.ts';
 import { wizard, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';

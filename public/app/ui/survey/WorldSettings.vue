@@ -17,7 +17,7 @@ import {
   presetSurvey,
   purities,
   richShape,
-} from '../../../preferences.js';
+} from '../../../preferences.ts';
 import { toast } from '../../api.ts';
 import { $ } from '../../format.ts';
 import { wizard } from '../../session.ts';

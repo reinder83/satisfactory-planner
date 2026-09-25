@@ -11,7 +11,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { browserMode } from '../../../browser-api.js';
+import { browserMode } from '../../../browser-api.ts';
 import {
   clockChoices,
   knownWorld,
@@ -21,7 +21,7 @@ import {
   presetSurvey,
   resourcePool,
   wellYield,
-} from '../../../preferences.js';
+} from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { wizard } from '../../session.ts';
 import { render } from '../../shell.ts';

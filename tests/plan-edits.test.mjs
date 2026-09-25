@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, validateState, mutate, shareState } from '../public/state.js';
+import { initialState, validateState, mutate, shareState } from '../public/state.ts';
 
 test('released version 1 and 2 states validate unchanged and gain empty plan edits and groups', () => {
   const v1 = {

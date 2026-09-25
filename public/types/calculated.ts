@@ -64,6 +64,17 @@ export interface ExtractionRecord {
   used: ItemRates;
 }
 
+// A survey while it is edited (the wizard, preferences.ts): looser than ExtractionRecord. The
+// mark is whatever the form holds until the planner checks it, and the maps are created as
+// counts are entered.
+export interface Survey {
+  mark: number;
+  clock: number;
+  nodes?: Record<string, NodeCounts>;
+  wells?: Record<string, NodeCounts>;
+  used?: ItemRates;
+}
+
 // Normalised settings, as settings() in planner.mjs returns them. Units: GW for power,
 // % for utilityPercent, per minute for rates and limits, hours per phase.
 export interface CurrentSettings {

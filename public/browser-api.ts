@@ -1,7 +1,7 @@
 // The GitHub Pages edition's stand-in for the server API. app/api.ts request() sends every
 // /api/ path here when browserMode is on, and gets back the same JSON the matching route in
 // workspace.mjs returns, so the UI does not care which edition it runs in. Data lives in one
-// IndexedDB record (browser-store.js); calculation runs in calculator-worker.js, which
+// IndexedDB record (browser-store.ts); calculation runs in calculator-worker.js, which
 // build.mjs generates around planner.mjs.
 //
 // Emulated routes:
@@ -16,26 +16,56 @@
 // POST /api/select, /api/remove-profile, /api/rename, /api/update, /api/import
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
-import { openBrowserStore } from './browser-store.js';
-import { validateState, mutate, shareState, newProfileState } from './state.js';
-import { validateTransfer, transferFormat } from './transfer.js';
+import { openBrowserStore, type BrowserStore } from './browser-store.ts';
+import { validateState, mutate, shareState, newProfileState } from './state.ts';
+import { validateTransfer, transferFormat } from './transfer.ts';
+import type {
+  BrowserSave,
+  BrowserWorkspace,
+  Catalog,
+  CurrentCalculatedPlan,
+  CurrentStage,
+  StageKey,
+  StoredProfile,
+  UpdateOp,
+  WorkspaceSummary,
+} from './types/index.ts';
+
+// What app/api.ts passes: fetch's options (a JSON string body and a plain headers object) and
+// the calculation progress callback.
+export interface BrowserRequestOptions {
+  body?: BodyInit | null;
+  headers?: HeadersInit;
+  onProgress?: (phase: number) => void;
+}
+export type BrowserRequest = (route: string, options?: BrowserRequestOptions) => Promise<unknown>;
+// Calculates a plan for the settings: the worker wrapper, or planner.mjs's calculate in tests.
+export type Calculator = (
+  settings: unknown,
+  onProgress?: (phase: number) => void,
+) => Promise<CurrentCalculatedPlan> | CurrentCalculatedPlan;
+
 // Set by browser-mode.js, which build.mjs writes only into the Pages build.
-export const browserMode = globalThis.PLANNER_BROWSER === true;
+export const browserMode = (globalThis as { PLANNER_BROWSER?: unknown }).PLANNER_BROWSER === true;
 // The API created on first use by browserRequest, shared by every later request in this tab.
-let instance;
+let instance: Promise<BrowserRequest> | undefined;
 // Builds the request handler. `store` is openBrowserStore()'s object, `calculator(settings,
 // onProgress)` resolves to a plan and `catalog` is catalog.json; tests pass a stand-in store
 // and planner.mjs's calculate. Errors are thrown; app/api.ts shows them like a server { error }.
-export function createBrowserApi(store, calculator, catalog) {
+export function createBrowserApi(
+  store: BrowserStore,
+  calculator: Calculator,
+  catalog: Catalog,
+): BrowserRequest {
   const uid = () => crypto.randomUUID();
-  const cleanName = n => {
+  const cleanName = (n: unknown): string => {
     if (typeof n !== 'string' || !n.trim() || n.length > 80)
       throw Error('Enter a name with 1–80 characters.');
     return n.trim();
   };
   // Mirrors summary() in workspace.mjs: profile lists without plans or progress. Adds
   // `browser: true` and `lastBackup`, the last full export, which the Backup page and ADA show.
-  const summary = d => ({
+  const summary = (d: BrowserWorkspace): WorkspaceSummary => ({
     browser: true,
     accountsEnabled: false,
     user: { id: 'browser', username: 'This browser' },
@@ -56,7 +86,12 @@ export function createBrowserApi(store, calculator, catalog) {
   });
   // Mirrors scope() in workspace.mjs: body ids (only for routes that pass `body`), then the
   // X-Save-Id/X-Profile-Id headers, then ?save=/?profile=, then the active save and profile.
-  const scope = (d, url, headers = {}, body) => {
+  const scope = (
+    d: BrowserWorkspace,
+    url: URL,
+    headers: Record<string, string> = {},
+    body?: Record<string, unknown>,
+  ): { save: BrowserSave; profile: StoredProfile } => {
     const saveId =
       body?.saveId || headers['X-Save-Id'] || url.searchParams.get('save') || d.activeSave;
     const save = d.saves.find(s => s.id === saveId);
@@ -76,10 +111,11 @@ export function createBrowserApi(store, calculator, catalog) {
   // readwrite transactions, so two tabs cannot lose each other's writes. Routes that calculate
   // do so before their transaction opens, then look the save and profile up again inside it.
   return async function request(route, options = {}) {
+    // app/api.ts sends a JSON string and a plain headers object.
     const url = new URL(route, 'https://planner.invalid'),
       ep = url.pathname,
-      body = options.body ? JSON.parse(options.body) : {},
-      headers = options.headers || {};
+      body: Record<string, unknown> = options.body ? JSON.parse(options.body as string) : {},
+      headers = (options.headers || {}) as Record<string, string>;
     if (ep === '/api/workspace') return summary(await store.transaction());
     // Wizard preview: calculate only, nothing stored.
     if (ep === '/api/preview') return calculator(body.settings, options.onProgress);
@@ -97,7 +133,8 @@ export function createBrowserApi(store, calculator, catalog) {
         if (body.saveId && !save) throw Error('Save not found.');
         if (!save) {
           if (d.saves.length >= 50) throw Error('Save limit reached.');
-          save = { id: uid(), name: saveName, profiles: [] };
+          // saveName is set whenever no saveId was given; activeProfile is set below.
+          save = { id: uid(), name: saveName as string, activeProfile: '', profiles: [] };
           d.saves.push(save);
         }
         if (save.profiles.length >= 30) throw Error('Profile limit reached.');
@@ -149,7 +186,8 @@ export function createBrowserApi(store, calculator, catalog) {
         }
         for (const s of saves) {
           if (profileId) s.profiles = s.profiles.filter(p => p.id === profileId);
-          if (!s.profiles.some(p => p.id === s.activeProfile)) s.activeProfile = s.profiles[0].id;
+          // The filters above keep only saves with a matching profile.
+          if (!s.profiles.some(p => p.id === s.activeProfile)) s.activeProfile = s.profiles[0]!.id;
           if (share) for (const p of s.profiles) p.state = shareState(p.state);
         }
         const exportedAt = new Date().toISOString();
@@ -201,10 +239,11 @@ export function createBrowserApi(store, calculator, catalog) {
     // taken from the profile as it is at write time, so ticks made meanwhile in another tab carry.
     if (ep === '/api/round-up') {
       const before = scope(await store.transaction(), url, headers);
-      if (before.profile.kind !== 'calculated' || before.profile.plan.settings.wholeMachines)
+      // A calculated profile always carries its plan.
+      if (before.profile.kind !== 'calculated' || before.profile.plan!.settings.wholeMachines)
         throw Error('Choose a calculated profile without whole-machine production.');
       const rounded = await calculator(
-          { ...before.profile.plan.settings, wholeMachines: true },
+          { ...before.profile.plan!.settings, wholeMachines: true },
           options.onProgress,
         ),
         profileId = uid();
@@ -213,9 +252,9 @@ export function createBrowserApi(store, calculator, catalog) {
         if (save.profiles.length >= 30) throw Error('Profile limit reached.');
         const state = structuredClone(profile.state);
         let reviewCount = 0;
-        for (const [ph, stage] of Object.entries(rounded.stages))
+        for (const [ph, stage] of Object.entries(rounded.stages) as [StageKey, CurrentStage][])
           for (const row of stage.rows || []) {
-            const old = profile.plan.stages[ph]?.rows?.find(r => r.id === row.id);
+            const old = profile.plan?.stages[ph]?.rows?.find(r => r.id === row.id);
             if (
               !old ||
               row.machines > old.machines ||
@@ -243,7 +282,7 @@ export function createBrowserApi(store, calculator, catalog) {
     // The remaining routes all act on one scoped save/profile. Reads use a readonly transaction;
     // everything else runs `operation` inside a readwrite one.
     const read = ['/api/context', '/api/state', '/api/export'].includes(ep);
-    const operation = d => {
+    const operation = (d: BrowserWorkspace): unknown => {
       const { save, profile } = scope(
         d,
         url,
@@ -280,7 +319,8 @@ export function createBrowserApi(store, calculator, catalog) {
         if (body.confirmed !== true) throw Error('Confirm profile removal first.');
         save.profiles = save.profiles.filter(p => p.id !== profile.id);
         if (!save.profiles.length) d.saves = d.saves.filter(s => s.id !== save.id);
-        else if (save.activeProfile === profile.id) save.activeProfile = save.profiles[0].id;
+        // The save still has profiles here.
+        else if (save.activeProfile === profile.id) save.activeProfile = save.profiles[0]!.id;
         if (!d.saves.some(s => s.id === d.activeSave)) d.activeSave = d.saves[0]?.id || null;
         return summary(d);
       }
@@ -290,7 +330,7 @@ export function createBrowserApi(store, calculator, catalog) {
         else throw Error('Invalid rename target.');
         return summary(d);
       }
-      // /api/update applies one save-queue operation through mutate() (state.js); /api/import
+      // /api/update applies one save-queue operation through mutate() (state.ts); /api/import
       // restores a progress backup through validateState. Either way the revision is bumped. Unlike
       // the server, a backup with a different `format` is not rejected here before validateState.
       if (ep === '/api/update' || ep === '/api/import') {
@@ -298,11 +338,13 @@ export function createBrowserApi(store, calculator, catalog) {
           throw Error('Switch to the matching profile before restoring progress.');
         const next =
           ep === '/api/update'
-            ? mutate(structuredClone(profile.state), body)
+            ? // The body is the operation as sent; mutate checks it.
+              mutate(structuredClone(profile.state), body as unknown as UpdateOp)
             : validateState(body.format ? body.state : body);
         if (profile.kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
           throw Error('The imported handbook covers Phase 3 onward.');
-        next.revision = profile.state.revision + 1;
+        // Every state this store wrote carries a revision (newProfileState, validateState).
+        next.revision = (profile.state.revision as number) + 1;
         profile.state = next;
         return next;
       }
@@ -314,16 +356,24 @@ export function createBrowserApi(store, calculator, catalog) {
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
 // wrapper and the catalog; if that fails, the rejected promise stays cached and every later
 // call fails with the same error until the page is reloaded.
-export async function browserRequest(route, options) {
+export async function browserRequest(route: string, options?: BrowserRequestOptions) {
   if (!instance)
     instance = (async () => {
       if (!globalThis.indexedDB)
         throw Error(
           'Browser storage is unavailable. Use a regular browser window with site storage enabled.',
         );
-      let worker;
+      let worker: Worker | null = null;
       let serial = 0;
-      const pending = new Map();
+      const pending = new Map<
+        number,
+        {
+          resolve: (plan: CurrentCalculatedPlan) => void;
+          reject: (error: Error) => void;
+          timer: ReturnType<typeof setTimeout>;
+          onProgress?: (phase: number) => void;
+        }
+      >();
       // The worker cannot be interrupted mid-solve, so a timeout terminates it and fails every
       // pending calculation; the next one starts a fresh worker.
       const expire = () => {
@@ -340,13 +390,14 @@ export async function browserRequest(route, options) {
       // phases starts, then { id, result } or { id, error }. Each progress message restarts the
       // three-minute timer, so the limit applies per phase, not to the whole plan. The worker
       // runs one calculation at a time, so a queued request's timer also covers its wait.
-      const calculate = (settings, onProgress) =>
-        new Promise((resolve, reject) => {
+      const calculate: Calculator = (settings, onProgress) =>
+        new Promise<CurrentCalculatedPlan>((resolve, reject) => {
           if (!worker) {
-            worker = new Worker(new URL('./calculator-worker.js', import.meta.url), {
+            const created = new Worker(new URL('./calculator-worker.js', import.meta.url), {
               type: 'module',
             });
-            worker.onmessage = e => {
+            worker = created;
+            created.onmessage = e => {
               const entry = pending.get(e.data.id);
               if (!entry) return;
               if (e.data.phase) {
@@ -362,13 +413,13 @@ export async function browserRequest(route, options) {
               e.data.error ? entry.reject(Error(e.data.error)) : entry.resolve(e.data.result);
             };
             // Script or WASM load failure: fail everything pending and let the next request retry.
-            worker.onerror = () => {
+            created.onerror = () => {
               for (const p of pending.values()) {
                 clearTimeout(p.timer);
                 p.reject(Error('The calculator could not load. Refresh and try again.'));
               }
               pending.clear();
-              worker.terminate();
+              created.terminate();
               worker = null;
             };
           }
@@ -379,7 +430,11 @@ export async function browserRequest(route, options) {
         });
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
-      return createBrowserApi(openBrowserStore(indexedDB), calculate, await response.json());
+      return createBrowserApi(
+        openBrowserStore(indexedDB),
+        calculate,
+        (await response.json()) as Catalog,
+      );
     })();
   return (await instance)(route, options);
 }

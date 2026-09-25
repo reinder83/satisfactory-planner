@@ -35,11 +35,11 @@ const stripTypes = code => {
 const PUBLIC = new URL('../../public/', import.meta.url);
 const UI = new URL('app/ui/', PUBLIC).href;
 const SHARED = new Set([
-  'browser-api.js',
-  'preferences.js',
-  'progression.js',
-  'state.js',
-  'ada.js',
+  'browser-api.ts',
+  'preferences.ts',
+  'progression.ts',
+  'state.ts',
+  'ada.ts',
 ]);
 const IMPORT = /^import\s(?:[^;]*?\sfrom\s)?'([^']+)';\r?\n/gm;
 
@@ -65,7 +65,7 @@ export function appSource() {
     }
     if (!ui) ordered.push(text.replace(IMPORT, '').replace(/^export /gm, ''));
   };
-  visit(new URL('app.js', PUBLIC));
+  visit(new URL('app.ts', PUBLIC));
   const source = [...[...stubs].map(name => `function ${name}() {}`), ...ordered]
     .join('\n')
     .replaceAll(
@@ -73,6 +73,6 @@ export function appSource() {
       JSON.stringify('https://example.com/satisfactory-planner/app.js'),
     );
   // The entry module ends by booting the app; the tests drive it themselves.
-  if (!/\nboot\(\);\s*$/.test(source)) throw Error('app.js no longer ends with boot();');
+  if (!/\nboot\(\);\s*$/.test(source)) throw Error('app.ts no longer ends with boot();');
   return source.replace(/\nboot\(\);\s*$/, '');
 }

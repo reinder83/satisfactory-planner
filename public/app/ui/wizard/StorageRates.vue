@@ -17,7 +17,7 @@ import {
   ref,
   watch,
 } from 'vue';
-import { storageRateFor, wantsStorage } from '../../../preferences.js';
+import { storageRateFor, wantsStorage } from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';

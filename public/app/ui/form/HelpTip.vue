@@ -1,8 +1,8 @@
-<!-- The ⓘ tooltip for a setting, or nothing when preferences.js has no help text for `name`. It opens on hover and on
+<!-- The ⓘ tooltip for a setting, or nothing when preferences.ts has no help text for `name`. It opens on hover and on
      keyboard focus, and the tooltip text doubles as its accessible name. -->
 <script setup>
 import { computed } from 'vue';
-import { helpText } from '../../../preferences.js';
+import { helpText } from '../../../preferences.ts';
 
 const props = defineProps({ name: { type: String, required: true } });
 const text = computed(() => helpText[props.name] || '');

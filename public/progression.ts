@@ -1,7 +1,23 @@
 // The Space Elevator phase in which a HUB tier becomes available: tiers 1-2 in Phase 1, 3-4 in
 // Phase 2 and so on, with 9 in Phase 5.
-const phaseForTier = t => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
-const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+import type {
+  CalcRow,
+  Progression,
+  ProgressionEntry,
+  StageKey,
+  StoredCalculatedPlan,
+  StoredStage,
+} from './types/index.ts';
+
+// A generated guidance step: its checklist key, title and text.
+export interface GuideTask {
+  id: string;
+  title: string;
+  body: string;
+}
+
+const phaseForTier = (t: number) => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
+const fmt = (n: unknown) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 // The generated guidance steps of a calculated profile for one phase, called by calcTasks in
 // app/views/calculated.ts. `plan` is the profile's calculation snapshot, `state` its
 // progress (only `checks` is read), `data` is progression.json and `phase` '1'-'5' or
@@ -10,44 +26,57 @@ const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 
 // progression.json: `entries` are HUB milestones and MAM nodes ({ id, name, tier, mam,
 // alternate, cost, recipes, requires }), `buildings` maps a machine name to the recipe that
 // builds it and `availability` gives the first phase in which an item can be made.
-export function progression(plan, state, data, phase) {
+export function progression(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: { checks: Record<string, boolean> },
+  data: Progression,
+  phase: string,
+): {
+  baseTasks: GuideTask[];
+  powerTasks: GuideTask[];
+  milestoneTasks: GuideTask[];
+  hardDrives: GuideTask[];
+  retire: GuideTask[];
+} {
+  // The plan's stage for a phase number (stage keys are its digits).
+  const stageOf = (p: number): StoredStage | undefined => plan.stages[String(p) as StageKey];
   const stage = Number(phase === 'post' ? 5 : phase),
-    rows = plan.stages[stage]?.rows || [],
+    rows: CalcRow[] = stageOf(stage)?.rows || [],
     checks = state.checks;
   // An unlock counts as done only when the user ticked its step, never by guessing from phase.
-  const unlocked = s => !!checks['unlock-' + s.id];
-  const byName = n => data.entries.find(s => s.name === n);
-  const known = n => {
+  const unlocked = (s: ProgressionEntry) => !!checks['unlock-' + s.id];
+  const byName = (n: string) => data.entries.find(s => s.name === n);
+  const known = (n: string) => {
     const s = byName(n);
     return s && unlocked(s);
   };
   // Rows up to this phase that make item `n`, and whether their factory is ticked as running;
   // used to say where a milestone's cost can come from.
-  const sources = n =>
-    Object.entries(plan.stages)
+  const sources = (n: string) =>
+    (Object.entries(plan.stages) as [string, StoredStage][])
       .filter(([p]) => Number(p) <= stage)
       .flatMap(([p, s]) =>
         (s.rows || [])
           .filter(r => r.outputs[n])
           .map(r => ({ row: r, running: !!checks['calc-' + p + '-' + r.id] })),
       );
-  const status = n =>
+  const status = (n: string) =>
     sources(n).some(x => x.running)
       ? 'already producing (marked running; reserve a batch)'
       : sources(n).length
         ? 'production planned, not yet marked running'
         : 'gather, handcraft, or build a starter supply';
-  const funding = s =>
+  const funding = (s: ProgressionEntry) =>
     Object.entries(s.cost)
       .map(([n, q]) => `${fmt(q)} ${n}: ${status(n)}`)
       .join('; ');
   // `tasks` becomes powerTasks. calcTasks interleaves Phase 1's lists by position, so the order
   // of the first pushes (power review, biomass, Solid Biofuel, burner bank) matters.
-  const tasks = [];
+  const tasks: GuideTask[] = [];
   // Milestones this phase needs: those unlocking a recipe or machine its rows use, a fixed set
   // of basics, and phase-specific power and logistics unlocks, each with its prerequisites.
-  const required = new Map();
-  function add(s) {
+  const required = new Map<string, ProgressionEntry>();
+  function add(s: ProgressionEntry | undefined) {
     if (!s || required.has(s.id)) return;
     required.set(s.id, s);
     for (const r of s.requires) add(data.entries.find(x => x.id === r));
@@ -79,7 +108,7 @@ export function progression(plan, state, data, phase) {
   // Whether an unlock can be researched by this phase: a HUB milestone by its tier, a MAM node by
   // the latest first-available phase of its cost items. Collectibles (hard drives, slugs,
   // somersloops...) are ignored because they are gathered, not produced.
-  const available = s =>
+  const available = (s: ProgressionEntry) =>
     s.mam
       ? Math.max(
           1,
@@ -102,7 +131,7 @@ export function progression(plan, state, data, phase) {
   // Alternate recipes are left out: they come from hard drives, handled below.
   const milestones = [...required.values()].filter(s => !s.alternate && available(s));
   // Prerequisites before dependents; among otherwise independent unlocks favor costs with running supply.
-  const readiness = s =>
+  const readiness = (s: ProgressionEntry) =>
     Object.keys(s.cost).filter(n => sources(n).some(x => x.running)).length /
     Math.max(1, Object.keys(s.cost).length);
   milestones.sort(
@@ -112,10 +141,10 @@ export function progression(plan, state, data, phase) {
       readiness(b) - readiness(a) ||
       a.name.localeCompare(b.name),
   );
-  const ordered = [],
-    seen = new Set();
+  const ordered: ProgressionEntry[] = [],
+    seen = new Set<string>();
   // Depth-first, so every prerequisite in the list comes before what needs it.
-  function visit(s) {
+  function visit(s: ProgressionEntry) {
     if (seen.has(s.id)) return;
     seen.add(s.id);
     for (const id of s.requires) {
@@ -125,15 +154,17 @@ export function progression(plan, state, data, phase) {
     ordered.push(s);
   }
   milestones.forEach(visit);
-  const milestoneTasks = ordered.map(s => ({
-    id: 'unlock-' + s.id,
-    title: `${s.mam ? 'MAM' : 'Tier ' + s.tier}: ${s.name}`,
-    body: `${s.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${s.requires.length ? 'Prerequisites: ' + s.requires.map(id => data.entries.find(x => x.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(s) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
-  }));
+  const milestoneTasks = ordered.map(
+    (s): GuideTask => ({
+      id: 'unlock-' + s.id,
+      title: `${s.mam ? 'MAM' : 'Tier ' + s.tier}: ${s.name}`,
+      body: `${s.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${s.requires.length ? 'Prerequisites: ' + s.requires.map(id => data.entries.find(x => x.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(s) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
+    }),
+  );
   // One hard-drive step plus one unlock step per alternate recipe this phase's rows use.
   const alternates = rows.filter(r => r.alternate);
   const missing = alternates.filter(r => !checks['recipe-unlock-' + r.id]);
-  const hardDrives = alternates.length
+  const hardDrives: GuideTask[] = alternates.length
     ? [
         {
           id: 'hard-drives-' + stage,
@@ -187,7 +218,7 @@ export function progression(plan, state, data, phase) {
     });
     const need = Math.max(
         0,
-        (plan.stages[stage]?.requiredMW || 0) - plan.settings.availablePowerGW * 1000,
+        (stageOf(stage)?.requiredMW || 0) - plan.settings.availablePowerGW * 1000,
       ),
       factor = plan.settings.powerFactor ?? 1;
     // Three starter constructors have their own draw; this is a manually supplied startup estimate.
@@ -310,9 +341,10 @@ export function progression(plan, state, data, phase) {
       title: 'Protect the continuous Singularity Cell supply for portals',
       body: `Unlock Tier 9 Spatial Energy Regulation. Each Main Portal consumes 2 Singularity Cells/min while maintaining its connection; the Satellite Portal needs no cells. Your dedicated ${fmt(plan.settings.cellsPerMinute)}/min contract supports ${Math.floor(plan.settings.cellsPerMinute / 2)} continuously connected Main Portals. The standard manufacturing recipe produces 10/min, enough for five connections. Feed portals before storage or the sink, add a buffer, and reserve their operating and startup electrical demand separately from the production calculation.`,
     });
-  if (stage === 5 && plan.settings.augmenters > 0) {
-    const a = plan.settings.augmenters,
-      fueled = plan.settings.fueledAugmenters || 0;
+  // Plans frozen before the augmenter settings existed have none.
+  const a = plan.settings.augmenters ?? 0;
+  if (stage === 5 && a > 0) {
+    const fueled = plan.settings.fueledAugmenters || 0;
     tasks.push({
       id: 'alien-power-augmenter',
       title: `Build ${a} Alien Power Augmenter${a > 1 ? 's' : ''}`,
@@ -321,7 +353,7 @@ export function progression(plan, state, data, phase) {
   }
   // Shown only in the profile's starting phase.
   if (stage === Number(plan.settings.phase || 1) && (plan.settings.sloopReserved || []).length) {
-    const labels = {
+    const labels: Record<string, string> = {
       shards:
         'a Constructor making Power Shards from power slugs — the world holds a fixed number of slugs, so an amplified Constructor is the difference between 2,650 and 5,301 shards for the whole save',
       dna: 'a Constructor chain turning creature remains into Alien Protein and then Alien DNA Capsules, doubling what finite remains are worth',
@@ -336,7 +368,7 @@ export function progression(plan, state, data, phase) {
     });
   }
   if (stage >= 4 && plan.settings.droneFuel && plan.settings.droneFuel !== 'none') {
-    const fuel = Object.entries(plan.stages[stage]?.drone || {})
+    const fuel = Object.entries(stageOf(stage)?.drone || {})
       .map(([n, q]) => fmt(q) + ' ' + n + '/min')
       .join(', ');
     tasks.push({
@@ -352,15 +384,15 @@ export function progression(plan, state, data, phase) {
   // straight after the last one that needed it.
   const start = Number(plan.settings.phase || 1),
     previous = stage - 1,
-    retired = new Map();
+    retired = new Map<string, { name: string; machine: string; machines: number }>();
   if (previous >= start)
-    for (const r of plan.stages[previous]?.rows || [])
+    for (const r of stageOf(previous)?.rows || [])
       retired.set(r.id, { name: r.name, machine: r.machine, machines: r.machines });
-  for (let p = stage; p <= 5; p++) for (const r of plan.stages[p]?.rows || []) retired.delete(r.id);
+  for (let p = stage; p <= 5; p++) for (const r of stageOf(p)?.rows || []) retired.delete(r.id);
   const all = [...retired.values()].sort((a, b) => b.machines - a.machines),
     listed = all.slice(0, 10),
     rest = all.length - listed.length;
-  const retire = listed.length
+  const retire: GuideTask[] = listed.length
     ? [
         {
           id: 'retire-' + stage,

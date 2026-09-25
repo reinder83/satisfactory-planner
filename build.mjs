@@ -5,8 +5,9 @@
 //                                calculator running in a worker.
 //
 // Both are minified: the modules in public/app/ are bundled into app.js by Vite, the other scripts
-// and the stylesheet are minified file by file. Development needs no build; `npm start`
-// serves public/ as it is.
+// and the stylesheet are minified file by file. The sources are TypeScript; both steps strip the
+// types, and every script ships as .js. Development needs no build; `npm start` serves public/
+// as it is, with Vite compiling the TypeScript on request.
 //
 // Usage: node build.mjs [web] [pages]    (no argument builds both)
 import * as esbuild from 'esbuild';
@@ -24,17 +25,19 @@ for (const target of targets)
 
 // Scripts at the root of public/ ship as separate files, as they are in development: the
 // server imports some of them, browser-check.mjs imports browser-api.js into the page, and
-// each must stay one module instance. Only public/app/ (and app-root.js) is bundled.
+// each must stay one module instance. Only public/app/ (and app-root.ts) is bundled. Each
+// public/<name>.ts ships as <name>.js.
 const SHARED = [
-  'ada.js',
-  'browser-api.js',
-  'browser-store.js',
-  'preferences.js',
-  'progression.js',
-  'state.js',
-  'transfer.js',
+  'ada.ts',
+  'browser-api.ts',
+  'browser-store.ts',
+  'preferences.ts',
+  'progression.ts',
+  'state.ts',
+  'transfer.ts',
 ];
-const BUNDLED = ['app.js', 'app-root.js'];
+const BUNDLED = ['app.ts', 'app-root.ts'];
+const shipped = name => name.replace(/\.ts$/, '.js');
 
 // Source edits for the browser edition must all apply, or the build would ship server-only code.
 const replaceOnce = (text, from, to) => {
@@ -42,13 +45,20 @@ const replaceOnce = (text, from, to) => {
   return text.replace(from, to);
 };
 const read = file => fs.readFile(path.join(root, file), 'utf8');
-const minifyJs = async code =>
-  (await esbuild.transform(code, { loader: 'js', format: 'esm', minify: true, charset: 'utf8' }))
-    .code;
+const minifyJs = async (code, loader = 'js') =>
+  (await esbuild.transform(code, { loader, format: 'esm', minify: true, charset: 'utf8' })).code;
+// A shared script as it ships: types stripped, minified, and its imports of the other shared
+// scripts renamed to the .js files they ship as (esbuild keeps the specifiers as written).
+const sharedJs = async name => {
+  const code = await minifyJs(await read('public/' + name), 'ts');
+  return code.replace(/(from\s*|import\s*\(\s*)(["'])(\.\/[\w-]+)\.ts\2/g, '$1$2$3.js$2');
+};
+// The page loads app.ts in development; the editions ship the bundle as app.js.
+const shippedPage = html => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
 const minifyCss = async code =>
   (await esbuild.transform(code, { loader: 'css', minify: true, charset: 'utf8' })).code;
 
-// public/app.js with public/app/ (including the Vue components) and Vue itself, as one
+// public/app.ts with public/app/ (including the Vue components) and Vue itself, as one
 // minified module, built by Vite. The shared root scripts stay imports of their own files.
 async function bundleApp() {
   const result = await viteBuild({
@@ -58,7 +68,7 @@ async function bundleApp() {
       minify: true,
       modulePreload: false,
       rollupOptions: {
-        input: path.join(publicDir, 'app.js'),
+        input: path.join(publicDir, 'app.ts'),
         preserveEntrySignatures: 'strict',
         // Called with the import as written, so relative ones are resolved against the importer.
         external: (id, importer, resolved) => {
@@ -69,7 +79,7 @@ async function bundleApp() {
           format: 'es',
           entryFileNames: 'app.js',
 
-          paths: id => './' + path.basename(id),
+          paths: id => './' + shipped(path.basename(id)),
         },
       },
     },
@@ -84,9 +94,7 @@ async function bundleApp() {
 }
 
 // Every script at the root of public/ must be classified above, so a new one is never
-// shipped unminified or bundled twice by accident. The shared scripts are copied as they
-// are, so a TypeScript one there would ship with its types: it is refused until
-// writeScripts strips them (see "TypeScript" in AGENTS.md).
+// shipped unminified or bundled twice by accident.
 const rootScripts = (await fs.readdir(publicDir)).filter(name => /\.(js|ts)$/.test(name));
 for (const name of rootScripts)
   if (!SHARED.includes(name) && !BUNDLED.includes(name))
@@ -95,24 +103,27 @@ for (const name of rootScripts)
 async function writeScripts(out) {
   await fs.writeFile(path.join(out, 'app.js'), await bundleApp());
   for (const name of SHARED)
-    await fs.writeFile(path.join(out, name), await minifyJs(await read('public/' + name)));
+    await fs.writeFile(path.join(out, shipped(name)), await sharedJs(name));
   await fs.writeFile(path.join(out, 'style.css'), await minifyCss(await read('public/style.css')));
 }
 
 // Docker edition: everything the server serves from public/, minus the module sources and docs.
+// The Dockerfile adds the shared .ts sources next to it for the server, which imports them.
 async function buildWeb() {
   const out = path.join(dist, 'web');
   await fs.rm(out, { recursive: true, force: true });
   const skip = new Set([
     path.join(publicDir, 'app'),
     path.join(publicDir, 'types'),
-    ...BUNDLED.map(name => path.join(publicDir, name)),
+    ...[...BUNDLED, ...SHARED].map(name => path.join(publicDir, name)),
   ]);
   await fs.cp(publicDir, out, {
     recursive: true,
     filter: src => !skip.has(src) && !src.endsWith('.md'),
   });
   await writeScripts(out);
+  const page = path.join(out, 'index.html');
+  await fs.writeFile(page, shippedPage(await fs.readFile(page, 'utf8')));
   console.log('Docker edition built in dist/web');
 }
 
@@ -127,7 +138,7 @@ async function buildPages() {
     await fs.copyFile(path.join(publicDir, file), path.join(out, file));
   await fs.cp(path.join(publicDir, 'icons'), path.join(out, 'icons'), { recursive: true });
   await fs.cp(path.join(publicDir, 'fonts'), path.join(out, 'fonts'), { recursive: true });
-  let html = await fs.readFile(path.join(out, 'index.html'), 'utf8');
+  let html = shippedPage(await fs.readFile(path.join(out, 'index.html'), 'utf8'));
   html = replaceOnce(
     html.replaceAll('href="/', 'href="./').replaceAll('src="/', 'src="./'),
     '<script type="module"',
@@ -158,7 +169,7 @@ async function buildPages() {
   await fs.writeFile(path.join(out, 'catalog.json'), JSON.stringify(catalog()));
   let planner = await read('planner.mjs');
   planner = replaceOnce(planner, "import fs from 'node:fs';", '');
-  planner = replaceOnce(planner, "from './public/preferences.js'", "from './preferences.js'");
+  planner = replaceOnce(planner, "from './public/preferences.ts'", "from './preferences.js'");
   planner = replaceOnce(
     planner,
     "JSON.parse(fs.readFileSync(new URL('./recipes.json', import.meta.url)))",

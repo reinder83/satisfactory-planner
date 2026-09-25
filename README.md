@@ -188,7 +188,7 @@ The preserved original handbook retains its previous assumptions and corrected r
 
 Node.js 22.18 or newer is sufficient. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
 
-The frontend is readable ES modules and Vue components (`public/app/ui/`), moving to TypeScript module by module; nothing is compiled ahead of time, the types are stripped as the code is served. `npm start` serves `public/` as it is: outside production it runs Vite inside the planner's own server, which compiles the `.vue` files on request and reloads the browser on edits, so there is still no separate build or dev server to run. Install the packages first:
+The frontend is TypeScript modules and Vue components (`public/app/ui/`); nothing is compiled ahead of time, the types are stripped as the code is served. `npm start` serves `public/` as it is: outside production it runs Vite inside the planner's own server, which compiles the `.vue` files on request and reloads the browser on edits, so there is still no separate build or dev server to run. Install the packages first:
 
 ```sh
 npm ci            # Vue, Vite, Vitest, TypeScript, Prettier and esbuild
@@ -201,7 +201,7 @@ npm run build     # minified editions in dist/web (Docker) and dist/satisfactory
 
 With `NODE_ENV=production` (as in the Docker image) the server serves `public/` as plain files and never loads Vite; that `public/` is the `dist/web` build.
 
-The frontend lives in `public/`: `app.js` is the entry point and `public/app/` holds the UI modules (the Vue components under `ui/`, the data behind the pages under `views/`, the profile wizard under `wizard/`). The release build bundles `public/app/` into a single minified `app.js` and minifies the other scripts and the stylesheet file by file. The Docker image runs that build in its first stage and serves `dist/web`; the Pages workflow publishes `dist/satisfactory-planner`. The server-side modules in the image (`server.mjs`, `planner.mjs`, …) are not minified.
+The frontend lives in `public/`: `app.ts` is the entry point and `public/app/` holds the UI modules (the Vue components under `ui/`, the data behind the pages under `views/`, the profile wizard under `wizard/`). The release build bundles `public/app/` into a single minified `app.js` and minifies the other scripts and the stylesheet file by file. The Docker image runs that build in its first stage and serves `dist/web`; the Pages workflow publishes `dist/satisfactory-planner`. The server-side modules in the image (`server.mjs`, `planner.mjs`, …) are not minified.
 
 Tests cover migration, durable progress, concurrent updates, backup restore, corrupted saves, save/profile isolation, account ownership, authentication, calculator constraints and interface rendering. GitHub Actions additionally builds and restarts a real Docker container before publishing. Pushes to `main` publish `latest` and a commit tag; `v*` tags publish version tags. No additional registry secrets are required.
 

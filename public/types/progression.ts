@@ -1,5 +1,5 @@
 // public/progression.json: the game's milestones and MAM research, generated from the game
-// data. public/progression.js turns it into the unlock steps of a calculated plan.
+// data. public/progression.ts turns it into the unlock steps of a calculated plan.
 import type { ItemRates } from './common.ts';
 
 // A milestone, MAM research node or hard-drive alternate.

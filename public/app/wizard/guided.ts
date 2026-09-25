@@ -1,6 +1,6 @@
 // Guided start: the short question sequence in front of the wizard. It is the
 // default for a new profile (startWizard sets mode 'guided'). The questions and
-// the settings each answer writes are data in preferences.js (guidedQuestions,
+// the settings each answer writes are data in preferences.ts (guidedQuestions,
 // guidedStandingQuestion); this module sequences and reads them, and
 // ui/pages/GuidedPage.vue (with ui/guided/) draws them. Draft fields used:
 // guidedStep (1-based index into guidedFlow()), guidedAsk, guidedTopics, tutorial.
@@ -10,7 +10,7 @@ import {
   guidedStandingQuestion,
   guidedTopupItems,
   tutorialKeys,
-} from '../../preferences.js';
+} from '../../preferences.ts';
 import { $ } from '../format.ts';
 import { draft, wizard } from '../session.ts';
 import { render } from '../shell.ts';
@@ -53,7 +53,7 @@ export const GUIDED_GLYPHS: Record<string, string> = {
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
-// Order: the preferences.js list (phase, goal, recipes, stock, exact), with the
+// Order: the preferences.ts list (phase, goal, recipes, stock, exact), with the
 // tutorial question (Phase 1) or the "already producing" question (later
 // phases) inserted after phase for a new save. When wizard.guidedAsk is set
 // (the "What is different" screen), only those ids are kept. vuePage (ui/pages.ts)
@@ -93,7 +93,7 @@ export function guidedBuiltKeys(w: WizardDraft): string[] {
 }
 
 // Copy the current guided screen into the draft. The mapping from answer to
-// settings is the chosen option's `set` object (preferences.js), merged into
+// settings is the chosen option's `set` object (preferences.ts), merged into
 // wizard.settings: the same fields All settings writes (phase, goal, recipes,
 // pureIngots, storage, collectables, wholeMachines). The tutorial answer is kept
 // on the draft instead. Clears the preview, so Review must recalculate.

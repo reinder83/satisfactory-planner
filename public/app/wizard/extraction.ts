@@ -11,7 +11,7 @@ import {
   extractionLimits,
   purities3,
   startingSurvey,
-} from '../../preferences.js';
+} from '../../preferences.ts';
 import { toast } from '../api.ts';
 import { $ } from '../format.ts';
 import { draft, wizard, workspace } from '../session.ts';
