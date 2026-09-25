@@ -4,7 +4,7 @@
   the note saved under `factory-<row id>`. The easier rounded setting is left out when the
   profile already runs whole machines. Opened by openCalculatedFactory in factory-detail.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel } from '../../flow.ts';
@@ -18,7 +18,7 @@ import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 
-const props = defineProps({ id: { type: String, required: true } });
+const props = defineProps<{ id: string }>();
 
 const view = computed(() =>
   legacy(() => {

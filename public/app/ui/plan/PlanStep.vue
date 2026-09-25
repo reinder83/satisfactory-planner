@@ -4,27 +4,28 @@
   "Open factory" link is a factoryLink(). In edit mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark.
 -->
-<script setup>
+<script setup lang="ts">
 import { save } from '../../api.ts';
 import { phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { planTasks } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
+import type { PlanStepView } from '../../tasks.ts';
 
-const props = defineProps({
-  step: { type: Object, required: true },
-  editing: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{ step: PlanStepView; editing?: boolean }>(), {
+  editing: false,
 });
 
 // ↑ / ↓: swap the step with its neighbour and save this phase's whole order (taskOrder).
 // Nothing happens at either end of the list.
-async function move(dir) {
+async function move(dir: number) {
   const ids = planTasks().map(t => t.id),
     i = ids.indexOf(props.step.id),
     j = i + dir;
   if (i < 0 || j < 0 || j >= ids.length) return;
-  [ids[i], ids[j]] = [ids[j], ids[i]];
+  // Both indexes were checked above.
+  [ids[i], ids[j]] = [ids[j]!, ids[i]!];
   try {
     await save({ type: 'taskOrder', phase: phase(), ids });
     render();

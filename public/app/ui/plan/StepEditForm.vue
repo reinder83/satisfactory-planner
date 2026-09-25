@@ -4,22 +4,26 @@
   text are saved as empty, meaning "no override", and so is the link when it is the
   automatic one. The checkmark is untouched.
 -->
-<script setup>
+<script setup lang="ts">
 import { save } from '../../api.ts';
 import { setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { autoTaskLink, basePlanTasks } from '../../tasks.ts';
+import type { PlanStepView } from '../../tasks.ts';
 
-const props = defineProps({
-  step: { type: Object, required: true },
-  // [factory or row id, name] for every factory of this phase.
-  options: { type: Array, required: true },
-  current: { type: String, default: '' },
-});
+const props = withDefaults(
+  defineProps<{
+    step: PlanStepView;
+    // [factory or row id, name] for every factory of this phase.
+    options: [id: string, name: string][];
+    current?: string;
+  }>(),
+  { current: '' },
+);
 
-async function submit(e) {
+async function submit(e: Event) {
   const id = props.step.id,
-    fd = new FormData(e.target);
+    fd = new FormData(e.target as HTMLFormElement);
   const base = basePlanTasks().find(t => t.id === id);
   const title = String(fd.get('title') || '').trim(),
     body = String(fd.get('body') || '').trim(),

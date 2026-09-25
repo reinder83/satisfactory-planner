@@ -5,7 +5,7 @@
   the generated ones with this profile's edits, plus its personal tasks. The step being
   edited shows its edit form instead.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import {
   checked,
@@ -30,6 +30,7 @@ import { legacy } from '../bridge.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
+import type { PlanStepView, RemovedStepView } from '../../tasks.ts';
 
 const list = computed(() =>
   legacy(() => {
@@ -47,33 +48,35 @@ const list = computed(() =>
         : query.trim()
           ? 'No steps match this search.'
           : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
-      steps: shown.map(t => ({
-        id: t.id,
-        title: t.title,
-        body: t.body,
-        done: checked(t.id),
-        icon: taskIcon(t),
-        link: taskLink(t),
-        custom: t.id.startsWith('custom-'),
-        form: planEditing && editingTask === t.id ? taskLinkChoices(t) : null,
-      })),
+      steps: shown.map(
+        (t): PlanStepView => ({
+          id: t.id,
+          title: t.title,
+          body: t.body,
+          done: checked(t.id),
+          icon: taskIcon(t),
+          link: taskLink(t),
+          custom: t.id.startsWith('custom-'),
+          form: planEditing && editingTask === t.id ? taskLinkChoices(t) : null,
+        }),
+      ),
       removed: planEditing
         ? basePlanTasks()
             .filter(t => removed.has(t.id))
-            .map(t => ({ id: t.id, title: t.title, icon: taskIcon(t) }))
+            .map((t): RemovedStepView => ({ id: t.id, title: t.title, icon: taskIcon(t) }))
         : [],
     };
   }),
 );
 
 // The step search, as you type.
-function search(e) {
-  setQuery(e.target.value);
+function search(e: Event) {
+  setQuery((e.target as HTMLInputElement).value);
   render();
 }
 
-function toggleHideDone(e) {
-  setHideDone(e.target.checked);
+function toggleHideDone(e: Event) {
+  setHideDone((e.target as HTMLInputElement).checked);
   render();
 }
 </script>

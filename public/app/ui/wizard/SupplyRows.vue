@@ -9,7 +9,7 @@
   back, Enter picks the highlighted one (or the first), Escape closes, and leaving the row
   closes it. Committing an item or a rate reads the screen and redraws.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -18,7 +18,7 @@ import { legacy } from '../bridge.ts';
 import { vValue } from '../form/value.ts';
 import ItemIcon from '../ItemIcon.vue';
 
-const root = ref(null);
+const root = ref<HTMLElement | null>(null);
 
 const rows = computed(() =>
   legacy(() => {
@@ -38,21 +38,22 @@ const rows = computed(() =>
 );
 
 // What is typed in each item field since the last redraw, so its icon follows the typing.
-const typed = reactive({});
+const typed = reactive<Record<number, string>>({});
 watch(rows, () => {
-  for (const k of Object.keys(typed)) delete typed[k];
+  for (const k of Object.keys(typed)) delete typed[Number(k)];
 });
-const iconOf = i => {
-  const name = String(typed[i] ?? rows.value[i].name).trim();
+const iconOf = (i: number) => {
+  // i is the index of a drawn row.
+  const name = String(typed[i] ?? rows.value[i]!.name).trim();
   return (workspace.catalog.supplyItems || []).includes(name) ? name : '';
 };
 
 // The open suggestion list: its row, the items offered and the highlighted one.
 const open = ref(-1);
-const matches = ref([]);
+const matches = ref<string[]>([]);
 const active = ref(-1);
 
-function show(i, value) {
+function show(i: number, value: string) {
   const m = supplyMatches(value).filter(n => n.toLowerCase() !== value.trim().toLowerCase());
   if (!m.length) return hide();
   open.value = i;
@@ -65,14 +66,15 @@ function hide() {
   active.value = -1;
 }
 
-const rowEl = i => root.value?.querySelectorAll('.supply-row')[i];
+const rowEl = (i: number) => root.value?.querySelectorAll<HTMLElement>('.supply-row')[i];
 
-function typing(i, e) {
-  typed[i] = e.target.value;
-  show(i, e.target.value);
+function typing(i: number, e: Event) {
+  const value = (e.target as HTMLInputElement).value;
+  typed[i] = value;
+  show(i, value);
 }
 
-function key(i, e) {
+function key(i: number, e: KeyboardEvent) {
   const shown = open.value === i && matches.value.length > 0;
   if (e.key === 'Escape') {
     if (shown) {
@@ -82,7 +84,7 @@ function key(i, e) {
     return;
   }
   if (e.key === 'ArrowDown' && !shown) {
-    show(i, e.target.value);
+    show(i, (e.target as HTMLInputElement).value);
     e.preventDefault();
     return;
   }
@@ -100,39 +102,40 @@ function key(i, e) {
   } else if (e.key === 'Enter') {
     // Enter picks the highlighted suggestion rather than submitting the step.
     e.preventDefault();
-    pick(i, matches.value[at >= 0 ? at : 0]);
+    // shown means the list has at least one suggestion.
+    pick(i, matches.value[at >= 0 ? at : 0]!);
   }
 }
 
 // Leaving the row closes its list; moving inside it (input to suggestion) does not.
-function left(i, e) {
-  const field = e.target.closest('.supply-field');
-  if (open.value === i && !field?.contains(e.relatedTarget)) hide();
+function left(i: number, e: FocusEvent) {
+  const field = (e.target as HTMLElement).closest('.supply-field');
+  if (open.value === i && !field?.contains(e.relatedTarget as Node | null)) hide();
 }
 
 // An item or rate, once committed: read the screen into the settings and redraw.
-function committed(e) {
+function committed(e: Event) {
   hide();
-  readScreen(e.target.form);
+  readScreen((e.target as HTMLInputElement).form);
   render();
 }
 
 // Picking a suggestion commits it and moves to the rate, which is the next thing you were
 // going to type anyway.
-async function pick(i, name) {
+async function pick(i: number, name: string) {
   const row = rowEl(i),
-    input = row?.querySelector('input[name=supplyItem]');
+    input = row?.querySelector<HTMLInputElement>('input[name=supplyItem]');
   if (!input) return;
   input.value = name;
   hide();
   readScreen(input.form);
   render();
   await nextTick();
-  rowEl(i)?.querySelector('input[name=supplyRate]')?.focus();
+  rowEl(i)?.querySelector<HTMLInputElement>('input[name=supplyRate]')?.focus();
 }
 
-function remove(i, e) {
-  removeSupplyRow(e.currentTarget.form, i);
+function remove(i: number, e: Event) {
+  removeSupplyRow((e.currentTarget as HTMLButtonElement).form, i);
   render();
 }
 </script>
@@ -152,7 +155,7 @@ function remove(i, e) {
                 spellcheck="false"
                 placeholder="Search item"
                 role="combobox"
-                :aria-expanded="String(open === i)"
+                :aria-expanded="open === i ? 'true' : 'false'"
                 aria-autocomplete="list"
                 :aria-controls="'supply-options-' + i"
                 aria-label="Search for an item you already produce"
@@ -173,7 +176,7 @@ function remove(i, e) {
                 :key="n"
                 type="button"
                 role="option"
-                :aria-selected="String(k === active)"
+                :aria-selected="k === active ? 'true' : 'false'"
                 class="supply-option"
                 :data-supply-pick="n"
                 @click="pick(i, n)"
@@ -198,9 +201,9 @@ function remove(i, e) {
           type="button"
           :class="['btn quiet supply-remove', r.filled ? '' : 'is-blank']"
           :data-supply-remove="i"
-          :aria-label="r.filled ? 'Remove ' + r.name : null"
-          :tabindex="r.filled ? null : -1"
-          :aria-hidden="r.filled ? null : 'true'"
+          :aria-label="r.filled ? 'Remove ' + r.name : undefined"
+          :tabindex="r.filled ? undefined : -1"
+          :aria-hidden="r.filled ? undefined : 'true'"
           @click="remove(i, $event)"
         >
           Remove

@@ -4,15 +4,14 @@
   component's own, so it survives the dialog redrawing when a box in it is ticked; each
   opened dialog starts from the saved note.
 -->
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import { state } from '../../session.ts';
 import { saveNote } from '../actions.ts';
 
-const props = defineProps({
-  noteKey: { type: String, required: true },
-  label: { type: String, default: '' },
-  ariaLabel: { type: String, default: 'Factory notes' },
+const props = withDefaults(defineProps<{ noteKey: string; label?: string; ariaLabel?: string }>(), {
+  label: '',
+  ariaLabel: 'Factory notes',
 });
 const text = ref(state.notes[props.noteKey] || '');
 </script>

@@ -6,7 +6,7 @@
   completion modules, whose boxes write `completion-<id>` checks. A calculated profile gets
   CalculatedFactoriesPage.vue instead.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import {
@@ -30,9 +30,10 @@ import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import PageHeader from '../PageHeader.vue';
 import { toggleCheck } from '../actions.ts';
+import type { HandbookFactory } from '../../../types/index.ts';
 
 // The status filter: value, label.
-const FILTERS = [
+const FILTERS: [value: string, label: string][] = [
   ['all', 'All factories'],
   ['todo', 'Not running yet'],
   ['done', 'Running'],
@@ -40,16 +41,18 @@ const FILTERS = [
 ];
 
 // Which shared site a factory is drawn under; null means a card of its own.
-const siteOf = f => (['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : null);
+const siteOf = (f: HandbookFactory) =>
+  ['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : null;
 
 const page = computed(() =>
   legacy(() => {
-    const running = f => checked('factory-' + stage() + '-' + f.id);
+    const running = (f: HandbookFactory) => checked('factory-' + stage() + '-' + f.id);
     // Factories at this stage that match the search text and the status filter.
     const list = plan.factories
       .filter(f => f.stages[stage()])
       .filter(f =>
-        (f.name + ' ' + f.stages[stage()].recipe).toLowerCase().includes(query.toLowerCase()),
+        // The filter above keeps only factories with this stage.
+        (f.name + ' ' + f.stages[stage()]!.recipe).toLowerCase().includes(query.toLowerCase()),
       )
       .filter(
         f =>
@@ -59,8 +62,9 @@ const page = computed(() =>
           (factoryFilter === 'local' && f.local),
       );
     const ungrouped = list.filter(f => !membershipsOf(f.id).length);
-    const p = plan.plans[stage()];
-    const site = (kind, label, sub) => {
+    // The handbook has a stage plan for every phase it covers.
+    const p = plan.plans[stage()]!;
+    const site = (kind: 'oil' | 'nuclear', label: string, sub: string) => {
       const members = ungrouped.filter(f => siteOf(f) === kind);
       return members.length ? { kind, label, sub, members } : null;
     };
@@ -75,7 +79,7 @@ const page = computed(() =>
         'Nuclear site',
         'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.',
       ),
-    ].filter(Boolean);
+    ].filter(s => s !== null);
     const singles = ungrouped.filter(f => !siteOf(f));
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
@@ -107,13 +111,13 @@ const page = computed(() =>
   }),
 );
 
-function search(e) {
-  setQuery(e.target.value);
+function search(e: Event) {
+  setQuery((e.target as HTMLInputElement).value);
   render();
 }
 
-function filter(e) {
-  setFactoryFilter(e.target.value);
+function filter(e: Event) {
+  setFactoryFilter((e.target as HTMLSelectElement).value);
   render();
 }
 </script>

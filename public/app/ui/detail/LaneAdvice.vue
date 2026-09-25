@@ -4,15 +4,42 @@
   whether the last lane's spare capacity could also carry another factory's demand for the
   same item. Draws nothing without inputs.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { bestLane } from '../../flow.ts';
 import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import { factoryLink } from '../actions.ts';
+import type { FlowInput, FlowModel } from '../../flow.ts';
+import type { FactoryLink } from '../actions.ts';
 
-const props = defineProps({ model: { type: Object, default: null } });
+const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model: null });
+
+// How one full lane feeds the machines: a sentence, or the lane, the share of machines it
+// feeds, each machine's draw and how many that is.
+interface FeedAdvice {
+  text?: string;
+  lane?: string;
+  share?: string;
+  each?: string;
+  fed?: number;
+}
+// Spare capacity on the last lane, and the factories whose demand would fit on it.
+interface SpareAdvice {
+  word: string;
+  amount: string;
+  merge: { link: FactoryLink; text: string }[];
+}
+interface AdviceRow {
+  name: string;
+  rate: string;
+  lanes: string;
+  split: string;
+  feed: FeedAdvice | null;
+  spare: SpareAdvice | null;
+  local: FlowInput['local'];
+}
 
 const advice = computed(() => {
   const m = props.model;
@@ -32,7 +59,7 @@ const advice = computed(() => {
         l = p.lane,
         per = i.rate / m.equivalent,
         fed = Math.floor(l.cap / per + 1e-9);
-      const row = {
+      const row: AdviceRow = {
         name: i.name,
         rate: num(i.rate) + l.unit,
         lanes: `${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}`,

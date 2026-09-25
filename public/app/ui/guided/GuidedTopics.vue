@@ -5,16 +5,16 @@
   until a change records the ticks in wizard.guidedTopics, so a redraw keeps them); Continue
   (moveGuided) turns the ticked ones into wizard.guidedAsk, which narrows guidedFlow().
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { guidedQuestions, storageOptions } from '../../../preferences.ts';
 import { num } from '../../format.ts';
-import { wizard, workspace } from '../../session.ts';
+import { draft, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 
 const view = computed(() =>
   legacy(() => {
-    const w = wizard,
+    const w = draft(),
       s = w.settings,
       save = workspace.saves.find(x => x.id === w.saveId);
     const from =
@@ -24,7 +24,7 @@ const view = computed(() =>
       ticked: w.guidedTopics || ['phase'],
       known: [
         ['Phase', 'Phase ' + (s.phase || '3')],
-        ['Goal', (workspace.catalog.goals.find(g => g.id === s.goal) || {}).name || s.goal],
+        ['Goal', workspace.catalog.goals.find(g => g.id === s.goal)?.name || s.goal],
         [
           'Recipes',
           s.recipes === 'all'

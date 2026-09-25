@@ -1,16 +1,14 @@
 <!-- A labelled <input>, showing `value`.
      `name` is the form field the screen reads it back from, and its help text key. Any other
      attribute (min, max, step, required, readonly, maxlength) goes on the input. -->
-<script setup>
+<script setup lang="ts">
 import HelpTip from './HelpTip.vue';
 
 defineOptions({ inheritAttrs: false });
-defineProps({
-  label: { type: String, required: true },
-  name: { type: String, required: true },
-  value: { type: [String, Number], default: '' },
-  type: { type: String, default: 'number' },
-});
+withDefaults(
+  defineProps<{ label: string; name: string; value?: string | number; type?: string }>(),
+  { value: '', type: 'number' },
+);
 </script>
 
 <template>

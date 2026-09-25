@@ -5,7 +5,7 @@
   maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The notes'
   "Save notes" button uses saveNote in ui/actions.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, phase, phaseLabel, plan, stage, state } from '../../session.ts';

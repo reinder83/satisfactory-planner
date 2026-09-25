@@ -2,7 +2,7 @@
   ADA, the sidebar assistant. What she says comes from adaView() in ada-panel.ts; this
   component draws it and handles her buttons and the poke easter egg on the ◈ mark.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import {
   adaClearFault,
@@ -27,7 +27,7 @@ function next() {
 }
 
 // "Mute" / "Unmute": remembered in localStorage (adaStore), never in a saved profile.
-function mute(on) {
+function mute(on: boolean) {
   setAdaMuted(on);
   adaStore();
   adaClearFault();

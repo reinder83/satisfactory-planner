@@ -565,13 +565,13 @@ export const purities3: [purity: NodePurity, label: string][] = [
   ['pure', 'Pure'],
 ];
 // [mark, label] for the miner select; the tier is where the game unlocks that miner.
-export const minerMarks = [
+export const minerMarks: [mark: number, label: string][] = [
   [1, 'Mk.1 — Tier 0'],
   [2, 'Mk.2 — Tier 4'],
   [3, 'Mk.3 — Tier 7'],
 ];
 // 250% is the usual endgame assumption and what the shipped default budgets use.
-export const clockChoices = [
+export const clockChoices: [clock: number, label: string][] = [
   [1, '100% — no shards'],
   [1.5, '150% — one shard'],
   [2, '200% — two shards'],

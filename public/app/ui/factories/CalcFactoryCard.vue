@@ -4,7 +4,7 @@
   (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its group
   share is measured in MW.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
@@ -14,10 +14,11 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
+import type { CalcRow } from '../../../types/index.ts';
 
-const props = defineProps({
-  row: { type: Object, required: true },
-  group: { type: String, default: null },
+// group is the factory group this card sits in, or null outside the groups.
+const props = withDefaults(defineProps<{ row: CalcRow; group?: string | null }>(), {
+  group: null,
 });
 
 const card = computed(() =>

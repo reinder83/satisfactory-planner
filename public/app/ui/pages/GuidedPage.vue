@@ -10,11 +10,11 @@
   follows, and past the last question the plan is calculated and the five steps' Review
   (WizardPage.vue) takes over. The form is keyed by screen, so each starts from the draft.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { navigate } from '../../api.ts';
-import { setWizard, wizard } from '../../session.ts';
+import { draft, setWizard, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.ts';
 import { legacy } from '../bridge.ts';
@@ -59,10 +59,10 @@ const page = computed(() =>
 
 // A question's answer, a top-up chip or a topic decides what follows: read and redraw. A topic
 // is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
-function changed(e) {
-  const name = String(e.target.name);
+function changed(e: Event) {
+  const name = String((e.target as HTMLInputElement).name);
   if (name.startsWith('guided:') || name === 'topup' || name === 'topic') {
-    readGuidedForm(e.currentTarget);
+    readGuidedForm(e.currentTarget as HTMLFormElement);
     render();
   }
 }
@@ -77,7 +77,7 @@ function cancel() {
 // Enter or the primary button: the next question, or past the last one calculate the plan.
 // The submit stops here, since nothing else handles the wizard form.
 function submit() {
-  moveGuided(wizard.guidedStep + 1);
+  moveGuided(draft().guidedStep + 1);
 }
 </script>
 
@@ -95,7 +95,7 @@ function submit() {
         :key="p.id"
         role="listitem"
         :class="p.state"
-        :aria-current="p.state === 'current' ? 'step' : null"
+        :aria-current="p.state === 'current' ? 'step' : undefined"
         ><i></i>{{ p.label }}</span
       >
     </div>
@@ -147,7 +147,7 @@ function submit() {
           type="button"
           class="btn"
           data-guided-back
-          @click="moveGuided(wizard.guidedStep - 1)"
+          @click="moveGuided(draft().guidedStep - 1)"
         >
           Back
         </button>

@@ -3,7 +3,7 @@
   (also how sign-out lands here). "Create an account" / "Back to sign in" switches the form,
   offered only when the server allows registration.
 -->
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import { authMode, setAuthMode, workspace } from '../session.ts';
 import AuthForm from './AuthForm.vue';

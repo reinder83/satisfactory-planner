@@ -4,20 +4,21 @@
   declared), and the phases that could not keep the credit (stage.supplyDropped). Nothing
   when nothing is declared, as for a plan saved before existing production was asked.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import ItemIcon from '../ItemIcon.vue';
+import type { ItemRates, StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
-const props = defineProps({ plan: { type: Object, required: true } });
+const props = defineProps<{ plan: StoredCalculatedPlan }>();
 
 const view = computed(() => {
   const p = props.plan,
     declared = p.settings?.existingSupply || {};
   if (!Object.keys(declared).length) return null;
   const start = Number(p.settings.phase || 1);
-  const used = {};
-  for (const [ph, st] of Object.entries(p.stages))
+  const used: ItemRates = {};
+  for (const [ph, st] of Object.entries(p.stages) as [string, StoredStage][])
     if (Number(ph) >= start)
       for (const [n, q] of Object.entries(st.supplied || {})) used[n] = Math.max(used[n] || 0, q);
   return {
@@ -26,7 +27,7 @@ const view = computed(() => {
       rate: num(q),
       drawn: (used[n] || 0) > 0.002 ? num(used[n]) : '',
     })),
-    dropped: Object.entries(p.stages)
+    dropped: (Object.entries(p.stages) as [string, StoredStage][])
       .filter(([ph, st]) => st.supplyDropped && Number(ph) >= start)
       .map(([ph]) => ph),
   };

@@ -5,7 +5,7 @@
   renamed (saved when the field is committed, then redrawn with the saved name either way) or
   removed; otherwise a group with more than one factory offers its build order.
 -->
-<script setup>
+<script setup lang="ts" generic="T">
 import { computed } from 'vue';
 import { save } from '../../api.ts';
 import { openGroupChain } from '../../factory-detail.ts';
@@ -14,10 +14,9 @@ import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 
-const props = defineProps({
-  items: { type: Array, required: true },
-  keyOf: { type: Function, required: true },
-});
+// The factories to sort into groups (handbook factories or calculated rows), and the key
+// their memberships are saved under.
+const props = defineProps<{ items: T[]; keyOf: (item: T) => string }>();
 
 const sections = computed(() =>
   legacy(() =>
@@ -33,8 +32,8 @@ const sections = computed(() =>
 );
 const editing = computed(() => legacy(() => factoryEditing));
 
-async function rename(e, id) {
-  const el = e.target;
+async function rename(e: Event, id: string) {
+  const el = e.target as HTMLInputElement;
   el.disabled = true;
   try {
     await save({ type: 'factoryGroupRename', id, name: el.value });
@@ -47,7 +46,7 @@ async function rename(e, id) {
 
 // "Remove group", after a confirmation: only the group goes; its factories and their
 // progress stay.
-async function remove(id) {
+async function remove(id: string) {
   if (!confirm('Remove this group? The factories stay in the list and keep their progress.'))
     return;
   try {

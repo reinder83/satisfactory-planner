@@ -5,7 +5,7 @@
   the profile's assumptions. Everything reads the frozen calculation snapshot through
   calcStage(). A delivery's id is `<stage>-<item slug>`, a saved key.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num, slug } from '../../format.ts';
 import {
@@ -34,9 +34,9 @@ import { saveNote } from '../actions.ts';
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
-    if (!calculated) return null;
-    const x = calcStage(),
-      ts = planTasks();
+    const x = calcStage();
+    if (!calculated || !x) return null;
+    const ts = planTasks();
     return {
       phase: phase(),
       title: phaseLabel(phase()),

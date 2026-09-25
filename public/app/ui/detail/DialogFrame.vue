@@ -1,13 +1,12 @@
 <!-- The header and body of the shared #detail dialog. `icon` is an item name for the header
      icon. The × closes it (closeDetail in ui/actions.ts). -->
-<script setup>
+<script setup lang="ts">
 import ItemIcon from '../ItemIcon.vue';
 import { closeDetail } from '../actions.ts';
 
-defineProps({
-  title: { type: String, required: true },
-  subtitle: { type: String, default: '' },
-  icon: { type: String, default: '' },
+withDefaults(defineProps<{ title: string; subtitle?: string; icon?: string }>(), {
+  subtitle: '',
+  icon: '',
 });
 </script>
 

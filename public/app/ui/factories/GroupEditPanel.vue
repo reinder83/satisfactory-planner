@@ -1,11 +1,11 @@
 <!-- The "Factory groups" panel shown while editing groups: "+ Add group" creates a new, empty
      group with a random fg-… id. A success empties the form. -->
-<script setup>
+<script setup lang="ts">
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
 
-async function add(e) {
-  const form = e.target;
+async function add(e: Event) {
+  const form = e.target as HTMLFormElement;
   const name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
   try {

@@ -4,9 +4,9 @@
   target time applies to, and the rounding and whole-machine checkboxes. readWizard reads the
   two checkboxes only on this step, since an unticked box is absent from the form.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { wizard, workspace } from '../../session.ts';
+import { draft, wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
@@ -18,14 +18,15 @@ const PHASE_TIME = [
 
 const view = computed(() =>
   legacy(() => {
-    const w = wizard,
+    const w = draft(),
       s = w.settings;
     const goals = workspace.catalog.goals;
     return {
       timed: s.multiplier > 5,
       goals: goals.map(g => ({ ...g, on: s.goal === g.id })),
       recommended: s.multiplier > 5 ? 'timed' : 'balanced',
-      name: w.name || goals.find(g => g.id === s.goal).name,
+      // The goal is always one of the catalog's.
+      name: w.name || goals.find(g => g.id === s.goal)!.name,
       hours: s.hours,
       phaseTime: s.phaseTime || 'every',
       roundRates: !!s.roundRates,

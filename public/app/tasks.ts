@@ -34,7 +34,25 @@ export interface StepLink {
 }
 
 // A step's icon (taskIcon): an item's bundled icon, or a TASK_GLYPHS category glyph.
-export type StepIconData = { item: string } | { kind: string };
+export type StepIconData = { item: string; kind?: undefined } | { kind: string; item?: undefined };
+
+// A step as the checklist draws it (ui/plan/Checklist.vue): the step with its tick, icon,
+// "Open factory" link, and while it is being edited the edit form's choices. The storage
+// page's fixed checklists (ui/storage/StorageChecklist.vue) have no personal tasks or edits.
+export interface PlanStepView extends Step {
+  done: boolean;
+  icon: StepIconData;
+  link: StepLink | null;
+  custom?: boolean;
+  form?: ReturnType<typeof taskLinkChoices> | null;
+}
+
+// A step in "Removed steps in this phase".
+export interface RemovedStepView {
+  id: string;
+  title: string;
+  icon: StepIconData;
+}
 
 // The profile's step edits with every part defaulted, so callers can read them freely.
 // order is per phase; titles, bodies and links are keyed by step id.

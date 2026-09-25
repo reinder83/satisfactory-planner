@@ -6,7 +6,7 @@
   the text (coal limit, rocket-fuel blocks, nuclear sequence) describes the owner's handbook
   and is fixed copy.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, plan, stage } from '../../session.ts';
@@ -17,12 +17,12 @@ import StatTile from '../StatTile.vue';
 import { toggleCheck } from '../actions.ts';
 
 // The handbook's power commissioning steps: saved check key, label.
-const POWER_STEPS = [
+const POWER_STEPS: [id: string, title: string][] = [
   ['power-retained', 'Retained turbofuel: 44.425 GW'],
   ['power-rocket-1', 'Rocket-fuel block 1: +72 GW'],
   ['power-rocket-2', 'Rocket-fuel block 2: +72 GW'],
   ['power-u4', 'Phase 4 uranium: +125 GW'],
-  ...Array.from({ length: 4 }, (_, i) => [
+  ...Array.from({ length: 4 }, (_, i): [string, string] => [
     'power-rocket-' + (i + 3),
     'Rocket-fuel block ' + (i + 3) + ': +72 GW',
   ]),
@@ -31,13 +31,14 @@ const POWER_STEPS = [
 
 const page = computed(() =>
   legacy(() => {
-    const resources = plan.resources[stage()],
-      p = plan.plans[stage()];
+    // The handbook has both for every phase it covers.
+    const resources = plan.resources[stage()]!,
+      p = plan.plans[stage()]!;
     return {
       power: num(plan.power[stage()]) + ' GW',
       peak: num(p.manufacturingPeakGW) + ' GW',
       average: num(p.manufacturingAvgGW) + ' GW',
-      coal: num(74400 - resources.Coal) + '/min',
+      coal: num(74400 - resources.Coal!) + '/min',
       nitrogen: num(resources['Nitrogen Gas'] || 0),
       rows: Object.entries(resources)
         .sort(([a], [b]) => a.localeCompare(b))

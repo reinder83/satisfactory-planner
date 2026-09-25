@@ -5,7 +5,7 @@
   are gathered, never belted), so their checkboxes (name="sloop", read back by readWizard as
   settings.sloopReserved) only reserve sloops and add steps.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
@@ -15,7 +15,7 @@ const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
     const s = wizard.settings,
-      reserved = s.sloopReserved || [];
+      reserved: string[] = s.sloopReserved || [];
     const augmenters = s.augmenters || 0,
       fueled = s.fueledAugmenters || 0;
     return {

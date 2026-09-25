@@ -4,25 +4,26 @@
   are enabled it posts to /api/setup, otherwise to /api/login or /api/register; boot() then
   reloads the workspace, which shows the planner or the sign-in screen again.
 -->
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import { post } from '../api.ts';
 import { authMode, boot, workspace } from '../session.ts';
 
-const props = defineProps({ mode: { type: String, required: true } });
+const props = defineProps<{ mode: 'login' | 'register' | 'setup' }>();
 const busy = ref(false);
 const error = ref('');
 
-async function submit(e) {
-  const data = Object.fromEntries(new FormData(e.target));
-  data.registration = new FormData(e.target).has('registration');
+async function submit(e: Event) {
+  const form = e.target as HTMLFormElement;
+  const data: Record<string, unknown> = Object.fromEntries(new FormData(form));
+  data.registration = new FormData(form).has('registration');
   busy.value = true;
   error.value = '';
   try {
     await post('/api/' + (workspace.accountsEnabled ? authMode : 'setup'), data, false);
     await boot();
   } catch (err) {
-    error.value = err.message;
+    error.value = (err as Error).message;
     busy.value = false;
   }
 }

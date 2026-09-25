@@ -9,7 +9,7 @@
   settings.limits and returns to whatever opened the survey. The form keeps the shared
   #wizard-form id, so moveExtraction reads it.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
@@ -23,7 +23,7 @@ import {
   wellYield,
 } from '../../../preferences.ts';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
   EXTRACTION_STEPS,
@@ -52,8 +52,9 @@ const page = computed(() =>
   legacy(() => {
     if (wizard?.mode !== 'extraction') return null;
     const e = extractionOf(wizard),
-      step = wizard.extractionStep;
-    const sample = (name, purity) => num(Math.round(nodeYield(name, purity, e)));
+      // openExtraction sets the screen when it switches to this mode.
+      step = wizard.extractionStep ?? 1;
+    const sample = (name: string, purity: string) => num(Math.round(nodeYield(name, purity, e)));
     const budgets = BUDGET_ROWS.map(name => {
       const pool = Math.round(resourcePool(e, name)),
         used = Number(e.used?.[name]) || 0;
@@ -98,14 +99,15 @@ const page = computed(() =>
 // Any survey field, once committed: read the screen into the survey and redraw, since the
 // totals and budgets follow the counts. Choosing a purity and distribution whose world is
 // fully known (knownWorld) refills every count from that preset.
-function changed(e) {
-  const el = e.target;
+function changed(e: Event) {
+  const el = e.target as HTMLInputElement | HTMLSelectElement;
   if (!/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))) return;
-  readExtraction(e.currentTarget);
+  readExtraction(e.currentTarget as HTMLFormElement);
   if (['purity', 'distribution'].includes(el.name)) {
-    const s = wizard.settings;
+    const w = draft(),
+      s = w.settings;
     if (knownWorld(s.purity, s.distribution))
-      wizard.extraction = presetSurvey(s.purity, extractionOf(wizard), s.distribution);
+      w.extraction = presetSurvey(s.purity, extractionOf(w), s.distribution);
   }
   render();
 }
@@ -113,9 +115,9 @@ function changed(e) {
 // The tabs, Back (from the first screen it leaves the survey) and the submit button, which
 // past the last screen applies the survey. The submit stops here, so no other
 // submit listener takes the same Enter for the screen the survey returns to.
-const go = target => moveExtraction(target);
+const go = (target: number) => moveExtraction(target);
 function submit() {
-  moveExtraction(wizard.extractionStep + 1);
+  moveExtraction((draft().extractionStep ?? 1) + 1);
 }
 </script>
 
@@ -134,7 +136,7 @@ function submit() {
         type="button"
         :class="page.step === i + 1 ? 'current' : ''"
         :data-extraction-step="i + 1"
-        :aria-current="page.step === i + 1 ? 'step' : null"
+        :aria-current="page.step === i + 1 ? 'step' : undefined"
         @click="go(i + 1)"
       >
         {{ i + 1 }}. {{ n }}

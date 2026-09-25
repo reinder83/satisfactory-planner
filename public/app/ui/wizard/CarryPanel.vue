@@ -6,7 +6,7 @@
   into the new profile's fresh state without writing to the source. Recipe picks are offered
   only when the plan picks its own recipes.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { carryOptions, pickedRecipeUnlocks } from '../../../state.ts';
 import { num } from '../../format.ts';
@@ -18,9 +18,10 @@ const view = computed(() =>
     const w = wizard,
       save = w && workspace.saves.find(s => s.id === w.saveId);
     if (!save?.profiles.length) return null;
-    const source = save.profiles.find(p => p.id === w.carryFrom) || save.profiles[0];
-    const picks = w.carry || {},
-      picked = pickedRecipeUnlocks(w.preview).length;
+    // save is only found with a draft open, and has profiles (checked above).
+    const source = save.profiles.find(p => p.id === w!.carryFrom) || save.profiles[0]!;
+    const picks = w!.carry || {},
+      picked = pickedRecipeUnlocks(w!.preview).length;
     return {
       profiles: save.profiles.map(p => ({ id: p.id, name: p.name })),
       source: source.id,

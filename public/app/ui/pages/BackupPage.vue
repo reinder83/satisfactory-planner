@@ -5,7 +5,7 @@
   `global`; its "Save notes" button uses saveNote in ui/actions.ts, as the plan page and
   the dialogs do.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
@@ -62,7 +62,7 @@ async function exportSaves() {
     invalidate();
     toast('Full save backup downloaded.');
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     exporting.value = false;
   }
@@ -73,8 +73,9 @@ async function exportSaves() {
 // reloads the whole workspace with boot() and shows the profiles page. The success toast
 // only follows a successful import; any failure (too large, not JSON, refused by the
 // server) is a toast.
-async function importSaves(e) {
-  const file = e.target.files[0];
+async function importSaves(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
   try {
     // Checked before reading, so a huge file is never parsed.
@@ -87,10 +88,10 @@ async function importSaves(e) {
     navigate('profiles');
     toast('Imported saves. Existing progress was kept.');
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     // Clear the picker either way so choosing the same file again fires change again.
-    e.target.value = '';
+    input.value = '';
   }
 }
 
@@ -98,9 +99,9 @@ async function importSaves(e) {
 // progress-only backup, after a confirmation. It waits for queued saves and posts itself
 // rather than through save(), so it toasts its own errors; "Backup restored." only follows
 // a successful response.
-async function restoreProgress(e) {
-  const el = e.target,
-    file = el.files[0];
+async function restoreProgress(e: Event) {
+  const el = e.target as HTMLInputElement,
+    file = el.files?.[0];
   if (!file) return;
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
@@ -124,7 +125,7 @@ async function restoreProgress(e) {
     render();
     toast('Backup restored.');
   } catch (err) {
-    toast(err.message || 'Could not restore backup.', true);
+    toast((err as Error).message || 'Could not restore backup.', true);
     el.value = '';
   }
 }
@@ -140,7 +141,7 @@ async function persistStorage() {
         : 'Browser did not grant persistence. Keep downloaded backups.',
     );
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   }
 }
 </script>

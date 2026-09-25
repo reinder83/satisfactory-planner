@@ -1,7 +1,7 @@
 <!-- A factory group's build order (groupChain in factory-detail.ts): suppliers before
      consumers, each stage with what it needs and what it feeds, linked to its factory dialog.
      Opened from "Build order ↗" on a group with more than one factory. -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { groupChain } from '../../factory-detail.ts';
 import { phaseLabel, stage } from '../../session.ts';
@@ -9,7 +9,7 @@ import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
 import { factoryLink } from '../actions.ts';
 
-const props = defineProps({ id: { type: String, required: true } });
+const props = defineProps<{ id: string }>();
 
 const chain = computed(() =>
   legacy(() => {

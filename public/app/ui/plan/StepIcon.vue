@@ -1,11 +1,12 @@
 <!-- A build-plan step's icon: the bundled icon of the part it makes, otherwise the glyph for
      its kind of work (taskIcon() in tasks.ts), on the build plan and the storage page. The
      glyphs are fixed markup from TASK_GLYPHS, never user text. -->
-<script setup>
+<script setup lang="ts">
 import { TASK_GLYPHS } from '../../tasks.ts';
 import ItemIcon from '../ItemIcon.vue';
+import type { StepIconData } from '../../tasks.ts';
 
-defineProps({ icon: { type: Object, required: true } });
+defineProps<{ icon: StepIconData }>();
 </script>
 
 <template>
@@ -20,7 +21,7 @@ defineProps({ icon: { type: Object, required: true } });
       stroke-width="1.7"
       stroke-linecap="round"
       stroke-linejoin="round"
-      v-html="TASK_GLYPHS[icon.kind]"
+      v-html="TASK_GLYPHS[icon.kind ?? '']"
     ></svg
   ></span>
 </template>

@@ -4,7 +4,7 @@
   factory dialog (factoryLink()). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
@@ -13,16 +13,18 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
+import type { HandbookFactory } from '../../../types/index.ts';
 
-const props = defineProps({
-  factory: { type: Object, required: true },
-  group: { type: String, default: null },
+// group is the factory group this card sits in, or null outside the groups.
+const props = withDefaults(defineProps<{ factory: HandbookFactory; group?: string | null }>(), {
+  group: null,
 });
 
 const card = computed(() =>
   legacy(() => {
     const f = props.factory,
-      r = f.stages[stage()],
+      // The pages draw only factories with this stage.
+      r = f.stages[stage()]!,
       check = 'factory-' + stage() + '-' + f.id;
     return {
       check,

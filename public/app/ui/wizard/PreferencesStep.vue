@@ -5,10 +5,10 @@
   access, preferred power and the ingot choice change what the step shows, so WizardPage reads
   the step and redraws when they change.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { droneFuels, powerOptions, storageOptions } from '../../../preferences.ts';
-import { wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
@@ -41,7 +41,7 @@ const COLLECTABLES = [
 ];
 const FUELS = droneFuels.map(n => [n, n === 'none' ? 'No dedicated drone fuel' : n]);
 
-const s = computed(() => legacy(() => ({ ...wizard.settings })));
+const s = computed(() => legacy(() => ({ ...draft().settings })));
 </script>
 
 <template>

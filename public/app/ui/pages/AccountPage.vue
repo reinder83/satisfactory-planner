@@ -2,7 +2,7 @@
   #account. On the server: the signed-in user and "Sign out", or the setup form while
   accounts are still off. The browser edition has no accounts, so it shows the backup page.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { allowSwitch, post, writeQueue } from '../../api.ts';
@@ -13,7 +13,10 @@ import PageHeader from '../PageHeader.vue';
 import BackupPage from './BackupPage.vue';
 
 const account = computed(() =>
-  legacy(() => ({ enabled: workspace.accountsEnabled, username: workspace.user?.username })),
+  legacy(() => ({
+    enabled: workspace.accountsEnabled,
+    username: workspace.user?.username ?? '',
+  })),
 );
 
 // "Sign out": after the unsaved-notes check and any queued saves, sign out; boot() then
