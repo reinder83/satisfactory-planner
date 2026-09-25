@@ -255,6 +255,10 @@ const reservedUses = raw => {
 // utilityPercent in %, rates (droneFuelRate, storageRate, buildRate, cellsPerMinute) per minute,
 // hours per phase, limits per minute, multiplier the elevator cost multiplier, powerFactor the
 // power consumption multiplier.
+/**
+ * @param {unknown} [input]
+ * @returns {import('./public/types/index.ts').CurrentSettings}
+ */
 export function settings(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) err('Invalid settings.');
   const s = {
@@ -1009,6 +1013,11 @@ export function run(
 //
 // Callers: workspace.mjs (/api/preview, /api/profiles, /api/round-up), calculator-worker.js in
 // the Pages edition (via public/browser-api.js), and the tests.
+/**
+ * @param {unknown} input
+ * @param {(phase: number) => void} [onPhase]
+ * @returns {import('./public/types/index.ts').CurrentCalculatedPlan}
+ */
 export function calculate(input, onPhase) {
   const s = settings(input);
   if (s.goal === 'maximum' && !s.limitsConfirmed)
@@ -1280,6 +1289,7 @@ export function calculate(input, onPhase) {
 // The Docker edition sends it with the session summary (workspace.mjs); build.mjs writes it to
 // catalog.json for the Pages edition, which public/browser-api.js loads. The UI reads it as
 // `workspace.catalog`.
+/** @returns {import('./public/types/index.ts').Catalog} */
 export const catalog = () => ({
   engine: ENGINE,
   alternates: DATA.recipes

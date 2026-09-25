@@ -105,6 +105,7 @@ async function buildWeb() {
   await fs.rm(out, { recursive: true, force: true });
   const skip = new Set([
     path.join(publicDir, 'app'),
+    path.join(publicDir, 'types'),
     ...BUNDLED.map(name => path.join(publicDir, name)),
   ]);
   await fs.cp(publicDir, out, {

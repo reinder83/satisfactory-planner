@@ -18,6 +18,10 @@ const title = x => {
 // validateState, so older state versions import and a state from a newer planner is refused
 // with its update message. Only version 1 of this wrapper exists. Plans and handbooks are
 // checked for shape only and otherwise copied as they are.
+/**
+ * @param {unknown} data
+ * @returns {Omit<import('./types/index.ts').SaveExport, 'exportedAt'>}
+ */
 export function validateTransfer(data) {
   if (
     data?.format !== transferFormat ||

@@ -16,6 +16,7 @@
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
 // 'unlock-<schematic>', 'recipe-unlock-<recipe>', 'early-base-…', 'startup-…', 'custom-…'.
 // Notes use 'factory-<id>' and 'slot-<address>' without a phase or step.
+/** @returns {import('./types/index.ts').ProgressState} */
 export const initialState = () => ({
   version: 1,
   revision: 0,
@@ -305,6 +306,14 @@ const builtKeys = (raw, plan) => {
 // validated state, how many carried 'calc-' ticks were unticked for review, and how many
 // checks start ticked. The source is only read. Called by /api/profiles in workspace.mjs and
 // by the matching route in browser-api.js.
+/**
+ * @param {import('./types/index.ts').CurrentCalculatedPlan | null} plan
+ * @param {import('./types/index.ts').SavedState | null | undefined} source
+ * @param {import('./types/index.ts').StoredCalculatedPlan | null | undefined} sourcePlan
+ * @param {unknown} raw
+ * @param {unknown} built
+ * @returns {{ state: import('./types/index.ts').ProgressState, reviewCount: number, carried: number }}
+ */
 export function newProfileState(plan, source, sourcePlan, raw, built) {
   const state = initialState();
   state.settings.phase = plan?.settings?.phase || '3';
@@ -397,6 +406,10 @@ function mergeGroups(defaults, raw, plan) {
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
 // Used by /api/export-saves?share=1 in workspace.mjs and browser-api.js; the input is cloned.
+/**
+ * @param {import('./types/index.ts').SavedState} s
+ * @returns {import('./types/index.ts').ProgressState}
+ */
 export function shareState(s) {
   const clean = validateState(structuredClone(s));
   clean.checks = {};
@@ -467,6 +480,10 @@ function validateEdits(raw) {
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
+/**
+ * @param {unknown} s
+ * @returns {import('./types/index.ts').ProgressState}
+ */
 export function validateState(s) {
   if (!plain(s) || ![1, 2, 3, 4].includes(s.version))
     fail(
@@ -532,6 +549,11 @@ export function validateState(s) {
 // of the workspace and browser-api.js passes a structuredClone, so a throw from the final
 // validateState discards the change. Values such as a check's boolean or a delivery count
 // are only type-checked there, not here.
+/**
+ * @param {import('./types/index.ts').ProgressState} s
+ * @param {import('./types/index.ts').UpdateOp} op
+ * @returns {import('./types/index.ts').ProgressState}
+ */
 export function mutate(s, op) {
   if (!plain(op)) fail('Invalid update.');
   if (op.type === 'check' || op.type === 'note' || op.type === 'delivery') {
