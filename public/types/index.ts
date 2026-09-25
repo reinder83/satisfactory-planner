@@ -1,0 +1,12 @@
+// The planner's data shapes, for TypeScript code and JSDoc `import('…')` types. Types only:
+// this folder has no run-time code, and build.mjs leaves it out of both editions.
+//   state.ts       a profile's saved progress, and the /api/update operations
+//   handbook.ts    the owner's handbook (plan.json)
+//   calculated.ts  a calculated profile's frozen plan and its settings
+//   workspace.ts   workspace.json, the /api/ replies, the catalog and the export formats
+// tests/types/ checks these against the real data and code (npm run typecheck).
+export type * from './common.ts';
+export type * from './state.ts';
+export type * from './handbook.ts';
+export type * from './calculated.ts';
+export type * from './workspace.ts';

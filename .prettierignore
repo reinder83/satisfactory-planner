@@ -5,6 +5,7 @@ vendor/
 public/icons/
 public/*.json
 recipes.json
+tests/fixtures/
 package-lock.json
 # Prose and CI config are edited by hand.
 *.md

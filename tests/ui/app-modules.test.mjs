@@ -38,4 +38,6 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'window beforeunload',
     'rendered',
   ]);
-});
+  // Importing the entry point compiles every component through Vite, which takes about 5 s
+  // alone and longer beside the other test files: past Vitest's default 5 s timeout.
+}, 30000);
