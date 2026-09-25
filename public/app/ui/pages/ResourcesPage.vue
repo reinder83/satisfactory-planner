@@ -1,7 +1,7 @@
 <!--
   #resources for the original handbook, at the current stage: power tiles, the fresh
   resource table against plan.capacities, and the power commissioning checklist, whose boxes
-  write the saved check keys `power-…` (the shared data-check handler in events/views.js).
+  write the saved check keys `power-…` (toggleCheck in ui/actions.js).
   A calculated profile gets CalculatedResourcesPage.vue instead. Much of
   the text (coal limit, rocket-fuel blocks, nuclear sequence) describes the owner's handbook
   and is fixed copy.
@@ -14,6 +14,7 @@ import { legacy } from '../bridge.js';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
+import { toggleCheck } from '../actions.js';
 
 // The handbook's power commissioning steps: saved check key, label.
 const POWER_STEPS = [
@@ -116,7 +117,9 @@ const page = computed(() =>
       <h2>Power commissioning</h2>
       <div class="checklist">
         <label v-for="s in page.steps" :key="s.id" class="check-row"
-          ><input type="checkbox" :data-check="s.id" :checked="s.done" />{{ s.title }}</label
+          ><input type="checkbox" :data-check="s.id" @change="toggleCheck" :checked="s.done" />{{
+            s.title
+          }}</label
         >
       </div>
     </section>

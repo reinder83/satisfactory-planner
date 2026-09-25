@@ -304,7 +304,7 @@ test('applying the survey writes and confirms the budgets, and returns to step 4
   } finally {
     document.removeEventListener('submit', onSubmit);
   }
-  assert.equal(reached, 0, 'the delegated wizard submit never sees it');
+  assert.equal(reached, 0, 'no other submit listener sees it');
   assert.equal(wizard.settings.limits['Iron Ore'], 92100);
   assert.equal(wizard.settings.limits.Limestone, 69300);
   assert.equal(wizard.settings.limitsConfirmed, true, 'counted numbers are confirmed numbers');

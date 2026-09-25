@@ -7,7 +7,7 @@ import { groupChain } from '../../factory-detail.js';
 import { phaseLabel, stage } from '../../session.js';
 import { legacy } from '../bridge.js';
 import DialogFrame from './DialogFrame.vue';
-import { linkAttrs } from './links.js';
+import { factoryLink } from '../actions.js';
 
 const props = defineProps({ id: { type: String, required: true } });
 
@@ -41,7 +41,7 @@ const chain = computed(() =>
         <span class="chain-no">{{ s.no }}</span>
         <div class="chain-body">
           <div class="chain-title">
-            <button class="rail-link" v-bind="linkAttrs(s.link)">{{ s.name }} ↗</button
+            <button class="rail-link" v-bind="factoryLink(s.link)">{{ s.name }} ↗</button
             ><span class="muted">{{ s.machines }}</span>
           </div>
           <p v-if="s.needs.length" class="small">

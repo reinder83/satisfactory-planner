@@ -1,8 +1,8 @@
 <!--
   The dialog for one storage container (address `id`): where it sits, its four saved checks
-  `slot-<id>-<step>` (the shared data-check handler in events/views.js), the factory that
-  makes the item (data-calc-factory on a calculated profile, data-factory on the original,
-  which open that factory's dialog in its place) and the note saved under `slot-<id>`.
+  `slot-<id>-<step>` (toggleCheck in ui/actions.js), the factory that makes the item (a
+  factoryLink() to the calculated row or the handbook factory, which opens that factory's
+  dialog in its place) and the note saved under `slot-<id>`.
   Opened by openSlot in views/storage.js.
 -->
 <script setup>
@@ -12,6 +12,7 @@ import { SLOT_STEPS, storageBays, storageFloors } from '../../views/storage.js';
 import { legacy } from '../bridge.js';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
+import { factoryLink, toggleCheck } from '../actions.js';
 
 const props = defineProps({ id: { type: String, required: true } });
 
@@ -34,11 +35,7 @@ const view = computed(() =>
         const key = 'slot-' + id + '-' + k;
         return { key, label, done: checked(key) };
       }),
-      link: factory
-        ? calculated
-          ? { 'data-calc-factory': factory.id }
-          : { 'data-factory': factory.id }
-        : null,
+      link: factory ? (calculated ? { calcFactory: factory.id } : { factory: factory.id }) : null,
     };
   }),
 );
@@ -52,11 +49,13 @@ const view = computed(() =>
     </p>
     <div class="check-columns">
       <label v-for="s in view.steps" :key="s.key" class="check-row"
-        ><input type="checkbox" :data-check="s.key" :checked="s.done" />{{ s.label }}</label
+        ><input type="checkbox" :data-check="s.key" @change="toggleCheck" :checked="s.done" />{{
+          s.label
+        }}</label
       >
     </div>
     <div v-if="view.link" class="detail-actions">
-      <button class="btn" v-bind="view.link">Open production target →</button>
+      <button class="btn" v-bind="factoryLink(view.link)">Open production target →</button>
     </div>
     <p v-else class="small muted">
       Collected or completion item. Reserve its own supply; this storage position does not add

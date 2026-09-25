@@ -3,7 +3,7 @@
   personal tasks and phase notes, and a side column with the next step and the Space
   Elevator deliveries. Post-game ('post') reads the Phase 5 stage of the handbook: stage()
   maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The notes'
-  "Save notes" button is handled by the shared data-save-note handler in events/views.js.
+  "Save notes" button uses saveNote in ui/actions.js.
 -->
 <script setup>
 import { computed } from 'vue';
@@ -18,6 +18,7 @@ import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import { saveNote } from '../actions.js';
 
 const page = computed(() =>
   legacy(() => {
@@ -100,7 +101,12 @@ const page = computed(() =>
         ></textarea>
         <div class="note-save">
           <span class="small muted">Saved only when you click Save notes.</span
-          ><button class="btn" :data-save-note="'phase-' + page.phase" data-input="phase-note">
+          ><button
+            class="btn"
+            :data-save-note="'phase-' + page.phase"
+            @click="saveNote"
+            data-input="phase-note"
+          >
             Save notes
           </button>
         </div>

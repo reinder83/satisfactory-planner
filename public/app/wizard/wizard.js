@@ -10,8 +10,7 @@ import { browserMode } from '../../browser-api.js';
 import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.js';
 import { carryOptions } from '../../state.js';
 import { allowSwitch, navigate, post, toast } from '../api.js';
-import { $, plural } from '../format.js';
-import { html } from '../html.js';
+import { $, esc, plural } from '../format.js';
 import { loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.js';
 import { render } from '../shell.js';
 import { guidedBuiltKeys, guidedFlow } from './guided.js';
@@ -30,7 +29,7 @@ export function readCarry(form, data) {
 
 // Open a new draft and show it: saveId null creates a new save, otherwise the
 // profile is added to that save. Callers: "Create a save" / "Try another
-// profile" buttons (events/views.js) and session.js when there is no save yet.
+// profile" buttons (ui/actions.js, ProfilesPage.vue) and session.js when there is no save.
 export function startWizard(saveId = null) {
   if (!allowSwitch()) return;
   const existing = workspace.saves.find(s => s.id === saveId);
@@ -239,6 +238,17 @@ export const calcProgress = (button, label) => {
   };
 };
 
+// Suggestions shown after a calculation that timed out. Fixed markup, no user text.
+const TIMEOUT_ADVICE = [
+  '<span class="error-options"><b>Ways to get a plan:</b>',
+  '<span>Try again — speed varies with your device and other open tabs.</span>',
+  '<span>In the recipe picker, use <b>Planner’s choice</b> or untick alternates you don’t need; ' +
+    'many recipes for the same product slow the search the most.</span>',
+  '<span>In Goals, turn off whole-machine production — exact balancing calculates much ' +
+    'faster.</span>',
+  '<span>Lower the elevator multiplier or allow more hours per phase.</span></span>',
+].join('');
+
 // Show a failed calculation or create in the form's error line (a toast when
 // there is none). A timeout gets suggestions; the message itself is escaped.
 export function wizardError(form, err) {
@@ -247,20 +257,7 @@ export function wizardError(form, err) {
     toast(err.message, true);
     return;
   }
-  if (/timed out/i.test(err.message))
-    el.innerHTML = String(
-      html`${err.message}<span class="error-options"
-          ><b>Ways to get a plan:</b
-          ><span>Try again — speed varies with your device and other open tabs.</span
-          ><span
-            >In the recipe picker, use <b>Planner’s choice</b> or untick alternates you don’t need;
-            many recipes for the same product slow the search the most.</span
-          ><span
-            >In Goals, turn off whole-machine production — exact balancing calculates much
-            faster.</span
-          ><span>Lower the elevator multiplier or allow more hours per phase.</span></span
-        >`,
-    );
+  if (/timed out/i.test(err.message)) el.innerHTML = esc(err.message) + TIMEOUT_ADVICE;
   else el.textContent = err.message;
 }
 

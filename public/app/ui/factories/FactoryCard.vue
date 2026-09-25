@@ -1,7 +1,7 @@
 <!--
   A handbook factory's card at the current stage. Its Running box writes the saved check key
-  `factory-<stage>-<id>` (the shared data-check handler in events/views.js); its name and
-  "Details ↗" open the factory dialog (the shared data-factory handler). Inside a group it
+  `factory-<stage>-<id>` (toggleCheck in ui/actions.js); its name and "Details ↗" open the
+  factory dialog (factoryLink()). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
 -->
 <script setup>
@@ -12,6 +12,7 @@ import { allocationText } from '../../views/factories.js';
 import { legacy } from '../bridge.js';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
+import { factoryLink, toggleCheck } from '../actions.js';
 
 const props = defineProps({
   factory: { type: Object, required: true },
@@ -42,7 +43,9 @@ const card = computed(() =>
     <div class="card-top">
       <span class="card-icon"><ItemIcon :name="factory.name" /></span>
       <div class="card-main">
-        <button class="name" :data-factory="factory.id">{{ factory.name }}</button>
+        <button class="name" v-bind="factoryLink({ factory: factory.id })">
+          {{ factory.name }}
+        </button>
         <div class="output">{{ card.output }} <span>/min</span></div>
       </div>
       <span v-if="factory.local" class="badge">Local</span>
@@ -56,8 +59,13 @@ const card = computed(() =>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <footer>
       <label class="check-row"
-        ><input type="checkbox" :data-check="card.check" :checked="card.done" />Running</label
-      ><button class="btn quiet" :data-factory="factory.id">Details ↗</button>
+        ><input
+          type="checkbox"
+          :data-check="card.check"
+          @change="toggleCheck"
+          :checked="card.done"
+        />Running</label
+      ><button class="btn quiet" v-bind="factoryLink({ factory: factory.id })">Details ↗</button>
     </footer>
     <AssignEditor v-if="card.editing" :factory-key="factory.id" />
   </article>

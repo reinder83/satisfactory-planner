@@ -2,15 +2,15 @@
   "Flow at Phase N" in a factory dialog, from a flow model (flow.js): the recipe panel, the
   input tiles with their belts or pipes, the machine bar, and one row per destination. Draws
   nothing when the model has neither inputs nor outputs. Links open other factory dialogs
-  through the shared data-factory / data-calc-factory click handlers.
+  through factoryLink() in ui/actions.js.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.js';
 import { phaseLabel } from '../../session.js';
 import ItemIcon from '../ItemIcon.vue';
-import { linkAttrs } from './links.js';
 import RecipePanel from './RecipePanel.vue';
+import { factoryLink } from '../actions.js';
 
 const props = defineProps({ model: { type: Object, default: null } });
 
@@ -80,7 +80,7 @@ const flow = computed(() => {
           v-for="i in flow.inputs"
           :key="i.name"
           class="rail-tile"
-          v-bind="linkAttrs(i.link)"
+          v-bind="factoryLink(i.link)"
           ><ItemIcon :name="i.name" /><span class="rail-main"
             ><b>{{ i.name }}</b
             ><small :class="i.hot ? 'hot' : null">{{ i.lanes }}</small></span
@@ -119,7 +119,7 @@ const flow = computed(() => {
         <div v-for="(o, n) in flow.outputs" :key="n" :class="['rail-row', o.kind]">
           <ItemIcon v-if="o.icon" :name="o.icon" /><span v-else class="rail-noicon"></span
           ><span class="rail-main"
-            ><button v-if="o.link" class="rail-link" v-bind="linkAttrs(o.link)">
+            ><button v-if="o.link" class="rail-link" v-bind="factoryLink(o.link)">
               {{ o.label }} ↗</button
             ><b v-else :class="o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''">{{ o.label }}</b
             ><small>{{ o.caption }}</small></span

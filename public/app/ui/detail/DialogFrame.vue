@@ -1,7 +1,8 @@
 <!-- The header and body of the shared #detail dialog. `icon` is an item name for the header
-     icon. The × is handled by the shared data-close handler in events/views.js. -->
+     icon. The × closes it (closeDetail in ui/actions.js). -->
 <script setup>
 import ItemIcon from '../ItemIcon.vue';
+import { closeDetail } from '../actions.js';
 
 defineProps({
   title: { type: String, required: true },
@@ -19,7 +20,7 @@ defineProps({
         <h2>{{ title }}</h2>
       </div>
     </div>
-    <button class="close" aria-label="Close details" data-close>×</button>
+    <button class="close" aria-label="Close details" data-close @click="closeDetail">×</button>
   </header>
   <div class="dialog-body"><slot /></div>
 </template>

@@ -1,7 +1,7 @@
 <!--
   One step of the build-plan checklist. Its checkbox writes the step's saved checklist key
-  (data-check, the shared handler in events/views.js, which the storage page's checklists
-  use too). In edit mode it adds move, edit and remove tools. `step` is a row from
+  (toggleCheck in ui/actions.js, which the storage page's checklists use too); its
+  "Open factory" link is a factoryLink(). In edit mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark.
 -->
 <script setup>
@@ -10,6 +10,7 @@ import { phase, setEditingTask } from '../../session.js';
 import { render } from '../../shell.js';
 import { planTasks } from '../../tasks.js';
 import StepIcon from './StepIcon.vue';
+import { factoryLink, toggleCheck } from '../actions.js';
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -70,6 +71,7 @@ async function deletePersonal() {
     <input
       type="checkbox"
       :data-check="step.id"
+      @change="toggleCheck"
       :aria-label="'Complete: ' + step.title"
       :checked="step.done"
     /><StepIcon :icon="step.icon" />
@@ -79,8 +81,9 @@ async function deletePersonal() {
       <button
         v-if="step.link"
         class="btn quiet task-link"
-        :data-factory="step.link.calc ? null : step.link.id"
-        :data-calc-factory="step.link.calc ? step.link.id : null"
+        v-bind="
+          factoryLink(step.link.calc ? { calcFactory: step.link.id } : { factory: step.link.id })
+        "
       >
         Open factory: {{ step.link.name }} ↗</button
       ><button
