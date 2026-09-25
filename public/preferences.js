@@ -169,7 +169,7 @@ export function resourceDefaults(purity = 'vanilla', distribution = 'original') 
       : 'Original map totals at Mk.3 / 250% extraction. Oil excludes resource wells; water is a planning allowance, not a finite map total.',
   };
 }
-// Tooltip text, keyed by settings field name; fields.js looks it up for each wizard field.
+// Tooltip text, keyed by settings field name; fields.ts looks it up for each wizard field.
 // More keys are added by the Object.assign calls further down.
 export const helpText = {
   worldSeed:
@@ -321,6 +321,7 @@ export const phaseParts = {
 // "All settings" lands where you already were instead of at the top.
 // Each option's `set` is merged into the settings; `handoff` names the All settings step
 // the guided flow jumps to after it; `glyph` or `items` picks the card's artwork.
+/** @type {import('./types/index.ts').GuidedQuestion[]} */
 export const guidedQuestions = [
   {
     id: 'phase',
@@ -473,6 +474,7 @@ export const guidedQuestions = [
 // Asked only where it means something: the tutorial question belongs to a
 // Phase 1 save, the already-built question to any later one. Neither changes a
 // setting — both record what is already standing in the world.
+/** @type {(phase: string) => import('./types/index.ts').GuidedQuestion} */
 export const guidedStandingQuestion = phase =>
   phase === '1'
     ? {
@@ -508,7 +510,8 @@ export const guidedStandingQuestion = phase =>
       };
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.
-// Used by guidedBuiltKeys in app/wizard/guided.js.
+// Used by guidedBuiltKeys in app/wizard/guided.ts.
+/** @type {string[]} */
 export const tutorialKeys = ['early-base-hub', 'unlock-Schematic_Tutorial5_C'];
 Object.assign(helpText, {
   existingSupply:
@@ -576,7 +579,7 @@ export const minedResources = [
 // All settings like any other budget.
 export const uncountedResources = ['Water'];
 
-// Survey shapes (`settings.extraction`, edited in app/wizard/extraction.js): `nodes` and
+// Survey shapes (`settings.extraction`, edited in app/wizard/extraction.ts): `nodes` and
 // `wells` hold per-resource { impure, normal, pure } counts, `used` the items/min already
 // committed elsewhere.
 export const blankCounts = () => ({ impure: 0, normal: 0, pure: 0 });

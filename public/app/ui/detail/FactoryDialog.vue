@@ -4,21 +4,21 @@
   current phase, or the factory's first phase when it has no stage in the current one.
   Plastic and Rubber come from the shared oil campus, which replaces the lane advice. The check
   key `factory-<phase>-<id>` and the note key `factory-<id>` (shared by every phase) are saved
-  progress. Opened by openFactory in factory-detail.js.
+  progress. Opened by openFactory in factory-detail.ts.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { handbookFlowModel } from '../../flow.js';
-import { checked, phase, phaseLabel, plan, stage } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { handbookFlowModel } from '../../flow.ts';
+import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import StatTile from '../StatTile.vue';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import OilCampus from './OilCampus.vue';
-import { toggleCheck } from '../actions.js';
+import { toggleCheck } from '../actions.ts';
 
 const props = defineProps({ id: { type: String, required: true } });
 

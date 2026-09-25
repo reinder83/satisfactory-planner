@@ -1,14 +1,14 @@
 <!--
   The notices above a calculated profile's plan, factories and resources pages for the current
-  phase: the infeasible-draft warning with its options (draftFixes in views/calculated.js), and
+  phase: the infeasible-draft warning with its options (draftFixes in views/calculated.ts), and
   extra power headroom for whole buildings. It draws nothing without a calculated profile.
 -->
 <script setup>
 import { computed } from 'vue';
-import { calcStage, calculated } from '../../session.js';
-import { draftFixes } from '../../views/calculated.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+import { calcStage, calculated } from '../../session.ts';
+import { draftFixes } from '../../views/calculated.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 
 const notices = computed(() =>
   legacy(() => {

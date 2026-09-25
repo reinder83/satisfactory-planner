@@ -5,10 +5,10 @@
   automatic one. The checkmark is untouched.
 -->
 <script setup>
-import { save } from '../../api.js';
-import { setEditingTask } from '../../session.js';
-import { render } from '../../shell.js';
-import { autoTaskLink, basePlanTasks } from '../../tasks.js';
+import { save } from '../../api.ts';
+import { setEditingTask } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { autoTaskLink, basePlanTasks } from '../../tasks.ts';
 
 const props = defineProps({
   step: { type: Object, required: true },

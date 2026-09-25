@@ -200,6 +200,7 @@ function validateGroups(raw) {
 // facts about its plan, so a new profile can start from them instead of an
 // empty checklist. Plan-shaped records are carried only where the new plan
 // still asks for the same or less work.
+/** @type {[key: string, label: string, description: string][]} */
 export const carryOptions = [
   [
     'unlocks',

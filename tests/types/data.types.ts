@@ -12,6 +12,7 @@ import type {
   CurrentCalculatedPlan,
   CurrentSettings,
   Handbook,
+  Progression,
   ProgressState,
   SaveExport,
   StageResult,
@@ -29,6 +30,7 @@ import type {
 } from '../../public/state.js';
 import type { validateTransfer } from '../../public/transfer.js';
 import handbook from '../../public/plan.json' with { type: 'json' };
+import progression from '../../public/progression.json' with { type: 'json' };
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };
 
 // A record's values may be undefined here: TypeScript types a JSON array of objects as one
@@ -64,6 +66,9 @@ type NoExtra<T extends never> = T;
 
 handbook satisfies Loose<Handbook>;
 export type HandbookHasNoUndeclaredFields = NoExtra<Extra<typeof handbook, Handbook>>;
+
+progression satisfies Loose<Progression>;
+export type ProgressionHasNoUndeclaredFields = NoExtra<Extra<typeof progression, Progression>>;
 
 firstPlan satisfies Loose<StoredCalculatedPlan>;
 export type FirstPlanHasNoUndeclaredFields = NoExtra<Extra<typeof firstPlan, StoredCalculatedPlan>>;

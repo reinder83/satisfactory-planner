@@ -1,13 +1,13 @@
 <!--
   The notes box at the end of a factory dialog, saved under `noteKey` by saveNote in
-  ui/actions.js (which also closes the dialog after a successful save). The text is the
+  ui/actions.ts (which also closes the dialog after a successful save). The text is the
   component's own, so it survives the dialog redrawing when a box in it is ticked; each
   opened dialog starts from the saved note.
 -->
 <script setup>
 import { ref } from 'vue';
-import { state } from '../../session.js';
-import { saveNote } from '../actions.js';
+import { state } from '../../session.ts';
+import { saveNote } from '../actions.ts';
 
 const props = defineProps({
   noteKey: { type: String, required: true },

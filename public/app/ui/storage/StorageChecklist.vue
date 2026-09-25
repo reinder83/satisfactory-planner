@@ -3,9 +3,9 @@
      { id, title, body }. -->
 <script setup>
 import { computed } from 'vue';
-import { checked } from '../../session.js';
-import { taskIcon } from '../../tasks.js';
-import { legacy } from '../bridge.js';
+import { checked } from '../../session.ts';
+import { taskIcon } from '../../tasks.ts';
+import { legacy } from '../bridge.ts';
 import PlanStep from '../plan/PlanStep.vue';
 
 const props = defineProps({ steps: { type: Array, required: true } });

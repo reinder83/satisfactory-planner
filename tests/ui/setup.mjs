@@ -2,8 +2,8 @@
 // loadContext() opens one, with a hostile name wherever user text appears.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { setContext, setProgressionData, setView, setWorkspace } from '../../public/app/session.js';
-import { unmountShell } from '../../public/app/ui/mount.js';
+import { setContext, setProgressionData, setView, setWorkspace } from '../../public/app/session.ts';
+import { unmountShell } from '../../public/app/ui/mount.ts';
 
 // Vitest runs from the repository root.
 export const handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));

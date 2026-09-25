@@ -19,10 +19,10 @@ import {
 } from 'vue';
 import { storageRateFor, wantsStorage } from '../../../preferences.js';
 import { num } from '../../format.ts';
-import { wizard, workspace } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { wizard, workspace } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
-import { vValue } from '../form/value.js';
+import { vValue } from '../form/value.ts';
 
 const view = computed(() =>
   legacy(() => {

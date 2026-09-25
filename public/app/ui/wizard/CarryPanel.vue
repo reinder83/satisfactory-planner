@@ -10,8 +10,8 @@
 import { computed } from 'vue';
 import { carryOptions, pickedRecipeUnlocks } from '../../../state.js';
 import { num } from '../../format.ts';
-import { wizard, workspace } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { wizard, workspace } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 
 const view = computed(() =>
   legacy(() => {

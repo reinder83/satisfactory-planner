@@ -8,10 +8,10 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { calcStage, calculated, workspace } from '../../session.js';
-import { inputText } from '../../views/storage.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+import { calcStage, calculated, workspace } from '../../session.ts';
+import { inputText } from '../../views/storage.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';

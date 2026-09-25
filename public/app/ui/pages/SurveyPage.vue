@@ -3,7 +3,7 @@
   settings step 4 or the guided start: four screens that turn node counts into resource
   budgets. 1. where the counts come from and how you mine (miner mark and clock); 2. the ore
   nodes; 3. crude oil nodes and resource-well satellites; 4. the budgets, less what is
-  already committed. The draft lives in wizard/extraction.js: every change reads the screen
+  already committed. The draft lives in wizard/extraction.ts: every change reads the screen
   into wizard.extraction (readExtraction) and redraws, the tabs and Back move between
   screens keeping what was typed, and the submit button past the last screen writes
   settings.limits and returns to whatever opened the survey. The form keeps the shared
@@ -23,16 +23,16 @@ import {
   wellYield,
 } from '../../../preferences.js';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.js';
-import { render } from '../../shell.js';
+import { wizard } from '../../session.ts';
+import { render } from '../../shell.ts';
 import {
   EXTRACTION_STEPS,
   extractionOf,
   leaveExtraction,
   moveExtraction,
   readExtraction,
-} from '../../wizard/extraction.js';
-import { legacy } from '../bridge.js';
+} from '../../wizard/extraction.ts';
+import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import HelpTip from '../form/HelpTip.vue';
 import SelectField from '../form/SelectField.vue';

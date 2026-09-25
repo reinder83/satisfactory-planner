@@ -3,18 +3,23 @@
 // save(); other POSTs (profiles, imports, account) use post(); both use request().
 import { appRoot } from '../app-root.js';
 import { browserMode, browserRequest } from '../browser-api.js';
-import { $ } from './format.ts';
-import { currentProfile, currentSave, setState, setView, state } from './session.js';
-import { render } from './shell.js';
-import { invalidate } from './ui/bridge.js';
+import { required } from './format.ts';
+import { currentProfile, currentSave, setState, setView, state, type View } from './session.ts';
+import { render } from './shell.ts';
+import { invalidate } from './ui/bridge.ts';
+import type { ProgressState, UpdateOp } from '../types/index.ts';
+
+// Request options: fetch's, plus the browser edition's calculation progress callback
+// (calcProgress in wizard/wizard.ts), which browser-api.js calls with each phase it solves.
+export type RequestOptions = RequestInit & { onProgress?: (phase: number) => void };
 
 // Number of save() calls still in flight; drives the "Saving…" indicator.
 export let pending = 0;
-let toastTimer;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 // Shows a message in the #toast strip. Errors stay up longer than confirmations.
-export function toast(message, error = false) {
-  const el = $('#toast');
+export function toast(message: string, error = false) {
+  const el = required('#toast');
   el.textContent = message;
   el.className = 'show' + (error ? ' error' : '');
   clearTimeout(toastTimer);
@@ -25,8 +30,9 @@ export function toast(message, error = false) {
 // the server's error message. In the browser edition /api/* never reaches the network:
 // browser-api.js answers it from IndexedDB. Static files (plan.json, ...) are fetched
 // relative to appRoot there, because GitHub Pages serves the app under a subpath.
-export async function request(path, options = {}) {
-  if (browserMode && path.startsWith('/api/')) return browserRequest(path, options);
+// The caller names the reply's type (T); it is not checked at run time.
+export async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (browserMode && path.startsWith('/api/')) return browserRequest(path, options) as Promise<T>;
   const r = await fetch(browserMode ? new URL('.' + path, appRoot) : path, {
     cache: 'no-store',
     ...options,
@@ -43,7 +49,7 @@ export async function request(path, options = {}) {
 
 // The tail of the save chain. Anything that switches save/profile or replaces data awaits
 // it first (loadContext, imports, profile removal) so no queued write lands elsewhere.
-export let writeQueue = Promise.resolve();
+export let writeQueue: Promise<unknown> = Promise.resolve();
 
 // Saves one progress change. `op` is an operation for mutate() in state.js, e.g.
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
@@ -52,12 +58,12 @@ export let writeQueue = Promise.resolve();
 // its reply only replaces `state` if that profile is still open. Does not render: callers
 // render() after it resolves. On failure it shows an error toast and rejects, and callers
 // usually just restore their control instead of rendering.
-export function save(op) {
+export function save(op: UpdateOp): Promise<ProgressState> {
   const scope = { ...scopeHeaders() };
   pending++;
   saveIndicator();
   const run = writeQueue.then(async () => {
-    const next = await request('/api/update', {
+    const next = await request<ProgressState>('/api/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...scope },
       body: JSON.stringify(op),
@@ -70,7 +76,7 @@ export function save(op) {
   // A failed write must not block the writes queued after it.
   writeQueue = run.catch(() => {});
   return run
-    .catch(e => {
+    .catch((e: Error) => {
       toast(e.message, true);
       throw e;
     })
@@ -89,7 +95,7 @@ export function saveIndicator() {
 // Headers that name the save and profile a request applies to. Both editions read them
 // before falling back to the stored active save/profile, so another tab that switched
 // profile cannot redirect this tab's writes.
-export function scopeHeaders() {
+export function scopeHeaders(): { 'X-Save-Id': string; 'X-Profile-Id': string } {
   return { 'X-Save-Id': currentSave?.id || '', 'X-Profile-Id': currentProfile?.id || '' };
 }
 
@@ -97,8 +103,13 @@ export function scopeHeaders() {
 // Pass scope=false for workspace-wide calls; `extra` adds request options (such as the
 // onProgress callback from calcProgress() that the browser calculator reports to). The server
 // refuses a POST without X-Planner-Request and a JSON content type (a CSRF guard).
-export async function post(endpoint, data, scope = true, extra = {}) {
-  return request(endpoint, {
+export async function post<T = unknown>(
+  endpoint: string,
+  data: unknown,
+  scope = true,
+  extra: RequestOptions = {},
+): Promise<T> {
+  return request<T>(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -111,8 +122,8 @@ export async function post(endpoint, data, scope = true, extra = {}) {
 }
 
 // Goes to a route. Changing the hash triggers the hashchange listener in
-// listeners.js, which renders; an unchanged hash would not, so render directly.
-export function navigate(v) {
+// listeners.ts, which renders; an unchanged hash would not, so render directly.
+export function navigate(v: View) {
   setView(v);
   if (location.hash === '#' + v) render();
   else location.hash = v;
@@ -121,9 +132,9 @@ export function navigate(v) {
 // Notes are saved with an explicit button, not on typing. A notes textarea is unsaved
 // when its text differs from the saved note its paired data-input button writes.
 function hasUnsavedNotes() {
-  return [...document.querySelectorAll('textarea.notes')].some(el => {
-    const button = document.querySelector(`[data-input="${el.id}"]`);
-    return button && el.value !== (state.notes[button.dataset.saveNote] || '');
+  return [...document.querySelectorAll<HTMLTextAreaElement>('textarea.notes')].some(el => {
+    const button = document.querySelector<HTMLElement>(`[data-input="${el.id}"]`);
+    return button && el.value !== (state.notes[button.dataset.saveNote || ''] || '');
   });
 }
 
@@ -137,7 +148,7 @@ export function allowSwitch() {
 }
 
 // Offers `data` as a .json file download (exports and shared profiles).
-export function downloadJson(data, name) {
+export function downloadJson(data: unknown, name: string) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
   );

@@ -3,12 +3,12 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { currentSave } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
-import { openCalculatedFactory } from '../../public/app/factory-detail.js';
-import { invalidate } from '../../public/app/ui/bridge.js';
-import { showSignedOut } from '../../public/app/ui/mount.js';
-import { vuePage } from '../../public/app/ui/pages.js';
+import { currentSave } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
+import { invalidate } from '../../public/app/ui/bridge.ts';
+import { showSignedOut } from '../../public/app/ui/mount.ts';
+import { vuePage } from '../../public/app/ui/pages.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
 import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.mjs';
 
@@ -157,7 +157,7 @@ test('the handbook resources page shows every resource with its icon, and the po
   assert.equal($$('[data-check^="power-"]').length, 9);
   assert.equal($('[data-check="power-u4"]').checked, false);
   open({ phase: '3' });
-  const { state } = await import('../../public/app/session.js');
+  const { state } = await import('../../public/app/session.ts');
   state.checks['power-u4'] = true;
   render();
   await nextTick();

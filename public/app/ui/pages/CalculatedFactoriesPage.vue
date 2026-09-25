@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { allowSwitch, post, toast, writeQueue } from '../../api.js';
+import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
 import {
   calcStage,
   calculated,
@@ -15,11 +15,11 @@ import {
   query,
   setQuery,
   setWorkspace,
-} from '../../session.js';
-import { render } from '../../shell.js';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.js';
-import { calcProgress } from '../../wizard/wizard.js';
-import { legacy } from '../bridge.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
+import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { calcProgress } from '../../wizard/wizard.ts';
+import { legacy } from '../bridge.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';

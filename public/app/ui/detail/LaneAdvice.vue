@@ -7,10 +7,10 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { bestLane } from '../../flow.js';
-import { phaseLabel } from '../../session.js';
+import { bestLane } from '../../flow.ts';
+import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
-import { factoryLink } from '../actions.js';
+import { factoryLink } from '../actions.ts';
 
 const props = defineProps({ model: { type: Object, default: null } });
 

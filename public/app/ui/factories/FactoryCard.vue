@@ -1,18 +1,18 @@
 <!--
   A handbook factory's card at the current stage. Its Running box writes the saved check key
-  `factory-<stage>-<id>` (toggleCheck in ui/actions.js); its name and "Details ↗" open the
+  `factory-<stage>-<id>` (toggleCheck in ui/actions.ts); its name and "Details ↗" open the
   factory dialog (factoryLink()). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { checked, factoryEditing, stage } from '../../session.js';
-import { allocationText } from '../../views/factories.js';
-import { legacy } from '../bridge.js';
+import { checked, factoryEditing, stage } from '../../session.ts';
+import { allocationText } from '../../views/factories.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
-import { factoryLink, toggleCheck } from '../actions.js';
+import { factoryLink, toggleCheck } from '../actions.ts';
 
 const props = defineProps({
   factory: { type: Object, required: true },

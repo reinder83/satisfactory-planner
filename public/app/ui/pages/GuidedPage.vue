@@ -5,7 +5,7 @@
   otherwise the question at guidedStep, as picture cards (GuidedCards.vue), the rate rows of
   the "already producing" question (ui/wizard/SupplyRows.vue), the hours for a timed goal and
   the top-up chips on the stock question. "All settings →" lands on the step that owns the
-  question, keeping every answer. The flow, readers and moves are in wizard/guided.js: every
+  question, keeping every answer. The flow, readers and moves are in wizard/guided.ts: every
   answer is read back from the form (readGuidedForm) and redraws, since it decides what
   follows, and past the last question the plan is calculated and the five steps' Review
   (WizardPage.vue) takes over. The form is keyed by screen, so each starts from the draft.
@@ -13,11 +13,11 @@
 <script setup>
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.js';
-import { navigate } from '../../api.js';
-import { setWizard, wizard } from '../../session.js';
-import { render } from '../../shell.js';
-import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.js';
-import { legacy } from '../bridge.js';
+import { navigate } from '../../api.ts';
+import { setWizard, wizard } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.ts';
+import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
 import GuidedCards from '../guided/GuidedCards.vue';

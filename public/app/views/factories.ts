@@ -1,23 +1,31 @@
 // Factory groups: the profile's named groups and which factories belong to them, shared by
 // both factories pages (ui/pages/FactoriesPage.vue and CalculatedFactoriesPage.vue, with their
-// parts in ui/factories/), the group build-order dialog (factory-detail.js) and ADA.
+// parts in ui/factories/), the group build-order dialog (factory-detail.ts) and ADA.
 import { num } from '../format.ts';
-import { state } from '../session.js';
+import { state } from '../session.ts';
+import type { FactoryGroups, GroupAssignment } from '../../types/index.ts';
 
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key
 // (a handbook factory id, or a calculated row id) to a list of { group, rate } memberships;
 // a null rate means the whole output, or the remainder once other groups take theirs.
-export function factoryGroupsState() {
-  const g = state?.factoryGroups || {};
+export function factoryGroupsState(): FactoryGroups {
+  const g: Partial<FactoryGroups> = state?.factoryGroups || {};
   return { groups: g.groups || [], assignments: g.assignments || {} };
 }
 
-export const membershipsOf = key => factoryGroupsState().assignments[key] || [];
+export const membershipsOf = (key: string): GroupAssignment[] =>
+  factoryGroupsState().assignments[key] || [];
 
 // The line on a grouped card saying how much of the factory's output this group gets, or ''
 // when the factory sits whole in a single group. A null-rate membership receives what the
 // fixed-rate ones leave over; machines are scaled by the same share.
-export function allocationText(key, groupId, total, machines, unit = '/min') {
+export function allocationText(
+  key: string,
+  groupId: string,
+  total: number,
+  machines: number,
+  unit = '/min',
+): string {
   const ms = membershipsOf(key),
     m = ms.find(x => x.group === groupId);
   if (!m || (ms.length === 1 && m.rate == null)) return '';

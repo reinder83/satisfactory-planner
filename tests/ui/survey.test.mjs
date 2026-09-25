@@ -13,8 +13,8 @@ import {
   purities,
   richShape,
 } from '../../public/preferences.js';
-import { setWizard, wizard } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
+import { setWizard, wizard } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
 import { $, $$, catalog, generated, go, open, page } from './setup.mjs';
 
 const text = s => $(s).textContent.replace(/\s+/g, ' ');

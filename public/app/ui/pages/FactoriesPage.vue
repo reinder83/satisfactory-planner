@@ -19,17 +19,17 @@ import {
   setFactoryFilter,
   setQuery,
   stage,
-} from '../../session.js';
-import { render } from '../../shell.js';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.js';
-import { inputText } from '../../views/storage.js';
-import { legacy } from '../bridge.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
+import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { inputText } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import PageHeader from '../PageHeader.vue';
-import { toggleCheck } from '../actions.js';
+import { toggleCheck } from '../actions.ts';
 
 // The status filter: value, label.
 const FILTERS = [

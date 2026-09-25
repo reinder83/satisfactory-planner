@@ -5,6 +5,15 @@
 export const $ = <E extends Element = HTMLElement>(s: string): E | null =>
   document.querySelector<E>(s);
 
+// The element matching `s` that the page always has (#app, #detail, #toast in index.html, or
+// one the caller just drew). Throws, naming the selector, if it is missing, where `$(s).x`
+// would have thrown a vaguer TypeError.
+export const required = <E extends Element = HTMLElement>(s: string): E => {
+  const el = document.querySelector<E>(s);
+  if (!el) throw Error('Missing element ' + s);
+  return el;
+};
+
 // Escapes text for HTML text and quoted attributes: the few strings of markup built outside
 // components (the timeout advice) must pass every user-provided or imported value through
 // this.

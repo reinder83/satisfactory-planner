@@ -4,11 +4,15 @@
 // own state (an open suggestion list, a refreshed placeholder, a filter) would put the draft
 // back over typing that has not been read yet. For inputs that only redraw with the draft,
 // :value is the same thing.
-export const vValue = {
+import type { Directive } from 'vue';
+
+type ValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+export const vValue: Directive<ValueElement, string | number | null | undefined> = {
   mounted(el, { value }) {
-    el.value = value ?? '';
+    el.value = String(value ?? '');
   },
   updated(el, { value, oldValue }) {
-    if (value !== oldValue) el.value = value ?? '';
+    if (value !== oldValue) el.value = String(value ?? '');
   },
 };

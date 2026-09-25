@@ -8,10 +8,10 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.js';
-import { draftFixes } from '../../views/calculated.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+import { wizard } from '../../session.ts';
+import { draftFixes } from '../../views/calculated.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
 import FuelVerdict from './FuelVerdict.vue';
 import SupplyNotice from './SupplyNotice.vue';

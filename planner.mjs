@@ -2,7 +2,7 @@
 // linear program per phase (1 to 5) with HiGHS (optimizer.mjs). The result is the plan a
 // calculated profile stores as a frozen snapshot (`profile.plan`); profiles are never silently
 // recalculated. Post Phase 5 has no stage of its own: the interface shows Phase 5's stage for it
-// (`stage()` in public/app/session.js).
+// (`stage()` in public/app/session.ts).
 //
 // Callers: workspace.mjs (`/api/preview`, `/api/profiles`, `/api/round-up`, and `catalog()` in
 // the session summary) for the Docker edition. The Pages edition runs a copy that build.mjs adapts
@@ -576,7 +576,7 @@ function generators(s, phase) {
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names)
 // calculate() may add aheadOf, fuelVerdict, supplyDropped/amplificationDropped, or turn a failed
 // phase into a draft with reason/shortfalls/minHours. The interface reads these fields in
-// public/app/views/calculated.js, public/app/flow.js and public/app/wizard/. Only calculate()
+// public/app/views/calculated.ts, public/app/flow.ts and public/app/wizard/. Only calculate()
 // calls run, directly and through the two-step fit below.
 export function run(
   s,
@@ -1007,7 +1007,7 @@ export function run(
 // Returns { engine, settings, stages: { 1..5: stage }, warnings: [string], createdAt }. A stage is
 // run()'s result, or for a phase that does not fit a draft with `feasible: false`, the diagnostic
 // solve's rows and a `reason`, plus `shortfalls` [{ name, needed, budget }], `minHours` and
-// `wholeMachinesOnly` where they apply (see draftOptions in public/app/views/calculated.js).
+// `wholeMachinesOnly` where they apply (see draftOptions in public/app/views/calculated.ts).
 // Stored as `profile.plan` and never recalculated behind the user's back, so a field added here
 // must be optional for plans saved by older engines.
 //
@@ -1132,7 +1132,7 @@ export function calculate(input, onPhase) {
     // are the most machines any phase from n to 5 builds, so running a line harder than its own
     // plan asks never needs a building that is not built anyway. The re-solve maximises output
     // under those caps, and is kept only when it finishes strictly sooner, recording the time it
-    // replaces as `aheadOf` (shown by public/app/wizard/wizard.js).
+    // replaces as `aheadOf` (shown by public/app/wizard/wizard.ts).
     const built = {};
     for (let phase = 1; phase <= 5; phase++)
       for (const r of stages[phase].rows || [])

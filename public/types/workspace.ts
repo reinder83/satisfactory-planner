@@ -98,11 +98,15 @@ export interface SaveSummary {
   profiles: ProfileSummary[];
 }
 
-// GET /api/workspace: the signed-in user's saves. user is null when signed out.
+// GET /api/workspace: the signed-in user's saves. user is null when signed out. The browser
+// edition (browser-api.js) sends browser: true and lastBackup, the time of the last full
+// export, and has no registration or owner flag.
 export interface WorkspaceSummary {
+  browser?: true;
+  lastBackup?: string | null;
   accountsEnabled: boolean;
-  registration: boolean;
-  user: { id: string; username: string; owner: boolean } | null;
+  registration?: boolean;
+  user: { id: string; username: string; owner?: boolean } | null;
   activeSave?: string | null;
   catalog: Catalog;
   saves: SaveSummary[];

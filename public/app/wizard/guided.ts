@@ -12,10 +12,11 @@ import {
   tutorialKeys,
 } from '../../preferences.js';
 import { $ } from '../format.ts';
-import { wizard } from '../session.js';
-import { render } from '../shell.js';
-import { readSupply } from './supply.js';
-import { calculateWizard, readWizard, wizardBusy } from './wizard.js';
+import { draft, wizard } from '../session.ts';
+import { render } from '../shell.ts';
+import { readSupply } from './supply.ts';
+import { calculateWizard, readWizard, wizardBusy, type WizardDraft } from './wizard.ts';
+import type { GuidedQuestion, ItemRates } from '../../types/index.ts';
 
 // --- The guided start -------------------------------------------------------
 // A short illustrated sequence that writes the same settings object the
@@ -27,7 +28,7 @@ import { calculateWizard, readWizard, wizardBusy } from './wizard.js';
 // little as possible", and inline SVG themes with currentColor, needs no build
 // allowlist entry and raises no attribution question. The concrete questions
 // use the item icons already bundled and attributed in icons/sources.json.
-export const GUIDED_GLYPHS = {
+export const GUIDED_GLYPHS: Record<string, string> = {
   minimal: '<path d="M4 20h4v-6H4zM10 20h4v-9h-4z"/><path d="M17 5v9M17 14l-2.5-3M17 14l2.5-3"/>',
   balanced: '<path d="M12 4v16M6 20h12"/><path d="M3 9h18"/><path d="M6 9l-3 5h6zM18 9l-3 5h6z"/>',
   timed: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 3h6"/>',
@@ -55,39 +56,39 @@ export const GUIDED_GLYPHS = {
 // Order: the preferences.js list (phase, goal, recipes, stock, exact), with the
 // tutorial question (Phase 1) or the "already producing" question (later
 // phases) inserted after phase for a new save. When wizard.guidedAsk is set
-// (the "What is different" screen), only those ids are kept. vuePage (ui/pages.js)
+// (the "What is different" screen), only those ids are kept. vuePage (ui/pages.ts)
 // and the screens compare guidedStep with this length to know when the questions
-// are finished; ada-panel.js reads it too.
-export function guidedFlow() {
-  const w = wizard,
-    list = [];
+// are finished; ada-panel.ts reads it too.
+export function guidedFlow(): GuidedQuestion[] {
+  const w = draft(),
+    ask = w.guidedAsk,
+    list: GuidedQuestion[] = [];
   for (const q of guidedQuestions) {
     list.push(q);
     if (q.id === 'phase' && !w.saveId)
       list.push(guidedStandingQuestion(String(w.settings.phase || '3')));
   }
-  return w.guidedAsk ? list.filter(q => w.guidedAsk.includes(q.id)) : list;
+  return ask ? list.filter(q => ask.includes(q.id)) : list;
 }
 
 // The option value currently chosen for a question, derived from the settings
 // (so a change made in All settings shows up here). 'tutorial' lives on the
-// draft rather than the settings. No question has the id 'standing'.
-export const guidedAnswer = q => {
-  const w = wizard,
+// draft rather than the settings.
+export const guidedAnswer = (q: GuidedQuestion): string => {
+  const w = draft(),
     s = w.settings;
   if (q.id === 'tutorial') return w.tutorial || 'doing';
-  if (q.id === 'standing') return w.standing || 'none';
   if (q.id === 'exact') return s.wholeMachines === false ? 'precise' : 'whole';
   if (q.id === 'stock')
-    return q.options.some(o => o.value === s.storage) ? s.storage : 'construction';
-  return String(s[q.id] ?? '');
+    return q.options?.some(o => o.value === s.storage) ? s.storage : 'construction';
+  return String((s as unknown as Record<string, unknown>)[q.id] ?? '');
 };
 
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
 // the only ones a guided answer can tick: everything else it learns is a rate,
 // which changes the plan rather than its progress.
-// Sent as `built` by createProfile (wizard.js).
-export function guidedBuiltKeys(w) {
+// Sent as `built` by createProfile (wizard.ts).
+export function guidedBuiltKeys(w: WizardDraft): string[] {
   return w.tutorial === 'done' ? [...tutorialKeys] : [];
 }
 
@@ -99,8 +100,8 @@ export function guidedBuiltKeys(w) {
 // On the "What is different" screen the ticked topics are kept as guidedTopics,
 // so a redraw keeps them; only `topics` (leaving the screen) makes them
 // guidedAsk, which ends that screen and narrows guidedFlow().
-function readGuided(form, topics) {
-  const w = wizard,
+function readGuided(form: HTMLFormElement, topics: boolean) {
+  const w = draft(),
     s = w.settings,
     f = new FormData(form);
   if (form.querySelector?.('.guided-topics')) {
@@ -132,7 +133,7 @@ function readGuided(form, topics) {
       .getAll('topup')
       .map(String)
       .filter(n => guidedTopupItems.includes(n));
-    const over = {};
+    const over: ItemRates = {};
     for (const n of chosen) over[n] = GUIDED_TOPUP_RATE;
     s.storageOverrides = over;
   }
@@ -144,9 +145,9 @@ function readGuided(form, topics) {
 // Go to question `target` (1-based): read the screen, then re-render, hand over
 // to All settings, or, past the last question, calculate and show Review.
 // Forward moves must pass the form's own validation first.
-export async function moveGuided(target) {
+export async function moveGuided(target: number) {
   const w = wizard,
-    form = $('#wizard-form');
+    form = $<HTMLFormElement>('#wizard-form');
   if (wizardBusy || !w) return;
   if (target > w.guidedStep && form && !form.reportValidity()) return;
   // "What is different this time?" chooses which questions follow, so leaving it
@@ -184,8 +185,8 @@ export async function moveGuided(target) {
 // readGuided plus the name box, which every guided screen but the topics one has.
 // Also used by the survey and supply code before they re-render. `topics` applies
 // the ticked topics (see readGuided): Continue and All settings do, a change does not.
-export function readGuidedForm(form, { topics = false } = {}) {
-  const w = wizard,
+export function readGuidedForm(form: HTMLFormElement, { topics = false } = {}) {
+  const w = draft(),
     f = new FormData(form);
   if (f.has('saveName')) w.saveName = String(f.get('saveName'));
   if (f.has('profileName')) w.name = String(f.get('profileName'));
@@ -195,9 +196,9 @@ export function readGuidedForm(form, { topics = false } = {}) {
 // Switching to All settings keeps every answer: both modes write the same
 // settings object, so nothing is recalculated or lost either way.
 // Lands on `step`, clamped to 1-4: Review is only reached by calculating.
-export function toAdvanced(step) {
-  const w = wizard;
-  const form = $('#wizard-form');
+export function toAdvanced(step?: number) {
+  const w = draft();
+  const form = $<HTMLFormElement>('#wizard-form');
   if (form && w.mode === 'guided') readGuidedForm(form, { topics: true });
   w.mode = 'advanced';
   w.usedGuided = true;
@@ -208,8 +209,8 @@ export function toAdvanced(step) {
 // "← Guided start" from the five-step wizard: read that form, then resume the
 // questions at the last guided step, clamped to the current flow.
 export function toGuided() {
-  const w = wizard;
-  const form = $('#wizard-form');
+  const w = draft();
+  const form = $<HTMLFormElement>('#wizard-form');
   if (form && w.mode !== 'guided') readWizard(form);
   w.mode = 'guided';
   const flow = guidedFlow();

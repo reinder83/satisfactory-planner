@@ -1,16 +1,16 @@
 <!--
-  "Flow at Phase N" in a factory dialog, from a flow model (flow.js): the recipe panel, the
+  "Flow at Phase N" in a factory dialog, from a flow model (flow.ts): the recipe panel, the
   input tiles with their belts or pipes, the machine bar, and one row per destination. Draws
   nothing when the model has neither inputs nor outputs. Links open other factory dialogs
-  through factoryLink() in ui/actions.js.
+  through factoryLink() in ui/actions.ts.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { phaseLabel } from '../../session.js';
+import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
-import { factoryLink } from '../actions.js';
+import { factoryLink } from '../actions.ts';
 
 const props = defineProps({ model: { type: Object, default: null } });
 

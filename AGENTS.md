@@ -15,7 +15,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 
 | Location | Responsibility |
 | --- | --- |
-| `public/app.js`, `public/app/` | Shared vanilla-JS UI as ES modules: `app.js` is the entry point; `app/session.js` holds the open save/profile and UI state (other modules change it through its setters), `app/api.js` requests and the save queue, `app/shell.js` the frame and view router, `app/views/` the data behind the pages, `app/wizard/` the profile wizard, `app/ui/` the Vue components (`app/ui/actions.js` the handlers several share), `app/listeners.js` the page-wide listeners |
+| `public/app.js`, `public/app/` | Shared vanilla-JS UI as ES modules: `app.js` is the entry point; `app/session.ts` holds the open save/profile and UI state (other modules change it through its setters), `app/api.ts` requests and the save queue, `app/shell.ts` the frame and view router, `app/views/` the data behind the pages, `app/wizard/` the profile wizard, `app/ui/` the Vue components (`app/ui/actions.ts` the handlers several share), `app/listeners.ts` the page-wide listeners |
 | `public/style.css`, `public/index.html`, `public/favicon.svg` | Presentation and shell |
 | `public/preferences.js` | Wizard options, resource presets, help text |
 | `public/ada.js` | ADA’s remarks: facts in, ordered plain-text lines out |
@@ -85,7 +85,7 @@ The owner's original handbook starts in Phase 3, with all Tier 6 unlocks, pure n
 
 ## ADA
 
-`public/ada.js` holds ADA’s remarks: facts in, ordered plain-text lines out. `adaFacts` in `public/app/ada-panel.js` builds those facts from the same counters the pages render, and escapes the text like any other untrusted name.
+`public/ada.js` holds ADA’s remarks: facts in, ordered plain-text lines out. `adaFacts` in `public/app/ada-panel.ts` builds those facts from the same counters the pages render, and escapes the text like any other untrusted name.
 
 **When you add a feature, add ADA’s lines for it in the same change.** A new counter, warning, page or editing mode that ADA cannot see is a gap users notice. Give the rule a stable `id`, an `on` page affinity, a `tone` (`calm`, `warn`, `praise`; `lead` for a state that makes everything else irrelevant), and cover it in `tests/ada.test.mjs`.
 
@@ -108,7 +108,7 @@ npm run build
 
 ### TypeScript
 
-The code is moving to TypeScript one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.js`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, from the ones that import nothing upward; (4) the components; (5) the server, `workspace.mjs`, `planner.mjs` and `optimizer.mjs`. Each stage is its own pull request and leaves both editions working.
+The code is moving to TypeScript one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.js`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, in two pull requests: (a) everything under `public/app/`, which Vite bundles (done), then (b) the shared scripts at the root of `public/`, which the server imports too and `build.mjs` ships as separate files; (4) the components; (5) the server, `workspace.mjs`, `planner.mjs` and `optimizer.mjs`. Each stage is its own pull request and leaves both editions working.
 
 Nothing compiles TypeScript to files: Vite and Vitest strip the types when they serve, test or bundle the code, esbuild when `build.mjs` minifies, and Node 24 itself when it runs a `.ts` file. `tsconfig.json` only drives the type check (`npm run typecheck`, also in CI), with `strict` and `noUncheckedIndexedAccess` on. Rules:
 
@@ -118,6 +118,8 @@ Nothing compiles TypeScript to files: Vite and Vitest strip the types when they 
 - Types describe the code; they never change saved data. The data types live in `public/types/` (types only, left out of both builds; import them from `public/types/index.ts`). Saved data has two shapes there: `ProgressState` is what `validateState` returns and `SavedState` any released version it accepts; `CurrentCalculatedPlan` is what `calculate()` returns today and `StoredCalculatedPlan` any plan an earlier release froze on a profile, so a field added to the planner is required only in the Current types. Read saved data through the Stored types.
 - `tests/types/data.types.ts` checks the types against `public/plan.json` and a plan frozen by the first release's planner (`tests/fixtures/calculated-plan-2026-09-12.json`), both ways: the data must fit the types and hold no field they do not declare. `tests/types/fixtures.ts` has a typed state for every version, which `tests/data-types.test.mjs` runs through `validateState` and `validateTransfer`. When the saved shape changes, add a fixture of the new shape and keep the old ones.
 - The JavaScript entry points (`validateState`, `mutate`, `initialState`, `newProfileState`, `shareState`, `calculate`, `settings`, `catalog`, `validateTransfer`) declare these types in JSDoc, so TypeScript callers are typed before the files move. An unchecked JSDoc type that does not resolve silently becomes `any`; `data.types.ts` pins each one, so keep it in step when adding or moving an annotation.
+- Look up a page element the frame or the current screen always has with `required(selector)` (`app/format.ts`), which throws naming the selector; keep `$(selector)` and a null check for one that may be absent. Code that only runs while the wizard is open reads the draft through `draft()` (`app/session.ts`), which throws when there is none; code that may run without one reads `wizard` and checks it.
+- A non-null assertion (`!`) needs a comment saying why the value is there (a filter just above, a loop bound), unless it is plain from the line itself.
 - A component moves with `<script setup lang="ts">` and type-based `defineProps<{ … }>()` (with `withDefaults` for defaults); it renders the same markup as before.
 - `build.mjs` copies the shared scripts at the root of `public/` as they are, so it refuses a `.ts` file there until stage 3 makes it strip them.
 

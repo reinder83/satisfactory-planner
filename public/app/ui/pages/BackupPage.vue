@@ -2,7 +2,7 @@
   #backup, in three versions: the browser edition (saves live in this browser, so there is no
   progress download), a calculated profile on the server, and the original handbook on the
   server with its plan assumptions and sources. The save-wide note is stored under the key
-  `global`; its "Save notes" button uses saveNote in ui/actions.js, as the plan page and
+  `global`; its "Save notes" button uses saveNote in ui/actions.ts, as the plan page and
   the dialogs do.
 -->
 <script setup>
@@ -16,7 +16,7 @@ import {
   scopeHeaders,
   toast,
   writeQueue,
-} from '../../api.js';
+} from '../../api.ts';
 import {
   boot,
   calculated,
@@ -27,12 +27,12 @@ import {
   setWorkspace,
   state,
   workspace,
-} from '../../session.js';
-import { render } from '../../shell.js';
-import { invalidate, legacy } from '../bridge.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
+import { invalidate, legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
-import { saveNote } from '../actions.js';
+import { saveNote } from '../actions.ts';
 
 const page = computed(() =>
   legacy(() => ({

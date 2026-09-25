@@ -18,17 +18,17 @@ import {
   purities,
   richShape,
 } from '../../../preferences.js';
-import { toast } from '../../api.js';
+import { toast } from '../../api.ts';
 import { $ } from '../../format.ts';
-import { wizard } from '../../session.js';
-import { render } from '../../shell.js';
+import { wizard } from '../../session.ts';
+import { render } from '../../shell.ts';
 import {
   extractionOf,
   readExtraction,
   resetExtraction,
   undoExtractionReset,
-} from '../../wizard/extraction.js';
-import { legacy } from '../bridge.js';
+} from '../../wizard/extraction.ts';
+import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import SelectField from '../form/SelectField.vue';
 

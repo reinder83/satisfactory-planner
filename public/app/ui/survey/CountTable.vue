@@ -2,15 +2,15 @@
   A table of impure/normal/pure counts, one row per resource in `names`, with the rate each
   row yields at the survey's miner and clock. `kind` is 'node' (ores, crude oil nodes) or
   'well' (resource-well satellites). The inputs are named "node:<name>:<purity>" and
-  "well:<name>:<purity>", which readExtraction in wizard/extraction.js reads back.
+  "well:<name>:<purity>", which readExtraction in wizard/extraction.ts reads back.
 -->
 <script setup>
 import { computed } from 'vue';
 import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.js';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.js';
-import { extractionOf } from '../../wizard/extraction.js';
-import { legacy } from '../bridge.js';
+import { wizard } from '../../session.ts';
+import { extractionOf } from '../../wizard/extraction.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 
 const props = defineProps({

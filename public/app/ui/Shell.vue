@@ -1,13 +1,13 @@
 <!--
   The page frame: sidebar navigation, ADA, save status, profile footer, and the top bar with
   breadcrumbs and the phase picker. The current page is drawn into the empty <main> by
-  render() in shell.js until each page becomes a component of its own.
+  render() in shell.ts until each page becomes a component of its own.
 -->
 <script setup>
 import { computed } from 'vue';
 import { browserMode } from '../../browser-api.js';
 import { purities } from '../../preferences.js';
-import { pending, save } from '../api.js';
+import { pending, save } from '../api.ts';
 import { num } from '../format.ts';
 import {
   calculated,
@@ -18,10 +18,10 @@ import {
   phaseOptions,
   setQuery,
   view,
-} from '../session.js';
-import { render } from '../shell.js';
+} from '../session.ts';
+import { render } from '../shell.ts';
 import AdaPanel from './AdaPanel.vue';
-import { legacy } from './bridge.js';
+import { legacy } from './bridge.ts';
 
 // The sidebar's navigation: route, icon, label.
 const NAV = [

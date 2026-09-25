@@ -2,9 +2,9 @@
      step's edit form. View state only: nothing is saved. -->
 <script setup>
 import { computed } from 'vue';
-import { planEditing, setEditingTask, setPlanEditing } from '../../session.js';
-import { render } from '../../shell.js';
-import { legacy } from '../bridge.js';
+import { planEditing, setEditingTask, setPlanEditing } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { legacy } from '../bridge.ts';
 
 const editing = computed(() => legacy(() => planEditing));
 

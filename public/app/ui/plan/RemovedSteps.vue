@@ -2,8 +2,8 @@
      per step. Removed steps keep their checklist key and checkmark, so restoring loses
      nothing. `steps` are { id, title, icon }. -->
 <script setup>
-import { save } from '../../api.js';
-import { render } from '../../shell.js';
+import { save } from '../../api.ts';
+import { render } from '../../shell.ts';
 import StepIcon from './StepIcon.vue';
 
 defineProps({ steps: { type: Array, required: true } });

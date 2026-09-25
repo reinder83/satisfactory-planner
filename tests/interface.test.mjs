@@ -39,6 +39,7 @@ import vm from 'node:vm';
 import { progression } from '../public/progression.js';
 import {
   carryOptions,
+  initialState,
   pickedRecipeUnlocks,
   bayCapacity,
   bayOfSlot,
@@ -71,6 +72,7 @@ function ui() {
     makeFault,
     progression,
     carryOptions,
+    initialState,
     pickedRecipeUnlocks,
     bayCapacity,
     bayOfSlot,
