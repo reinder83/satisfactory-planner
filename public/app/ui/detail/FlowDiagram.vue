@@ -4,33 +4,38 @@
   nothing when the model has neither inputs nor outputs. Links open other factory dialogs
   through factoryLink() in ui/actions.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
 import { factoryLink } from '../actions.ts';
+import type { FlowModel, FlowOutput } from '../../flow.ts';
 
-const props = defineProps({ model: { type: Object, default: null } });
+const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model: null });
 
 // A destination row's caption by kind: consumer (another factory), store (protected storage),
 // ship (elevator, power fleet, augmenters…), drone (fuel contract), sink (surplus to the
 // AWESOME Sink) or more (the rows capFlowOutputs folded together).
-const caption = o =>
-  ({
-    consumer: `consumer${o.beltTxt ? ' · ' + o.beltTxt : ''}`,
-    store: 'protected module',
-    ship: o.shipSub || 'delivery',
-    drone: 'protected supply contract',
-    sink: o.subTxt || 'whole-machine rounding surplus',
-    more: 'combined smaller destinations',
-  })[o.kind] || '';
+const caption = (o: FlowOutput) =>
+  (
+    ({
+      consumer: `consumer${o.beltTxt ? ' · ' + o.beltTxt : ''}`,
+      store: 'protected module',
+      ship: o.shipSub || 'delivery',
+      drone: 'protected supply contract',
+      sink: o.subTxt || 'whole-machine rounding surplus',
+      more: 'combined smaller destinations',
+    }) as Record<FlowOutput['kind'], string>
+  )[o.kind] || '';
 
 const flow = computed(() => {
   const m = props.model;
   if (!m || (!m.inputs.length && !m.outputs.length)) return null;
   return {
+    // The model itself, for the template (non-null inside v-if="flow").
+    model: m,
     phase: phaseLabel(m.stage),
     // An input tile: lane count and mark, and how full those lanes are. 70% load or more is
     // highlighted as a line with little headroom.
@@ -69,7 +74,11 @@ const flow = computed(() => {
 <template>
   <template v-if="flow">
     <h3>Flow at {{ flow.phase }}</h3>
-    <RecipePanel v-if="model.recipe" :recipe="model.recipe" :machines="model.machineCount" />
+    <RecipePanel
+      v-if="flow.model.recipe"
+      :recipe="flow.model.recipe"
+      :machines="flow.model.machineCount"
+    />
     <template v-if="flow.inputs.length"
       ><div class="rail-cap">
         Inputs · {{ flow.inputs.length }} line{{ flow.inputs.length > 1 ? 's' : '' }} in
@@ -90,20 +99,20 @@ const flow = computed(() => {
         >
       </div></template
     >
-    <template v-if="model.bar"
+    <template v-if="flow.model.bar"
       ><div v-if="flow.inputs.length" class="rail-arrow">↓</div>
       <div class="rail-machine">
         <div class="rail-machine-main">
-          <b>{{ num(model.machineCount) }} × {{ model.machineName }}</b
-          ><small>{{ model.bar.sub }}</small>
+          <b>{{ num(flow.model.machineCount) }} × {{ flow.model.machineName }}</b
+          ><small>{{ flow.model.bar.sub }}</small>
         </div>
         <div class="rail-machine-out">
           <b
-            ><template v-if="model.bar.out.text">{{ model.bar.out.text }}</template
+            ><template v-if="flow.model.bar.out.text">{{ flow.model.bar.out.text }}</template
             ><template v-else
-              >{{ model.bar.out.rate }}<small>{{ model.bar.out.unit }}</small></template
+              >{{ flow.model.bar.out.rate }}<small>{{ flow.model.bar.out.unit }}</small></template
             ></b
-          ><small>{{ model.bar.outSub }}</small>
+          ><small>{{ flow.model.bar.outSub }}</small>
         </div>
       </div>
       <div v-if="flow.outputs.length" class="rail-arrow">↓</div></template
@@ -112,7 +121,7 @@ const flow = computed(() => {
       ><div class="rail-caps">
         <span class="rail-cap">Delivers · {{ flow.phase }}</span
         ><span v-if="flow.perDelivery" class="rail-cap"
-          >Machines per delivery · {{ num(model.machineCount) }} total</span
+          >Machines per delivery · {{ num(flow.model.machineCount) }} total</span
         >
       </div>
       <div class="rail-rows">
@@ -124,7 +133,7 @@ const flow = computed(() => {
             ><b v-else :class="o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''">{{ o.label }}</b
             ><small>{{ o.caption }}</small></span
           ><span v-if="o.machines" class="rail-mach"
-            ><b>≈ {{ o.machines.round }}</b> × {{ model.machineName
+            ><b>≈ {{ o.machines.round }}</b> × {{ flow.model.machineName
             }}<small>{{ o.machines.exact }}</small></span
           ><span v-else class="rail-mach"></span
           ><span class="rail-rate"
@@ -135,9 +144,11 @@ const flow = computed(() => {
           >
         </div>
       </div>
-      <p v-if="model.bankNote" class="small muted">
+      <p v-if="flow.model.bankNote" class="small muted">
         Demand for the item across this phase's whole plan{{
-          model.bankNote.shared ? ', supplied together with the other recipes producing it' : ''
+          flow.model.bankNote.shared
+            ? ', supplied together with the other recipes producing it'
+            : ''
         }}.
       </p></template
     >

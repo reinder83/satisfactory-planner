@@ -4,10 +4,10 @@
   already run. Changing purity or distribution replaces the budgets on step 4 with that
   world's starting estimates when the step is read.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { distributions, purities } from '../../../preferences.ts';
-import { wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import InputField from '../form/InputField.vue';
@@ -18,7 +18,7 @@ const PHASES = ['1', '2', '3', '4', '5'].map(x => [x, 'Phase ' + x]);
 
 const view = computed(() =>
   legacy(() => {
-    const w = wizard,
+    const w = draft(),
       s = w.settings;
     return {
       saveName: w.saveName,

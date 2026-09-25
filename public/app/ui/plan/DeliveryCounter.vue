@@ -5,7 +5,7 @@
   original profile. A committed entry must be a whole number from 0 to the target; an
   invalid one, or a failed write, puts the saved count back.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { num } from '../../format.ts';
@@ -13,11 +13,15 @@ import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
 
-const props = defineProps({ delivery: { type: Object, required: true } });
+// A delivery of the current phase: a handbook one (with the amount handed in when the
+// handbook was written) or a calculated plan's.
+const props = defineProps<{
+  delivery: { id: string; name: string; target: number; rate: number; initial?: number };
+}>();
 
 const saved = () =>
   state.deliveries[props.delivery.id] ??
-  (currentProfile.id === 'original' ? props.delivery.initial : 0);
+  (currentProfile.id === 'original' ? (props.delivery.initial ?? 0) : 0);
 
 const counter = computed(() =>
   legacy(() => {
@@ -33,20 +37,20 @@ const counter = computed(() =>
   }),
 );
 
-async function change(e) {
-  const el = e.target,
+async function change(e: Event) {
+  const el = e.target as HTMLInputElement,
     d = props.delivery,
     v = Number(el.value);
   if (!Number.isInteger(v) || v < 0 || v > d.target) {
     toast('Enter a whole number between 0 and ' + num(d.target) + '.', true);
-    el.value = saved();
+    el.value = String(saved());
     return;
   }
   try {
     await save({ type: 'delivery', key: d.id, value: v });
     render();
   } catch {
-    el.value = saved();
+    el.value = String(saved());
   }
 }
 </script>

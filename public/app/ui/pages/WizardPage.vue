@@ -9,11 +9,11 @@
   Review, which calculates, and on Review creates the profile. The submit stops here, since
   nothing else handles the wizard form.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { navigate } from '../../api.ts';
-import { setWizard, wizard } from '../../session.ts';
+import { draft, setWizard, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { toGuided } from '../../wizard/guided.ts';
 import {
@@ -38,9 +38,9 @@ const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
 const page = computed(() =>
   legacy(() => {
     const w = wizard;
-    if (!w) return { draft: false };
+    if (!w) return { draft: false as const };
     return {
-      draft: true,
+      draft: true as const,
       step: w.step,
       title: w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
       submit: submitLabel(w),
@@ -49,9 +49,9 @@ const page = computed(() =>
 );
 
 // Settings whose answer changes what the step shows: read the step and redraw.
-function changed(e) {
-  if (['recipes', 'mainPower', 'pureIngots'].includes(e.target.name)) {
-    readWizard(e.currentTarget);
+function changed(e: Event) {
+  if (['recipes', 'mainPower', 'pureIngots'].includes((e.target as HTMLInputElement).name)) {
+    readWizard(e.currentTarget as HTMLFormElement);
     render();
   }
 }
@@ -63,21 +63,23 @@ function cancel() {
   navigate('profiles');
 }
 
-async function submit(e) {
-  const form = e.currentTarget,
-    b = form.querySelector('button[type="submit"]');
-  if (wizard.step < 5) {
-    await moveWizard(wizard.step + 1);
+async function submit(e: Event) {
+  const w = draft(),
+    form = e.currentTarget as HTMLFormElement,
+    // Every step's form has its submit button.
+    b = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  if (w.step < 5) {
+    await moveWizard(w.step + 1);
     return;
   }
   b.disabled = true;
   try {
     await createProfile(form, b);
   } catch (err) {
-    wizardError(form, err);
+    wizardError(form, err as Error);
     b.disabled = false;
     // calcProgress rewrote the button's label, so give it the right one back.
-    b.textContent = submitLabel(wizard);
+    b.textContent = submitLabel(w);
   }
 }
 </script>
@@ -98,7 +100,7 @@ async function submit(e) {
         type="button"
         :class="page.step === i + 1 ? 'current' : ''"
         :data-wizard-step="i + 1"
-        :aria-current="page.step === i + 1 ? 'step' : null"
+        :aria-current="page.step === i + 1 ? 'step' : undefined"
         @click="moveWizard(i + 1)"
       >
         {{ i + 1 }}. {{ n }}

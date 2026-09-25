@@ -5,7 +5,7 @@
   existing production, conversions and surplus. Everything reads the profile's frozen
   calculation snapshot; nothing here recalculates.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcStage, calculated, workspace } from '../../session.ts';
@@ -30,25 +30,27 @@ const page = computed(() =>
       required: power(x.requiredMW),
       utility: (s.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
       spare: power(s.availablePowerGW * 1000),
-      sloops: x.sloopsUsed > 0 ? num(x.sloopsUsed) : '',
-      augmented: x.augmenters > 0 && {
+      sloops: (x.sloopsUsed ?? 0) > 0 ? num(x.sloopsUsed) : '',
+      augmented: (x.augmenters ?? 0) > 0 && {
         value: power(x.availableMW),
         caption:
           num(x.augmenters) +
           ' augmenter' +
-          (x.augmenters > 1 ? 's' : '') +
+          ((x.augmenters ?? 0) > 1 ? 's' : '') +
           ' · ' +
           num(x.augmenterMW) +
           ' MW plus ' +
-          Math.round(x.boost * 100) +
+          // Plans with augmenters have their boost too.
+          Math.round(x.boost! * 100) +
           '% of base production',
       },
       rows: (workspace.catalog.raw || []).map(n => ({
         name: n,
         required: num(x.raw?.[n]),
         budget: num(s.limits[n]),
-        remaining: num(s.limits[n] - (x.raw?.[n] || 0)),
-        over: (x.raw?.[n] || 0) > s.limits[n],
+        // The plan's limits hold every raw resource.
+        remaining: num(s.limits[n]! - (x.raw?.[n] || 0)),
+        over: (x.raw?.[n] || 0) > s.limits[n]!,
       })),
       drone: inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.',
       storage: inputText(x.storage || {}) || 'No storage production requested.',

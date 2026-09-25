@@ -5,10 +5,10 @@
   options for each phase that does not fit, the calculation's assumptions and, when adding a
   profile to a save, the carry-over panel.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { draftFixes } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -18,7 +18,7 @@ import SupplyNotice from './SupplyNotice.vue';
 
 const view = computed(() =>
   legacy(() => {
-    const w = wizard,
+    const w = draft(),
       p = w.preview;
     if (!p) return null;
     const from = Number(p.settings.phase || 1);

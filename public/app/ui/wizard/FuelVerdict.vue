@@ -5,17 +5,19 @@
   depends on the plan's own scale, so it shows the like-for-like comparison rather than a rule
   of thumb.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { power } from '../../wizard/fields.ts';
+import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
-const props = defineProps({ plan: { type: Object, required: true } });
+const props = defineProps<{ plan: StoredCalculatedPlan }>();
 
 const v = computed(() => {
-  const x = props.plan.stages?.[5]?.fuelVerdict;
+  const x = props.plan.stages?.['5']?.fuelVerdict;
   if (!x) return null;
-  const delta = x.buildings - x.buildingsUnfueled;
+  // Without an unfueled plan the count is compared with nothing (null counts as 0).
+  const delta = x.buildings - (x.buildingsUnfueled ?? 0);
   return {
     carrying: !x.unfueledFeasible,
     worth: x.worthIt,
@@ -27,7 +29,7 @@ const v = computed(() => {
     demandAfter: power(x.requiredMW),
     availableBefore: power(x.availableMWUnfueled),
     availableAfter: power(x.availableMW),
-    plural: props.plan.settings.augmenters > 1 ? 's' : '',
+    plural: (props.plan.settings.augmenters ?? 0) > 1 ? 's' : '',
   };
 });
 </script>

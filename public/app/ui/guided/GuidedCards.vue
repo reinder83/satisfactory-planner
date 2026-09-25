@@ -4,16 +4,17 @@
   All settings shows here. The artwork is either up to four bundled item icons or an inline SVG
   glyph (GUIDED_GLYPHS), never a new asset; the glyphs are fixed markup, not user text.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { GUIDED_GLYPHS, guidedAnswer } from '../../wizard/guided.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
+import type { GuidedQuestion } from '../../../types/index.ts';
 
-const props = defineProps({ question: { type: Object, required: true } });
+const props = defineProps<{ question: GuidedQuestion }>();
 
 const picked = computed(() => legacy(() => guidedAnswer(props.question)));
-const glyph = name => GUIDED_GLYPHS[name] || GUIDED_GLYPHS.balanced;
+const glyph = (name?: string) => GUIDED_GLYPHS[name || ''] || GUIDED_GLYPHS.balanced;
 </script>
 
 <template>

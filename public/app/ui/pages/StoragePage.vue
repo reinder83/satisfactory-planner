@@ -5,7 +5,7 @@
   `calc-storage-layout`. When the remembered floor no longer exists (a removed floor), the
   page switches to the first one.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import {
   calculated,
@@ -38,8 +38,9 @@ const CALCULATED_TASKS = [
 const page = computed(() =>
   legacy(() => {
     const floors = storageFloors();
-    if (!floors.some(f => f.id === floor)) setFloor(floors[0].id);
-    const current = floors.find(f => f.id === floor);
+    // The three built-in floors always exist, so the fallback and the lookup both succeed.
+    if (!floors.some(f => f.id === floor)) setFloor(floors[0]!.id);
+    const current = floors.find(f => f.id === floor)!;
     // Bays on this floor; the search narrows them to bays with a match.
     const floorBays = storageBays().filter(b => b.floor === floor),
       display = floorBays.filter(
@@ -89,14 +90,14 @@ const page = computed(() =>
 );
 
 // A floor tab: switch floor and clear the search.
-function showFloor(id) {
+function showFloor(id: string) {
   setFloor(id);
   setQuery('');
   render();
 }
 
-function search(e) {
-  setQuery(e.target.value);
+function search(e: Event) {
+  setQuery((e.target as HTMLInputElement).value);
   render();
 }
 

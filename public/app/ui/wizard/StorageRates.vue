@@ -7,7 +7,7 @@
   the general rate for the rest. Editing either group rate on the step refreshes them as you
   type; a half-typed rate leaves the last usable placeholder in place.
 -->
-<script setup>
+<script setup lang="ts">
 import {
   computed,
   getCurrentInstance,
@@ -47,7 +47,7 @@ const view = computed(() =>
 
 // The placeholders on screen: from the draft on each redraw, then kept in step with the
 // group-rate fields as they are typed.
-const placeholders = reactive({});
+const placeholders = reactive<Record<string, string>>({});
 watch(
   view,
   v => {
@@ -55,11 +55,11 @@ watch(
   },
   { immediate: true },
 );
-function groupRates(e) {
-  if (!['buildRate', 'storageRate'].includes(e.target.name)) return;
-  const form = e.currentTarget;
-  const read = name => {
-    const value = form.querySelector('[name=' + name + ']')?.value;
+function groupRates(e: Event) {
+  if (!['buildRate', 'storageRate'].includes((e.target as HTMLInputElement).name)) return;
+  const form = e.currentTarget as HTMLFormElement;
+  const read = (name: string) => {
+    const value = form.querySelector<HTMLInputElement>('[name=' + name + ']')?.value;
     return value !== undefined && value !== '' && Number.isFinite(Number(value))
       ? Number(value)
       : null;
@@ -73,16 +73,17 @@ function groupRates(e) {
 }
 // The group-rate fields sit elsewhere on the step, so listen on the step's form.
 // The component's root is the details, or its placeholder comment when there is none.
-const self = getCurrentInstance();
-let form = null;
+// Called during setup, so there is an instance with a proxy.
+const self = getCurrentInstance()!;
+let form: HTMLFormElement | null | undefined = null;
 onMounted(() => {
-  form = self.proxy.$el?.parentElement?.closest('form');
+  form = (self.proxy!.$el as Element | null)?.parentElement?.closest('form');
   form?.addEventListener('input', groupRates);
 });
 onBeforeUnmount(() => form?.removeEventListener('input', groupRates));
 
 const filter = ref('');
-const shown = r =>
+const shown = (r: { name: string }) =>
   filter.value.trim() === '' || r.name.toLowerCase().includes(filter.value.trim().toLowerCase());
 </script>
 

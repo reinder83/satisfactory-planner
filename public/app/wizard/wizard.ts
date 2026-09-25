@@ -292,7 +292,11 @@ export let wizardBusy = false;
 
 // The public edition reports each phase from the calculator worker; the server edition shows the static label.
 // Returns the options object for post(): relabels `button` now and on progress.
-export const calcProgress = (button: HTMLElement | null | undefined, label: string) => {
+// `button` is anything with a text to set: a button, or a stand-in that keeps the label.
+export const calcProgress = (
+  button: { textContent: string | null } | null | undefined,
+  label: string,
+) => {
   if (button) button.textContent = label;
   return {
     onProgress: (phase: number) => {

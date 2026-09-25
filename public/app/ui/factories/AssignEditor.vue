@@ -5,20 +5,21 @@
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
   state.ts. A field is redrawn with the saved value afterwards, whether or not the save worked.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import type { GroupAssignment } from '../../../types/index.ts';
 
-const props = defineProps({ factoryKey: { type: String, required: true } });
+const props = defineProps<{ factoryKey: string }>();
 
 const editor = computed(() =>
   legacy(() => {
     const g = factoryGroupsState(),
       ms = membershipsOf(props.factoryKey);
-    const nameOf = m => g.groups.find(x => x.id === m.group)?.name;
+    const nameOf = (m: GroupAssignment) => g.groups.find(x => x.id === m.group)?.name;
     return {
       any: g.groups.length > 0,
       rows: ms.map(m => ({ group: m.group, rate: m.rate ?? '', name: nameOf(m) })),
@@ -28,7 +29,10 @@ const editor = computed(() =>
 );
 
 // Saves this factory's memberships, `change` applied to the current list of { group, rate }.
-async function assign(el, change) {
+async function assign(
+  el: HTMLInputElement | HTMLSelectElement | HTMLButtonElement,
+  change: (memberships: GroupAssignment[]) => GroupAssignment[],
+) {
   const groups = change(
     membershipsOf(props.factoryKey).map(m => ({ group: m.group, rate: m.rate })),
   );
@@ -43,10 +47,10 @@ async function assign(el, change) {
 }
 
 // The rate beside a group: empty for the whole output or the remainder, anything else above 0.
-function setRate(e, group) {
-  const el = e.target,
+function setRate(e: Event, group: string) {
+  const el = e.target as HTMLInputElement,
     raw = el.value.trim();
-  let rate = null;
+  let rate: number | null = null;
   if (raw !== '') {
     rate = Number(raw);
     if (!Number.isFinite(rate) || rate <= 0) {
@@ -54,7 +58,7 @@ function setRate(e, group) {
         'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
         true,
       );
-      el.value = membershipsOf(props.factoryKey).find(m => m.group === group)?.rate ?? '';
+      el.value = String(membershipsOf(props.factoryKey).find(m => m.group === group)?.rate ?? '');
       return;
     }
   }
@@ -62,11 +66,12 @@ function setRate(e, group) {
 }
 
 // ✕: leave that group, keeping the other groups' rates.
-const unassign = (e, group) => assign(e.currentTarget, ms => ms.filter(m => m.group !== group));
+const unassign = (e: Event, group: string) =>
+  assign(e.currentTarget as HTMLButtonElement, ms => ms.filter(m => m.group !== group));
 
 // "+ Add to group…": join the chosen group with no rate.
-function add(e) {
-  const el = e.target,
+function add(e: Event) {
+  const el = e.target as HTMLSelectElement,
     group = el.value;
   el.value = '';
   if (group) assign(el, ms => [...ms, { group, rate: null }]);

@@ -3,17 +3,17 @@
   button that opens the node survey (ui/pages/SurveyPage.vue) to work them out, and the
   limitsConfirmed box, which maximum output needs.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { resourceDefaults } from '../../../preferences.ts';
-import { wizard, workspace } from '../../session.ts';
+import { draft, wizard, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 
 const view = computed(() =>
   legacy(() => {
-    const s = wizard.settings;
+    const s = draft().settings;
     return {
       description: resourceDefaults(s.purity, s.distribution).description,
       seed: s.worldSeed ? 'Recorded seed: ' + s.worldSeed + '. ' : '',

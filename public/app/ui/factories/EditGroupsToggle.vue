@@ -1,6 +1,6 @@
 <!-- "Edit groups" / "Done editing" on the factories pages: shows or hides the group editor.
      View state only: nothing is saved. -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { factoryEditing, setFactoryEditing } from '../../session.ts';
 import { render } from '../../shell.ts';

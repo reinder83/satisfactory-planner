@@ -6,7 +6,7 @@
   key `factory-<phase>-<id>` and the note key `factory-<id>` (shared by every phase) are saved
   progress. Opened by openFactory in factory-detail.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { handbookFlowModel } from '../../flow.ts';
@@ -19,39 +19,45 @@ import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import OilCampus from './OilCampus.vue';
 import { toggleCheck } from '../actions.ts';
+import type { HandbookFactoryStage } from '../../../types/index.ts';
 
-const props = defineProps({ id: { type: String, required: true } });
+const props = defineProps<{ id: string }>();
 
 const view = computed(() =>
   legacy(() => {
     const f = plan.factories.find(x => x.id === props.id);
     if (!f) return null;
-    const r = f.stages[stage()] || Object.values(f.stages)[0];
+    // Every handbook factory has at least one stage; the dialog shows the current one, or the
+    // first it has.
+    const r = (f.stages[stage()] || Object.values(f.stages)[0])!;
     const oil = ['Plastic', 'Rubber'].includes(f.name);
     // `st` is the phase key of `r`. Local factories (cable, wire, screws…) are built beside
     // their consumers, so an input one of them makes is shown as made on site.
-    const st = f.stages[stage()] ? stage() : Object.keys(f.stages)[0];
-    const localInput = n => plan.factories.find(x => x.local && x.name === n && x.stages[st]);
+    const st: string = f.stages[stage()] ? stage() : Object.keys(f.stages)[0]!;
+    const localInput = (n: string) =>
+      plan.factories.find(x => x.local && x.name === n && x.stages[st]);
     // Expansion table, one row per phase the factory runs in. `installed` remembers the most
     // machines of each type built so far, so "Add" is only the growth beyond that and a
     // smaller later requirement reads "Keep capacity". A different machine type starts its own
     // count. For oil the count is every building on that phase's shared campus.
-    const installed = {};
-    const history = Object.entries(f.stages).map(([ph, x]) => {
-      const campus = oil ? (plan.plans[ph]?.oil || []).reduce((a, c) => a + c.machines, 0) : 0;
-      const machines = oil ? campus : x.machines,
-        label = oil ? 'shared campus buildings' : x.machine;
-      const old = installed[label] || 0;
-      const added = Math.max(0, machines - old);
-      installed[label] = Math.max(old, machines);
-      return {
-        phase: ph,
-        output: num(x.output),
-        storage: num(x.storage),
-        required: `${num(machines)} ${label}`,
-        add: added ? `+${num(added)}` : 'Keep capacity',
-      };
-    });
+    const installed: Record<string, number> = {};
+    const history = (Object.entries(f.stages) as [string, HandbookFactoryStage][]).map(
+      ([ph, x]) => {
+        const campus = oil ? (plan.plans[ph]?.oil || []).reduce((a, c) => a + c.machines, 0) : 0;
+        const machines = oil ? campus : x.machines,
+          label = oil ? 'shared campus buildings' : x.machine;
+        const old = installed[label] || 0;
+        const added = Math.max(0, machines - old);
+        installed[label] = Math.max(old, machines);
+        return {
+          phase: ph,
+          output: num(x.output),
+          storage: num(x.storage),
+          required: `${num(machines)} ${label}`,
+          add: added ? `+${num(added)}` : 'Keep capacity',
+        };
+      },
+    );
     // Why nobody takes the output: nuclear parts feed the power fleet, anything else with a
     // storage allowance only refills protected storage. Post-game also lists the completion
     // modules (plan.completion) that draw on this item.
@@ -69,7 +75,8 @@ const view = computed(() =>
       localInputs: Object.keys(r.inputs).some(localInput),
       history,
       usage,
-      completion: completion.map(c => c.name + ' ' + num(c.inputs[f.name]) + '/min').join(' · '),
+      // completion keeps only the modules with this input.
+      completion: completion.map(c => c.name + ' ' + num(c.inputs[f.name]!) + '/min').join(' · '),
       check,
       done: checked(check),
     };

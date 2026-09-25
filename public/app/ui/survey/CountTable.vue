@@ -4,7 +4,7 @@
   'well' (resource-well satellites). The inputs are named "node:<name>:<purity>" and
   "well:<name>:<purity>", which readExtraction in wizard/extraction.ts reads back.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.ts';
 import { num } from '../../format.ts';
@@ -13,10 +13,8 @@ import { extractionOf } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 
-const props = defineProps({
-  kind: { type: String, required: true },
-  names: { type: Array, required: true },
-});
+// kind 'node' counts ore nodes, 'well' resource-well satellites; names are the resources.
+const props = defineProps<{ kind: 'node' | 'well'; names: string[] }>();
 
 const rows = computed(() =>
   legacy(() => {
@@ -24,7 +22,7 @@ const rows = computed(() =>
     const e = extractionOf(wizard),
       map = props.kind === 'well' ? e.wells : e.nodes;
     return props.names.map(name => {
-      const counts = { ...blankCounts(), ...(map[name] || {}) };
+      const counts = { ...blankCounts(), ...(map?.[name] || {}) };
       const total = purities3.reduce(
         (a, [k]) =>
           a +

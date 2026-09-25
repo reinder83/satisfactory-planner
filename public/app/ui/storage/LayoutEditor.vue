@@ -4,28 +4,27 @@
   move), add a floor, rename this floor, and remove an added floor once it has no bays.
   Each form ignores an empty name and empties after a successful save.
 -->
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { setFloor } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { nextBayLetter } from '../../views/storage.ts';
+import type { StorageFloor } from '../../views/storage.ts';
+import type { UpdateOp } from '../../../types/index.ts';
 
-const props = defineProps({
-  floor: { type: Object, required: true },
-  // How many bays the floor has; an added floor can only go once it has none.
-  bays: { type: Number, default: 0 },
-});
+// bays: how many bays the floor has; an added floor can only go once it has none.
+const props = withDefaults(defineProps<{ floor: StorageFloor; bays?: number }>(), { bays: 0 });
 
-const randomId = (prefix, bytes) =>
+const randomId = (prefix: string, bytes: number) =>
   prefix +
   Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b =>
     b.toString(16).padStart(2, '0'),
   ).join('');
 
 // Saves `op(name)` from a form's name field, then empties the form and redraws.
-async function submit(e, op) {
-  const form = e.target,
+async function submit(e: Event, op: (name: string) => UpdateOp | null) {
+  const form = e.target as HTMLFormElement,
     name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
   const change = op(name);
@@ -37,7 +36,7 @@ async function submit(e, op) {
   } catch {}
 }
 
-const addBay = e =>
+const addBay = (e: Event) =>
   submit(e, name => {
     const letter = nextBayLetter();
     if (!letter) {
@@ -46,9 +45,9 @@ const addBay = e =>
     }
     return { type: 'storageBayAdd', id: letter, name, floor: props.floor.id };
   });
-const addFloor = e =>
+const addFloor = (e: Event) =>
   submit(e, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
-const renameFloor = e =>
+const renameFloor = (e: Event) =>
   submit(e, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
 
 // "Remove this floor", after a confirmation; then back to the ground floor.

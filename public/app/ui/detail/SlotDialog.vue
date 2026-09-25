@@ -5,7 +5,7 @@
   dialog in its place) and the note saved under `slot-<id>`.
   Opened by openSlot in views/storage.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { calcStage, calculated, checked, plan } from '../../session.ts';
 import { SLOT_STEPS, storageBays, storageFloors } from '../../views/storage.ts';
@@ -14,20 +14,21 @@ import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 
-const props = defineProps({ id: { type: String, required: true } });
+const props = defineProps<{ id: string }>();
 
 const view = computed(() =>
   legacy(() => {
     const id = props.id,
       b = storageBays().find(b => b.items.some(x => x.id === id));
     const x = b?.items.find(x => x.id === id);
-    if (!x?.name) return null;
+    if (!b || !x?.name) return null;
+    const name = x.name;
     const factory = calculated
-      ? calcStage().rows?.find(r => r.outputs[x.name])
-      : plan.factories.find(f => f.name === x.name);
+      ? calcStage()?.rows?.find(r => r.outputs[name])
+      : plan.factories.find(f => f.name === name);
     const index = Number(id.slice(b.id.length));
     return {
-      name: x.name,
+      name,
       subtitle: `${id} · ${storageFloors().find(f => f.id === b.floor)?.label || b.floor} · Bay ${b.id}`,
       bay: b.name,
       where: `${index <= 4 ? 'Rear' : 'Front'} bank, position ${((index - 1) % 4) + 1} from the left on the floor plan.`,

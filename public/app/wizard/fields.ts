@@ -3,5 +3,8 @@
 // wizard's form controls are components (ui/form/).
 import { num } from '../format.ts';
 
-export const power = (mw: number): string =>
-  num(mw > 1000 ? mw / 1000 : mw) + (mw > 1000 ? ' GW' : ' MW');
+// A missing figure (a field older plans lack) shows as 0 MW, as it always has.
+export const power = (mw: number | null | undefined): string => {
+  const v = mw ?? 0;
+  return num(v > 1000 ? v / 1000 : v) + (v > 1000 ? ' GW' : ' MW');
+};

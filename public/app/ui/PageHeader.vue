@@ -1,10 +1,8 @@
 <!-- The heading row at the top of every page. -->
-<script setup>
-defineProps({
-  eyebrow: { type: String, required: true },
-  title: { type: String, required: true },
-  subtitle: { type: String, default: '' },
-  badge: { type: String, default: '' },
+<script setup lang="ts">
+withDefaults(defineProps<{ eyebrow: string; title: string; subtitle?: string; badge?: string }>(), {
+  subtitle: '',
+  badge: '',
 });
 </script>
 

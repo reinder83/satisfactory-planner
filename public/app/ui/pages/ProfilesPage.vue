@@ -6,7 +6,7 @@
   asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
   use newSave in ui/actions.ts.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
@@ -34,6 +34,7 @@ import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave } from '../actions.ts';
+import type { WorkspaceSummary } from '../../../types/index.ts';
 
 const page = computed(() =>
   legacy(() => ({
@@ -54,24 +55,31 @@ const page = computed(() =>
     })),
   })),
 );
+// A save card and a profile card of the page.
+type SaveCard = (typeof page.value)['saves'][number];
+type ProfileCard = SaveCard['profiles'][number];
+
 // The card action in progress, as "<action>:<save id>:<profile id>", so its button can say so.
 const busy = ref('');
-const key = (action, s, p) => `${action}:${s.id}:${p.id}`;
+const key = (action: string, s: SaveCard, p: ProfileCard) => `${action}:${s.id}:${p.id}`;
 const renaming = ref(false);
 
 // "Duplicate": copy the profile with its progress and open the copy.
-async function duplicate(s, p) {
+async function duplicate(s: SaveCard, p: ProfileCard) {
   if (!allowSwitch()) return;
   busy.value = key('duplicate', s, p);
   try {
     await writeQueue;
-    const r = await post('/api/duplicate-profile', { saveId: s.id, profileId: p.id });
+    const r = await post<{ workspace: WorkspaceSummary; saveId: string; profileId: string }>(
+      '/api/duplicate-profile',
+      { saveId: s.id, profileId: p.id },
+    );
     setWorkspace(r.workspace);
     await loadContext(r.saveId, r.profileId);
     navigate('plan');
     toast('Copy created and opened. Changes here leave the original profile untouched.');
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -79,7 +87,7 @@ async function duplicate(s, p) {
 
 // "Share": download that profile as a full-save file with its progress stripped (share=1),
 // for someone else to import.
-async function share(s, p) {
+async function share(s: SaveCard, p: ProfileCard) {
   busy.value = key('share', s, p);
   try {
     await writeQueue;
@@ -95,7 +103,7 @@ async function share(s, p) {
       'Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.',
     );
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -104,7 +112,7 @@ async function share(s, p) {
 // "Remove profile": after the unsaved-notes check, confirm by name (and say when its save
 // goes too, as its last profile), then remove it and reload everything with boot(). Other
 // profiles keep their progress.
-async function remove(s, p) {
+async function remove(s: SaveCard, p: ProfileCard) {
   if (!allowSwitch()) return;
   if (
     !confirm(
@@ -125,7 +133,7 @@ async function remove(s, p) {
     if (workspace.saves.length) navigate('profiles');
     toast('Profile removed.');
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -133,16 +141,16 @@ async function remove(s, p) {
 
 // "Open profile" / "Continue current profile": make it the active profile on the server,
 // load it and show its plan.
-async function openProfile(s, p) {
+async function openProfile(s: SaveCard, p: ProfileCard) {
   if (!allowSwitch()) return;
   busy.value = key('open', s, p);
   try {
     await writeQueue;
-    setWorkspace(await post('/api/select', { saveId: s.id, profileId: p.id }));
+    setWorkspace(await post<WorkspaceSummary>('/api/select', { saveId: s.id, profileId: p.id }));
     await loadContext(s.id, p.id);
     navigate('plan');
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -150,16 +158,22 @@ async function openProfile(s, p) {
 
 // #rename-form renames the open save or the open profile (its "target" select), then copies
 // the new names into the session's currentSave and currentProfile and redraws.
-async function rename(e) {
+async function rename(e: Event) {
   renaming.value = true;
   try {
-    setWorkspace(await post('/api/rename', Object.fromEntries(new FormData(e.target))));
-    const s = workspace.saves.find(s => s.id === currentSave.id);
+    setWorkspace(
+      await post<WorkspaceSummary>(
+        '/api/rename',
+        Object.fromEntries(new FormData(e.target as HTMLFormElement)),
+      ),
+    );
+    // The open save and profile are in the reply.
+    const s = workspace.saves.find(s => s.id === currentSave.id)!;
     currentSave.name = s.name;
-    currentProfile.name = s.profiles.find(p => p.id === currentProfile.id).name;
+    currentProfile.name = s.profiles.find(p => p.id === currentProfile.id)!.name;
     render();
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
   } finally {
     renaming.value = false;
   }

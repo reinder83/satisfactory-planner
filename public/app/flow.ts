@@ -85,6 +85,16 @@ export interface SameItemConsumer {
   link: FactoryLink;
 }
 
+// A recipe panel cell: an item, its rate per machine, and a link to the factory making it.
+export type RecipeCellData = [name: string, rate: number, link?: FactoryLink | null];
+// The recipe panel (ui/detail/RecipePanel.vue): per-machine rates in and out.
+export interface RecipeView {
+  name: string;
+  machine: string;
+  ins: RecipeCellData[];
+  outs: RecipeCellData[];
+}
+
 // A factory's flow at one phase (see the top of this file).
 export interface FlowModel {
   stage: string;
@@ -94,16 +104,14 @@ export interface FlowModel {
   machineCount: number;
   machineName: string;
   local: boolean;
-  // Per-machine rates for the recipe panel: [item, rate, link] in, [item, rate] out.
-  recipe: {
-    name: string;
-    machine: string;
-    ins: [name: string, rate: number, link: FactoryLink | null][];
-    outs: [name: string, rate: number][];
-  } | null;
+  // Per-machine rates for the recipe panel.
+  recipe: RecipeView | null;
   bar: {
     sub: string;
-    out: { rate: string; unit: string } | { text: string };
+    // A rate with its unit, or a text (a generator's power).
+    out:
+      | { rate: string; unit: string; text?: undefined }
+      | { text: string; rate?: undefined; unit?: undefined };
     outSub: string;
   } | null;
   bankNote?: { shared: boolean } | null;

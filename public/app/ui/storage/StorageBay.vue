@@ -6,7 +6,7 @@
   can be renamed, a container cleared (its checkmarks stay with the address), an item added
   (a free position first, then the next address) and an added bay removed.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { bayCapacity } from '../../../state.ts';
 import { save, toast } from '../../api.ts';
@@ -15,10 +15,11 @@ import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { openSlot, slotDone, slotKeys, storageBays } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import type { StorageBayView } from '../../views/storage.ts';
+import type { UpdateOp } from '../../../types/index.ts';
 
-const props = defineProps({
-  bay: { type: Object, required: true },
-  position: { type: Number, default: 0 },
+const props = withDefaults(defineProps<{ bay: StorageBayView; position?: number }>(), {
+  position: 0,
 });
 
 const view = computed(() =>
@@ -42,7 +43,8 @@ const view = computed(() =>
       addPrompt:
         items.length < b.items.length
           ? 'Add container: item name…'
-          : 'Add a position beyond ' + b.items.at(-1).id + '…',
+          : // Every bay has at least its eight printed positions.
+            'Add a position beyond ' + b.items.at(-1)!.id + '…',
     };
   }),
 );
@@ -51,7 +53,7 @@ const view = computed(() =>
 // control as it was. Only for controls whose disabled state the template does not bind: the
 // save indicator redraws the bay before this resumes, so resetting a bound one here would
 // undo what the redraw set.
-async function saving(el, op, done) {
+async function saving(el: HTMLButtonElement, op: UpdateOp, done?: () => void) {
   el.disabled = true;
   try {
     await save(op);
@@ -85,8 +87,8 @@ async function completeRoom() {
 }
 
 // A container's Done box. A failed write unticks it again.
-async function completeSlot(e, id) {
-  const el = e.target,
+async function completeSlot(e: Event, id: string) {
+  const el = e.target as HTMLInputElement,
     value = el.checked;
   el.disabled = true;
   try {
@@ -101,8 +103,8 @@ async function completeSlot(e, id) {
 
 // The bay's name field. Redrawn whether or not the save worked, so a failed rename shows the
 // saved name again.
-async function rename(e) {
-  const el = e.target;
+async function rename(e: Event) {
+  const el = e.target as HTMLInputElement;
   el.disabled = true;
   try {
     await save({ type: 'storageBayRename', id: props.bay.id, name: el.value });
@@ -113,20 +115,20 @@ async function rename(e) {
   }
 }
 
-const clearSlot = (e, id) =>
-  saving(e.currentTarget, { type: 'storageSlotClear', key: id }, () =>
+const clearSlot = (e: Event, id: string) =>
+  saving(e.currentTarget as HTMLButtonElement, { type: 'storageSlotClear', key: id }, () =>
     toast('Container cleared. Its saved checkmarks are kept with the address.'),
   );
 
-function removeBay(e) {
+function removeBay(e: Event) {
   if (!confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')) return;
-  saving(e.currentTarget, { type: 'storageBayRemove', id: props.bay.id });
+  saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayRemove', id: props.bay.id });
 }
 
 // "+ Add": put an item in this bay, in a free position first; a bay with none gets the next
 // address after its last. A success empties the form.
-async function addContainer(e) {
-  const form = e.target,
+async function addContainer(e: Event) {
+  const form = e.target as HTMLFormElement,
     name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
   const bay = storageBays().find(b => b.id === props.bay.id);

@@ -1,14 +1,12 @@
 <!-- The "Recipe · …" panel: what one machine makes at 100%, per minute. `recipe` is { name,
      machine, ins, outs } with ins and outs as RecipeCell tuples; `machines` is how many such
      machines the line runs. -->
-<script setup>
+<script setup lang="ts">
 import { machinesLabel } from '../../flow.ts';
 import RecipeCell from './RecipeCell.vue';
+import type { RecipeView } from '../../flow.ts';
 
-defineProps({
-  recipe: { type: Object, required: true },
-  machines: { type: Number, default: 1 },
-});
+withDefaults(defineProps<{ recipe: RecipeView; machines?: number }>(), { machines: 1 });
 </script>
 
 <template>

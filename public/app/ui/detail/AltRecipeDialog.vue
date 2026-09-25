@@ -3,16 +3,18 @@
   standard recipe(s) for its first output, so the two can be compared. Rates are one machine
   at 100%, per minute.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
 import RecipePanel from './RecipePanel.vue';
+import type { RecipeView } from '../../flow.ts';
+import type { CatalogRecipe } from '../../../types/index.ts';
 
-const props = defineProps({ id: { type: String, required: true } });
+const props = defineProps<{ id: string }>();
 
-const panel = rc => ({
+const panel = (rc: CatalogRecipe): RecipeView => ({
   name: rc.name.replace('Alternate: ', ''),
   machine: rc.machine,
   ins: Object.entries(rc.inputs || {}),
@@ -32,7 +34,7 @@ const view = computed(() =>
       primary,
       recipe: panel(a),
       standards: (workspace.catalog.standardRecipes || [])
-        .filter(r => r.outputs[primary])
+        .filter(r => r.outputs[primary ?? ''])
         .map(panel),
     };
   }),

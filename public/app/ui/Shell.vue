@@ -3,7 +3,7 @@
   breadcrumbs and the phase picker. The current page is drawn into the empty <main> by
   render() in shell.ts until each page becomes a component of its own.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import { purities } from '../../preferences.ts';
@@ -19,12 +19,13 @@ import {
   setQuery,
   view,
 } from '../session.ts';
+import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
 import AdaPanel from './AdaPanel.vue';
 import { legacy } from './bridge.ts';
 
 // The sidebar's navigation: route, icon, label.
-const NAV = [
+const NAV: [id: string, icon: string, label: string][] = [
   ['plan', '◫', 'Build plan'],
   ['factories', '▥', 'Factories'],
   ['storage', '▦', 'Storage room'],
@@ -80,11 +81,12 @@ function profileFooter() {
 // The "Working on" select: save the profile's selected phase, clear the search and redraw;
 // on failure it shows the saved phase again. There is no unsaved-notes check, so an unsaved
 // phase note edit is lost in the redraw.
-async function pickPhase(e) {
-  const el = e.target;
+async function pickPhase(e: Event) {
+  const el = e.target as HTMLSelectElement;
   el.disabled = true;
   try {
-    await save({ type: 'phase', value: el.value });
+    // The options are phaseOptions(), so the value is a phase.
+    await save({ type: 'phase', value: el.value as Phase });
     setQuery('');
     render();
   } catch {
@@ -111,7 +113,7 @@ async function pickPhase(e) {
           :key="id"
           :href="'#' + id"
           :class="frame.view === id ? 'active' : ''"
-          :aria-current="frame.view === id ? 'page' : null"
+          :aria-current="frame.view === id ? 'page' : undefined"
           ><span class="navicon" aria-hidden="true">{{ icon }}</span
           >{{ label }}</a
         >

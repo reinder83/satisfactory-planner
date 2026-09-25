@@ -9,18 +9,19 @@
   calculates once with every alternate allowed and ticks exactly the ones that plan uses;
   only the draft changes, nothing is saved.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { post, toast } from '../../api.ts';
-import { $ } from '../../format.ts';
-import { wizard, workspace } from '../../session.ts';
+import { $, required } from '../../format.ts';
+import { draft, wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
 import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
 // A stable empty list, so a draft without picks does not look replaced on every redraw.
-const NONE = [];
+const NONE: string[] = [];
 
 const view = computed(() =>
   legacy(() => {
@@ -49,11 +50,14 @@ const view = computed(() =>
   }),
 );
 
+// One alternate's row in the picker.
+type AltRow = NonNullable<(typeof view)['value']>['rows'][number];
+
 // The picks on screen, from the draft whenever the draft's lists are replaced (a read of the
 // step, Planner's choice). `touched` once a box has been changed here: the heading counts the
 // draft's list until then, and the ticked editable boxes after, as the screen shows them.
-const picked = ref(new Set());
-const starred = ref(new Set());
+const picked = ref(new Set<string>());
+const starred = ref(new Set<string>());
 const touched = ref(false);
 watch(
   () => view.value?.alternates,
@@ -70,14 +74,16 @@ watch(
 );
 
 const filter = ref('');
-const shown = r => filter.value.trim() === '' || r.text.includes(filter.value.trim().toLowerCase());
+const shown = (r: AltRow) =>
+  filter.value.trim() === '' || r.text.includes(filter.value.trim().toLowerCase());
 const count = computed(() =>
   touched.value
-    ? view.value.rows.filter(r => !r.why && picked.value.has(r.id)).length
+    ? // touched is only set by the boxes, which the view draws.
+      view.value!.rows.filter(r => !r.why && picked.value.has(r.id)).length
     : picked.value.size,
 );
 
-function tick(r, on) {
+function tick(r: AltRow, on: boolean) {
   const p = new Set(picked.value),
     s = new Set(starred.value);
   on ? p.add(r.id) : p.delete(r.id);
@@ -86,13 +92,14 @@ function tick(r, on) {
   starred.value = s;
   touched.value = true;
 }
-function star(r, on) {
+function star(r: AltRow, on: boolean) {
   const s = new Set(starred.value);
   on ? s.add(r.id) : s.delete(r.id);
   starred.value = s;
 }
-function all(on) {
-  for (const r of view.value.rows) if (!r.why && shown(r)) tick(r, on);
+function all(on: boolean) {
+  // The buttons are only drawn with the view.
+  for (const r of view.value!.rows) if (!r.why && shown(r)) tick(r, on);
 }
 
 // Planner's choice: its label shows the calculation's progress meanwhile.
@@ -101,28 +108,29 @@ const bestLabel = ref('Planner’s choice');
 async function best() {
   if (busy.value) return;
   busy.value = true;
+  const w = draft();
   try {
-    readWizard($('#wizard-form'));
-    const preview = await post(
+    readWizard(required<HTMLFormElement>('#wizard-form'));
+    const preview = await post<StoredCalculatedPlan>(
       '/api/preview',
-      { settings: { ...wizard.settings, recipes: 'all' } },
+      { settings: { ...w.settings, recipes: 'all' } },
       true,
       calcProgress(
         {
-          set textContent(v) {
+          set textContent(v: string | null) {
+            if (v === null) return;
             bestLabel.value = v;
           },
         },
         'Calculating…',
       ),
     );
-    wizard.settings.alternateRecipes = alternatesUsed(preview);
+    const used = alternatesUsed(preview);
+    w.settings.alternateRecipes = used;
     render();
-    toast(
-      `Selected ${wizard.settings.alternateRecipes.length} alternate recipes the planner uses with your current settings.`,
-    );
+    toast(`Selected ${used.length} alternate recipes the planner uses with your current settings.`);
   } catch (err) {
-    wizardError($('#wizard-form'), err);
+    wizardError($<HTMLFormElement>('#wizard-form'), err as Error);
   } finally {
     busy.value = false;
     bestLabel.value = 'Planner’s choice';
@@ -194,7 +202,7 @@ async function best() {
             name="alt"
             :value="r.id"
             :checked="picked.has(r.id)"
-            @change="tick(r, $event.target.checked)"
+            @change="tick(r, ($event.target as HTMLInputElement).checked)"
           /><span
             >{{ r.name
             }}<small class="muted">
@@ -213,7 +221,7 @@ async function best() {
             :checked="starred.has(r.id)"
             :disabled="!picked.has(r.id)"
             :aria-label="`Force ${r.name} as the only ${r.outs[0]} recipe`"
-            @change="star(r, $event.target.checked)"
+            @change="star(r, ($event.target as HTMLInputElement).checked)"
           /><span>★</span></label
         ><button
           type="button"

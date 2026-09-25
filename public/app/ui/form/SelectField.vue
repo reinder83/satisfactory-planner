@@ -1,16 +1,20 @@
 <!-- A labelled <select> from [value, label] pairs, showing `value` (the first option when no
      option has it, as a select does by itself). `name` is the form field the screen reads it
      back from, and its help text key. The value is set on the select, after its options. -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import HelpTip from './HelpTip.vue';
 
-const props = defineProps({
-  label: { type: String, required: true },
-  name: { type: String, required: true },
-  options: { type: Array, required: true },
-  value: { type: [String, Number], default: '' },
-});
+const props = withDefaults(
+  // options are [value, label] pairs.
+  defineProps<{
+    label: string;
+    name: string;
+    options: readonly (readonly string[])[];
+    value?: string | number;
+  }>(),
+  { value: '' },
+);
 const shown = computed(() =>
   props.options.some(([v]) => v === String(props.value))
     ? String(props.value)

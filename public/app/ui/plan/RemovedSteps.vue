@@ -1,14 +1,15 @@
 <!-- "Removed steps in this phase", shown while editing the build plan, with a Restore button
      per step. Removed steps keep their checklist key and checkmark, so restoring loses
      nothing. `steps` are { id, title, icon }. -->
-<script setup>
+<script setup lang="ts">
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
 import StepIcon from './StepIcon.vue';
+import type { RemovedStepView } from '../../tasks.ts';
 
-defineProps({ steps: { type: Array, required: true } });
+defineProps<{ steps: RemovedStepView[] }>();
 
-async function restore(id) {
+async function restore(id: string) {
   try {
     await save({ type: 'taskRestore', id });
     render();

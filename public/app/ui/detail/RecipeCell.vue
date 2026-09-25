@@ -1,15 +1,13 @@
 <!-- One item cell of a recipe panel: [item, rate, link]. A link makes the cell a button that
      opens the factory making the item. The pseudo item 'MW' is a generator's output. -->
-<script setup>
+<script setup lang="ts">
 import { num3 } from '../../format.ts';
 import { FLUIDS } from '../../flow.ts';
 import ItemIcon from '../ItemIcon.vue';
 import { factoryLink } from '../actions.ts';
+import type { RecipeCellData } from '../../flow.ts';
 
-defineProps({
-  cell: { type: Array, required: true },
-  out: { type: Boolean, default: false },
-});
+withDefaults(defineProps<{ cell: RecipeCellData; out?: boolean }>(), { out: false });
 </script>
 
 <template>

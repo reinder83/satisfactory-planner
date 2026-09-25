@@ -4,7 +4,7 @@
   production", which asks /api/round-up for a recalculated profile revision and opens it; the
   previous profile stays as it is.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
 import {
@@ -26,13 +26,14 @@ import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
+import type { WorkspaceSummary } from '../../../types/index.ts';
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
     if (!calculated) return null;
-    const rows = (calcStage().rows || []).filter(r =>
+    const rows = (calcStage()?.rows || []).filter(r =>
       (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
     );
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
@@ -51,20 +52,25 @@ const page = computed(() =>
   }),
 );
 
-function search(e) {
-  setQuery(e.target.value);
+function search(e: Event) {
+  setQuery((e.target as HTMLInputElement).value);
   render();
 }
 
 // "Round up production": after the unsaved-notes check, create the rounded revision and open
 // it. The button shows the calculation's progress meanwhile.
-async function roundUp(e) {
-  const b = e.currentTarget;
+async function roundUp(e: Event) {
+  const b = e.currentTarget as HTMLButtonElement;
   if (!allowSwitch()) return;
   b.disabled = true;
   try {
     await writeQueue;
-    const r = await post('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
+    const r = await post<{
+      workspace: WorkspaceSummary;
+      saveId: string;
+      profileId: string;
+      reviewCount: number;
+    }>('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
     setWorkspace(r.workspace);
     await loadContext(r.saveId, r.profileId);
     render();
@@ -74,7 +80,7 @@ async function roundUp(e) {
         ' completed factory checks need review; previous progress is preserved.',
     );
   } catch (err) {
-    toast(err.message, true);
+    toast((err as Error).message, true);
     b.disabled = false;
     b.textContent = 'Round up production';
   }

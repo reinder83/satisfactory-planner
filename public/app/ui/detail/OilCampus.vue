@@ -5,7 +5,7 @@
   grossGW…). Phase 3 runs standard refineries whose Heavy Oil Residue becomes generator fuel;
   later phases run the fuel-driven recycled polymer loops.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { FLUIDS, lanePlan, OIL_RECIPES } from '../../flow.ts';
@@ -14,16 +14,18 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
 import { factoryLink } from '../actions.ts';
+import type { HandbookFactory } from '../../../types/index.ts';
 
-const props = defineProps({ phase: { type: String, required: true } });
+const props = defineProps<{ phase: string }>();
 
 const campus = computed(() =>
   legacy(() => {
+    // Drawn only for the oil products, whose phases all have a campus plan.
     const st = props.phase,
-      p = plan.plans[st];
+      p = plan.plans[st]!;
     // Each stage with its per-machine recipe; an unknown recipe name gets empty in/out.
     const stages = p.oil.map(x => ({ ...x, rc: OIL_RECIPES[x.recipe] || { in: {}, out: {} } }));
-    const pipes = q => {
+    const pipes = (q: number) => {
       const pl = lanePlan(q, true, st);
       return `${pl.count} × ${pl.lane.mark} pipe${pl.count > 1 ? 's' : ''}`;
     };
@@ -35,15 +37,17 @@ const campus = computed(() =>
       label: phaseLabel(st),
       first: st === '3',
       // Raw campus inputs (crude oil and water), skipping any the phase does not use.
-      inputs: [
-        ['Crude Oil', p.oilTotals.crude],
-        ['Water', p.oilTotals.water],
-      ]
+      inputs: (
+        [
+          ['Crude Oil', p.oilTotals.crude],
+          ['Water', p.oilTotals.water],
+        ] as [string, number][]
+      )
         .filter(([, q]) => q > 0.01)
         .map(([name, q]) => ({ name, pipes: pipes(q), rate: num(q) })),
       stages: stages.map(x => {
         // Whole-stage flow: per-machine recipe rate × machine equivalents.
-        const total = side =>
+        const total = (side: 'in' | 'out') =>
           Object.entries(x.rc[side])
             .map(([n, q]) => `${num(q * x.equivalent)}${FLUIDS.has(n) ? ' m³' : ''} ${n}`)
             .join(' + ');
@@ -57,7 +61,7 @@ const campus = computed(() =>
         // and Fuel either burned in generators (Phase 3) or exported.
         const dest = Object.keys(x.rc.out)
           .map(n => {
-            const parts = stages
+            const parts: { text: string; to?: HandbookFactory }[] = stages
               .filter(o => o !== x && o.rc.in[n])
               .map(o => ({
                 text: `the ${o.recipe.replace('Alternate: ', '')} ${o.machine.replace(/y$/, 'ie')}s`,
@@ -73,7 +77,7 @@ const campus = computed(() =>
             }
             return parts.length ? { item: n, parts } : null;
           })
-          .filter(Boolean);
+          .filter(d => d !== null);
         return {
           key: x.recipe,
           head: `${num(x.machines)} × ${x.machine}`,

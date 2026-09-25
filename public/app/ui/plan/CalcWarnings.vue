@@ -3,7 +3,7 @@
   phase: the infeasible-draft warning with its options (draftFixes in views/calculated.ts), and
   extra power headroom for whole buildings. It draws nothing without a calculated profile.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { calcStage, calculated } from '../../session.ts';
 import { draftFixes } from '../../views/calculated.ts';
@@ -19,7 +19,7 @@ const notices = computed(() =>
         reason: x.reason,
         fixes: draftFixes(x, calculated?.settings),
       },
-      headroom: x.additionalHeadroomMW > 0.01 ? power(x.additionalHeadroomMW) : '',
+      headroom: (x.additionalHeadroomMW ?? 0) > 0.01 ? power(x.additionalHeadroomMW!) : '',
     };
   }),
 );

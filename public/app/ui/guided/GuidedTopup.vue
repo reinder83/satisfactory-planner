@@ -5,11 +5,11 @@
   (name="topup") become storageOverrides of GUIDED_TOPUP_RATE each in readGuidedForm. Nothing
   when no storage is stocked.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { GUIDED_TOPUP_RATE, guidedTopupItems } from '../../../preferences.ts';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.ts';
+import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import ItemIcon from '../ItemIcon.vue';
@@ -17,7 +17,7 @@ import ItemIcon from '../ItemIcon.vue';
 const rate = num(GUIDED_TOPUP_RATE);
 const view = computed(() =>
   legacy(() => {
-    const s = wizard.settings;
+    const s = draft().settings;
     if (s.storage === 'none') return null;
     const over = s.storageOverrides || {};
     return guidedTopupItems.map(n => ({ name: n, on: over[n] !== undefined }));

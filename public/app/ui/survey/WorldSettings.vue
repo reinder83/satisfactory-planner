@@ -6,7 +6,7 @@
   all counts to zero" and, after a reset, "Undo reset" in its place. There is deliberately no
   confirmation: the undo is the safety net.
 -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import {
   distributions,
@@ -20,7 +20,7 @@ import {
 } from '../../../preferences.ts';
 import { toast } from '../../api.ts';
 import { $ } from '../../format.ts';
-import { wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
   extractionOf,
@@ -68,12 +68,14 @@ const view = computed(() =>
 // "Fill in the counts below": every count from the default world at that purity. It also
 // forgets any pending "Undo reset", and keeps the recorded purity in step with the counts.
 function fill() {
-  const form = $('#wizard-form');
+  const w = draft();
+  const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
-  const purity = view.value.purity;
-  wizard.extraction = presetSurvey(purity, extractionOf(wizard), wizard.settings.distribution);
-  wizard.extractionUndo = null;
-  wizard.settings.purity = purity;
+  // The button is only drawn with the view.
+  const purity = view.value!.purity;
+  w.extraction = presetSurvey(purity, extractionOf(w), w.settings.distribution);
+  w.extractionUndo = null;
+  w.settings.purity = purity;
   render();
   toast(
     'Filled in the default world at ' +
@@ -83,7 +85,7 @@ function fill() {
 }
 
 function reset() {
-  const form = $('#wizard-form');
+  const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
   resetExtraction();
   render();
