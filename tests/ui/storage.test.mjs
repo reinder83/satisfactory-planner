@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { bayCapacity } from '../../public/state.js';
+import { bayCapacity } from '../../public/state.ts';
 import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openSlot, slotKeys } from '../../public/app/views/storage.ts';

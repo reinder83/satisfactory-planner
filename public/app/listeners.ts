@@ -3,7 +3,7 @@
 // components share (checkboxes, notes, factory links, the dialog's ×, "Create a save") are
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
-// Registration order: app.js imports this module, and tests/ui/app-modules.test.mjs pins
+// Registration order: app.ts imports this module, and tests/ui/app-modules.test.mjs pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click,
 // beforeunload.
 import { pending } from './api.ts';

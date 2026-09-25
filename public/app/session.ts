@@ -1,8 +1,8 @@
 // The open workspace, save and profile, and the UI state every screen reads.
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
-import { browserMode } from '../browser-api.js';
-import { initialState } from '../state.js';
+import { browserMode } from '../browser-api.ts';
+import { initialState } from '../state.ts';
 import { pending, request, writeQueue } from './api.ts';
 import { required } from './format.ts';
 import { render } from './shell.ts';

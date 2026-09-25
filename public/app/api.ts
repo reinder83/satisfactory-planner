@@ -1,8 +1,8 @@
 // Requests to the server (or the browser-only adapter), the serialized save queue,
 // toasts, and navigation that guards unsaved notes. Edits to the open profile go through
 // save(); other POSTs (profiles, imports, account) use post(); both use request().
-import { appRoot } from '../app-root.js';
-import { browserMode, browserRequest } from '../browser-api.js';
+import { appRoot } from '../app-root.ts';
+import { browserMode, browserRequest } from '../browser-api.ts';
 import { required } from './format.ts';
 import { currentProfile, currentSave, setState, setView, state, type View } from './session.ts';
 import { render } from './shell.ts';
@@ -10,7 +10,7 @@ import { invalidate } from './ui/bridge.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
-// (calcProgress in wizard/wizard.ts), which browser-api.js calls with each phase it solves.
+// (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves.
 export type RequestOptions = RequestInit & { onProgress?: (phase: number) => void };
 
 // Number of save() calls still in flight; drives the "Saving…" indicator.
@@ -28,7 +28,7 @@ export function toast(message: string, error = false) {
 
 // The one request path for the whole UI. Resolves to the parsed JSON body; rejects with
 // the server's error message. In the browser edition /api/* never reaches the network:
-// browser-api.js answers it from IndexedDB. Static files (plan.json, ...) are fetched
+// browser-api.ts answers it from IndexedDB. Static files (plan.json, ...) are fetched
 // relative to appRoot there, because GitHub Pages serves the app under a subpath.
 // The caller names the reply's type (T); it is not checked at run time.
 export async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -51,7 +51,7 @@ export async function request<T = unknown>(path: string, options: RequestOptions
 // it first (loadContext, imports, profile removal) so no queued write lands elsewhere.
 export let writeQueue: Promise<unknown> = Promise.resolve();
 
-// Saves one progress change. `op` is an operation for mutate() in state.js, e.g.
+// Saves one progress change. `op` is an operation for mutate() in state.ts, e.g.
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
 // profile's full new state. Writes run one at a time in call order. The save/profile is
 // captured now, so a write made before a profile switch still goes to its own profile, and

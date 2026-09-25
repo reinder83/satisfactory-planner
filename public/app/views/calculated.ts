@@ -3,7 +3,7 @@
 // setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
-import { progression } from '../../progression.js';
+import { progression } from '../../progression.ts';
 import { num } from '../format.ts';
 import {
   calcStage,
@@ -26,10 +26,12 @@ export interface PlanStepData {
 
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
-// from progression.js, hard drives, one step per production row, storage, then the lines
+// from progression.ts, hard drives, one step per production row, storage, then the lines
 // this phase retires. Row steps use the saved key `calc-<stage>-<row id>` — the same key as
 // that factory card's Running box — and must stay stable.
 export function calcTasks(): PlanStepData[] {
+  // A page of the profile just left can be drawn once more; it then has no steps.
+  if (!calculated) return [];
   const p = calcStage(),
     g = progression(calculated, state, progressionData, phase());
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
@@ -37,7 +39,8 @@ export function calcTasks(): PlanStepData[] {
   const startup =
     stage() === '1'
       ? [
-          g.baseTasks[0],
+          // Phase 1 always has its seven base steps (progression.ts).
+          g.baseTasks[0]!,
           ...g.powerTasks.slice(0, 2),
           ...g.baseTasks.slice(1, 5),
           ...g.milestoneTasks,

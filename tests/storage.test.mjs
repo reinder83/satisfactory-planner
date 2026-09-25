@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, mutate, validateState } from '../public/state.js';
+import { initialState, mutate, validateState } from '../public/state.ts';
 import fs from 'node:fs';
 
 test('every assigned storage item has a bundled PNG and source attribution', () => {

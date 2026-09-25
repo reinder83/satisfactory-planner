@@ -1,5 +1,5 @@
 // The guided start's questions (guidedQuestions and guidedStandingQuestion in
-// public/preferences.js), which app/wizard/guided.js sequences and ui/guided/ draws.
+// public/preferences.ts), which app/wizard/guided.js sequences and ui/guided/ draws.
 import type { CurrentSettings } from './calculated.ts';
 
 export interface GuidedOption {

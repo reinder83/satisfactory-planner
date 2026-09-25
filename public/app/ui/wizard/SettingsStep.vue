@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { distributions, purities } from '../../../preferences.js';
+import { distributions, purities } from '../../../preferences.ts';
 import { wizard } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';

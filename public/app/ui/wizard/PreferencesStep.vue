@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { droneFuels, powerOptions, storageOptions } from '../../../preferences.js';
+import { droneFuels, powerOptions, storageOptions } from '../../../preferences.ts';
 import { wizard } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';

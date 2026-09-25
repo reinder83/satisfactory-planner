@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, validateState, mutate, bayCapacity } from '../public/state.js';
+import { initialState, validateState, mutate, bayCapacity } from '../public/state.ts';
 
 test('legacy version-1 states validate unchanged, gain empty layout edits and stay version 1', () => {
   const legacy = {

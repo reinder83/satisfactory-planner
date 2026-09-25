@@ -8,7 +8,7 @@
 -->
 <script setup>
 import { computed, ref } from 'vue';
-import { browserMode } from '../../../browser-api.js';
+import { browserMode } from '../../../browser-api.ts';
 import {
   allowSwitch,
   downloadJson,

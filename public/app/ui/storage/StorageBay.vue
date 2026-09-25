@@ -8,7 +8,7 @@
 -->
 <script setup>
 import { computed, ref } from 'vue';
-import { bayCapacity } from '../../../state.js';
+import { bayCapacity } from '../../../state.ts';
 import { save, toast } from '../../api.ts';
 import { slug } from '../../format.ts';
 import { layoutEditing, query } from '../../session.ts';

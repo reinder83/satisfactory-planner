@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { GUIDED_TOPUP_RATE, guidedTopupItems } from '../../../preferences.js';
+import { GUIDED_TOPUP_RATE, guidedTopupItems } from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { wizard } from '../../session.ts';
 import { legacy } from '../bridge.ts';

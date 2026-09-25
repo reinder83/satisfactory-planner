@@ -1,9 +1,20 @@
 // A single record lets each IndexedDB transaction atomically change selection and progress.
-// Opens the browser edition's database; browserRequest in browser-api.js is the caller (tests
+// Opens the browser edition's database; browserRequest in browser-api.ts is the caller (tests
 // hand createBrowserApi a stand-in store instead). The name, store `workspace` and key `main`
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI.
-export function openBrowserStore(indexedDB, name = 'satisfactory-planner-browser-v1') {
-  const opened = new Promise((resolve, reject) => {
+import type { BrowserWorkspace } from './types/index.ts';
+
+// The store browser-api.ts works through (tests pass a stand-in with the same method).
+export interface BrowserStore {
+  transaction(): Promise<BrowserWorkspace>;
+  transaction<T>(change: (data: BrowserWorkspace) => T): Promise<T>;
+}
+
+export function openBrowserStore(
+  indexedDB: IDBFactory,
+  name = 'satisfactory-planner-browser-v1',
+): BrowserStore {
+  const opened = new Promise<IDBDatabase>((resolve, reject) => {
     const r = indexedDB.open(name, 1);
     // Schema version 1 is the only one so far: a brand-new database just gets the empty store.
     r.onupgradeneeded = () => r.result.createObjectStore('workspace');
@@ -22,17 +33,23 @@ export function openBrowserStore(indexedDB, name = 'satisfactory-planner-browser
     // the response, then put it back. IndexedDB serializes readwrite transactions on a store, so
     // concurrent tabs cannot interleave a read-modify-write. `change` must be synchronous: the
     // transaction commits once no request is pending.
-    async transaction(change) {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
       const db = await opened;
-      return new Promise((resolve, reject) => {
+      return new Promise<T>((resolve, reject) => {
         const tx = db.transaction('workspace', change ? 'readwrite' : 'readonly'),
           store = tx.objectStore('workspace');
-        let answer, failure;
+        // Without change, the answer is the record itself.
+        let answer: T | undefined, failure: unknown;
         const r = store.get('main');
         r.onsuccess = () => {
           try {
-            const data = r.result || { version: 1, activeSave: null, saves: [], lastBackup: null };
-            answer = change ? change(data) : data;
+            const data: BrowserWorkspace = r.result || {
+              version: 1,
+              activeSave: null,
+              saves: [],
+              lastBackup: null,
+            };
+            answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
           } catch (e) {
             failure = e;
@@ -41,7 +58,7 @@ export function openBrowserStore(indexedDB, name = 'satisfactory-planner-browser
         };
         // Resolve only after the commit is durable. If `change` throws, the abort discards its
         // edits and the promise rejects with that error.
-        tx.oncomplete = () => resolve(answer);
+        tx.oncomplete = () => resolve(answer as T);
         tx.onabort = () =>
           reject(failure || tx.error || Error('Browser storage could not be saved.'));
         // Request errors also abort the transaction, so onabort reports them.

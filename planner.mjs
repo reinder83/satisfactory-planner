@@ -6,13 +6,13 @@
 //
 // Callers: workspace.mjs (`/api/preview`, `/api/profiles`, `/api/round-up`, and `catalog()` in
 // the session summary) for the Docker edition. The Pages edition runs a copy that build.mjs adapts
-// for the browser, inside calculator-worker.js, which public/browser-api.js drives; `catalog()` is
+// for the browser, inside calculator-worker.js, which public/browser-api.ts drives; `catalog()` is
 // written to catalog.json at build time. tests/*.test.mjs import this module directly.
 //
 // Units: items per minute (m³ per minute for fluids) and MW. Recipe rates in recipes.json are for
 // one machine at 100% clock, so a recipe's LP variable counts machine-equivalents.
 //
-// build.mjs finds the node:fs import, the preferences.js path and the recipes.json read below by
+// build.mjs finds the node:fs import, the preferences.ts path and the recipes.json read below by
 // exact string match and replaces them for the browser; keep those three snippets unchanged.
 import {
   droneFuels,
@@ -26,7 +26,7 @@ import {
   purities,
   powerOptions,
   resourceDefaults,
-} from './public/preferences.js';
+} from './public/preferences.ts';
 import fs from 'node:fs';
 import { solve } from './optimizer.mjs';
 // Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
@@ -68,7 +68,7 @@ export const RAW = [
 // Resource budgets per minute for the default map at its own purities, every node worked at 250%
 // clock: Miner Mk.3 300/600/1200 on impure/normal/pure, Oil Extractor 150/300/600 (resource wells
 // excluded), Resource Well Extractor 75/150/300 per nitrogen satellite. These are `nodeCounts`
-// in public/preferences.js through that extraction table, and a test (guided.test.mjs) rebuilds
+// in public/preferences.ts through that extraction table, and a test (guided.test.mjs) rebuilds
 // both tables from it. Water is a planning allowance, not a map total. Shipped to the interface
 // as `catalog().limits`; a profile's own budgets live in `settings.limits`.
 export const DEFAULT_LIMITS = {
@@ -105,7 +105,7 @@ export const PURE_LIMITS = {
 };
 // Space Elevator project parts per phase, as the game asks for them at a 1x cost multiplier.
 // `run` scales them by `settings.multiplier` and turns them into delivery rates over the phase's
-// hours. `elevatorParts` in public/preferences.js is kept in step with this by a test. Item names
+// hours. `elevatorParts` in public/preferences.ts is kept in step with this by a test. Item names
 // here are part of saved progress: delivery counts are stored under '<phase>-<slugged name>'.
 export const DELIVERIES = {
   1: { 'Smart Plating': 50 },
@@ -331,7 +331,7 @@ export function settings(input = {}) {
   if (s.installedPowerGW < s.availablePowerGW)
     err('Total installed generation cannot be less than the spare part of it.');
   // Budgets the profile did not enter default to what its map preset gives (resourceDefaults in
-  // public/preferences.js): DEFAULT_LIMITS for the default map, zero for the resource-rich ones.
+  // public/preferences.ts): DEFAULT_LIMITS for the default map, zero for the resource-rich ones.
   s.limits = {};
   const defaults = resourceDefaults(s.purity, s.distribution).limits;
   if ((s.mainPower === 'nuclear' || s.mainPower.endsWith('-nuclear')) && s.nuclear === 'none')
@@ -1012,7 +1012,7 @@ export function run(
 // must be optional for plans saved by older engines.
 //
 // Callers: workspace.mjs (/api/preview, /api/profiles, /api/round-up), calculator-worker.js in
-// the Pages edition (via public/browser-api.js), and the tests.
+// the Pages edition (via public/browser-api.ts), and the tests.
 /**
  * @param {unknown} input
  * @param {(phase: number) => void} [onPhase]
@@ -1287,7 +1287,7 @@ export function calculate(input, onPhase) {
 // Static data the interface needs before any calculation: recipe lists for the wizard's
 // alternate picker, storage, supply and raw-resource options, default budgets and goal labels.
 // The Docker edition sends it with the session summary (workspace.mjs); build.mjs writes it to
-// catalog.json for the Pages edition, which public/browser-api.js loads. The UI reads it as
+// catalog.json for the Pages edition, which public/browser-api.ts loads. The UI reads it as
 // `workspace.catalog`.
 /** @returns {import('./public/types/index.ts').Catalog} */
 export const catalog = () => ({

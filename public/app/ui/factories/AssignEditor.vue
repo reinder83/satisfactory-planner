@@ -3,7 +3,7 @@
   factory id or the calculated row id. Each membership has a rate (empty: the whole output, or
   the remainder) and a ✕; "+ Add to group…" adds another. Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
-  state.js. A field is redrawn with the saved value afterwards, whether or not the save worked.
+  state.ts. A field is redrawn with the saved value afterwards, whether or not the save worked.
 -->
 <script setup>
 import { computed } from 'vue';

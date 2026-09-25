@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateState } from '../public/state.js';
-import { validateTransfer } from '../public/transfer.js';
+import { validateState } from '../public/state.ts';
+import { validateTransfer } from '../public/transfer.ts';
 // Typed with public/types/ (checked by npm run typecheck); Node strips the types.
 import { backup, saveExport, states } from './types/fixtures.ts';
 

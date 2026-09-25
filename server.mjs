@@ -6,7 +6,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-import { initialState as blankState, validateState, mutate } from './public/state.js';
+import { initialState as blankState, validateState, mutate } from './public/state.ts';
 export { validateState, mutate };
 // Starting progress for the Original handbook profile of a brand-new server (no
 // workspace.json and no legacy progress.json): the owner's handbook starts in Phase 3 with
@@ -121,6 +121,9 @@ export async function createApp({
       const relative = decodeURIComponent(url.pathname);
       const file = path.resolve(publicDir, '.' + (relative === '/' ? '/index.html' : relative));
       if (!file.startsWith(publicDir + path.sep)) return send(res, 403, { error: 'Not allowed.' });
+      // The image keeps the shared TypeScript sources beside the build for this server to
+      // import; browsers load the built .js files, so the sources are not served.
+      if (file.endsWith('.ts')) return send(res, 404, { error: 'Not found.' });
       let content;
       try {
         content = await fs.readFile(file);

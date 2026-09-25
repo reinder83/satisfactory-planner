@@ -2,13 +2,13 @@
   Review, only when adding a profile to a save that already has profiles: which of that save's
   profiles to continue, and which records to copy from it. The select (carryFrom) and the
   checkboxes (carry) are read by readCarry when the profile is created. Carrying copies: the
-  create request names the source profile, and newProfileState (state.js) reads its records
+  create request names the source profile, and newProfileState (state.ts) reads its records
   into the new profile's fresh state without writing to the source. Recipe picks are offered
   only when the plan picks its own recipes.
 -->
 <script setup>
 import { computed } from 'vue';
-import { carryOptions, pickedRecipeUnlocks } from '../../../state.js';
+import { carryOptions, pickedRecipeUnlocks } from '../../../state.ts';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { progression } from '../public/progression.js';
+import { progression } from '../public/progression.ts';
 import { calculate } from '../planner.mjs';
 const data = JSON.parse(fs.readFileSync(new URL('../public/progression.json', import.meta.url)));
 test('Phase 1 has construction stock and biomass guidance, without later power instructions', () => {

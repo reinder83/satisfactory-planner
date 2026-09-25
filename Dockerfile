@@ -12,6 +12,9 @@ WORKDIR /app
 COPY --chown=node:node package.json server.mjs workspace.mjs planner.mjs optimizer.mjs docker-start.mjs recipes.json ./
 COPY --chown=node:node vendor ./vendor
 COPY --from=build --chown=node:node /src/dist/web ./public
+# The server imports the shared scripts' TypeScript sources (state.ts, transfer.ts,
+# preferences.ts, ...), which Node runs as they are; the browser gets the built .js files.
+COPY --from=build --chown=node:node /src/public/*.ts ./public/
 RUN mkdir -p /data && chown node:node /data
 USER root
 VOLUME ["/data"]

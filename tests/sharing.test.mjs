@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../server.mjs';
-import { createBrowserApi } from '../public/browser-api.js';
+import { createBrowserApi } from '../public/browser-api.ts';
 import { calculate } from '../planner.mjs';
 async function start(dir) {
   const server = await createApp({ dataDir: dir, password: '' });

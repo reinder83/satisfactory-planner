@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { adaRemarks, adaEncore, adaFault } from '../public/ada.js';
+import { adaRemarks, adaEncore, adaFault } from '../public/ada.ts';
 
 const facts = (over = {}) => ({
   view: 'plan',
@@ -236,7 +236,7 @@ test('remarks stay plain text for the caller to escape', () => {
     assert.ok(['calm', 'warn', 'praise'].includes(r.tone), 'known tone: ' + r.tone);
   }
   // Names and step titles are the user’s text: ADA passes them through
-  // unchanged and app.js escapes them at the point of rendering.
+  // unchanged and app.ts escapes them at the point of rendering.
   const nasty = adaRemarks(
     facts({
       save: 'World <one>',

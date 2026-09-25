@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBrowserApi } from '../public/browser-api.js';
+import { createBrowserApi } from '../public/browser-api.ts';
 import { calculate } from '../planner.mjs';
 test('browser imports reject invalid data atomically and deletion preserves other profiles', async () => {
   let data = { version: 1, activeSave: null, saves: [] };

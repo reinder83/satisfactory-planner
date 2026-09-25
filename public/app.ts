@@ -29,8 +29,8 @@
 //
 // Two editions share this code. The Docker edition talks to server.mjs (with workspace.mjs)
 // over HTTP. The GitHub Pages build sets globalThis.PLANNER_BROWSER (browserMode in
-// browser-api.js), and
-// request() then answers /api/* paths with browser-api.js instead: IndexedDB storage and a
+// browser-api.ts), and
+// request() then answers /api/* paths with browser-api.ts instead: IndexedDB storage and a
 // calculator Web Worker, with the same request and response shapes.
 import { boot } from './app/session.ts';
 import './app/listeners.ts';

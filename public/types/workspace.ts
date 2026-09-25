@@ -1,5 +1,5 @@
 // The Docker edition's workspace file, the replies the interface reads, the item catalog and
-// the two export formats. The browser edition (browser-api.js) answers the same /api/ paths
+// the two export formats. The browser edition (browser-api.ts) answers the same /api/ paths
 // with the same shapes from IndexedDB.
 import type { Choice, ItemRates, Phase } from './common.ts';
 import type { StoredCalculatedPlan, StoredSettings } from './calculated.ts';
@@ -35,6 +35,23 @@ export interface StoredUser {
   password?: string;
   // null for a new account until it creates its first save.
   activeSave: string | null;
+}
+
+// A save in the browser edition's record: no owner, since the browser is the only user.
+export interface BrowserSave {
+  id: string;
+  name: string;
+  activeProfile: string;
+  profiles: StoredProfile[];
+}
+
+// The browser edition's IndexedDB record (browser-store.ts, store 'workspace', key 'main').
+export interface BrowserWorkspace {
+  version: 1;
+  activeSave: string | null;
+  saves: BrowserSave[];
+  // The time of the last full export, for the Backup page and ADA.
+  lastBackup: string | null;
 }
 
 // DATA_DIR/workspace.json (workspace.mjs openWorkspace).
@@ -99,7 +116,7 @@ export interface SaveSummary {
 }
 
 // GET /api/workspace: the signed-in user's saves. user is null when signed out. The browser
-// edition (browser-api.js) sends browser: true and lastBackup, the time of the last full
+// edition (browser-api.ts) sends browser: true and lastBackup, the time of the last full
 // export, and has no registration or owner flag.
 export interface WorkspaceSummary {
   browser?: true;
@@ -132,7 +149,7 @@ export interface ProgressBackup {
   state: SavedState;
 }
 
-// A full-save export (public/transfer.js): saves with their profiles, never accounts.
+// A full-save export (public/transfer.ts): saves with their profiles, never accounts.
 export interface SaveExport {
   format: 'satisfactory-planner-saves';
   version: 1;

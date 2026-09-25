@@ -27,7 +27,7 @@ test('the app entry point loads as ES modules and registers its listeners in ord
   globalThis.fetch = async () => {
     throw new Error('offline');
   };
-  await import('../../public/app.js');
+  await import('../../public/app.ts');
   await new Promise(resolve => setTimeout(resolve, 50));
   // Several handlers share an event type, so their order is behaviour; boot() then renders
   // its error screen because the stub fetch fails.

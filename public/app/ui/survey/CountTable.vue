@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.js';
+import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { wizard } from '../../session.ts';
 import { extractionOf } from '../../wizard/extraction.ts';

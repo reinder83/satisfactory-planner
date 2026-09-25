@@ -3,7 +3,7 @@
 // room serves both profile kinds: the original handbook shows its printed room, a calculated
 // profile shows the same addresses with only the items it selected for storage.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
-import { bayOfSlot, slotPosition } from '../../state.js';
+import { bayOfSlot, slotPosition } from '../../state.ts';
 import { num } from '../format.ts';
 import { calculated, checked, plan, setActiveDetail, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';

@@ -6,9 +6,9 @@
 // ui/pages/WizardPage.vue (the five steps, ui/wizard/), GuidedPage.vue (ui/guided/)
 // and SurveyPage.vue (ui/survey/), which read their forms back through the
 // readers here and handle their own controls.
-import { browserMode } from '../../browser-api.js';
-import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.js';
-import { carryOptions } from '../../state.js';
+import { browserMode } from '../../browser-api.ts';
+import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.ts';
+import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { $, esc, plural, required } from '../format.ts';
 import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
@@ -19,21 +19,13 @@ import type {
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
-  NodeCounts,
   StoredCalculatedPlan,
+  Survey,
   WorkspaceSummary,
 } from '../../types/index.ts';
 
-// The resource survey being edited (extraction.ts). Looser than the saved ExtractionRecord:
-// the mark is whatever the form holds until the planner checks it, and the maps are created
-// as counts are entered.
-export interface Survey {
-  mark: number;
-  clock: number;
-  nodes?: Record<string, NodeCounts>;
-  wells?: Record<string, NodeCounts>;
-  used?: ItemRates;
-}
+// The resource survey being edited (extraction.ts).
+export type { Survey };
 
 // The settings being edited: the planner's input. A draft starts from the fields every
 // release has stored (the active profile's settings, or the literals in startWizard) and the

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { carryOptions } from '../../public/state.js';
+import { carryOptions } from '../../public/state.ts';
 import { setWizard, view, wizard, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';

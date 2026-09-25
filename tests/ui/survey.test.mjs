@@ -12,7 +12,7 @@ import {
   presetSurvey,
   purities,
   richShape,
-} from '../../public/preferences.js';
+} from '../../public/preferences.ts';
 import { setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, $$, catalog, generated, go, open, page } from './setup.mjs';

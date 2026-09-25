@@ -1,7 +1,27 @@
 // Shared by the planner and wizard. Unknown seed totals must never masquerade as verified budgets.
+import type {
+  Choice,
+  CurrentSettings,
+  GuidedQuestion,
+  ItemRates,
+  NodeCounts,
+  StageKey,
+  Survey,
+} from './types/index.ts';
+
+// The settings storageRateFor and droneSupply read: normalised (planner.mjs) or a draft.
+type RateSettings = Pick<Partial<CurrentSettings>, 'storageOverrides' | 'buildRate'> & {
+  storageRate: number;
+};
+type DroneSettings = Pick<
+  Partial<CurrentSettings>,
+  'droneFuel' | 'droneFuelRate' | 'droneBridgeRate'
+>;
+// The purities a node count is kept for.
+type NodePurity = keyof NodeCounts;
 // [value, label] pairs for the storage setting (`s.storage`), shown by the wizard and the
 // guided start and validated by planner.mjs. wantsStorage below decides what each one covers.
-export const storageOptions = [
+export const storageOptions: Choice[] = [
   ['none', 'No dedicated storage'],
   ['construction', 'Construction materials'],
   ['electronics', 'Construction + electronics'],
@@ -11,7 +31,7 @@ export const storageOptions = [
 ];
 // Materials you carry out by hand to build with. They get the construction rate (`buildRate`)
 // in storageRateFor and are in every storage mode except 'none' and 'packaged'.
-export const constructionItems = [
+export const constructionItems: string[] = [
   'Iron Plate',
   'Iron Rod',
   'Reinforced Iron Plate',
@@ -33,7 +53,7 @@ export const constructionItems = [
 ];
 // Whether item `name` gets a container and a protected refill under storage mode `mode`.
 // planner.mjs uses it for the storage contract; the wizard uses it to list the covered items.
-export function wantsStorage(name, mode) {
+export function wantsStorage(name: string, mode: string): boolean {
   if (mode === 'none') return false;
   if (mode === 'all') return true;
   if (mode === 'packaged') return name.startsWith('Packaged ');
@@ -52,7 +72,7 @@ export function wantsStorage(name, mode) {
 // They keep their container and address at a zero rate, and a per-item rate
 // still buys a buffer for anyone who wants one. Kept in step with the planner's
 // DELIVERIES table by a test.
-export const elevatorParts = [
+export const elevatorParts: string[] = [
   'Smart Plating',
   'Versatile Framework',
   'Automated Wiring',
@@ -70,7 +90,7 @@ export const elevatorParts = [
 // worth a faster guaranteed refill than items you never take out. A per-item
 // rate wins over everything; 0 keeps the container and its address without
 // reserving any production for it.
-export const storageRateFor = (s, name) => {
+export const storageRateFor = (s: RateSettings, name: string): number => {
   const override = s.storageOverrides?.[name];
   if (override !== undefined) return override;
   if (elevatorParts.includes(name)) return 0;
@@ -78,7 +98,7 @@ export const storageRateFor = (s, name) => {
 };
 // World Randomization "resource distribution" choices (`s.distribution`). Only 'original' has
 // known node totals; the rest are handled by resourceDefaults and knownWorld below.
-export const distributions = [
+export const distributions: Choice[] = [
   ['original', 'Default'],
   ['randomized', 'Random'],
   ['basic', 'Basic Resource Rich'],
@@ -86,7 +106,7 @@ export const distributions = [
   ['fossil', 'Fossil Fuel Rich'],
 ];
 // World Randomization "node purity" choices (`s.purity`); 'custom' means totals entered by hand.
-export const purities = [
+export const purities: Choice[] = [
   ['vanilla', 'Default'],
   ['pure', 'All Pure'],
   ['mostly-pure', 'Mostly Pure'],
@@ -96,9 +116,9 @@ export const purities = [
   ['random', 'Random'],
   ['custom', 'Custom / manual'],
 ];
-// [value, label] pairs for the preferred main power (`s.mainPower`); progression.js turns the
+// [value, label] pairs for the preferred main power (`s.mainPower`); progression.ts turns the
 // choice into a "power before the next production block" step.
-export const powerOptions = [
+export const powerOptions: Choice[] = [
   ['auto', 'Let the planner choose'],
   ['coal', 'Coal'],
   ['nuclear', 'Nuclear (turbofuel bridge)'],
@@ -111,7 +131,7 @@ export const powerOptions = [
 // Original map: impure / normal / pure, from the official resource-node and well tables.
 // Known facts, not estimates. Nitrogen Gas counts resource-well satellites, not nodes.
 // Crude Oil counts oil nodes only; its wells are not in this table.
-export const nodeCounts = {
+export const nodeCounts: Record<string, [impure: number, normal: number, pure: number]> = {
   'Iron Ore': [39, 42, 46],
   'Copper Ore': [13, 29, 13],
   Limestone: [15, 50, 29],
@@ -130,9 +150,12 @@ export const nodeCounts = {
 // node's yield and `weights` multiply it per impure/normal/pure node: 1 impure, 2 normal, 4
 // pure, with the Mostly settings shifting one level. `uncertain` marks a seed-dependent
 // result, and `description` says which.
-export function resourceDefaults(purity = 'vanilla', distribution = 'original') {
+export function resourceDefaults(
+  purity = 'vanilla',
+  distribution = 'original',
+): { limits: ItemRates; uncertain: boolean; description: string } {
   const uncertain = distribution !== 'original' || ['random', 'custom'].includes(purity);
-  const limits = { Water: 1000000 };
+  const limits: ItemRates = { Water: 1000000 };
   for (const [name, counts] of Object.entries(nodeCounts)) {
     // Rich presets have seed-dependent counts; zero is an unallocated budget, not a claim that the map lacks this resource.
     if (['basic', 'advanced', 'fossil'].includes(distribution)) {
@@ -156,7 +179,7 @@ export function resourceDefaults(purity = 'vanilla', distribution = 'original') 
     limits[name] = counts.reduce(
       (sum, n, i) =>
         sum +
-        n * rate * (uncertain && !['pure', 'normal', 'impure'].includes(purity) ? 1 : weights[i]),
+        n * rate * (uncertain && !['pure', 'normal', 'impure'].includes(purity) ? 1 : weights[i]!),
       0,
     );
     if (name === 'Nitrogen Gas' && distribution !== 'original') limits[name] = 0;
@@ -171,7 +194,7 @@ export function resourceDefaults(purity = 'vanilla', distribution = 'original') 
 }
 // Tooltip text, keyed by settings field name; fields.ts looks it up for each wizard field.
 // More keys are added by the Object.assign calls further down.
-export const helpText = {
+export const helpText: Record<string, string> = {
   worldSeed:
     'Record the signed world seed from your game. Seed simulation is not built in: use the linked seed lookup and transfer extraction totals in Resources.',
   collectables:
@@ -225,7 +248,7 @@ export const helpText = {
 };
 
 // Drone fuel choices (`s.droneFuel`); 'none' plans no dedicated drone fuel supply.
-export const droneFuels = [
+export const droneFuels: string[] = [
   'none',
   'Battery',
   'Packaged Fuel',
@@ -237,7 +260,7 @@ export const droneFuels = [
 ];
 // The protected drone fuel line planner.mjs adds to a phase, as { item: items/min }. None
 // before Phase 4. With ionized fuel chosen, Phase 4 supplies batteries instead (the bridge).
-export function droneSupply(s, phase) {
+export function droneSupply(s: DroneSettings, phase: number): ItemRates {
   if (phase < 4 || !s.droneFuel || s.droneFuel === 'none') return {};
   const bridge = phase === 4 && s.droneFuel === 'Packaged Ionized Fuel';
   return {
@@ -293,7 +316,7 @@ export const GUIDED_TOPUP_RATE = 20;
 // because it is the one the plan leaves least surplus for: at a floor of 1/min
 // a default Phase 3 plan already spills 29 Wire/min and 19 Iron Plate/min into
 // storage, and 2 Concrete/min.
-export const guidedTopupItems = [
+export const guidedTopupItems: string[] = [
   'Concrete',
   'Iron Plate',
   'Iron Rod',
@@ -305,7 +328,7 @@ export const guidedTopupItems = [
 // Kept in step with the planner's DELIVERIES by a test; the icons are already
 // bundled and attributed in icons/sources.json, so the guided start adds no new
 // imagery and no new attribution.
-export const phaseParts = {
+export const phaseParts: Record<number, string[]> = {
   1: ['Smart Plating'],
   2: ['Smart Plating', 'Versatile Framework', 'Automated Wiring'],
   3: ['Versatile Framework', 'Modular Engine', 'Adaptive Control Unit'],
@@ -321,8 +344,7 @@ export const phaseParts = {
 // "All settings" lands where you already were instead of at the top.
 // Each option's `set` is merged into the settings; `handoff` names the All settings step
 // the guided flow jumps to after it; `glyph` or `items` picks the card's artwork.
-/** @type {import('./types/index.ts').GuidedQuestion[]} */
-export const guidedQuestions = [
+export const guidedQuestions: GuidedQuestion[] = [
   {
     id: 'phase',
     step: 1,
@@ -336,10 +358,11 @@ export const guidedQuestions = [
         n === 1
           ? 'The first Space Elevator delivery. Starting out.'
           : 'Delivering ' +
-            phaseParts[n].slice(0, 2).join(' and ') +
-            (phaseParts[n].length > 2 ? ', and more' : '.'),
-      items: phaseParts[n],
-      set: { phase: String(n) },
+            phaseParts[n]!.slice(0, 2).join(' and ') +
+            (phaseParts[n]!.length > 2 ? ', and more' : '.'),
+      // Every phase 1-5 has its parts listed above.
+      items: phaseParts[n]!,
+      set: { phase: String(n) as StageKey },
     })),
   },
   {
@@ -474,8 +497,7 @@ export const guidedQuestions = [
 // Asked only where it means something: the tutorial question belongs to a
 // Phase 1 save, the already-built question to any later one. Neither changes a
 // setting — both record what is already standing in the world.
-/** @type {(phase: string) => import('./types/index.ts').GuidedQuestion} */
-export const guidedStandingQuestion = phase =>
+export const guidedStandingQuestion = (phase: string): GuidedQuestion =>
   phase === '1'
     ? {
         id: 'tutorial',
@@ -511,8 +533,7 @@ export const guidedStandingQuestion = phase =>
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.
 // Used by guidedBuiltKeys in app/wizard/guided.ts.
-/** @type {string[]} */
-export const tutorialKeys = ['early-base-hub', 'unlock-Schematic_Tutorial5_C'];
+export const tutorialKeys: string[] = ['early-base-hub', 'unlock-Schematic_Tutorial5_C'];
 Object.assign(helpText, {
   existingSupply:
     'Production that already runs in your world, as items per minute. The plan credits it and builds only the remainder, skipping the chain behind it. Enter what your factory actually makes — the recipe and machine count do not have to match anything this plan would have chosen. Its ore and its power are already spent, so enter your resource budgets and spare power net of it, exactly as for any other existing factory.',
@@ -533,12 +554,12 @@ Object.assign(helpText, {
 // clock; impure is half and pure is double. A test pins the whole table by
 // rebuilding the shipped DEFAULT_LIMITS from the known node counts, so a wrong
 // number here cannot pass unnoticed.
-export const MINER_BASE = { 1: 60, 2: 120, 3: 240 }; // Miner Mk.1 / Mk.2 / Mk.3
+export const MINER_BASE: Record<number, number> = { 1: 60, 2: 120, 3: 240 }; // Miner Mk.1 / Mk.2 / Mk.3
 export const OIL_BASE = 120; // Oil Extractor, crude oil node
 export const WELL_BASE = 60; // Resource Well Extractor, per satellite
-export const purityFactor = { impure: 0.5, normal: 1, pure: 2 };
+export const purityFactor: Record<string, number> = { impure: 0.5, normal: 1, pure: 2 };
 // The per-node purity levels, in the order the node-count inputs show them.
-export const purities3 = [
+export const purities3: [purity: NodePurity, label: string][] = [
   ['impure', 'Impure'],
   ['normal', 'Normal'],
   ['pure', 'Pure'],
@@ -557,11 +578,11 @@ export const clockChoices = [
   [2.5, '250% — three shards'],
 ];
 // Extracted by Oil Extractor rather than a miner.
-export const oilNodeResources = ['Crude Oil'];
+export const oilNodeResources: string[] = ['Crude Oil'];
 // Come out of resource wells: a pressurizer plus its satellite nodes.
-export const wellResources = ['Crude Oil', 'Nitrogen Gas', 'Water'];
+export const wellResources: string[] = ['Crude Oil', 'Nitrogen Gas', 'Water'];
 // Ordinary mineable nodes, in the order the node-count screen lists them.
-export const minedResources = [
+export const minedResources: string[] = [
   'Iron Ore',
   'Copper Ore',
   'Limestone',
@@ -577,31 +598,46 @@ export const minedResources = [
 // the map has more coastline than any factory can use, so a node count would be
 // a fiction; the planner keeps its large water allowance instead, editable in
 // All settings like any other budget.
-export const uncountedResources = ['Water'];
+export const uncountedResources: string[] = ['Water'];
 
 // Survey shapes (`settings.extraction`, edited in app/wizard/extraction.ts): `nodes` and
 // `wells` hold per-resource { impure, normal, pure } counts, `used` the items/min already
 // committed elsewhere.
-export const blankCounts = () => ({ impure: 0, normal: 0, pure: 0 });
-export const blankExtraction = () => ({ mark: 3, clock: 2.5, nodes: {}, wells: {}, used: {} });
+export const blankCounts = (): NodeCounts => ({ impure: 0, normal: 0, pure: 0 });
+export const blankExtraction = (): Required<Survey> => ({
+  mark: 3,
+  clock: 2.5,
+  nodes: {},
+  wells: {},
+  used: {},
+});
+// A survey's miner and clock, the only parts the yields depend on.
+type Equipment = { mark?: number; clock?: number };
 
 // One node's output per minute, at the chosen miner mark and clock.
-export function nodeYield(resource, purity, { mark = 3, clock = 2.5 } = {}) {
+export function nodeYield(
+  resource: string,
+  purity: string,
+  { mark = 3, clock = 2.5 }: Equipment = {},
+): number {
   const p = purityFactor[purity];
   if (!p) return 0;
   if (oilNodeResources.includes(resource)) return OIL_BASE * p * clock;
-  return (MINER_BASE[mark] || MINER_BASE[3]) * p * clock;
+  return (MINER_BASE[mark] || MINER_BASE[3]!) * p * clock;
 }
 // One resource-well satellite's output per minute. Wells have no marks; the
 // pressurizer's clock drives every satellite it feeds.
-export function wellYield(purity, { clock = 2.5 } = {}) {
+export function wellYield(purity: string, { clock = 2.5 }: Equipment = {}): number {
   const p = purityFactor[purity];
   return p ? WELL_BASE * p * clock : 0;
 }
 // One resource's counts from a nodes/wells map, with missing purities as 0.
-const countsOf = (map, name) => ({ ...blankCounts(), ...(map?.[name] || {}) });
+const countsOf = (map: Record<string, NodeCounts> | undefined, name: string): NodeCounts => ({
+  ...blankCounts(),
+  ...(map?.[name] || {}),
+});
 // What a resource yields in total, before anything is deducted.
-export function resourcePool(extraction, resource) {
+export function resourcePool(extraction: Survey | null | undefined, resource: string): number {
   const e = { ...blankExtraction(), ...(extraction || {}) };
   const opts = { mark: e.mark, clock: e.clock };
   const nodes = countsOf(e.nodes, resource),
@@ -615,13 +651,16 @@ export function resourcePool(extraction, resource) {
 }
 // The pool less whatever is already committed to factories this plan does not
 // include, which is what the planner's budgets are supposed to mean.
-export function resourceAvailable(extraction, resource) {
+export function resourceAvailable(extraction: Survey | null | undefined, resource: string): number {
   const used = Number(extraction?.used?.[resource]) || 0;
   return Math.max(0, resourcePool(extraction, resource) - used);
 }
 // Every counted resource as a budget, rounded to whole items per minute.
 // Water and anything else uncounted keeps whatever the profile already had.
-export function extractionLimits(extraction, current = {}) {
+export function extractionLimits(
+  extraction: Survey | null | undefined,
+  current: ItemRates = {},
+): ItemRates {
   const limits = { ...current };
   for (const name of [...minedResources, ...wellResources]) {
     if (uncountedResources.includes(name)) continue;
@@ -656,7 +695,7 @@ Object.assign(helpText, {
 // worse than asking, so for those the survey points at the map upload instead.
 // The purity settings the known node table can be rearranged into. Random and
 // Custom are not among them: there is no fixed layout to rearrange.
-export const presetPurities = [
+export const presetPurities: string[] = [
   'vanilla',
   'pure',
   'mostly-pure',
@@ -666,7 +705,7 @@ export const presetPurities = [
 ];
 // Purity settings that give every node the same purity. Under these the purity
 // split stops mattering: only the total node count does.
-export const uniformPurities = ['pure', 'normal', 'impure'];
+export const uniformPurities: string[] = ['pure', 'normal', 'impure'];
 // Whether the node counts for a world are actually knowable.
 //
 // Random node randomization is a shuffle: it moves which resource sits at which
@@ -677,11 +716,11 @@ export const uniformPurities = ['pure', 'normal', 'impure'];
 //
 // The resource-rich distributions do change how many nodes each resource has,
 // by amounts that depend on the seed, so nothing is knowable there.
-export const knownWorld = (purity, distribution = 'original') =>
+export const knownWorld = (purity: string | undefined, distribution = 'original'): boolean =>
   distribution === 'original'
-    ? presetPurities.includes(purity)
+    ? presetPurities.includes(purity as string)
     : distribution === 'randomized'
-      ? uniformPurities.includes(purity)
+      ? uniformPurities.includes(purity as string)
       : false;
 // What a resource-rich distribution does to the map, in the only terms that
 // have held up. Players who have generated these worlds report per-resource
@@ -689,7 +728,7 @@ export const knownWorld = (purity, distribution = 'original') =>
 // here and there never should be one — but every count published so far pushes
 // each resource the same way, and that much is worth telling someone who is
 // about to count their own map.
-export const richShape = {
+export const richShape: Record<string, string> = {
   basic:
     'Basic Resource Rich trades the late-game ores for the early ones: expect more limestone, iron, copper and coal, and less caterium, sulfur, bauxite, quartz, uranium and SAM.',
   advanced:
@@ -698,13 +737,16 @@ export const richShape = {
     'Fossil Fuel Rich concentrates on what burns: expect much more coal, crude oil and sulfur, and less of nearly everything else.',
 };
 // [id, label] for each preset purity, labelled as in `purities`.
-export const nodePresets = presetPurities.map(id => [
+export const nodePresets: [id: string, label: string][] = presetPurities.map(id => [
   id,
   (purities.find(([v]) => v === id) || [, id])[1],
 ]);
 // One resource's [impure, normal, pure] counts redistributed by a purity
 // setting. Mostly Pure shifts each node up one level, Mostly Impure down one.
-export function presetCounts(purity, [impure, normal, pure]) {
+export function presetCounts(
+  purity: string,
+  [impure, normal, pure]: [number, number, number],
+): NodeCounts {
   const all = impure + normal + pure;
   if (purity === 'pure') return { impure: 0, normal: 0, pure: all };
   if (purity === 'normal') return { impure: 0, normal: all, pure: 0 };
@@ -722,7 +764,11 @@ export function presetCounts(purity, [impure, normal, pure]) {
 // hold different numbers of satellites, so a shuffle that leaves every ordinary
 // node count intact still moves nitrogen onto a bigger or smaller well than it
 // had. Under Random its satellites are the user's to count.
-export function presetSurvey(purity, base, distribution = 'original') {
+export function presetSurvey(
+  purity: string,
+  base?: Survey | null,
+  distribution = 'original',
+): Required<Survey> {
   const e = { ...blankExtraction(), ...(base || {}) };
   e.nodes = { ...e.nodes };
   e.wells = { ...e.wells };
@@ -740,7 +786,7 @@ Object.assign(helpText, {
 
 // Which preset, if any, the counts in a survey currently are. Used to show the
 // active preset and to say where untouched numbers came from.
-export function matchingPreset(extraction) {
+export function matchingPreset(extraction: Survey | null | undefined): string {
   const e = { ...blankExtraction(), ...(extraction || {}) };
   for (const [id] of nodePresets) {
     const p = presetSurvey(id);
@@ -748,7 +794,8 @@ export function matchingPreset(extraction) {
       .filter(name => name !== 'Nitrogen Gas')
       .every(name => {
         const a = { ...blankCounts(), ...(e.nodes || {})[name] };
-        const b = p.nodes[name];
+        // presetSurvey fills every resource of nodeCounts but nitrogen.
+        const b = p.nodes[name]!;
         return a.impure === b.impure && a.normal === b.normal && a.pure === b.pure;
       });
     if (same) return id;
@@ -759,9 +806,11 @@ export function matchingPreset(extraction) {
 // already entered on Game settings. Only where those counts are known — a
 // resource-rich or randomised distribution, or a random or hand-set purity, has
 // no table to start from, so it starts empty and asks.
-export function startingSurvey(settings = {}) {
+export function startingSurvey(
+  settings: { purity?: string; distribution?: string } = {},
+): Required<Survey> {
   const distribution = settings.distribution || 'original';
   return knownWorld(settings.purity, distribution)
-    ? presetSurvey(settings.purity, null, distribution)
+    ? presetSurvey(settings.purity as string, null, distribution)
     : blankExtraction();
 }
