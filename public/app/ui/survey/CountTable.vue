@@ -7,7 +7,7 @@
 <script setup>
 import { computed } from 'vue';
 import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard } from '../../session.js';
 import { extractionOf } from '../../wizard/extraction.js';
 import { legacy } from '../bridge.js';

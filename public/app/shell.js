@@ -1,5 +1,5 @@
 // The router that renders the current view into the page frame (ui/Shell.vue).
-import { $ } from './format.js';
+import { $ } from './format.ts';
 import { calculated, view, wizard } from './session.js';
 import { invalidate } from './ui/bridge.js';
 import { mountPage, mountShell, unmountPage } from './ui/mount.js';

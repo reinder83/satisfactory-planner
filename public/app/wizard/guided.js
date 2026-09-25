@@ -11,7 +11,7 @@ import {
   guidedTopupItems,
   tutorialKeys,
 } from '../../preferences.js';
-import { $ } from '../format.js';
+import { $ } from '../format.ts';
 import { wizard } from '../session.js';
 import { render } from '../shell.js';
 import { readSupply } from './supply.js';

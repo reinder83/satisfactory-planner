@@ -3,7 +3,7 @@
 // save(); other POSTs (profiles, imports, account) use post(); both use request().
 import { appRoot } from '../app-root.js';
 import { browserMode, browserRequest } from '../browser-api.js';
-import { $ } from './format.js';
+import { $ } from './format.ts';
 import { currentProfile, currentSave, setState, setView, state } from './session.js';
 import { render } from './shell.js';
 import { invalidate } from './ui/bridge.js';

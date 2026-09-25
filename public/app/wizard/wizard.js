@@ -10,7 +10,7 @@ import { browserMode } from '../../browser-api.js';
 import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.js';
 import { carryOptions } from '../../state.js';
 import { allowSwitch, navigate, post, toast } from '../api.js';
-import { $, esc, plural } from '../format.js';
+import { $, esc, plural } from '../format.ts';
 import { loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.js';
 import { render } from '../shell.js';
 import { guidedBuiltKeys, guidedFlow } from './guided.js';

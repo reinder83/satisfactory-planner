@@ -186,13 +186,14 @@ The preserved original handbook retains its previous assumptions and corrected r
 
 ## Development
 
-Node.js 22 or newer is sufficient. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
+Node.js 22.18 or newer is sufficient. The MIT-licensed solver is bundled with its WebAssembly asset and license; see `THIRD_PARTY.md`.
 
-The frontend is readable ES modules and Vue components (`public/app/ui/`). `npm start` serves `public/` as it is: outside production it runs Vite inside the planner's own server, which compiles the `.vue` files on request and reloads the browser on edits, so there is still no separate build or dev server to run. Install the packages first:
+The frontend is readable ES modules and Vue components (`public/app/ui/`), moving to TypeScript module by module; nothing is compiled ahead of time, the types are stripped as the code is served. `npm start` serves `public/` as it is: outside production it runs Vite inside the planner's own server, which compiles the `.vue` files on request and reloads the browser on edits, so there is still no separate build or dev server to run. Install the packages first:
 
 ```sh
-npm ci            # Vue, Vite, Vitest, Prettier and esbuild
+npm ci            # Vue, Vite, Vitest, TypeScript, Prettier and esbuild
 npm run check     # formatting; `npm run format` fixes it
+npm run typecheck # TypeScript types (vue-tsc)
 npm test          # node --test for the logic and pages, Vitest for the components
 npm start
 npm run build     # minified editions in dist/web (Docker) and dist/satisfactory-planner (Pages)

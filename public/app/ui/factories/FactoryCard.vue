@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.js';
 import { allocationText } from '../../views/factories.js';
 import { legacy } from '../bridge.js';

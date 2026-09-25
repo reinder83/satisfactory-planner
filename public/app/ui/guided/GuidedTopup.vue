@@ -8,7 +8,7 @@
 <script setup>
 import { computed } from 'vue';
 import { GUIDED_TOPUP_RATE, guidedTopupItems } from '../../../preferences.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard } from '../../session.js';
 import { legacy } from '../bridge.js';
 import HelpTip from '../form/HelpTip.vue';

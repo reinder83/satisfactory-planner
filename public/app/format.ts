@@ -1,0 +1,37 @@
+// Small DOM and text helpers shared by every screen.
+
+// The first element matching `s`, or null. `E` narrows the element type for TypeScript
+// callers (`$<HTMLDialogElement>('#detail')`); it is not checked at run time.
+export const $ = <E extends Element = HTMLElement>(s: string): E | null =>
+  document.querySelector<E>(s);
+
+// Escapes text for HTML text and quoted attributes: the few strings of markup built outside
+// components (the timeout advice) must pass every user-provided or imported value through
+// this.
+const ENTITIES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+export const esc = (s: unknown): string =>
+  String(s ?? '').replace(/[&<>"']/g, c => ENTITIES[c] ?? c);
+
+// Locale-formatted numbers with at most 2 (num) or 3 (num3) decimals. A missing value
+// formats as 0.
+export const num = (n: number | null | undefined): string =>
+  Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+export const num3 = (n: number | null | undefined): string =>
+  Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+
+// "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
+// saved keys (calculated delivery ids), so its output must stay the same.
+export const slug = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+export const plural = (n: number, word: string): string =>
+  num(n) + ' ' + word + (n === 1 ? '' : 's');

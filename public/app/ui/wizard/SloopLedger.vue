@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.js';
 import { legacy } from '../bridge.js';
 

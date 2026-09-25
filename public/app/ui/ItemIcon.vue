@@ -1,10 +1,10 @@
 <!-- An item's bundled icon from icons/. A trailing "(...)" qualifier is dropped first. Missing icons are hidden by the error
      listener in listeners.js. -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { slug } from '../format.js';
+import { slug } from '../format.ts';
 
-const props = defineProps({ name: { type: String, required: true } });
+const props = defineProps<{ name: string }>();
 const src = computed(
   () => `./icons/${slug(String(props.name).replace(/\s*\([^)]*\)\s*$/, ''))}.png`,
 );

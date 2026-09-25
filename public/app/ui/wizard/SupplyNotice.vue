@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import ItemIcon from '../ItemIcon.vue';
 
 const props = defineProps({ plan: { type: Object, required: true } });

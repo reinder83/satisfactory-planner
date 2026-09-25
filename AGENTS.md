@@ -93,17 +93,31 @@ Keep the deal the feature rests on: the joke is in the tone, never in the number
 
 ## Development and verification
 
-Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22. The frontend is being migrated to Vue 3 in stages; see "Vue migration" in `public/AGENTS.md`. Source files stay readable: `npm start` serves `public/` unbuilt, compiling the `.vue` files through Vite in middleware mode (see `devFrontend` in `server.mjs`) unless `NODE_ENV=production`, and only `build.mjs` minifies, for publishing.
+Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22.18 (the first 22.x that strips TypeScript types without a flag). The frontend is being migrated to Vue 3 in stages; see "Vue migration" in `public/AGENTS.md`. Source files stay readable: `npm start` serves `public/` unbuilt, compiling the `.vue` files through Vite in middleware mode (see `devFrontend` in `server.mjs`) unless `NODE_ENV=production`, and only `build.mjs` minifies, for publishing.
 
 ```sh
 npm ci
 node server.mjs
 npm run check
+npm run typecheck
 npm test
 npm run build
 ```
 
-`npm run check` is Prettier; run `npm run format` rather than hand-compacting code. `npm test` runs `node --test` on `tests/*.test.mjs` and then Vitest on the component tests in `tests/ui/`; it needs `npm ci`. The VM-based interface tests load the `public/app/` modules through `tests/helpers/app-source.mjs`, which concatenates them in ES evaluation order: top-level names must stay unique across those modules, and a module changes another module's `let` only through that module's exported setter. The harness leaves out the Vue layer (`vue` and `public/app/ui/`), follows its imports of plain modules, and replaces the names plain modules import from it with do-nothing functions.
+`npm run check` is Prettier; run `npm run format` rather than hand-compacting code. `npm run typecheck` is `vue-tsc --noEmit` (see "TypeScript" below). `npm test` runs `node --test` on `tests/*.test.mjs` and then Vitest on the component tests in `tests/ui/`; it needs `npm ci`. The VM-based interface tests load the `public/app/` modules through `tests/helpers/app-source.mjs`, which concatenates them in ES evaluation order: top-level names must stay unique across those modules, and a module changes another module's `let` only through that module's exported setter. The harness leaves out the Vue layer (`vue` and `public/app/ui/`), follows its imports of plain modules, and replaces the names plain modules import from it with do-nothing functions. It strips the types from a `.ts` module first (`stripTypeScriptTypes` from `node:module`), which leaves the rest of the text as written.
+
+### TypeScript
+
+The code is moving to TypeScript one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.js`, every version), the handbook (`plan.json`), the calculated plan and the workspace; (3) the plain modules in `public/`, from the ones that import nothing upward; (4) the components; (5) the server, `workspace.mjs`, `planner.mjs` and `optimizer.mjs`. Each stage is its own pull request and leaves both editions working.
+
+Nothing compiles TypeScript to files: Vite and Vitest strip the types when they serve, test or bundle the code, esbuild when `build.mjs` minifies, and Node 24 itself when it runs a `.ts` file. `tsconfig.json` only drives the type check (`npm run typecheck`, also in CI), with `strict` and `noUncheckedIndexedAccess` on. Rules:
+
+- Use only syntax Node can erase (`erasableSyntaxOnly`): no `enum`, `namespace` or constructor parameter properties. Use a union of string literals or an `as const` object instead of an enum.
+- Import a TypeScript module by its `.ts` file name (`'./format.ts'`), as Node requires; import types with `import type` (`verbatimModuleSyntax`).
+- Plain `.js` files are read for their types but not checked (`allowJs` without `checkJs`), so a converted module's JavaScript callers are not checked against its types yet. Keep run-time guards for values that may come from unchecked callers or from saved data, until those callers are typed too.
+- Types describe the code; they never change saved data. Types for the save format (stage 2) must accept every released version that `validateState` accepts, not only the current one.
+- A component moves with `<script setup lang="ts">` and type-based `defineProps<{ … }>()` (with `withDefaults` for defaults); it renders the same markup as before.
+- `build.mjs` copies the shared scripts at the root of `public/` as they are, so it refuses a `.ts` file there until stage 3 makes it strip them.
 
 The server defaults to port 8080. Set `HOST=127.0.0.1` for a local-only preview and `DATA_DIR` to an isolated temporary folder for experiments. Environment-variable syntax differs by shell. Check whether an existing server is running before starting another; never terminate unrelated processes.
 

@@ -10,7 +10,27 @@
 // (the vue package and public/app/ui/): these tests draw pages through the legacy render
 // functions, so every name imported from it becomes a do-nothing function. Components are
 // tested with Vitest in tests/ui/ instead.
+//
+// TypeScript modules (.ts) have their types stripped first with Node's own stripper, which
+// replaces the type syntax with spaces and leaves everything else as written, so the
+// import and export statements below still match.
 import fs from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
+
+// stripTypeScriptTypes is marked experimental and warns on its first call; the warning is
+// noise in the test output, so only that one is dropped.
+const emitWarning = process.emitWarning;
+const stripTypes = code => {
+  process.emitWarning = (warning, ...rest) => {
+    if (!String(warning).includes('stripTypeScriptTypes'))
+      emitWarning.call(process, warning, ...rest);
+  };
+  try {
+    return stripTypeScriptTypes(code);
+  } finally {
+    process.emitWarning = emitWarning;
+  }
+};
 
 const PUBLIC = new URL('../../public/', import.meta.url);
 const UI = new URL('app/ui/', PUBLIC).href;
@@ -32,7 +52,8 @@ export function appSource() {
   const visit = url => {
     if (seen.has(url.href)) return;
     seen.add(url.href);
-    const text = fs.readFileSync(url, 'utf8');
+    const source = fs.readFileSync(url, 'utf8');
+    const text = url.pathname.endsWith('.ts') ? stripTypes(source) : source;
     const ui = url.href.startsWith(UI);
     for (const [statement, specifier] of text.matchAll(IMPORT)) {
       if (specifier === 'vue') continue;

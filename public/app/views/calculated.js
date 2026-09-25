@@ -4,7 +4,7 @@
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.js';
-import { num } from '../format.js';
+import { num } from '../format.ts';
 import {
   calcStage,
   calculated,

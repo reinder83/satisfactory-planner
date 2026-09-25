@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num, slug } from '../../format.js';
+import { num, slug } from '../../format.ts';
 import {
   calcStage,
   calculated,

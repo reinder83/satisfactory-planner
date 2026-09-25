@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { FLUIDS, lanePlan, OIL_RECIPES } from '../../flow.js';
 import { phaseLabel, plan } from '../../session.js';
 import { legacy } from '../bridge.js';

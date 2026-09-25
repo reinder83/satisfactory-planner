@@ -19,7 +19,7 @@ import {
   richShape,
 } from '../../../preferences.js';
 import { toast } from '../../api.js';
-import { $ } from '../../format.js';
+import { $ } from '../../format.ts';
 import { wizard } from '../../session.js';
 import { render } from '../../shell.js';
 import {

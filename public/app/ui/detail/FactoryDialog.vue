@@ -8,7 +8,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { handbookFlowModel } from '../../flow.js';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.js';
 import { legacy } from '../bridge.js';

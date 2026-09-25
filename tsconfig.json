@@ -1,0 +1,31 @@
+{
+  // Type checking only: Vite, Vitest and esbuild strip the types when they run or bundle
+  // the code, and Node 24 strips them itself for server files, so nothing is emitted.
+  // `npm run typecheck` (vue-tsc) checks the .ts files and <script lang="ts"> components;
+  // plain .js files are read for their types but not checked (allowJs without checkJs), so
+  // modules can move to TypeScript one at a time. See "TypeScript" in AGENTS.md.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    // Only syntax that can be erased (no enums, namespaces or parameter properties), so
+    // Node can run a .ts file as written, and imports name the .ts file itself.
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["public/**/*", "tests/**/*", "*.mjs"],
+  "exclude": ["node_modules", "dist", "vendor", "public/fonts", "public/icons"]
+}

@@ -8,7 +8,7 @@
 <script setup>
 import { computed } from 'vue';
 import { save, toast } from '../../api.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { currentProfile, state } from '../../session.js';
 import { render } from '../../shell.js';
 import { legacy } from '../bridge.js';

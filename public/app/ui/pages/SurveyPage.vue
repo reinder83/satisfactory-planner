@@ -22,7 +22,7 @@ import {
   resourcePool,
   wellYield,
 } from '../../../preferences.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard } from '../../session.js';
 import { render } from '../../shell.js';
 import {

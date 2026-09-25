@@ -8,7 +8,7 @@
 <script setup>
 import { computed } from 'vue';
 import { guidedQuestions, storageOptions } from '../../../preferences.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.js';
 import { legacy } from '../bridge.js';
 

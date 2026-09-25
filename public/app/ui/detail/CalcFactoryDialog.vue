@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { calcFlowModel } from '../../flow.js';
 import { calcStage, calculated, phase, phaseLabel } from '../../session.js';
 import { calcExpansion, machineSetup } from '../../views/calculated.js';

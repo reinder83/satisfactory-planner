@@ -18,7 +18,7 @@ import {
   watch,
 } from 'vue';
 import { storageRateFor, wantsStorage } from '../../../preferences.js';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.js';
 import { legacy } from '../bridge.js';
 import HelpTip from '../form/HelpTip.vue';
