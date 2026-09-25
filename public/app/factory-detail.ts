@@ -1,29 +1,57 @@
 // Detail dialogs in the shared #detail <dialog>. The factory dialogs (handbook and calculated),
 // a factory group's build order and the storage container are components in ui/detail/, opened
-// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.js), as
-// is the wizard's alternate recipe (openAltRecipe in wizard/recipes.js).
+// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.ts), as
+// is the wizard's alternate recipe (openAltRecipe in wizard/recipes.ts).
 import { num } from './format.ts';
-import { FLUIDS } from './flow.js';
-import { calcStage, calculated, plan, setActiveDetail, stage } from './session.js';
-import { showDetail } from './ui/detail.js';
-import { factoryGroupsState, membershipsOf } from './views/factories.js';
+import { FLUIDS } from './flow.ts';
+import { calcStage, calculated, plan, setActiveDetail, stage } from './session.ts';
+import { showDetail } from './ui/detail.ts';
+import { factoryGroupsState, membershipsOf } from './views/factories.ts';
+import type { FactoryLink } from './ui/actions.ts';
+import type { ItemRates } from '../types/index.ts';
+
+// A factory in a group's build order, in one shape for both profile kinds.
+interface ChainNode {
+  id: string;
+  link: FactoryLink;
+  name: string;
+  machine: string;
+  machines: number;
+  inputs: ItemRates;
+  outputs: ItemRates;
+  // A calculated generator's output, MW.
+  mw?: number;
+  recipe?: string;
+}
+
+// One numbered stage of a group's build order (ui/detail/GroupChainDialog.vue).
+export interface ChainStage {
+  no: string;
+  id: string;
+  link: FactoryLink;
+  name: string;
+  machines: string;
+  needs: { text: string; loop: boolean; from: string }[];
+  feeds: string[];
+  power: boolean;
+}
 
 // The dialog for one handbook factory (ui/detail/FactoryDialog.vue); nothing for an unknown id.
-export function openFactory(id) {
+export function openFactory(id: string) {
   if (!plan.factories.some(x => x.id === id)) return;
   setActiveDetail({ type: 'factory', id });
   showDetail({ kind: 'factory', id });
 }
 
 // The dialog for one row of a calculated plan (ui/detail/CalcFactoryDialog.vue).
-export function openCalculatedFactory(id) {
-  if (!calcStage().rows?.some(r => r.id === id)) return;
+export function openCalculatedFactory(id: string) {
+  if (!calcStage()?.rows?.some(r => r.id === id)) return;
   setActiveDetail({ type: 'calc', id });
   showDetail({ kind: 'calc', id });
 }
 
 // The build-order dialog for a factory group (ui/detail/GroupChainDialog.vue).
-export function openGroupChain(gid) {
+export function openGroupChain(gid: string) {
   if (!factoryGroupsState().groups.some(g => g.id === gid)) return;
   setActiveDetail({ type: 'group', id: gid });
   showDetail({ kind: 'group', id: gid });
@@ -33,10 +61,10 @@ export function openGroupChain(gid) {
 // profile kinds: { id, link, name, machine, machines, inputs, outputs } with total rates.
 // Calculated rows also carry generationMW as `mw`; a handbook factory has a single output,
 // its own item.
-function groupChainNodes(gid) {
+function groupChainNodes(gid: string): ChainNode[] {
   if (calculated) {
     const x = calcStage();
-    return (x.rows || [])
+    return (x?.rows || [])
       .filter(r => membershipsOf(r.id).some(m => m.group === gid))
       .map(r => ({
         id: r.id,
@@ -53,7 +81,8 @@ function groupChainNodes(gid) {
   return plan.factories
     .filter(f => f.stages[st] && membershipsOf(f.id).some(m => m.group === gid))
     .map(f => {
-      const r = f.stages[st];
+      // The filter above keeps only factories with this stage.
+      const r = f.stages[st]!;
       return {
         id: f.id,
         link: { factory: f.id },
@@ -72,7 +101,9 @@ function groupChainNodes(gid) {
 // Returns null for an unknown group, otherwise { name, stages, split }; `stages` is empty when
 // no factory of the group produces anything in this phase. Each stage is { no, link, name,
 // machines, needs: [{ text, from, loop }], feeds: [text], power }.
-export function groupChain(gid) {
+export function groupChain(
+  gid: string,
+): { name: string; stages: ChainStage[]; split: boolean } | null {
   const gr = factoryGroupsState().groups.find(g => g.id === gid);
   if (!gr) return null;
   const nodes = groupChainNodes(gid);
@@ -80,10 +111,10 @@ export function groupChain(gid) {
   // all placed (making its own input does not count). When none qualifies there is a loop: place
   // the node with the fewest unplaced suppliers and record those inputs in loopSeeds, which the
   // stage text shows as "seed a starter batch".
-  const makers = n => nodes.filter(o => o.outputs[n]);
-  const placed = [],
-    placedSet = new Set(),
-    loopSeeds = new Map(),
+  const makers = (n: string) => nodes.filter(o => o.outputs[n]);
+  const placed: ChainNode[] = [],
+    placedSet = new Set<string>(),
+    loopSeeds = new Map<string, string[]>(),
     pending = [...nodes];
   while (pending.length) {
     let idx = pending.findIndex(nd =>
@@ -104,7 +135,8 @@ export function groupChain(gid) {
       });
       loop = true;
     }
-    const nd = pending.splice(idx, 1)[0];
+    // pending is not empty inside the loop, and idx is one of its indexes.
+    const nd = pending.splice(idx, 1)[0]!;
     if (loop)
       loopSeeds.set(
         nd.id,
@@ -113,14 +145,15 @@ export function groupChain(gid) {
     placed.push(nd);
     placedSet.add(nd.id);
   }
-  // Stage numbers by node id, and every factory in the phase, to count consumers outside the group.
+  // Stage numbers by node id (every node is placed, so each has one), and every factory in the
+  // phase, to count consumers outside the group.
   const stageNo = new Map(placed.map((nd, i) => [nd.id, i + 1]));
-  const others = calculated
-    ? calcStage().rows || []
+  const others: { id: string; inputs?: ItemRates }[] = calculated
+    ? calcStage()?.rows || []
     : plan.factories
         .filter(f => f.stages[stage()])
-        .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()].inputs || {} }));
-  const stages = placed.map((nd, i) => {
+        .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()]!.inputs || {} }));
+  const stages = placed.map((nd, i): ChainStage => {
     // Needs: each input with the earliest in-group stage making it, "outside the group" when
     // none does, or the loop marker.
     const loopIns = loopSeeds.get(nd.id) || [];
@@ -130,7 +163,7 @@ export function groupChain(gid) {
         text: `${n} ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min`,
         loop: loopIns.includes(n),
         from: from.length
-          ? 'stage ' + Math.min(...from.map(m => stageNo.get(m.id)))
+          ? 'stage ' + Math.min(...from.map(m => stageNo.get(m.id)!))
           : 'outside the group',
       };
     });

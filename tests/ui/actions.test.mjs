@@ -1,13 +1,13 @@
-// The controls several components share (public/app/ui/actions.js): progress checkboxes,
+// The controls several components share (public/app/ui/actions.ts): progress checkboxes,
 // "Save notes", links to a factory's dialog, the dialog's ×, and "Create a save". Each
 // component binds them itself, so these click the real elements, mounted the way the app
 // mounts them, in happy-dom.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { openFactory } from '../../public/app/factory-detail.js';
-import { calcStage, setQuery, state, wizard } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
+import { openFactory } from '../../public/app/factory-detail.ts';
+import { calcStage, setQuery, state, wizard } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
 import { $, generated, go, open, page, stubFetch } from './setup.mjs';
 
 const plan = generated();

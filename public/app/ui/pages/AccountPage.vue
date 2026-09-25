@@ -5,10 +5,10 @@
 <script setup>
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.js';
-import { allowSwitch, post, writeQueue } from '../../api.js';
-import { boot, setAuthMode, workspace } from '../../session.js';
+import { allowSwitch, post, writeQueue } from '../../api.ts';
+import { boot, setAuthMode, workspace } from '../../session.ts';
 import AuthForm from '../AuthForm.vue';
-import { legacy } from '../bridge.js';
+import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import BackupPage from './BackupPage.vue';
 

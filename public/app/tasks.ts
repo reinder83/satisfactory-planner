@@ -14,13 +14,32 @@ import {
   query,
   stage,
   state,
-} from './session.js';
-import { calcTasks } from './views/calculated.js';
+} from './session.ts';
+import { calcTasks } from './views/calculated.ts';
+import type { TaskEdits } from '../types/index.ts';
+
+// A build-plan step: a handbook, calculated or personal one. id is its saved check key;
+// personal tasks have no body.
+export interface Step {
+  id: string;
+  title: string;
+  body?: string;
+}
+
+// The factory a step's "Open factory" button opens (taskLink).
+export interface StepLink {
+  calc: boolean;
+  id: string;
+  name: string;
+}
+
+// A step's icon (taskIcon): an item's bundled icon, or a TASK_GLYPHS category glyph.
+export type StepIconData = { item: string } | { kind: string };
 
 // The profile's step edits with every part defaulted, so callers can read them freely.
 // order is per phase; titles, bodies and links are keyed by step id.
-export function taskEditsState() {
-  const e = state?.taskEdits || {};
+export function taskEditsState(): TaskEdits {
+  const e: Partial<TaskEdits> = state?.taskEdits || {};
   return {
     order: e.order || {},
     removed: e.removed || [],
@@ -33,7 +52,7 @@ export function taskEditsState() {
 // Applies the user's edits to the generated steps: drops removed ones, swaps in edited
 // wording and sorts by the saved order for this phase. Steps missing from the saved
 // order (new in a later release, or added since) keep their place after the ordered ones.
-function applyTaskEdits(base) {
+function applyTaskEdits(base: Step[]): Step[] {
   const e = taskEditsState(),
     removed = new Set(e.removed);
   const visible = base
@@ -43,37 +62,37 @@ function applyTaskEdits(base) {
   if (!ord?.length) return visible;
   const pos = new Map(ord.map((id, i) => [id, i]));
   return [
-    ...visible.filter(t => pos.has(t.id)).sort((a, b) => pos.get(a.id) - pos.get(b.id)),
+    ...visible.filter(t => pos.has(t.id)).sort((a, b) => pos.get(a.id)! - pos.get(b.id)!),
     ...visible.filter(t => !pos.has(t.id)),
   ];
 }
 
 // The current phase's steps before edits: calculated steps or handbook steps, plus the
 // user's personal (custom-...) tasks for this phase.
-export function basePlanTasks() {
+export function basePlanTasks(): Step[] {
   return calculated
     ? [...calcTasks(), ...state.customTasks.filter(t => t.phase === phase())]
     : tasks();
 }
 
 // The steps as the user sees them in the build plan (edits applied, no search filter).
-export function planTasks() {
+export function planTasks(): Step[] {
   return applyTaskEdits(basePlanTasks());
 }
 
 // A calculated production step (calc-<phase>-<rowId>) links to its own factory row.
 // Returns that row id, or '' for any other step.
-export const autoTaskLink = id => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
+export const autoTaskLink = (id: string) => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
 
 // The factory a step links to, as { calc, id, name } for its "Open factory" button
 // (calc: a calculated row, opened by data-calc-factory, otherwise a handbook factory,
 // opened by data-factory), or null when the step has no link or the linked factory is not
 // part of the current phase.
-export function taskLink(t) {
+export function taskLink(t: Step): StepLink | null {
   const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
   if (!linked) return null;
   if (calculated) {
-    const row = (calcStage().rows || []).find(r => r.id === linked);
+    const row = (calcStage()?.rows || []).find(r => r.id === linked);
     return row ? { calc: true, id: row.id, name: row.name } : null;
   }
   const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
@@ -82,18 +101,21 @@ export function taskLink(t) {
 
 // What a step's edit form offers: the factories of this phase as [id, name], and the one
 // the step links to now (its saved link, or the automatic one).
-export function taskLinkChoices(t) {
+export function taskLinkChoices(t: Step): {
+  options: [id: string, name: string][];
+  current: string;
+} {
   return {
     options: calculated
-      ? (calcStage().rows || []).map(r => [r.id, r.name])
-      : plan.factories.filter(f => f.stages[stage()]).map(f => [f.id, f.name]),
+      ? (calcStage()?.rows || []).map((r): [string, string] => [r.id, r.name])
+      : plan.factories.filter(f => f.stages[stage()]).map((f): [string, string] => [f.id, f.name]),
     current: taskEditsState().links[t.id] || autoTaskLink(t.id),
   };
 }
 
 // A step's icon says what kind of work it is at a glance: a linked or calculated
 // production line shows the part it makes, every other step a category glyph.
-export const TASK_GLYPHS = {
+export const TASK_GLYPHS: Record<string, string> = {
   production:
     '<path d="M3 20.5h18M5.5 20.5v-9l4 2.6v-2.6l4 2.6v-2.6l4 2.6v6.4M17.5 9.2V4h2.2v5.2"/>',
   build: '<path d="M3.5 3.5h17v17h-17zM3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17"/>',
@@ -124,7 +146,7 @@ export const TASK_GLYPHS = {
 
 // Generated step identifiers are stable, so match those before reading the
 // wording of a handbook step or a personal one.
-const TASK_ID_KINDS = [
+const TASK_ID_KINDS: [RegExp, string][] = [
   [/^custom-/, 'note'],
   [/^recipe-unlock-|^hard-drives-/, 'harddrive'],
   [/^retire-/, 'retire'],
@@ -141,7 +163,7 @@ const TASK_ID_KINDS = [
 ];
 
 // Fallback: keywords in the id or title, first match wins, so order matters.
-const TASK_TEXT_KINDS = [
+const TASK_TEXT_KINDS: [RegExp, string][] = [
   [/retire|dismantle|decommission/, 'retire'],
   [/portal/, 'portal'],
   [/nuclear|uranium|plutonium|ficsonium|radioactive/, 'nuclear'],
@@ -158,7 +180,7 @@ const TASK_TEXT_KINDS = [
 
 // The TASK_GLYPHS key for a step. Unlock steps are MAM research when titled "MAM: ...",
 // otherwise HUB milestones; anything unmatched counts as production.
-export function taskKind(t) {
+export function taskKind(t: Step): string {
   const id = t.id || '';
   if (id.startsWith('unlock-')) return /^mam:/i.test(t.title || '') ? 'research' : 'milestone';
   for (const [re, kind] of TASK_ID_KINDS) if (re.test(id)) return kind;
@@ -169,11 +191,11 @@ export function taskKind(t) {
 
 // The part a step makes, taken from its linked factory: calculated production
 // steps link themselves, a handbook or personal step uses the chosen link.
-function taskIconItem(t) {
+function taskIconItem(t: Step): string {
   const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
   if (!linked) return '';
   if (calculated) {
-    const row = (calcStage().rows || []).find(r => r.id === linked);
+    const row = (calcStage()?.rows || []).find(r => r.id === linked);
     return (row && Object.keys(row.outputs || {})[0]) || '';
   }
   const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
@@ -182,13 +204,13 @@ function taskIconItem(t) {
 
 // A step's icon: { item } for the made item's bundled icon, otherwise { kind } for its
 // TASK_GLYPHS category glyph (ui/plan/StepIcon.vue draws it).
-export function taskIcon(t) {
+export function taskIcon(t: Step): StepIconData {
   const item = taskIconItem(t);
   return item ? { item } : { kind: taskKind(t) };
 }
 
 // Applies the "Hide completed" toggle and the step search to a list of steps.
-export function filteredPlanTasks(ts) {
+export function filteredPlanTasks(ts: Step[]): Step[] {
   const q = query.trim().toLowerCase();
   return ts.filter(
     t =>
@@ -198,6 +220,6 @@ export function filteredPlanTasks(ts) {
 }
 
 // Handbook steps for the current phase from plan.json, plus personal tasks.
-function tasks() {
-  return [...plan.phases[phase()], ...state.customTasks.filter(t => t.phase === phase())];
+function tasks(): Step[] {
+  return [...(plan.phases[phase()] ?? []), ...state.customTasks.filter(t => t.phase === phase())];
 }

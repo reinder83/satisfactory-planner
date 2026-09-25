@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { bayCapacity } from '../../public/state.js';
-import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
-import { openSlot, slotKeys } from '../../public/app/views/storage.js';
+import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
+import { openSlot, slotKeys } from '../../public/app/views/storage.ts';
 import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.mjs';
 
 const noMarkup = () =>

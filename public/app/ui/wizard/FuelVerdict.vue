@@ -8,7 +8,7 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { power } from '../../wizard/fields.js';
+import { power } from '../../wizard/fields.ts';
 
 const props = defineProps({ plan: { type: Object, required: true } });
 

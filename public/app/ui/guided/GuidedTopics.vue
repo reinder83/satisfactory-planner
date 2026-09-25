@@ -9,8 +9,8 @@
 import { computed } from 'vue';
 import { guidedQuestions, storageOptions } from '../../../preferences.js';
 import { num } from '../../format.ts';
-import { wizard, workspace } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { wizard, workspace } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 
 const view = computed(() =>
   legacy(() => {

@@ -6,10 +6,10 @@
 -->
 <script setup>
 import { ref } from 'vue';
-import { save, toast } from '../../api.js';
-import { setFloor } from '../../session.js';
-import { render } from '../../shell.js';
-import { nextBayLetter } from '../../views/storage.js';
+import { save, toast } from '../../api.ts';
+import { setFloor } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { nextBayLetter } from '../../views/storage.ts';
 
 const props = defineProps({
   floor: { type: Object, required: true },

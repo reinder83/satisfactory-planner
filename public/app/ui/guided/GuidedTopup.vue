@@ -9,8 +9,8 @@
 import { computed } from 'vue';
 import { GUIDED_TOPUP_RATE, guidedTopupItems } from '../../../preferences.js';
 import { num } from '../../format.ts';
-import { wizard } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { wizard } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import ItemIcon from '../ItemIcon.vue';
 

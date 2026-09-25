@@ -4,9 +4,16 @@
 // (possibly half-finished), and settings.existingSupply, the { item: rate } map
 // the planner receives. The rows and their item search are drawn and handled by
 // ui/wizard/SupplyRows.vue.
-import { wizard, workspace } from '../session.js';
-import { readGuidedForm } from './guided.js';
-import { readWizard } from './wizard.js';
+import { draft, workspace } from '../session.ts';
+import { readGuidedForm } from './guided.ts';
+import { readWizard, type WizardDraft } from './wizard.ts';
+import type { ItemRates } from '../../types/index.ts';
+
+// A row as typed: the rate stays text until it is read, so a half-typed one survives.
+export interface SupplyRow {
+  name: string;
+  rate: string;
+}
 
 // Production you already run, entered as a rate. Matching an existing factory
 // against the plan's own rows does not work — your Modular Frame line is
@@ -24,13 +31,13 @@ const SUPPLY_SUGGESTIONS = 8;
 
 // Up to SUPPLY_SUGGESTIONS catalog items for the typed text, case-insensitive:
 // names that start with it first, then names that merely contain it.
-export function supplyMatches(query) {
+export function supplyMatches(query: unknown): string[] {
   const q = String(query || '')
     .trim()
     .toLowerCase();
   if (!q) return [];
-  const starts = [],
-    contains = [];
+  const starts: string[] = [],
+    contains: string[] = [];
   for (const n of workspace.catalog.supplyItems || []) {
     const l = n.toLowerCase();
     if (l.startsWith(q)) starts.push(n);
@@ -44,7 +51,7 @@ export function supplyMatches(query) {
 // picking a suggestion would erase what you just picked.
 // Created lazily from settings.existingSupply the first time it is needed, then
 // kept on the draft; readSupply and removeSupplyRow edit it.
-export function supplyRows(w) {
+export function supplyRows(w: WizardDraft): SupplyRow[] {
   if (!Array.isArray(w.supplyRows))
     w.supplyRows = Object.entries(w.settings.existingSupply || {}).map(([name, rate]) => ({
       name,
@@ -58,7 +65,7 @@ export function supplyRows(w) {
 // Side effect: replaces wizard.supplyRows with the non-empty rows as typed.
 // Name plus rate, paired by position. Every row is kept for editing; only the
 // ones naming a real item at a real rate are handed to the planner.
-export function readSupply(form, f) {
+export function readSupply(form: HTMLFormElement | null, f: FormData): ItemRates | null {
   if (!form?.querySelector?.('.supply-list')) return null;
   const known = new Set(workspace.catalog.supplyItems || []);
   const names = f.getAll('supplyItem').map(x => String(x));
@@ -66,8 +73,8 @@ export function readSupply(form, f) {
   const rows = names
     .map((name, i) => ({ name, rate: rates[i] ?? '' }))
     .filter(r => r.name.trim() || String(r.rate).trim());
-  wizard.supplyRows = rows;
-  const out = {};
+  draft().supplyRows = rows;
+  const out: ItemRates = {};
   for (const r of rows) {
     const name = r.name.trim(),
       q = Number(r.rate);
@@ -79,21 +86,22 @@ export function readSupply(form, f) {
 
 // Reads the screen the rows are on into the draft: the guided question or All settings
 // step 1. Before a redraw, so what was typed elsewhere on the screen is kept.
-export function readScreen(form) {
-  if (form) wizard.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
+export function readScreen(form: HTMLFormElement | null) {
+  if (form) draft().mode === 'guided' ? readGuidedForm(form) : readWizard(form);
 }
 
 // "Remove" on row `index`: drop it and rebuild existingSupply from the rest, keeping known
 // items with a rate above 0. The preview no longer matches, so it is cleared.
-export function removeSupplyRow(form, index) {
+export function removeSupplyRow(form: HTMLFormElement | null, index: number) {
   readScreen(form);
-  const rows = supplyRows(wizard);
+  const w = draft();
+  const rows = supplyRows(w);
   rows.splice(index, 1);
-  wizard.settings.existingSupply = Object.fromEntries(
+  w.settings.existingSupply = Object.fromEntries(
     rows
       .filter(r => Number(r.rate) > 0)
-      .map(r => [r.name.trim(), Number(r.rate)])
+      .map((r): [string, number] => [r.name.trim(), Number(r.rate)])
       .filter(([n]) => (workspace.catalog.supplyItems || []).includes(n)),
   );
-  wizard.preview = null;
+  w.preview = null;
 }

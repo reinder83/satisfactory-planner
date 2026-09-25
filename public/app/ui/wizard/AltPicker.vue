@@ -11,13 +11,13 @@
 -->
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { post, toast } from '../../api.js';
+import { post, toast } from '../../api.ts';
 import { $ } from '../../format.ts';
-import { wizard, workspace } from '../../session.js';
-import { render } from '../../shell.js';
-import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.js';
-import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.js';
-import { legacy } from '../bridge.js';
+import { wizard, workspace } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
+import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.ts';
+import { legacy } from '../bridge.ts';
 
 // A stable empty list, so a draft without picks does not look replaced on every redraw.
 const NONE = [];

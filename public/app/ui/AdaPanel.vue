@@ -1,5 +1,5 @@
 <!--
-  ADA, the sidebar assistant. What she says comes from adaView() in ada-panel.js; this
+  ADA, the sidebar assistant. What she says comes from adaView() in ada-panel.ts; this
   component draws it and handles her buttons and the poke easter egg on the ◈ mark.
 -->
 <script setup>
@@ -14,8 +14,8 @@ import {
   adaView,
   setAdaIndex,
   setAdaMuted,
-} from '../ada-panel.js';
-import { invalidate, legacy } from './bridge.js';
+} from '../ada-panel.ts';
+import { invalidate, legacy } from './bridge.ts';
 
 const ada = computed(() => legacy(adaView));
 

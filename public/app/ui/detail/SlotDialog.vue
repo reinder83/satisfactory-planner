@@ -1,18 +1,18 @@
 <!--
   The dialog for one storage container (address `id`): where it sits, its four saved checks
-  `slot-<id>-<step>` (toggleCheck in ui/actions.js), the factory that makes the item (a
+  `slot-<id>-<step>` (toggleCheck in ui/actions.ts), the factory that makes the item (a
   factoryLink() to the calculated row or the handbook factory, which opens that factory's
   dialog in its place) and the note saved under `slot-<id>`.
-  Opened by openSlot in views/storage.js.
+  Opened by openSlot in views/storage.ts.
 -->
 <script setup>
 import { computed } from 'vue';
-import { calcStage, calculated, checked, plan } from '../../session.js';
-import { SLOT_STEPS, storageBays, storageFloors } from '../../views/storage.js';
-import { legacy } from '../bridge.js';
+import { calcStage, calculated, checked, plan } from '../../session.ts';
+import { SLOT_STEPS, storageBays, storageFloors } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
-import { factoryLink, toggleCheck } from '../actions.js';
+import { factoryLink, toggleCheck } from '../actions.ts';
 
 const props = defineProps({ id: { type: String, required: true } });
 

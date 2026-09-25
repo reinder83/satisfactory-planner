@@ -13,15 +13,23 @@ import {
   progressionData,
   stage,
   state,
-} from '../session.js';
-import { power } from '../wizard/fields.js';
+} from '../session.ts';
+import { power } from '../wizard/fields.ts';
+import type { CalcRow, CurrentSettings, ItemRates, StoredStage } from '../../types/index.ts';
+
+// A build-plan step before the user's edits: its saved check key, title and text.
+export interface PlanStepData {
+  id: string;
+  title: string;
+  body: string;
+}
 
 // The generated checklist for a calculated profile's current phase, before the user's step
-// edits and custom tasks (tasks.js adds those). Order: startup, power and milestone steps
+// edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
 // from progression.js, hard drives, one step per production row, storage, then the lines
 // this phase retires. Row steps use the saved key `calc-<stage>-<row id>` — the same key as
 // that factory card's Running box — and must stay stable.
-export function calcTasks() {
+export function calcTasks(): PlanStepData[] {
   const p = calcStage(),
     g = progression(calculated, state, progressionData, phase());
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
@@ -40,10 +48,10 @@ export function calcTasks() {
   return [
     ...startup,
     ...g.hardDrives,
-    ...(p.rows || []).map(r => ({
+    ...(p?.rows || []).map(r => ({
       id: 'calc-' + stage() + '-' + r.id,
       title: r.name,
-      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${r.slots > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs /min: ${
+      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs /min: ${
         Object.entries(r.inputs)
           .map(([n, q]) => n + ' ' + num(q))
           .join(', ') || 'none'
@@ -66,8 +74,8 @@ export function calcTasks() {
 // The options for an infeasible phase `x` under settings `s`, as sentences (none for an
 // older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review
 // (ui/wizard/ReviewStep.vue) list them.
-export function draftFixes(x, s) {
-  const fixes = [];
+export function draftFixes(x: StoredStage, s: Partial<CurrentSettings> | undefined): string[] {
+  const fixes: string[] = [];
   if (x.shortfalls?.length)
     fixes.push(
       `Raise the short budget${x.shortfalls.length > 1 ? 's' : ''} (Resources): ${x.shortfalls.map(f => `${f.name} to about ${num(f.needed)}/min (entered: ${num(f.budget)}/min)`).join('; ')}.`,
@@ -102,7 +110,14 @@ export function draftFixes(x, s) {
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear
 // or waste lines, whose balance must stay exact. Used by calcTasks and
 // ui/detail/CalcFactoryDialog.vue.
-export function machineSetup(r) {
+// A rounded-up clock for the last machine, and what it adds.
+export interface EasySetup {
+  clock: number;
+  output: ItemRates;
+  inputs: ItemRates;
+  extraOutputs: ItemRates;
+}
+export function machineSetup(r: CalcRow) {
   const equivalent = r.equivalent || r.machines - 1 + r.lastClock / 100,
     whole = Math.floor(equivalent + 1e-7),
     fraction = Math.max(0, equivalent - whole),
@@ -122,7 +137,7 @@ export function machineSetup(r) {
   const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(
     [r.name, ...Object.keys(r.inputs || {}), ...Object.keys(r.outputs || {})].join(' '),
   );
-  let easy = null;
+  let easy: EasySetup | null = null;
   if (partial && !sensitive) {
     // Round the final clock upward to a whole percent, never silently underproduce.
     let clock = Math.ceil(fraction * 100 - 1e-7);
@@ -151,9 +166,9 @@ export function machineSetup(r) {
 // to add: say so with a dash rather than claiming capacity is being kept.
 // One row per phase from the profile's start phase on: { phase, required, add }, the machines
 // required for row `id` and how many to add over the most installed so far.
-export function calcExpansion(id) {
+export function calcExpansion(id: string) {
   let installed = 0;
-  return fromStart(calculated.stages).map(([ph, p]) => {
+  return fromStart(calculated?.stages).map(([ph, p]) => {
     const required = p.rows?.find(x => x.id === id)?.machines || 0;
     const add = Math.max(0, required - installed);
     installed = Math.max(installed, required);

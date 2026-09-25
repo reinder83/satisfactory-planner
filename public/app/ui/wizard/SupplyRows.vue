@@ -1,7 +1,7 @@
 <!--
   "Production you already run": one row per declared item plus a blank one, on All settings
   step 1 and as the guided "already producing" question. Each row pairs a supplyItem and a
-  supplyRate input, read back by readSupply (wizard/supply.js) with the rest of the screen;
+  supplyRate input, read back by readSupply (wizard/supply.ts) with the rest of the screen;
   the rows as typed live on the draft (wizard.supplyRows), so a half-finished row survives a
   redraw. The item search is an in-page listbox rather than a native <datalist>, which is
   browser chrome: it cannot be themed or read back, and Chrome suppresses it on an input with
@@ -11,11 +11,11 @@
 -->
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
-import { wizard, workspace } from '../../session.js';
-import { render } from '../../shell.js';
-import { readScreen, removeSupplyRow, supplyMatches, supplyRows } from '../../wizard/supply.js';
-import { legacy } from '../bridge.js';
-import { vValue } from '../form/value.js';
+import { wizard, workspace } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { readScreen, removeSupplyRow, supplyMatches, supplyRows } from '../../wizard/supply.ts';
+import { legacy } from '../bridge.ts';
+import { vValue } from '../form/value.ts';
 import ItemIcon from '../ItemIcon.vue';
 
 const root = ref(null);

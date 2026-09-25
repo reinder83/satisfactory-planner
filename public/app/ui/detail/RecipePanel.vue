@@ -2,7 +2,7 @@
      machine, ins, outs } with ins and outs as RecipeCell tuples; `machines` is how many such
      machines the line runs. -->
 <script setup>
-import { machinesLabel } from '../../flow.js';
+import { machinesLabel } from '../../flow.ts';
 import RecipeCell from './RecipeCell.vue';
 
 defineProps({

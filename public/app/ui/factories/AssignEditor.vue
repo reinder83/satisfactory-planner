@@ -7,10 +7,10 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { save, toast } from '../../api.js';
-import { render } from '../../shell.js';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.js';
-import { legacy } from '../bridge.js';
+import { save, toast } from '../../api.ts';
+import { render } from '../../shell.ts';
+import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { legacy } from '../bridge.ts';
 
 const props = defineProps({ factoryKey: { type: String, required: true } });
 

@@ -114,7 +114,7 @@ export interface CurrentSettings {
 }
 
 // The settings fields a plan frozen by the first release (2026-09-12) already had.
-type FirstReleaseSettings =
+export type FirstReleaseSettings =
   | 'phase'
   | 'purity'
   | 'distribution'

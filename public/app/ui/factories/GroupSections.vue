@@ -7,12 +7,12 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { save } from '../../api.js';
-import { openGroupChain } from '../../factory-detail.js';
-import { factoryEditing } from '../../session.js';
-import { render } from '../../shell.js';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.js';
-import { legacy } from '../bridge.js';
+import { save } from '../../api.ts';
+import { openGroupChain } from '../../factory-detail.ts';
+import { factoryEditing } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { legacy } from '../bridge.ts';
 
 const props = defineProps({
   items: { type: Array, required: true },

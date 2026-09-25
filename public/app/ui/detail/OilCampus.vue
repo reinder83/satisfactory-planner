@@ -8,12 +8,12 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { FLUIDS, lanePlan, OIL_RECIPES } from '../../flow.js';
-import { phaseLabel, plan } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { FLUIDS, lanePlan, OIL_RECIPES } from '../../flow.ts';
+import { phaseLabel, plan } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
-import { factoryLink } from '../actions.js';
+import { factoryLink } from '../actions.ts';
 
 const props = defineProps({ phase: { type: String, required: true } });
 

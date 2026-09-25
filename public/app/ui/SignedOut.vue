@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { ref } from 'vue';
-import { authMode, setAuthMode, workspace } from '../session.js';
+import { authMode, setAuthMode, workspace } from '../session.ts';
 import AuthForm from './AuthForm.vue';
 
 const mode = ref(authMode);

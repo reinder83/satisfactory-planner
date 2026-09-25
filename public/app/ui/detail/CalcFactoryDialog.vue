@@ -1,18 +1,18 @@
 <!--
   The dialog for one row of a calculated plan at the current phase: flow diagram, machine
-  setup (machineSetup in views/calculated.js), lane advice, outputs, expansion by phase and
+  setup (machineSetup in views/calculated.ts), lane advice, outputs, expansion by phase and
   the note saved under `factory-<row id>`. The easier rounded setting is left out when the
-  profile already runs whole machines. Opened by openCalculatedFactory in factory-detail.js.
+  profile already runs whole machines. Opened by openCalculatedFactory in factory-detail.ts.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { calcFlowModel } from '../../flow.js';
-import { calcStage, calculated, phase, phaseLabel } from '../../session.js';
-import { calcExpansion, machineSetup } from '../../views/calculated.js';
-import { inputText } from '../../views/storage.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+import { calcFlowModel } from '../../flow.ts';
+import { calcStage, calculated, phase, phaseLabel } from '../../session.ts';
+import { calcExpansion, machineSetup } from '../../views/calculated.ts';
+import { inputText } from '../../views/storage.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';

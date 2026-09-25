@@ -1,6 +1,6 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, summary tiles, the checklist
-  (calcTasks in views/calculated.js, with this profile's edits and personal tasks) with
+  (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with
   phase notes (`phase-<phase>`), and a side column with the Space Elevator deliveries and
   the profile's assumptions. Everything reads the frozen calculation snapshot through
   calcStage(). A delivery's id is `<stage>-<item slug>`, a saved key.
@@ -17,10 +17,10 @@ import {
   phaseLabel,
   stage,
   state,
-} from '../../session.js';
-import { planTasks } from '../../tasks.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+} from '../../session.ts';
+import { planTasks } from '../../tasks.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
@@ -28,7 +28,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
-import { saveNote } from '../actions.js';
+import { saveNote } from '../actions.ts';
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.

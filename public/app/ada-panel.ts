@@ -20,13 +20,14 @@ import {
   view,
   wizard,
   workspace,
-} from './session.js';
-import { render } from './shell.js';
-import { planTasks, taskEditsState } from './tasks.js';
-import { factoryGroupsState } from './views/factories.js';
-import { storageBays } from './views/storage.js';
-import { power } from './wizard/fields.js';
-import { guidedFlow } from './wizard/guided.js';
+} from './session.ts';
+import { render } from './shell.ts';
+import { planTasks, taskEditsState } from './tasks.ts';
+import { factoryGroupsState } from './views/factories.ts';
+import { storageBays } from './views/storage.ts';
+import { power } from './wizard/fields.ts';
+import { guidedFlow } from './wizard/guided.ts';
+import type { StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
 const ADA_KEY = 'planner-ada';
@@ -37,17 +38,25 @@ let adaSignature = '';
 export let adaMuted = adaStored();
 
 // Other modules cannot assign imported bindings, so they change these through setters.
-export function setAdaIndex(value) {
+export function setAdaIndex(value: number) {
   adaIndex = value;
 }
-export function setAdaMuted(value) {
+export function setAdaMuted(value: boolean) {
   adaMuted = value;
+}
+
+// A line ADA says (ada.js): a remark, an encore or a fault line, which also has a name.
+export interface AdaLine {
+  id: string;
+  tone: string;
+  text: string;
+  name?: string;
 }
 
 // The easter egg: clicking ADA's ◈ mark five times in quick succession shows a
 // "transmission fault" line in place of the normal remark until it times out.
-export let adaFault = null;
-let adaFaultTimer;
+export let adaFault: AdaLine | null = null;
+let adaFaultTimer: ReturnType<typeof setTimeout> | undefined;
 let adaPokes = 0;
 let adaPokedAt = 0;
 
@@ -76,24 +85,26 @@ export function adaStore() {
 function adaFacts() {
   const ts = currentSave.id ? planTasks() : [];
   const next = ts.find(t => !checked(t.id));
-  const x = calculated ? calcStage() : null;
-  const rows = calculated ? x.rows || [] : plan.factories.filter(f => f.stages[stage()]);
-  const runningKey = calculated
-    ? r => 'calc-' + stage() + '-' + r.id
-    : f => 'factory-' + stage() + '-' + f.id;
+  // Read only with a calculated profile open; an empty stage stands in if its data is missing.
+  const x: StoredStage = calcStage() ?? { feasible: false };
+  const rows: { id: string }[] = calculated
+    ? x.rows || []
+    : plan.factories.filter(f => f.stages[stage()]);
+  const runningKey = (r: { id: string }) =>
+    (calculated ? 'calc-' : 'factory-') + stage() + '-' + r.id;
   const slots = storageBays()
     .flatMap(b => b.items)
     .filter(i => i.name);
-  // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.js.
+  // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.ts.
   const deliveries = calculated
-    ? Object.entries(x.delivery || {}).map(([n, d]) => ({
+    ? Object.entries<StageDelivery>(x.delivery || {}).map(([n, d]) => ({
         id: stage() + '-' + slug(n),
         target: d.target,
         initial: 0,
       }))
     : plan.deliveries.filter(d => d.phase === phase());
   // Same default as ui/plan/DeliveryCounter.vue: the original handbook starts from its recorded amounts.
-  const delivered = d =>
+  const delivered = (d: { id: string; initial: number }) =>
     state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
@@ -132,7 +143,7 @@ function adaFacts() {
     // Raw resources this stage uses beyond the profile's resource limits.
     short: calculated
       ? (workspace.catalog?.raw || []).filter(
-          n => (x.raw?.[n] || 0) > (calculated.settings.limits?.[n] ?? Infinity),
+          n => (x.raw?.[n] || 0) > (calculated?.settings.limits?.[n] ?? Infinity),
         )
       : [],
     power:
@@ -158,7 +169,7 @@ function adaFacts() {
 // A changed situation deserves the most relevant line, so the cycle restarts
 // whenever the set of applicable remarks changes. Cycling past the end of the
 // list is not an error: ADA has something to say about that too.
-export function adaCurrent() {
+export function adaCurrent(): AdaLine | null {
   if (adaFault) return adaFault;
   const facts = adaFacts(),
     list = adaRemarks(facts);
@@ -170,7 +181,8 @@ export function adaCurrent() {
   }
   const lap = Math.floor(adaIndex / list.length),
     at = adaIndex % list.length;
-  return lap > 0 && !at ? adaEncore(lap, facts) : list[at];
+  // at is below list.length, so list[at] is a remark.
+  return lap > 0 && !at ? adaEncore(lap, facts) : list[at]!;
 }
 
 // Prodding the badge is the only way to reach these, and the last one restores

@@ -3,16 +3,24 @@
 // fresh app, so a dialog starts from saved state; it reads session state through the bridge
 // and refreshes on render(). Closing the dialog unmounts it too, so a closed dialog never
 // redraws for a profile or phase it was not opened for.
-import { createApp } from 'vue';
+import { createApp, type App } from 'vue';
+import { required } from '../format.ts';
 import DetailDialog from './detail/DetailDialog.vue';
 
-let app = null;
+// What #detail shows: a handbook factory, a calculated row, a factory group's build order, a
+// storage container (by address) or an alternate recipe (by recipe id).
+export interface DetailTarget {
+  kind: 'factory' | 'calc' | 'group' | 'slot' | 'alt';
+  id: string;
+}
+
+let app: App | null = null;
 let listening = false;
 
 // Opens `target` ({ kind: 'factory' | 'calc' | 'group' | 'slot' | 'alt', id }) in #detail, replacing whatever
 // it shows, and opens the dialog if it is not open yet.
-export function showDetail(target) {
-  const d = document.querySelector('#detail');
+export function showDetail(target: DetailTarget) {
+  const d = required<HTMLDialogElement>('#detail');
   if (!listening) {
     d.addEventListener('close', unmountDetail);
     listening = true;

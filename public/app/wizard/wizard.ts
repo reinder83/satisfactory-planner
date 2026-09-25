@@ -1,36 +1,103 @@
 // The five-step profile wizard ("All settings"): creating the draft, reading the
 // form back into the draft, moving between steps, calculating the Review preview
-// and creating the profile. The draft is the `wizard` object in session.js (set
-// with setWizard). The guided start (guided.js) and the resource survey
-// (extraction.js) edit the same draft. The screens are components:
+// and creating the profile. The draft is the `wizard` object in session.ts (set
+// with setWizard). The guided start (guided.ts) and the resource survey
+// (extraction.ts) edit the same draft. The screens are components:
 // ui/pages/WizardPage.vue (the five steps, ui/wizard/), GuidedPage.vue (ui/guided/)
 // and SurveyPage.vue (ui/survey/), which read their forms back through the
 // readers here and handle their own controls.
 import { browserMode } from '../../browser-api.js';
 import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.js';
 import { carryOptions } from '../../state.js';
-import { allowSwitch, navigate, post, toast } from '../api.js';
-import { $, esc, plural } from '../format.ts';
-import { loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.js';
-import { render } from '../shell.js';
-import { guidedBuiltKeys, guidedFlow } from './guided.js';
-import { readSupply } from './supply.js';
+import { allowSwitch, navigate, post, toast } from '../api.ts';
+import { $, esc, plural, required } from '../format.ts';
+import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
+import { render } from '../shell.ts';
+import { guidedBuiltKeys, guidedFlow } from './guided.ts';
+import { readSupply } from './supply.ts';
+import type {
+  CurrentSettings,
+  FirstReleaseSettings,
+  ItemRates,
+  NodeCounts,
+  StoredCalculatedPlan,
+  WorkspaceSummary,
+} from '../../types/index.ts';
+
+// The resource survey being edited (extraction.ts). Looser than the saved ExtractionRecord:
+// the mark is whatever the form holds until the planner checks it, and the maps are created
+// as counts are entered.
+export interface Survey {
+  mark: number;
+  clock: number;
+  nodes?: Record<string, NodeCounts>;
+  wells?: Record<string, NodeCounts>;
+  used?: ItemRates;
+}
+
+// The settings being edited: the planner's input. A draft starts from the fields every
+// release has stored (the active profile's settings, or the literals in startWizard) and the
+// screens add the rest. The forms write their values as typed; the planner's settings()
+// checks and normalises them on /api/preview and /api/profiles.
+type DraftRequired = Exclude<FirstReleaseSettings, 'modNotes'>;
+export type WizardSettings = Pick<CurrentSettings, DraftRequired> &
+  Partial<Omit<CurrentSettings, DraftRequired | 'extraction'>> & { extraction?: Survey | null };
+
+// Where the survey returns to (extraction.ts).
+export interface SurveyReturn {
+  mode: WizardDraft['mode'];
+  step: number;
+  guidedStep: number;
+}
+
+// The in-progress wizard, `wizard` in session.ts. See startWizard for the fields.
+export interface WizardDraft {
+  step: number;
+  saveId: string | null;
+  saveName: string;
+  name: string;
+  settings: WizardSettings;
+  // Arrives as JSON, so a phase that never finishes has hours null, as in a stored plan.
+  preview: StoredCalculatedPlan | null;
+  carryFrom: string | null;
+  carry: Record<string, boolean>;
+  mode: 'guided' | 'advanced' | 'extraction';
+  guidedStep: number;
+  guidedAsk: string[] | null;
+  guidedTopics?: string[];
+  usedGuided: boolean;
+  tutorial: string;
+  supplyRows?: { name: string; rate: string }[];
+  extraction?: Survey;
+  extractionStep?: number;
+  extractionReturn?: SurveyReturn | null;
+  extractionUndo?: Survey | null;
+}
+
+// The reply of POST /api/profiles.
+interface CreatedProfile {
+  workspace: WorkspaceSummary;
+  saveId: string;
+  profileId: string;
+  carriedChecks: number;
+  reviewCount: number;
+}
 
 // Copy the carry panel's choices into wizard.carryFrom / wizard.carry. Does
 // nothing when the panel is not on screen. Also called by the create submit.
-export function readCarry(form, data) {
-  const w = wizard;
+export function readCarry(form: HTMLFormElement | null, data?: FormData) {
+  const w = draft();
   if (!form?.querySelector('.carry-list')) return;
   const f = data || new FormData(form),
     on = new Set(f.getAll('carry').map(String));
-  w.carryFrom = f.get('carryFrom') || null;
+  w.carryFrom = (f.get('carryFrom') as string | null) || null;
   w.carry = Object.fromEntries(carryOptions.map(([key]) => [key, on.has(key)]));
 }
 
 // Open a new draft and show it: saveId null creates a new save, otherwise the
 // profile is added to that save. Callers: "Create a save" / "Try another
-// profile" buttons (ui/actions.js, ProfilesPage.vue) and session.js when there is no save.
-export function startWizard(saveId = null) {
+// profile" buttons (ui/actions.ts, ProfilesPage.vue) and session.ts when there is no save.
+export function startWizard(saveId: string | null = null) {
   if (!allowSwitch()) return;
   const existing = workspace.saves.find(s => s.id === saveId);
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
@@ -38,7 +105,7 @@ export function startWizard(saveId = null) {
   // settings (the workspace summary exposes plan.settings). The preserved
   // handbook profile ('original') has no calculated settings, so this literal
   // stands in for the handbook's own assumptions.
-  const previous =
+  const previous: WizardSettings | null =
     selected?.settings ||
     (selected?.kind === 'original'
       ? {
@@ -75,11 +142,11 @@ export function startWizard(saveId = null) {
   //                     read clears it. Creating the profile calculates again.
   //   carryFrom, carry  source profile id and carryOptions picks (Review panel)
   //   mode              'guided' | 'advanced' | 'extraction': which screen draws
-  //   guidedStep, guidedAsk, tutorial  guided.js state; tutorial also feeds
-  //                     guidedBuiltKeys and ada-panel.js
+  //   guidedStep, guidedAsk, tutorial  guided.ts state; tutorial also feeds
+  //                     guidedBuiltKeys and ada-panel.ts
   //   usedGuided        set by toAdvanced; nothing reads it at present
-  // Added later: guidedTopics (guided.js), supplyRows (supply.js) and extraction, extractionStep,
-  // extractionReturn, extractionUndo (extraction.js).
+  // Added later: guidedTopics (guided.ts), supplyRows (supply.ts) and extraction, extractionStep,
+  // extractionReturn, extractionUndo (extraction.ts).
   setWizard({
     step: 1,
     saveId,
@@ -124,18 +191,20 @@ export function startWizard(saveId = null) {
   });
   // Fresh settings only: Concrete starts pre-ticked as a guided top-up, and the
   // browser-only edition starts a fresh plan at Phase 1.
-  if (!previous) wizard.settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
-  if (browserMode && !previous) wizard.settings.phase = '1';
+  if (!previous) draft().settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
+  if (browserMode && !previous) draft().settings.phase = '1';
   navigate('wizard');
 }
 
 // Copy the five-step form on screen into the draft (all steps share this one
 // reader; each only finds its own fields). Mutates wizard and wizard.settings
 // and clears the preview. Does not re-render.
-export function readWizard(form) {
+export function readWizard(form: HTMLFormElement) {
   const f = new FormData(form),
-    w = wizard,
+    w = draft(),
     s = w.settings,
+    // The name-driven writes below go through this view of the same object.
+    byName = s as unknown as Record<string, unknown>,
     oldPreset = s.purity + '|' + s.distribution;
   // Name -> setting: MW fields are stored as GW, saveName/profileName go on the
   // draft, "limit:<r>" into s.limits, then numeric, boolean and text settings.
@@ -143,8 +212,8 @@ export function readWizard(form) {
   for (const [k, v] of f) {
     if (k === 'availablePowerMW') s.availablePowerGW = Number(v) / 1000;
     if (k === 'installedPowerMW') s.installedPowerGW = Number(v) / 1000;
-    if (k === 'saveName') w.saveName = v;
-    if (k === 'profileName') w.name = v;
+    if (k === 'saveName') w.saveName = String(v);
+    if (k === 'profileName') w.name = String(v);
     else if (k.startsWith('limit:')) s.limits[k.slice(6)] = Number(v);
     else if (
       [
@@ -165,9 +234,9 @@ export function readWizard(form) {
         'hours',
       ].includes(k)
     )
-      s[k] = Number(v);
+      byName[k] = Number(v);
     else if (k === 'collectables') s.collectables = v === 'true';
-    else if (k === 'pureIngots') s[k] = v === 'true';
+    else if (k === 'pureIngots') s.pureIngots = v === 'true';
     else if (
       [
         'phase',
@@ -185,22 +254,24 @@ export function readWizard(form) {
         'droneFuel',
       ].includes(k)
     )
-      s[k] = v;
+      byName[k] = v;
   }
-  if (form.querySelector('[name=sloop]')) s.sloopReserved = f.getAll('sloop').map(String);
+  if (form.querySelector('[name=sloop]'))
+    s.sloopReserved = f.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
   if (form.querySelector('.alt-list')) {
-    s.alternateRecipes = f.getAll('alt').map(String);
+    const alternates = f.getAll('alt').map(String);
+    s.alternateRecipes = alternates;
     s.preferredRecipes = f
       .getAll('altpref')
       .map(String)
-      .filter(id => s.alternateRecipes.includes(id));
+      .filter(id => alternates.includes(id));
   }
   {
     const supply = readSupply(form, f);
     if (supply) s.existingSupply = supply;
   }
   if (form.querySelector('.rate-list')) {
-    const over = {};
+    const over: ItemRates = {};
     for (const [k, v] of f)
       if (k.startsWith('rate:') && String(v).trim() !== '' && Number.isFinite(Number(v)))
         over[k.slice(5)] = Number(v);
@@ -223,16 +294,16 @@ export function readWizard(form) {
   w.preview = null;
 }
 
-// True while calculateWizard runs; the move functions here, in guided.js and in
-// extraction.js ignore clicks meanwhile, so a second request cannot start.
+// True while calculateWizard runs; the move functions here, in guided.ts and in
+// extraction.ts ignore clicks meanwhile, so a second request cannot start.
 export let wizardBusy = false;
 
 // The public edition reports each phase from the calculator worker; the server edition shows the static label.
 // Returns the options object for post(): relabels `button` now and on progress.
-export const calcProgress = (button, label) => {
+export const calcProgress = (button: HTMLElement | null | undefined, label: string) => {
   if (button) button.textContent = label;
   return {
-    onProgress: phase => {
+    onProgress: (phase: number) => {
       if (button) button.textContent = `${label} Phase ${phase} of 5…`;
     },
   };
@@ -251,7 +322,7 @@ const TIMEOUT_ADVICE = [
 
 // Show a failed calculation or create in the form's error line (a toast when
 // there is none). A timeout gets suggestions; the message itself is escaped.
-export function wizardError(form, err) {
+export function wizardError(form: HTMLFormElement | null, err: Error) {
   const el = form?.querySelector('.form-error');
   if (!el) {
     toast(err.message, true);
@@ -266,10 +337,10 @@ export function wizardError(form, err) {
 // to copy from a sibling profile of the same save; guidedBuiltKeys marks the tutorial steps
 // built when the guided answers say it is done. Nothing is created until the post succeeds.
 // `button` shows the progress (see calcProgress). A failure goes in the form's error line.
-export async function createProfile(form, button) {
-  const w = wizard;
+export async function createProfile(form: HTMLFormElement, button: HTMLElement | null) {
+  const w = draft();
   readCarry(form);
-  const r = await post(
+  const r = await post<CreatedProfile>(
     '/api/profiles',
     {
       saveId: w.saveId,
@@ -301,7 +372,7 @@ export async function createProfile(form, button) {
 }
 
 // The primary button's label on the current screen: the guided questions, the five steps.
-export const submitLabel = w =>
+export const submitLabel = (w: WizardDraft) =>
   w.mode === 'guided' && w.guidedStep <= guidedFlow().length
     ? w.guidedStep >= guidedFlow().length
       ? 'Calculate plan'
@@ -314,9 +385,9 @@ export const submitLabel = w =>
 
 // Go to step `target` (1-5): read the form first, validating only when moving
 // forward. Reaching step 5 always recalculates the preview.
-export async function moveWizard(target) {
+export async function moveWizard(target: number) {
   if (wizardBusy || !wizard || target === wizard.step || target < 1 || target > 5) return;
-  const form = $('#wizard-form');
+  const form = required<HTMLFormElement>('#wizard-form');
   if (target > wizard.step && !form.reportValidity()) return;
   readWizard(form);
   if (target !== 5) {
@@ -333,28 +404,29 @@ export async function moveWizard(target) {
 // Pages edition), stores the result as wizard.preview and shows Review. All
 // step and submit buttons are disabled meanwhile; on failure the draft stays
 // where it was and the error is shown in the form.
-export async function calculateWizard(form) {
+export async function calculateWizard(form: HTMLFormElement | null) {
+  const w = draft();
   wizardBusy = true;
-  const buttons = document.querySelectorAll(
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
     '[data-wizard-step],[data-guided-advanced],#wizard-form button',
   );
   buttons.forEach(b => (b.disabled = true));
-  const submit = form?.querySelector('button[type="submit"]'),
-    label = submit?.textContent;
+  const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]'),
+    label = submit?.textContent ?? '';
   try {
-    wizard.name =
-      wizard.name.trim() || workspace.catalog.goals.find(g => g.id === wizard.settings.goal).name;
-    wizard.preview = await post(
+    // The goal is one of the catalog's: the guided cards and the Goals step only offer those.
+    w.name = w.name.trim() || workspace.catalog.goals.find(g => g.id === w.settings.goal)!.name;
+    w.preview = await post<StoredCalculatedPlan>(
       '/api/preview',
-      { settings: wizard.settings },
+      { settings: w.settings },
       true,
       calcProgress(submit, 'Calculating…'),
     );
-    wizard.step = 5;
-    wizard.guidedStep = guidedFlow().length + 1;
+    w.step = 5;
+    w.guidedStep = guidedFlow().length + 1;
     render();
   } catch (err) {
-    wizardError(form, err);
+    wizardError(form, err as Error);
     if (submit) submit.textContent = label;
   } finally {
     wizardBusy = false;

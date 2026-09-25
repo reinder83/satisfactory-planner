@@ -383,7 +383,7 @@ const safe = (fn, facts) => {
 
 // Facts in, remarks out. Never throws: a joke must not be able to break the
 // planner, so a rule that trips over unexpected data is skipped.
-// `facts` comes from adaFacts in app/ada-panel.js. Returns every applicable rule as
+// `facts` comes from adaFacts in app/ada-panel.ts. Returns every applicable rule as
 // { id, tone, text } in rank order, followed by all IDLE lines. The panel shows one at a time
 // and restarts at the top when the list of ids changes.
 export function adaRemarks(facts = {}) {

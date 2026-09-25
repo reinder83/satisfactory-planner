@@ -6,8 +6,8 @@
 -->
 <script setup>
 import { ref } from 'vue';
-import { post } from '../api.js';
-import { authMode, boot, workspace } from '../session.js';
+import { post } from '../api.ts';
+import { authMode, boot, workspace } from '../session.ts';
 
 const props = defineProps({ mode: { type: String, required: true } });
 const busy = ref(false);

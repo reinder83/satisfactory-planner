@@ -3,7 +3,7 @@
   questions are answered: step tabs, the current step in #wizard-form (ui/wizard/), and Back /
   Cancel, "← Guided start" and the primary button. Without a draft it offers to create a save.
   The steps keep the legacy readers: their inputs are named as before and not bound to the
-  draft, so readWizard (wizard/wizard.js) reads the form exactly as it did, and moving between
+  draft, so readWizard (wizard/wizard.ts) reads the form exactly as it did, and moving between
   steps reads the one being left. The form is keyed by step, so every step starts from the
   draft and a new step clears the error line. Enter or the primary button moves on until
   Review, which calculates, and on Review creates the profile. The submit stops here, since
@@ -12,18 +12,18 @@
 <script setup>
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.js';
-import { navigate } from '../../api.js';
-import { setWizard, wizard } from '../../session.js';
-import { render } from '../../shell.js';
-import { toGuided } from '../../wizard/guided.js';
+import { navigate } from '../../api.ts';
+import { setWizard, wizard } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { toGuided } from '../../wizard/guided.ts';
 import {
   createProfile,
   moveWizard,
   readWizard,
   submitLabel,
   wizardError,
-} from '../../wizard/wizard.js';
-import { legacy } from '../bridge.js';
+} from '../../wizard/wizard.ts';
+import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import GoalStep from '../wizard/GoalStep.vue';
@@ -31,7 +31,7 @@ import PreferencesStep from '../wizard/PreferencesStep.vue';
 import ResourcesStep from '../wizard/ResourcesStep.vue';
 import ReviewStep from '../wizard/ReviewStep.vue';
 import SettingsStep from '../wizard/SettingsStep.vue';
-import { newSave } from '../actions.js';
+import { newSave } from '../actions.ts';
 
 const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
 

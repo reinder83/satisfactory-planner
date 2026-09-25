@@ -2,146 +2,207 @@
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
 import { browserMode } from '../browser-api.js';
-import { pending, request, writeQueue } from './api.js';
-import { $ } from './format.ts';
-import { render } from './shell.js';
-import { showSignedOut, unmountShell } from './ui/mount.js';
-import { startWizard } from './wizard/wizard.js';
+import { initialState } from '../state.js';
+import { pending, request, writeQueue } from './api.ts';
+import { required } from './format.ts';
+import { render } from './shell.ts';
+import { showSignedOut, unmountShell } from './ui/mount.ts';
+import { startWizard, type WizardDraft } from './wizard/wizard.ts';
+import type {
+  ContextReply,
+  Handbook,
+  Phase,
+  ProfileKind,
+  Progression,
+  ProgressState,
+  StageKey,
+  StoredCalculatedPlan,
+  WorkspaceSummary,
+} from '../types/index.ts';
 
-// progression.json (unlocks and milestones), read by views/calculated.js and flow.js.
-export let progressionData;
+// The hash routes, one per page.
+export const VIEWS = [
+  'plan',
+  'factories',
+  'storage',
+  'resources',
+  'backup',
+  'profiles',
+  'wizard',
+  'account',
+] as const;
+export type View = (typeof VIEWS)[number];
+// The route a hash names: an unknown one shows the plan.
+export const viewOf = (hash: string): View =>
+  (VIEWS as readonly string[]).includes(hash) ? (hash as View) : 'plan';
+
+// Which dialog #detail shows (factory-detail.ts, views/storage.ts), or null.
+export interface ActiveDetail {
+  type: 'factory' | 'calc' | 'group' | 'slot';
+  id: string;
+}
+
+// The open save and profile. kind is 'original' for the preserved handbook and 'calculated'
+// for a wizard-made profile; the empty workspace's placeholder profile has none.
+export interface OpenSave {
+  id: string;
+  name: string;
+}
+export interface OpenProfile {
+  id: string;
+  name: string;
+  kind?: ProfileKind;
+}
+
+// progression.json (unlocks and milestones), read by views/calculated.ts and flow.ts.
+export let progressionData: Progression;
 // /api/workspace: the signed-in user, every save with its profile summaries, the catalog.
-export let workspace;
-// { id, name } of the open save and { id, name, kind } of the open profile. kind is
-// 'original' for the preserved handbook and 'calculated' for a wizard-made profile.
-export let currentSave;
-export let currentProfile;
+export let workspace: WorkspaceSummary;
+export let currentSave: OpenSave;
+export let currentProfile: OpenProfile;
 // The open profile's frozen calculated plan, or null for the original handbook.
 // Views branch on this to pick the calculated or the handbook rendering.
-export let calculated = null;
+export let calculated: StoredCalculatedPlan | null = null;
 // The in-progress wizard (settings being edited, step, preview) while #wizard is open.
-export let wizard = null;
-// Which form the signed-out screen shows ('login' or 'register'); see ui/SignedOut.vue.
-export let authMode = 'login';
+export let wizard: WizardDraft | null = null;
+// Which form the signed-out screen shows; see ui/SignedOut.vue.
+export let authMode: 'login' | 'register' = 'login';
 // plan.json as fetched at boot; the fallback when a profile carries no handbook of its own.
-let basePlan;
+let basePlan: Handbook | undefined;
 // The handbook in use: the profile's own copy for an original profile, otherwise plan.json.
-export let plan;
+export let plan: Handbook;
 // The open profile's saved progress (settings, checks, notes, deliveries, customTasks,
-// taskEdits, ...). Replaced wholesale by every successful save() in api.js.
-export let state;
-// The current hash route; render() in shell.js picks the view from it.
-export let view = 'plan';
+// taskEdits, ...). Replaced wholesale by every successful save() in api.ts. null while
+// signed out.
+export let state: ProgressState;
+// The current hash route; render() in shell.ts picks the view from it.
+export let view: View = 'plan';
 // The current page's search text and UI toggles. View state only, never saved;
 // loadContext() and route changes reset some of them.
 export let query = '';
+// The storage floor shown: a built-in id ('ground', 'upper', 'workshop') or an added 'cf-…'.
 export let floor = 'ground';
+// The factories page's filter (FILTERS in ui/pages/FactoriesPage.vue).
 export let factoryFilter = 'all';
 export let hideDone = false;
-export let activeDetail = null;
+export let activeDetail: ActiveDetail | null = null;
 export let layoutEditing = false;
 export let planEditing = false;
-export let editingTask = null;
+// The id of the build-plan step whose edit form is open.
+export let editingTask: string | null = null;
 export let factoryEditing = false;
 
 // Other modules cannot assign imported bindings, so they change these through setters.
-export function setWorkspace(value) {
+export function setWorkspace(value: WorkspaceSummary) {
   workspace = value;
 }
-export function setProgressionData(value) {
+export function setProgressionData(value: Progression) {
   progressionData = value;
 }
-export function setWizard(value) {
+export function setWizard(value: WizardDraft | null) {
   wizard = value;
 }
-export function setAuthMode(value) {
+// The open wizard draft, for code that only runs while one is open (the wizard's screens and
+// their readers). Throws if there is none, where reading a field of null would have thrown.
+export function draft(): WizardDraft {
+  if (!wizard) throw Error('No wizard draft is open.');
+  return wizard;
+}
+export function setAuthMode(value: 'login' | 'register') {
   authMode = value;
 }
-export function setState(value) {
+export function setState(value: ProgressState) {
   state = value;
 }
-export function setView(value) {
+export function setView(value: View) {
   view = value;
 }
-export function setQuery(value) {
+export function setQuery(value: string) {
   query = value;
 }
-export function setFloor(value) {
+export function setFloor(value: string) {
   floor = value;
 }
-export function setFactoryFilter(value) {
+export function setFactoryFilter(value: string) {
   factoryFilter = value;
 }
-export function setHideDone(value) {
+export function setHideDone(value: boolean) {
   hideDone = value;
 }
-export function setActiveDetail(value) {
+export function setActiveDetail(value: ActiveDetail | null) {
   activeDetail = value;
 }
-export function setLayoutEditing(value) {
+export function setLayoutEditing(value: boolean) {
   layoutEditing = value;
 }
-export function setPlanEditing(value) {
+export function setPlanEditing(value: boolean) {
   planEditing = value;
 }
-export function setEditingTask(value) {
+export function setEditingTask(value: string | null) {
   editingTask = value;
 }
-export function setFactoryEditing(value) {
+export function setFactoryEditing(value: boolean) {
   factoryEditing = value;
 }
 
 // A profile records the phase it was created for. Earlier phases are already
 // behind the user, so their steps and targets are not theirs to build.
 // The original handbook (no calculated plan) covers Phase 3 onward.
-export const startPhase = () => (calculated ? String(calculated.settings?.phase || '1') : '3');
+export const startPhase = (): StageKey =>
+  calculated ? (String(calculated.settings?.phase || '1') as StageKey) : '3';
 
 // The phase being worked on: the saved setting, raised to the profile's start phase.
-export const phase = () => {
+export const phase = (): Phase => {
   const p = state.settings.phase;
   return p !== 'post' && Number(p) < Number(startPhase()) ? startPhase() : p;
 };
 
 // The data key for the phase: post-game has no stage of its own and uses Phase 5's
 // factories and calculated stage. Checklist ids like factory-<stage>-<id> use this.
-export const stage = () => (phase() === 'post' ? '5' : phase());
+export const stage = (): StageKey => {
+  const p = phase();
+  return p === 'post' ? '5' : p;
+};
 
 // Choices for the phase picker in the header. Without an open save (fresh start) every
 // phase is offered; otherwise phases before the profile's start phase are left out.
-export const phaseOptions = () =>
+const PHASES: Phase[] = ['1', '2', '3', '4', '5', 'post'];
+export const phaseOptions = (): Phase[] =>
   !currentSave.id
-    ? ['1', '2', '3', '4', '5', 'post']
-    : [...['1', '2', '3', '4', '5'].filter(p => Number(p) >= Number(startPhase())), 'post'];
+    ? PHASES
+    : [...PHASES.filter(p => p !== 'post' && Number(p) >= Number(startPhase())), 'post'];
 
 // [phase, data] entries of a per-phase object, from the profile's start phase on.
-export const fromStart = stages =>
-  Object.entries(stages || {}).filter(([ph]) => Number(ph) >= Number(startPhase()));
+export const fromStart = <T>(stages: Partial<Record<string, T>> | undefined): [string, T][] =>
+  (Object.entries(stages || {}) as [string, T][]).filter(
+    ([ph]) => Number(ph) >= Number(startPhase()),
+  );
 
 // Checklist lookups. The id is a stable saved key (e.g. factory-<stage>-<id>,
 // calc-<stage>-<rowId>, slot-<address>-<step>) and must not change between releases.
-export const checked = id => !!state.checks[id];
-export const phaseLabel = p => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
+export const checked = (id: string) => !!state.checks[id];
+export const phaseLabel = (p: string) => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
 
 // Opens a save/profile: fetches its state and plan from /api/context and resets the
 // per-page UI state and the factory dialog. Does not render; callers render or navigate.
 // Waits for queued saves first so they land in the profile they were made in.
-export async function loadContext(saveId, profileId) {
+export async function loadContext(saveId: string, profileId: string) {
   await writeQueue;
   setContext(
-    await request(
+    await request<ContextReply>(
       '/api/context?save=' +
         encodeURIComponent(saveId) +
         '&profile=' +
         encodeURIComponent(profileId),
     ),
   );
-  $('#detail').close();
+  required<HTMLDialogElement>('#detail').close();
 }
 
 // Makes an /api/context reply the open save and profile ({ save, profile, state, plan,
 // handbook }): its state, its calculated plan (null for the handbook) and the handbook it
 // reads, and resets the per-page UI state. Also used by the component tests.
-export function setContext(c) {
+export function setContext(c: ContextReply) {
   currentSave = c.save;
   currentProfile = c.profile;
   state = c.state;
@@ -165,34 +226,25 @@ export const calcStage = () => calculated?.stages[stage()];
 // placeholder save/profile. Otherwise opens the active save and renders the routed view.
 export async function boot() {
   try {
-    workspace = await request('/api/workspace');
+    workspace = await request<WorkspaceSummary>('/api/workspace');
     if (!workspace.user) {
       authMode = 'login';
-      state = null;
-      showSignedOut($('#app'));
+      // Signed out: no page reads the state until the next boot(); the hashchange listener
+      // checks it before drawing.
+      state = null as unknown as ProgressState;
+      showSignedOut(required('#app'));
       return;
     }
     [plan, progressionData] = await Promise.all([
-      request('/plan.json'),
-      request('/progression.json'),
+      request<Handbook>('/plan.json'),
+      request<Progression>('/progression.json'),
     ]);
     basePlan = plan;
     // Open the workspace's active save at its active profile, then honour a deep link.
     const save = workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
     if (save) {
       await loadContext(save.id, save.activeProfile);
-      view = [
-        'plan',
-        'factories',
-        'storage',
-        'resources',
-        'backup',
-        'profiles',
-        'wizard',
-        'account',
-      ].includes(location.hash.slice(1))
-        ? location.hash.slice(1)
-        : 'plan';
+      view = viewOf(location.hash.slice(1));
       // The wizard lives only in memory, so #wizard after a reload lands on the profiles page.
       if (view === 'wizard' && !wizard) view = 'profiles';
       render();
@@ -201,13 +253,7 @@ export async function boot() {
       // then the wizard to create the first save. startWizard() navigates to #wizard.
       currentSave = { id: '', name: 'New save' };
       currentProfile = { id: '', name: 'Choose a profile' };
-      state = {
-        settings: { phase: browserMode ? '1' : '3' },
-        checks: {},
-        notes: {},
-        deliveries: {},
-        customTasks: [],
-      };
+      state = { ...initialState(), settings: { phase: browserMode ? '1' : '3' } };
       calculated = null;
       startWizard();
     }
@@ -215,10 +261,10 @@ export async function boot() {
     // Any failure while opening replaces the page with an error and a retry button.
     unmountShell();
     // The markup is fixed; the message goes in as text.
-    $('#app').innerHTML =
+    required('#app').innerHTML =
       '<section class="loading"><h1>Could not open the planner</h1><p></p>' +
       '<button class="btn" id="retry">Try again</button></section>';
-    $('#app .loading p').textContent = e.message;
-    $('#retry').onclick = boot;
+    required('#app .loading p').textContent = e instanceof Error ? e.message : String(e);
+    required('#retry').onclick = boot;
   }
 }

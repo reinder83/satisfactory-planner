@@ -7,11 +7,11 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { save, toast } from '../../api.js';
+import { save, toast } from '../../api.ts';
 import { num } from '../../format.ts';
-import { currentProfile, state } from '../../session.js';
-import { render } from '../../shell.js';
-import { legacy } from '../bridge.js';
+import { currentProfile, state } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { legacy } from '../bridge.ts';
 
 const props = defineProps({ delivery: { type: Object, required: true } });
 

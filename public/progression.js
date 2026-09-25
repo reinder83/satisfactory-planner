@@ -3,7 +3,7 @@
 const phaseForTier = t => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
 const fmt = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 // The generated guidance steps of a calculated profile for one phase, called by calcTasks in
-// app/views/calculated.js. `plan` is the profile's calculation snapshot, `state` its
+// app/views/calculated.ts. `plan` is the profile's calculation snapshot, `state` its
 // progress (only `checks` is read), `data` is progression.json and `phase` '1'-'5' or
 // 'post' (planned as Phase 5). Returns task lists of { id, title, body }; ids are checklist
 // keys, so they must stay stable. Nothing here changes the plan or the progress.

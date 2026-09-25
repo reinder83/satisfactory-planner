@@ -1,4 +1,4 @@
-// The GitHub Pages edition's stand-in for the server API. app/api.js request() sends every
+// The GitHub Pages edition's stand-in for the server API. app/api.ts request() sends every
 // /api/ path here when browserMode is on, and gets back the same JSON the matching route in
 // workspace.mjs returns, so the UI does not care which edition it runs in. Data lives in one
 // IndexedDB record (browser-store.js); calculation runs in calculator-worker.js, which
@@ -25,7 +25,7 @@ export const browserMode = globalThis.PLANNER_BROWSER === true;
 let instance;
 // Builds the request handler. `store` is openBrowserStore()'s object, `calculator(settings,
 // onProgress)` resolves to a plan and `catalog` is catalog.json; tests pass a stand-in store
-// and planner.mjs's calculate. Errors are thrown; app/api.js shows them like a server { error }.
+// and planner.mjs's calculate. Errors are thrown; app/api.ts shows them like a server { error }.
 export function createBrowserApi(store, calculator, catalog) {
   const uid = () => crypto.randomUUID();
   const cleanName = n => {
@@ -70,7 +70,7 @@ export function createBrowserApi(store, calculator, catalog) {
     if (!profile) throw Error('Profile not found.');
     return { save, profile };
   };
-  // Takes the same (path, fetch options) app/api.js would give fetch(); `options.onProgress`
+  // Takes the same (path, fetch options) app/api.ts would give fetch(); `options.onProgress`
   // is extra and receives the phase number the worker is calculating.
   // Concurrency: every change happens inside one store.transaction(), and IndexedDB serializes
   // readwrite transactions, so two tabs cannot lose each other's writes. Routes that calculate
@@ -311,7 +311,7 @@ export function createBrowserApi(store, calculator, catalog) {
     return read ? operation(await store.transaction()) : store.transaction(operation);
   };
 }
-// Entry point app/api.js calls in browser mode. The first call creates the store, the worker
+// Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
 // wrapper and the catalog; if that fails, the rejected promise stays cached and every later
 // call fails with the same error until the page is reloaded.
 export async function browserRequest(route, options) {

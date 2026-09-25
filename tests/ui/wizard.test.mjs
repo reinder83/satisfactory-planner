@@ -6,13 +6,13 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { carryOptions } from '../../public/state.js';
-import { setWizard, view, wizard, workspace } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
-import { vuePage } from '../../public/app/ui/pages.js';
+import { setWizard, view, wizard, workspace } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
+import { vuePage } from '../../public/app/ui/pages.ts';
 import GuidedPage from '../../public/app/ui/pages/GuidedPage.vue';
 import SurveyPage from '../../public/app/ui/pages/SurveyPage.vue';
 import WizardPage from '../../public/app/ui/pages/WizardPage.vue';
-import { guidedFlow } from '../../public/app/wizard/guided.js';
+import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { $, $$, catalog, evil, generated, go, open, page, stubFetch } from './setup.mjs';
 
 const text = s => ($(s)?.textContent || '').replace(/\s+/g, ' ');

@@ -1,13 +1,13 @@
 <!--
   One guided question's options as picture cards: radios named "guided:<id>", read back by
-  readGuidedForm (wizard/guided.js). The picked card follows the settings, so a change made in
+  readGuidedForm (wizard/guided.ts). The picked card follows the settings, so a change made in
   All settings shows here. The artwork is either up to four bundled item icons or an inline SVG
   glyph (GUIDED_GLYPHS), never a new asset; the glyphs are fixed markup, not user text.
 -->
 <script setup>
 import { computed } from 'vue';
-import { GUIDED_GLYPHS, guidedAnswer } from '../../wizard/guided.js';
-import { legacy } from '../bridge.js';
+import { GUIDED_GLYPHS, guidedAnswer } from '../../wizard/guided.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 
 const props = defineProps({ question: { type: Object, required: true } });

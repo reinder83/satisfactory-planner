@@ -1,16 +1,16 @@
 <!--
   One step of the build-plan checklist. Its checkbox writes the step's saved checklist key
-  (toggleCheck in ui/actions.js, which the storage page's checklists use too); its
+  (toggleCheck in ui/actions.ts, which the storage page's checklists use too); its
   "Open factory" link is a factoryLink(). In edit mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark.
 -->
 <script setup>
-import { save } from '../../api.js';
-import { phase, setEditingTask } from '../../session.js';
-import { render } from '../../shell.js';
-import { planTasks } from '../../tasks.js';
+import { save } from '../../api.ts';
+import { phase, setEditingTask } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { planTasks } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
-import { factoryLink, toggleCheck } from '../actions.js';
+import { factoryLink, toggleCheck } from '../actions.ts';
 
 const props = defineProps({
   step: { type: Object, required: true },

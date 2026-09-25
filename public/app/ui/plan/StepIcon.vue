@@ -1,8 +1,8 @@
 <!-- A build-plan step's icon: the bundled icon of the part it makes, otherwise the glyph for
-     its kind of work (taskIcon() in tasks.js), on the build plan and the storage page. The
+     its kind of work (taskIcon() in tasks.ts), on the build plan and the storage page. The
      glyphs are fixed markup from TASK_GLYPHS, never user text. -->
 <script setup>
-import { TASK_GLYPHS } from '../../tasks.js';
+import { TASK_GLYPHS } from '../../tasks.ts';
 import ItemIcon from '../ItemIcon.vue';
 
 defineProps({ icon: { type: Object, required: true } });

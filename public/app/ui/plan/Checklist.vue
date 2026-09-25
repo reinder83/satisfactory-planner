@@ -15,8 +15,8 @@ import {
   query,
   setHideDone,
   setQuery,
-} from '../../session.js';
-import { render } from '../../shell.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
 import {
   basePlanTasks,
   filteredPlanTasks,
@@ -25,8 +25,8 @@ import {
   taskIcon,
   taskLink,
   taskLinkChoices,
-} from '../../tasks.js';
-import { legacy } from '../bridge.js';
+} from '../../tasks.ts';
+import { legacy } from '../bridge.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';

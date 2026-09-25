@@ -9,15 +9,15 @@ import {
   openCalculatedFactory,
   openFactory,
   openGroupChain,
-} from '../../public/app/factory-detail.js';
+} from '../../public/app/factory-detail.ts';
 import {
   calcStage,
   setFactoryEditing,
   setFactoryFilter,
   setQuery,
   state,
-} from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
+} from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
 import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.mjs';
 
 const plan = generated();
@@ -273,7 +273,7 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   openFactory('wire');
   $('#detail-note').value = 'Unsaved thought';
   $('#detail-note').dispatchEvent(new Event('input'));
-  // What toggleCheck (ui/actions.js) does once the tick is saved.
+  // What toggleCheck (ui/actions.ts) does once the tick is saved.
   state.checks['factory-3-wire'] = true;
   render();
   await nextTick();

@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.js';
-import { setContext, setView, setWorkspace } from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
-import { showSignedOut, unmountShell } from '../../public/app/ui/mount.js';
+import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.ts';
+import { setContext, setView, setWorkspace } from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
+import { showSignedOut, unmountShell } from '../../public/app/ui/mount.ts';
 
 // Vitest runs from the repository root.
 const handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));

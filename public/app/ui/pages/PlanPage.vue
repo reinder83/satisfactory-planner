@@ -3,22 +3,22 @@
   personal tasks and phase notes, and a side column with the next step and the Space
   Elevator deliveries. Post-game ('post') reads the Phase 5 stage of the handbook: stage()
   maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The notes'
-  "Save notes" button uses saveNote in ui/actions.js.
+  "Save notes" button uses saveNote in ui/actions.ts.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { checked, phase, phaseLabel, plan, stage, state } from '../../session.js';
-import { planTasks } from '../../tasks.js';
-import { storageBays } from '../../views/storage.js';
-import { legacy } from '../bridge.js';
+import { checked, phase, phaseLabel, plan, stage, state } from '../../session.ts';
+import { planTasks } from '../../tasks.ts';
+import { storageBays } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
-import { saveNote } from '../actions.js';
+import { saveNote } from '../actions.ts';
 
 const page = computed(() =>
   legacy(() => {
@@ -28,7 +28,7 @@ const page = computed(() =>
       next = ts.find(t => !checked(t.id));
     // Factory and storage counters. The check keys are saved progress and must not change:
     // `factory-<stage>-<id>` is a factory's Running box, `slot-<address>-verified` the last
-    // of a container's four checks (see slotKeys in views/storage.js).
+    // of a container's four checks (see slotKeys in views/storage.ts).
     const fs = plan.factories.filter(f => f.stages[stage()]);
     const slots = storageBays()
       .flatMap(b => b.items)

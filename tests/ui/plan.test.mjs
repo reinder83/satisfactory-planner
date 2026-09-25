@@ -10,9 +10,9 @@ import {
   setHideDone,
   setQuery,
   state,
-} from '../../public/app/session.js';
-import { render } from '../../public/app/shell.js';
-import { planTasks } from '../../public/app/tasks.js';
+} from '../../public/app/session.ts';
+import { render } from '../../public/app/shell.ts';
+import { planTasks } from '../../public/app/tasks.ts';
 import {
   $,
   $$,

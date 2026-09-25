@@ -1,13 +1,13 @@
-<!-- A factory group's build order (groupChain in factory-detail.js): suppliers before
+<!-- A factory group's build order (groupChain in factory-detail.ts): suppliers before
      consumers, each stage with what it needs and what it feeds, linked to its factory dialog.
      Opened from "Build order ↗" on a group with more than one factory. -->
 <script setup>
 import { computed } from 'vue';
-import { groupChain } from '../../factory-detail.js';
-import { phaseLabel, stage } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { groupChain } from '../../factory-detail.ts';
+import { phaseLabel, stage } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
-import { factoryLink } from '../actions.js';
+import { factoryLink } from '../actions.ts';
 
 const props = defineProps({ id: { type: String, required: true } });
 

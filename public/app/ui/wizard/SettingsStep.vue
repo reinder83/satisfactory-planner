@@ -7,8 +7,8 @@
 <script setup>
 import { computed } from 'vue';
 import { distributions, purities } from '../../../preferences.js';
-import { wizard } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { wizard } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';

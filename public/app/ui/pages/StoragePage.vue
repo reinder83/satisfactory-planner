@@ -17,10 +17,10 @@ import {
   setFloor,
   setLayoutEditing,
   setQuery,
-} from '../../session.js';
-import { render } from '../../shell.js';
-import { storageBays, storageFloors } from '../../views/storage.js';
-import { legacy } from '../bridge.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
+import { storageBays, storageFloors } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';

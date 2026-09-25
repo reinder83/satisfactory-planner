@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { workspace } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { workspace } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import DialogFrame from './DialogFrame.vue';
 import RecipePanel from './RecipePanel.vue';
 

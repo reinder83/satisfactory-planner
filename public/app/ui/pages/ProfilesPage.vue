@@ -4,7 +4,7 @@
   calculated ones have `settings` to summarise. The browser edition links to backups
   instead of accounts. Actions that leave the open profile call allowSwitch() first, which
   asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
-  use newSave in ui/actions.js.
+  use newSave in ui/actions.ts.
 -->
 <script setup>
 import { computed, ref } from 'vue';
@@ -17,7 +17,7 @@ import {
   request,
   toast,
   writeQueue,
-} from '../../api.js';
+} from '../../api.ts';
 import { num, slug } from '../../format.ts';
 import {
   boot,
@@ -27,13 +27,13 @@ import {
   phaseLabel,
   setWorkspace,
   workspace,
-} from '../../session.js';
-import { render } from '../../shell.js';
-import { startWizard } from '../../wizard/wizard.js';
-import { legacy } from '../bridge.js';
+} from '../../session.ts';
+import { render } from '../../shell.ts';
+import { startWizard } from '../../wizard/wizard.ts';
+import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
-import { newSave } from '../actions.js';
+import { newSave } from '../actions.ts';
 
 const page = computed(() =>
   legacy(() => ({

@@ -1,19 +1,19 @@
 <!--
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
   key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
-  (factoryLink() in ui/actions.js). A power-generation row has no outputs, so its group
+  (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its group
   share is measured in MW.
 -->
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { checked, factoryEditing, stage } from '../../session.js';
-import { allocationText } from '../../views/factories.js';
-import { power } from '../../wizard/fields.js';
-import { legacy } from '../bridge.js';
+import { checked, factoryEditing, stage } from '../../session.ts';
+import { allocationText } from '../../views/factories.ts';
+import { power } from '../../wizard/fields.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
-import { factoryLink, toggleCheck } from '../actions.js';
+import { factoryLink, toggleCheck } from '../actions.ts';
 
 const props = defineProps({
   row: { type: Object, required: true },

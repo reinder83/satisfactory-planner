@@ -1,7 +1,7 @@
 <!--
   #resources for the original handbook, at the current stage: power tiles, the fresh
   resource table against plan.capacities, and the power commissioning checklist, whose boxes
-  write the saved check keys `power-…` (toggleCheck in ui/actions.js).
+  write the saved check keys `power-…` (toggleCheck in ui/actions.ts).
   A calculated profile gets CalculatedResourcesPage.vue instead. Much of
   the text (coal limit, rocket-fuel blocks, nuclear sequence) describes the owner's handbook
   and is fixed copy.
@@ -9,12 +9,12 @@
 <script setup>
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { checked, plan, stage } from '../../session.js';
-import { legacy } from '../bridge.js';
+import { checked, plan, stage } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
-import { toggleCheck } from '../actions.js';
+import { toggleCheck } from '../actions.ts';
 
 // The handbook's power commissioning steps: saved check key, label.
 const POWER_STEPS = [

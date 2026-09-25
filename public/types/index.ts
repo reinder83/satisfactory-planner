@@ -4,9 +4,13 @@
 //   handbook.ts    the owner's handbook (plan.json)
 //   calculated.ts  a calculated profile's frozen plan and its settings
 //   workspace.ts   workspace.json, the /api/ replies, the catalog and the export formats
+//   progression.ts the game's milestones and research (progression.json)
+//   guided.ts      the guided start's questions (preferences.js)
 // tests/types/ checks these against the real data and code (npm run typecheck).
 export type * from './common.ts';
 export type * from './state.ts';
 export type * from './handbook.ts';
 export type * from './calculated.ts';
 export type * from './workspace.ts';
+export type * from './progression.ts';
+export type * from './guided.ts';

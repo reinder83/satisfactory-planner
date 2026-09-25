@@ -2,9 +2,9 @@
      a random custom-… id. The button is disabled while saving; a success empties the form. -->
 <script setup>
 import { ref } from 'vue';
-import { save } from '../../api.js';
-import { phase } from '../../session.js';
-import { render } from '../../shell.js';
+import { save } from '../../api.ts';
+import { phase } from '../../session.ts';
+import { render } from '../../shell.ts';
 
 defineProps({ placeholder: { type: String, required: true } });
 

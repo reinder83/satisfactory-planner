@@ -2,17 +2,18 @@
 // share the session state: the frame (Shell.vue) in #app, the current page in the frame's
 // <main> when that page is a component, and the sign-in screen, which replaces #app.
 // Mounting is synchronous, so the DOM is there as soon as these return.
-import { createApp } from 'vue';
+import { createApp, type App, type Component } from 'vue';
 import Shell from './Shell.vue';
 import SignedOut from './SignedOut.vue';
 
-let shell = null;
-let page = null;
-let screen = null;
+// The frame's app and its root element, which tells whether the frame is still on the page.
+let shell: { app: App; el: Element | null } | null = null;
+let page: { app: App; component: Component; host: Element } | null = null;
+let screen: App | null = null;
 
 // Mounts the frame unless it is already on the page.
-export function mountShell(root) {
-  if (shell?.el.isConnected) return;
+export function mountShell(root: Element) {
+  if (shell?.el?.isConnected) return;
   unmountShell();
   root.textContent = '';
   const app = createApp(Shell);
@@ -30,7 +31,7 @@ export function unmountShell() {
 }
 
 // Shows `component` as the page in `host` (the frame's <main>), unless it already is.
-export function mountPage(host, component) {
+export function mountPage(host: Element, component: Component) {
   if (page?.component === component && page.host === host && host.isConnected) return;
   unmountPage();
   const app = createApp(component);
@@ -45,7 +46,7 @@ export function unmountPage() {
 }
 
 // The sign-in screen in place of the whole app (boot() with no signed-in user, sign-out).
-export function showSignedOut(root) {
+export function showSignedOut(root: Element) {
   unmountShell();
   root.textContent = '';
   screen = createApp(SignedOut);

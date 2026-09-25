@@ -9,12 +9,12 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { bayCapacity } from '../../../state.js';
-import { save, toast } from '../../api.js';
+import { save, toast } from '../../api.ts';
 import { slug } from '../../format.ts';
-import { layoutEditing, query } from '../../session.js';
-import { render } from '../../shell.js';
-import { openSlot, slotDone, slotKeys, storageBays } from '../../views/storage.js';
-import { legacy } from '../bridge.js';
+import { layoutEditing, query } from '../../session.ts';
+import { render } from '../../shell.ts';
+import { openSlot, slotDone, slotKeys, storageBays } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 
 const props = defineProps({
   bay: { type: Object, required: true },

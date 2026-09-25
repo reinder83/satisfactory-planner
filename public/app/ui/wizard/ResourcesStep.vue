@@ -6,9 +6,9 @@
 <script setup>
 import { computed } from 'vue';
 import { resourceDefaults } from '../../../preferences.js';
-import { wizard, workspace } from '../../session.js';
-import { openExtraction } from '../../wizard/extraction.js';
-import { legacy } from '../bridge.js';
+import { wizard, workspace } from '../../session.ts';
+import { openExtraction } from '../../wizard/extraction.ts';
+import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 
 const view = computed(() =>

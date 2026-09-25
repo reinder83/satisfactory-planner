@@ -1,4 +1,4 @@
-<!-- The contents of #detail for a component dialog (ui/detail.js): `target` is { kind, id }. -->
+<!-- The contents of #detail for a component dialog (ui/detail.ts): `target` is { kind, id }. -->
 <script setup>
 import AltRecipeDialog from './AltRecipeDialog.vue';
 import CalcFactoryDialog from './CalcFactoryDialog.vue';
