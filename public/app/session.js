@@ -4,7 +4,6 @@
 import { browserMode } from '../browser-api.js';
 import { pending, request, writeQueue } from './api.js';
 import { $ } from './format.js';
-import { html } from './html.js';
 import { render } from './shell.js';
 import { showSignedOut, unmountShell } from './ui/mount.js';
 import { startWizard } from './wizard/wizard.js';
@@ -215,13 +214,11 @@ export async function boot() {
   } catch (e) {
     // Any failure while opening replaces the page with an error and a retry button.
     unmountShell();
-    $('#app').innerHTML = String(
-      html`<section class="loading">
-        <h1>Could not open the planner</h1>
-        <p>${e.message}</p>
-        <button class="btn" id="retry">Try again</button>
-      </section>`,
-    );
+    // The markup is fixed; the message goes in as text.
+    $('#app').innerHTML =
+      '<section class="loading"><h1>Could not open the planner</h1><p></p>' +
+      '<button class="btn" id="retry">Try again</button></section>';
+    $('#app .loading p').textContent = e.message;
     $('#retry').onclick = boot;
   }
 }

@@ -15,7 +15,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 
 | Location | Responsibility |
 | --- | --- |
-| `public/app.js`, `public/app/` | Shared vanilla-JS UI as ES modules: `app.js` is the entry point; `app/session.js` holds the open save/profile and UI state (other modules change it through its setters), `app/api.js` requests and the save queue, `app/shell.js` the frame and view router, `app/views/` one module per page, `app/wizard/` the profile wizard, `app/events/` the delegated event handlers |
+| `public/app.js`, `public/app/` | Shared vanilla-JS UI as ES modules: `app.js` is the entry point; `app/session.js` holds the open save/profile and UI state (other modules change it through its setters), `app/api.js` requests and the save queue, `app/shell.js` the frame and view router, `app/views/` the data behind the pages, `app/wizard/` the profile wizard, `app/ui/` the Vue components (`app/ui/actions.js` the handlers several share), `app/listeners.js` the page-wide listeners |
 | `public/style.css`, `public/index.html`, `public/favicon.svg` | Presentation and shell |
 | `public/preferences.js` | Wizard options, resource presets, help text |
 | `public/ada.js` | ADA’s remarks: facts in, ordered plain-text lines out |

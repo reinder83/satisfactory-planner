@@ -31,6 +31,7 @@ import PreferencesStep from '../wizard/PreferencesStep.vue';
 import ResourcesStep from '../wizard/ResourcesStep.vue';
 import ReviewStep from '../wizard/ReviewStep.vue';
 import SettingsStep from '../wizard/SettingsStep.vue';
+import { newSave } from '../actions.js';
 
 const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
 
@@ -84,7 +85,7 @@ async function submit(e) {
 <template>
   <template v-if="!page.draft">
     <PageHeader eyebrow="NEW PROFILE" title="Choose a save first" />
-    <button class="btn primary" data-new-save>Create a save</button
+    <button class="btn primary" data-new-save @click="newSave">Create a save</button
     ><a class="btn" href="#profiles">Existing saves</a>
   </template>
   <template v-else>

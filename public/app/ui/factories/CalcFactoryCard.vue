@@ -1,7 +1,7 @@
 <!--
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
   key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
-  (the shared data-calc-factory handler). A power-generation row has no outputs, so its group
+  (factoryLink() in ui/actions.js). A power-generation row has no outputs, so its group
   share is measured in MW.
 -->
 <script setup>
@@ -13,6 +13,7 @@ import { power } from '../../wizard/fields.js';
 import { legacy } from '../bridge.js';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
+import { factoryLink, toggleCheck } from '../actions.js';
 
 const props = defineProps({
   row: { type: Object, required: true },
@@ -51,7 +52,7 @@ const card = computed(() =>
     <div class="card-top">
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
       <div class="card-main">
-        <button class="name" :data-calc-factory="row.id">{{ row.name }}</button>
+        <button class="name" v-bind="factoryLink({ calcFactory: row.id })">{{ row.name }}</button>
         <div class="output">
           {{ card.machines }} <span>{{ row.machine }}</span>
         </div>
@@ -67,8 +68,13 @@ const card = computed(() =>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <footer>
       <label class="check-row"
-        ><input type="checkbox" :data-check="card.check" :checked="card.done" />Running</label
-      ><button class="btn quiet" :data-calc-factory="row.id">Details ↗</button>
+        ><input
+          type="checkbox"
+          :data-check="card.check"
+          @change="toggleCheck"
+          :checked="card.done"
+        />Running</label
+      ><button class="btn quiet" v-bind="factoryLink({ calcFactory: row.id })">Details ↗</button>
     </footer>
     <AssignEditor v-if="card.editing" :factory-key="row.id" />
   </article>

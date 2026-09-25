@@ -28,6 +28,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import { saveNote } from '../actions.js';
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
@@ -96,7 +97,12 @@ const page = computed(() =>
         <AddTaskForm placeholder="Add a task…" />
         <h2>Phase notes</h2>
         <textarea id="phase-note" class="notes" maxlength="6000" :value="page.note"></textarea>
-        <button class="btn" :data-save-note="'phase-' + page.phase" data-input="phase-note">
+        <button
+          class="btn"
+          :data-save-note="'phase-' + page.phase"
+          @click="saveNote"
+          data-input="phase-note"
+        >
           Save notes
         </button>
       </section>

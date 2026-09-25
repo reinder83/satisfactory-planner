@@ -13,6 +13,7 @@ import { phaseLabel, plan } from '../../session.js';
 import { legacy } from '../bridge.js';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
+import { factoryLink } from '../actions.js';
 
 const props = defineProps({ phase: { type: String, required: true } });
 
@@ -135,7 +136,7 @@ const campus = computed(() =>
           >{{ k ? ' + ' : '' }}{{ part.text
           }}<template v-if="part.to">
             to
-            <button class="btn quiet" :data-factory="part.to.id">
+            <button class="btn quiet" v-bind="factoryLink({ factory: part.to.id })">
               {{ part.to.name }} ↗
             </button></template
           ></template

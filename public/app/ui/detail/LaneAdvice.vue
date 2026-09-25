@@ -10,7 +10,7 @@ import { num } from '../../format.js';
 import { bestLane } from '../../flow.js';
 import { phaseLabel } from '../../session.js';
 import ItemIcon from '../ItemIcon.vue';
-import { linkAttrs } from './links.js';
+import { factoryLink } from '../actions.js';
 
 const props = defineProps({ model: { type: Object, default: null } });
 
@@ -105,7 +105,7 @@ const advice = computed(() => {
               >enough to also carry
               <template v-for="(x, n) in r.spare.merge" :key="n"
                 >{{ n ? ' or ' : ''
-                }}<button class="btn quiet" v-bind="linkAttrs(x.link)">
+                }}<button class="btn quiet" v-bind="factoryLink(x.link)">
                   {{ x.text }}
                 </button></template
               >
@@ -113,7 +113,7 @@ const advice = computed(() => {
             ><template v-else>keep it as expansion headroom on this manifold</template>.
           </p>
           <p v-if="r.local">
-            <button class="btn quiet" :data-factory="r.local.id">
+            <button class="btn quiet" v-bind="factoryLink({ factory: r.local.id })">
               Local: ≈ {{ r.local.count }} × {{ r.local.machine }} at this site ↗
             </button>
           </p>

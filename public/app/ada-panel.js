@@ -181,7 +181,7 @@ export function adaClearFault() {
   adaPokes = 0;
 }
 
-// Counts clicks on the ◈ mark (events/views.js); a gap over 2.5 s starts the count over.
+// Counts clicks on the ◈ mark (ui/AdaPanel.vue); a gap over 2.5 s starts the count over.
 // From the fifth click on, each shows the next fault line, cleared after 12 seconds.
 export function adaPoke() {
   clearTimeout(adaFaultTimer);

@@ -2,8 +2,8 @@
   #backup, in three versions: the browser edition (saves live in this browser, so there is no
   progress download), a calculated profile on the server, and the original handbook on the
   server with its plan assumptions and sources. The save-wide note is stored under the key
-  `global`; its "Save notes" button is handled by the shared data-save-note handler in
-  events/views.js, which the plan page and the dialogs use too.
+  `global`; its "Save notes" button uses saveNote in ui/actions.js, as the plan page and
+  the dialogs do.
 -->
 <script setup>
 import { computed, ref } from 'vue';
@@ -32,6 +32,7 @@ import { render } from '../../shell.js';
 import { invalidate, legacy } from '../bridge.js';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
+import { saveNote } from '../actions.js';
 
 const page = computed(() =>
   legacy(() => ({
@@ -231,7 +232,9 @@ async function persistStorage() {
     <section class="panel">
       <h2>Save-wide notes for this profile</h2>
       <textarea id="global-note" class="notes" maxlength="6000" :value="page.note"></textarea>
-      <button class="btn" data-save-note="global" data-input="global-note">Save notes</button>
+      <button class="btn" data-save-note="global" @click="saveNote" data-input="global-note">
+        Save notes
+      </button>
     </section>
     <section class="panel">
       <h2>Calculation assumptions</h2>
@@ -289,7 +292,9 @@ async function persistStorage() {
       ></textarea>
       <div class="note-save">
         <span class="small muted">Seed, locations, routes and decisions.</span
-        ><button class="btn" data-save-note="global" data-input="global-note">Save notes</button>
+        ><button class="btn" data-save-note="global" @click="saveNote" data-input="global-note">
+          Save notes
+        </button>
       </div>
     </section>
     <section class="panel">

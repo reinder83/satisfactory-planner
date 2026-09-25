@@ -1,4 +1,4 @@
-// Entry point. The event module registers its document-level listeners as a side effect,
+// Entry point. listeners.js registers the page-wide listeners as a side effect,
 // in the order they must run (tests/ui/app-modules.test.mjs pins it).
 //
 // How the frontend fits together (read this first):
@@ -15,10 +15,10 @@
 //    readers and moves).
 // 3. Session state is not reactive: components read it inside legacy() from
 //    app/ui/bridge.js, which re-runs whenever render() calls invalidate().
-// 4. Components handle their own controls. A few controls several components share are
-//    still delegated listeners on document in app/events/views.js, matched on data-*
-//    attributes (data-check, data-save-note, ...).
-//    A hashchange listener in events/views.js switches the view; navigate() in api.js too.
+// 4. Components handle their own controls; the ones several components share (checkboxes,
+//    "Save notes", factory links, ...) call the handlers in app/ui/actions.js. The few
+//    page-wide listeners live in app/listeners.js: the hashchange listener there switches
+//    the view, and navigate() in api.js does too.
 // 5. Changes go through save(op) in app/api.js: a serialized queue that POSTs the op to
 //    /api/update and replaces the local state with the reply. The handler then calls
 //    render() again. Other writes (profiles, imports) use post()/request() from api.js.
@@ -33,6 +33,6 @@
 // request() then answers /api/* paths with browser-api.js instead: IndexedDB storage and a
 // calculator Web Worker, with the same request and response shapes.
 import { boot } from './app/session.js';
-import './app/events/views.js';
+import './app/listeners.js';
 
 boot();

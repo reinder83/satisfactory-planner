@@ -18,6 +18,7 @@ import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import OilCampus from './OilCampus.vue';
+import { toggleCheck } from '../actions.js';
 
 const props = defineProps({ id: { type: String, required: true } });
 
@@ -162,8 +163,12 @@ const view = computed(() =>
     </p>
     <div class="detail-actions">
       <label class="check-row"
-        ><input type="checkbox" :data-check="view.check" :checked="view.done" />Running at Phase
-        {{ view.st }} target</label
+        ><input
+          type="checkbox"
+          :data-check="view.check"
+          @change="toggleCheck"
+          :checked="view.done"
+        />Running at Phase {{ view.st }} target</label
       >
     </div>
     <h3>Factory notes</h3>

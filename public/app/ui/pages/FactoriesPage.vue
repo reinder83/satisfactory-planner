@@ -29,6 +29,7 @@ import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import PageHeader from '../PageHeader.vue';
+import { toggleCheck } from '../actions.js';
 
 // The status filter: value, label.
 const FILTERS = [
@@ -173,9 +174,12 @@ function filter(e) {
     <div class="completion-grid">
       <article v-for="r in page.completion" :key="r.id" class="completion-item">
         <label class="check-row"
-          ><input type="checkbox" :data-check="r.check" :checked="r.done" /><strong>{{
-            r.name
-          }}</strong></label
+          ><input
+            type="checkbox"
+            :data-check="r.check"
+            @change="toggleCheck"
+            :checked="r.done"
+          /><strong>{{ r.name }}</strong></label
         >
         <p>{{ r.line }}<br />{{ r.recipe }}</p>
         <p>

@@ -111,8 +111,8 @@ function changed(e) {
 }
 
 // The tabs, Back (from the first screen it leaves the survey) and the submit button, which
-// past the last screen applies the survey. The submit stops here: the wizard's delegated
-// submit handler would otherwise take the same Enter for the screen the survey returns to.
+// past the last screen applies the survey. The submit stops here, so no other
+// submit listener takes the same Enter for the screen the survey returns to.
 const go = target => moveExtraction(target);
 function submit() {
   moveExtraction(wizard.extractionStep + 1);

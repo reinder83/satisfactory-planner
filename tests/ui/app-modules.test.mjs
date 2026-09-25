@@ -32,13 +32,10 @@ test('the app entry point loads as ES modules and registers its listeners in ord
   // Several handlers share an event type, so their order is behaviour; boot() then renders
   // its error screen because the stub fetch fails.
   assert.deepEqual(registered, [
-    'document click',
-    'document change',
     'document error',
     'window hashchange',
     '#detail click',
     'window beforeunload',
-    'document click',
     'rendered',
   ]);
 });

@@ -1,5 +1,5 @@
 <!-- An item's bundled icon from icons/. A trailing "(...)" qualifier is dropped first. Missing icons are hidden by the error
-     listener in events/views.js. -->
+     listener in listeners.js. -->
 <script setup>
 import { computed } from 'vue';
 import { slug } from '../format.js';

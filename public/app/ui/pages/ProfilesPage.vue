@@ -3,8 +3,8 @@
   "PRESERVED HANDBOOK" for the original profile and "CALCULATED PROFILE" otherwise; only
   calculated ones have `settings` to summarise. The browser edition links to backups
   instead of accounts. Actions that leave the open profile call allowSwitch() first, which
-  asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so it
-  stays with the shared data-new-save handler in events/views.js.
+  asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
+  use newSave in ui/actions.js.
 -->
 <script setup>
 import { computed, ref } from 'vue';
@@ -33,6 +33,7 @@ import { startWizard } from '../../wizard/wizard.js';
 import { legacy } from '../bridge.js';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
+import { newSave } from '../actions.js';
 
 const page = computed(() =>
   legacy(() => ({
@@ -173,7 +174,7 @@ async function rename(e) {
     subtitle="Each save keeps separate progress for every profile. Switching back restores its checklist, deliveries and notes."
   />
   <div class="toolbar">
-    <button class="btn primary" data-new-save>Create a save</button>
+    <button class="btn primary" data-new-save @click="newSave">Create a save</button>
     <a v-if="browserMode" class="btn" href="#backup">Backups & transfer</a>
     <a v-else class="btn" href="#account">{{
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'

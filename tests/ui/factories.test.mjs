@@ -273,7 +273,7 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   openFactory('wire');
   $('#detail-note').value = 'Unsaved thought';
   $('#detail-note').dispatchEvent(new Event('input'));
-  // What the shared data-check handler does once the tick is saved.
+  // What toggleCheck (ui/actions.js) does once the tick is saved.
   state.checks['factory-3-wire'] = true;
   render();
   await nextTick();

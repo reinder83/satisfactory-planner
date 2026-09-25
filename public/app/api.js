@@ -111,7 +111,7 @@ export async function post(endpoint, data, scope = true, extra = {}) {
 }
 
 // Goes to a route. Changing the hash triggers the hashchange listener in
-// events/views.js, which renders; an unchanged hash would not, so render directly.
+// listeners.js, which renders; an unchanged hash would not, so render directly.
 export function navigate(v) {
   setView(v);
   if (location.hash === '#' + v) render();
