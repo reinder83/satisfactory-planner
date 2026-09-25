@@ -3,7 +3,7 @@
 // below, which every view reads directly and other modules change through the setters.
 import { browserMode } from '../browser-api.js';
 import { pending, request, writeQueue } from './api.js';
-import { $ } from './format.js';
+import { $ } from './format.ts';
 import { render } from './shell.js';
 import { showSignedOut, unmountShell } from './ui/mount.js';
 import { startWizard } from './wizard/wizard.js';

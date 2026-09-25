@@ -12,7 +12,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { post, toast } from '../../api.js';
-import { $ } from '../../format.js';
+import { $ } from '../../format.ts';
 import { wizard, workspace } from '../../session.js';
 import { render } from '../../shell.js';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.js';

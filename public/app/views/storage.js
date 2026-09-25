@@ -4,7 +4,7 @@
 // profile shows the same addresses with only the items it selected for storage.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.js';
-import { num } from '../format.js';
+import { num } from '../format.ts';
 import { calculated, checked, plan, setActiveDetail, state } from '../session.js';
 import { showDetail } from '../ui/detail.js';
 

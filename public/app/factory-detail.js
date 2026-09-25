@@ -2,7 +2,7 @@
 // a factory group's build order and the storage container are components in ui/detail/, opened
 // by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.js), as
 // is the wizard's alternate recipe (openAltRecipe in wizard/recipes.js).
-import { num } from './format.js';
+import { num } from './format.ts';
 import { FLUIDS } from './flow.js';
 import { calcStage, calculated, plan, setActiveDetail, stage } from './session.js';
 import { showDetail } from './ui/detail.js';

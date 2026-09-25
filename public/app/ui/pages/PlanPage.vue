@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { checked, phase, phaseLabel, plan, stage, state } from '../../session.js';
 import { planTasks } from '../../tasks.js';
 import { storageBays } from '../../views/storage.js';

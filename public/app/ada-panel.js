@@ -3,7 +3,7 @@
 // texts themselves are chosen in ../ada.js. The panel and its buttons are ui/AdaPanel.vue.
 import { adaEncore, adaRemarks, adaFault as makeFault } from '../ada.js';
 import { browserMode } from '../browser-api.js';
-import { num, slug } from './format.js';
+import { num, slug } from './format.ts';
 import {
   calcStage,
   calculated,

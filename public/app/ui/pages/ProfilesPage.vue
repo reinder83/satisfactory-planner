@@ -18,7 +18,7 @@ import {
   toast,
   writeQueue,
 } from '../../api.js';
-import { num, slug } from '../../format.js';
+import { num, slug } from '../../format.ts';
 import {
   boot,
   currentProfile,

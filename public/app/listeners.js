@@ -7,7 +7,7 @@
 // the order. In order: image error (capture), hashchange, #detail backdrop click,
 // beforeunload.
 import { pending } from './api.js';
-import { $ } from './format.js';
+import { $ } from './format.ts';
 import { setQuery, setView, state } from './session.js';
 import { render } from './shell.js';
 import { closeDetail } from './ui/actions.js';

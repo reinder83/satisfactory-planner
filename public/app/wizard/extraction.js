@@ -13,7 +13,7 @@ import {
   startingSurvey,
 } from '../../preferences.js';
 import { toast } from '../api.js';
-import { $ } from '../format.js';
+import { $ } from '../format.ts';
 import { wizard, workspace } from '../session.js';
 import { render } from '../shell.js';
 import { readGuidedForm } from './guided.js';

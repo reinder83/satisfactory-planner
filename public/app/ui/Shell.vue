@@ -8,7 +8,7 @@ import { computed } from 'vue';
 import { browserMode } from '../../browser-api.js';
 import { purities } from '../../preferences.js';
 import { pending, save } from '../api.js';
-import { num } from '../format.js';
+import { num } from '../format.ts';
 import {
   calculated,
   currentProfile,

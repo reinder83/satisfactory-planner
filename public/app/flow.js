@@ -5,7 +5,7 @@
 // (calcFlowModel, planner rows), and drawn by ui/detail/FlowDiagram.vue and LaneAdvice.vue in
 // the factory dialogs. Everything in it is data: a link to another factory's dialog is
 // { factory: <handbook id> } or { calcFactory: <row id> } (see factoryLink in ui/actions.js).
-import { num, num3 } from './format.js';
+import { num, num3 } from './format.ts';
 import { calcStage, calculated, checked, plan, progressionData, stage } from './session.js';
 import { power } from './wizard/fields.js';
 

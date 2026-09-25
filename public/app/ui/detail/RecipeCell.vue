@@ -1,7 +1,7 @@
 <!-- One item cell of a recipe panel: [item, rate, link]. A link makes the cell a button that
      opens the factory making the item. The pseudo item 'MW' is a generator's output. -->
 <script setup>
-import { num3 } from '../../format.js';
+import { num3 } from '../../format.ts';
 import { FLUIDS } from '../../flow.js';
 import ItemIcon from '../ItemIcon.vue';
 import { factoryLink } from '../actions.js';

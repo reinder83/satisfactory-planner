@@ -84,8 +84,10 @@ async function bundleApp() {
 }
 
 // Every script at the root of public/ must be classified above, so a new one is never
-// shipped unminified or bundled twice by accident.
-const rootScripts = (await fs.readdir(publicDir)).filter(name => name.endsWith('.js'));
+// shipped unminified or bundled twice by accident. The shared scripts are copied as they
+// are, so a TypeScript one there would ship with its types: it is refused until
+// writeScripts strips them (see "TypeScript" in AGENTS.md).
+const rootScripts = (await fs.readdir(publicDir)).filter(name => /\.(js|ts)$/.test(name));
 for (const name of rootScripts)
   if (!SHARED.includes(name) && !BUNDLED.includes(name))
     throw Error(`build.mjs: add public/${name} to SHARED or BUNDLED`);

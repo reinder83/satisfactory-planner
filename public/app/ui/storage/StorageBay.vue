@@ -10,7 +10,7 @@
 import { computed, ref } from 'vue';
 import { bayCapacity } from '../../../state.js';
 import { save, toast } from '../../api.js';
-import { slug } from '../../format.js';
+import { slug } from '../../format.ts';
 import { layoutEditing, query } from '../../session.js';
 import { render } from '../../shell.js';
 import { openSlot, slotDone, slotKeys, storageBays } from '../../views/storage.js';

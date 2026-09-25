@@ -1,10 +1,9 @@
 <!-- A summary tile. The value slot takes markup
      such as a "/ total" fraction; otherwise `value` is shown as text. -->
-<script setup>
-defineProps({
-  label: { type: String, required: true },
-  value: { type: [String, Number], default: '' },
-  caption: { type: String, default: '' },
+<script setup lang="ts">
+withDefaults(defineProps<{ label: string; value?: string | number; caption?: string }>(), {
+  value: '',
+  caption: '',
 });
 </script>
 

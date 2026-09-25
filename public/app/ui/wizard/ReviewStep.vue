@@ -7,7 +7,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { wizard } from '../../session.js';
 import { draftFixes } from '../../views/calculated.js';
 import { power } from '../../wizard/fields.js';

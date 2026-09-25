@@ -8,7 +8,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { checked, plan, stage } from '../../session.js';
 import { legacy } from '../bridge.js';
 import ItemIcon from '../ItemIcon.vue';

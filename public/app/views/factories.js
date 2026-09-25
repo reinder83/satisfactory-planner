@@ -1,7 +1,7 @@
 // Factory groups: the profile's named groups and which factories belong to them, shared by
 // both factories pages (ui/pages/FactoriesPage.vue and CalculatedFactoriesPage.vue, with their
 // parts in ui/factories/), the group build-order dialog (factory-detail.js) and ADA.
-import { num } from '../format.js';
+import { num } from '../format.ts';
 import { state } from '../session.js';
 
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key

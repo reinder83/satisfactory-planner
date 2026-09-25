@@ -6,7 +6,7 @@
 -->
 <script setup>
 import { computed } from 'vue';
-import { num } from '../../format.js';
+import { num } from '../../format.ts';
 import { bestLane } from '../../flow.js';
 import { phaseLabel } from '../../session.js';
 import ItemIcon from '../ItemIcon.vue';
