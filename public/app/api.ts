@@ -121,28 +121,55 @@ export async function post<T = unknown>(
   });
 }
 
+// The address hash of the page on screen, which acceptRoute() puts back when the user keeps
+// their unsaved notes. navigating is set while navigate() changes the hash itself.
+let shownHash = location.hash;
+let navigating = false;
+
 // Goes to a route. Changing the hash triggers the hashchange listener in
 // listeners.ts, which renders; an unchanged hash would not, so render directly.
+// A route change from here is not checked for unsaved notes: the callers that leave a page
+// with notes on it (switching profile, starting the wizard) have already asked allowSwitch().
 export function navigate(v: View) {
   setView(v);
   if (location.hash === '#' + v) render();
-  else location.hash = v;
+  else {
+    navigating = true;
+    location.hash = v;
+  }
+}
+
+// The hashchange listener's check (listeners.ts): a sidebar link, a typed address or Back
+// leaves the page, so ask about unsaved notes first. When the user keeps them, the address
+// goes back to the page still on screen (replaceState fires no hashchange) and this returns
+// false, so nothing is redrawn.
+export function acceptRoute() {
+  if (!navigating && location.hash !== shownHash && !allowSwitch()) {
+    history.replaceState(history.state, '', shownHash || location.pathname + location.search);
+    return false;
+  }
+  navigating = false;
+  shownHash = location.hash;
+  return true;
 }
 
 // Notes are saved with an explicit button, not on typing. A notes textarea is unsaved
 // when its text differs from the saved note its paired data-input button writes.
-function hasUnsavedNotes() {
-  return [...document.querySelectorAll<HTMLTextAreaElement>('textarea.notes')].some(el => {
-    const button = document.querySelector<HTMLElement>(`[data-input="${el.id}"]`);
+// `root` narrows the check, to the dialog when only the dialog is closing.
+export function hasUnsavedNotes(root: ParentNode = document) {
+  return [...root.querySelectorAll<HTMLTextAreaElement>('textarea.notes')].some(el => {
+    const button = root.querySelector<HTMLElement>(`[data-input="${el.id}"]`);
     return button && el.value !== (state.notes[button.dataset.saveNote || ''] || '');
   });
 }
 
-// True when it is fine to leave the current page: no unsaved notes, or the user agreed
-// to drop them. Checked before switching profile, starting the wizard, signing out, etc.
-export function allowSwitch() {
+// True when it is fine to leave the current page (or, with `root`, that part of it): no
+// unsaved notes, or the user agreed to drop them. Checked before switching profile, starting
+// the wizard, signing out, changing the working phase, following the hash route and closing
+// or replacing the detail dialog.
+export function allowSwitch(root: ParentNode = document) {
   return (
-    !hasUnsavedNotes() ||
+    !hasUnsavedNotes(root) ||
     confirm('You have notes that have not been saved. Leave without saving those edits?')
   );
 }

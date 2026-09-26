@@ -4,13 +4,13 @@
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
-// the order. In order: image error (capture), hashchange, #detail backdrop click,
-// beforeunload.
-import { pending } from './api.ts';
+// the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
+// cancel (Escape), beforeunload.
+import { acceptRoute, hasUnsavedNotes, pending } from './api.ts';
 import { required } from './format.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
-import { closeDetail } from './ui/actions.ts';
+import { cancelDetail, closeDetail } from './ui/actions.ts';
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
 // Registered for the capture phase (the final true), since error events do not bubble.
@@ -26,8 +26,10 @@ document.addEventListener(
 
 // The address hash is the page: sidebar links and navigate() in api.ts both land here.
 // An unknown hash shows the plan. Clears the search and scrolls to the top; before the
-// first load (no state) nothing is drawn. Unsaved notes are not checked here.
+// first load (no state) nothing is drawn. Unsaved notes are asked about first (acceptRoute),
+// and when the user keeps them the page stays as it is.
 window.addEventListener('hashchange', () => {
+  if (!acceptRoute()) return;
   setView(viewOf(location.hash.slice(1)));
   setQuery('');
   if (stateLoaded) render();
@@ -40,10 +42,13 @@ required('#detail').addEventListener('click', e => {
   if (e.target === required('#detail')) closeDetail();
 });
 
+// Escape closes the dialog natively; cancelDetail asks about an unsaved note first.
+required('#detail').addEventListener('cancel', cancelDetail);
+
 // Ask before closing or reloading the tab while a save is still in flight (pending in
-// api.ts). Unsaved note edits are not covered.
+// api.ts) or a notes box holds unsaved text.
 window.addEventListener('beforeunload', e => {
-  if (pending) {
+  if (pending || hasUnsavedNotes()) {
     e.preventDefault();
     e.returnValue = '';
   }
