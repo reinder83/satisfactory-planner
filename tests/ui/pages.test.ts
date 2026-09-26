@@ -2,7 +2,7 @@
 // the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { beforeEach, test } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
 import { boot, currentSave, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
@@ -263,8 +263,7 @@ test('after a restore the file box is cleared, so the same backup can be chosen 
     configurable: true,
   });
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  await new Promise(r => setTimeout(r, 30));
-  assert.match($('#toast')!.textContent!, /Backup restored/);
+  await vi.waitFor(() => assert.match($('#toast')!.textContent!, /Backup restored/));
   assert.equal(chosen, '', 'cleared after a successful restore');
 });
 
@@ -283,8 +282,7 @@ test('an export over the import limit is refused with a reason, and nothing down
   go('backup');
   render();
   $('[data-export-saves]')!.click();
-  await new Promise(r => setTimeout(r, 30));
-  assert.equal(downloads, 1);
+  await vi.waitFor(() => assert.equal(downloads, 1));
   // One over 50 MB is refused outright: no question, no download, and a toast saying why.
   stubFetch({
     '/api/export-saves': {
@@ -295,7 +293,8 @@ test('an export over the import limit is refused with a reason, and nothing down
     '/api/workspace': summary,
   });
   $('[data-export-saves]')!.click();
-  await new Promise(r => setTimeout(r, 200));
+  // The refusal's toast is the last thing the click does.
+  await vi.waitFor(() => assert.ok($('#toast')!.classList.contains('error')), { timeout: 5000 });
   assert.equal(asked, false, 'no "download anyway" question');
   assert.equal(downloads, 1, 'nothing downloaded');
   const text = $('#toast')!.textContent!;
@@ -535,7 +534,7 @@ test('chosen saves export on their own, and a single save offers no choice (#160
   boxes[1]!.dispatchEvent(new Event('change'));
   await nextTick();
   $<HTMLButtonElement>('[data-export-selected]')!.click();
-  await new Promise(r => setTimeout(r, 30));
+  await vi.waitFor(() => assert.equal(downloads, 1));
   assert.ok(
     calls.some(([path]) => path === '/api/export-saves?saves=s2'),
     JSON.stringify(calls),
@@ -563,10 +562,13 @@ test('a refused browser record offers its stored data as a download on the error
   const button = $<HTMLButtonElement>('#download-stored-data')!;
   assert.ok(button, 'the download is offered');
   // A minimal IndexedDB holding the damaged record; the download is that record, unchanged.
+  // Its requests answer in a microtask (#226): readStoredData sets onsuccess as soon as a request
+  // returns, and the open, the read and the download then all finish before any timer runs.
+  // With timers, a busy event loop let the wait below run between the open and the read.
   const record = { version: 1, saves: [1], note: 'keep me' };
   const request = <T>(result: T) => {
     const r: { result: T; onsuccess?: () => void; onerror?: () => void } = { result };
-    setTimeout(() => r.onsuccess?.());
+    queueMicrotask(() => r.onsuccess?.());
     return r;
   };
   const db = {
@@ -579,8 +581,9 @@ test('a refused browser record offers its stored data as a download on the error
   URL.createObjectURL = (b: Blob | MediaSource) => ((saved = b as Blob), 'blob:x');
   URL.revokeObjectURL = () => {};
   button.click();
-  await new Promise(r => setTimeout(r, 30));
-  assert.deepEqual(JSON.parse(await saved!.text()), record);
+  await new Promise(r => setTimeout(r));
+  assert.ok(saved, 'the download is ready');
+  assert.deepEqual(JSON.parse(await saved.text()), record);
   // Any other start-up failure shows no such button.
   globalThis.fetch = async () => {
     throw new Error('offline');
