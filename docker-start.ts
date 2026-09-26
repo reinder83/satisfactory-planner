@@ -3,11 +3,15 @@
 // Every failure is reported without touching existing data.
 import fs from 'node:fs';
 import path from 'node:path';
-import { createApp } from './server.mjs';
+import { createApp } from './server.ts';
+
+// The POSIX identity calls, which Node only defines on POSIX systems; the image is Linux.
+const getuid = () => process.getuid!(),
+  getgid = () => process.getgid!();
 
 // Reads PUID or PGID. Root (0) and non-numeric values are refused, so the server can never keep
 // running as root; `fallback` applies when the variable is unset.
-const identity = (key, fallback) => {
+const identity = (key: string, fallback: number) => {
   const value = process.env[key] ?? String(fallback);
   if (!/^[1-9]\d*$/.test(value) || Number(value) > 2147483647)
     throw new Error(`${key} must be a non-root numeric ID between 1 and 2147483647.`);
@@ -16,9 +20,9 @@ const identity = (key, fallback) => {
 try {
   // Started as root (the image default): default to 1000:1000, the image's `node` user.
   // Started with compose `user:`: default to that identity, since it cannot be changed.
-  const root = process.getuid() === 0;
-  const uid = identity('PUID', root ? 1000 : process.getuid()),
-    gid = identity('PGID', root ? 1000 : process.getgid());
+  const root = getuid() === 0;
+  const uid = identity('PUID', root ? 1000 : getuid()),
+    gid = identity('PGID', root ? 1000 : getgid());
   // Refusing `/` keeps the ownership repair below from ever running over a whole filesystem.
   const dir = path.resolve(process.env.DATA_DIR || '/data');
   if (dir === path.parse(dir).root)
@@ -32,8 +36,8 @@ try {
     // check and the chown can redirect it. O_NOFOLLOW refuses symbolic links and the nlink check
     // refuses hard links: either could make root chown a file outside the volume. Files become
     // 0600; the directory keeps its bits plus owner rwx. A missing file is skipped.
-    const prepare = (file, directory = false) => {
-      let fd;
+    const prepare = (file: string, directory = false) => {
+      let fd: number | undefined;
       try {
         fd = fs.openSync(
           file,
@@ -47,7 +51,7 @@ try {
         fs.fchownSync(fd, uid, gid);
         fs.fchmodSync(fd, directory ? (stat.mode & 0o777) | 0o700 : 0o600);
       } catch (e) {
-        if (!directory && e.code === 'ENOENT') return;
+        if (!directory && (e as NodeJS.ErrnoException | null)?.code === 'ENOENT') return;
         throw e;
       } finally {
         if (fd !== undefined) fs.closeSync(fd);
@@ -67,18 +71,18 @@ try {
       prepare(path.join(dir, name));
     // Drop supplementary groups, then the group, then the user. setuid must come last: after it
     // the process can no longer change its groups.
-    process.setgroups([]);
-    process.setgid(gid);
-    process.setuid(uid);
+    process.setgroups!([]);
+    process.setgid!(gid);
+    process.setuid!(uid);
     // Not root, so nothing can be chowned or dropped: PUID/PGID must match the running user.
-  } else if (uid !== process.getuid() || gid !== process.getgid()) {
+  } else if (uid !== getuid() || gid !== getgid()) {
     throw new Error(
       'PUID/PGID conflict with Docker user:. Remove user: to enable automatic ownership setup, or match the IDs and prepare the folder permissions yourself.',
     );
   }
   // Fail at startup with the guidance below rather than on the first save.
   fs.accessSync(dir, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK);
-  console.log(`Planner identity: ${process.getuid()}:${process.getgid()}`);
+  console.log(`Planner identity: ${getuid()}:${getgid()}`);
   const server = await createApp();
   const port = Number(process.env.PORT || 8080);
   server.listen(port, process.env.HOST || '0.0.0.0', () =>
@@ -90,7 +94,7 @@ try {
     process.on(signal, () => server.close(() => process.exit(0)));
 } catch (e) {
   console.error(
-    `Planner startup failed: ${e.message}\nCheck PUID/PGID, the data mount's write access and NAS folder permissions. With cap_drop: ALL, allow CHOWN, DAC_OVERRIDE, FOWNER, SETUID and SETGID for startup. Existing data has not been deleted.`,
+    `Planner startup failed: ${(e as Error | null)?.message}\nCheck PUID/PGID, the data mount's write access and NAS folder permissions. With cap_drop: ALL, allow CHOWN, DAC_OVERRIDE, FOWNER, SETUID and SETGID for startup. Existing data has not been deleted.`,
   );
   process.exitCode = 1;
 }

@@ -24,10 +24,10 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `public/state.ts` | Shared blank progress, validation and mutations |
 | `public/transfer.ts` | Portable full-save format and validation |
 | `public/browser-api.ts`, `public/browser-store.ts` | Browser API adapter, worker orchestration, IndexedDB transactions |
-| `planner.mjs`, `optimizer.mjs`, `recipes.json` | Production calculation, HiGHS solver, recipe data |
+| `planner.ts`, `optimizer.ts`, `recipes.json` | Production calculation, HiGHS solver, recipe data |
 | `vendor/`, `THIRD_PARTY.md` | Bundled solver and attribution; retain licenses |
-| `server.mjs`, `workspace.mjs` | HTTP/authentication boundary, scoped saves, durable server persistence |
-| `docker-start.mjs`, `Dockerfile`, `compose*.yaml` | Container startup and Synology ownership support |
+| `server.ts`, `workspace.ts` | HTTP/authentication boundary, scoped saves, durable server persistence |
+| `docker-start.ts`, `Dockerfile`, `compose*.yaml` | Container startup and Synology ownership support |
 | `build.mjs` | Release build: minified Docker frontend (`dist/web`) and allowlisted Pages edition (`dist/satisfactory-planner`); adapts the calculator for browser execution |
 | `tests/`, `browser-check.mjs` | Server, calculator, interface and real-browser checks |
 | `.github/workflows/docker.yml` | Tests, Docker publishing, public-site publishing |
@@ -93,11 +93,11 @@ Keep the deal the feature rests on: the joke is in the tone, never in the number
 
 ## Development and verification
 
-Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22.18 (the first 22.x that strips TypeScript types without a flag). The frontend is being migrated to Vue 3 in stages; see "Vue migration" in `public/AGENTS.md`. Source files stay readable: `npm start` serves `public/` unbuilt, compiling the `.vue` files through Vite in middleware mode (see `devFrontend` in `server.mjs`) unless `NODE_ENV=production`, and only `build.mjs` minifies, for publishing.
+Run commands from this repository root. Node 24 is used in CI; the package supports Node >=22.18 (the first 22.x that strips TypeScript types without a flag). The frontend is being migrated to Vue 3 in stages; see "Vue migration" in `public/AGENTS.md`. Source files stay readable: `npm start` serves `public/` unbuilt, compiling the `.vue` files through Vite in middleware mode (see `devFrontend` in `server.ts`) unless `NODE_ENV=production`, and only `build.mjs` minifies, for publishing.
 
 ```sh
 npm ci
-node server.mjs
+node server.ts
 npm run check
 npm run typecheck
 npm test
@@ -108,7 +108,7 @@ npm run build
 
 ### TypeScript
 
-The code is moving to TypeScript one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.ts`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, in two pull requests: (a) everything under `public/app/`, which Vite bundles (done), then (b) the shared scripts at the root of `public/`, which the server imports too and `build.mjs` ships as separate files (done); (4) the components (done); (5) the server, `workspace.mjs`, `planner.mjs` and `optimizer.mjs`. Each stage is its own pull request and leaves both editions working.
+The code is moving to TypeScript one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.ts`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, in two pull requests: (a) everything under `public/app/`, which Vite bundles (done), then (b) the shared scripts at the root of `public/`, which the server imports too and `build.mjs` ships as separate files (done); (4) the components (done); (5) the server, `workspace.ts`, `planner.ts`, `optimizer.ts` and `docker-start.ts` (done). Each stage was its own pull request and left both editions working. The build tooling (`build.mjs`, `browser-check.mjs`, `vite.config.mjs`) and the tests under `tests/*.mjs` are still JavaScript.
 
 Nothing compiles TypeScript to files: Vite and Vitest strip the types when they serve, test or bundle the code, esbuild when `build.mjs` minifies, and Node 24 itself when it runs a `.ts` file. `tsconfig.json` only drives the type check (`npm run typecheck`, also in CI), with `strict` and `noUncheckedIndexedAccess` on. Rules:
 
@@ -117,12 +117,13 @@ Nothing compiles TypeScript to files: Vite and Vitest strip the types when they 
 - Plain `.js` files are read for their types but not checked (`allowJs` without `checkJs`), so a converted module's JavaScript callers are not checked against its types yet. Keep run-time guards for values that may come from unchecked callers or from saved data, until those callers are typed too.
 - Types describe the code; they never change saved data. The data types live in `public/types/` (types only, left out of both builds; import them from `public/types/index.ts`). Saved data has two shapes there: `ProgressState` is what `validateState` returns and `SavedState` any released version it accepts; `CurrentCalculatedPlan` is what `calculate()` returns today and `StoredCalculatedPlan` any plan an earlier release froze on a profile, so a field added to the planner is required only in the Current types. Read saved data through the Stored types.
 - `tests/types/data.types.ts` checks the types against `public/plan.json` and a plan frozen by the first release's planner (`tests/fixtures/calculated-plan-2026-09-12.json`), both ways: the data must fit the types and hold no field they do not declare. `tests/types/fixtures.ts` has a typed state for every version, which `tests/data-types.test.mjs` runs through `validateState` and `validateTransfer`. When the saved shape changes, add a fixture of the new shape and keep the old ones.
-- The JavaScript entry points (`validateState`, `mutate`, `initialState`, `newProfileState`, `shareState`, `calculate`, `settings`, `catalog`, `validateTransfer`) declare these types in JSDoc, so TypeScript callers are typed before the files move. An unchecked JSDoc type that does not resolve silently becomes `any`; `data.types.ts` pins each one, so keep it in step when adding or moving an annotation.
+- The entry points that read or produce saved data (`validateState`, `mutate`, `initialState`, `newProfileState`, `shareState`, `calculate`, `settings`, `catalog`, `validateTransfer`) declare these types in their signatures. A type that does not resolve silently becomes `any`; `data.types.ts` pins each one, so keep it in step when changing a signature.
 - Look up a page element the frame or the current screen always has with `required(selector)` (`app/format.ts`), which throws naming the selector; keep `$(selector)` and a null check for one that may be absent. Code that only runs while the wizard is open reads the draft through `draft()` (`app/session.ts`), which throws when there is none; code that may run without one reads `wizard` and checks it.
 - A non-null assertion (`!`) needs a comment saying why the value is there (a filter just above, a loop bound), unless it is plain from the line itself.
 - Every component is `<script setup lang="ts">` with type-based `defineProps<{ … }>()` (`withDefaults` for defaults), so vue-tsc also checks its template against those types. A prop takes a named type (`PlanStepView`, `FlowModel`, `StorageBayView`, …), never `Object` or `Array`; `GroupSections.vue` is generic (`generic="T"`) over the items it groups. Event handlers type their event (`e: Event`) and cast its target to the element they are bound on. An attribute a template drops is bound to `undefined` (DOM typings refuse `null`; Vue removes the attribute for both).
 - Every script at the root of `public/` is TypeScript and ships as `.js`: `build.mjs` strips and minifies each shared one (`SHARED`) with esbuild and rewrites its `./x.ts` imports to `./x.js`, and bundles `app.ts` (which `index.html` loads in development) into `app.js`. A new root script must be added to `SHARED` or `BUNDLED` there.
-- The server imports the shared sources (`./public/state.ts`, `transfer.ts`, `preferences.ts`) and Node runs them as they are. The Docker image therefore copies `public/*.ts` next to the built `public/`, and `server.mjs` answers 404 for any `.ts` path so browsers only ever get the built files. The Docker smoke test in CI starts that image, so a server import the image lacks fails there.
+- The server imports the shared sources (`./public/state.ts`, `transfer.ts`, `preferences.ts`) and Node runs them as they are. The Docker image therefore copies `public/*.ts` next to the built `public/`, and `server.ts` answers 404 for any `.ts` path so browsers only ever get the built files. The Docker smoke test in CI starts that image, so a server import the image lacks fails there.
+- The server-side modules (`server.ts`, `workspace.ts`, `planner.ts`, `optimizer.ts`, `docker-start.ts`) run as they are in the Docker image. A request body is `unknown` until a check narrows it; keep the existing checks rather than trusting a cast. The Pages edition ships `planner.ts` and `optimizer.ts` as `planner.mjs` and `optimizer.mjs`: `build.mjs` strips them and replaces a few snippets by exact match (the `node:fs` import, the `recipes.json` read, the import paths), so keep those snippets unchanged.
 
 The server defaults to port 8080. Set `HOST=127.0.0.1` for a local-only preview and `DATA_DIR` to an isolated temporary folder for experiments. Environment-variable syntax differs by shell. Check whether an existing server is running before starting another; never terminate unrelated processes.
 

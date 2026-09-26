@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createApp, initialState } from '../server.mjs';
+import { createApp, initialState } from '../server.ts';
 import {
   calculate,
   catalog,
@@ -12,7 +12,7 @@ import {
   PURE_LIMITS,
   DEFAULT_LIMITS,
   DELIVERIES,
-} from '../planner.mjs';
+} from '../planner.ts';
 import { elevatorParts } from '../public/preferences.ts';
 async function start(dir) {
   const server = await createApp({ dataDir: dir, password: '' });

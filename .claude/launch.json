@@ -6,7 +6,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set DATA_DIR=%TEMP%\\planner-preview-data-%PORT%&& set HOST=127.0.0.1&& node server.mjs"
+        "set DATA_DIR=%TEMP%\\planner-preview-data-%PORT%&& set HOST=127.0.0.1&& node server.ts"
       ],
       "port": 8123,
       "autoPort": true

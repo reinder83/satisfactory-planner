@@ -6,6 +6,7 @@
 //   workspace.ts   workspace.json, the /api/ replies, the catalog and the export formats
 //   progression.ts the game's milestones and research (progression.json)
 //   guided.ts      the guided start's questions (preferences.ts)
+//   recipes.ts     the game's recipes and items (recipes.json)
 // tests/types/ checks these against the real data and code (npm run typecheck).
 export type * from './common.ts';
 export type * from './state.ts';
@@ -14,3 +15,4 @@ export type * from './calculated.ts';
 export type * from './workspace.ts';
 export type * from './progression.ts';
 export type * from './guided.ts';
+export type * from './recipes.ts';

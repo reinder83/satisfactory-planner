@@ -54,7 +54,7 @@ export interface BrowserWorkspace {
   lastBackup: string | null;
 }
 
-// DATA_DIR/workspace.json (workspace.mjs openWorkspace).
+// DATA_DIR/workspace.json (workspace.ts openWorkspace).
 export interface WorkspaceFile {
   version: 2;
   revision: number;
@@ -79,7 +79,7 @@ export interface CatalogRecipe {
   pure?: boolean;
 }
 
-// planner.mjs catalog(): the choices and defaults the wizard offers.
+// planner.ts catalog(): the choices and defaults the wizard offers.
 export interface Catalog {
   engine: string;
   alternates: CatalogRecipe[];

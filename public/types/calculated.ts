@@ -1,4 +1,4 @@
-// A calculated profile's plan (planner.mjs calculate()), frozen on the profile when it is
+// A calculated profile's plan (planner.ts calculate()), frozen on the profile when it is
 // created and never recalculated. Two shapes:
 //   Current*  what calculate() returns today, every field present;
 //   Stored*   what a saved profile may hold: a plan frozen by any earlier release, which
@@ -75,7 +75,7 @@ export interface Survey {
   used?: ItemRates;
 }
 
-// Normalised settings, as settings() in planner.mjs returns them. Units: GW for power,
+// Normalised settings, as settings() in planner.ts returns them. Units: GW for power,
 // % for utilityPercent, per minute for rates and limits, hours per phase.
 export interface CurrentSettings {
   utilityPercent: number;

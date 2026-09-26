@@ -1,5 +1,6 @@
 import http from 'node:http';
-import { openWorkspace } from './workspace.mjs';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { openWorkspace } from './workspace.ts';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -7,23 +8,27 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 import { initialState as blankState, validateState, mutate } from './public/state.ts';
+import type { ProgressState } from './public/types/index.ts';
 export { validateState, mutate };
 // Starting progress for the Original handbook profile of a brand-new server (no
 // workspace.json and no legacy progress.json): the owner's handbook starts in Phase 3 with
 // the storage ground floor built and 125,000 Versatile Frameworks delivered. Not used for
 // any other profile; tests import it to compare against.
-export const initialState = () => ({
+export const initialState = (): ProgressState => ({
   ...blankState(),
   checks: { 'storage-ground-shell': true },
   deliveries: { '3-versatile-framework': 125000 },
   settings: { phase: '3' },
 });
-const fail = (message, status = 400) => {
+// A function declaration, so TypeScript knows the code after a failed check is unreachable.
+function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
-};
+}
+// A thrown error: one with a status carries a message for the user.
+type Failure = { status?: number; message?: string; code?: string } | null | undefined;
 // Builds the Docker edition's HTTP server (not yet listening) around the workspace in
 // dataDir. APP_PASSWORD adds an optional HTTP Basic login in front of everything, separate
-// from the in-app accounts in workspace.mjs. Tests call this with a temporary dataDir.
+// from the in-app accounts in workspace.ts. Tests call this with a temporary dataDir.
 // `dev` serves the frontend through Vite (see devFrontend below) instead of as plain files.
 export async function createApp({
   dataDir = process.env.DATA_DIR || path.join(root, 'data'),
@@ -33,9 +38,14 @@ export async function createApp({
 } = {}) {
   await fs.mkdir(dataDir, { recursive: true });
   const workspace = await openWorkspace({ dataDir, initialState, validateState, mutate });
-  const hash = s => createHash('sha256').update(s).digest();
+  const hash = (s: string) => createHash('sha256').update(s).digest();
   // JSON replies are never cached, so a browser never shows stale progress.
-  const send = (res, status, value, headers = {}) => {
+  const send = (
+    res: ServerResponse,
+    status: number,
+    value: unknown,
+    headers: Record<string, string> = {},
+  ) => {
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
@@ -46,8 +56,8 @@ export async function createApp({
   // Reads a JSON request body, stopping at 2 MB (50 MB for a full-save import, which carries
   // whole plans and handbooks) so a huge upload cannot exhaust memory. The error text
   // always says 2 MB. Passed to workspace routes, which call it only when they need a body.
-  const body = async req => {
-    let chunks = [],
+  const body = async (req: IncomingMessage): Promise<unknown> => {
+    let chunks: Buffer[] = [],
       length = 0;
     for await (const chunk of req) {
       length += chunk.length;
@@ -73,7 +83,7 @@ export async function createApp({
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     try {
-      const url = new URL(req.url, 'http://localhost');
+      const url = new URL(req.url ?? '/', 'http://localhost');
       // Open without a password so container health checks work.
       if (url.pathname === '/health' && req.method === 'GET') return send(res, 200, { ok: true });
       // Both sides are hashed first so timingSafeEqual compares equal lengths and the time
@@ -107,7 +117,7 @@ export async function createApp({
         }
         return send(res, 404, { error: 'Not found.' });
       }
-      if (!['GET', 'HEAD'].includes(req.method))
+      if (!['GET', 'HEAD'].includes(req.method ?? ''))
         return send(res, 405, { error: 'Method not allowed.' }, { Allow: 'GET, HEAD, POST' });
       if (url.pathname.startsWith('/api/')) {
         const r = await workspace(req, url, body);
@@ -124,31 +134,33 @@ export async function createApp({
       // The image keeps the shared TypeScript sources beside the build for this server to
       // import; browsers load the built .js files, so the sources are not served.
       if (file.endsWith('.ts')) return send(res, 404, { error: 'Not found.' });
-      let content;
+      let content: Buffer;
       try {
         content = await fs.readFile(file);
       } catch (e) {
-        if (['ENOENT', 'EISDIR'].includes(e.code)) return send(res, 404, { error: 'Not found.' });
+        if (['ENOENT', 'EISDIR'].includes((e as Failure)?.code ?? ''))
+          return send(res, 404, { error: 'Not found.' });
         throw e;
       }
-      const type =
-        {
-          '.html': 'text/html; charset=utf-8',
-          '.js': 'text/javascript; charset=utf-8',
-          '.css': 'text/css; charset=utf-8',
-          '.json': 'application/json; charset=utf-8',
-          '.svg': 'image/svg+xml',
-          '.png': 'image/png',
-          '.pdf': 'application/pdf',
-        }[path.extname(file)] || 'application/octet-stream';
+      const types: Record<string, string> = {
+        '.html': 'text/html; charset=utf-8',
+        '.js': 'text/javascript; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.json': 'application/json; charset=utf-8',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.pdf': 'application/pdf',
+      };
+      const type = types[path.extname(file)] || 'application/octet-stream';
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
       res.end(req.method === 'HEAD' ? undefined : content);
-    } catch (e) {
+    } catch (thrown) {
       // Errors thrown with a status are meant for the user; anything else is unexpected and
       // gets a generic message, since commit() never writes a half-applied change.
+      const e = thrown as Failure;
       if (!res.headersSent)
-        send(res, e.status || 500, {
-          error: e.status
+        send(res, e?.status || 500, {
+          error: e?.status
             ? e.message
             : 'Could not save or load data. Please retry; your previous progress is retained.',
         });
@@ -164,8 +176,8 @@ export async function createApp({
 // `npm start` still serves the source as it is, with the Vue components compiled on
 // request and edits reloaded in the browser. Its file access is limited to public/ and the
 // installed packages, so data/ stays out of reach. Needs the dev dependencies (npm ci).
-async function devFrontend(server) {
-  let vite;
+async function devFrontend(server: Server) {
+  let vite: import('vite').ViteDevServer;
   try {
     vite = await (
       await import('vite')
@@ -179,7 +191,7 @@ async function devFrontend(server) {
       },
     });
   } catch (e) {
-    if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+    if ((e as Failure)?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
     throw Error(
       'Development mode needs the dev dependencies: run npm ci (or set NODE_ENV=production to serve a build).',
     );
@@ -187,7 +199,7 @@ async function devFrontend(server) {
   return {
     close: () => vite.close(),
     // Answers the request if it is Vite's to answer; false leaves it to the static files.
-    async handle(req, res, url) {
+    async handle(req: IncomingMessage, res: ServerResponse, url: URL) {
       if (url.pathname === '/' || url.pathname === '/index.html') {
         const page = await fs.readFile(path.join(root, 'public', 'index.html'), 'utf8');
         res.writeHead(200, {
@@ -197,15 +209,15 @@ async function devFrontend(server) {
         res.end(await vite.transformIndexHtml(url.pathname, page));
         return true;
       }
-      await new Promise(done => {
+      await new Promise<void>(done => {
         res.once('finish', done);
-        vite.middlewares(req, res, done);
+        vite.middlewares(req, res, () => done());
       });
       return res.headersSent;
     },
   };
 }
-// Listen only when run directly (node server.mjs), not when imported by tests.
+// Listen only when run directly (node server.ts), not when imported by tests.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const server = await createApp({ dev: process.env.NODE_ENV !== 'production' });
   const port = Number(process.env.PORT || 8080);

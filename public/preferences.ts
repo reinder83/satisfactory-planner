@@ -9,7 +9,7 @@ import type {
   Survey,
 } from './types/index.ts';
 
-// The settings storageRateFor and droneSupply read: normalised (planner.mjs) or a draft.
+// The settings storageRateFor and droneSupply read: normalised (planner.ts) or a draft.
 type RateSettings = Pick<Partial<CurrentSettings>, 'storageOverrides' | 'buildRate'> & {
   storageRate: number;
 };
@@ -20,7 +20,7 @@ type DroneSettings = Pick<
 // The purities a node count is kept for.
 type NodePurity = keyof NodeCounts;
 // [value, label] pairs for the storage setting (`s.storage`), shown by the wizard and the
-// guided start and validated by planner.mjs. wantsStorage below decides what each one covers.
+// guided start and validated by planner.ts. wantsStorage below decides what each one covers.
 export const storageOptions: Choice[] = [
   ['none', 'No dedicated storage'],
   ['construction', 'Construction materials'],
@@ -52,7 +52,7 @@ export const constructionItems: string[] = [
   'Aluminum Casing',
 ];
 // Whether item `name` gets a container and a protected refill under storage mode `mode`.
-// planner.mjs uses it for the storage contract; the wizard uses it to list the covered items.
+// planner.ts uses it for the storage contract; the wizard uses it to list the covered items.
 export function wantsStorage(name: string, mode: string): boolean {
   if (mode === 'none') return false;
   if (mode === 'all') return true;
@@ -146,7 +146,7 @@ export const nodeCounts: Record<string, [impure: number, normal: number, pure: n
   'Nitrogen Gas': [2, 7, 36],
 };
 // Default resource budgets (items/min, Mk.3 miners at 250%) for a purity and distribution;
-// planner.mjs fills any missing limit from it and the wizard shows it. `rate` is one impure
+// planner.ts fills any missing limit from it and the wizard shows it. `rate` is one impure
 // node's yield and `weights` multiply it per impure/normal/pure node: 1 impure, 2 normal, 4
 // pure, with the Mostly settings shifting one level. `uncertain` marks a seed-dependent
 // result, and `description` says which.
@@ -258,7 +258,7 @@ export const droneFuels: string[] = [
   'Uranium Fuel Rod',
   'Plutonium Fuel Rod',
 ];
-// The protected drone fuel line planner.mjs adds to a phase, as { item: items/min }. None
+// The protected drone fuel line planner.ts adds to a phase, as { item: items/min }. None
 // before Phase 4. With ionized fuel chosen, Phase 4 supplies batteries instead (the bridge).
 export function droneSupply(s: DroneSettings, phase: number): ItemRates {
   if (phase < 4 || !s.droneFuel || s.droneFuel === 'none') return {};

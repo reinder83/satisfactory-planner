@@ -26,7 +26,7 @@ interface IncomingSave {
   profiles: unknown;
 }
 // Full-save export: a user's saves with their profiles, plans or handbooks and progress,
-// never accounts, passwords or sessions. Written by /api/export-saves in workspace.mjs and
+// never accounts, passwords or sessions. Written by /api/export-saves in workspace.ts and
 // browser-api.ts and read back by their /api/import-saves, so saves move between editions.
 //   { format, version: 1, exportedAt, saves: [{ id, name, activeProfile, profiles: [
 //     { id, name, kind: 'calculated' | 'original', plan, handbook?, state }] }] }

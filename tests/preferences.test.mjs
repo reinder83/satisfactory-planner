@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculate, settings } from '../planner.mjs';
+import { calculate, settings } from '../planner.ts';
 import { resourceDefaults, wantsStorage, distributions, purities } from '../public/preferences.ts';
 test('resource presets transform known purity counts and distinguish unknown seed totals', () => {
   assert.equal(distributions.length, 5);

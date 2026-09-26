@@ -1,5 +1,5 @@
-// Progress state: everything one profile records, shared by both editions (server.mjs via
-// workspace.mjs, the Pages edition via browser-api.ts) and by full-save exports.
+// Progress state: everything one profile records, shared by both editions (server.ts via
+// workspace.ts, the Pages edition via browser-api.ts) and by full-save exports.
 //   version        content version, recomputed by validateState (see the end of it)
 //   revision       bumped by the server/browser store on every accepted write
 //   checks         { key: boolean } ticked checklist items
@@ -87,7 +87,7 @@ const safeKey = (k: unknown): k is string =>
   typeof k === 'string' &&
   /^[a-zA-Z0-9:_-]{1,160}$/.test(k) &&
   !['__proto__', 'constructor', 'prototype'].includes(k);
-// Throws an error carrying the HTTP status server.mjs replies with; its message is the
+// Throws an error carrying the HTTP status server.ts replies with; its message is the
 // text the user sees.
 // A function declaration, so TypeScript knows the code after a failed check is unreachable.
 function fail(message: string, status = 400): never {
@@ -344,7 +344,7 @@ const builtKeys = (raw: unknown, plan: RowsPlan | null): string[] => {
 // sourcePlan the sibling profile's state and plan to carry from, raw the carry choices and
 // built the guided start's finished-work keys. Returns { state, reviewCount, carried }: the
 // validated state, how many carried 'calc-' ticks were unticked for review, and how many
-// checks start ticked. The source is only read. Called by /api/profiles in workspace.mjs and
+// checks start ticked. The source is only read. Called by /api/profiles in workspace.ts and
 // by the matching route in browser-api.ts.
 export function newProfileState(
   plan: RowsPlan | null,
@@ -445,7 +445,7 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
 }
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
-// Used by /api/export-saves?share=1 in workspace.mjs and browser-api.ts; the input is cloned.
+// Used by /api/export-saves?share=1 in workspace.ts and browser-api.ts; the input is cloned.
 export function shareState(s: SavedState): ProgressState {
   const clean = validateState(structuredClone(s));
   clean.checks = {};
@@ -512,7 +512,7 @@ function validateEdits(raw: unknown): StorageEdits {
   return e;
 }
 // The single gate for progress: every load, import, update and new profile passes through
-// it, on the server (workspace.mjs), in the browser (browser-api.ts) and inside full-save
+// it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
 // Versions 1–4 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused

@@ -59,7 +59,7 @@ jobs:
       - name: Test Synology IDs and root-owned bind-mount migration
         run: |
           mkdir -p "$RUNNER_TEMP/planner-nas"
-          docker run --rm -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke node --input-type=module -e "import fs from 'node:fs';import {initialState} from './server.mjs';const s=initialState();s.checks['nas-migration']=true;fs.writeFileSync('/data/progress.json',JSON.stringify(s),{mode:0o600});fs.chownSync('/data',0,0);fs.chmodSync('/data',0o700);"
+          docker run --rm -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke node --input-type=module -e "import fs from 'node:fs';import {initialState} from './server.ts';const s=initialState();s.checks['nas-migration']=true;fs.writeFileSync('/data/progress.json',JSON.stringify(s),{mode:0o600});fs.chownSync('/data',0,0);fs.chmodSync('/data',0o700);"
           docker run -d --name planner-nas --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID --security-opt no-new-privileges:true -e PUID=1028 -e PGID=100 -e TZ=Europe/Amsterdam -p 127.0.0.1:18081:8080 -v "$RUNNER_TEMP/planner-nas:/data" planner-smoke
           for i in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18081/health; then break; fi

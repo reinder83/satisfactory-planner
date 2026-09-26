@@ -46,7 +46,7 @@ import {
   slotPosition,
 } from '../public/state.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
-import { calculate, catalog } from '../planner.mjs';
+import { calculate, catalog } from '../planner.ts';
 import { appSource } from './helpers/app-source.mjs';
 const source = appSource();
 function ui() {

@@ -27,7 +27,7 @@
 // UI flags) lives in app/session.ts. ES module imports are read-only bindings, so other
 // modules change it through the set*() functions exported there.
 //
-// Two editions share this code. The Docker edition talks to server.mjs (with workspace.mjs)
+// Two editions share this code. The Docker edition talks to server.ts (with workspace.ts)
 // over HTTP. The GitHub Pages build sets globalThis.PLANNER_BROWSER (browserMode in
 // browser-api.ts), and
 // request() then answers /api/* paths with browser-api.ts instead: IndexedDB storage and a

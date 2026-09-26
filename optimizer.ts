@@ -1,9 +1,36 @@
 // Thin wrapper around the vendored HiGHS LP/MIP solver (WebAssembly, vendor/highs.cjs). Its only
-// caller is `run` in planner.mjs. build.mjs rewrites the import path and the loadHighs() call for
+// caller is `run` in planner.ts. build.mjs rewrites the import path and the loadHighs() call for
 // the Pages edition (highs.mjs next to highs.wasm), so keep both exactly as written.
 import loadHighs from './vendor/highs.cjs';
+
+// The part of the HiGHS module this uses: solve an LP-format model.
+interface Highs {
+  solve(
+    lp: string,
+    options: Record<string, unknown>,
+  ): { Status: string; Columns?: Record<string, { Primal?: number }> };
+}
+
+// A model in the planner's shape (see solve below).
+export interface LpModel {
+  optimize: string;
+  opType: 'max' | 'min';
+  constraints: Record<string, { min?: number; max?: number; equal?: number }>;
+  variables: Record<string, Record<string, number>>;
+  bounds?: Record<string, number>;
+  ints?: Record<string, number>;
+}
+
+// What solve returns: HiGHS's status, and every variable's value by name.
+export interface LpSolution {
+  solverStatus: string;
+  feasible: boolean;
+  bounded: boolean;
+  values: Record<string, number>;
+}
+
 // Loaded once, when the module is first imported (server start, or the browser worker's import).
-const highs = await loadHighs();
+const highs = (await loadHighs()) as Highs;
 // Solves one model and returns every variable's value by name.
 //
 // The model shape is the planner's own:
@@ -14,20 +41,20 @@ const highs = await loadHighs();
 //   bounds       optional { name: upper bound }; every variable is otherwise just >= 0
 //   ints         optional { name: 1 } for integer (whole-machine or amplified) variables
 //
-// Returns { solverStatus, feasible, bounded, ...values }, with a variable HiGHS reports no value
+// Returns { solverStatus, feasible, bounded, values }, with a variable HiGHS reports no value
 // for read as 0. `feasible` and `bounded` are both simply "HiGHS said Optimal": a MIP stopped by
 // the time limit, even with a usable incumbent, counts as not feasible, and `run`/`calculate`
 // tell that case apart from a real shortage by `solverStatus`.
-export function solve(model) {
+export function solve(model: LpModel): LpSolution {
   // Variables and constraints are renamed v0, v1, … and c0, c1, … because the planner's names
   // ('item:Iron Plate', 'raw:Crude Oil', 'amp:Recipe_…') are not valid LP-format names.
   const names = Object.keys(model.variables),
     vars = names.map((_, i) => 'v' + i);
   // One linear expression over the coefficients stored under `key`. An expression with no terms
   // is written as '0 v0' so the LP text stays parseable.
-  const expression = key =>
+  const expression = (key: string) =>
     names
-      .map((n, i) => [model.variables[n][key] || 0, vars[i]])
+      .map((n, i): [number, string] => [model.variables[n]![key] || 0, vars[i]!])
       .filter(([q]) => q !== 0)
       .map(([q, n]) => `${q < 0 ? '-' : '+'} ${Math.abs(q)} ${n}`)
       .join(' ') || '0 v0';
@@ -55,12 +82,12 @@ export function solve(model) {
   if (integers.length) lines.push('Generals', integers.join(' '));
   lines.push('End');
   // Three seconds per solve, not per plan: `calculate` makes several solves per phase. The
-  // integer searches are the ones that can hit it (see AMPLIFY_CANDIDATES in planner.mjs).
+  // integer searches are the ones that can hit it (see AMPLIFY_CANDIDATES in planner.ts).
   const r = highs.solve(lines.join('\n'), { output_flag: false, time_limit: 3 });
   return {
     solverStatus: r.Status,
     feasible: r.Status === 'Optimal',
     bounded: r.Status === 'Optimal',
-    ...Object.fromEntries(names.map((n, i) => [n, r.Columns?.[vars[i]]?.Primal || 0])),
+    values: Object.fromEntries(names.map((n, i) => [n, r.Columns?.[vars[i]!]?.Primal || 0])),
   };
 }
