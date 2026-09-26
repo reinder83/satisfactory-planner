@@ -7,9 +7,9 @@
 //
 // Imports of the shared modules below are not followed: each test supplies their
 // exports as VM globals, as it did when the app was a single file. Nor is the Vue layer
-// (the vue package and public/app/ui/): these tests draw pages through the legacy render
-// functions, so every name imported from it becomes a do-nothing function. Components are
-// tested with Vitest in tests/ui/ instead.
+// (the vue and @dnd-kit/vue packages and public/app/ui/): these tests draw pages through the
+// legacy render functions, so every name imported from it becomes a do-nothing function.
+// Components are tested with Vitest in tests/ui/ instead.
 //
 // TypeScript modules (.ts) have their types stripped first with Node's own stripper, which
 // replaces the type syntax with spaces and leaves everything else as written, so the
@@ -56,7 +56,8 @@ export function appSource() {
     const text = url.pathname.endsWith('.ts') ? stripTypes(source) : source;
     const ui = url.href.startsWith(UI);
     for (const [statement, specifier] of text.matchAll(IMPORT)) {
-      if (specifier === 'vue') continue;
+      // npm packages (vue, @dnd-kit/vue) belong to the Vue layer, which these tests leave out.
+      if (!specifier!.startsWith('.')) continue;
       // The pattern's one group always matches.
       const dependency = new URL(specifier!, url);
       if (dependency.href.startsWith(UI) && !ui)

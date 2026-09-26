@@ -747,11 +747,12 @@ export function validateState(s: unknown): ProgressState {
   return clean;
 }
 // Operations that send a whole value the tab worked out from the state it last showed: a
-// phase's full step order, a floor's bay order (#191), a note's whole text, a step's title/body/link. Applied on top of
-// a newer state (another tab or device wrote in between), they would silently undo that
-// write, so both editions refuse them unless the tab saw the current revision (#165).
+// phase's full step order, a floor's bay order (#191), a container move with the items the
+// tab showed at both addresses (#208), a note's whole text, a step's title/body/link. Applied
+// on top of a newer state (another tab or device wrote in between), they would silently undo
+// that write, so both editions refuse them unless the tab saw the current revision (#165).
 // Small operations (a tick, a count, one assignment) merge safely and are never refused.
-const baseSensitive = ['taskOrder', 'note', 'taskEdit', 'storageBayOrder'];
+const baseSensitive = ['taskOrder', 'note', 'taskEdit', 'storageBayOrder', 'storageSlotMove'];
 export const staleWrite =
   'This profile was changed in another tab or on another device, so your last change was not ' +
   'saved. The page now shows the latest version; text you typed is kept, and saving it again ' +
@@ -1119,7 +1120,47 @@ function mutateLayout(s: SavedState, op: Raw) {
     // An added position disappears with its container; a handbook one stays as a
     // reserved address so its printed label keeps meaning something.
     if (!addedSlot(op.key) && !e.clearedSlots.includes(op.key)) e.clearedSlots.push(op.key);
+  } else if (op.type === 'storageSlotMove') {
+    // A container dragged to another position (#208), in its bay or another. The page sends the
+    // items it shows at both addresses (the server does not know the handbook's), `toName` null
+    // for an empty position: a move, else a swap. The owner's choice on #208: progress moves
+    // with the container, so the two addresses' 'slot-' checks and notes always trade places;
+    // an empty position's leftover records go to the address left behind, never deleted.
+    const { from, to } = op;
+    if (!slotAddr(from) || !slotAddr(to) || from === to) fail('Invalid container move.');
+    for (const k of [from, to])
+      if (!handbookBay(bayOfSlot(k)) && !e.bays.some(b => b.id === bayOfSlot(k)))
+        fail('Unknown bay.');
+    if (!label(op.fromName, 120) || (op.toName !== null && !label(op.toName, 120)))
+      fail('Invalid container.');
+    const put = (k: string, name: string | null) => {
+      if (name === null) {
+        // Emptied the way storageSlotClear empties a position.
+        delete e.slots[k];
+        if (!addedSlot(k) && !e.clearedSlots.includes(k)) e.clearedSlots.push(k);
+      } else {
+        e.slots[k] = name.trim();
+        e.clearedSlots = e.clearedSlots.filter(x => x !== k);
+      }
+    };
+    put(to, op.fromName);
+    put(from, op.toName as string | null);
+    swapSlotRecords(s, from, to);
   } else fail('Unknown update.');
+}
+// Trades every 'slot-<a>' note and 'slot-<a>-<step>' check with those of address b.
+function swapSlotRecords(s: SavedState, a: string, b: string) {
+  for (const records of [s.checks, s.notes] as Record<string, unknown>[]) {
+    if (!records) continue;
+    const moved: [string, unknown][] = [];
+    for (const k of Object.keys(records)) {
+      const m = /^slot-([A-Z]{1,2}[0-9]{2})(-.*)?$/.exec(k);
+      if (!m || (m[1] !== a && m[1] !== b)) continue;
+      moved.push(['slot-' + (m[1] === a ? b : a) + (m[2] ?? ''), records[k]]);
+      delete records[k];
+    }
+    for (const [k, v] of moved) records[k] = v;
+  }
 }
 
 // Default factory groups for newly calculated profiles: production areas keyed by each row's primary output.

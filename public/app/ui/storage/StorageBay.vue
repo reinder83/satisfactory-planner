@@ -4,8 +4,9 @@
   Done box writes all four of its saved `slot-<address>-<step>` checks in one save; "Complete
   room" does that for every named container of the bay. While editing the layout, the bay
   can be renamed, a container cleared (its checkmarks stay with the address), an item added
-  (a free position first, then the next address) and an added bay removed. Move left / Move right
-  set the order of the bays on the floor (#191): `order` is every bay on it, in its current order.
+  (a free position first, then the next address), a container dragged to another position
+  (SlotCell.vue, #208) and an added bay removed. Move left / Move right set the order of the bays
+  on the floor (#191): `order` is every bay on it, in its current order.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -16,6 +17,7 @@ import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import SlotCell from './SlotCell.vue';
 import type { StorageBayView } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
@@ -50,6 +52,9 @@ const view = computed(() =>
       // A full bay still takes another container: it gets the next address, up to the
       // addressable limit.
       canAdd: b.items.length < bayCapacity,
+      // The address a container dropped past the last position gets (#208).
+      next:
+        b.items.length < bayCapacity ? b.id + String(b.items.length + 1).padStart(2, '0') : null,
       addPrompt:
         items.length < b.items.length
           ? 'Add container: item name…'
@@ -303,7 +308,13 @@ async function addContainer(e: Event) {
       <template v-for="(x, i) in view.slots" :key="x.id"
         ><div v-if="i === 4" class="walkway">BAY WALKWAY</div>
         <div v-if="i === 8" class="walkway added">ADDED POSITIONS</div>
-        <div v-if="x.name" :class="['slot', x.done ? 'done' : '', x.match ? 'match' : '']">
+        <SlotCell
+          v-if="x.name"
+          :id="x.id"
+          :editing="view.editing"
+          :label="`${x.id}: ${x.name}`"
+          :class="['slot', x.done ? 'done' : '', x.match ? 'match' : '']"
+        >
           <button
             v-if="view.editing"
             class="slot-remove"
@@ -336,18 +347,27 @@ async function addContainer(e: Event) {
               @change="completeSlot($event, x.id)"
             />Done</label
           >
-        </div>
+        </SlotCell>
         <!-- A reserved position keeps a filled card's shape: invisible stand-ins for the icon and
              the Done box hold the same space, so a row of reserved positions is as tall as any
              other (#200). -->
-        <div v-else class="slot empty">
+        <SlotCell v-else :id="x.id" :editing="view.editing" class="slot empty">
           <strong>{{ x.id }}</strong
           ><span class="slot-icon-space" aria-hidden="true"></span
           ><span class="slot-reserved">Reserved</span
           ><span class="slot-complete slot-space" aria-hidden="true"
-            ><input type="checkbox" tabindex="-1" disabled
-          /></span></div
+            ><input type="checkbox" tabindex="-1" disabled /></span></SlotCell
       ></template>
+      <!-- While editing, a drop past the last position makes a new one there (#208). -->
+      <SlotCell
+        v-if="view.editing && view.next"
+        :id="view.next"
+        :editing="true"
+        class="slot empty drop-new"
+      >
+        <strong>{{ view.next }}</strong
+        ><span class="slot-reserved">Drop here for a new position</span>
+      </SlotCell>
     </div>
     <form
       v-if="view.editing && view.canAdd"

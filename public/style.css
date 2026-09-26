@@ -1591,6 +1591,41 @@ td:first-child {
   background: #3a1f1a;
   color: #ff7a5e;
 }
+/* Dragging containers in layout edit mode (#208, ui/storage/SlotCell.vue): the ⠿ handle left of
+   the ✕, the position under the pointer, and a dashed place past the last position. */
+.slot-drag {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.slot-drag:hover,
+.slot-drag:focus-visible {
+  color: var(--accent-hi);
+  border-color: var(--accent);
+}
+.slot.drop-over {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.slot.dragging {
+  opacity: 0.5;
+}
+.slot.drop-new {
+  border: 1px dashed var(--line);
+}
 .bay-rename {
   min-width: 0;
   flex: 1;
