@@ -261,6 +261,16 @@ test('a refill keeps an earlier undo, and offers none when nothing was typed', a
   assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 3);
 });
 
+test('an edit after a reset drops its undo, so undoing cannot throw the edit away', async () => {
+  survey(2, { purity: 'vanilla', distribution: 'original' });
+  await click('[data-node-reset]');
+  assert.ok($('[data-node-undo]'));
+  await change('input[name="node:Copper Ore:pure"]', '50');
+  assert.equal($('[data-node-undo]'), null, 'no undo left to press');
+  assert.ok($('[data-node-reset]'));
+  assert.equal(wizard!.extraction!.nodes!['Copper Ore']!.pure, 50, 'the typed count stays');
+});
+
 test('typed nitrogen counts are typed too: a refill over them can be undone', async () => {
   survey(3, { purity: 'vanilla', distribution: 'original' });
   await change('input[name="well:Nitrogen Gas:normal"]', '99');
