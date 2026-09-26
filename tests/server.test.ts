@@ -157,6 +157,24 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
         { ...wrap, saves: [{ profiles: [{ id: 'p', kind: 'calculated' }] }] },
         'Missing calculation snapshot.',
       ],
+      // An original profile whose handbook sources are not a list (#116).
+      ...[5, {}, 'x'].map(sources => [
+        {
+          ...wrap,
+          saves: [
+            {
+              profiles: [
+                {
+                  id: 'p',
+                  kind: 'original',
+                  handbook: { factories: [], phases: {}, storage: [], sources },
+                },
+              ],
+            },
+          ],
+        },
+        'Invalid handbook sources.',
+      ]),
     ] as [unknown, string][]) {
       const r = await post(app.url, '/api/import-saves', data);
       assert.equal(r.status, 400, JSON.stringify(data));

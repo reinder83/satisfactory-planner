@@ -90,6 +90,8 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
         invalid('This original profile needs its full handbook export.');
       // Handbook source links survive only as https URLs.
       const handbook = kind === 'original' ? structuredClone(p.handbook) : undefined;
+      if (handbook && handbook.sources !== undefined && !Array.isArray(handbook.sources))
+        invalid('Invalid handbook sources.');
       if (handbook)
         handbook.sources = (handbook.sources || []).filter(s => {
           try {
