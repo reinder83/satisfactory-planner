@@ -2,7 +2,7 @@
 // vehicle and says how long one round trip takes, since the planner knows no distances; this
 // works out how many vehicles carry the link's items and what they burn. The choice is saved
 // per link in factoryGroups.links (state.ts); the flows come from group-links.ts.
-import { groupLinks } from './group-links.ts';
+import { groupLinks, linkTransportFor } from './group-links.ts';
 import type {
   Catalog,
   FactoryGroups,
@@ -168,7 +168,7 @@ export function transportFuel(
     if (Number(phase) < Number(plan.settings.phase || 1) || !stage.rows?.length) continue;
     const fuels: ItemRates = {};
     for (const l of groupLinks(stage, groups)) {
-      const t = groups.links[l.from + ':' + l.to];
+      const t = linkTransportFor(groups.links, l.from, l.to);
       if (!t?.fuel) continue;
       const burn = linkLoad(l.items, t, catalog, fluids).fuelPerMin;
       if (burn > 0) fuels[t.fuel] = (fuels[t.fuel] || 0) + burn;

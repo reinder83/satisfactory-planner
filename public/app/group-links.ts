@@ -1,7 +1,8 @@
 // Flows between a calculated profile's factory groups (#184, part 1 of #68): for each pair of
 // places, what moves from one to the other per minute. A place is a factory group, "Ungrouped"
-// for rows (or shares of rows) in no group, the mines and existing supply as a source, and
-// protected storage, drone fuel, vehicle fuel, the Space Elevator and the sink as destinations.
+// for rows (or shares of rows) in no group, each raw resource or existing-supply item as a source
+// of its own (#231), and protected storage, drone fuel, vehicle fuel, the Space Elevator and the
+// sink as destinations.
 //
 // A row's group shares come from its memberships (views/factories.ts): a fixed rate is that
 // much of the row's primary output (MW for a generator), null-rate memberships split evenly
@@ -11,11 +12,28 @@
 // among everything that asks for it in proportion to what each asks, as elsewhere in the
 // planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
 // left out: they are that group's own belts.
-import type { FactoryGroups, ItemRates, StoredStage } from '../types/index.ts';
+import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
 
 // Place ids that are not factory groups.
 export const UNGROUPED = 'ungrouped';
+// The mines and existing supply as one place: how links from them were keyed before #231, and
+// the id of the page's card for them. A vehicle saved on such a link applies to every item it
+// carries (linkTransportFor below).
 export const MINES = 'mines';
+// Each raw resource and existing-supply item is a source of its own (#231): 'supply/Iron Ore'.
+export const SOURCE = 'supply/';
+export const sourceOf = (item: string) => SOURCE + item;
+export const isSource = (place: string) => place.startsWith(SOURCE);
+export const sourceItem = (place: string) => place.slice(SOURCE.length);
+// The transport saved for the link from -> to: its own entry, or for a source, the entry the
+// whole mines link had before #231 ('mines:<to>'), until one of its items gets a choice.
+export function linkTransportFor(
+  links: FactoryGroups['links'],
+  from: string,
+  to: string,
+): LinkTransport | undefined {
+  return links?.[from + ':' + to] ?? (isSource(from) ? links?.[MINES + ':' + to] : undefined);
+}
 export const OUTSIDE = {
   storage: 'storage',
   drone: 'drone',
@@ -93,7 +111,7 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     }
   }
   for (const books of [stage.raw, stage.supplied] as (ItemRates | undefined)[])
-    for (const [n, q] of Object.entries(books || {})) put(supply, n, MINES, q);
+    for (const [n, q] of Object.entries(books || {})) put(supply, n, sourceOf(n), q);
   for (const [n, q] of Object.entries(stage.storage || {})) put(demand, n, OUTSIDE.storage, q);
   for (const [n, q] of Object.entries(stage.drone || {})) put(demand, n, OUTSIDE.drone, q);
   for (const [n, q] of Object.entries(stage.transport || {})) put(demand, n, OUTSIDE.transport, q);

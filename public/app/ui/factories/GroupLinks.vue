@@ -19,7 +19,15 @@ import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num } from '../../format.ts';
 import { bestLane, FLUIDS, lanePlan } from '../../flow.ts';
-import { groupLinks, MINES, OUTSIDE, UNGROUPED } from '../../group-links.ts';
+import {
+  groupLinks,
+  isSource,
+  linkTransportFor,
+  MINES,
+  OUTSIDE,
+  sourceItem,
+  UNGROUPED,
+} from '../../group-links.ts';
 import { FLUID_CAR_M3, LINK_MODES, linkLoad, transportFuel, VEHICLES } from '../../logistics.ts';
 import {
   calcStage,
@@ -139,10 +147,14 @@ const view = computed(() =>
     const x = calcStage(),
       g = factoryGroupsState();
     if (!calculated || !x?.rows?.length || !g.groups.length) return null;
-    const name = (id: string) => g.groups.find(x => x.id === id)?.name ?? PLACES[id] ?? id;
+    // A source (#231) is named by its item; one the plan does not mine is existing supply.
+    const name = (id: string) =>
+      isSource(id)
+        ? sourceItem(id) + (x.raw?.[sourceItem(id)] ? '' : ' (existing supply)')
+        : (g.groups.find(x => x.id === id)?.name ?? PLACES[id] ?? id);
     const links = groupLinks(x, g).map(l => {
       const key = l.from + ':' + l.to,
-        t = g.links?.[key];
+        t = linkTransportFor(g.links, l.from, l.to);
       const mode: 'belt' | LinkMode = t?.mode ?? 'belt';
       const vehicle = t ? vehicleText(l.items, t) : null;
       const items = l.items.map(({ item, rate }) => {
@@ -173,9 +185,20 @@ const view = computed(() =>
       };
     });
     type Row = (typeof links)[number];
-    const part = (dir: 'in' | 'out', rows: Row[]) => ({
+    // A part lists its rows in sections: one unnamed section, or on the sources' card one per
+    // raw resource or existing-supply item (#231).
+    type Section = { id: string; name: string; rows: Row[]; count: string; total: string };
+    const section = (id: string, rows: Row[]): Section => ({
+      id,
+      name: id ? name(id) : '',
+      rows,
+      count: plural(rows.length, 'link'),
+      total: total(rows.flatMap(r => r.items)),
+    });
+    const part = (dir: 'in' | 'out', rows: Row[], sections = [section('', rows)]) => ({
       dir,
       rows,
+      sections,
       count: plural(rows.length, 'link'),
       total: total(rows.flatMap(r => r.items)),
     });
@@ -199,9 +222,21 @@ const view = computed(() =>
     }));
     // The mines and existing supply send but never receive: a card with only an Out part, first,
     // so every link, straight to storage, fuel, the elevator or the sink too, has its sender's
-    // Out row and its transport controls (#222).
-    const mined = links.filter(l => l.from === MINES);
-    if (mined.length) cards.unshift({ id: MINES, name: name(MINES), parts: [part('out', mined)] });
+    // Out row and its transport controls (#222). Each item is a source of its own with a section
+    // (#231): mined resources first, then existing supply, the largest first within each.
+    const mined = links.filter(l => isSource(l.from));
+    if (mined.length) {
+      const sources = [...new Set(mined.map(l => l.from))].map(id =>
+        section(
+          id,
+          mined.filter(l => l.from === id),
+        ),
+      );
+      const flow = (sec: Section) => sec.rows.reduce((t, r) => t + r.items[0]!.rate, 0);
+      const minedFirst = (sec: Section) => (x.raw?.[sourceItem(sec.id)] ? 0 : 1);
+      sources.sort((a, b) => minedFirst(a) - minedFirst(b) || flow(b) - flow(a));
+      cards.unshift({ id: MINES, name: name(MINES), parts: [part('out', mined, sources)] });
+    }
     const idle = places.filter(id => !used(id)).map(name);
     return { links, cards, idle };
   }),
@@ -216,9 +251,32 @@ async function setTransport(
   change: { mode?: 'belt' | LinkMode; roundTripMin?: number; fuel?: string },
 ) {
   const mode = change.mode ?? l.mode;
+  // A mines link with a choice saved before #231 splits on the first change to one of its items:
+  // the other sources going the same way keep that choice (state.ts factoryLinkTransport). The
+  // old entry applied in every phase, so its siblings are the sources going there in any phase of
+  // the plan, not only the one on screen (#235).
+  const g = factoryGroupsState();
+  const siblings =
+    isSource(l.from) && g.links?.[MINES + ':' + l.to]
+      ? [
+          ...new Set(
+            Object.values(calculated?.stages ?? {})
+              .filter(st => st.rows?.length)
+              .flatMap(st => groupLinks(st, g))
+              .filter(x => isSource(x.from) && x.to === l.to)
+              .map(x => x.from),
+          ),
+        ]
+      : undefined;
   const op: UpdateOp =
     mode === 'belt'
-      ? { type: 'factoryLinkTransport', from: l.from, to: l.to, mode }
+      ? {
+          type: 'factoryLinkTransport',
+          from: l.from,
+          to: l.to,
+          mode,
+          ...(siblings ? { siblings } : {}),
+        }
       : {
           type: 'factoryLinkTransport',
           from: l.from,
@@ -228,6 +286,7 @@ async function setTransport(
           ...(fuelledModes.includes(mode)
             ? { fuel: change.fuel ?? l.transport?.fuel ?? DEFAULT_FUEL }
             : {}),
+          ...(siblings ? { siblings } : {}),
         };
   el.disabled = true;
   try {
@@ -362,87 +421,95 @@ async function recalculate(e: Event) {
             <p v-if="!p.rows.length" class="small muted">
               {{ p.dir === 'in' ? 'Nothing comes in.' : 'Nothing goes out.' }}
             </p>
-            <div
-              v-for="l in p.rows"
-              :key="l.key"
-              class="flow-row"
-              v-bind="p.dir === 'in' ? { 'data-link-in': l.key } : { 'data-link-out': l.key }"
-            >
-              <div class="flow-end">
-                <template v-if="p.dir === 'in'"
-                  >← from <b>{{ l.fromName }}</b></template
-                >
-                <template v-else
-                  >→ to <b>{{ l.toName }}</b></template
-                >
-              </div>
-              <ul class="flow-items">
-                <li v-for="i in l.items" :key="i.item" :title="i.title">
-                  <ItemIcon :name="i.item" /><span class="flow-item-name">{{ i.item }}: </span
-                  >{{ i.text }}
-                </li>
-              </ul>
-              <template v-if="p.dir === 'out'">
-                <div class="link-transport">
-                  <label
-                    >By
-                    <select
-                      :data-link-mode="l.key"
-                      :value="l.mode"
-                      @change="
-                        setTransport($event.target as HTMLSelectElement, l, {
-                          mode: ($event.target as HTMLSelectElement).value as LinkMode,
-                        })
-                      "
-                    >
-                      <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">
-                        {{ label }}
-                      </option>
-                    </select></label
+            <template v-for="sec in p.sections" :key="sec.id"
+              ><h5 v-if="sec.name" class="flow-source" :data-source="sec.id">
+                {{ sec.name }}
+                <span class="flow-sum">{{ sec.count }} · {{ sec.total }}</span>
+              </h5>
+              <div
+                v-for="l in sec.rows"
+                :key="l.key"
+                class="flow-row"
+                v-bind="p.dir === 'in' ? { 'data-link-in': l.key } : { 'data-link-out': l.key }"
+              >
+                <div class="flow-end">
+                  <template v-if="p.dir === 'in'"
+                    >← from <b>{{ l.fromName }}</b></template
                   >
-                  <label v-if="l.transport"
-                    >Round trip
-                    <input
-                      type="number"
-                      min="0.1"
-                      max="1440"
-                      step="0.1"
-                      :data-link-trip="l.key"
-                      :value="l.transport.roundTripMin"
-                      @change="setTrip($event, l)"
-                    />
-                    min</label
-                  >
-                  <label v-if="l.fuelled"
-                    >Fuel
-                    <select
-                      :data-link-fuel="l.key"
-                      :value="l.transport!.fuel"
-                      @change="
-                        setTransport($event.target as HTMLSelectElement, l, {
-                          fuel: ($event.target as HTMLSelectElement).value,
-                        })
-                      "
-                    >
-                      <option v-for="f in fuels" :key="f.name" :value="f.name">{{ f.name }}</option>
-                    </select></label
+                  <template v-else
+                    >→ to <b>{{ l.toName }}</b></template
                   >
                 </div>
-                <template v-if="l.transport">
-                  <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>
-                    {{ line }}
-                  </p>
-                  <p v-if="l.packed.length" class="small muted">
-                    Packaged for the trip:
-                    {{ l.packed.map(i => `${i.item} as ${i.pack}`).join(', ') }}.
-                  </p>
+                <ul class="flow-items">
+                  <li v-for="i in l.items" :key="i.item" :title="i.title">
+                    <ItemIcon :name="i.item" /><span class="flow-item-name">{{ i.item }}: </span
+                    >{{ i.text }}
+                  </li>
+                </ul>
+                <template v-if="p.dir === 'out'">
+                  <div class="link-transport">
+                    <label
+                      >By
+                      <select
+                        :data-link-mode="l.key"
+                        :value="l.mode"
+                        @change="
+                          setTransport($event.target as HTMLSelectElement, l, {
+                            mode: ($event.target as HTMLSelectElement).value as LinkMode,
+                          })
+                        "
+                      >
+                        <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">
+                          {{ label }}
+                        </option>
+                      </select></label
+                    >
+                    <label v-if="l.transport"
+                      >Round trip
+                      <input
+                        type="number"
+                        min="0.1"
+                        max="1440"
+                        step="0.1"
+                        :data-link-trip="l.key"
+                        :value="l.transport.roundTripMin"
+                        @change="setTrip($event, l)"
+                      />
+                      min</label
+                    >
+                    <label v-if="l.fuelled"
+                      >Fuel
+                      <select
+                        :data-link-fuel="l.key"
+                        :value="l.transport!.fuel"
+                        @change="
+                          setTransport($event.target as HTMLSelectElement, l, {
+                            fuel: ($event.target as HTMLSelectElement).value,
+                          })
+                        "
+                      >
+                        <option v-for="f in fuels" :key="f.name" :value="f.name">
+                          {{ f.name }}
+                        </option>
+                      </select></label
+                    >
+                  </div>
+                  <template v-if="l.transport">
+                    <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>
+                      {{ line }}
+                    </p>
+                    <p v-if="l.packed.length" class="small muted">
+                      Packaged for the trip:
+                      {{ l.packed.map(i => `${i.item} as ${i.pack}`).join(', ') }}.
+                    </p>
+                  </template>
+                  <p v-else class="flow-badge" data-link-badge>{{ l.badge }}</p>
                 </template>
-                <p v-else class="flow-badge" data-link-badge>{{ l.badge }}</p>
-              </template>
-              <p v-else :class="['flow-badge', { vehicle: l.transport }]" data-link-badge>
-                {{ l.badge }}
-              </p>
-            </div>
+                <p v-else :class="['flow-badge', { vehicle: l.transport }]" data-link-badge>
+                  {{ l.badge }}
+                </p>
+              </div></template
+            >
           </section>
         </div>
       </article>
