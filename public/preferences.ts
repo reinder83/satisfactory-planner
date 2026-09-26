@@ -392,7 +392,6 @@ export const guidedQuestions: GuidedQuestion[] = [
         detail: 'You choose the hours per phase; the planner sizes the factory to hit it.',
         glyph: 'timed',
         set: { goal: 'timed' },
-        ask: 'hours',
       },
       {
         value: 'maximum',

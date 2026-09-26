@@ -4,7 +4,7 @@
 // is the wizard's alternate recipe (openAltRecipe in wizard/recipes.ts).
 import { num } from './format.ts';
 import { FLUIDS } from './flow.ts';
-import { calcStage, calculated, plan, setActiveDetail, stage } from './session.ts';
+import { calcStage, calculated, plan, stage } from './session.ts';
 import { showDetail } from './ui/detail.ts';
 import { factoryGroupsState, membershipsOf } from './views/factories.ts';
 import type { FactoryLink } from './ui/actions.ts';
@@ -39,21 +39,18 @@ export interface ChainStage {
 // The dialog for one handbook factory (ui/detail/FactoryDialog.vue); nothing for an unknown id.
 export function openFactory(id: string) {
   if (!plan.factories.some(x => x.id === id)) return;
-  setActiveDetail({ type: 'factory', id });
   showDetail({ kind: 'factory', id });
 }
 
 // The dialog for one row of a calculated plan (ui/detail/CalcFactoryDialog.vue).
 export function openCalculatedFactory(id: string) {
   if (!calcStage()?.rows?.some(r => r.id === id)) return;
-  setActiveDetail({ type: 'calc', id });
   showDetail({ kind: 'calc', id });
 }
 
 // The build-order dialog for a factory group (ui/detail/GroupChainDialog.vue).
 export function openGroupChain(gid: string) {
   if (!factoryGroupsState().groups.some(g => g.id === gid)) return;
-  setActiveDetail({ type: 'group', id: gid });
   showDetail({ kind: 'group', id: gid });
 }
 

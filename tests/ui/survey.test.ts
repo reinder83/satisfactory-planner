@@ -41,7 +41,7 @@ function survey(
   settings: Partial<WizardSettings> = {},
   draft: Partial<WizardDraft> = {},
 ) {
-  // A partial draft (no usedGuided, a return without its guidedStep), as the tests have
+  // A partial draft (a return without its guidedStep), as the tests have
   // always opened it.
   setWizard({
     step: 4,

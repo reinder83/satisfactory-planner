@@ -14,7 +14,6 @@ import {
   openGroupChain,
 } from '../../public/app/factory-detail.ts';
 import {
-  activeDetail,
   boot,
   calcStage,
   setFactoryEditing,
@@ -470,5 +469,4 @@ test('a dialog left open when the session ends closes with the sign-in screen', 
   await boot();
   assert.ok($('#auth-form'), 'the sign-in screen is up');
   assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'no dialog over it');
-  assert.equal(activeDetail, null);
 });

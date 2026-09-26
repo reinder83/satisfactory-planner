@@ -54,7 +54,6 @@ function wizardAt(
     mode: 'advanced',
     guidedStep: 1,
     guidedAsk: null,
-    usedGuided: false,
     tutorial: 'doing',
     ...extra,
   });
@@ -162,6 +161,17 @@ test('the five steps keep every setting, and escape the save name once', async (
   assert.equal($('#wizard-form button[type=submit]')!.textContent.trim(), 'Calculate plan');
   wizardAt(5);
   assert.equal($('#wizard-form button[type=submit]')!.textContent.trim(), 'Create profile');
+});
+
+test('power typed in MW is kept in GW, as the settings store it', async () => {
+  wizardAt(1, {}, { availablePowerGW: 0, installedPowerGW: 0 });
+  await change('input[name=availablePowerMW]', '2500');
+  await change('input[name=installedPowerMW]', '4000');
+  // Read when the step is left.
+  await submit();
+  assert.equal(wizard!.settings.availablePowerGW, 2.5);
+  assert.equal(wizard!.settings.installedPowerGW, 4);
+  assert.equal(wizard!.step, 2);
 });
 
 test('a help tip opens without a mouse and has no native tooltip', () => {

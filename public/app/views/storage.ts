@@ -5,7 +5,7 @@
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
 import { num } from '../format.ts';
-import { calculated, checked, plan, setActiveDetail, state } from '../session.ts';
+import { calculated, checked, plan, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits } from '../../types/index.ts';
 
@@ -166,6 +166,5 @@ export const SLOT_STEPS: [step: string, label: string][] = [
 // reserved position.
 export function openSlot(id: string) {
   if (!storageBays().some(b => b.items.some(x => x.id === id && x.name))) return;
-  setActiveDetail({ type: 'slot', id });
   showDetail({ kind: 'slot', id });
 }

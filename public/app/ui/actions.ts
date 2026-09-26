@@ -8,7 +8,6 @@
 // (or put the control back); a success toast never follows a failed write.
 import { allowSwitch, save, toast } from '../api.ts';
 import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
-import { setActiveDetail } from '../session.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
 import { required } from '../format.ts';
@@ -78,7 +77,6 @@ export function closeDetail() {
   const d = required<HTMLDialogElement>('#detail');
   if (d.open && !allowSwitch(d)) return;
   d.close();
-  setActiveDetail(null);
 }
 
 // Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
