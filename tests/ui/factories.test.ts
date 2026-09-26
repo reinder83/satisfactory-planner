@@ -3,7 +3,10 @@
 // and group build-order dialogs (public/app/ui/detail/), mounted the way the app mounts them,
 // in happy-dom.
 import assert from 'node:assert/strict';
-import { nextTick } from 'vue';
+import { createApp, h, nextTick } from 'vue';
+import { lanePlan } from '../../public/app/flow.ts';
+import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
+import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, test } from 'vitest';
 import {
   openCalculatedFactory,
@@ -299,6 +302,31 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
     '',
     'opening the dialog again starts from the saved note',
   );
+});
+
+test('belt advice counts no extra lane at an exact multiple of the capacity', () => {
+  // Two lanes' worth exactly, then a little over one lane.
+  const advice = (rate: number) => {
+    const plan = lanePlan(rate, false, '3');
+    const model: FlowModel = {
+      stage: '3',
+      equivalent: 4,
+      machineCount: 4,
+      inputs: [{ name: 'Iron Ore', rate, link: null, plan, local: null }],
+      outputs: [],
+      machineName: '',
+      local: false,
+      recipe: null,
+      bar: null,
+      sameItemConsumers: () => [],
+    };
+    const el = document.createElement('div');
+    createApp({ render: () => h(LaneAdvice, { model }) }).mount(el);
+    return { cap: plan.lane.cap, text: el.querySelector('.logi-row p')!.textContent!.trim() };
+  };
+  const { cap } = advice(1);
+  assert.match(advice(2 * cap).text, /→ 2 × Mk\.\d belts — all 2 full\.$/);
+  assert.match(advice(cap + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
 });
 
 test('closing or replacing a dialog asks before dropping an unsaved note', () => {
