@@ -62,7 +62,7 @@ async function submit(e: Event) {
         required
         minlength="3"
         maxlength="32"
-        pattern="[a-zA-Z0-9_-]+"
+        pattern="[a-zA-Z0-9_\-]+"
         autocomplete="username"
     /></label>
     <label class="field"
