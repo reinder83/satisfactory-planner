@@ -569,3 +569,38 @@ test('a calculated plan saved before existing production existed still renders',
 // The handbook's Space Elevator deliveries for a phase.
 const handbookDeliveries = (phase: string): HandbookDelivery[] =>
   handbook.deliveries.filter((d: HandbookDelivery) => d.phase === phase);
+
+test('a step edit refused as stale keeps what was typed while the page catches up', async () => {
+  open();
+  state.revision = 7;
+  render();
+  // The other tab retitled the same step; this tab still shows the old wording.
+  const other: Partial<TaskEdits> = { titles: { 'phase-3-iron': 'Other tab title' } };
+  const newer = { ...state, revision: 8, taskEdits: { ...state.taskEdits, ...other } as TaskEdits };
+  globalThis.fetch = async (path: RequestInfo | URL) =>
+    String(path) === '/api/state'
+      ? new Response(JSON.stringify(newer))
+      : new Response(JSON.stringify({ error: 'This profile was changed in another tab.' }), {
+          status: 409,
+        });
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  $('[data-edit-task="phase-3-iron"]')!.click();
+  await nextTick();
+  const type = (name: string, value: string) => {
+    const el = $<HTMLInputElement>(`[data-task-edit="phase-3-iron"] [name=${name}]`)!;
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  type('title', 'My title');
+  type('body', 'My details');
+  $('[data-task-edit="phase-3-iron"]')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+  assert.equal(state.revision, 8, 'the page took the latest state');
+  assert.equal(state.taskEdits!.titles!['phase-3-iron'], 'Other tab title');
+  assert.equal(editingTask, 'phase-3-iron', 'the form stays open');
+  const form = $('[data-task-edit="phase-3-iron"]')!;
+  assert.equal(form.querySelector<HTMLInputElement>('[name=title]')!.value, 'My title');
+  assert.equal(form.querySelector<HTMLTextAreaElement>('[name=body]')!.value, 'My details');
+  assert.match($('#toast')!.textContent, /changed in another tab/);
+});
