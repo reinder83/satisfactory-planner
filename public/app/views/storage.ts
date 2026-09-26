@@ -100,19 +100,31 @@ export function storageBays(): StorageBayView[] {
 // Handbook bays the user hid (#166), with the items the plan would still keep in them: those
 // have no container while the bay is hidden. Hidden bays are left out of storageBays(), and so
 // out of the storage page's grid and counts, the plan's storage tile and ADA.
-export function hiddenStorageBays(): { id: string; name: string; items: string[] }[] {
-  const hidden = new Set(storageEdits().hiddenBays);
-  return allStorageBays()
+export function hiddenStorageBays(): {
+  id: string;
+  name: string;
+  items: string[];
+  // An added bay has taken the letter (#167), so the bay cannot be restored until it goes.
+  taken: boolean;
+}[] {
+  const e = storageEdits(),
+    hidden = new Set(e.hiddenBays);
+  // A hidden letter an added bay has taken (#167) shares its addresses with that bay, so its
+  // planned items are read from the plan alone, not from the added bay's containers.
+  const taken = new Set(e.bays.map(b => b.id).filter(id => hidden.has(id)));
+  return allStorageBays(taken)
     .filter(b => !b.custom && hidden.has(b.id))
     .map(b => ({
       id: b.id,
       name: b.name,
       items: b.items.filter(x => x.name).map(x => x.name!),
+      taken: taken.has(b.id),
     }));
 }
 
 // Every bay, hidden handbook bays included; storageBays() and hiddenStorageBays() split it.
-function allStorageBays(): StorageBayView[] {
+// Handbook bays in `planOnly` show just the plan's items, without the user's container edits.
+function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   // `selected` is null for the original handbook; for a calculated profile it is every
   // item any phase stores, so unselected handbook positions show as reserved.
   const e = storageEdits(),
@@ -151,9 +163,9 @@ function allStorageBays(): StorageBayView[] {
             ? x.name
             : null
           : x.name;
-        return { ...x, name: merge(planned, x.id) };
+        return { ...x, name: planOnly.has(b.id) ? planned : merge(planned, x.id) };
       }),
-      ...positions(b.id, b.items.length),
+      ...(planOnly.has(b.id) ? [] : positions(b.id, b.items.length)),
     ],
   }));
   // Bays the user added: at least eight positions, all filled from `slots`. They always

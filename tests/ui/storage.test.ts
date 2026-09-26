@@ -225,7 +225,7 @@ test('the layout editor saves floors, bays, containers and removals', async () =
   setLayoutEditing(true);
   render();
   const submit = (form: HTMLElement, value: string) => {
-    form.querySelector('input')!.value = value;
+    form.querySelector<HTMLInputElement>('input[name=name]')!.value = value;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
   };
   submit($('#add-bay')!, 'New bay');
@@ -236,7 +236,11 @@ test('the layout editor saves floors, bays, containers and removals', async () =
     name: 'New bay',
     floor: 'ground',
   });
-  assert.equal($<HTMLInputElement>('#add-bay input')!.value, '', 'the form empties after adding');
+  assert.equal(
+    $<HTMLInputElement>('#add-bay [name=name]')!.value,
+    '',
+    'the form empties after adding',
+  );
   submit($('#add-floor')!, 'Attic');
   await settle();
   assert.equal(calls.at(-1)![1].type, 'storageFloorAdd');
@@ -420,4 +424,62 @@ test('a reserved position keeps a filled card’s shape, with inert stand-ins (#
   assert.equal(box.tabIndex, -1);
   assert.equal(box.dataset.completeSlot, undefined, 'not a control the page counts or saves');
   noMarkup();
+});
+
+test('an added bay takes the letter typed, and a hidden handbook letter only after a yes (#167)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  open({ state: { checks: { 'slot-C01-built': true } } });
+  setLayoutEditing(true);
+  render();
+  const add = async (letter: string, name: string) => {
+    $<HTMLInputElement>('#new-bay-letter')!.value = letter;
+    $<HTMLInputElement>('#new-bay-name')!.value = name;
+    $('#add-bay')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    await settle();
+  };
+  assert.equal(
+    $<HTMLInputElement>('#new-bay-letter')!.value,
+    'S',
+    'the next free letter is filled in',
+  );
+  // A letter already in the room is refused before anything is sent.
+  const before = calls.length;
+  await add('c', 'Clash');
+  assert.equal(calls.length, before);
+  assert.match($('#toast')!.textContent!, /Bay C is already in the room/);
+  // Hide C, then take its letter: asked first; "No" sends nothing, "Yes" replaces it.
+  $('[data-hide-bay="C"]')!.click();
+  await settle();
+  let asked = '';
+  globalThis.confirm = (m?: string) => ((asked = m || ''), false);
+  await add('C', 'My parts');
+  assert.match(asked, /Bay C still has saved progress/);
+  assert.equal(state.storageEdits.bays.length, 0, 'no bay was added');
+  globalThis.confirm = () => true;
+  await add('C', 'My parts');
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'storageBayAdd',
+    id: 'C',
+    name: 'My parts',
+    floor: 'ground',
+    replace: true,
+  });
+  assert.equal(state.checks['slot-C01-built'], undefined, 'the handbook bay’s records are cleared');
+  assert.ok($('[data-remove-bay="C"]'), 'the added bay C is in the room');
+  // The hidden handbook bay now says why it cannot be restored.
+  assert.match($('[data-hidden-bays]')!.textContent!, /An added bay uses this letter/);
+  assert.equal($('[data-restore-bay="C"]'), null);
+  noMarkup();
+});
+
+test('a handbook bay sharing its letter with an added bay stored before #91 offers no Hide', () => {
+  open({
+    state: {
+      storageEdits: someEdits({ bays: [{ id: 'C', name: 'Old added C', floor: 'ground' }] }),
+    },
+  });
+  setLayoutEditing(true);
+  render();
+  assert.equal($('[data-hide-bay="C"]'), null, 'remove the added bay first');
+  assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
 });

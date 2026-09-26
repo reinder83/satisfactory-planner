@@ -1081,6 +1081,13 @@ p.eyebrow {
   margin-top: 10px;
 }
 
+/* The bay letter box in the storage layout editor (ui/storage/LayoutEditor.vue). */
+.inline-form .new-bay-letter {
+  width: 4.5em;
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
 /* ── Deliveries ────────────────────────────────────────── */
 .delivery {
   border-bottom: 1px solid var(--row);
