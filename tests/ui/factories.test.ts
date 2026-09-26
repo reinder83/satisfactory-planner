@@ -381,12 +381,15 @@ test('a handbook dialog names an underclocked last building only when there is o
   const sentence = () =>
     $$('#detail p.small.muted')
       .map(p => p.textContent.replace(/\s+/g, ' '))
-      .find(t => t.includes('whole buildings'))!;
+      .find(t => t.includes('whole building'))!;
   render();
   openFactory('circuit-board');
   assert.match(sentence(), /32 whole buildings\. All at 100%\. Peak/);
   openFactory('smart-plating');
   assert.match(sentence(), /58 whole buildings\. All at 100%, except the last at 50%\. Peak/);
+  // One building is one, not "1 whole buildings" (#112).
+  openFactory('versatile-framework');
+  assert.match(sentence(), /^1 whole building at 100%\. Peak/);
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
