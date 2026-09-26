@@ -674,6 +674,23 @@ test('ticking topics keeps the "what is different" screen; Continue asks exactly
   assert.equal($$('.guided-progress [role=listitem]').length, 2);
 });
 
+test('a failed calculation with no topics ticked stays on the "what is different" screen', async () => {
+  guidedAt(1, { saveId: 's', saveName: 'World', carryFrom: 'p' });
+  await change('input[name=topic][value=phase]', false);
+  stubFetch({}); // /api/preview answers 500
+  await submit();
+  await settle();
+  assert.equal(vuePage('wizard', null, wizard), GuidedPage);
+  assert.ok($('.guided-topics'), 'the topic picker is still on screen');
+  assert.match(text('#wizard-form .form-error'), /unexpected \/api\/preview/);
+  assert.equal(wizard!.mode, 'guided');
+  // Trying again once it can be calculated goes on to Review.
+  stubFetch({ '/api/preview': generated() });
+  await submit();
+  assert.equal(wizard!.step, 5);
+  assert.match($('#main h2')!.textContent, /^Review /);
+});
+
 test('the already-running question asks for a rate, with an item search we own', async () => {
   guidedAt(1);
   const at = guidedFlow().findIndex(q => q.id === 'supply') + 1;
