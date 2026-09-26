@@ -70,7 +70,15 @@ export function refillExtraction() {
   const counted = [previous.nodes, previous.wells].some(map =>
     Object.values(map || {}).some(c => c.impure || c.normal || c.pure),
   );
-  if (counted && !matchingPreset(previous)) {
+  // matchingPreset compares the ordinary nodes only. On the default distribution the refill also
+  // replaces nitrogen, so a nitrogen row that differs from the matched preset's was typed too.
+  const preset = matchingPreset(previous);
+  const row = (c?: NodeCounts) => [c?.impure || 0, c?.normal || 0, c?.pure || 0].join();
+  const nitrogenTyped =
+    !!preset &&
+    s.distribution === 'original' &&
+    row(previous.wells?.['Nitrogen Gas']) !== row(presetSurvey(preset).wells['Nitrogen Gas']);
+  if (counted && (!preset || nitrogenTyped)) {
     w.extractionUndo = JSON.parse(JSON.stringify(previous));
     w.extractionUndoKind = 'refill';
   }
