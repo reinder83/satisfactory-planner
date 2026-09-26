@@ -56,26 +56,46 @@ function storageEdits(): StorageEdits {
     slots: e.slots || {},
     clearedSlots: e.clearedSlots || [],
     hiddenBays: e.hiddenBays || [],
+    hiddenFloors: e.hiddenFloors || [],
   };
 }
 
-// The floor tabs: the three built-in floors (renameable, never removable) followed by
-// floors the user added.
+// The floor tabs: the three built-in floors (renameable, never removable; hidden ones left out,
+// #168) followed by floors the user added. A hidden built-in floor that still has a bay showing
+// keeps its tab, so no bay is ever out of reach (the layout editor only hides empty floors).
 const BUILTIN_FLOORS: [id: string, label: string][] = [
   ['ground', 'Ground floor'],
   ['upper', 'Upper floor'],
   ['workshop', 'Workshop'],
 ];
 export function storageFloors(): StorageFloor[] {
-  const e = storageEdits();
+  const e = storageEdits(),
+    hidden = hiddenFloorIds();
   return [
-    ...BUILTIN_FLOORS.map(([id, label]) => ({
+    ...BUILTIN_FLOORS.filter(([id]) => !hidden.has(id)).map(([id, label]) => ({
       id,
       label: e.floorNames[id] || label,
       builtin: true,
     })),
     ...e.floors.map(f => ({ id: f.id, label: e.floorNames[f.id] || f.label, builtin: false })),
   ];
+}
+
+// Built-in floors hidden from the tabs: those listed in hiddenFloors with no bay showing.
+function hiddenFloorIds(): Set<string> {
+  const listed = storageEdits().hiddenFloors;
+  if (!listed.length) return new Set();
+  const used = new Set(storageBays().map(b => b.floor));
+  return new Set(listed.filter(id => !used.has(id)));
+}
+// The hidden built-in floors, for the storage page's Hidden panel.
+export function hiddenStorageFloors(): { id: string; label: string }[] {
+  const e = storageEdits(),
+    hidden = hiddenFloorIds();
+  return BUILTIN_FLOORS.filter(([id]) => hidden.has(id)).map(([id, label]) => ({
+    id,
+    label: e.floorNames[id] || label,
+  }));
 }
 
 // The id for a bay the user adds (#add-bay, ui/storage/LayoutEditor.vue): the first unused letter,

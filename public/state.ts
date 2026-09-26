@@ -8,7 +8,7 @@
 //                  e.g. '3-versatile-framework'
 //   settings       { phase } the selected phase; nothing else in settings is kept
 //   customTasks    [{ id: 'custom-…', title, phase }] steps the user added
-//   storageEdits   storage room layout edits (blankEdits), version 2+/4/5
+//   storageEdits   storage room layout edits (blankEdits), version 2+/4/5/6
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3
 // Checklist keys link progress to content and must never be renamed, because saved states
@@ -63,6 +63,7 @@ const blankEdits = (): StorageEdits => ({
   slots: {},
   clearedSlots: [],
   hiddenBays: [],
+  hiddenFloors: [],
 });
 // Build-plan edits, keyed by step id: order is { phase: [stepId…] }, removed lists hidden
 // steps, titles/bodies replace step text and links point a step at a factory or row id.
@@ -525,22 +526,30 @@ function validateEdits(raw: unknown): StorageEdits {
       fail('Invalid hidden storage bays.');
     e.hiddenBays = [...new Set<string>(raw.hiddenBays)].sort();
   }
+  if (raw.hiddenFloors !== undefined) {
+    const list = raw.hiddenFloors;
+    if (!Array.isArray(list) || list.some((k: unknown) => !builtinFloors.some(([id]) => id === k)))
+      fail('Invalid hidden storage floors.');
+    e.hiddenFloors = builtinFloors.map(([id]) => id).filter(id => list.includes(id));
+    if (e.hiddenFloors.length === builtinFloors.length && !e.floors.length)
+      fail('Invalid hidden storage floors.');
+  }
   return e;
 }
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–5 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–6 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "6" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 5
+      // Compared as the old code did, so a version given as "7" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 6
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -592,15 +601,19 @@ export function validateState(s: unknown): ProgressState {
   // edits or factory groups 3, and one using a container position past 08 is
   // marked 4, and one with a hidden handbook bay 5, so old versions refuse it instead of
   // silently dropping those edits (and showing the bay again as if nothing happened).
-  clean.version = clean.storageEdits.hiddenBays.length
-    ? 5
-    : hasAddedSlots(clean.storageEdits)
-      ? 4
-      : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-        ? 3
-        : hasEdits(clean.storageEdits)
-          ? 2
-          : 1;
+  // A hidden built-in floor is 6: a version-5 release would drop the list it does not know
+  // and show the floor again.
+  clean.version = clean.storageEdits.hiddenFloors.length
+    ? 6
+    : clean.storageEdits.hiddenBays.length
+      ? 5
+      : hasAddedSlots(clean.storageEdits)
+        ? 4
+        : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+          ? 3
+          : hasEdits(clean.storageEdits)
+            ? 2
+            : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
@@ -807,9 +820,24 @@ function mutateLayout(s: SavedState, op: Raw) {
       if (!label(op.label)) fail('Invalid floor name.');
       e.floorNames[op.id] = op.label.trim();
     }
+  } else if (op.type === 'storageFloorHide' || op.type === 'storageFloorRestore') {
+    // Built-in floors are hidden, never removed (#168); an added floor is removed instead.
+    if (!builtinFloors.some(([id]) => id === op.id))
+      fail('Only built-in floors can be hidden. Remove an added floor instead.');
+    const id = op.id as string;
+    if (op.type === 'storageFloorRestore') e.hiddenFloors = e.hiddenFloors.filter(f => f !== id);
+    else {
+      if (e.bays.some(b => b.floor === id)) fail('Remove or move the bays on this floor first.');
+      const hidden = new Set([...e.hiddenFloors, id]);
+      if (hidden.size === builtinFloors.length && !e.floors.length)
+        fail('Keep at least one floor in the storage room.');
+      e.hiddenFloors = builtinFloors.map(([f]) => f).filter(f => hidden.has(f));
+    }
   } else if (op.type === 'storageFloorRemove') {
     if (!e.floors.some(f => f.id === op.id)) fail('Only added floors can be removed.');
     if (e.bays.some(b => b.floor === op.id)) fail('Remove or move the bays on this floor first.');
+    if (e.hiddenFloors.length === builtinFloors.length && e.floors.length === 1)
+      fail('Keep at least one floor in the storage room.');
     e.floors = e.floors.filter(f => f.id !== op.id);
     // The first check above matched an added floor, so the id is a string.
     delete e.floorNames[op.id as string];

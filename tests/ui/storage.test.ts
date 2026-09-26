@@ -26,6 +26,7 @@ const EDITS = {
   slots: { S01: evil },
   clearedSlots: ['A01'],
   hiddenBays: [],
+  hiddenFloors: [],
 };
 // Layout edits with only the given fields, as a test sets them up; the page reads the others
 // as absent.
@@ -404,6 +405,36 @@ test('a handbook bay can be hidden in edit mode and restored, and its items are 
   assert.ok($('[data-slot="C01"]'), 'bay C is back');
   assert.equal($('[data-unplaced]'), null);
   noMarkup();
+});
+
+test('an empty built-in floor can be hidden and restored from the layout editor (#168)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  open();
+  setLayoutEditing(true);
+  // The ground floor still has its bays: hiding waits until they are gone.
+  render();
+  assert.equal($<HTMLButtonElement>('[data-hide-floor="ground"]')!.disabled, true);
+  assert.match($('[data-hide-floor="ground"]')!.textContent!, /Hide or remove its bays first/);
+  setFloor('workshop');
+  render();
+  await nextTick();
+  $('[data-hide-floor="workshop"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageFloorHide', id: 'workshop' });
+  assert.ok(
+    !$$('.tabs .tab').some(t => t.dataset.floor === 'workshop'),
+    'the workshop tab is gone',
+  );
+  assert.notEqual(floor, 'workshop', 'the page moved to a floor that is still there');
+  assert.match($('[data-hidden-bays]')!.textContent!, /Workshop · floor/);
+  $('[data-restore-floor="workshop"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageFloorRestore', id: 'workshop' });
+  assert.ok(
+    $$('.tabs .tab').some(t => t.dataset.floor === 'workshop'),
+    'the tab is back',
+  );
+  assert.equal($('[data-hidden-bays]'), null);
 });
 
 test('an added bay takes the letter typed, and a hidden handbook letter only after a yes (#167)', async () => {

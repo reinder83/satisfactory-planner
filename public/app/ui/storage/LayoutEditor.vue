@@ -76,6 +76,22 @@ const addFloor = (e: Event) =>
 const renameFloor = (e: Event) =>
   submit(e, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
 
+// "Hide this floor" (built-in floors, #168): once none of its bays is showing, the tab goes; the
+// storage page's Hidden panel brings it back. The page then shows the first visible floor.
+const hiding = ref(false);
+async function hideFloor() {
+  if (!confirm(`Hide ${props.floor.label}? You can bring it back under Hidden bays and floors.`))
+    return;
+  hiding.value = true;
+  try {
+    await save({ type: 'storageFloorHide', id: props.floor.id });
+    render();
+  } catch {
+  } finally {
+    hiding.value = false;
+  }
+}
+
 // "Remove this floor", after a confirmation; then back to the ground floor.
 const removing = ref(false);
 async function removeFloor() {
@@ -135,6 +151,16 @@ async function removeFloor() {
           aria-label="Rename this floor"
         /><button class="btn" type="submit">Rename floor</button>
       </form>
+      <button
+        v-if="floor.builtin"
+        class="btn"
+        :data-hide-floor="floor.id"
+        :class="{ unavailable: !hiding }"
+        :disabled="hiding || bays > 0"
+        @click="hideFloor"
+      >
+        {{ bays ? 'Hide or remove its bays first' : 'Hide this floor' }}
+      </button>
       <button
         v-if="!floor.builtin"
         class="btn danger"
