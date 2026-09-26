@@ -83,6 +83,13 @@ test('the handbook plan shows the phase checklist, counters, notes and deliverie
   );
 });
 
+test('a duplicated or imported original profile also starts from the handbook counts', () => {
+  open({ profileId: 'copy-uuid' });
+  render();
+  for (const d of handbookDeliveries('3'))
+    assert.equal($<HTMLInputElement>(`#delivery-${d.id}`)!.value, String(d.initial));
+});
+
 test('post-game reads the Phase 5 stage and swaps deliveries for its priority note', () => {
   open({ phase: 'post' });
   render();

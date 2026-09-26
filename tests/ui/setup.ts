@@ -68,6 +68,8 @@ interface OpenOptions {
   name?: string;
   calculated?: boolean | StoredCalculatedPlan;
   phase?: Phase;
+  // The original profile's id: a duplicated or imported copy has its own.
+  profileId?: string;
   notes?: Record<string, string>;
   workspace?: Partial<WorkspaceSummary>;
   state?: Partial<ProgressState>;
@@ -76,13 +78,14 @@ export function open({
   name = evil,
   calculated = false,
   phase = '3',
+  profileId = 'original',
   notes = {},
   workspace,
   state,
 }: OpenOptions = {}) {
   const profile: ContextReply['profile'] = calculated
     ? { id: 'p', kind: 'calculated', name }
-    : { id: 'original', kind: 'original', name };
+    : { id: profileId, kind: 'original', name };
   setWorkspace({
     user: { id: 'owner', username: evil },
     accountsEnabled: false,
