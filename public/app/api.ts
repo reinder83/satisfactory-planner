@@ -154,12 +154,14 @@ export function acceptRoute() {
 }
 
 // Notes are saved with an explicit button, not on typing. A notes textarea is unsaved
-// when its text differs from the saved note its paired data-input button writes.
+// when its text differs from the saved note its paired data-input button writes. A blank
+// note is saved by deleting it (mutate in state.ts), so whitespace compares as empty.
 // `root` narrows the check, to the dialog when only the dialog is closing.
 export function hasUnsavedNotes(root: ParentNode = document) {
   return [...root.querySelectorAll<HTMLTextAreaElement>('textarea.notes')].some(el => {
     const button = root.querySelector<HTMLElement>(`[data-input="${el.id}"]`);
-    return button && el.value !== (state.notes[button.dataset.saveNote || ''] || '');
+    const text = el.value.trim() ? el.value : '';
+    return button && text !== (state.notes[button.dataset.saveNote || ''] || '');
   });
 }
 
