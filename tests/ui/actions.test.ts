@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { openFactory } from '../../public/app/factory-detail.ts';
-import { acceptRoute } from '../../public/app/api.ts';
+import { acceptRoute, request } from '../../public/app/api.ts';
 import { calcStage, setQuery, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generated, go, open, page, stubFetch } from './setup.ts';
@@ -53,6 +53,55 @@ test('ticking a progress checkbox saves it and redraws the page', async () => {
   assert.equal(after.checked, true);
   assert.equal(after.disabled, false);
   assert.ok(after.closest('.factory-card')!.classList.contains('done'));
+});
+
+// A server whose session has ended: every write answers 401, and /api/workspace (which is
+// answered signed out too) has no user.
+const sessionEnded = () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (path: RequestInfo | URL) => {
+    calls.push(String(path));
+    return String(path) === '/api/workspace'
+      ? new Response(JSON.stringify({ user: null, accountsEnabled: true, saves: [] }))
+      : new Response(JSON.stringify({ error: 'Sign in to continue.' }), { status: 401 });
+  };
+  return calls;
+};
+
+test('a write refused because the session ended shows the sign-in screen', async () => {
+  const calls = sessionEnded();
+  go('factories');
+  render();
+  const box = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  await settle();
+  assert.deepEqual(calls, ['/api/update', '/api/workspace']);
+  assert.ok($('#auth-form'), 'the sign-in form is on screen');
+  assert.equal($('.layout'), null, 'the signed-in frame is gone');
+});
+
+test('with unsaved notes on screen, an ended session keeps the page and says so', async () => {
+  const calls = sessionEnded();
+  go('plan');
+  render();
+  $<HTMLTextAreaElement>('#phase-note')!.value = 'Unsaved thought';
+  // Straight through request(): a tick would redraw the page and clear the note first (#110).
+  await assert.rejects(request('/api/update', { method: 'POST', body: '{}' }), /Sign in/);
+  await settle();
+  assert.deepEqual(calls, ['/api/update']);
+  assert.ok($('.layout'), 'still on the page');
+  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Unsaved thought');
+  assert.match($('#toast')!.textContent, /session has ended/i);
+});
+
+test('signed out, a 401 (a wrong password) does not reload the sign-in screen', async () => {
+  const calls = sessionEnded();
+  open({ workspace: { user: null, accountsEnabled: true } });
+  await assert.rejects(request('/api/login', { method: 'POST', body: '{}' }));
+  await settle();
+  assert.deepEqual(calls, ['/api/login']);
 });
 
 test('a failed tick puts the box back', async () => {

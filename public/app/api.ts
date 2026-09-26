@@ -4,7 +4,16 @@
 import { appRoot } from '../app-root.ts';
 import { browserMode, browserRequest } from '../browser-api.ts';
 import { required } from './format.ts';
-import { currentProfile, currentSave, setState, setView, state, type View } from './session.ts';
+import {
+  boot,
+  currentProfile,
+  currentSave,
+  setState,
+  setView,
+  state,
+  workspace,
+  type View,
+} from './session.ts';
 import { render } from './shell.ts';
 import { invalidate } from './ui/bridge.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
@@ -43,8 +52,27 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   } catch {
     throw new Error('The server returned an unreadable response.');
   }
+  if (r.status === 401) sessionEnded();
   if (!r.ok) throw new Error(data.error || 'Request failed.');
   return data;
+}
+
+// A 401 while signed in means the session expired or was ended in another tab. boot()
+// then asks /api/workspace again, which answers signed out too, and shows the sign-in
+// screen. That screen replaces the page, so with unsaved notes on it the page stays and a
+// toast says what happened instead. Signed out already (a wrong password on the sign-in
+// screen is a 401 too), nothing changes. Runs once.
+let ending = false;
+function sessionEnded() {
+  if (ending || !workspace?.user) return;
+  if (hasUnsavedNotes()) {
+    setTimeout(() =>
+      toast('Your session has ended. Copy your unsaved notes, then reload to sign in.', true),
+    );
+    return;
+  }
+  ending = true;
+  boot().finally(() => (ending = false));
 }
 
 // The tail of the save chain. Anything that switches save/profile or replaces data awaits
