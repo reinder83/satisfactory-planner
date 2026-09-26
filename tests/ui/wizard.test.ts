@@ -177,24 +177,39 @@ test('a help tip opens without a mouse and has no native tooltip', () => {
 });
 
 test('a new purity on step 1 refills a survey whose world is known, as the survey does', async () => {
-  // A survey already applied for the default world, with a miner mark of its own.
+  // A survey already applied for the default world, with a miner mark, an oil well and a
+  // rate already used of its own.
+  const applied = {
+    ...presetSurvey('vanilla'),
+    mark: 3,
+    wells: { 'Crude Oil': { impure: 0, normal: 0, pure: 3 } },
+    used: { Coal: 100 },
+  };
   wizardAt(
     1,
     {},
-    {
-      purity: 'vanilla',
-      distribution: 'original',
-      extraction: {
-        ...presetSurvey('vanilla'),
-        mark: 3,
-      },
-    },
+    { purity: 'vanilla', distribution: 'original', extraction: structuredClone(applied) },
   );
   $<HTMLSelectElement>('select[name=purity]')!.value = 'pure';
   await click('[data-wizard-step="2"]');
   const counts = extractionOf(wizard!);
   assert.deepEqual(counts.nodes, presetSurvey('pure').nodes, 'the counts of the pure world');
   assert.equal(counts.mark, 3, 'the miner mark is kept');
+  // The draft is a copy: editing it leaves the applied survey alone until it is applied.
+  counts.wells!['Crude Oil']!.pure = 99;
+  counts.used = {};
+  assert.deepEqual(wizard!.settings.extraction!.wells, applied.wells);
+  assert.deepEqual(wizard!.settings.extraction!.used, applied.used);
+  // Counts typed by hand are not the old preset's, so they stay, both ways round.
+  const typed = presetSurvey('vanilla');
+  typed.nodes['Iron Ore'] = { impure: 1, normal: 1, pure: 1 };
+  wizardAt(1, {}, { purity: 'vanilla', distribution: 'original', extraction: typed });
+  $<HTMLSelectElement>('select[name=purity]')!.value = 'pure';
+  await click('[data-wizard-step="2"]');
+  await click('[data-wizard-step="1"]');
+  $<HTMLSelectElement>('select[name=purity]')!.value = 'vanilla';
+  await click('[data-wizard-step="2"]');
+  assert.deepEqual(extractionOf(wizard!).nodes, typed.nodes);
   // A world whose counts are not known keeps what was typed.
   wizardAt(
     1,

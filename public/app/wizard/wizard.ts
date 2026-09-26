@@ -10,6 +10,7 @@ import { browserMode } from '../../browser-api.ts';
 import {
   GUIDED_TOPUP_RATE,
   knownWorld,
+  matchingPreset,
   presetSurvey,
   resourceDefaults,
 } from '../../preferences.ts';
@@ -18,6 +19,7 @@ import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { $, esc, plural, required } from '../format.ts';
 import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
+import { extractionOf } from './extraction.ts';
 import { guidedBuiltKeys, guidedFlow } from './guided.ts';
 import { readSupply } from './supply.ts';
 import type {
@@ -284,15 +286,23 @@ export function readWizard(form: HTMLFormElement) {
   if (w.step === 4) s.limitsConfirmed = f.has('limitsConfirmed');
   readCarry(form, f);
   // Changing purity or distribution on step 1 replaces the budgets with that
-  // world's starting estimates, which then need confirming again. The node survey
-  // follows as it does when the same settings change inside it (SurveyPage.vue):
-  // a fully known world refills every count, keeping the mark, clock and usage;
-  // otherwise the counts stay as typed.
+  // world's starting estimates, which then need confirming again. A node survey that
+  // still holds the old world's preset counts follows to the new world's when that is
+  // fully known (presetSurvey keeps the mark, clock, usage and the wells it does not
+  // fill). Counts that differ from the old preset were typed, and stay as they are,
+  // since the survey is not on screen to show the change. The draft survey is a full
+  // copy (extractionOf), so nothing edits the applied settings.extraction.
   if (w.step === 1 && oldPreset !== s.purity + '|' + s.distribution) {
     s.limits = resourceDefaults(s.purity, s.distribution).limits;
     s.limitsConfirmed = false;
-    if (knownWorld(s.purity, s.distribution))
-      w.extraction = presetSurvey(s.purity, w.extraction ?? s.extraction, s.distribution);
+    const [oldPurity = '', oldDistribution] = oldPreset.split('|');
+    if (
+      (w.extraction || s.extraction) &&
+      knownWorld(s.purity, s.distribution) &&
+      knownWorld(oldPurity, oldDistribution) &&
+      matchingPreset(extractionOf(w)) === oldPurity
+    )
+      w.extraction = presetSurvey(s.purity, extractionOf(w), s.distribution);
   }
   w.preview = null;
 }
