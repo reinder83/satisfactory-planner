@@ -22,8 +22,12 @@ import { invalidate } from './ui/bridge.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
-// (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves.
-export type RequestOptions = RequestInit & { onProgress?: (phase: number) => void };
+// (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves, and
+// its payoff ranking progress (candidates done of the total, ui/plan/PayoffPanel.vue).
+export type RequestOptions = RequestInit & {
+  onProgress?: (phase: number) => void;
+  onRankProgress?: (done: number, total: number) => void;
+};
 
 // Number of queued writes still in flight (queuedWrite: save() and restoring a progress
 // backup); drives the "Saving…" indicator and the close-tab warning.

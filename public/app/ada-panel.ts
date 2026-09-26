@@ -16,6 +16,7 @@ import {
   checked,
   currentProfile,
   currentSave,
+  payoff,
   phase,
   phaseLabel,
   plan,
@@ -27,6 +28,7 @@ import {
   wizard,
   workspace,
 } from './session.ts';
+import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
 import { planTasks, taskEditsState } from './tasks.ts';
 import { currentBuildStatus } from './views/calculated.ts';
@@ -99,6 +101,23 @@ function buildFacts(x: StoredStage): AdaFacts['build'] {
     waiting: held.map(r => name(r.id)),
     shortOf: [...new Set(held.map(r => r.shortOf!))],
     powerShort: s.power.short,
+  };
+}
+
+// ADA's view of a stored hard-drive payoff ranking of this phase (app/payoff.ts): the best
+// alternate on what the profile's goal optimises, and by how much.
+function payoffFacts(): AdaFacts['payoff'] {
+  if (!calculated || payoff?.ranking.phase !== stage()) return null;
+  const column = payoffDefaultSort(calculated.settings.goal);
+  const best = payoffBest(payoff.ranking, column);
+  if (!best) return null;
+  const gain = -(best[column] ?? 0);
+  return {
+    name: best.name,
+    gain:
+      column === 'hours'
+        ? `${num(gain)} ${gain === 1 ? 'hour' : 'hours'} sooner`
+        : `${num(gain)} fewer ${gain === 1 ? 'building' : 'buildings'}`,
   };
 }
 
@@ -184,6 +203,7 @@ function adaFacts(): AdaFacts {
     startPhase: startPhase(),
     assumptions: calculated ? (calculated.warnings || []).length : 0,
     build: buildFacts(x),
+    payoff: payoffFacts(),
   };
 }
 

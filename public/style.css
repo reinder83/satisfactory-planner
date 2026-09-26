@@ -1144,6 +1144,45 @@ p.eyebrow {
 .build-status .notice {
   margin-top: 12px;
 }
+/* Hard-drive payoff (ui/plan/PayoffPanel.vue): a sortable table of alternate recipes. */
+.payoff .section-head {
+  align-items: center;
+}
+.payoff .table-wrap {
+  margin: 12px 0;
+  box-shadow: none;
+}
+.payoff button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.payoff th button.link {
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.payoff td:first-child .small {
+  display: block;
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.payoff-better {
+  color: var(--green);
+}
+.payoff-worse,
+.payoff-infeasible,
+.payoff-error {
+  color: var(--red);
+}
+.payoff-mixed {
+  color: var(--gold);
+}
 .factory-card .build-held {
   color: var(--accent-hi);
 }

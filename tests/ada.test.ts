@@ -324,3 +324,11 @@ test('the storage and account pages have a line of their own, and there is more 
   for (const r of adaRemarks(facts({ save: 'My World', phaseLabel: 'Phase 4' })))
     assert.ok(!/[<>]/.test(r.text), r.text);
 });
+
+test('ADA names the best hard-drive payoff once a ranking exists (#204)', () => {
+  const line = adaRemarks(
+    facts({ payoff: { name: 'Pure Iron Ingot', gain: '12 fewer buildings' } }),
+  ).find(r => r.id === 'payoff-best')!;
+  assert.match(line.text, /Allowing Pure Iron Ingot would mean 12 fewer buildings in Phase 3/);
+  assert.ok(!ids(facts({ payoff: null })).includes('payoff-best'));
+});

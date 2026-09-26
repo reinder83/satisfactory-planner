@@ -54,6 +54,7 @@ test('the server ranks on request, stores the result with the profile and keeps 
     );
     const plan = (await ctx(ah)).plan!;
     assert.equal(payoff.planCreatedAt, plan.createdAt);
+    assert.ok(!Number.isNaN(Date.parse(payoff.rankedAt!)), 'it records when it was ranked');
     assert.equal(payoff.ranking.phase, '1');
     assert.ok(payoff.ranking.total > 0 && !payoff.ranking.stopped);
     assert.deepEqual(payoff.ranking.candidates.length, payoff.ranking.total);
@@ -136,6 +137,7 @@ test('the browser edition ranks through its ranker and stores the result the sam
   const profile = data.saves[0]!.profiles[0]!;
   assert.deepEqual(profile.payoff, payoff, 'stored in the record');
   assert.equal(payoff.planCreatedAt, profile.plan!.createdAt);
+  assert.ok(!Number.isNaN(Date.parse(payoff.rankedAt!)));
   assert.deepEqual(((await api('/api/context')) as ContextReply).payoff, payoff);
   // Exports leave it out and leave the record alone.
   const full = (await api('/api/export-saves')) as SaveExport;
