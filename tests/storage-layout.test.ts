@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, validateState, mutate, bayCapacity } from '../public/state.ts';
+import { initialState, validateState, mutate, bayCapacity, handbookBay } from '../public/state.ts';
+import plan from '../public/plan.json' with { type: 'json' };
 import type { SavedState, UpdateOp } from '../public/types/index.ts';
 
 test('legacy version-1 states validate unchanged, gain empty layout edits and stay version 1', () => {
@@ -166,6 +167,39 @@ test('a bay that reuses the letter of a removed bay starts without its checks an
   s = mutate(s, { type: 'storageBayAdd', id: 'T', name: 'Overflow again', floor: 'ground' });
   assert.deepEqual(Object.keys(s.checks).sort(), ['slot-A01-built', 'slot-TA01-built']);
   assert.deepEqual(Object.keys(s.notes).sort(), ['phase-3', 'slot-A01', 'slot-TA01']);
+});
+
+test('an added bay cannot take a handbook letter, and removing an old one keeps that bay', () => {
+  assert.deepEqual(
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(handbookBay),
+    plan.storage.map(b => b.id),
+    'handbookBay matches the handbook',
+  );
+  let s = initialState();
+  assert.throws(
+    () =>
+      mutate(structuredClone(s), { type: 'storageBayAdd', id: 'A', name: 'x', floor: 'ground' }),
+    /handbook bay/,
+  );
+  // A state saved with one, through a direct request or an edited import, still loads.
+  s = validateState({
+    ...s,
+    storageEdits: {
+      bays: [{ id: 'A', name: 'Clash', floor: 'ground' }],
+      bayNames: { A: 'Plates' },
+      slots: { A01: 'Wire' },
+      clearedSlots: ['A02'],
+    },
+  });
+  s = mutate(s, { type: 'check', key: 'slot-A01-built', value: true });
+  s = mutate(s, { type: 'note', key: 'slot-A01', value: 'Handbook note' });
+  s = mutate(s, { type: 'storageBayRemove', id: 'A' });
+  assert.deepEqual(s.storageEdits.bays, []);
+  assert.deepEqual(s.storageEdits.bayNames, { A: 'Plates' });
+  assert.deepEqual(s.storageEdits.slots, { A01: 'Wire' });
+  assert.deepEqual(s.storageEdits.clearedSlots, ['A02']);
+  assert.equal(s.checks['slot-A01-built'], true);
+  assert.equal(s.notes['slot-A01'], 'Handbook note');
 });
 
 test('invalid layout updates are rejected without corrupting the state', () => {

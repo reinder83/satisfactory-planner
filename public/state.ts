@@ -105,6 +105,10 @@ const floorId = (k: unknown): k is string =>
   typeof k === 'string' &&
   (builtinFloors.some(([id]) => id === k) || /^cf-[a-z0-9]{4,32}$/.test(k));
 const bayId = (k: unknown): k is string => typeof k === 'string' && /^[A-Z]{1,2}$/.test(k);
+// The handbook's own bays, A–R in plan.json (a test keeps the two in step). The interface never
+// adds a bay under one of these letters (nextBayLetter); storageBayAdd refuses one, so an added
+// bay cannot share addresses with a handbook bay.
+export const handbookBay = (k: string) => /^[A-R]$/.test(k);
 // An added floor's id as validateEdits has always checked it: the pattern test alone, which
 // stringifies what it is given. Kept exactly, so no stored layout that passed before fails now.
 const addedFloorId = (k: unknown) => /^cf-[a-z0-9]{4,32}$/.test(k as string);
@@ -475,6 +479,8 @@ function validateEdits(raw: unknown): StorageEdits {
   if (raw.bays !== undefined) {
     if (!Array.isArray(raw.bays) || raw.bays.length > 40) fail('Invalid storage bays.');
     const seen = new Set<string>();
+    // A bay under a handbook letter is still accepted (see handbookBay), so a state that holds
+    // one keeps loading rather than failing.
     e.bays = raw.bays.map((b: unknown) => {
       if (!plain(b) || !bayId(b.id) || seen.has(b.id) || !label(b.name) || !floorId(b.floor))
         fail('Invalid storage bay.');
@@ -762,6 +768,7 @@ function mutateLayout(s: SavedState, op: Raw) {
   } else if (op.type === 'storageBayAdd') {
     if (!bayId(op.id) || e.bays.some(b => b.id === op.id) || !label(op.name) || !floorId(op.floor))
       fail('Invalid bay.');
+    if (handbookBay(op.id)) fail('That letter belongs to a handbook bay.');
     if (!(builtinFloors.some(([id]) => id === op.floor) || e.floors.some(f => f.id === op.floor)))
       fail('Unknown floor.');
     e.bays.push({ id: op.id, name: op.name.trim(), floor: op.floor });
@@ -776,6 +783,10 @@ function mutateLayout(s: SavedState, op: Raw) {
     if (!e.bays.some(b => b.id === op.id))
       fail('Only added bays can be removed. Progress on handbook bays is preserved.');
     e.bays = e.bays.filter(b => b.id !== op.id);
+    // An added bay under a handbook letter predates storageBayAdd refusing one (only a direct
+    // request or an edited import could make it). Its addresses, name, checks and notes are the
+    // handbook bay's too, so removing it removes the entry and nothing else.
+    if (handbookBay(op.id as string)) return;
     // The check above matched an added bay, so the id is a string.
     delete e.bayNames[op.id as string];
     for (const k of Object.keys(e.slots))
