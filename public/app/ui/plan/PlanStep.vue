@@ -8,7 +8,7 @@
 import { save } from '../../api.ts';
 import { phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { filteredPlanTasks, planTasks } from '../../tasks.ts';
+import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import type { PlanStepView } from '../../tasks.ts';
@@ -20,7 +20,8 @@ const props = withDefaults(defineProps<{ step: PlanStepView; editing?: boolean }
 // ↑ / ↓: move the step past its neighbour on screen and save this phase's whole order
 // (taskOrder). Steps hidden by "Hide completed" or the search keep their places, so a step
 // never trades places with one the user cannot see. Nothing happens at either end of the
-// visible list.
+// visible list. Removed steps and saved places of steps not in the plan now keep their slots
+// (taskOrderSlots), so restoring a step puts it back where it was.
 async function move(dir: number) {
   const ts = planTasks(),
     ids = ts.map(t => t.id),
@@ -29,8 +30,11 @@ async function move(dir: number) {
   if (!shown.includes(props.step.id) || !past) return;
   ids.splice(ids.indexOf(props.step.id), 1);
   ids.splice(ids.indexOf(past) + (dir > 0 ? 1 : 0), 0, props.step.id);
+  const listed = new Set(ids);
+  let next = 0;
+  const order = taskOrderSlots().map(id => (listed.has(id) ? ids[next++]! : id));
   try {
-    await save({ type: 'taskOrder', phase: phase(), ids });
+    await save({ type: 'taskOrder', phase: phase(), ids: order });
     render();
   } catch {}
 }

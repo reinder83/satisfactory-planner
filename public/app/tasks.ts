@@ -85,6 +85,21 @@ function applyTaskEdits(base: Step[]): Step[] {
   ];
 }
 
+// Every step id this phase's saved order should keep, in order: the saved order as it is
+// (including steps removed or not in the plan right now), then the phase's other steps in
+// their generated order. A reorder rearranges only the steps on screen within their own
+// slots of this list, so a removed step keeps its place for when it is restored.
+export function taskOrderSlots(): string[] {
+  const saved = taskEditsState().order[phase()] || [];
+  const listed = new Set(saved);
+  return [
+    ...saved,
+    ...basePlanTasks()
+      .map(t => t.id)
+      .filter(id => !listed.has(id)),
+  ];
+}
+
 // The current phase's steps before edits: calculated steps or handbook steps, plus the
 // user's personal (custom-...) tasks for this phase.
 export function basePlanTasks(): Step[] {
