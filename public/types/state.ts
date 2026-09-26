@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–4). Later versions only add optional sections, so an older
+//                  version (1–5). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -9,8 +9,9 @@
 import type { Phase } from './common.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
-// edits, 3 build-plan edits or factory groups, 4 a container position past 08.
-export type StateVersion = 1 | 2 | 3 | 4;
+// edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
+// handbook bay.
+export type StateVersion = 1 | 2 | 3 | 4 | 5;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -19,7 +20,8 @@ export interface CustomTask {
   phase: Phase;
 }
 
-// Storage room layout edits on top of the handbook's room (version 2+; 4 for positions 09+).
+// Storage room layout edits on top of the handbook's room (version 2+; 4 for positions 09+;
+// 5 for hidden handbook bays).
 export interface StorageEdits {
   // Added floors: { id: 'cf-…', label }.
   floors: { id: string; label: string }[];
@@ -33,6 +35,9 @@ export interface StorageEdits {
   slots: Record<string, string>;
   // Handbook container addresses the user emptied.
   clearedSlots: string[];
+  // Handbook bays (A–R) the user took out of the room (#166). Only hidden: the bay's checks,
+  // notes, names and containers are all kept, and restoring it brings them back.
+  hiddenBays: string[];
 }
 
 // Build-plan step edits, keyed by step id (version 3).
@@ -122,5 +127,8 @@ export type UpdateOp =
   | { type: 'storageBayAdd'; id: string; name: string; floor: string }
   | { type: 'storageBayRename'; id: string; name: string }
   | { type: 'storageBayRemove'; id: string }
+  // Hide or bring back a handbook bay; its records are kept either way.
+  | { type: 'storageBayHide'; id: string }
+  | { type: 'storageBayRestore'; id: string }
   | { type: 'storageSlotAssign'; key: string; name: string }
   | { type: 'storageSlotClear'; key: string };

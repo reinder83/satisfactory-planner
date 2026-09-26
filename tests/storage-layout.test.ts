@@ -28,6 +28,7 @@ test('legacy version-1 states validate unchanged, gain empty layout edits and st
     bayNames: {},
     slots: {},
     clearedSlots: [],
+    hiddenBays: [],
   });
 });
 
@@ -47,7 +48,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
   assert.equal(round.storageEdits.floorNames.ground, 'Main hall');
   assert.equal(round.storageEdits.floors[0]!.label, 'Basement overflow');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 5 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
     /newer planner version/,
   );
 });
@@ -63,7 +64,7 @@ test('a bay takes containers past its printed eight and marks the state version 
   assert.equal(round.storageEdits.slots.A09, 'Alclad Aluminum Sheet');
   assert.equal(round.storageEdits.slots.A12, 'Aluminum Casing');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 5 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
     /newer planner version/,
   );
   // An added position has no handbook container behind it, so clearing one drops
@@ -226,4 +227,50 @@ test('invalid layout updates are rejected without corrupting the state', () => {
     ],
   };
   assert.throws(() => validateState(bad), /Invalid storage bay/);
+});
+
+test('a handbook bay can be hidden and restored, keeping every record, as version 5 (#166)', () => {
+  let s = initialState();
+  s = mutate(s, { type: 'check', key: 'slot-C01-built', value: true });
+  s = mutate(s, { type: 'note', key: 'slot-C01', value: 'Left of the lift' });
+  s = mutate(s, { type: 'storageBayRename', id: 'C', name: 'Copper bay' });
+  s = mutate(s, { type: 'storageSlotAssign', key: 'C02', name: 'Wire' });
+  const before = structuredClone(s);
+  s = mutate(s, { type: 'storageBayHide', id: 'C' });
+  s = mutate(s, { type: 'storageBayHide', id: 'C' });
+  assert.deepEqual(s.storageEdits.hiddenBays, ['C'], 'hiding twice lists it once');
+  assert.equal(s.version, 5, 'older planners must refuse it rather than show the bay again');
+  // Nothing of the bay's own is touched.
+  assert.deepEqual(s.checks, before.checks);
+  assert.deepEqual(s.notes, before.notes);
+  assert.equal(s.storageEdits.bayNames.C, 'Copper bay');
+  assert.equal(s.storageEdits.slots.C02, 'Wire');
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(round.storageEdits.hiddenBays, ['C']);
+  assert.equal(round.version, 5);
+  assert.throws(
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
+    /newer planner version/,
+  );
+  // Restoring brings back exactly what was there, at the version the rest needs.
+  s = mutate(s, { type: 'storageBayRestore', id: 'C' });
+  assert.deepEqual(s.storageEdits, before.storageEdits);
+  assert.equal(s.version, before.version);
+  // Only handbook letters can be hidden; an added bay is removed instead.
+  assert.throws(() => mutate(s, { type: 'storageBayHide', id: 'S' }), /Only handbook bays/);
+  assert.throws(
+    () => mutate(s, { type: 'storageBayRemove', id: 'C' }),
+    /Hide a handbook bay instead; its progress is kept/,
+  );
+});
+
+test('a malformed hidden-bay list is refused and leaves nothing changed', () => {
+  const s = mutate(initialState(), { type: 'storageBayHide', id: 'A' });
+  for (const hiddenBays of ['A', ['S'], ['a'], [1], Array.from({ length: 19 }, () => 'A')])
+    assert.throws(
+      () =>
+        validateState({ ...structuredClone(s), storageEdits: { ...s.storageEdits, hiddenBays } }),
+      /Invalid hidden storage bays/,
+      JSON.stringify(hiddenBays),
+    );
 });

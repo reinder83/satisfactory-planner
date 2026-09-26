@@ -85,6 +85,15 @@ export const version4 = {
   factoryGroups: { groups: [], assignments: {} },
 } satisfies SavedState;
 
+// Version 5: a hidden handbook bay (#166), its records kept.
+export const version5 = {
+  ...version4,
+  version: 5,
+  checks: { 'slot-C01-built': true },
+  notes: { 'slot-C01': 'Behind the lift' },
+  storageEdits: { ...version4.storageEdits, hiddenBays: ['C'] },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -92,6 +101,7 @@ export const states: [SavedState, number][] = [
   [version2, 2],
   [version3, 3],
   [version4, 4],
+  [version5, 5],
 ];
 
 export const backup = {

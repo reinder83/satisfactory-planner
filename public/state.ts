@@ -8,7 +8,7 @@
 //                  e.g. '3-versatile-framework'
 //   settings       { phase } the selected phase; nothing else in settings is kept
 //   customTasks    [{ id: 'custom-…', title, phase }] steps the user added
-//   storageEdits   storage room layout edits (blankEdits), version 2+/4
+//   storageEdits   storage room layout edits (blankEdits), version 2+/4/5
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3
 // Checklist keys link progress to content and must never be renamed, because saved states
@@ -62,6 +62,7 @@ const blankEdits = (): StorageEdits => ({
   bayNames: {},
   slots: {},
   clearedSlots: [],
+  hiddenBays: [],
 });
 // Build-plan edits, keyed by step id: order is { phase: [stepId…] }, removed lists hidden
 // steps, titles/bodies replace step text and links point a step at a factory or row id.
@@ -515,22 +516,31 @@ function validateEdits(raw: unknown): StorageEdits {
     // handbook container behind it, so clearing one removes the address itself.
     e.clearedSlots = [...new Set<string>(raw.clearedSlots)].filter(k => !addedSlot(k));
   }
+  if (raw.hiddenBays !== undefined) {
+    if (
+      !Array.isArray(raw.hiddenBays) ||
+      raw.hiddenBays.length > 18 ||
+      raw.hiddenBays.some((k: unknown) => typeof k !== 'string' || !handbookBay(k))
+    )
+      fail('Invalid hidden storage bays.');
+    e.hiddenBays = [...new Set<string>(raw.hiddenBays)].sort();
+  }
   return e;
 }
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–4 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–5 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "5" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 4
+      // Compared as the old code did, so a version given as "6" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 5
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -580,14 +590,17 @@ export function validateState(s: unknown): ProgressState {
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
-  // marked 4, so old versions refuse it instead of silently dropping those edits.
-  clean.version = hasAddedSlots(clean.storageEdits)
-    ? 4
-    : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-      ? 3
-      : hasEdits(clean.storageEdits)
-        ? 2
-        : 1;
+  // marked 4, and one with a hidden handbook bay 5, so old versions refuse it instead of
+  // silently dropping those edits (and showing the bay again as if nothing happened).
+  clean.version = clean.storageEdits.hiddenBays.length
+    ? 5
+    : hasAddedSlots(clean.storageEdits)
+      ? 4
+      : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+        ? 3
+        : hasEdits(clean.storageEdits)
+          ? 2
+          : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
@@ -758,8 +771,9 @@ function mutateGroups(s: SavedState, op: Raw) {
     else delete g.assignments[op.key];
   } else fail('Unknown update.');
 }
-// Storage layout edits. Only added floors and bays can be removed; built-in ones can only be
-// renamed. These edits change names and addresses only, with one exception: removing an added
+// Storage layout edits. Only added floors and bays can be removed; built-in floors can only be
+// renamed, and handbook bays hidden and restored (storageBayHide/Restore, #166), which keeps
+// every record of theirs. These edits change names and addresses only, with one exception: removing an added
 // bay also deletes the 'slot-' checks and notes of its addresses (the owner's decision in #51),
 // so a bay that later reuses the letter starts clean. A removed floor has no records of its own.
 function mutateLayout(s: SavedState, op: Raw) {
@@ -801,9 +815,16 @@ function mutateLayout(s: SavedState, op: Raw) {
       if (!label(op.name)) fail('Invalid bay name.');
       e.bayNames[op.id] = op.name.trim();
     }
+  } else if (op.type === 'storageBayHide' || op.type === 'storageBayRestore') {
+    if (typeof op.id !== 'string' || !handbookBay(op.id))
+      fail('Only handbook bays can be hidden. Remove an added bay instead.');
+    const hidden = new Set(e.hiddenBays);
+    if (op.type === 'storageBayHide') hidden.add(op.id);
+    else hidden.delete(op.id);
+    e.hiddenBays = [...hidden].sort();
   } else if (op.type === 'storageBayRemove') {
     if (!e.bays.some(b => b.id === op.id))
-      fail('Only added bays can be removed. Progress on handbook bays is preserved.');
+      fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
     e.bays = e.bays.filter(b => b.id !== op.id);
     // An added bay under a handbook letter predates storageBayAdd refusing one (only a direct
     // request or an edited import could make it). Its addresses, name, checks and notes are the

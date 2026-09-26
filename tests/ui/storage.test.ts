@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { bayCapacity } from '../../public/state.ts';
+import { bayCapacity, mutate } from '../../public/state.ts';
 import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openSlot, slotKeys } from '../../public/app/views/storage.ts';
@@ -25,6 +25,7 @@ const EDITS = {
   bayNames: { A: 'Renamed ingots' },
   slots: { S01: evil },
   clearedSlots: ['A01'],
+  hiddenBays: [],
 };
 // Layout edits with only the given fields, as a test sets them up; the page reads the others
 // as absent.
@@ -366,4 +367,37 @@ test('"Complete room" stays disabled once the saved room is complete', async () 
   button.click();
   await settle();
   assert.equal($<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled, true);
+});
+
+test('a handbook bay can be hidden in edit mode and restored, and its items are listed meanwhile', async () => {
+  // The update stand-in applies the operation the way the server does.
+  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  open({ state: { checks: { 'slot-C01-built': true } } });
+  setLayoutEditing(true);
+  render();
+  const items = handbook.storage.find(b => b.id === 'C')!.items.filter(x => x.name);
+  assert.ok($('[data-slot="C01"]'), 'bay C is in the room');
+  assert.equal($('[data-hide-bay="S"]'), null, 'only handbook bays offer Hide');
+  $('[data-hide-bay="C"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageBayHide', id: 'C' });
+  assert.equal($('[data-slot="C01"]'), null, 'bay C left the room');
+  assert.match($('[data-unplaced]')!.textContent!, new RegExp(items[0]!.name!));
+  assert.match($('[data-hidden-bays]')!.textContent!, /C · /);
+  assert.equal(state.checks['slot-C01-built'], true, 'its checkmark is kept');
+  // Out of edit mode the notice stays; the Restore panel is only in edit mode.
+  setLayoutEditing(false);
+  render();
+  await nextTick();
+  assert.ok($('[data-unplaced]'));
+  assert.equal($('[data-hidden-bays]'), null);
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  $('[data-restore-bay="C"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageBayRestore', id: 'C' });
+  assert.ok($('[data-slot="C01"]'), 'bay C is back');
+  assert.equal($('[data-unplaced]'), null);
+  noMarkup();
 });

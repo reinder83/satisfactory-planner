@@ -44,7 +44,8 @@ export function inputText(inputs: ItemRates): string {
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,
 // renamed floors and bays, `slots` (address → item name filled in by the user) and
-// `clearedSlots` (handbook addresses the user emptied, kept as reserved positions).
+// `clearedSlots` (handbook addresses the user emptied, kept as reserved positions) and
+// `hiddenBays` (handbook bays taken out of the room, their records kept).
 function storageEdits(): StorageEdits {
   const e: Partial<StorageEdits> = state?.storageEdits || {};
   return {
@@ -54,6 +55,7 @@ function storageEdits(): StorageEdits {
     bayNames: e.bayNames || {},
     slots: e.slots || {},
     clearedSlots: e.clearedSlots || [],
+    hiddenBays: e.hiddenBays || [],
   };
 }
 
@@ -91,6 +93,26 @@ export function nextBayLetter(): string | null {
 // profile's layout edits. A null name is a reserved (empty) position. Used by the storage
 // page and its container dialog, the plan's storage tile and ADA.
 export function storageBays(): StorageBayView[] {
+  const hidden = new Set(storageEdits().hiddenBays);
+  return allStorageBays().filter(b => b.custom || !hidden.has(b.id));
+}
+
+// Handbook bays the user hid (#166), with the items the plan would still keep in them: those
+// have no container while the bay is hidden. Hidden bays are left out of storageBays(), and so
+// out of the storage page's grid and counts, the plan's storage tile and ADA.
+export function hiddenStorageBays(): { id: string; name: string; items: string[] }[] {
+  const hidden = new Set(storageEdits().hiddenBays);
+  return allStorageBays()
+    .filter(b => !b.custom && hidden.has(b.id))
+    .map(b => ({
+      id: b.id,
+      name: b.name,
+      items: b.items.filter(x => x.name).map(x => x.name!),
+    }));
+}
+
+// Every bay, hidden handbook bays included; storageBays() and hiddenStorageBays() split it.
+function allStorageBays(): StorageBayView[] {
   // `selected` is null for the original handbook; for a calculated profile it is every
   // item any phase stores, so unselected handbook positions show as reserved.
   const e = storageEdits(),
