@@ -274,3 +274,42 @@ test('a malformed hidden-bay list is refused and leaves nothing changed', () => 
       JSON.stringify(hiddenBays),
     );
 });
+
+test('an added bay can take a hidden handbook letter, clearing that bay first (#167)', () => {
+  let s = initialState();
+  s = mutate(s, { type: 'check', key: 'slot-C01-built', value: true });
+  s = mutate(s, { type: 'note', key: 'slot-C01', value: 'Old copper' });
+  s = mutate(s, { type: 'storageBayRename', id: 'C', name: 'Copper bay' });
+  s = mutate(s, { type: 'storageSlotAssign', key: 'C02', name: 'Wire' });
+  s = mutate(s, { type: 'check', key: 'slot-D01-built', value: true });
+  const add = { type: 'storageBayAdd', id: 'C', name: 'My parts', floor: 'ground' } as const;
+  // In the room: refused. Hidden: refused until the replacement is confirmed.
+  assert.throws(() => mutate(structuredClone(s), add), /Bay C is in the room/);
+  s = mutate(s, { type: 'storageBayHide', id: 'C' });
+  assert.throws(() => mutate(structuredClone(s), add), /still has saved progress/);
+  const kept = structuredClone(s);
+  s = mutate(s, { ...add, replace: true });
+  assert.deepEqual(s.storageEdits.bays, [{ id: 'C', name: 'My parts', floor: 'ground' }]);
+  assert.equal(s.checks['slot-C01-built'], undefined, 'the hidden bay’s records are cleared');
+  assert.equal(s.notes['slot-C01'], undefined);
+  assert.equal(s.storageEdits.bayNames.C, undefined);
+  assert.equal(s.storageEdits.slots.C02, undefined);
+  assert.equal(s.checks['slot-D01-built'], true, 'other bays keep theirs');
+  assert.equal(s.version, 5);
+  // The refused attempts changed nothing.
+  assert.equal(kept.checks['slot-C01-built'], true);
+  // The handbook bay cannot come back while the added bay holds its letter.
+  assert.throws(() => mutate(s, { type: 'storageBayRestore', id: 'C' }), /Remove it before/);
+  // The added bay's own records go with it (#51), and then the letter can be restored.
+  s = mutate(s, { type: 'check', key: 'slot-C01-built', value: true });
+  s = mutate(s, { type: 'storageBayRemove', id: 'C' });
+  assert.equal(s.checks['slot-C01-built'], undefined);
+  s = mutate(s, { type: 'storageBayRestore', id: 'C' });
+  assert.deepEqual(s.storageEdits.hiddenBays, []);
+  // A letter taken twice is refused with a clear reason.
+  s = mutate(s, { type: 'storageBayAdd', id: 'S', name: 'Extra', floor: 'ground' });
+  assert.throws(
+    () => mutate(s, { type: 'storageBayAdd', id: 'S', name: 'Again', floor: 'ground' }),
+    /Bay S already exists/,
+  );
+});

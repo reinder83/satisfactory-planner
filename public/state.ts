@@ -106,9 +106,9 @@ const floorId = (k: unknown): k is string =>
   typeof k === 'string' &&
   (builtinFloors.some(([id]) => id === k) || /^cf-[a-z0-9]{4,32}$/.test(k));
 const bayId = (k: unknown): k is string => typeof k === 'string' && /^[A-Z]{1,2}$/.test(k);
-// The handbook's own bays, A–R in plan.json (a test keeps the two in step). The interface never
-// adds a bay under one of these letters (nextBayLetter); storageBayAdd refuses one, so an added
-// bay cannot share addresses with a handbook bay.
+// The handbook's own bays, A–R in plan.json (a test keeps the two in step). An added bay may take
+// one of these letters only while that handbook bay is hidden (#167), and only after the hidden
+// bay's kept records are cleared, so two bays never share addresses or progress.
 export const handbookBay = (k: string) => /^[A-R]$/.test(k);
 // An added floor's id as validateEdits has always checked it: the pattern test alone, which
 // stringifies what it is given. Kept exactly, so no stored layout that passed before fails now.
@@ -771,6 +771,18 @@ function mutateGroups(s: SavedState, op: Raw) {
     else delete g.assignments[op.key];
   } else fail('Unknown update.');
 }
+// Deletes everything recorded for bay `id`'s addresses: its name, container names and cleared
+// positions, and its 'slot-<address>' notes and 'slot-<address>-<step>' checks.
+function clearBayRecords(s: SavedState, e: StorageEdits, id: string) {
+  delete e.bayNames[id];
+  for (const k of Object.keys(e.slots)) if (slotAddr(k) && bayOfSlot(k) === id) delete e.slots[k];
+  e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== id);
+  for (const records of [s.checks, s.notes] as Record<string, unknown>[])
+    for (const k of Object.keys(records || {})) {
+      const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(k)?.[1];
+      if (address && bayOfSlot(address) === id) delete records[k];
+    }
+}
 // Storage layout edits. Only added floors and bays can be removed; built-in floors can only be
 // renamed, and handbook bays hidden and restored (storageBayHide/Restore, #166), which keeps
 // every record of theirs. These edits change names and addresses only, with one exception: removing an added
@@ -802,11 +814,23 @@ function mutateLayout(s: SavedState, op: Raw) {
     // The first check above matched an added floor, so the id is a string.
     delete e.floorNames[op.id as string];
   } else if (op.type === 'storageBayAdd') {
-    if (!bayId(op.id) || e.bays.some(b => b.id === op.id) || !label(op.name) || !floorId(op.floor))
-      fail('Invalid bay.');
-    if (handbookBay(op.id)) fail('That letter belongs to a handbook bay.');
+    if (!bayId(op.id) || !label(op.name) || !floorId(op.floor)) fail('Invalid bay.');
+    if (e.bays.some(b => b.id === op.id))
+      fail(`Bay ${op.id} already exists. Choose another letter.`);
+    // Any free letter, the owner's choice on #167. A handbook letter is free only while that
+    // bay is hidden, and taking it needs `replace`: the hidden bay's kept records are cleared
+    // first (as removing an added bay does, #51), so the new bay starts clean.
+    if (handbookBay(op.id)) {
+      if (!e.hiddenBays.includes(op.id))
+        fail(
+          `Bay ${op.id} is in the room. Hide that handbook bay first, or choose another letter.`,
+        );
+      if (op.replace !== true)
+        fail(`Bay ${op.id} still has saved progress from the handbook bay. Confirm to replace it.`);
+    }
     if (!(builtinFloors.some(([id]) => id === op.floor) || e.floors.some(f => f.id === op.floor)))
       fail('Unknown floor.');
+    if (handbookBay(op.id)) clearBayRecords(s, e, op.id);
     e.bays.push({ id: op.id, name: op.name.trim(), floor: op.floor });
   } else if (op.type === 'storageBayRename') {
     if (!bayId(op.id)) fail('Invalid bay.');
@@ -820,27 +844,22 @@ function mutateLayout(s: SavedState, op: Raw) {
       fail('Only handbook bays can be hidden. Remove an added bay instead.');
     const hidden = new Set(e.hiddenBays);
     if (op.type === 'storageBayHide') hidden.add(op.id);
+    else if (e.bays.some(b => b.id === op.id))
+      fail(`An added bay uses the letter ${op.id}. Remove it before restoring the handbook bay.`);
     else hidden.delete(op.id);
     e.hiddenBays = [...hidden].sort();
   } else if (op.type === 'storageBayRemove') {
     if (!e.bays.some(b => b.id === op.id))
       fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
     e.bays = e.bays.filter(b => b.id !== op.id);
-    // An added bay under a handbook letter predates storageBayAdd refusing one (only a direct
-    // request or an edited import could make it). Its addresses, name, checks and notes are the
-    // handbook bay's too, so removing it removes the entry and nothing else.
-    if (handbookBay(op.id as string)) return;
     // The check above matched an added bay, so the id is a string.
-    delete e.bayNames[op.id as string];
-    for (const k of Object.keys(e.slots))
-      if (slotAddr(k) && bayOfSlot(k) === op.id) delete e.slots[k];
-    e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== op.id);
-    // 'slot-<address>' notes and 'slot-<address>-<step>' checks.
-    for (const records of [s.checks, s.notes] as Record<string, unknown>[])
-      for (const k of Object.keys(records || {})) {
-        const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(k)?.[1];
-        if (address && bayOfSlot(address) === op.id) delete records[k];
-      }
+    const id = op.id as string;
+    // An added bay under the letter of a handbook bay that is still in the room predates
+    // storageBayAdd refusing one (only a direct request or an edited import could make it). Its
+    // addresses, name, checks and notes are the handbook bay's too, so removing it removes the
+    // entry and nothing else. Under a hidden handbook letter (#167) the records are its own.
+    if (handbookBay(id) && !e.hiddenBays.includes(id)) return;
+    clearBayRecords(s, e, id);
   } else if (op.type === 'storageSlotAssign') {
     if (!slotAddr(op.key) || !label(op.name, 120)) fail('Invalid container.');
     e.slots[op.key] = op.name.trim();
