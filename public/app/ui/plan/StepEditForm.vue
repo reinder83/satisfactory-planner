@@ -1,8 +1,9 @@
 <!--
   The inline form that replaces a step while it is being edited (data-task-edit). It saves
   only what differs from the generated step: a title or details equal to the plan's own
-  text are saved as empty, meaning "no override", and so is the link when it is the
-  automatic one. The checkmark is untouched.
+  text are saved as empty, meaning "no override", and so is a cleared field and the link
+  when it is the automatic one. "No linked factory" on an automatically linked step is
+  saved as '-' (stepLink in tasks.ts). The checkmark is untouched.
 -->
 <script setup lang="ts">
 import { save } from '../../api.ts';
@@ -28,14 +29,13 @@ async function submit(e: Event) {
   const title = String(fd.get('title') || '').trim(),
     body = String(fd.get('body') || '').trim(),
     link = String(fd.get('link') || '');
-  if (!title) return;
   try {
     await save({
       type: 'taskEdit',
       id,
       title: base && title === base.title ? '' : title,
       body: base && body === String(base.body || '').trim() ? '' : body,
-      link: link === autoTaskLink(id) ? '' : link,
+      link: link === autoTaskLink(id) ? '' : link || (autoTaskLink(id) ? '-' : ''),
     });
     setEditingTask(null);
     render();
@@ -52,7 +52,7 @@ function cancel() {
 <template>
   <form class="task task-edit" :data-task-edit="step.id" @submit.prevent="submit">
     <label class="field"
-      >Step title<input name="title" maxlength="240" required :value="step.title"
+      >Step title<input name="title" maxlength="240" :value="step.title"
     /></label>
     <label class="field"
       >Details<textarea

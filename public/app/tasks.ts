@@ -102,12 +102,20 @@ export function planTasks(): Step[] {
 // Returns that row id, or '' for any other step.
 export const autoTaskLink = (id: string) => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
 
+// The factory or row a step links to: its saved link, or else the automatic one. A saved
+// link of '-' (StepEditForm.vue's "No linked factory" on an automatically linked step)
+// means none. No factory or row has that id, so releases before it also show no link.
+export const stepLink = (id: string) => {
+  const saved = taskEditsState().links[id];
+  return saved === '-' ? '' : saved || autoTaskLink(id);
+};
+
 // The factory a step links to, as { calc, id, name } for its "Open factory" button
 // (calc: a calculated row, opened by data-calc-factory, otherwise a handbook factory,
 // opened by data-factory), or null when the step has no link or the linked factory is not
 // part of the current phase.
 export function taskLink(t: Step): StepLink | null {
-  const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
+  const linked = stepLink(t.id);
   if (!linked) return null;
   if (calculated) {
     const row = (calcStage()?.rows || []).find(r => r.id === linked);
@@ -127,7 +135,7 @@ export function taskLinkChoices(t: Step): {
     options: calculated
       ? (calcStage()?.rows || []).map((r): [string, string] => [r.id, r.name])
       : plan.factories.filter(f => f.stages[stage()]).map((f): [string, string] => [f.id, f.name]),
-    current: taskEditsState().links[t.id] || autoTaskLink(t.id),
+    current: stepLink(t.id),
   };
 }
 
@@ -210,7 +218,7 @@ export function taskKind(t: Step): string {
 // The part a step makes, taken from its linked factory: calculated production
 // steps link themselves, a handbook or personal step uses the chosen link.
 function taskIconItem(t: Step): string {
-  const linked = taskEditsState().links[t.id] || autoTaskLink(t.id);
+  const linked = stepLink(t.id);
   if (!linked) return '';
   if (calculated) {
     const row = (calcStage()?.rows || []).find(r => r.id === linked);
