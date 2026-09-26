@@ -72,6 +72,11 @@ const page = computed(() =>
       floors: floors.map(f => ({ ...f, active: f.id === floor })),
       current,
       floorBays: floorBays.length,
+      // Hidden handbook bays moved onto this floor: not shown, but the floor cannot be hidden
+      // or removed while they are here (#216).
+      hiddenHere: hiddenStorageBays()
+        .filter(b => b.moved && b.floor === floor)
+        .map(b => b.id),
       workshop: floor === 'workshop',
       // The floor's notice. The ground-floor instructions describe the owner's built room,
       // so only original (handbook) profiles get them, copies included: a duplicated or
@@ -226,9 +231,12 @@ function toggleLayout() {
       </button>
     </div>
   </section>
-  <LayoutEditor v-if="page.editing" :floor="page.current" :bays="page.floorBays" /><WorkshopPanel
-    v-if="page.workshop"
-  />
+  <LayoutEditor
+    v-if="page.editing"
+    :floor="page.current"
+    :bays="page.floorBays"
+    :hidden-here="page.hiddenHere"
+  /><WorkshopPanel v-if="page.workshop" />
   <div v-if="page.notice === 'template'" class="notice blue">
     Optional storage template. Each position has its own checklist; nothing is assumed built.
   </div>

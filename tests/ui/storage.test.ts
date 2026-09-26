@@ -543,3 +543,37 @@ test('a bay moves to another floor from edit mode, with its records, and the bui
   assert.equal(state.checks['slot-D01-built'], true, 'its checkmark came along');
   noMarkup();
 });
+
+test('a hidden bay moved onto a floor keeps it from going, and the button says which (#216)', async () => {
+  stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  // D moved to an added floor and J to the workshop, both then hidden: neither floor shows a bay.
+  open({
+    state: {
+      storageEdits: someEdits({
+        floors: [{ id: 'cf-abcd', label: 'Annex' }],
+        bayFloors: { D: 'cf-abcd', J: 'workshop' },
+        hiddenBays: ['D', 'J'],
+      }),
+    },
+  });
+  setLayoutEditing(true);
+  setFloor('cf-abcd');
+  render();
+  await nextTick();
+  assert.equal($$('.bay').length, 0, 'the annex shows no bay');
+  const remove = $<HTMLButtonElement>('[data-remove-floor="cf-abcd"]')!;
+  assert.equal(remove.disabled, true);
+  assert.match(remove.textContent!, /Restore and move hidden bay D first/);
+  setFloor('workshop');
+  render();
+  await nextTick();
+  const hide = $<HTMLButtonElement>('[data-hide-floor="workshop"]')!;
+  assert.equal(hide.disabled, true);
+  assert.match(hide.textContent!, /Restore and move hidden bay J first/);
+  // Restored, J shows on the workshop, so the button asks for the usual instead.
+  $('[data-restore-bay="J"]')!.click();
+  await settle();
+  assert.ok($('[data-slot="J01"]'), 'J is back, on the floor it was moved to');
+  assert.match($('[data-hide-floor="workshop"]')!.textContent!, /Hide or remove its bays first/);
+  noMarkup();
+});

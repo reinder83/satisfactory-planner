@@ -7,7 +7,7 @@
   Each form ignores an empty name and empties after a successful save.
 -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { setFloor } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -16,7 +16,20 @@ import type { StorageFloor } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
 // bays: how many bays the floor has; an added floor can only go once it has none.
-const props = withDefaults(defineProps<{ floor: StorageFloor; bays?: number }>(), { bays: 0 });
+// hiddenHere: hidden handbook bays moved onto this floor (#216). They are not shown, yet the
+// floor cannot be hidden or removed while they are here, so the buttons name them.
+const props = withDefaults(
+  defineProps<{ floor: StorageFloor; bays?: number; hiddenHere?: string[] }>(),
+  { bays: 0, hiddenHere: () => [] },
+);
+// Why the floor cannot go yet, or '' when it can.
+const blocked = computed(() =>
+  props.bays
+    ? ''
+    : props.hiddenHere.length
+      ? `Restore and move hidden bay ${props.hiddenHere.join(', ')} first`
+      : '',
+);
 
 const randomId = (prefix: string, bytes: number) =>
   prefix +
@@ -156,20 +169,20 @@ async function removeFloor() {
         class="btn"
         :data-hide-floor="floor.id"
         :class="{ unavailable: !hiding }"
-        :disabled="hiding || bays > 0"
+        :disabled="hiding || bays > 0 || !!blocked"
         @click="hideFloor"
       >
-        {{ bays ? 'Hide or remove its bays first' : 'Hide this floor' }}
+        {{ bays ? 'Hide or remove its bays first' : blocked || 'Hide this floor' }}
       </button>
       <button
         v-if="!floor.builtin"
         class="btn danger"
         :data-remove-floor="floor.id"
         :class="{ unavailable: !removing }"
-        :disabled="removing || bays > 0"
+        :disabled="removing || bays > 0 || !!blocked"
         @click="removeFloor"
       >
-        {{ bays ? 'Remove its bays first' : 'Remove this floor' }}
+        {{ bays ? 'Remove its bays first' : blocked || 'Remove this floor' }}
       </button>
     </div>
     <p class="small muted">

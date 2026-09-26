@@ -128,6 +128,8 @@ export function hiddenStorageBays(): {
   items: string[];
   // An added bay has taken the letter (#167), so the bay cannot be restored until it goes.
   taken: boolean;
+  floor: string;
+  moved: boolean;
 }[] {
   const e = storageEdits(),
     hidden = new Set(e.hiddenBays);
@@ -141,6 +143,10 @@ export function hiddenStorageBays(): {
       name: b.name,
       items: b.items.filter(x => x.name).map(x => x.name!),
       taken: taken.has(b.id),
+      // Where it sits, and whether it was moved there (#190): a hidden bay moved onto a floor
+      // still keeps that floor from being hidden or removed (#216).
+      floor: b.floor,
+      moved: !!e.bayFloors?.[b.id],
     }));
 }
 
