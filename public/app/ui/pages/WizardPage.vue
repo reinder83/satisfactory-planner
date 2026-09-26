@@ -12,11 +12,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { navigate } from '../../api.ts';
-import { draft, setWizard, wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { toGuided } from '../../wizard/guided.ts';
 import {
+  cancelWizard,
   createProfile,
   moveWizard,
   readWizard,
@@ -54,13 +54,6 @@ function changed(e: Event) {
     readWizard(e.currentTarget as HTMLFormElement);
     render();
   }
-}
-
-// "Cancel" on step 1: drop the draft without a confirmation and show the profiles page.
-// Nothing has been saved yet; the profile is only created on Review.
-function cancel() {
-  setWizard(null);
-  navigate('profiles');
 }
 
 async function submit(e: Event) {
@@ -119,7 +112,13 @@ async function submit(e: Event) {
       <ResourcesStep v-else-if="page.step === 4" />
       <ReviewStep v-else-if="page.step === 5" />
       <div class="wizard-actions">
-        <button v-if="page.step === 1" type="button" class="btn" data-cancel-wizard @click="cancel">
+        <button
+          v-if="page.step === 1"
+          type="button"
+          class="btn"
+          data-cancel-wizard
+          @click="cancelWizard"
+        >
           Cancel</button
         ><button
           v-else

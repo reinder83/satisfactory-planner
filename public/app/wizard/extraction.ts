@@ -20,7 +20,7 @@ import { $ } from '../format.ts';
 import { draft, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
 import { readGuidedForm } from './guided.ts';
-import { readWizard, wizardBusy, type Survey, type WizardDraft } from './wizard.ts';
+import { noteWizardEdit, readWizard, wizardBusy, type Survey, type WizardDraft } from './wizard.ts';
 import type { Distribution, NodeCounts, Purity } from '../../types/index.ts';
 
 // --- Working out the resource budgets ---------------------------------------
@@ -51,6 +51,7 @@ export function extractionOf(w: WizardDraft): Survey {
 // clearing can be undone, which is why no confirmation is asked for.
 export function resetExtraction() {
   const w = draft();
+  noteWizardEdit();
   const previous = extractionOf(w);
   w.extractionUndo = JSON.parse(JSON.stringify(previous));
   w.extractionUndoKind = 'reset';
@@ -150,6 +151,7 @@ export async function moveExtraction(target: number) {
   w.settings.limits = extractionLimits(w.extraction, w.settings.limits);
   w.settings.extraction = structuredClone(w.extraction);
   w.settings.limitsConfirmed = true;
+  noteWizardEdit();
   w.preview = null;
   leaveExtraction();
   toast('Resource budgets set from your nodes. You can still edit any of them in All settings.');

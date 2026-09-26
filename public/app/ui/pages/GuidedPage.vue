@@ -13,10 +13,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { navigate } from '../../api.ts';
-import { draft, setWizard, wizard } from '../../session.ts';
+import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.ts';
+import { cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
@@ -65,13 +65,6 @@ function changed(e: Event) {
     readGuidedForm(e.currentTarget as HTMLFormElement);
     render();
   }
-}
-
-// "Cancel" on the first screen: drop the draft without a confirmation and show the profiles
-// page. Nothing has been saved yet.
-function cancel() {
-  setWizard(null);
-  navigate('profiles');
 }
 
 // Enter or the primary button: the next question, or past the last one calculate the plan.
@@ -139,7 +132,13 @@ function submit() {
         <GuidedTopup v-if="page.question.id === 'stock'" />
       </template>
       <div class="wizard-actions">
-        <button v-if="page.first" type="button" class="btn" data-cancel-wizard @click="cancel">
+        <button
+          v-if="page.first"
+          type="button"
+          class="btn"
+          data-cancel-wizard
+          @click="cancelWizard"
+        >
           Cancel
         </button>
         <button

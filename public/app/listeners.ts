@@ -5,12 +5,13 @@
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
-// cancel (Escape), beforeunload.
+// cancel (Escape), beforeunload, wizard input and change (capture).
 import { acceptRoute, hasUnsavedNotes, pending } from './api.ts';
 import { required } from './format.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
+import { noteWizardEdit } from './wizard/wizard.ts';
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
 // Registered for the capture phase (the final true), since error events do not bubble.
@@ -53,3 +54,15 @@ window.addEventListener('beforeunload', e => {
     e.returnValue = '';
   }
 });
+
+// A value typed or chosen on any wizard screen (guided, the five steps, the survey) marks the
+// draft as edited, so Cancel asks before dropping it (cancelWizard in wizard/wizard.ts).
+// Capture, so it sees the event whatever the screen's own handlers do with it.
+for (const type of ['input', 'change'])
+  document.addEventListener(
+    type,
+    e => {
+      if ((e.target as Element | null)?.closest?.('#wizard-form')) noteWizardEdit();
+    },
+    true,
+  );
