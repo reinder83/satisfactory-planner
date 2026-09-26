@@ -488,7 +488,7 @@ test('a calculated page survives a redraw after the handbook is opened', async (
   const onError = (e: { reason?: unknown; error?: unknown }) => errors.push(e.reason ?? e.error);
   process.on('unhandledRejection', onError);
   try {
-    for (const view of ['plan', 'factories', 'storage', 'resources'] as const) {
+    for (const view of ['plan', 'factories', 'logistics', 'storage', 'resources'] as const) {
       page();
       const plan = generated();
       open({ calculated: plan });

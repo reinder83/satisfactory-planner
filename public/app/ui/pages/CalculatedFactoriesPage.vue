@@ -1,6 +1,7 @@
 <!--
   #factories on a calculated profile: the rows of the current phase matching the search, user
-  groups first, then the ungrouped rows, then what moves between the groups (GroupLinks.vue).
+  groups first, then the ungrouped rows. What moves between the groups has its own page,
+  #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is.
 -->
@@ -21,7 +22,6 @@ import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
-import GroupLinks from '../factories/GroupLinks.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
@@ -49,6 +49,8 @@ const page = computed(() =>
       rows,
       ungrouped,
       label: groupsShown && ungrouped.length > 0,
+      // The profile has groups, so the Logistics page has something to show (#229).
+      grouped: factoryGroupsState().groups.length > 0,
     };
   }),
 );
@@ -126,6 +128,9 @@ async function roundUp(e: Event) {
     <div class="cards">
       <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
     </div>
-    <GroupLinks />
+    <p v-if="page.grouped" class="small muted" data-logistics-link>
+      What each group sends the others, and by which belt, pipe or vehicle, is on
+      <a href="#logistics">Logistics</a>.
+    </p>
   </template>
 </template>
