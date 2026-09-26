@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { allowSwitch, post, writeQueue } from '../../api.ts';
+import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
 import { boot, setAuthMode, workspace } from '../../session.ts';
 import AuthForm from '../AuthForm.vue';
 import { legacy } from '../bridge.ts';
@@ -20,11 +20,16 @@ const account = computed(() =>
 );
 
 // "Sign out": after the unsaved-notes check and any queued saves, sign out; boot() then
-// shows the sign-in screen.
+// shows the sign-in screen. A failed request is a toast, and the user stays signed in.
 async function signOut() {
   if (!allowSwitch()) return;
   await writeQueue;
-  await post('/api/logout', {});
+  try {
+    await post('/api/logout', {});
+  } catch (err) {
+    toast((err as Error).message || 'Could not sign out.', true);
+    return;
+  }
   setAuthMode('login');
   await boot();
 }
