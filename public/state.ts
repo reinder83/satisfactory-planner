@@ -30,6 +30,8 @@ import type {
   SavedState,
   StorageEdits,
   StoredCalculatedPlan,
+  StoredPayoff,
+  StoredProfile,
   TaskEdits,
   UpdateOp,
 } from './types/index.ts';
@@ -449,6 +451,10 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
   }
   return validateGroups({ groups, assignments });
 }
+// A profile's stored hard-drive payoff ranking (#203) while it was ranked against the plan the
+// profile has now, otherwise null. GET /api/context sends this in both editions.
+export const currentPayoff = (p: Pick<StoredProfile, 'plan' | 'payoff'>): StoredPayoff | null =>
+  p.plan && p.payoff?.planCreatedAt === p.plan.createdAt ? p.payoff : null;
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
 // Used by /api/export-saves?share=1 in workspace.ts and browser-api.ts; the input is cloned.

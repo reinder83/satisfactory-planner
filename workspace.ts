@@ -1,13 +1,14 @@
 import { validateTransfer, transferFormat } from './public/transfer.ts';
-import { shareState, newProfileState, checkBase } from './public/state.ts';
+import { shareState, newProfileState, checkBase, currentPayoff } from './public/state.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { calculate, catalog } from './planner.ts';
+import { calculate, catalog, rankAlternates } from './planner.ts';
 import type { IncomingMessage } from 'node:http';
 import type {
   ProgressState,
+  StoredPayoff,
   StoredProfile,
   StoredSave,
   StageKey,
@@ -82,17 +83,22 @@ const authCookie = (token: string) =>
 //   POST /api/preview            calculate without saving
 //   GET  /api/context, /api/state, /api/export   the scoped profile
 //   POST /api/round-up           whole-machine copy of a calculated profile
+//   POST /api/rank-alternates    hard-drive payoff ranking, stored on the scoped profile
 //   POST /api/update, /api/import   change or restore the scoped profile's progress
 export async function openWorkspace({
   dataDir,
   initialState,
   validateState,
   mutate,
+  rankBudgetMs = 20000,
 }: {
   dataDir: string;
   initialState: () => ProgressState;
   validateState: (s: unknown) => ProgressState;
   mutate: (s: ProgressState, update: UpdateOp) => ProgressState;
+  // A ranking recalculates the plan once per candidate recipe on the request, holding up every
+  // other request meanwhile, so it stops after this long and reports `stopped`.
+  rankBudgetMs?: number | undefined;
 }): Promise<Route> {
   const file = path.join(dataDir, 'workspace.json');
   let db: Workspace;
@@ -280,9 +286,10 @@ export async function openWorkspace({
     return { save, profile };
   };
   // At most 20 sign-in attempts or calculations per client address per minute, held in
-  // memory only. The map is pruned of expired entries once it passes 2000 addresses.
+  // memory only. The map is pruned of expired entries once it passes 2000 addresses. A
+  // payoff ranking counts as `cost` of them, since it runs a calculation per candidate.
   const throttles = new Map<string | undefined, { count: number; until: number }>();
-  function throttle(req: IncomingMessage) {
+  function throttle(req: IncomingMessage, cost = 1) {
     const key = req.socket.remoteAddress,
       now = Date.now();
     let v = throttles.get(key);
@@ -290,7 +297,7 @@ export async function openWorkspace({
       v = { count: 0, until: now + 60000 };
       throttles.set(key, v);
     }
-    if (++v.count > 20) fail('Too many attempts. Wait a minute and try again.', 429);
+    if ((v.count += cost) > 20) fail('Too many attempts. Wait a minute and try again.', 429);
     if (throttles.size > 2000)
       for (const [k, v] of throttles) if (v.until < now) throttles.delete(k);
   }
@@ -687,9 +694,35 @@ export async function openWorkspace({
         201,
       );
     }
+    // Hard-drive payoff (#203): ranks the alternates the scoped calculated profile does not
+    // allow yet for body.phase (rankAlternates in planner.ts) and stores the result on the
+    // profile with the createdAt of its plan. Throttled at the cost of five calculations and
+    // stopped after rankBudgetMs; progress is untouched.
+    if (endpoint === '/api/rank-alternates' && req.method === 'POST') {
+      const plan = profile.plan;
+      if (profile.kind !== 'calculated' || !plan)
+        fail('Hard-drive payoff needs a calculated profile.');
+      const b = await body(req);
+      const phase = String(b.phase) as StageKey;
+      if (!['1', '2', '3', '4', '5'].includes(phase)) fail('Choose a phase from 1 to 5.');
+      throttle(req, 5);
+      const payoff: StoredPayoff = {
+        planCreatedAt: plan.createdAt,
+        ranking: rankAlternates(plan.settings, { phase, budgetMs: rankBudgetMs }),
+      };
+      await commit(d => {
+        const p = d.saves
+          .find(s => s.id === save.id && s.userId === u.id)
+          ?.profiles.find(p => p.id === profile.id);
+        if (!p) fail('Profile not found.', 404);
+        p.payoff = payoff;
+      });
+      return response(payoff);
+    }
     // Everything the interface needs to open the scoped profile. handbook is only present
     // on an original profile that carries its own (from an import, or a copy of one);
-    // otherwise the client falls back to its default handbook.
+    // otherwise the client falls back to its default handbook. A stored payoff ranking is
+    // only sent while it belongs to the profile's plan.
     if (endpoint === '/api/context' && req.method === 'GET')
       return response({
         save: { id: save.id, name: save.name },
@@ -697,6 +730,7 @@ export async function openWorkspace({
         state: profile.state,
         plan: profile.plan || null,
         handbook: profile.handbook,
+        payoff: currentPayoff(profile),
       });
     if (endpoint === '/api/state' && req.method === 'GET') return response(profile.state);
     // Progress-only backup of the scoped profile, a separate format from the full-save

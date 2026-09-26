@@ -7,7 +7,13 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createApp } from './server.ts';
 import os from 'node:os';
 import type { Page } from 'playwright';
-import type { ProgressState, SaveExport, WorkspaceSummary } from './public/types/index.ts';
+import type {
+  ContextReply,
+  ProgressState,
+  SaveExport,
+  StoredPayoff,
+  WorkspaceSummary,
+} from './public/types/index.ts';
 // The shipped browser-api.js is public/browser-api.ts with its types stripped.
 type BrowserApi = typeof import('./public/browser-api.ts');
 const { chromium }: typeof import('playwright') = await import(
@@ -114,6 +120,13 @@ try {
       },
       { route, body },
     );
+  // Hard-drive payoff (#203): the ranking runs on the real worker and is stored with the profile.
+  console.log('Ranking alternates on the worker');
+  const payoff = await api<StoredPayoff>('/api/rank-alternates', { phase: '1' });
+  assert.equal(payoff.ranking.phase, '1');
+  assert.ok(payoff.ranking.total > 0);
+  assert.equal(payoff.ranking.candidates.length, payoff.ranking.total);
+  assert.deepEqual((await api<ContextReply>('/api/context')).payoff, payoff);
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();

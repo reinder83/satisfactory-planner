@@ -12,12 +12,20 @@
 // POST /api/duplicate-profile  copy a profile within its save
 // POST /api/import-saves       add transferred saves as new copies
 // POST /api/round-up           recalculate as whole machines into a new profile
+// POST /api/rank-alternates    hard-drive payoff ranking on the worker, stored on the profile
 // GET  /api/context, /api/state, /api/export   read the scoped profile
 // POST /api/select, /api/remove-profile, /api/rename, /api/update, /api/import
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
-import { validateState, mutate, shareState, newProfileState, checkBase } from './state.ts';
+import {
+  validateState,
+  mutate,
+  shareState,
+  newProfileState,
+  checkBase,
+  currentPayoff,
+} from './state.ts';
 import {
   validateTransfer,
   transferFormat,
@@ -25,6 +33,7 @@ import {
   transferImportLimit,
 } from './transfer.ts';
 import type {
+  AlternateRanking,
   BrowserSave,
   BrowserWorkspace,
   Catalog,
@@ -42,6 +51,8 @@ export interface BrowserRequestOptions {
   body?: BodyInit | null;
   headers?: HeadersInit;
   onProgress?: (phase: number) => void;
+  // A payoff ranking's progress: candidates done out of the total.
+  onRankProgress?: (done: number, total: number) => void;
 }
 export type BrowserRequest = (route: string, options?: BrowserRequestOptions) => Promise<unknown>;
 // Calculates a plan for the settings: the worker wrapper, or planner.ts's calculate in tests.
@@ -49,6 +60,15 @@ export type Calculator = (
   settings: unknown,
   onProgress?: (phase: number) => void,
 ) => Promise<CurrentCalculatedPlan> | CurrentCalculatedPlan;
+// Ranks the alternates for one phase of the settings (planner.ts's rankAlternates): the worker
+// wrapper, or a direct call in tests.
+export type Ranker = (
+  settings: unknown,
+  phase: StageKey,
+  onProgress?: (done: number, total: number) => void,
+) => Promise<AlternateRanking> | AlternateRanking;
+// A ranking in this edition runs on the worker, so the page stays usable; it still stops here.
+const RANK_BUDGET_MS = 120000;
 
 // Set by browser-mode.js, which build.ts writes only into the Pages build.
 export const browserMode = (globalThis as { PLANNER_BROWSER?: unknown }).PLANNER_BROWSER === true;
@@ -56,11 +76,13 @@ export const browserMode = (globalThis as { PLANNER_BROWSER?: unknown }).PLANNER
 let instance: Promise<BrowserRequest> | undefined;
 // Builds the request handler. `store` is openBrowserStore()'s object, `calculator(settings,
 // onProgress)` resolves to a plan and `catalog` is catalog.json; tests pass a stand-in store
-// and planner.ts's calculate. Errors are thrown; app/api.ts shows them like a server { error }.
+// and planner.ts's calculate. `ranker` runs a payoff ranking; without one that route is refused.
+// Errors are thrown; app/api.ts shows them like a server { error }.
 export function createBrowserApi(
   store: BrowserStore,
   calculator: Calculator,
   catalog: Catalog,
+  ranker?: Ranker,
 ): BrowserRequest {
   const uid = () => crypto.randomUUID();
   const cleanName = (n: unknown): string => {
@@ -199,6 +221,8 @@ export function createBrowserApi(
           // The filters above keep only saves with a matching profile.
           if (!s.profiles.some(p => p.id === s.activeProfile)) s.activeProfile = s.profiles[0]!.id;
           if (share) for (const p of s.profiles) p.state = shareState(p.state);
+          // A payoff ranking is derived and can be run again; exports leave it out, as on the server.
+          for (const p of s.profiles) delete p.payoff;
         }
         const exportedAt = new Date().toISOString();
         const exported = { format: transferFormat, version: 1, exportedAt, saves };
@@ -299,6 +323,25 @@ export function createBrowserApi(
         return { saveId: save.id, profileId, reviewCount, workspace: summary(d) };
       });
     }
+    // Mirrors POST /api/rank-alternates: read the profile, rank on the worker outside any
+    // transaction, then store the result on the profile if its plan is still the one ranked.
+    if (ep === '/api/rank-alternates') {
+      if (!ranker) throw Error('This feature needs a self-hosted server.');
+      const { profile: before } = scope(await store.transaction(), url, headers);
+      const plan = before.plan;
+      if (before.kind !== 'calculated' || !plan)
+        throw Error('Hard-drive payoff needs a calculated profile.');
+      const phase = String(body.phase) as StageKey;
+      if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
+      const ranking = await ranker(plan.settings, phase, options.onRankProgress);
+      return store.transaction(d => {
+        const { profile } = scope(d, url, headers);
+        if (profile.plan?.createdAt !== plan.createdAt)
+          throw Error('The profile changed while ranking. Rank again.');
+        profile.payoff = { planCreatedAt: plan.createdAt, ranking };
+        return profile.payoff;
+      });
+    }
     // The remaining routes all act on one scoped save/profile. Reads use a readonly transaction;
     // everything else runs `operation` inside a readwrite one. Any other route (accounts,
     // logout) is refused before the scope lookup, so it does not report "Save not found."
@@ -327,6 +370,7 @@ export function createBrowserApi(
           state: profile.state,
           plan: profile.plan,
           handbook: profile.handbook,
+          payoff: currentPayoff(profile),
         };
       if (ep === '/api/state') return profile.state;
       // GET /api/export: the progress-only backup format for one profile.
@@ -403,13 +447,26 @@ export interface CalculatorWorker {
 // and never includes time spent waiting. The worker cannot be interrupted mid-solve, so a timeout
 // terminates it and fails only the running request; the ones queued behind it are posted again
 // to a fresh worker (#158).
+// A payoff ranking (#203) is a job on the same worker: it posts { id, settings, rank: { phase,
+// budgetMs } } and gets { id, done, total } after each candidate, which restarts the timer too.
 export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000): Calculator {
+  return workerJobs(spawn, limit).calculate;
+}
+export function workerJobs(
+  spawn: () => CalculatorWorker,
+  limit = 180000,
+): { calculate: Calculator; rank: Ranker } {
+  // What the worker is sent, apart from the id.
+  type Job = { settings: unknown; rank?: { phase: StageKey; budgetMs: number } };
+  // A progress message: { phase } from a calculation, { done, total } from a ranking.
+  type Progress = { phase?: number; done?: number; total?: number };
   type Entry = {
     id: number;
-    settings: unknown;
-    resolve: (plan: CurrentCalculatedPlan) => void;
+    job: Job;
+    // A plan or a ranking, depending on the job.
+    resolve: (result: unknown) => void;
     reject: (error: Error) => void;
-    onProgress?: ((phase: number) => void) | undefined;
+    onProgress?: ((data: Progress) => void) | undefined;
   };
   let worker: CalculatorWorker | null = null;
   let serial = 0;
@@ -431,7 +488,7 @@ export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000):
     const queued = [...pending.values()];
     if (queued.length) {
       const next = start();
-      for (const entry of queued) next.postMessage({ id: entry.id, settings: entry.settings });
+      for (const entry of queued) next.postMessage({ id: entry.id, ...entry.job });
     }
     restartTimer();
   };
@@ -442,10 +499,10 @@ export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000):
       if (worker !== created) return;
       const entry = pending.get(e.data.id);
       if (!entry) return;
-      if (e.data.phase) {
+      if (e.data.phase || e.data.done !== undefined) {
         if (entry === front()) restartTimer();
         try {
-          entry.onProgress?.(e.data.phase);
+          entry.onProgress?.(e.data);
         } catch {}
         return;
       }
@@ -467,14 +524,32 @@ export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000):
     };
     return created;
   };
-  return (settings, onProgress) =>
-    new Promise<CurrentCalculatedPlan>((resolve, reject) => {
+  const run = <T>(job: Job, onProgress?: (data: Progress) => void) =>
+    new Promise<T>((resolve, reject) => {
       const target = worker || start();
       const id = ++serial;
-      pending.set(id, { id, settings, resolve, reject, onProgress });
+      pending.set(id, {
+        id,
+        job,
+        resolve: resolve as (result: unknown) => void,
+        reject,
+        onProgress,
+      });
       if (pending.size === 1) restartTimer();
-      target.postMessage({ id, settings });
+      target.postMessage({ id, ...job });
     });
+  return {
+    calculate: (settings, onProgress) =>
+      run<CurrentCalculatedPlan>(
+        { settings },
+        onProgress && (d => d.phase !== undefined && onProgress(d.phase)),
+      ),
+    rank: (settings, phase, onProgress) =>
+      run<AlternateRanking>(
+        { settings, rank: { phase, budgetMs: RANK_BUDGET_MS } },
+        onProgress && (d => d.done !== undefined && onProgress(d.done, d.total ?? 0)),
+      ),
+  };
 }
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
 // wrapper and the catalog. If that fails (no IndexedDB, the catalog did not load), the calls
@@ -487,15 +562,16 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
         throw Error(
           'Browser storage is unavailable. Use a regular browser window with site storage enabled.',
         );
-      const calculate = workerCalculator(
+      const jobs = workerJobs(
         () => new Worker(new URL('./calculator-worker.js', import.meta.url), { type: 'module' }),
       );
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
       return createBrowserApi(
         openBrowserStore(indexedDB),
-        calculate,
+        jobs.calculate,
         (await response.json()) as Catalog,
+        jobs.rank,
       );
     })());
     starting.catch(() => {
