@@ -4,8 +4,9 @@
 // protected storage, drone fuel, the Space Elevator and the sink as destinations.
 //
 // A row's group shares come from its memberships (views/factories.ts): a fixed rate is that
-// much of the row's primary output (MW for a generator), a null rate is whatever the fixed
-// ones leave, and a row in no group, or the part no membership takes, is Ungrouped. Every
+// much of the row's primary output (MW for a generator), null-rate memberships split evenly
+// whatever the fixed ones leave, and a row in no group, or the part no membership takes, is
+// Ungrouped. Every
 // input and output of the row is split by the same shares. An item's supply is then shared
 // among everything that asks for it in proportion to what each asks, as elsewhere in the
 // planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
@@ -53,9 +54,13 @@ export function rowShares(
     add(m.group, x);
     taken += Math.max(0, x);
   }
+  // What the fixed rates leave is split evenly between the memberships without a rate (a row
+  // just added to a second group has two), or is Ungrouped when every membership has a rate.
+  // The factory cards (allocationText in views/factories.ts) use the same rule (#197).
   const rest = Math.max(0, 1 - taken);
-  const remainder = memberships.find(m => m.rate == null);
-  add(remainder ? remainder.group : UNGROUPED, rest);
+  const open = memberships.filter(m => m.rate == null);
+  if (open.length) for (const m of open) add(m.group, rest / open.length);
+  else add(UNGROUPED, rest);
   return shares;
 }
 

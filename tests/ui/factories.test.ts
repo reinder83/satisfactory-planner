@@ -163,6 +163,35 @@ test('groups show their share of a split factory, and edit mode offers the edito
   assert.ok($('[data-assign-add="computer"]'), 'every card offers a group');
 });
 
+test('a factory in two groups without rates shows half in each, as Between groups counts it (#197)', async () => {
+  open({
+    state: {
+      factoryGroups: {
+        groups: [
+          { id: 'fg-plates1', name: 'Plates' },
+          { id: 'fg-remote1', name: 'Remote' },
+        ],
+        assignments: {
+          wire: [
+            { group: 'fg-plates1', rate: null },
+            { group: 'fg-remote1', rate: null },
+          ],
+        },
+      },
+    },
+  });
+  go('factories');
+  render();
+  await nextTick();
+  const lines = $$('.allocation').map(e => e.textContent);
+  assert.equal(lines.length, 2, JSON.stringify(lines));
+  // Each group shows half of Wire's output, not all of it twice.
+  for (const line of lines) assert.match(line, /^Remaining here, split 2 ways: /);
+  const [here, total] = lines[0]!.match(/[\d.,]+(?=\/min)/g)!;
+  assert.equal(lines[0], lines[1]);
+  assert.ok(here !== total, 'a share, not the whole: ' + lines[0]);
+});
+
 test('the group editor saves groups and memberships', async () => {
   const calls = stubFetch<GroupOp>({ '/api/update': () => state });
   open({ state: { factoryGroups: structuredClone(GROUPS) } });
