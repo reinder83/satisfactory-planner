@@ -101,11 +101,25 @@ export const version6 = {
   storageEdits: { ...version5.storageEdits, hiddenFloors: ['workshop'] },
 } satisfies SavedState;
 
-// Version 7: a handbook bay moved to another floor (#190), its records kept.
+// Version 7: a vehicle picked for a factory-group link (#205).
 export const version7 = {
   ...version6,
   version: 7,
-  storageEdits: { ...version6.storageEdits, bayFloors: { D: 'upper' } },
+  factoryGroups: {
+    groups: [{ id: 'fg-plates1', name: 'Plates' }],
+    assignments: {},
+    links: {
+      'fg-plates1:elevator': { mode: 'truck', roundTripMin: 4, fuel: 'Packaged Fuel' },
+      'mines:fg-plates1': { mode: 'train', roundTripMin: 12 },
+    },
+  },
+} satisfies SavedState;
+
+// Version 8: a handbook bay moved to another floor (#190), its records kept.
+export const version8 = {
+  ...version7,
+  version: 8,
+  storageEdits: { ...version7.storageEdits, bayFloors: { D: 'upper' } },
 } satisfies SavedState;
 
 // Each state and the version validateState must mark it with.
@@ -118,6 +132,7 @@ export const states: [SavedState, number][] = [
   [version5, 5],
   [version6, 6],
   [version7, 7],
+  [version8, 8],
 ];
 
 export const backup = {

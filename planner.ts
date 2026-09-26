@@ -16,6 +16,7 @@
 // exact string match and replaces them for the browser; keep those three snippets unchanged.
 import {
   droneFuels,
+  vehicleFuels,
   droneSupply,
   wantsStorage,
   storageRateFor,
@@ -1394,6 +1395,25 @@ export const catalog = (): Catalog => ({
   raw: RAW,
   limits: DEFAULT_LIMITS,
   pureLimits: PURE_LIMITS,
+  stacks: Object.fromEntries(
+    Object.entries(DATA.items)
+      .filter(([, i]) => !i.fluid)
+      .map(([n, i]) => [n, i.stack]),
+  ),
+  // A fluid's packaged form, from the standard Packager recipe that takes it in: the item and
+  // the m³ of fluid one item holds (4 for nitrogen gas, 1 for the others).
+  packaged: Object.fromEntries(
+    DATA.recipes
+      .filter(r => r.machine === 'Packager' && !r.alternate)
+      .flatMap(r => {
+        const fluid = Object.keys(r.inputs).find(n => DATA.items[n]?.fluid);
+        const item = Object.keys(r.outputs).find(n => !DATA.items[n]?.fluid);
+        return fluid && item && Object.keys(r.outputs).length === 1
+          ? [[fluid, { item, m3: r.inputs[fluid]! / r.outputs[item]! }]]
+          : [];
+      }),
+  ),
+  vehicleFuels: vehicleFuels.map(name => ({ name, mj: DATA.items[name]?.energy || 0 })),
   goals: [
     {
       id: 'minimal',

@@ -247,6 +247,20 @@ export const helpText: Record<string, string> = {
   roundRates: 'Rounds elevator target rates; completion time may be slightly longer or shorter.',
 };
 
+// What a truck, tractor or explorer on a factory-group link can burn (#205): the solid and
+// packaged fuels a vehicle's fuel slot takes. Stored per link in factoryGroups.links, so the
+// names are saved data: add, but do not rename.
+export const vehicleFuels: string[] = [
+  'Packaged Fuel',
+  'Packaged Turbofuel',
+  'Packaged Rocket Fuel',
+  'Packaged Ionized Fuel',
+  'Packaged Liquid Biofuel',
+  'Coal',
+  'Compacted Coal',
+  'Solid Biofuel',
+];
+
 // Drone fuel choices (`s.droneFuel`); 'none' plans no dedicated drone fuel supply.
 export const droneFuels: string[] = [
   'none',
