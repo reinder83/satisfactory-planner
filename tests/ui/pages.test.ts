@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
-import { currentSave, state } from '../../public/app/session.ts';
+import { currentSave, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
@@ -266,6 +266,41 @@ test('after a restore the file box is cleared, so the same backup can be chosen 
   await new Promise(r => setTimeout(r, 30));
   assert.match($('#toast')!.textContent!, /Backup restored/);
   assert.equal(chosen, '', 'cleared after a successful restore');
+});
+
+test('an export over the import limit is refused with a reason, and nothing downloads', async () => {
+  let downloads = 0;
+  URL.createObjectURL = () => (downloads++, 'blob:x');
+  URL.revokeObjectURL = () => {};
+  let asked = false;
+  globalThis.confirm = () => ((asked = true), true);
+  const summary = { ...workspace };
+  // A normal export downloads without a question.
+  stubFetch({
+    '/api/export-saves': { format: 'satisfactory-planner-saves', saves: [] },
+    '/api/workspace': summary,
+  });
+  go('backup');
+  render();
+  $('[data-export-saves]')!.click();
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(downloads, 1);
+  // One over 50 MB is refused outright: no question, no download, and a toast saying why.
+  stubFetch({
+    '/api/export-saves': {
+      format: 'satisfactory-planner-saves',
+      saves: [],
+      pad: 'x'.repeat(51 * 1024 * 1024),
+    },
+    '/api/workspace': summary,
+  });
+  $('[data-export-saves]')!.click();
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(asked, false, 'no "download anyway" question');
+  assert.equal(downloads, 1, 'nothing downloaded');
+  const text = $('#toast')!.textContent!;
+  assert.ok(/would be 5\d MB, more than the 50 MB an import accepts/.test(text), text);
+  assert.ok($('#toast')!.classList.contains('error'));
 });
 
 test('a redraw keeps unsaved save-wide notes on the backup page', async () => {

@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
+import { transferFileSize, transferImportLimit } from '../../../transfer.ts';
 import {
   downloadJson,
   navigate,
@@ -62,7 +63,18 @@ async function exportSaves() {
   exporting.value = true;
   try {
     await writeQueue;
-    downloadJson(await request('/api/export-saves'), 'satisfactory-full-saves.json');
+    const data = await request('/api/export-saves');
+    // Past the import limit the file could not be imported back, so it is refused rather than
+    // downloaded (the owner's choice on #118). The browser edition does not record such an
+    // export as a backup either (browser-api.ts).
+    const size = transferFileSize(data);
+    if (size > transferImportLimit)
+      throw Error(
+        `This export would be ${Math.ceil(size / 1024 / 1024)} MB, more than the ` +
+          `${transferImportLimit / 1024 / 1024} MB an import accepts, so nothing was downloaded. ` +
+          "Download each profile's progress JSON below instead, or delete profiles you no longer need.",
+      );
+    downloadJson(data, 'satisfactory-full-saves.json');
     setWorkspace(await request('/api/workspace'));
     invalidate();
     toast('Full save backup downloaded.');
@@ -84,7 +96,7 @@ async function importSaves(e: Event) {
   if (!file) return;
   try {
     // Checked before reading, so a huge file is never parsed.
-    if (file.size > 50 * 1024 * 1024) throw Error('Choose a save export smaller than 50 MB.');
+    if (file.size > transferImportLimit) throw Error('Choose a save export smaller than 50 MB.');
     const data = JSON.parse(await file.text());
     if (!confirm('Import these saves as new copies? Existing saves will be kept.')) return;
     await writeQueue;
