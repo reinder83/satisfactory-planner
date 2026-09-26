@@ -171,16 +171,21 @@ export function createBrowserApi(
         };
       });
     }
-    // Mirrors GET /api/export-saves: all saves, one save (?save=), or one profile (?profile=, with
-    // ?share=1 stripping progress through shareState). Only an unscoped full export stamps
+    // Mirrors GET /api/export-saves: all saves, the listed ones (?saves=), one save (?save=), or
+    // one profile (?profile=, with ?share=1 stripping progress through shareState). Only an unscoped full export stamps
     // lastBackup, which is why this runs as a readwrite transaction. Unlike the server it adds no
     // default handbook to 'original' profiles; an imported one keeps its own.
     if (ep === '/api/export-saves') {
       const saveId = url.searchParams.get('save'),
         profileId = url.searchParams.get('profile'),
-        share = url.searchParams.get('share') === '1';
+        share = url.searchParams.get('share') === '1',
+        chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
       return store.transaction(d => {
         let saves = structuredClone(d.saves);
+        if (chosen) {
+          saves = saves.filter(s => chosen.includes(s.id));
+          if (saves.length !== new Set(chosen).size) throw Error('Save not found.');
+        }
         if (saveId) {
           saves = saves.filter(s => s.id === saveId);
           if (!saves.length) throw Error('Save not found.');
@@ -199,7 +204,13 @@ export function createBrowserApi(
         const exported = { format: transferFormat, version: 1, exportedAt, saves };
         // Only a full export counts as a backup, and not one past the import limit: the
         // Backup page refuses to download that (#118), so it must not reset the reminder.
-        if (!saveId && !profileId && !share && transferFileSize(exported) <= transferImportLimit)
+        if (
+          !chosen &&
+          !saveId &&
+          !profileId &&
+          !share &&
+          transferFileSize(exported) <= transferImportLimit
+        )
           d.lastBackup = exportedAt;
         return exported;
       });

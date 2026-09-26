@@ -509,3 +509,43 @@ test('a calculated page survives a redraw after the handbook is opened', async (
   }
   assert.deepEqual(errors, []);
 });
+
+test('chosen saves export on their own, and a single save offers no choice (#160)', async () => {
+  let downloads = 0;
+  URL.createObjectURL = () => (downloads++, 'blob:x');
+  URL.revokeObjectURL = () => {};
+  const two = {
+    saves: [
+      { id: 's', name: 'First world', activeProfile: 'original', profiles: [] },
+      { id: 's2', name: 'Second world', activeProfile: 'p2', profiles: [] },
+    ],
+  };
+  open({ workspace: two as Partial<typeof workspace> });
+  const calls = stubFetch({
+    '/api/export-saves': { format: 'satisfactory-planner-saves', saves: [] },
+    '/api/workspace': { ...workspace },
+  });
+  go('backup');
+  render();
+  await nextTick();
+  const boxes = $$<HTMLInputElement>('[data-choose-save]');
+  assert.equal(boxes.length, 2);
+  assert.equal($<HTMLButtonElement>('[data-export-selected]')!.disabled, true, 'nothing ticked');
+  boxes[1]!.checked = true;
+  boxes[1]!.dispatchEvent(new Event('change'));
+  await nextTick();
+  $<HTMLButtonElement>('[data-export-selected]')!.click();
+  await new Promise(r => setTimeout(r, 30));
+  assert.ok(
+    calls.some(([path]) => path === '/api/export-saves?saves=s2'),
+    JSON.stringify(calls),
+  );
+  assert.equal(downloads, 1);
+  assert.match($('#toast')!.textContent!, /^1 save downloaded\.$/);
+  // With one save there is nothing to choose between.
+  open();
+  go('backup');
+  render();
+  await nextTick();
+  assert.equal($('[data-choose-save]'), null);
+});

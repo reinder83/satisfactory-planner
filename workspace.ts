@@ -403,8 +403,9 @@ export async function openWorkspace({
         });
       return response({ ok: true }, 200, { 'Set-Cookie': authCookie('') });
     }
-    // Full-save export (public/transfer.ts format) of all the user's saves, or of one save
-    // with ?save=, or one profile with ?profile=. share=1 strips progress with shareState.
+    // Full-save export (public/transfer.ts format) of all the user's saves, of the saves listed
+    // in ?saves=<id>,<id> (the Backup page's selection, #160), or of one save with ?save=, or
+    // one profile with ?profile=. share=1 strips progress with shareState.
     // An original profile without its own handbook is exported with the current plan.json,
     // so the export can be imported where that default differs. Read-only.
     if (endpoint === '/api/export-saves' && req.method === 'GET') {
@@ -415,6 +416,11 @@ export async function openWorkspace({
         profileId = url.searchParams.get('profile'),
         share = url.searchParams.get('share') === '1';
       let saves = db.saves.filter(s => s.userId === u.id);
+      const chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
+      if (chosen) {
+        saves = saves.filter(s => chosen.includes(s.id));
+        if (saves.length !== new Set(chosen).size) fail('Save not found.', 404);
+      }
       if (saveId) {
         saves = saves.filter(s => s.id === saveId);
         if (!saves.length) fail('Save not found.', 404);
