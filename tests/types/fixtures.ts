@@ -122,6 +122,19 @@ export const version8 = {
   storageEdits: { ...version7.storageEdits, bayFloors: { D: 'upper' } },
 } satisfies SavedState;
 
+// Version 9: a factory-group link to the vehicle fuel place (#206, #220).
+export const version9 = {
+  ...version8,
+  version: 9,
+  factoryGroups: {
+    ...version8.factoryGroups,
+    links: {
+      ...version8.factoryGroups.links,
+      'fg-plates1:vehicles': { mode: 'tractor', roundTripMin: 3, fuel: 'Packaged Fuel' },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -133,6 +146,7 @@ export const states: [SavedState, number][] = [
   [version6, 6],
   [version7, 7],
   [version8, 8],
+  [version9, 9],
 ];
 
 export const backup = {
