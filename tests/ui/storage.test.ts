@@ -407,6 +407,26 @@ test('a handbook bay can be hidden in edit mode and restored, and its items are 
   noMarkup();
 });
 
+test('a reserved position keeps a filled card’s shape, with inert stand-ins (#200)', () => {
+  // A01 cleared: a reserved position in the handbook room.
+  open({ state: { storageEdits: someEdits({ clearedSlots: ['A01'] }) } });
+  render();
+  const reserved = $$('.bay-items .slot.empty').find(
+    s => s.querySelector('strong')!.textContent === 'A01',
+  )!;
+  assert.ok(reserved, 'A01 is reserved');
+  // The same parts as a filled card, so the row keeps its height.
+  assert.ok(reserved.querySelector('.slot-icon-space'), 'the icon’s space is kept');
+  assert.equal(reserved.querySelector('.slot-reserved')!.textContent, 'Reserved');
+  const done = reserved.querySelector<HTMLElement>('.slot-space')!;
+  assert.equal(done.getAttribute('aria-hidden'), 'true');
+  const box = done.querySelector<HTMLInputElement>('input')!;
+  assert.equal(box.disabled, true);
+  assert.equal(box.tabIndex, -1);
+  assert.equal(box.dataset.completeSlot, undefined, 'not a control the page counts or saves');
+  noMarkup();
+});
+
 test('an empty built-in floor can be hidden and restored from the layout editor (#168)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
   open();

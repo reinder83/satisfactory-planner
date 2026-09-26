@@ -258,11 +258,17 @@ async function addContainer(e: Event) {
             />Done</label
           >
         </div>
+        <!-- A reserved position keeps a filled card's shape: invisible stand-ins for the icon and
+             the Done box hold the same space, so a row of reserved positions is as tall as any
+             other (#200). -->
         <div v-else class="slot empty">
           <strong>{{ x.id }}</strong
-          ><span>Reserved</span>
-        </div></template
-      >
+          ><span class="slot-icon-space" aria-hidden="true"></span
+          ><span class="slot-reserved">Reserved</span
+          ><span class="slot-complete slot-space" aria-hidden="true"
+            ><input type="checkbox" tabindex="-1" disabled
+          /></span></div
+      ></template>
     </div>
     <form
       v-if="view.editing && view.canAdd"
