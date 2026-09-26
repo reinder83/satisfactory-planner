@@ -85,7 +85,10 @@ export let query = '';
 export let floor = 'ground';
 // The factories page's filter (FILTERS in ui/pages/FactoriesPage.vue).
 export let factoryFilter = 'all';
-export let hideDone = false;
+// "Hide completed" on the build plan. A view preference rather than progress, so like
+// ADA's mute switch it is remembered in this browser and never touches a saved profile.
+const HIDE_DONE_KEY = 'planner-hide-done';
+export let hideDone = hideDoneStored();
 export let activeDetail: ActiveDetail | null = null;
 export let layoutEditing = false;
 export let planEditing = false;
@@ -130,6 +133,16 @@ export function setFactoryFilter(value: string) {
 }
 export function setHideDone(value: boolean) {
   hideDone = value;
+  try {
+    localStorage.setItem(HIDE_DONE_KEY, value ? 'on' : 'off');
+  } catch {}
+}
+function hideDoneStored() {
+  try {
+    return localStorage.getItem(HIDE_DONE_KEY) === 'on';
+  } catch {
+    return false;
+  }
 }
 export function setActiveDetail(value: ActiveDetail | null) {
   activeDetail = value;

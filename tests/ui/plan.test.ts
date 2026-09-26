@@ -3,7 +3,7 @@
 // the way the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
-import { beforeEach, test } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 import {
   editingTask,
   planEditing,
@@ -135,6 +135,23 @@ test('the checklist can be searched and can hide completed steps', async () => {
   render();
   await nextTick();
   assert.equal($<HTMLInputElement>('#hide-done')!.checked, true);
+  // It is remembered in this browser, never in the profile.
+  assert.equal(localStorage.getItem('planner-hide-done'), 'on');
+  assert.equal('hideDone' in state.settings, false);
+});
+
+test('"Hide completed" survives a page refresh', async () => {
+  // A refresh loads session.ts afresh, which reads the remembered toggle.
+  const fresh = async () => {
+    vi.resetModules();
+    return (await import('../../public/app/session.ts')).hideDone;
+  };
+  localStorage.setItem('planner-hide-done', 'on');
+  assert.equal(await fresh(), true);
+  localStorage.setItem('planner-hide-done', 'off');
+  assert.equal(await fresh(), false);
+  localStorage.removeItem('planner-hide-done');
+  assert.equal(await fresh(), false, 'off by default');
 });
 
 test('every step carries an icon for its kind of work, or the part it makes', () => {
