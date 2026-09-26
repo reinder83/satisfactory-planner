@@ -89,15 +89,16 @@ function applyTaskEdits(base: Step[]): Step[] {
 // (including steps removed or not in the plan right now), then the phase's other steps in
 // their generated order. A reorder rearranges only the steps on screen within their own
 // slots of this list, so a removed step keeps its place for when it is restored.
+// A saved order holds at most 600 ids (taskOrder in state.ts), so past that the places of
+// steps not in this phase's plan any more are dropped, earliest first; steps in the plan,
+// removed ones included, always keep theirs.
 export function taskOrderSlots(): string[] {
   const saved = taskEditsState().order[phase()] || [];
   const listed = new Set(saved);
-  return [
-    ...saved,
-    ...basePlanTasks()
-      .map(t => t.id)
-      .filter(id => !listed.has(id)),
-  ];
+  const inPlan = new Set(basePlanTasks().map(t => t.id));
+  const slots = [...saved, ...[...inPlan].filter(id => !listed.has(id))];
+  let excess = slots.length - 600;
+  return excess > 0 ? slots.filter(id => inPlan.has(id) || excess-- <= 0) : slots;
 }
 
 // The current phase's steps before edits: calculated steps or handbook steps, plus the
