@@ -54,6 +54,8 @@ const note = useNoteDraft(
   () => page.value.note,
 );
 const exporting = ref(false);
+// The largest full-save file an import accepts, here and on the server (server.ts).
+const IMPORT_LIMIT = 50 * 1024 * 1024;
 
 // "Export all saves": wait for queued saves, download every save of this user as one
 // full-save file, then refetch the workspace, which carries lastBackup (when a full export
@@ -62,7 +64,20 @@ async function exportSaves() {
   exporting.value = true;
   try {
     await writeQueue;
-    downloadJson(await request('/api/export-saves'), 'satisfactory-full-saves.json');
+    const data = await request('/api/export-saves');
+    // The file as downloadJson writes it. Past the import limit it could not be imported back
+    // in one piece (the owner's choice on #118: warn at export time), so say so first.
+    const size = new Blob([JSON.stringify(data, null, 2)]).size;
+    if (
+      size > IMPORT_LIMIT &&
+      !confirm(
+        `This export is ${Math.ceil(size / 1024 / 1024)} MB, more than the ${IMPORT_LIMIT / 1024 / 1024} MB ` +
+          'an import accepts, so it could not be imported back in one piece. Export fewer saves ' +
+          'at a time to move them. Download it anyway as a backup?',
+      )
+    )
+      return;
+    downloadJson(data, 'satisfactory-full-saves.json');
     setWorkspace(await request('/api/workspace'));
     invalidate();
     toast('Full save backup downloaded.');
@@ -84,7 +99,7 @@ async function importSaves(e: Event) {
   if (!file) return;
   try {
     // Checked before reading, so a huge file is never parsed.
-    if (file.size > 50 * 1024 * 1024) throw Error('Choose a save export smaller than 50 MB.');
+    if (file.size > IMPORT_LIMIT) throw Error('Choose a save export smaller than 50 MB.');
     const data = JSON.parse(await file.text());
     if (!confirm('Import these saves as new copies? Existing saves will be kept.')) return;
     await writeQueue;

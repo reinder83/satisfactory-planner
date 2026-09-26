@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
-import { currentSave, state } from '../../public/app/session.ts';
+import { currentSave, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
@@ -266,6 +266,39 @@ test('after a restore the file box is cleared, so the same backup can be chosen 
   await new Promise(r => setTimeout(r, 30));
   assert.match($('#toast')!.textContent!, /Backup restored/);
   assert.equal(chosen, '', 'cleared after a successful restore');
+});
+
+test('an export over the import limit asks first, and nothing downloads without a yes', async () => {
+  let downloads = 0;
+  URL.createObjectURL = () => (downloads++, 'blob:x');
+  URL.revokeObjectURL = () => {};
+  let asked = '';
+  globalThis.confirm = (m?: string) => ((asked = m || ''), false);
+  const summary = { ...workspace };
+  // A normal export downloads without a question.
+  stubFetch({
+    '/api/export-saves': { format: 'satisfactory-planner-saves', saves: [] },
+    '/api/workspace': summary,
+  });
+  go('backup');
+  render();
+  $('[data-export-saves]')!.click();
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(asked, '');
+  assert.equal(downloads, 1);
+  // One over 50 MB says how big it is and what that means; No downloads nothing.
+  stubFetch({
+    '/api/export-saves': {
+      format: 'satisfactory-planner-saves',
+      saves: [],
+      pad: 'x'.repeat(51 * 1024 * 1024),
+    },
+    '/api/workspace': summary,
+  });
+  $('[data-export-saves]')!.click();
+  await new Promise(r => setTimeout(r, 200));
+  assert.match(asked, /This export is 5\d MB, more than the 50 MB an import accepts/);
+  assert.equal(downloads, 1, 'nothing downloaded');
 });
 
 test('a redraw keeps unsaved save-wide notes on the backup page', async () => {
