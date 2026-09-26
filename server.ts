@@ -26,6 +26,19 @@ function fail(message: string, status = 400): never {
 }
 // A thrown error: one with a status carries a message for the user.
 type Failure = { status?: number; message?: string; code?: string } | null | undefined;
+// Content types for the files the production server serves from public/ (the Docker image's
+// build of it, which includes the interface fonts); anything else is application/octet-stream.
+// Every response carries nosniff, so a font needs its real type.
+export const contentTypes: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.pdf': 'application/pdf',
+  '.woff2': 'font/woff2',
+};
 // Builds the Docker edition's HTTP server (not yet listening) around the workspace in
 // dataDir. APP_PASSWORD adds an optional HTTP Basic login in front of everything, separate
 // from the in-app accounts in workspace.ts. Tests call this with a temporary dataDir.
@@ -146,16 +159,7 @@ export async function createApp({
           return send(res, 404, { error: 'Not found.' });
         throw e;
       }
-      const types: Record<string, string> = {
-        '.html': 'text/html; charset=utf-8',
-        '.js': 'text/javascript; charset=utf-8',
-        '.css': 'text/css; charset=utf-8',
-        '.json': 'application/json; charset=utf-8',
-        '.svg': 'image/svg+xml',
-        '.png': 'image/png',
-        '.pdf': 'application/pdf',
-      };
-      const type = types[path.extname(file)] || 'application/octet-stream';
+      const type = contentTypes[path.extname(file)] || 'application/octet-stream';
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
       res.end(req.method === 'HEAD' ? undefined : content);
     } catch (thrown) {

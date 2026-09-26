@@ -6,7 +6,7 @@
   "Save notes" button uses saveNote in ui/actions.ts.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { num } from '../../format.ts';
 import { checked, phase, phaseLabel, plan, stage, state } from '../../session.ts';
 import { planTasks } from '../../tasks.ts';
@@ -51,6 +51,10 @@ const page = computed(() =>
     };
   }),
 );
+// The phase notes box keeps its own text, so a redraw (a ticked step, the save indicator) does not
+// put the saved note back over unsaved typing. It follows the saved note when the phase or that note changes (another phase or profile).
+const note = ref(page.value.note);
+watch([() => page.value.phase, () => page.value.note], () => (note.value = page.value.note));
 </script>
 
 <template>
@@ -97,7 +101,7 @@ const page = computed(() =>
           class="notes"
           maxlength="6000"
           aria-label="Phase notes"
-          :value="page.note"
+          v-model="note"
         ></textarea>
         <div class="note-save">
           <span class="small muted">Saved only when you click Save notes.</span

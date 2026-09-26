@@ -399,6 +399,31 @@ test('a cleared step title restores the original, and an automatic link can be r
   assert.deepEqual(calls.at(-1)![1], { type: 'taskEdit', id, title: '', body: '', link: '' });
 });
 
+test('ticking a step keeps an unsaved phase note on both plan pages', async () => {
+  for (const calculated of [false, generated]) {
+    const calls = stubFetch({ '/api/update': () => state });
+    open({ calculated });
+    go('plan');
+    render();
+    await nextTick();
+    const note = () => $<HTMLTextAreaElement>('#phase-note')!;
+    note().value = 'Unsaved thought';
+    note().dispatchEvent(new Event('input'));
+    const box = $<HTMLInputElement>('#main .checklist [data-check]')!;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    assert.equal(calls.length, 1, 'the tick was saved');
+    assert.equal(note().value, 'Unsaved thought', calculated ? 'calculated' : 'handbook');
+    // Another phase shows that phase's saved note.
+    state.notes['phase-4'] = 'Phase 4 plans';
+    state.settings.phase = '4';
+    render();
+    await nextTick();
+    assert.equal(note().value, 'Phase 4 plans');
+  }
+});
+
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
   const plan = structuredClone(generated);
   plan.warnings = [evil];
