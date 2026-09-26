@@ -122,7 +122,7 @@ test('clearing and reassigning containers preserves saved checkmarks', () => {
   assert.equal(s.checks['slot-G08-built'], true);
 });
 
-test('handbook floors and bays cannot be removed; added ones can, keeping progress records', () => {
+test('handbook floors and bays cannot be removed; added ones can', () => {
   let s = initialState();
   assert.throws(
     () => mutate(structuredClone(s), { type: 'storageFloorRemove', id: 'ground' }),
@@ -143,7 +143,7 @@ test('handbook floors and bays cannot be removed; added ones can, keeping progre
   s = mutate(s, { type: 'storageBayRemove', id: 'T' });
   assert.equal(s.storageEdits.bays.length, 0);
   assert.equal(s.storageEdits.slots.T01, undefined);
-  assert.equal(s.checks['slot-T01-built'], true, 'progress records survive bay removal');
+  assert.equal(s.checks['slot-T01-built'], undefined, 'the removed bay takes its checks along');
   s = mutate(s, { type: 'storageFloorRemove', id: 'cf-zz99aa' });
   assert.equal(s.storageEdits.floors.length, 0);
   assert.equal(
@@ -151,6 +151,21 @@ test('handbook floors and bays cannot be removed; added ones can, keeping progre
     1,
     'no remaining edits means the state stays importable by older planners',
   );
+});
+
+test('a bay that reuses the letter of a removed bay starts without its checks and notes', () => {
+  let s = initialState();
+  s = mutate(s, { type: 'storageBayAdd', id: 'T', name: 'Overflow', floor: 'ground' });
+  s = mutate(s, { type: 'storageBayAdd', id: 'TA', name: 'Next door', floor: 'ground' });
+  for (const addr of ['T01', 'T09', 'TA01', 'A01']) {
+    s = mutate(s, { type: 'check', key: `slot-${addr}-built`, value: true });
+    s = mutate(s, { type: 'note', key: `slot-${addr}`, value: 'Wire here' });
+  }
+  s = mutate(s, { type: 'note', key: 'phase-3', value: 'Unrelated' });
+  s = mutate(s, { type: 'storageBayRemove', id: 'T' });
+  s = mutate(s, { type: 'storageBayAdd', id: 'T', name: 'Overflow again', floor: 'ground' });
+  assert.deepEqual(Object.keys(s.checks).sort(), ['slot-A01-built', 'slot-TA01-built']);
+  assert.deepEqual(Object.keys(s.notes).sort(), ['phase-3', 'slot-A01', 'slot-TA01']);
 });
 
 test('invalid layout updates are rejected without corrupting the state', () => {
