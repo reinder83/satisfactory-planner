@@ -843,6 +843,12 @@ function mutateLayout(s: SavedState, op: Raw) {
     if (typeof op.id !== 'string' || !handbookBay(op.id))
       fail('Only handbook bays can be hidden. Remove an added bay instead.');
     const hidden = new Set(e.hiddenBays);
+    // An added bay under a handbook letter still in the room predates #91 and shares that bay's
+    // addresses and records. Hiding the handbook bay would make removing the added one clear
+    // them (storageBayRemove treats a hidden letter's records as the added bay's own), so the
+    // added bay has to go first. A letter an added bay took with `replace` is already hidden.
+    if (op.type === 'storageBayHide' && !hidden.has(op.id) && e.bays.some(b => b.id === op.id))
+      fail(`An added bay uses the letter ${op.id}. Remove it before hiding the handbook bay.`);
     if (op.type === 'storageBayHide') hidden.add(op.id);
     else if (e.bays.some(b => b.id === op.id))
       fail(`An added bay uses the letter ${op.id}. Remove it before restoring the handbook bay.`);

@@ -451,3 +451,15 @@ test('an added bay takes the letter typed, and a hidden handbook letter only aft
   assert.equal($('[data-restore-bay="C"]'), null);
   noMarkup();
 });
+
+test('a handbook bay sharing its letter with an added bay stored before #91 offers no Hide', () => {
+  open({
+    state: {
+      storageEdits: someEdits({ bays: [{ id: 'C', name: 'Old added C', floor: 'ground' }] }),
+    },
+  });
+  setLayoutEditing(true);
+  render();
+  assert.equal($('[data-hide-bay="C"]'), null, 'remove the added bay first');
+  assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
+});

@@ -313,3 +313,36 @@ test('an added bay can take a hidden handbook letter, clearing that bay first (#
     /Bay S already exists/,
   );
 });
+
+test('a handbook bay sharing its letter with a pre-#91 added bay is not hidden, so removing that bay keeps its records', () => {
+  // Before #91 an added bay could be stored under a handbook letter; it shares that bay's
+  // addresses, checks and notes.
+  let s = validateState({
+    ...initialState(),
+    version: 2,
+    checks: { 'slot-C01-built': true },
+    notes: { 'slot-C01': 'Handbook copper' },
+    storageEdits: {
+      floors: [],
+      floorNames: {},
+      bays: [{ id: 'C', name: 'Old added C', floor: 'ground' }],
+      bayNames: {},
+      slots: {},
+      clearedSlots: [],
+    },
+  });
+  const before = structuredClone(s);
+  assert.throws(
+    () => mutate(structuredClone(s), { type: 'storageBayHide', id: 'C' }),
+    /An added bay uses the letter C. Remove it before hiding/,
+  );
+  // Removing the old added bay removes only its entry, as it always has.
+  s = mutate(s, { type: 'storageBayRemove', id: 'C' });
+  assert.deepEqual(s.storageEdits.bays, []);
+  assert.deepEqual(s.checks, before.checks);
+  assert.deepEqual(s.notes, before.notes);
+  // Then the handbook bay can be hidden, keeping everything.
+  s = mutate(s, { type: 'storageBayHide', id: 'C' });
+  assert.deepEqual(s.storageEdits.hiddenBays, ['C']);
+  assert.equal(s.checks['slot-C01-built'], true);
+});
