@@ -29,6 +29,9 @@ const view = computed(() =>
     const q = query.toLowerCase();
     return {
       editing: layoutEditing,
+      // A handbook bay sharing its letter with an added bay (stored before #91) cannot be
+      // hidden until that bay is removed (storageBayHide in state.ts).
+      canHide: !b.custom && !storageBays().some(x => x.custom && x.id === b.id),
       done: items.filter(x => slotDone(x.id)).length,
       named: items.length,
       slots: b.items.map(x => ({
@@ -195,7 +198,7 @@ async function addContainer(e: Event) {
           Remove bay
         </button>
         <button
-          v-if="view.editing && !bay.custom"
+          v-if="view.editing && view.canHide"
           class="btn quiet"
           :data-hide-bay="bay.id"
           @click="hideBay"
