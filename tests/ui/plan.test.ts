@@ -319,6 +319,32 @@ test('leaving the page or changing phase asks before dropping an unsaved phase n
   acceptRoute();
 });
 
+test('with completed steps hidden, moving a step passes the neighbour on screen', async () => {
+  const calls = stubFetch({ '/api/update': () => state });
+  open({ state: { checks: { 'phase-3-iron': true } } });
+  setHideDone(true);
+  render();
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  const before = planTasks().map(t => t.id);
+  assert.deepEqual(before.slice(0, 4), [
+    'phase-3-survey',
+    'phase-3-retire-power',
+    'phase-3-iron',
+    'phase-3-construction',
+  ]);
+  // The hidden (ticked) iron step sits between these two; it keeps its place.
+  $('[data-move-task="phase-3-retire-power"][data-dir="1"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'taskOrder',
+    phase: '3',
+    ids: ['phase-3-survey', 'phase-3-iron', 'phase-3-construction', 'phase-3-retire-power'].concat(
+      before.slice(4),
+    ),
+  });
+});
+
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
   const plan = structuredClone(generated);
   plan.warnings = [evil];
