@@ -8,12 +8,20 @@ import type { BrowserWorkspace } from './types/index.ts';
 // workspace record is newer. Neither is read or written: AGENTS.md forbids downgrading them.
 const NEWER =
   'The saves in this browser were written by a newer version of the planner. Open the latest ' +
-  'version to use them; nothing has been changed.';
+  'version to use them; nothing has been changed. You can also download the stored data below ' +
+  'to keep a copy.';
 // A record that is there but is not a workspace. It is refused rather than treated as missing,
-// which would put a blank workspace in its place on the next write.
+// which would put a blank workspace in its place on the next write. This browser cannot restore
+// anything while it is refused (every route reads the record first), so the message names the
+// ways out (#142).
 const UNREADABLE =
-  'The saves in this browser could not be read. Nothing has been changed; reload to try ' +
-  'again, and keep this browser data until you have restored a backup.';
+  'The saves in this browser could not be read, so the planner cannot open here. Nothing has ' +
+  "been changed: reload to try again, and keep this browser's site data. Download the stored " +
+  'data below to keep a copy, and restore your last full save export in another browser or ' +
+  'the Docker edition (Backup & notes → Import saves).';
+// Errors about the stored data itself carry storedData, so the start-up error page (boot() in
+// app/session.ts) offers readStoredData's download next to the message.
+const refused = (message: string) => Object.assign(Error(message), { storedData: true });
 
 // Whether a stored record has the shape browser-api.ts reads without checking: a saves list
 // whose saves each have an id and a profiles list, and whose profiles each have an id and a
@@ -70,7 +78,7 @@ export function openBrowserStore(
       resolve(r.result);
     };
     // A database a newer release has upgraded refuses this older schema version.
-    r.onerror = () => reject(r.error?.name === 'VersionError' ? Error(NEWER) : r.error);
+    r.onerror = () => reject(r.error?.name === 'VersionError' ? refused(NEWER) : r.error);
     r.onblocked = () => reject(Error('Close other planner tabs to upgrade browser storage.'));
   });
   return {
@@ -97,10 +105,10 @@ export function openBrowserStore(
             const found: unknown = r.result;
             // Version 1 is the only workspace format so far; a later one is refused unread.
             if (object(found) && typeof found.version === 'number' && found.version > 1)
-              throw Error(NEWER);
+              throw refused(NEWER);
             // Only a missing record (a new browser) starts blank; anything else not shaped like
             // a workspace, falsy values included, is refused unread.
-            if (found !== undefined && !workspaceRecord(found)) throw Error(UNREADABLE);
+            if (found !== undefined && !workspaceRecord(found)) throw refused(UNREADABLE);
             const data: BrowserWorkspace = found ?? {
               version: 1,
               activeSave: null,
@@ -127,4 +135,40 @@ export function openBrowserStore(
       });
     },
   };
+}
+
+// The stored workspace record exactly as it is, unchecked, for the start-up error page's
+// download when the planner refuses it (#142): damaged, or written by a newer release. Opens the
+// database at whatever version it has, so a newer schema is readable too, and never writes. A
+// browser without the database resolves undefined: the upgrade that opening would start is
+// aborted, so no empty database is left behind for the real open to trip over.
+export function readStoredData(
+  indexedDB: IDBFactory,
+  name = 'satisfactory-planner-browser-v1',
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(name);
+    let missing = false;
+    r.onupgradeneeded = () => {
+      missing = true;
+      r.transaction?.abort();
+    };
+    r.onerror = () => (missing ? resolve(undefined) : reject(r.error));
+    r.onsuccess = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains('workspace')) {
+        db.close();
+        return resolve(undefined);
+      }
+      const get = db.transaction('workspace', 'readonly').objectStore('workspace').get('main');
+      get.onsuccess = () => {
+        db.close();
+        resolve(get.result);
+      };
+      get.onerror = () => {
+        db.close();
+        reject(get.error);
+      };
+    };
+  });
 }

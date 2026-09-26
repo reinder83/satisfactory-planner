@@ -2,8 +2,9 @@
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
 import { browserMode } from '../browser-api.ts';
+import { readStoredData } from '../browser-store.ts';
 import { initialState } from '../state.ts';
-import { request, writeQueue } from './api.ts';
+import { downloadJson, request, toast, writeQueue } from './api.ts';
 import { required } from './format.ts';
 import { render } from './shell.ts';
 import { showSignedOut, unmountShell } from './ui/mount.ts';
@@ -294,5 +295,19 @@ export async function boot() {
       '<button class="btn" id="retry">Try again</button></section>';
     required('#app .loading p').textContent = e instanceof Error ? e.message : String(e);
     required('#retry').onclick = boot;
+    // The browser edition refused its own stored data (damaged, or from a newer release): offer
+    // that data as a file, since nothing in this browser can open or restore it (#142).
+    if ((e as { storedData?: boolean } | null)?.storedData) {
+      const button = document.createElement('button');
+      button.className = 'btn';
+      button.id = 'download-stored-data';
+      button.textContent = 'Download the stored data';
+      button.onclick = () =>
+        readStoredData(indexedDB).then(
+          data => downloadJson(data ?? null, 'satisfactory-planner-browser-data.json'),
+          (err: Error) => toast('The stored data could not be read: ' + err.message, true),
+        );
+      required('#retry').after(' ', button);
+    }
   }
 }
