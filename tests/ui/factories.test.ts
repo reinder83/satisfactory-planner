@@ -21,6 +21,7 @@ import {
   setFactoryFilter,
   setQuery,
   state,
+  viewOf,
   workspace,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
@@ -591,7 +592,7 @@ test('between groups: a card per group with what comes in and goes out, names es
       },
     },
   });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   noMarkup();
@@ -664,7 +665,7 @@ test('between groups: a card per group with what comes in and goes out, names es
       },
     },
   });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   assert.deepEqual(
@@ -673,10 +674,53 @@ test('between groups: a card per group with what comes in and goes out, names es
   );
   // Without groups there is nothing to show.
   open({ calculated: plan });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   assert.equal($('[data-group-links]'), null);
+});
+
+test('between groups has its own Logistics page, with a way forward when there is nothing to show (#229)', async () => {
+  const rows = plan.stages['3'].rows!;
+  const factoryGroups = {
+    groups: [{ id: 'fg-smelt1', name: evil }],
+    assignments: Object.fromEntries(rows.map(r => [r.id, [{ group: 'fg-smelt1', rate: null }]])),
+  };
+  open({ calculated: plan, state: { factoryGroups } });
+  assert.equal(viewOf('logistics'), 'logistics', 'a deep link to #logistics opens it');
+  go('factories');
+  render();
+  await nextTick();
+  // The factories page no longer carries the section; a line points to the new page.
+  assert.equal($('[data-group-links]'), null);
+  assert.equal($('[data-logistics-link] a')!.getAttribute('href'), '#logistics');
+  const nav = $$('.nav a').map(a => a.textContent!.trim());
+  assert.deepEqual(nav.slice(0, 3), ['◫Build plan', '▥Factories', '⇄Logistics']);
+  go('logistics');
+  render();
+  await nextTick();
+  assert.equal($('h1')!.textContent, 'Logistics');
+  assert.ok($('[data-group-links] [data-group-card]'));
+  assert.equal($('.nav a.active')!.textContent!.trim(), '⇄Logistics');
+  noMarkup();
+  // A calculated profile without groups: what to do first.
+  open({ calculated: plan });
+  go('logistics');
+  render();
+  await nextTick();
+  assert.equal($('[data-group-links]'), null);
+  assert.equal($('[data-logistics-empty="groups"] a')!.getAttribute('href'), '#factories');
+  go('factories');
+  render();
+  await nextTick();
+  assert.equal($('[data-logistics-link]'), null, 'no pointer to an empty page');
+  // The handbook profile has no calculated plan to work from.
+  open();
+  go('logistics');
+  render();
+  await nextTick();
+  assert.equal($('[data-logistics-empty="handbook"] a')!.getAttribute('href'), '#profiles');
+  noMarkup();
 });
 
 test('between groups: a link can go by truck, train or back to belts, with the vehicle math (#205)', async () => {
@@ -699,7 +743,7 @@ test('between groups: a link can go by truck, train or back to belts, with the v
     },
   });
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   const key = 'fg-smelt1:fg-parts1';
@@ -769,7 +813,7 @@ test('between groups: existing supply sent straight to storage has its row and c
     },
   });
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   const key = 'mines:storage';
@@ -812,7 +856,7 @@ test('between groups: recalculating with transport fuel creates a revision that 
     workspace: { catalog: catalog() },
     state: { version: 7, factoryGroups },
   });
-  go('factories');
+  go('logistics');
   render();
   await nextTick();
   const note = () => $('[data-transport-fuel-note]')!.textContent!.replace(/\s+/g, ' ');

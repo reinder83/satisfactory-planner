@@ -1,6 +1,7 @@
 <!--
-  "Between groups" on a calculated profile's factories page (#184): what each factory group hands
-  the next per minute, and the belt or pipe it needs, from groupLinks (group-links.ts). Only
+  "Between groups" on the Logistics page (#184; on the calculated factories page until #229):
+  what each factory group hands the next per minute, and the belt or pipe it needs, from
+  groupLinks (group-links.ts). Only
   shown when the profile has groups; flows inside a group are the group's own belts and are
   left out. Group names are user text, rendered as text.
   One card per group (#213), Ungrouped too when it has links, with an In part (where each flow

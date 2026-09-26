@@ -11,6 +11,7 @@ import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
 import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import FactoriesPage from './pages/FactoriesPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
+import LogisticsPage from './pages/LogisticsPage.vue';
 import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
@@ -28,6 +29,7 @@ export function vuePage(
 ): Component | null {
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
+  if (view === 'logistics') return LogisticsPage;
   if (view === 'storage') return StoragePage;
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;

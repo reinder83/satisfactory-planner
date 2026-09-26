@@ -28,6 +28,7 @@ import { legacy } from './bridge.ts';
 const NAV: [id: string, icon: string, label: string][] = [
   ['plan', '◫', 'Build plan'],
   ['factories', '▥', 'Factories'],
+  ['logistics', '⇄', 'Logistics'],
   ['storage', '▦', 'Storage room'],
   ['resources', '↗', 'Power & resources'],
   ['backup', '⇅', 'Backup & notes'],
