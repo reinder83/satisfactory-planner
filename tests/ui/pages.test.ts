@@ -92,6 +92,24 @@ test('the account page offers setup until accounts are on, then the signed-in us
   assert.equal($('#auth-form'), null);
 });
 
+test('a failed sign-out says so and leaves the user signed in', async () => {
+  open({ workspace: { accountsEnabled: true } });
+  go('account');
+  render();
+  const calls = stubFetch({}); // /api/logout answers 500
+  $('[data-logout]')!.click();
+  await new Promise(r => setTimeout(r, 20));
+  await nextTick();
+  assert.deepEqual(
+    calls.map(c => c[0]),
+    ['/api/logout'],
+    'no reload follows a failed sign-out',
+  );
+  assert.match($('#toast')!.textContent, /unexpected \/api\/logout/);
+  assert.ok($('#toast')!.classList.contains('error'));
+  assert.ok($('[data-logout]'), 'still on the account page');
+});
+
 test('the sign-in screen switches between signing in and registering', async () => {
   open({ workspace: { user: null, registration: true } });
   showSignedOut($('#app')!);
