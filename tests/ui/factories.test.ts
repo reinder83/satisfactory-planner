@@ -21,6 +21,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
 import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
@@ -307,13 +308,18 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
   // Two lanes' worth exactly, then a little over one lane.
   const advice = (rate: number) => {
     const plan = lanePlan(rate, false, '3');
-    const model = {
+    const model: FlowModel = {
       stage: '3',
       equivalent: 4,
       machineCount: 4,
-      inputs: [{ name: 'Iron Ore', rate, plan, local: false }],
+      inputs: [{ name: 'Iron Ore', rate, link: null, plan, local: null }],
+      outputs: [],
+      machineName: '',
+      local: false,
+      recipe: null,
+      bar: null,
       sameItemConsumers: () => [],
-    } as unknown as FlowModel;
+    };
     const el = document.createElement('div');
     createApp({ render: () => h(LaneAdvice, { model }) }).mount(el);
     return { cap: plan.lane.cap, text: el.querySelector('.logi-row p')!.textContent!.trim() };
@@ -321,6 +327,34 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
   const { cap } = advice(1);
   assert.match(advice(2 * cap).text, /→ 2 × Mk\.\d belts — all 2 full\.$/);
   assert.match(advice(cap + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
+});
+
+test('closing or replacing a dialog asks before dropping an unsaved note', () => {
+  render();
+  openFactory('wire');
+  let asked = 0;
+  globalThis.confirm = () => (asked++, false);
+  $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  // The × and a backdrop click (closeDetail), another factory's link, and Escape.
+  closeDetail();
+  openFactory('screws');
+  const escape = new Event('cancel', { cancelable: true });
+  cancelDetail(escape);
+  assert.equal(asked, 3);
+  assert.equal(escape.defaultPrevented, true);
+  assert.ok(dialog.open, 'kept notes keep the dialog open');
+  assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-wire');
+  globalThis.confirm = () => true;
+  closeDetail();
+  assert.equal(dialog.open, false);
+  // Without an edit there is nothing to ask.
+  globalThis.confirm = () => (asked++, false);
+  openFactory('wire');
+  closeDetail();
+  assert.equal(dialog.open, false);
+  assert.equal(asked, 3);
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {

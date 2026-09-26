@@ -66,7 +66,8 @@ async function saving(el: HTMLButtonElement, op: UpdateOp, done?: () => void) {
 }
 
 // "Complete room X": tick every check of every named container in the bay in one write. The
-// button stays disabled while saving, and afterwards while every container is done.
+// button stays disabled while saving, and afterwards while every container is done (then
+// marked .unavailable, so it shows no wait cursor, and relabelled).
 const completing = ref(false);
 async function completeRoom() {
   const bay = storageBays().find(b => b.id === props.bay.id);
@@ -121,7 +122,8 @@ const clearSlot = (e: Event, id: string) =>
   );
 
 function removeBay(e: Event) {
-  if (!confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')) return;
+  if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
+    return;
   saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayRemove', id: props.bay.id });
 }
 
@@ -183,10 +185,15 @@ async function addContainer(e: Event) {
         <button
           class="btn quiet"
           :data-complete-bay="bay.id"
+          :class="{ unavailable: !completing }"
           :disabled="completing || !view.named || view.done === view.named"
           @click="completeRoom"
         >
-          Complete room {{ bay.id }}
+          {{
+            view.named && view.done === view.named
+              ? `Room ${bay.id} completed ✓`
+              : `Complete room ${bay.id}`
+          }}
         </button></span
       >
     </div>

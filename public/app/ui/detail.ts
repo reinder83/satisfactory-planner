@@ -4,6 +4,7 @@
 // and refreshes on render(). Closing the dialog unmounts it too, so a closed dialog never
 // redraws for a profile or phase it was not opened for.
 import { createApp, type App } from 'vue';
+import { allowSwitch } from '../api.ts';
 import { required } from '../format.ts';
 import DetailDialog from './detail/DetailDialog.vue';
 
@@ -18,13 +19,15 @@ let app: App | null = null;
 let listening = false;
 
 // Opens `target` ({ kind: 'factory' | 'calc' | 'group' | 'slot' | 'alt', id }) in #detail, replacing whatever
-// it shows, and opens the dialog if it is not open yet.
+// it shows, and opens the dialog if it is not open yet. Replacing an open dialog drops its
+// unsaved note, so that is asked about first; kept, the dialog stays as it is.
 export function showDetail(target: DetailTarget) {
   const d = required<HTMLDialogElement>('#detail');
   if (!listening) {
     d.addEventListener('close', unmountDetail);
     listening = true;
   }
+  if (d.open && !allowSwitch(d)) return;
   unmountDetail();
   d.textContent = '';
   app = createApp(DetailDialog, { target });

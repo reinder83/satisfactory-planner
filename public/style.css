@@ -109,6 +109,11 @@ button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
+/* A disabled button is waiting for a save, except one marked .unavailable: that one has
+   nothing to do (a completed room, a floor that still has bays) and keeps a normal cursor. */
+button.unavailable:disabled {
+  cursor: default;
+}
 a {
   color: var(--accent);
   text-decoration: none;

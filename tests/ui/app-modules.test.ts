@@ -39,6 +39,7 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'document error',
     'window hashchange',
     '#detail click',
+    '#detail cancel',
     'window beforeunload',
     'rendered',
   ]);

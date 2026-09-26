@@ -6,7 +6,7 @@
 // Progress changes go through save() in api.ts: it queues the write, toasts a failure
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
 // (or put the control back); a success toast never follows a failed write.
-import { save, toast } from '../api.ts';
+import { allowSwitch, save, toast } from '../api.ts';
 import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
 import { setActiveDetail } from '../session.ts';
 import { render } from '../shell.ts';
@@ -72,11 +72,20 @@ export const factoryLink = (link: FactoryLink | null | undefined) =>
       : { 'data-factory': link.factory, onClick: () => openFactory(link.factory) };
 
 // Closes the shared #detail dialog (its ×, a backdrop click, a saved note). Closing unmounts
-// the dialog's app (ui/detail.ts). There is no unsaved-notes check, so an unsaved note edit
-// in the dialog is dropped.
+// the dialog's app (ui/detail.ts), so an unsaved note in the dialog is asked about first and
+// the dialog stays open when the user keeps it. After a saved note there is nothing to ask.
 export function closeDetail() {
-  required<HTMLDialogElement>('#detail').close();
+  const d = required<HTMLDialogElement>('#detail');
+  if (d.open && !allowSwitch(d)) return;
+  d.close();
   setActiveDetail(null);
+}
+
+// Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
+// cancel event, so an unsaved note is asked about here, as the × does, and kept by cancelling
+// the close. A browser may still close it after repeated presses, whatever the answer.
+export function cancelDetail(e: Event) {
+  if (!allowSwitch(required('#detail'))) e.preventDefault();
 }
 
 // "Create a save" on the profiles page, and in the wizard when there is no draft.
