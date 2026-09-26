@@ -29,6 +29,7 @@ import {
 } from './session.ts';
 import { render } from './shell.ts';
 import { planTasks, taskEditsState } from './tasks.ts';
+import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { storageBays } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
@@ -82,6 +83,25 @@ export function adaStore() {
 // A snapshot of the open profile that ada.ts picks remarks from: page, phase, progress
 // counts, feasibility, power, backups. It re-derives the counters the pages show from
 // the same checklist keys (factory-/calc-<stage>-<id>, slot-<address>-verified).
+// ADA's view of the build-so-far status (views/calculated.ts), with row ids turned into names.
+function buildFacts(x: StoredStage): AdaFacts['build'] {
+  const s = currentBuildStatus();
+  if (!s) return null;
+  const name = (id: string) => x.rows?.find(r => r.id === id)?.name || id;
+  const held = s.rows.filter(r => r.built && r.share < 1 && r.shortOf);
+  return {
+    built: s.builtCount,
+    total: s.rowCount,
+    share: Math.round(s.deliveryShare * 100),
+    next: s.next ? name(s.next.id) : '',
+    nextGain: s.next ? Math.max(s.next.gain > 0 ? 1 : 0, Math.round(s.next.gain * 100)) : 0,
+    nextUnblocks: s.next?.unblocks || 0,
+    waiting: held.map(r => name(r.id)),
+    shortOf: [...new Set(held.map(r => r.shortOf!))],
+    powerShort: s.power.short,
+  };
+}
+
 function adaFacts(): AdaFacts {
   const ts = currentSave.id ? planTasks() : [];
   const next = ts.find(t => !checked(t.id));
@@ -163,6 +183,7 @@ function adaFacts(): AdaFacts {
     post: phase() === 'post',
     startPhase: startPhase(),
     assumptions: calculated ? (calculated.warnings || []).length : 0,
+    build: buildFacts(x),
   };
 }
 

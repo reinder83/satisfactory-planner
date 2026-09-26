@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { createApp, h, nextTick } from 'vue';
 import { lanePlan } from '../../public/app/flow.ts';
+import { num } from '../../public/app/format.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, test } from 'vitest';
@@ -469,4 +470,62 @@ test('a dialog left open when the session ends closes with the sign-in screen', 
   await boot();
   assert.ok($('#auth-form'), 'the sign-in screen is up');
   assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'no dialog over it');
+});
+
+test('built so far: the plan panel and factory cards follow the rows marked running', async () => {
+  const x = plan.stages['3'];
+  const rows = x.rows!;
+  // A row fed by another row (not only by raw resources), and that supplier.
+  const consumer = rows.find(r =>
+    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  )!;
+  open({ calculated: plan, state: { checks: { ['calc-3-' + consumer.id]: true } } });
+  go('plan');
+  render();
+  noMarkup();
+  const panel = () => $('[data-build-status]')!;
+  assert.ok(panel(), 'the panel is on the calculated plan page');
+  assert.match(panel().textContent, new RegExp(`1 of ${rows.length} factories marked running`));
+  assert.ok($('[data-build-none]'), 'nothing reaches the elevator yet');
+  assert.match($('[data-build-waiting]')!.textContent, new RegExp(consumer.name));
+  assert.match($('[data-build-waiting]')!.textContent, /running at 0%, short of /);
+  // The next step is a factory link that opens its dialog.
+  const next = $<HTMLButtonElement>('[data-build-next] [data-calc-factory]')!;
+  assert.ok(next, 'the next step links to its factory');
+  next.click();
+  assert.equal($<HTMLDialogElement>('#detail')!.open, true);
+  closeDetail();
+  // Its factory card says the same.
+  go('factories');
+  render();
+  await nextTick();
+  const held = $$('[data-build-held]');
+  assert.equal(held.length, 1);
+  assert.match(held[0]!.textContent, /^Running at 0%: short of /);
+  // Every row marked running: the whole delivery flows and nothing is left to build.
+  open({
+    calculated: plan,
+    state: { checks: Object.fromEntries(rows.map(r => ['calc-3-' + r.id, true])) },
+  });
+  go('plan');
+  render();
+  await nextTick();
+  assert.equal($('[data-build-waiting]'), null);
+  assert.match(
+    $('[data-build-next]')!.textContent,
+    /Every factory of this phase is marked running/,
+  );
+  for (const [item, d] of Object.entries(x.delivery!)) {
+    const line = $$('[data-build-rate]').find(e =>
+      e.closest('.delivery')!.textContent.includes(item),
+    );
+    assert.ok(line, item);
+    assert.ok(line.textContent.startsWith(`${num(d.rate)} of ${num(d.rate)} / min now`), item);
+  }
+  // The handbook profile has no such panel.
+  open();
+  go('plan');
+  render();
+  await nextTick();
+  assert.equal($('[data-build-status]'), null);
 });
