@@ -139,6 +139,15 @@ node browser-check.ts
 
 Use tests appropriate to the change. UI redesigns require real-browser inspection in addition to tests; see `public/AGENTS.md`. The VM-based interface tests currently reference UI functions/selectors. If restructuring them, update the tests to cover equivalent behavior rather than deleting coverage. Documentation-only changes need link/path and diff review, not the whole Docker test suite.
 
+## Backlog and issues
+
+The backlog (bugs, feature requests, cleanup) lives in GitHub Issues on `reinder83/satisfactory-planner`, and nowhere else: no TODO files, notes in these guides, agent memory or task lists that could drift from it. The owner adds requests there too. Read it with `gh issue list -R reinder83/satisfactory-planner`.
+
+- Every possible bug you find goes in as an issue straight away: one noticed in passing, one a helper or subagent reports, and one traced from the code but not reproduced. Don't fix it on the side or only mention it in your reply; link the new issue in your reply and carry on with the current task. A defect inside the change you are making may be fixed in that change; say so in the pull request, and still file an issue if it was already on `main` and the fix is out of scope.
+- A message that says "for the backlog", or a bare bug report with no request to fix it, means file an issue and stop. Offer to fix it; don't start.
+- Give each issue a type label (`bug`, `enhancement` or `cleanup`) and a priority (`priority: high`, `priority: medium` or `priority: low`). Add `unverified` when it was traced from the code rather than reproduced, `saved data` when it touches saves or progress (follow "Data compatibility is essential"), `needs decision` when the owner must choose the behaviour first, and `fix ready` when a branch with a fix exists. Name the file and the concrete failure.
+- When asked what to work on, list the open issues by priority. A fix pull request says `Fixes #N`.
+
 ## Publishing
 
 - Private source: `reinder83/satisfactory-planner`.
