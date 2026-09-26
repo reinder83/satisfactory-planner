@@ -65,7 +65,9 @@ const advice = computed(() => {
         lanes: `${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}`,
         split:
           p.count > 1
-            ? ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`
+            ? p.full === p.count
+              ? ` — all ${p.count} full`
+              : ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`
             : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`,
         feed: null,
         spare: null,
