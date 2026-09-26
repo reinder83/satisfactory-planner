@@ -1088,9 +1088,13 @@ export function calculate(
     // solver timed out (no shortage proven); the recipes and power options cannot make it at all;
     // or it is a budget problem, split into "only whole machines break it" and a real shortfall.
     // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
+    // The diagnostics solve without production amplification (the owner's choice in #64): the
+    // exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
+    // the amounts are before amplification when somersloops are budgeted for it.
     if (!result.feasible) {
       const conversion = phase === 5 && s.sam !== 'avoid';
-      const diagnostic = run({ ...s, wholeMachines: false }, phase, {
+      const plain: CurrentSettings = { ...s, amplifySloops: 0 };
+      const diagnostic = run({ ...plain, wholeMachines: false }, phase, {
         conversion,
         ignoreLimits: true,
       });
@@ -1104,7 +1108,7 @@ export function calculate(
       else {
         // Does the exact LP fit the real budgets at `h` hours for this phase?
         const fits = (h: number) =>
-          run({ ...s, wholeMachines: false, goal: 'timed', hours: h }, phase, { conversion })
+          run({ ...plain, wholeMachines: false, goal: 'timed', hours: h }, phase, { conversion })
             .feasible;
         const currentHours = s.goal === 'minimal' ? 24 : s.goal === 'balanced' ? 8 : s.hours;
         const listNames = (a: string[]) =>
@@ -1113,10 +1117,10 @@ export function calculate(
           // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
           // doubled budgets to measure which resources need headroom and how much; keep bounds modest for MIP stability.
           stage.wholeMachinesOnly = true;
-          const network = run({ ...s, wholeMachines: false }, phase, { conversion });
+          const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
           const rounded: RunResult = network.feasible
             ? run(
-                { ...s, limits: Object.fromEntries(RAW.map(n => [n, s.limits[n]! * 2 + 600])) },
+                { ...plain, limits: Object.fromEntries(RAW.map(n => [n, s.limits[n]! * 2 + 600])) },
                 phase,
                 { conversion, recipeIds: new Set(network.rows.map(r => r.id)) },
               )
@@ -1156,6 +1160,9 @@ export function calculate(
                 ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
                 : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.');
         }
+        if (s.amplifySloops > 0 && stage.shortfalls?.length)
+          stage.reason +=
+            ' These amounts are before production amplification; amplified machines may need somewhat less.';
       }
       stages[phase] = stage;
     } else stages[phase] = result;
