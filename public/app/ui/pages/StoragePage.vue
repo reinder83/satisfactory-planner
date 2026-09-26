@@ -19,7 +19,12 @@ import {
   setQuery,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { hiddenStorageBays, storageBays, storageFloors } from '../../views/storage.ts';
+import {
+  hiddenStorageBays,
+  hiddenStorageFloors,
+  storageBays,
+  storageFloors,
+} from '../../views/storage.ts';
 import { save, toast } from '../../api.ts';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
@@ -83,6 +88,7 @@ const page = computed(() =>
       editing: layoutEditing,
       // Hidden handbook bays (#166) and the planned items left without a container.
       hidden: hiddenStorageBays(),
+      hiddenFloors: hiddenStorageFloors(),
       unplaced: hiddenStorageBays().flatMap(b => b.items),
       bays: [...display]
         .sort((a, b) => a.id.localeCompare(b.id))
@@ -113,6 +119,20 @@ async function restoreBay(e: Event, id: string) {
   try {
     await save({ type: 'storageBayRestore', id });
     toast(`Bay ${id} is back, with its containers, checkmarks and notes.`);
+  } catch {
+  } finally {
+    button.disabled = false;
+    render();
+  }
+}
+
+// "Restore" on a hidden built-in floor (#168): its tab comes back.
+async function restoreFloor(e: Event, id: string) {
+  const button = e.currentTarget as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await save({ type: 'storageFloorRestore', id });
+    toast('The floor is back.');
   } catch {
   } finally {
     button.disabled = false;
@@ -172,15 +192,26 @@ function toggleLayout() {
     >
     {{ page.unplaced.join(', ') }}. Restore the bay under Edit layout, or add them to another bay.
   </div>
-  <section v-if="page.editing && page.hidden.length" class="panel hidden-bays" data-hidden-bays>
-    <h2>Hidden bays</h2>
-    <p class="small muted">
+  <section
+    v-if="page.editing && (page.hidden.length || page.hiddenFloors.length)"
+    class="panel hidden-bays"
+    data-hidden-bays
+  >
+    <h2>Hidden bays and floors</h2>
+    <p v-if="page.hidden.length" class="small muted">
       Their containers, checkmarks and notes are kept until you restore them.
     </p>
     <div v-for="b in page.hidden" :key="b.id" class="check-row">
       <span
         ><b>{{ b.id }}</b> · {{ b.name }}</span
       ><button class="btn" :data-restore-bay="b.id" @click="restoreBay($event, b.id)">
+        Restore
+      </button>
+    </div>
+    <div v-for="f in page.hiddenFloors" :key="f.id" class="check-row">
+      <span
+        ><b>{{ f.label }}</b> · floor</span
+      ><button class="btn" :data-restore-floor="f.id" @click="restoreFloor($event, f.id)">
         Restore
       </button>
     </div>

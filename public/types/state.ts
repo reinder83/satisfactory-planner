@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–5). Later versions only add optional sections, so an older
+//                  version (1–6). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -10,8 +10,8 @@ import type { Phase } from './common.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
-// handbook bay.
-export type StateVersion = 1 | 2 | 3 | 4 | 5;
+// handbook bay, 6 a hidden built-in floor.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -21,7 +21,7 @@ export interface CustomTask {
 }
 
 // Storage room layout edits on top of the handbook's room (version 2+; 4 for positions 09+;
-// 5 for hidden handbook bays).
+// 5 for hidden handbook bays; 6 for hidden built-in floors).
 export interface StorageEdits {
   // Added floors: { id: 'cf-…', label }.
   floors: { id: string; label: string }[];
@@ -38,6 +38,9 @@ export interface StorageEdits {
   // Handbook bays (A–R) the user took out of the room (#166). Only hidden: the bay's checks,
   // notes, names and containers are all kept, and restoring it brings them back.
   hiddenBays: string[];
+  // Built-in floors ('ground', 'upper', 'workshop') the user took out of the tabs (#168), once
+  // no bay on them was showing. Restoring one brings its tab back.
+  hiddenFloors: string[];
 }
 
 // Build-plan step edits, keyed by step id (version 3).
@@ -129,6 +132,9 @@ export type UpdateOp =
   | { type: 'storageBayRemove'; id: string }
   // Hide or bring back a handbook bay; its records are kept either way.
   | { type: 'storageBayHide'; id: string }
+  // Hide or bring back a built-in floor.
+  | { type: 'storageFloorHide'; id: string }
+  | { type: 'storageFloorRestore'; id: string }
   | { type: 'storageBayRestore'; id: string }
   | { type: 'storageSlotAssign'; key: string; name: string }
   | { type: 'storageSlotClear'; key: string };

@@ -94,6 +94,13 @@ export const version5 = {
   storageEdits: { ...version4.storageEdits, hiddenBays: ['C'] },
 } satisfies SavedState;
 
+// Version 6: a hidden built-in floor (#168).
+export const version6 = {
+  ...version5,
+  version: 6,
+  storageEdits: { ...version5.storageEdits, hiddenFloors: ['workshop'] },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -102,6 +109,7 @@ export const states: [SavedState, number][] = [
   [version3, 3],
   [version4, 4],
   [version5, 5],
+  [version6, 6],
 ];
 
 export const backup = {
