@@ -8,7 +8,7 @@ import { unmountShell } from '../../public/app/ui/mount.ts';
 // Vitest runs from the repository root.
 export const handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
 setProgressionData(JSON.parse(fs.readFileSync('public/progression.json', 'utf8')));
-// A real calculated plan (planner.mjs with default settings), made once per test file. The
+// A real calculated plan (planner.ts with default settings), made once per test file. The
 // planner reads its data files through import.meta.url, which happy-dom does not give it, so
 // it runs in Node.
 let generatedPlan;
@@ -18,11 +18,11 @@ export const generated = () =>
       execFileSync(process.execPath, [
         '--input-type=module',
         '-e',
-        "import('./planner.mjs').then(m => process.stdout.write(JSON.stringify(m.calculate({}))))",
+        "import('./planner.ts').then(m => process.stdout.write(JSON.stringify(m.calculate({}))))",
       ]),
     )),
   );
-// The server's item catalog (planner.mjs catalog(): raw resources, budgets, goals, …), made
+// The server's item catalog (planner.ts catalog(): raw resources, budgets, goals, …), made
 // once per test file in Node for the same reason.
 let catalogData;
 export const catalog = () =>
@@ -31,7 +31,7 @@ export const catalog = () =>
       execFileSync(process.execPath, [
         '--input-type=module',
         '-e',
-        "import('./planner.mjs').then(m => process.stdout.write(JSON.stringify(m.catalog())))",
+        "import('./planner.ts').then(m => process.stdout.write(JSON.stringify(m.catalog())))",
       ]),
     )),
   );

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { calculate, settings } from '../planner.mjs';
+import { calculate, settings } from '../planner.ts';
 import { droneFuels } from '../public/preferences.ts';
 import { progression } from '../public/progression.ts';
 test('utilities percentage affects actual power sizing with backward-compatible default', () => {

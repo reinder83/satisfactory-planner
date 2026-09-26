@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createApp } from '../server.mjs';
+import { createApp } from '../server.ts';
 async function start(dir, config = {}) {
   const server = await createApp({ dataDir: dir, ...config });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -83,7 +83,7 @@ test('progress persists, concurrent updates are not lost, backup restores and in
       (await post(app.url, '/api/update', {}, { Origin: 'https://other.example' })).status,
       403,
     );
-    assert.equal((await fetch(app.url + '/%2e%2e%2fserver.mjs')).status, 403);
+    assert.equal((await fetch(app.url + '/%2e%2e%2fserver.ts')).status, 403);
     assert.equal((await fetch(app.url + '/no-such-file')).status, 404);
     assert.equal((await fetch(app.url + '/')).status, 200);
     const plan = await (await fetch(app.url + '/plan.json')).json();

@@ -128,7 +128,7 @@ async function buildWeb() {
 }
 
 async function buildPages() {
-  const { catalog } = await import('./planner.mjs');
+  const { catalog } = await import('./planner.ts');
   const out = path.join(dist, 'satisfactory-planner');
   await fs.rm(out, { recursive: true, force: true });
   await fs.mkdir(out, { recursive: true });
@@ -167,23 +167,26 @@ async function buildPages() {
   );
   await fs.copyFile(path.join(root, 'recipes.json'), path.join(out, 'recipes.json'));
   await fs.writeFile(path.join(out, 'catalog.json'), JSON.stringify(catalog()));
-  let planner = await read('planner.mjs');
+  // The planner and optimizer are TypeScript: stripped here, and shipped as .mjs files that
+  // import each other by those names.
+  let planner = await read('planner.ts');
   planner = replaceOnce(planner, "import fs from 'node:fs';", '');
   planner = replaceOnce(planner, "from './public/preferences.ts'", "from './preferences.js'");
   planner = replaceOnce(
     planner,
-    "JSON.parse(fs.readFileSync(new URL('./recipes.json', import.meta.url)))",
-    "await (await fetch(new URL('./recipes.json',import.meta.url))).json()",
+    "fs.readFileSync(new URL('./recipes.json', import.meta.url), 'utf8')",
+    "await (await fetch(new URL('./recipes.json',import.meta.url))).text()",
   );
-  await fs.writeFile(path.join(out, 'planner.mjs'), await minifyJs(planner));
-  let optimizer = await read('optimizer.mjs');
+  planner = replaceOnce(planner, "from './optimizer.ts'", "from './optimizer.mjs'");
+  await fs.writeFile(path.join(out, 'planner.mjs'), await minifyJs(planner, 'ts'));
+  let optimizer = await read('optimizer.ts');
   optimizer = replaceOnce(optimizer, "'./vendor/highs.cjs'", "'./highs.mjs'");
   optimizer = replaceOnce(
     optimizer,
     'await loadHighs()',
     'await loadHighs({locateFile:name=>new URL(name,import.meta.url).href})',
   );
-  await fs.writeFile(path.join(out, 'optimizer.mjs'), await minifyJs(optimizer));
+  await fs.writeFile(path.join(out, 'optimizer.mjs'), await minifyJs(optimizer, 'ts'));
   // The vendored HiGHS build is already minified; it only gains an ES module export.
   await fs.writeFile(
     path.join(out, 'highs.mjs'),

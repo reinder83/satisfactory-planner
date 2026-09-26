@@ -4,27 +4,66 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { calculate, catalog } from './planner.mjs';
-const scrypt = promisify(scryptCallback),
+import { calculate, catalog } from './planner.ts';
+import type { IncomingMessage } from 'node:http';
+import type {
+  ProgressState,
+  StoredProfile,
+  StoredSave,
+  StageKey,
+  StoredUser,
+  UpdateOp,
+  WorkspaceFile,
+  WorkspaceSummary,
+} from './public/types/index.ts';
+
+// workspace.json as it is held in memory: every profile's progress has been through
+// validateState, so it is the current ProgressState, whatever version the file stored.
+type Profile = Omit<StoredProfile, 'state'> & { state: ProgressState };
+type Save = Omit<StoredSave, 'profiles'> & { profiles: Profile[] };
+type Workspace = Omit<WorkspaceFile, 'saves'> & { saves: Save[] };
+// A request body: parsed JSON whose fields are not checked yet.
+type Body = Record<string, unknown>;
+// What route() returns for server.ts to send.
+export interface RouteReply {
+  data: unknown;
+  status: number;
+  headers: Record<string, string>;
+}
+export type Route = (
+  req: IncomingMessage,
+  url: URL,
+  body: (req: IncomingMessage) => Promise<unknown>,
+) => Promise<RouteReply>;
+// The error code of a failed file read, if it has one.
+const code = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code;
+
+const scrypt = promisify(scryptCallback) as (
+    password: string,
+    salt: string,
+    keylen: number,
+  ) => Promise<Buffer>,
   id = () => randomBytes(16).toString('hex'),
-  digest = s => createHash('sha256').update(s).digest('hex');
-const fail = (message, status = 400) => {
+  digest = (s: string) => createHash('sha256').update(s).digest('hex');
+// A function declaration, so TypeScript knows the code after a failed check is unreachable.
+function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
-};
+}
 // A save or profile name from a request, trimmed.
-const name = value =>
+const name = (value: unknown): string =>
   typeof value === 'string' && value.trim() && value.length <= 80
     ? value.trim()
     : fail('Enter a name with 1–80 characters.');
 // The part of a user record the browser may see; never the password hash.
-const publicUser = u => (u ? { id: u.id, username: u.username, owner: u.id === 'owner' } : null);
+const publicUser = (u: StoredUser | null | undefined) =>
+  u ? { id: u.id, username: u.username, owner: u.id === 'owner' } : null;
 // The session cookie: HttpOnly so scripts cannot read it, SameSite=Strict so other sites
 // cannot send it, 30 days (an empty token expires it). Secure only when COOKIE_SECURE=true
 // (behind HTTPS), because browsers never send a Secure cookie back over plain http.
-const authCookie = token =>
+const authCookie = (token: string) =>
   `planner_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 2592000 : 0}${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 // Opens (or creates) the Docker edition's workspace in dataDir and returns route(req, url,
-// body), which server.mjs calls for every /api/ request. The whole workspace lives in
+// body), which server.ts calls for every /api/ request. The whole workspace lives in
 // memory and in DATA_DIR/workspace.json:
 //   { version: 2, revision, accountsEnabled, registration,
 //     users:    [{ id ('owner' or random), username, password: 'salt:scryptHex', activeSave }],
@@ -34,7 +73,7 @@ const authCookie = token =>
 // state is the progress object from public/state.ts. The 'owner' user always exists; with
 // accounts disabled every request acts as the owner.
 //
-// Routes (all JSON; POST checks happen in server.mjs first):
+// Routes (all JSON; POST checks happen in server.ts first):
 //   GET  /api/workspace          saves and profiles of the signed-in user
 //   POST /api/setup, /login, /register, /logout   accounts and sessions
 //   GET  /api/export-saves       full-save export, optionally one save/profile or a share
@@ -44,10 +83,20 @@ const authCookie = token =>
 //   GET  /api/context, /api/state, /api/export   the scoped profile
 //   POST /api/round-up           whole-machine copy of a calculated profile
 //   POST /api/update, /api/import   change or restore the scoped profile's progress
-export async function openWorkspace({ dataDir, initialState, validateState, mutate }) {
+export async function openWorkspace({
+  dataDir,
+  initialState,
+  validateState,
+  mutate,
+}: {
+  dataDir: string;
+  initialState: () => ProgressState;
+  validateState: (s: unknown) => ProgressState;
+  mutate: (s: ProgressState, update: UpdateOp) => ProgressState;
+}): Promise<Route> {
   const file = path.join(dataDir, 'workspace.json');
-  let db;
-  const original = state => ({
+  let db: Workspace;
+  const original = (state: ProgressState): Profile => ({
     id: 'original',
     name: 'Original · 50× complete automation',
     kind: 'original',
@@ -78,20 +127,20 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       for (const p of save.profiles) p.state = validateState(p.state);
     }
   } catch (e) {
-    if (e.code !== 'ENOENT')
+    if (code(e) !== 'ENOENT')
       throw new Error('Workspace could not be read; existing data has not been overwritten.');
     // First start of this format: migrate the single-profile progress.json of earlier
-    // releases into the Original profile of one save, or start from server.mjs's initial
+    // releases into the Original profile of one save, or start from server.ts's initial
     // state when neither file exists. progress.json is only read, never changed, so it
     // stays as the pre-migration copy; a corrupt one stops start-up. The 'wx' flag refuses
     // to overwrite a workspace.json that appeared in the meantime.
-    let legacy;
+    let legacy: ProgressState;
     try {
       legacy = validateState(
         JSON.parse(await fs.readFile(path.join(dataDir, 'progress.json'), 'utf8')),
       );
     } catch (e) {
-      if (e.code === 'ENOENT') legacy = initialState();
+      if (code(e) === 'ENOENT') legacy = initialState();
       else throw new Error('Progress could not be read; existing data has not been overwritten.');
     }
     db = {
@@ -116,11 +165,11 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   // The one-time token /api/setup asks for before it enables accounts, so only someone with
   // access to the data folder can claim the owner account. Created once and kept.
   const tokenFile = path.join(dataDir, 'account-setup-token.txt');
-  let setupToken;
+  let setupToken: string;
   try {
     setupToken = (await fs.readFile(tokenFile, 'utf8')).trim();
   } catch (e) {
-    if (e.code !== 'ENOENT') throw e;
+    if (code(e) !== 'ENOENT') throw e;
     setupToken = randomBytes(24).toString('hex');
     await fs.writeFile(tokenFile, setupToken, { mode: 0o600, flag: 'wx' });
   }
@@ -130,8 +179,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   // renamed over workspace.json, and only then does db become the copy. So a crash leaves
   // either the old or the new workspace, never a half-written one. Returns fn's result; a
   // failed commit does not block the ones queued after it.
-  let queue = Promise.resolve();
-  const commit = fn => {
+  let queue: Promise<unknown> = Promise.resolve();
+  const commit = <T>(fn: (d: Workspace) => T): Promise<T> => {
     const run = queue.then(async () => {
       const next = structuredClone(db);
       const result = fn(next);
@@ -147,7 +196,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   };
   // The requesting user: the owner while accounts are off, otherwise the user of an
   // unexpired session whose token hash matches the cookie, or null when signed out.
-  const userFor = req => {
+  const userFor = (req: IncomingMessage) => {
     if (!db.accountsEnabled) return db.users.find(u => u.id === 'owner');
     const token = (req.headers.cookie || '')
       .split(';')
@@ -160,7 +209,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   };
   // What the interface needs to list saves: only this user's saves, and per profile its
   // settings and tick count rather than the full state.
-  const summary = u => ({
+  const summary = (u: StoredUser | null | undefined): WorkspaceSummary => ({
     accountsEnabled: db.accountsEnabled,
     registration: db.registration,
     user: publicUser(u),
@@ -186,7 +235,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   // headers, then ?save= / ?profile=, then the user's active save and its active profile.
   // Each browser tab sends its own headers, so tabs on different profiles never write into
   // each other. A save that belongs to another user is reported as not found.
-  const scope = (req, url, u) => {
+  const scope = (req: { headers: Record<string, unknown> }, url: URL, u: StoredUser) => {
     const saveId = req.headers['x-save-id'] || url.searchParams.get('save') || u.activeSave;
     const save = db.saves.find(s => s.id === saveId && s.userId === u.id);
     if (!save) fail('Save not found.', 404);
@@ -198,8 +247,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   };
   // At most 20 sign-in attempts or calculations per client address per minute, held in
   // memory only. The map is pruned of expired entries once it passes 2000 addresses.
-  const throttles = new Map();
-  function throttle(req) {
+  const throttles = new Map<string | undefined, { count: number; until: number }>();
+  function throttle(req: IncomingMessage) {
     const key = req.socket.remoteAddress,
       now = Date.now();
     let v = throttles.get(key);
@@ -212,7 +261,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       for (const [k, v] of throttles) if (v.until < now) throttles.delete(k);
   }
   // Validates sign-in input and returns the lower-cased username.
-  const authValues = b => {
+  const authValues = (b: Body) => {
     const username = String(b.username || '')
       .trim()
       .toLowerCase();
@@ -227,17 +276,23 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
   };
   // Adds a 30-day session to a commit draft. Only the token's hash is stored, expired
   // sessions are dropped, and past 5000 the oldest is signed out.
-  const makeSession = (d, userId, token) => {
+  const makeSession = (d: Workspace, userId: string, token: string) => {
     d.sessions = d.sessions.filter(s => s.expires > Date.now());
     d.sessions.push({ hash: digest(token), userId, expires: Date.now() + 2592000000 });
     if (d.sessions.length > 5000) d.sessions.shift();
   };
-  // body(req) reads the JSON body (server.mjs enforces the size limit). Returns
-  // { data, status, headers }; errors are thrown with a status for server.mjs to send.
-  return async function route(req, url, body) {
+  // body(req) reads the JSON body (server.ts enforces the size limit). Returns
+  // { data, status, headers }; errors are thrown with a status for server.ts to send.
+  return async function route(req, url, readBody) {
     let u = userFor(req);
     const endpoint = url.pathname;
-    const response = (data, status = 200, headers = {}) => ({ data, status, headers });
+    const response = (
+      data: unknown,
+      status = 200,
+      headers: Record<string, string> = {},
+    ): RouteReply => ({ data, status, headers });
+    // Every route that reads a body expects a JSON object; its fields are checked where used.
+    const body = async (r: IncomingMessage) => (await readBody(r)) as Body;
     // Answered even when signed out (user null, no saves), so the interface can show the
     // sign-in or setup screen.
     if (endpoint === '/api/workspace' && req.method === 'GET') return response(summary(u));
@@ -251,16 +306,22 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       throttle(req);
       const b = await body(req),
         username = authValues(b),
+        password = b.password as string, // authValues checked it
         token = randomBytes(32).toString('hex');
       if (endpoint === '/api/login') {
         if (!db.accountsEnabled) fail('Accounts are not enabled.');
         const found = db.users.find(x => x.username === username);
-        const [salt, hash] = (found?.password || 'missing:' + '0'.repeat(128)).split(':');
-        const actual = Buffer.from(await scrypt(b.password, salt, 64));
+        const [salt, hash] = (found?.password || 'missing:' + '0'.repeat(128)).split(':') as [
+          string,
+          string,
+        ];
+        const actual = Buffer.from(await scrypt(password, salt, 64));
         if (!timingSafeEqual(actual, Buffer.from(hash, 'hex')))
           fail('Incorrect username or password.', 401);
-        await commit(d => makeSession(d, found.id, token));
-        u = db.users.find(x => x.id === found.id);
+        // Only a found user can match: the dummy hash is all zeros.
+        const userId = found!.id;
+        await commit(d => makeSession(d, userId, token));
+        u = db.users.find(x => x.id === userId);
       } else {
         if (endpoint === '/api/setup') {
           if (db.accountsEnabled) fail('Accounts are already enabled.', 409);
@@ -269,14 +330,14 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         } else if (!db.accountsEnabled || !db.registration)
           fail('New accounts are not enabled on this server.', 403);
         const salt = id(),
-          hash = Buffer.from(await scrypt(b.password, salt, 64)).toString('hex');
-        let userId;
+          hash = Buffer.from(await scrypt(password, salt, 64)).toString('hex');
+        let userId = '';
         await commit(d => {
           if (d.users.some(x => x.username === username))
             fail('That username is already in use.', 409);
           if (endpoint === '/api/setup') {
             if (d.accountsEnabled) fail('Accounts are already enabled.', 409);
-            const owner = d.users.find(x => x.id === 'owner');
+            const owner = d.users.find(x => x.id === 'owner')!;
             owner.username = username;
             owner.password = salt + ':' + hash;
             userId = owner.id;
@@ -335,7 +396,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           name: s.name,
           activeProfile: profiles.some(p => p.id === s.activeProfile)
             ? s.activeProfile
-            : profiles[0].id,
+            : profiles[0]!.id,
           profiles: profiles.map(p => ({
             id: p.id,
             name: p.name,
@@ -367,7 +428,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       await commit(d => {
         const sv = d.saves.find(s => s.id === save.id && s.userId === u.id);
         const source = sv?.profiles.find(p => p.id === profile.id);
-        if (!source) fail('Profile not found.', 404);
+        if (!sv || !source) fail('Profile not found.', 404);
         if (sv.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
         sv.profiles.push({
           ...structuredClone(source),
@@ -375,7 +436,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           name: (source.name + ' · copy').slice(0, 80),
         });
         sv.activeProfile = profileId;
-        d.users.find(x => x.id === u.id).activeSave = sv.id;
+        d.users.find(x => x.id === u.id)!.activeSave = sv.id;
       });
       return response(
         { saveId: save.id, profileId, workspace: summary(db.users.find(x => x.id === u.id)) },
@@ -390,7 +451,9 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       await commit(d => {
         if (d.saves.filter(s => s.userId === u.id).length + imported.saves.length > 50)
           fail('Import would exceed the save limit.');
-        for (const save of imported.saves) {
+        // validateTransfer ran every profile's progress through validateState; the owner is
+        // added below.
+        for (const save of imported.saves as Save[]) {
           const old = save.activeProfile;
           for (const p of save.profiles) {
             const previous = p.id;
@@ -400,7 +463,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           save.id = id();
           save.userId = u.id;
           d.saves.push(save);
-          d.users.find(x => x.id === u.id).activeSave = save.id;
+          d.users.find(x => x.id === u.id)!.activeSave = save.id;
         }
       });
       return response(summary(db.users.find(x => x.id === u.id)));
@@ -424,7 +487,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         profileName = name(b.name);
       const plan = b.kind === 'original' ? null : calculate(b.settings);
       const profileId = id();
-      let saveId = b.saveId || id();
+      // A saveId that is not one of the user's save ids is refused inside the commit.
+      let saveId = (b.saveId || id()) as string;
       const carried = await commit(d => {
         let save = d.saves.find(s => s.id === saveId && s.userId === u.id);
         if (b.saveId && !save) fail('Save not found.', 404);
@@ -433,7 +497,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
             fail('You can create up to 50 saves.');
           save = {
             id: saveId,
-            name: saveName,
+            // Only null when saveId named an existing save.
+            name: saveName as string,
             userId: u.id,
             activeProfile: profileId,
             profiles: [],
@@ -458,7 +523,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           state: started.state,
         });
         save.activeProfile = profileId;
-        d.users.find(x => x.id === u.id).activeSave = saveId;
+        d.users.find(x => x.id === u.id)!.activeSave = saveId;
         return started;
       });
       return response(
@@ -481,8 +546,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         u,
       );
       await commit(d => {
-        d.users.find(x => x.id === u.id).activeSave = save.id;
-        d.saves.find(s => s.id === save.id).activeProfile = profile.id;
+        d.users.find(x => x.id === u.id)!.activeSave = save.id;
+        d.saves.find(s => s.id === save.id)!.activeProfile = profile.id;
       });
       return response(summary(db.users.find(x => x.id === u.id)));
     }
@@ -503,8 +568,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         if (!sv || !sv.profiles.some(p => p.id === profile.id)) fail('Profile not found.', 404);
         sv.profiles = sv.profiles.filter(p => p.id !== profile.id);
         if (!sv.profiles.length) d.saves = d.saves.filter(s => s.id !== sv.id);
-        else if (sv.activeProfile === profile.id) sv.activeProfile = sv.profiles[0].id;
-        const owner = d.users.find(x => x.id === u.id);
+        else if (sv.activeProfile === profile.id) sv.activeProfile = sv.profiles[0]!.id;
+        const owner = d.users.find(x => x.id === u.id)!;
         if (!d.saves.some(s => s.id === owner.activeSave && s.userId === u.id))
           owner.activeSave = d.saves.find(s => s.userId === u.id)?.id || null;
       });
@@ -517,9 +582,9 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
       const title = name(b.name);
       const { save, profile } = scope(req, url, u);
       await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id);
+        const sv = d.saves.find(s => s.id === save.id)!;
         if (b.target === 'save') sv.name = title;
-        else if (b.target === 'profile') sv.profiles.find(p => p.id === profile.id).name = title;
+        else if (b.target === 'profile') sv.profiles.find(p => p.id === profile.id)!.name = title;
         else fail('Unknown rename target.');
       });
       return response(summary(db.users.find(x => x.id === u.id)));
@@ -535,20 +600,21 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
         fail(
           'The preserved handbook is unchanged. Create a calculated profile to use whole-machine planning.',
         );
-      if (profile.plan.settings.wholeMachines)
-        fail('This profile already uses whole-machine planning.');
+      // A calculated profile always carries its plan.
+      const plan = profile.plan!;
+      if (plan.settings.wholeMachines) fail('This profile already uses whole-machine planning.');
       throttle(req);
-      const rounded = calculate({ ...profile.plan.settings, wholeMachines: true }),
+      const rounded = calculate({ ...plan.settings, wholeMachines: true }),
         profileId = id();
       let reviewCount = 0;
       await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id && s.userId === u.id);
+        const sv = d.saves.find(s => s.id === save.id && s.userId === u.id)!;
         if (sv.profiles.length >= 30) fail('Profile limit reached.');
-        const previous = sv.profiles.find(p => p.id === profile.id);
+        const previous = sv.profiles.find(p => p.id === profile.id)!;
         const state = structuredClone(previous.state);
         for (const [ph, stage] of Object.entries(rounded.stages))
           for (const row of stage.rows || []) {
-            const old = previous.plan.stages[ph]?.rows?.find(r => r.id === row.id);
+            const old = previous.plan!.stages[ph as StageKey]?.rows?.find(r => r.id === row.id);
             if (
               !old ||
               Object.entries(row.inputs).some(([n, q]) => q > (old.inputs[n] || 0) + 0.001) ||
@@ -569,7 +635,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           state,
         });
         sv.activeProfile = profileId;
-        d.users.find(x => x.id === u.id).activeSave = sv.id;
+        d.users.find(x => x.id === u.id)!.activeSave = sv.id;
       });
       return response(
         {
@@ -616,7 +682,7 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
     // profile cannot be moved before Phase 3, which its handbook does not cover.
     if (['/api/update', '/api/import'].includes(endpoint) && req.method === 'POST') {
       const b = await body(req);
-      let imported;
+      let imported: ProgressState | undefined;
       if (endpoint === '/api/import') {
         if (b.format && b.format !== 'satisfactory-planner-backup') fail('Wrong backup format.');
         if (b.profileId && b.profileId !== profile.id)
@@ -628,7 +694,8 @@ export async function openWorkspace({ dataDir, initialState, validateState, muta
           .find(s => s.id === save.id && s.userId === u.id)
           ?.profiles.find(p => p.id === profile.id);
         if (!p) fail('Profile not found.', 404);
-        const state = imported || mutate(p.state, b);
+        // mutate() checks the operation and throws for one it does not know.
+        const state = imported || mutate(p.state, b as unknown as UpdateOp);
         if (p.kind === 'original' && !['3', '4', '5', 'post'].includes(state.settings.phase))
           fail('The original handbook covers Phase 3 onward.');
         state.revision = p.state.revision + 1;

@@ -1,5 +1,5 @@
 // Vite compiles the Vue components in public/app/ui/. It is used three ways:
-//   - development: server.mjs runs it in middleware mode (npm start), so the source is
+//   - development: server.ts runs it in middleware mode (npm start), so the source is
 //     served as it is, with .vue files compiled on request;
 //   - build.mjs bundles public/app.ts with it for both published editions;
 //   - Vitest runs the component tests in tests/ui/ with it.

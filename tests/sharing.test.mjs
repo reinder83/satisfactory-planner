@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createApp } from '../server.mjs';
+import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
-import { calculate } from '../planner.mjs';
+import { calculate } from '../planner.ts';
 async function start(dir) {
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise(r => server.listen(0, '127.0.0.1', r));

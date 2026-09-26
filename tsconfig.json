@@ -26,6 +26,6 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["public/**/*", "tests/**/*", "*.mjs"],
+  "include": ["public/**/*", "tests/**/*", "*.ts", "*.mjs"],
   "exclude": ["node_modules", "dist", "vendor", "public/fonts", "public/icons"]
 }

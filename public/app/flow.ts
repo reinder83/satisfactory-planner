@@ -402,7 +402,7 @@ export function handbookFlowModel(
 }
 
 // Flow model for a row of a calculated plan, at the current phase. `r` is a row of
-// calcStage().rows from planner.mjs: inputs and outputs are totals for the whole row (per-machine
+// calcStage().rows from planner.ts: inputs and outputs are totals for the whole row (per-machine
 // rate × equivalent), and a row may have several outputs (byproducts) or none (a generator, with
 // generationMW). Unlike the handbook, destinations come from the phase's plan-wide books:
 // consuming rows, storage, delivery, drone fuel, augmenter fuel, extra cells, plutonium and

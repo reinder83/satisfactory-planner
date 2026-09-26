@@ -13,6 +13,7 @@ import type {
   CurrentSettings,
   Handbook,
   Progression,
+  RecipeData,
   ProgressState,
   SaveExport,
   StageResult,
@@ -20,7 +21,7 @@ import type {
   StoredStage,
   UpdateOp,
 } from '../../public/types/index.ts';
-import type { calculate, catalog, settings } from '../../planner.mjs';
+import type { calculate, catalog, settings } from '../../planner.ts';
 import type {
   initialState,
   mutate,
@@ -31,6 +32,7 @@ import type {
 import type { validateTransfer } from '../../public/transfer.ts';
 import handbook from '../../public/plan.json' with { type: 'json' };
 import progression from '../../public/progression.json' with { type: 'json' };
+import recipes from '../../recipes.json' with { type: 'json' };
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };
 
 // A record's values may be undefined here: TypeScript types a JSON array of objects as one
@@ -66,6 +68,9 @@ type NoExtra<T extends never> = T;
 
 handbook satisfies Loose<Handbook>;
 export type HandbookHasNoUndeclaredFields = NoExtra<Extra<typeof handbook, Handbook>>;
+
+recipes satisfies Loose<RecipeData>;
+export type RecipesHaveNoUndeclaredFields = NoExtra<Extra<typeof recipes, RecipeData>>;
 
 progression satisfies Loose<Progression>;
 export type ProgressionHasNoUndeclaredFields = NoExtra<Extra<typeof progression, Progression>>;

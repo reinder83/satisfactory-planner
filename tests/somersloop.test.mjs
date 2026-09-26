@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculate, settings, DATA, AMPLIFY_SLOTS } from '../planner.mjs';
+import { calculate, settings, DATA, AMPLIFY_SLOTS } from '../planner.ts';
 
 const base = { phase: '5', recipes: 'all', nuclear: 'recycle', goal: 'balanced' };
 const buildings = x => (x.rows || []).reduce((a, r) => a + r.machines, 0);
