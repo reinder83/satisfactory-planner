@@ -228,6 +228,14 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
     "delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.taskEdits=undefined;adaSignature='';",
     c,
   );
+  // The handbook's Phase 3 Versatile Framework delivery was already handed in when it was written.
+  // A duplicated or imported original profile has a new id but the same handbook, so ADA counts
+  // the same open deliveries for it.
+  const openDeliveries = () => vm.runInContext('adaFacts().deliveries.open', c);
+  assert.equal(openDeliveries(), 2);
+  vm.runInContext("currentProfile={id:'copy-uuid',kind:'original',name:'Copy'};", c);
+  assert.equal(openDeliveries(), 2, 'a copied original profile starts from the handbook counts');
+  vm.runInContext("currentProfile={id:'original',kind:'original',name:'Original'};", c);
   // Cycling past the last remark is answered rather than silently repeated.
   const count = vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length', c);
   assert.match(
