@@ -3,7 +3,7 @@
 // below, which every view reads directly and other modules change through the setters.
 import { browserMode } from '../browser-api.ts';
 import { initialState } from '../state.ts';
-import { pending, request, writeQueue } from './api.ts';
+import { request, writeQueue } from './api.ts';
 import { required } from './format.ts';
 import { render } from './shell.ts';
 import { showSignedOut, unmountShell } from './ui/mount.ts';
