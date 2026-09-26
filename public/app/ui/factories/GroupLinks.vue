@@ -4,8 +4,9 @@
   shown when the profile has groups; flows inside a group are the group's own belts and are
   left out. Group names are user text, rendered as text.
   One card per group (#213), Ungrouped too when it has links, with an In part (where each flow
-  comes from) and an Out part (where it goes). Places that are not groups (mines, storage, fuel,
-  the Space Elevator, the sink) only show as the other end of a row.
+  comes from) and an Out part (where it goes). The mines and existing supply get a card with only
+  an Out part when they send anything (#222). The destinations that are not groups (storage,
+  fuel, the Space Elevator, the sink) only show as the other end of a row.
   Each link can instead go by truck, tractor, explorer, train or drone (#205): the user gives the
   round trip in minutes and, for a road vehicle, its fuel; linkLoad (logistics.ts) works out the
   vehicles and fuel. The controls sit on the sender's Out row only, so each link is edited in one
@@ -183,6 +184,11 @@ const view = computed(() =>
         ),
       ],
     }));
+    // The mines and existing supply send but never receive: a card with only an Out part, first,
+    // so every link, straight to storage, fuel, the elevator or the sink too, has its sender's
+    // Out row and its transport controls (#222).
+    const mined = links.filter(l => l.from === MINES);
+    if (mined.length) cards.unshift({ id: MINES, name: name(MINES), parts: [part('out', mined)] });
     const idle = places.filter(id => !used(id)).map(name);
     return { links, cards, idle };
   }),

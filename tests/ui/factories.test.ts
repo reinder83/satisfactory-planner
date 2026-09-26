@@ -32,6 +32,7 @@ import {
   catalog,
   evil,
   generated,
+  generatedWith,
   go,
   open,
   page,
@@ -596,11 +597,17 @@ test('between groups: a card per group with what comes in and goes out, names es
   noMarkup();
   const section = $('[data-group-links]')!;
   assert.ok(section, 'shown once the profile has groups');
-  // One card per group, in the groups' order; mines and the elevator are only row ends.
-  const cards = $$('[data-group-card]');
+  // One card per group, in the groups' order, after the mines' (#222); the elevator is only a
+  // row end.
+  const [mines, ...cards] = $$('[data-group-card]');
   assert.deepEqual(
-    cards.map(c => c.querySelector('h3')!.textContent),
-    [evil, 'Parts'],
+    [mines, ...cards].map(c => c!.querySelector('h3')!.textContent),
+    ['Mines and existing supply', evil, 'Parts'],
+  );
+  assert.deepEqual(
+    [...mines!.querySelectorAll<HTMLElement>('[data-flow]')].map(p => p.dataset.flow),
+    ['out'],
+    'the mines only send',
   );
   // A group nothing reaches or leaves gets a line, not an empty card.
   assert.match(
@@ -619,6 +626,14 @@ test('between groups: a card per group with what comes in and goes out, names es
   assert.ok(out.querySelector('[data-link-mode]'));
   assert.equal($$('[data-link-in] select, [data-link-in] input').length, 0);
   assert.equal($$('[data-link-mode]').length, $$('[data-link-out]').length);
+  // Every link has exactly one Out row, so each can be edited, and the mines' go to the groups.
+  const outs = $$('[data-link-out]').map(r => r.dataset.linkOut);
+  assert.equal(new Set(outs).size, outs.length);
+  assert.deepEqual(
+    [...new Set($$('[data-link-in]').map(r => r.dataset.linkIn))].filter(k => !outs.includes(k)),
+    [],
+  );
+  assert.ok(outs.some(k => k!.startsWith('mines:fg-')));
   const ends = (dir: string) => $$(`[data-flow="${dir}"] .flow-end`).map(text);
   assert.ok(ends('in').includes('← from Mines and existing supply'));
   assert.ok(ends('out').includes('→ to Space Elevator'));
@@ -654,7 +669,7 @@ test('between groups: a card per group with what comes in and goes out, names es
   await nextTick();
   assert.deepEqual(
     $$('[data-group-card]').map(c => c.dataset.group),
-    ['fg-parts1', 'ungrouped'],
+    ['mines', 'fg-parts1', 'ungrouped'],
   );
   // Without groups there is nothing to show.
   open({ calculated: plan });
@@ -740,6 +755,40 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   await pick(`[data-link-mode="${key}"]`, 'belt');
   assert.equal(state.factoryGroups.links, undefined);
   assert.match($(`[data-link-out="${key}"]`)!.textContent!, /Mk\.\d (belt|pipe)/);
+  noMarkup();
+});
+
+test('between groups: existing supply sent straight to storage has its row and controls on the mines card (#222)', async () => {
+  const supplied = generatedWith({ existingSupply: { 'Iron Plate': 30 } });
+  open({
+    calculated: supplied,
+    workspace: { catalog: catalog() },
+    state: {
+      version: 3,
+      factoryGroups: { groups: [{ id: 'fg-plate1', name: 'Plates' }], assignments: {} },
+    },
+  });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  go('factories');
+  render();
+  await nextTick();
+  const key = 'mines:storage';
+  const row = $(`[data-group-card][data-group="mines"] [data-link-out="${key}"]`)!;
+  assert.ok(row, 'the link with neither end on a group card shows');
+  assert.match(row.textContent!.replace(/\s+/g, ' '), /→ to Protected storage Iron Plate: /);
+  const mode = $<HTMLSelectElement>(`[data-link-mode="${key}"]`)!;
+  mode.value = 'truck';
+  mode.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'factoryLinkTransport',
+    from: 'mines',
+    to: 'storage',
+    mode: 'truck',
+    roundTripMin: 5,
+    fuel: 'Packaged Fuel',
+  });
+  assert.ok($(`[data-link-out="${key}"] [data-link-load]`), 'its vehicle math shows');
   noMarkup();
 });
 

@@ -43,6 +43,16 @@ export const generated = (): CurrentCalculatedPlan =>
       ]).toString(),
     )),
   );
+// A plan for the given planner settings, made in Node the same way (not cached).
+export const generatedWith = (settings: object): CurrentCalculatedPlan =>
+  JSON.parse(
+    execFileSync(process.execPath, [
+      '--input-type=module',
+      '-e',
+      "import('./planner.ts').then(m => process.stdout.write(JSON.stringify(m.calculate(JSON.parse(process.argv[1])))))",
+      JSON.stringify(settings),
+    ]).toString(),
+  );
 // The server's item catalog (planner.ts catalog(): raw resources, budgets, goals, …), made
 // once per test file in Node for the same reason.
 let catalogData: Catalog | undefined;
