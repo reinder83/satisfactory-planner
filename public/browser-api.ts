@@ -280,8 +280,18 @@ export function createBrowserApi(
       });
     }
     // The remaining routes all act on one scoped save/profile. Reads use a readonly transaction;
-    // everything else runs `operation` inside a readwrite one.
+    // everything else runs `operation` inside a readwrite one. Any other route (accounts,
+    // logout) is refused before the scope lookup, so it does not report "Save not found."
+    // when no save is open.
+    const scoped = [
+      '/api/select',
+      '/api/remove-profile',
+      '/api/rename',
+      '/api/update',
+      '/api/import',
+    ];
     const read = ['/api/context', '/api/state', '/api/export'].includes(ep);
+    if (!read && !scoped.includes(ep)) throw Error('This feature needs a self-hosted server.');
     const operation = (d: BrowserWorkspace): unknown => {
       const { save, profile } = scope(
         d,
@@ -350,17 +360,19 @@ export function createBrowserApi(
         profile.state = next;
         return next;
       }
+      // Unreachable: every route left after the check above is handled.
       throw Error('This feature needs a self-hosted server.');
     };
     return read ? operation(await store.transaction()) : store.transaction(operation);
   };
 }
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
-// wrapper and the catalog; if that fails, the rejected promise stays cached and every later
-// call fails with the same error until the page is reloaded.
+// wrapper and the catalog. If that fails (no IndexedDB, the catalog did not load), the calls
+// already waiting fail with that error and the next call tries again, so a passing network
+// hiccup does not need a reload.
 export async function browserRequest(route: string, options?: BrowserRequestOptions) {
-  if (!instance)
-    instance = (async () => {
+  if (!instance) {
+    const starting = (instance = (async () => {
       if (!globalThis.indexedDB)
         throw Error(
           'Browser storage is unavailable. Use a regular browser window with site storage enabled.',
@@ -437,6 +449,10 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
         calculate,
         (await response.json()) as Catalog,
       );
-    })();
+    })());
+    starting.catch(() => {
+      if (instance === starting) instance = undefined;
+    });
+  }
   return (await instance)(route, options);
 }
