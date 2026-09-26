@@ -526,6 +526,69 @@ test('a handbook bay sharing its letter with an added bay stored before #91 offe
   assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
 });
 
+test('a bay moves to another floor from edit mode, with its records, and the built room says so (#190)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ state: { version: 1, checks: { 'slot-D01-built': true } } });
+  render();
+  assert.equal($('[data-move-bay]'), null, 'only while editing the layout');
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  const menu = $<HTMLSelectElement>('[data-move-bay="D"]')!;
+  assert.deepEqual(
+    [...menu.options].map(o => o.value),
+    ['', 'upper', 'workshop'],
+    'every other floor in the tabs',
+  );
+  menu.value = 'upper';
+  menu.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageBayMove', id: 'D', floor: 'upper' });
+  assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');
+  assert.match($('#toast')!.textContent!, /Bay D moved to Upper floor/);
+  assert.match($('[data-moved-off]')!.textContent!, /bay D to Upper floor/);
+  setFloor('upper');
+  render();
+  await nextTick();
+  assert.ok($('[data-slot="D01"]'), 'and arrived upstairs');
+  assert.equal(state.checks['slot-D01-built'], true, 'its checkmark came along');
+  noMarkup();
+});
+
+test('a hidden bay moved onto a floor keeps it from going, and the button says which (#216)', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  // D moved to an added floor and J to the workshop, both then hidden: neither floor shows a bay.
+  open({
+    state: {
+      storageEdits: someEdits({
+        floors: [{ id: 'cf-abcd', label: 'Annex' }],
+        bayFloors: { D: 'cf-abcd', J: 'workshop' },
+        hiddenBays: ['D', 'J'],
+      }),
+    },
+  });
+  setLayoutEditing(true);
+  setFloor('cf-abcd');
+  render();
+  await nextTick();
+  assert.equal($$('.bay').length, 0, 'the annex shows no bay');
+  const remove = $<HTMLButtonElement>('[data-remove-floor="cf-abcd"]')!;
+  assert.equal(remove.disabled, true);
+  assert.match(remove.textContent!, /Restore and move hidden bay D first/);
+  setFloor('workshop');
+  render();
+  await nextTick();
+  const hide = $<HTMLButtonElement>('[data-hide-floor="workshop"]')!;
+  assert.equal(hide.disabled, true);
+  assert.match(hide.textContent!, /Restore and move hidden bay J first/);
+  // Restored, J shows on the workshop, so the button asks for the usual instead.
+  $('[data-restore-bay="J"]')!.click();
+  await settle();
+  assert.ok($('[data-slot="J01"]'), 'J is back, on the floor it was moved to');
+  assert.match($('[data-hide-floor="workshop"]')!.textContent!, /Hide or remove its bays first/);
+  noMarkup();
+});
+
 test('the update stand-in applies an op like the server: a refused one leaves the page state alone (#214)', () => {
   open({ state: { checks: { 'slot-C01-built': true } } });
   const before = structuredClone(state);

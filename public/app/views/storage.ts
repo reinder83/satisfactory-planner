@@ -45,7 +45,8 @@ export function inputText(inputs: ItemRates): string {
 // The profile's storage layout edits with defaults filled in: added floors and bays,
 // renamed floors and bays, `slots` (address → item name filled in by the user) and
 // `clearedSlots` (handbook addresses the user emptied, kept as reserved positions) and
-// `hiddenBays` (handbook bays taken out of the room, their records kept).
+// `hiddenBays` (handbook bays taken out of the room, their records kept) and `bayFloors`
+// (handbook bays moved to another floor, #190).
 function storageEdits(): StorageEdits {
   const e: Partial<StorageEdits> = state?.storageEdits || {};
   return {
@@ -57,6 +58,7 @@ function storageEdits(): StorageEdits {
     clearedSlots: e.clearedSlots || [],
     hiddenBays: e.hiddenBays || [],
     hiddenFloors: e.hiddenFloors || [],
+    ...(e.bayFloors ? { bayFloors: e.bayFloors } : {}),
   };
 }
 
@@ -126,6 +128,8 @@ export function hiddenStorageBays(): {
   items: string[];
   // An added bay has taken the letter (#167), so the bay cannot be restored until it goes.
   taken: boolean;
+  floor: string;
+  moved: boolean;
 }[] {
   const e = storageEdits(),
     hidden = new Set(e.hiddenBays);
@@ -139,6 +143,10 @@ export function hiddenStorageBays(): {
       name: b.name,
       items: b.items.filter(x => x.name).map(x => x.name!),
       taken: taken.has(b.id),
+      // Where it sits, and whether it was moved there (#190): a hidden bay moved onto a floor
+      // still keeps that floor from being hidden or removed (#216).
+      floor: b.floor,
+      moved: !!e.bayFloors?.[b.id],
     }));
 }
 
@@ -175,6 +183,8 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   // collectables bays Q and R when its settings keep collectables.
   const base: StorageBayView[] = plan.storage.map(b => ({
     ...b,
+    // A handbook bay moved to another floor (#190) keeps everything else.
+    floor: e.bayFloors?.[b.id] ?? b.floor,
     name: e.bayNames[b.id] || b.name,
     items: [
       ...b.items.map(x => {
