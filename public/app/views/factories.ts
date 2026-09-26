@@ -2,6 +2,7 @@
 // both factories pages (ui/pages/FactoriesPage.vue and CalculatedFactoriesPage.vue, with their
 // parts in ui/factories/), the group build-order dialog (factory-detail.ts) and ADA.
 import { num } from '../format.ts';
+import { rowShares } from '../group-links.ts';
 import { state } from '../session.ts';
 import type { FactoryGroups, GroupAssignment } from '../../types/index.ts';
 
@@ -17,8 +18,9 @@ export const membershipsOf = (key: string): GroupAssignment[] =>
   factoryGroupsState().assignments[key] || [];
 
 // The line on a grouped card saying how much of the factory's output this group gets, or ''
-// when the factory sits whole in a single group. A null-rate membership receives what the
-// fixed-rate ones leave over; machines are scaled by the same share.
+// when the factory sits whole in a single group. Shares follow rowShares (group-links.ts), so
+// the cards and "Between groups" agree: fixed rates first, and what they leave split evenly
+// between the null-rate memberships (#197). Machines are scaled by the same share.
 export function allocationText(
   key: string,
   groupId: string,
@@ -29,11 +31,15 @@ export function allocationText(
   const ms = membershipsOf(key),
     m = ms.find(x => x.group === groupId);
   if (!m || (ms.length === 1 && m.rate == null)) return '';
-  const rate =
-    m.rate == null ? Math.max(0, total - ms.reduce((a, x) => a + (x.rate || 0), 0)) : m.rate;
-  const share = total > 0 ? Math.min(1, rate / total) : 0;
+  const share = total > 0 ? rowShares(total, ms).get(groupId) || 0 : 0;
+  const rate = total > 0 ? share * total : (m.rate ?? 0);
+  const sharing = ms.filter(x => x.rate == null).length;
   return (
-    (m.rate == null ? 'Remaining here: ' : 'Here: ') +
+    (m.rate != null
+      ? 'Here: '
+      : sharing > 1
+        ? `Remaining here, split ${sharing} ways: `
+        : 'Remaining here: ') +
     `${num(rate)}${unit} of ${num(total)}${unit}` +
     (machines > 0 && share < 1 ? ` · ≈ ${num(machines * share)} of ${num(machines)} machines` : '')
   );

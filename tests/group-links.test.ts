@@ -136,3 +136,46 @@ test('on a real plan the flows add up to its rows, its mining and its deliveries
   }
   assert.ok(links.some(l => l.from === 'fg-smelt1' && l.to === 'fg-parts1'));
 });
+
+test('memberships without a rate split what is left evenly (#197)', () => {
+  // A row just added to a second group: neither has a rate.
+  assert.deepEqual(
+    [
+      ...rowShares(100, [
+        { group: 'a', rate: null },
+        { group: 'b', rate: null },
+      ]),
+    ],
+    [
+      ['a', 0.5],
+      ['b', 0.5],
+    ],
+  );
+  // With a fixed rate too, the rest is shared by the other two.
+  const mixed = rowShares(100, [
+    { group: 'a', rate: null },
+    { group: 'b', rate: 20 },
+    { group: 'c', rate: null },
+  ]);
+  close(mixed.get('a')!, 0.4, 'a');
+  close(mixed.get('b')!, 0.2, 'b');
+  close(mixed.get('c')!, 0.4, 'c');
+  close(
+    [...mixed.values()].reduce((x, y) => x + y, 0),
+    1,
+    'the shares add up to one',
+  );
+  // Both groups get their half of the row's inputs.
+  const links = groupLinks(
+    chain,
+    groups({
+      ingot: [{ group: 'fg-smelt1', rate: null }],
+      plate: [
+        { group: 'fg-parts1', rate: null },
+        { group: 'fg-parts2', rate: null },
+      ],
+    }),
+  );
+  close(rate(links, 'fg-smelt1', 'fg-parts1', 'Ingot'), 15, 'Parts');
+  close(rate(links, 'fg-smelt1', 'fg-parts2', 'Ingot'), 15, 'Parts two');
+});
