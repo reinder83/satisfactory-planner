@@ -605,6 +605,7 @@ export function validateState(s: unknown): ProgressState {
 export function mutate(s: SavedState, update: UpdateOp): ProgressState {
   const op: unknown = update;
   if (!plain(op)) fail('Invalid update.');
+  if (typeof op.type !== 'string') fail('Unknown update.');
   if (op.type === 'check' || op.type === 'note' || op.type === 'delivery') {
     if (!safeKey(op.key)) fail('Invalid record address.');
     const kind = ({ check: 'checks', note: 'notes', delivery: 'deliveries' } as const)[op.type];

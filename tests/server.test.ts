@@ -136,3 +136,61 @@ test('a damaged progress file never silently resets the save', async () => {
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('malformed updates and save exports are refused with 400 and a reason', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const app = await start(dir);
+  try {
+    for (const type of [5, null, ['check']]) {
+      const r = await post(app.url, '/api/update', { type });
+      assert.equal(r.status, 400, JSON.stringify(type));
+      assert.equal((await r.json()).error, 'Unknown update.');
+    }
+    const wrap = { format: 'satisfactory-planner-saves', version: 1 };
+    for (const [data, error] of [
+      [null, 'Choose a full planner save export.'],
+      [{ ...wrap, saves: 'x' }, 'Choose a full planner save export.'],
+      [{ ...wrap, saves: [null] }, 'Invalid profiles in export.'],
+      [{ ...wrap, saves: [{ profiles: [null] }] }, 'Invalid profile.'],
+      [
+        { ...wrap, saves: [{ profiles: [{ id: 'p', kind: 'calculated' }] }] },
+        'Missing calculation snapshot.',
+      ],
+    ] as [unknown, string][]) {
+      const r = await post(app.url, '/api/import-saves', data);
+      assert.equal(r.status, 400, JSON.stringify(data));
+      assert.equal((await r.json()).error, error);
+    }
+    // The full-save import allows 50 MB, and says so when a file is larger.
+    const big = await post(app.url, '/api/import-saves', 'x'.repeat(51 * 1024 * 1024));
+    assert.equal(big.status, 413);
+    assert.equal((await big.json()).error, 'Backup or update exceeds 50 MB.');
+    const saves = (await (await fetch(app.url + '/api/workspace')).json()).saves;
+    assert.equal(saves.length, 1, 'nothing was imported');
+  } finally {
+    await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a missing workspace with a backup beside it stops start-up instead of starting fresh', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  try {
+    let app = await start(dir);
+    await post(app.url, '/api/update', { type: 'check', key: 'kept', value: true });
+    await close(app.server);
+    const file = path.join(dir, 'workspace.json');
+    await fs.rename(file, file + '.bak');
+    const backup = await fs.readFile(file + '.bak', 'utf8');
+    await assert.rejects(start(dir), /workspace\.json\.bak exists/);
+    assert.equal(await fs.readFile(file + '.bak', 'utf8'), backup, 'the backup is untouched');
+    await assert.rejects(fs.stat(file), 'no fresh workspace was written');
+    // Following the advice recovers it.
+    await fs.rename(file + '.bak', file);
+    app = await start(dir);
+    assert.equal((await (await fetch(app.url + '/api/state')).json()).checks.kept, true);
+    await close(app.server);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

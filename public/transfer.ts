@@ -33,12 +33,17 @@ interface IncomingSave {
 // The ids only keep activeProfile pointing at the right profile: both importers give every
 // save and profile a new id, so an import always adds copies and never overwrites.
 export const transferFormat = 'satisfactory-planner-saves';
+// A refused export. The status makes the server answer 400 with this message, like state.ts's
+// fail; the browser edition shows the message either way.
+function invalid(message: string): never {
+  throw Object.assign(new Error(message), { status: 400 });
+}
 // Save and profile names are checked but kept exactly as exported, untrimmed.
 const title = (x: unknown): string => {
-  if (typeof x !== 'string' || !x.trim() || x.length > 80)
-    throw Error('Invalid save or profile name.');
+  if (typeof x !== 'string' || !x.trim() || x.length > 80) invalid('Invalid save or profile name.');
   return x;
 };
+const record = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
 // Checks a parsed export and returns a clean copy of the same shape, without exportedAt.
 // Throws plain Errors before anything is written. Each profile's progress goes through
 // validateState, so older state versions import and a state from a newer planner is refused
@@ -54,31 +59,35 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
     !Array.isArray(d.saves) ||
     d.saves.length > 50
   )
-    throw Error('Choose a full planner save export.');
+    invalid('Choose a full planner save export.');
   // Only accept data objects; executable links never belong in a portable handbook.
   const text = JSON.stringify(data);
   if (text.length > 50 * 1024 * 1024 || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))
-    throw Error('Invalid or oversized save export.');
+    invalid('Invalid or oversized save export.');
   const saves = (d.saves as IncomingSave[]).map(s => {
-    if (!Array.isArray(s.profiles) || !s.profiles.length || s.profiles.length > 30)
-      throw Error('Invalid profiles in export.');
+    if (!record(s) || !Array.isArray(s.profiles) || !s.profiles.length || s.profiles.length > 30)
+      invalid('Invalid profiles in export.');
     const profiles = (s.profiles as IncomingProfile[]).map(p => {
-      if (!['calculated', 'original'].includes(p.kind as string) || typeof p.id !== 'string')
-        throw Error('Invalid profile.');
+      if (
+        !record(p) ||
+        !['calculated', 'original'].includes(p.kind as string) ||
+        typeof p.id !== 'string'
+      )
+        invalid('Invalid profile.');
       const kind = p.kind as ProfileKind;
       // A calculated profile must bring its calculation snapshot, since profiles are never
       // silently recalculated, with a stage for each of phases 1–5. An original profile must
       // bring its own handbook rather than fall back to the current default.
       if (kind === 'calculated') {
         if (!p.plan?.settings || !p.plan?.stages || !Array.isArray(p.plan.warnings))
-          throw Error('Missing calculation snapshot.');
+          invalid('Missing calculation snapshot.');
         for (const phase of ['1', '2', '3', '4', '5']) {
           const stage = p.plan.stages[phase];
           if (!stage || !Array.isArray(stage.rows || []) || typeof stage.feasible !== 'boolean')
-            throw Error('Invalid calculation stage.');
+            invalid('Invalid calculation stage.');
         }
       } else if (!p.handbook?.factories || !p.handbook?.phases || !p.handbook?.storage)
-        throw Error('This original profile needs its full handbook export.');
+        invalid('This original profile needs its full handbook export.');
       // Handbook source links survive only as https URLs.
       const handbook = kind === 'original' ? structuredClone(p.handbook) : undefined;
       if (handbook)
@@ -102,7 +111,7 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
       new Set(profiles.map(p => p.id)).size !== profiles.length ||
       !profiles.some(p => p.id === s.activeProfile)
     )
-      throw Error('Invalid active profile.');
+      invalid('Invalid active profile.');
     // The check above matched it against the (string) profile ids.
     return {
       id: String(s.id),
