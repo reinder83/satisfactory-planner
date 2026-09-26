@@ -220,8 +220,9 @@ export function bestLane(fluid: boolean, st?: string): BestLane {
 
 // How many belts or pipes of the best available mark carry `rate`. Returns the lane, the lane
 // count (at least 1), the rate on the last lane, how many lanes run full, the unused capacity
-// (all of it on the last lane) and the word to print. The 1e-9 keeps an exact multiple of the
-// capacity from rounding up to an extra lane through floating-point noise.
+// (all of it on the last lane) and the word to print. The 1e-9, a fraction of one lane in both
+// places, keeps a rate within floating-point noise of an exact multiple of the capacity from
+// counting an extra lane or a partly filled last one.
 export function lanePlan(rate: number, fluid: boolean, st?: string): LanePlan {
   const lane = bestLane(fluid, st);
   const count = Math.max(1, Math.ceil(rate / lane.cap - 1e-9));
@@ -230,7 +231,7 @@ export function lanePlan(rate: number, fluid: boolean, st?: string): LanePlan {
     lane,
     count,
     last,
-    full: count - (last < lane.cap - 1e-9 ? 1 : 0),
+    full: count - (last < lane.cap * (1 - 1e-9) ? 1 : 0),
     spare: count * lane.cap - rate,
     word: fluid ? 'pipe' : 'belt',
   };
