@@ -2,7 +2,16 @@
 // vehicle and says how long one round trip takes, since the planner knows no distances; this
 // works out how many vehicles carry the link's items and what they burn. The choice is saved
 // per link in factoryGroups.links (state.ts); the flows come from group-links.ts.
-import type { Catalog, LinkMode, LinkTransport } from '../types/index.ts';
+import { groupLinks } from './group-links.ts';
+import type {
+  Catalog,
+  FactoryGroups,
+  ItemRates,
+  LinkMode,
+  LinkTransport,
+  StageKey,
+  StoredCalculatedPlan,
+} from '../types/index.ts';
 
 // Vehicle figures from the SatisfactoryTools dataset at the revision recorded in recipes.json:
 // inventory slots from each vehicle's description (the Freight Car's 32 slots or 1,600 m³), and
@@ -112,4 +121,33 @@ export function linkLoad(
   const mj = catalog.vehicleFuels?.find(f => f.name === t.fuel)?.mj || 0;
   if (v.burnMW && mj) load.fuelPerMin = (n * v.burnMW * 60) / mj;
   return load;
+}
+
+// The fuel the links' vehicles burn in each phase of a plan, from the profile's start phase on
+// (#206): { phase: { fuel: rate/min } }, rounded up to hundredths. "Recalculate with transport
+// fuel" hands this to the planner as settings.transportFuel. Phases without fuel are left out.
+export function transportFuel(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  groups: FactoryGroups,
+  catalog: Pick<Catalog, 'stacks' | 'packaged' | 'vehicleFuels'>,
+  fluids: Set<string>,
+): Partial<Record<StageKey, ItemRates>> {
+  const out: Partial<Record<StageKey, ItemRates>> = {};
+  if (!groups.links) return out;
+  for (const [phase, stage] of Object.entries(plan.stages) as [
+    StageKey,
+    (typeof plan.stages)[StageKey],
+  ][]) {
+    if (Number(phase) < Number(plan.settings.phase || 1) || !stage.rows?.length) continue;
+    const fuels: ItemRates = {};
+    for (const l of groupLinks(stage, groups)) {
+      const t = groups.links[l.from + ':' + l.to];
+      if (!t?.fuel) continue;
+      const burn = linkLoad(l.items, t, catalog, fluids).fuelPerMin;
+      if (burn > 0) fuels[t.fuel] = (fuels[t.fuel] || 0) + burn;
+    }
+    for (const n of Object.keys(fuels)) fuels[n] = Math.ceil(fuels[n]! * 100 - 1e-9) / 100;
+    if (Object.keys(fuels).length) out[phase] = fuels;
+  }
+  return out;
 }

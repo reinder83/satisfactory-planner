@@ -1,7 +1,7 @@
 // Flows between a calculated profile's factory groups (#184, part 1 of #68): for each pair of
 // places, what moves from one to the other per minute. A place is a factory group, "Ungrouped"
 // for rows (or shares of rows) in no group, the mines and existing supply as a source, and
-// protected storage, drone fuel, the Space Elevator and the sink as destinations.
+// protected storage, drone fuel, vehicle fuel, the Space Elevator and the sink as destinations.
 //
 // A row's group shares come from its memberships (views/factories.ts): a fixed rate is that
 // much of the row's primary output (MW for a generator), null-rate memberships split evenly
@@ -19,6 +19,8 @@ export const MINES = 'mines';
 export const OUTSIDE = {
   storage: 'storage',
   drone: 'drone',
+  // Fuel for the vehicles on the links themselves (#206).
+  transport: 'vehicles',
   delivery: 'elevator',
   surplus: 'sink',
 } as const;
@@ -94,6 +96,7 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     for (const [n, q] of Object.entries(books || {})) put(supply, n, MINES, q);
   for (const [n, q] of Object.entries(stage.storage || {})) put(demand, n, OUTSIDE.storage, q);
   for (const [n, q] of Object.entries(stage.drone || {})) put(demand, n, OUTSIDE.drone, q);
+  for (const [n, q] of Object.entries(stage.transport || {})) put(demand, n, OUTSIDE.transport, q);
   for (const [n, d] of Object.entries(stage.delivery || {}))
     put(demand, n, OUTSIDE.delivery, d.rate || 0);
   for (const [n, q] of Object.entries(stage.surplus || {})) put(demand, n, OUTSIDE.surplus, q);

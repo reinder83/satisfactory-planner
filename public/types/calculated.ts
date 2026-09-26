@@ -103,6 +103,8 @@ export interface CurrentSettings {
   buildRate: number;
   storageOverrides: ItemRates;
   existingSupply: ItemRates;
+  // Vehicle fuel for the factory-group links per phase (#206): { phase: { fuel: rate/min } }.
+  transportFuel: Partial<Record<StageKey, ItemRates>>;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;
@@ -218,6 +220,8 @@ export interface StageResult {
   storage: ItemRates;
   // Dedicated drone fuel per minute.
   drone: ItemRates;
+  // Fuel for the vehicles on factory-group links per minute (#206); absent from older plans.
+  transport: ItemRates;
   delivery: Record<string, StageDelivery>;
   // Sinkable output beyond every demand, per minute.
   surplus: ItemRates;

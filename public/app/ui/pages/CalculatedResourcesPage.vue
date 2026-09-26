@@ -53,6 +53,7 @@ const page = computed(() =>
         over: (x.raw?.[n] || 0) > s.limits[n]!,
       })),
       drone: inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.',
+      transport: inputText(x.transport || {}),
       storage: inputText(x.storage || {}) || 'No storage production requested.',
       supplied: inputText(x.supplied || {}) || 'None credited in this phase.',
       credited: Object.keys(x.supplied || {}).length > 0,
@@ -128,6 +129,10 @@ const page = computed(() =>
       <section class="panel">
         <h2>Dedicated drone fuel /min</h2>
         <p>{{ page.drone }}</p>
+        <template v-if="page.transport"
+          ><h2>Vehicle fuel for group links /min</h2>
+          <p data-transport-fuel>{{ page.transport }}</p></template
+        >
         <h2>Protected storage /min</h2>
         <p>{{ page.storage }}</p>
         <h2>From production you already run</h2>
