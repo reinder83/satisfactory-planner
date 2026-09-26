@@ -161,6 +161,14 @@ export async function moveGuided(target: number) {
     render();
     return;
   }
+  // Nothing ticked: nothing is different, so calculate straight away. An empty question list
+  // would hand the page to the five steps, so the topics screen stays (guidedAsk null) while
+  // calculating and if the calculation fails; success moves on to Review as usual.
+  if (wasTopics) {
+    w.guidedAsk = null;
+    await calculateWizard(form);
+    return;
+  }
   if (target < 1) {
     w.guidedStep = 1;
     render();
