@@ -322,6 +322,22 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
   const max = calculate({ goal: 'maximum', limitsConfirmed: true, recipes: 'all' });
   assert.ok(max.stages[5].feasible);
   assert.ok(max.stages[5].hours < standard.stages[5].hours!);
+  // Phase 1 has no generators and runs on hand-fed biomass, so maximum output leaves it on the
+  // balanced plan: maximising it found no plan on 0 GW spare power, and without a power limit it
+  // grew to thousands of machines and over 100 GW of biomass.
+  const maxDefault = calculate({ goal: 'maximum', limitsConfirmed: true });
+  for (const ph of ['1', '2', '3', '4', '5'] as const)
+    assert.ok(maxDefault.stages[ph].feasible, `Phase ${ph} has a maximum-output plan by default`);
+  const balanced = calculate({ limitsConfirmed: true });
+  const machines = (st: (typeof balanced.stages)['1']) =>
+    (st.rows || []).map(r => `${r.id}:${r.machines}`).sort();
+  assert.deepEqual(machines(maxDefault.stages[1]), machines(balanced.stages[1]));
+  assert.equal(maxDefault.stages[1].hours, balanced.stages[1].hours);
+  // phaseTime 'final' re-solves Phase 1 for maximum output under caps; that re-solve keeps
+  // Phase 1's power budget, so on the default 0 GW spare power Phase 1 is not pulled ahead.
+  const finalTime = calculate({ phaseTime: 'final' });
+  assert.equal(finalTime.stages[1].aheadOf, undefined);
+  assert.deepEqual(machines(finalTime.stages[1]), machines(balanced.stages[1]));
   const impossible = calculate({ limits: { 'Iron Ore': 0, 'Copper Ore': 0 }, sam: 'avoid' });
   assert.equal(impossible.stages[3].feasible, false);
 });

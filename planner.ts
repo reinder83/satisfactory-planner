@@ -799,8 +799,9 @@ export function run(
     s.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
   // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
   // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
-  // constraint (its power is hand-fed biomass). Under `maximum` it applies in Phase 1 too, where
-  // there are no generators, so only the entered spare power can run that phase.
+  // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
+  // no generators, so only the entered spare power can run that phase harder. calculate() never
+  // maximises Phase 1 for maximum output; only the `phaseTime: 'final'` re-solve does.
   if (phase >= 2 || maximum) model.constraints.power = { max: spareMW };
   // One variable per recipe: its level is machine-equivalents at 100% clock, and its
   // coefficients are its per-machine outputs (+) and inputs (-) in each item balance.
@@ -1064,10 +1065,14 @@ export function calculate(
   const warnings: string[] = [];
   // Solve each phase on its own. SAM conversion: 'allow' offers it to the Phase 5 solve from the
   // start, 'needed' only when Phase 5 does not fit without it, 'avoid' never.
+  // Maximum output starts from Phase 2. Phase 1 has no generators and runs on hand-fed biomass:
+  // maximising it finds no plan on the default 0 GW of spare power, and without that limit it
+  // scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
-    let result = run(s, phase, {
-      maximum: s.goal === 'maximum',
+    const maximised = s.goal === 'maximum' && phase >= 2;
+    let result = run(s.goal === 'maximum' && !maximised ? { ...s, goal: 'balanced' } : s, phase, {
+      maximum: maximised,
       conversion: phase === 5 && s.sam === 'allow',
     });
     if (!result.feasible && phase === 5 && s.sam === 'needed')
