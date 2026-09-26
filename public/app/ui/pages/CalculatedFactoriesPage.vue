@@ -1,8 +1,8 @@
 <!--
   #factories on a calculated profile: the rows of the current phase matching the search, user
-  groups first, then the ungrouped rows. Without whole-machine production it offers "Round up
-  production", which asks /api/round-up for a recalculated profile revision and opens it; the
-  previous profile stays as it is.
+  groups first, then the ungrouped rows, then what moves between the groups (GroupLinks.vue).
+  Without whole-machine production it offers "Round up production", which asks /api/round-up
+  for a recalculated profile revision and opens it; the previous profile stays as it is.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -21,6 +21,7 @@ import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
+import GroupLinks from '../factories/GroupLinks.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
@@ -125,5 +126,6 @@ async function roundUp(e: Event) {
     <div class="cards">
       <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
     </div>
+    <GroupLinks />
   </template>
 </template>
