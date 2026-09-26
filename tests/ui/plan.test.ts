@@ -11,6 +11,7 @@ import {
   setQuery,
   state,
 } from '../../public/app/session.ts';
+import { acceptRoute } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import {
@@ -284,6 +285,38 @@ test('a delivery count must be a whole number up to the target', async () => {
   input.dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(calls[0]![1], { type: 'delivery', key: d.id, value: 7 });
+});
+
+test('leaving the page or changing phase asks before dropping an unsaved phase note', async () => {
+  const calls = stubFetch({ '/api/update': () => state });
+  render();
+  // The page on screen is #plan (the hashchange listener in listeners.ts calls acceptRoute).
+  history.replaceState(null, '', '#plan');
+  assert.equal(acceptRoute(), true, 'nothing to ask without an edit');
+  let asked = 0;
+  globalThis.confirm = () => (asked++, false);
+  const note = $<HTMLTextAreaElement>('#phase-note')!;
+  note.value = 'Unsaved thought';
+  // A sidebar link, a typed address or Back: kept notes put the address back.
+  history.replaceState(null, '', '#storage');
+  assert.equal(acceptRoute(), false);
+  assert.equal(location.hash, '#plan');
+  assert.equal(asked, 1);
+  // The working-phase select: kept notes leave the phase as it was, unsaved.
+  const picker = $<HTMLSelectElement>('#phase-picker')!;
+  picker.value = '4';
+  picker.dispatchEvent(new Event('change'));
+  await settle();
+  assert.equal(calls.length, 0);
+  assert.equal(picker.value, '3');
+  assert.equal(note.value, 'Unsaved thought');
+  assert.equal(asked, 2);
+  // Agreeing to drop them follows the route.
+  globalThis.confirm = () => true;
+  history.replaceState(null, '', '#storage');
+  assert.equal(acceptRoute(), true);
+  history.replaceState(null, '', '#plan');
+  acceptRoute();
 });
 
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {

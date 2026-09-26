@@ -18,6 +18,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
 import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
@@ -298,6 +299,34 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
     '',
     'opening the dialog again starts from the saved note',
   );
+});
+
+test('closing or replacing a dialog asks before dropping an unsaved note', () => {
+  render();
+  openFactory('wire');
+  let asked = 0;
+  globalThis.confirm = () => (asked++, false);
+  $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  // The × and a backdrop click (closeDetail), another factory's link, and Escape.
+  closeDetail();
+  openFactory('screws');
+  const escape = new Event('cancel', { cancelable: true });
+  cancelDetail(escape);
+  assert.equal(asked, 3);
+  assert.equal(escape.defaultPrevented, true);
+  assert.ok(dialog.open, 'kept notes keep the dialog open');
+  assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-wire');
+  globalThis.confirm = () => true;
+  closeDetail();
+  assert.equal(dialog.open, false);
+  // Without an edit there is nothing to ask.
+  globalThis.confirm = () => (asked++, false);
+  openFactory('wire');
+  closeDetail();
+  assert.equal(dialog.open, false);
+  assert.equal(asked, 3);
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
