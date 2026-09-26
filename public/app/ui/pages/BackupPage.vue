@@ -113,15 +113,14 @@ async function restoreProgress(e: Event) {
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
     const data = JSON.parse(await file.text());
-    if (!confirm('Replace current progress with this backup?')) {
-      el.value = '';
-      return;
-    }
+    if (!confirm('Replace current progress with this backup?')) return;
     await queuedWrite('/api/import', data);
     render();
     toast('Backup restored.');
   } catch (err) {
     toast((err as Error).message || 'Could not restore backup.', true);
+  } finally {
+    // Cleared every time, so choosing the same file again fires another change.
     el.value = '';
   }
 }

@@ -245,6 +245,29 @@ test('a restore reply does not replace another profile opened meanwhile', async 
   assert.equal(state.notes.global, 'Other profile');
 });
 
+test('after a restore the file box is cleared, so the same backup can be chosen again', async () => {
+  stubFetch({ '/api/import': () => state });
+  globalThis.confirm = () => true;
+  go('backup');
+  render();
+  const input = $<HTMLInputElement>('#import-file')!;
+  const file = new File(
+    [JSON.stringify({ format: 'satisfactory-planner-backup', state })],
+    'b.json',
+  );
+  let chosen = 'C:\fakepath\b.json';
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  Object.defineProperty(input, 'value', {
+    get: () => chosen,
+    set: (v: string) => (chosen = v),
+    configurable: true,
+  });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 30));
+  assert.match($('#toast')!.textContent!, /Backup restored/);
+  assert.equal(chosen, '', 'cleared after a successful restore');
+});
+
 test('a redraw keeps unsaved save-wide notes on the backup page', async () => {
   go('backup');
   render();
