@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -192,25 +192,61 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
   }
 });
 
+// Starts a server that is expected to be refused. If it starts anyway, it is closed before the
+// test fails, so a regression fails the test instead of leaving node --test hanging.
+const refused = (dir: string) =>
+  start(dir).then(async app => {
+    await close(app.server);
+    return app;
+  });
+
 test('a missing workspace with a backup beside it stops start-up instead of starting fresh', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  let app: Awaited<ReturnType<typeof start>> | undefined;
   try {
-    let app = await start(dir);
+    app = await start(dir);
     await post(app.url, '/api/update', { type: 'check', key: 'kept', value: true });
     await close(app.server);
+    app = undefined;
     const file = path.join(dir, 'workspace.json');
     await fs.rename(file, file + '.bak');
     const backup = await fs.readFile(file + '.bak', 'utf8');
-    await assert.rejects(start(dir), /workspace\.json\.bak exists/);
+    await assert.rejects(refused(dir), /workspace\.json\.bak exists/);
     assert.equal(await fs.readFile(file + '.bak', 'utf8'), backup, 'the backup is untouched');
     await assert.rejects(fs.stat(file), 'no fresh workspace was written');
     // Following the advice recovers it.
     await fs.rename(file + '.bak', file);
     app = await start(dir);
     assert.equal((await (await fetch(app.url + '/api/state')).json()).checks.kept, true);
+  } finally {
+    if (app) await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('a backup that cannot be checked also stops start-up; only a certainly missing one does not', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const stat = fs.stat;
+  // Only the .bak lookup fails, and not with ENOENT (a permission error, say).
+  mock.method(fs, 'stat', (p: string) =>
+    String(p).endsWith('workspace.json.bak')
+      ? Promise.reject(Object.assign(new Error('denied'), { code: 'EACCES' }))
+      : stat(p),
+  );
+  try {
+    await assert.rejects(refused(dir), /workspace\.json\.bak exists/);
+    await assert.rejects(fs.access(path.join(dir, 'workspace.json')), 'nothing was written');
+  } finally {
+    mock.restoreAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+  // With no backup at all, a fresh data folder starts as before.
+  const fresh = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  try {
+    const app = await start(fresh);
     await close(app.server);
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(fresh, { recursive: true, force: true });
   }
 });
 

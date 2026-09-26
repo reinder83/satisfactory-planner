@@ -50,7 +50,7 @@ const title = (x: unknown): string => {
 };
 const record = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
 // Checks a parsed export and returns a clean copy of the same shape, without exportedAt.
-// Throws plain Errors before anything is written. Each profile's progress goes through
+// Throws (invalid(): an Error with status 400) before anything is written. Each profile's progress goes through
 // validateState, so older state versions import and a state from a newer planner is refused
 // with its update message. Only version 1 of this wrapper exists. Plans and handbooks are
 // checked for shape only and otherwise copied as they are.
