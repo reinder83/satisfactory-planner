@@ -29,6 +29,7 @@ test('legacy version-1 states validate unchanged, gain empty layout edits and st
     slots: {},
     clearedSlots: [],
     hiddenBays: [],
+    hiddenFloors: [],
   });
 });
 
@@ -48,7 +49,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
   assert.equal(round.storageEdits.floorNames.ground, 'Main hall');
   assert.equal(round.storageEdits.floors[0]!.label, 'Basement overflow');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 7 }),
     /newer planner version/,
   );
 });
@@ -64,7 +65,7 @@ test('a bay takes containers past its printed eight and marks the state version 
   assert.equal(round.storageEdits.slots.A09, 'Alclad Aluminum Sheet');
   assert.equal(round.storageEdits.slots.A12, 'Aluminum Casing');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 7 }),
     /newer planner version/,
   );
   // An added position has no handbook container behind it, so clearing one drops
@@ -249,7 +250,7 @@ test('a handbook bay can be hidden and restored, keeping every record, as versio
   assert.deepEqual(round.storageEdits.hiddenBays, ['C']);
   assert.equal(round.version, 5);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 6 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 7 }),
     /newer planner version/,
   );
   // Restoring brings back exactly what was there, at the version the rest needs.
@@ -272,6 +273,53 @@ test('a malformed hidden-bay list is refused and leaves nothing changed', () => 
         validateState({ ...structuredClone(s), storageEdits: { ...s.storageEdits, hiddenBays } }),
       /Invalid hidden storage bays/,
       JSON.stringify(hiddenBays),
+    );
+});
+
+test('a built-in floor can be hidden once empty and restored, as version 6 (#168)', () => {
+  let s = initialState();
+  s = mutate(s, { type: 'storageFloorHide', id: 'workshop' });
+  s = mutate(s, { type: 'storageFloorHide', id: 'workshop' });
+  assert.deepEqual(s.storageEdits.hiddenFloors, ['workshop']);
+  assert.equal(s.version, 6, 'a version-5 planner must refuse it rather than show the floor');
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(round.storageEdits.hiddenFloors, ['workshop']);
+  assert.throws(
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 7 }),
+    /newer planner version/,
+  );
+  s = mutate(s, { type: 'storageFloorRestore', id: 'workshop' });
+  assert.deepEqual(s.storageEdits.hiddenFloors, []);
+  assert.equal(s.version, 1);
+  // An added floor is removed, not hidden; a floor with added bays keeps them in reach.
+  assert.throws(() => mutate(s, { type: 'storageFloorHide', id: 'cf-abcd12' }), /Only built-in/);
+  s = mutate(s, { type: 'storageBayAdd', id: 'S', name: 'Extra', floor: 'upper' });
+  assert.throws(() => mutate(s, { type: 'storageFloorHide', id: 'upper' }), /bays on this floor/);
+  // At least one floor stays: all three built-ins only with an added floor, which then stays.
+  s = mutate(s, { type: 'storageBayRemove', id: 'S' });
+  s = mutate(s, { type: 'storageFloorHide', id: 'ground' });
+  s = mutate(s, { type: 'storageFloorHide', id: 'upper' });
+  assert.throws(
+    () => mutate(s, { type: 'storageFloorHide', id: 'workshop' }),
+    /at least one floor/,
+  );
+  s = mutate(s, { type: 'storageFloorAdd', id: 'cf-abcd12', label: 'Basement' });
+  s = mutate(s, { type: 'storageFloorHide', id: 'workshop' });
+  assert.deepEqual(s.storageEdits.hiddenFloors, ['ground', 'upper', 'workshop']);
+  assert.throws(
+    () => mutate(s, { type: 'storageFloorRemove', id: 'cf-abcd12' }),
+    /at least one floor/,
+  );
+});
+
+test('a malformed hidden-floor list is refused', () => {
+  const s = mutate(initialState(), { type: 'storageFloorHide', id: 'workshop' });
+  for (const hiddenFloors of ['workshop', ['attic'], [1], ['ground', 'upper', 'workshop']])
+    assert.throws(
+      () =>
+        validateState({ ...structuredClone(s), storageEdits: { ...s.storageEdits, hiddenFloors } }),
+      /Invalid hidden storage floors/,
+      JSON.stringify(hiddenFloors),
     );
 });
 

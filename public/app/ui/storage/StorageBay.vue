@@ -129,7 +129,7 @@ const clearSlot = (e: Event, id: string) =>
 function hideBay(e: Event) {
   if (
     !confirm(
-      `Hide bay ${props.bay.id}? Its containers, checkmarks and notes are kept, and you can restore it under Hidden bays.`,
+      `Hide bay ${props.bay.id}? Its containers, checkmarks and notes are kept, and you can restore it under Hidden bays and floors.`,
     )
   )
     return;
