@@ -621,6 +621,26 @@ function validateEdits(raw: unknown): StorageEdits {
     // Only kept when a bay moved, so a layout without moves keeps its old shape.
     if (Object.keys(moved).length) e.bayFloors = moved;
   }
+  if (raw.bayOrder !== undefined) {
+    if (!plain(raw.bayOrder) || Object.keys(raw.bayOrder).length > 15)
+      fail('Invalid storage bay order.');
+    const order: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(raw.bayOrder)) {
+      if (
+        !knownFloor(e, k) ||
+        !Array.isArray(v) ||
+        v.length > 60 ||
+        v.some((id: unknown) => !bayId(id)) ||
+        new Set(v).size !== v.length
+      )
+        fail('Invalid storage bay order.');
+      // Letters no longer on the floor stay listed and are skipped where the order is read
+      // (views/storage.ts), so nothing here depends on which bays a profile shows.
+      if (v.length) order[k] = [...v];
+    }
+    // Only kept when a floor has an order, so a layout without one keeps its old shape.
+    if (Object.keys(order).length) e.bayOrder = order;
+  }
   return e;
 }
 // A floor that exists in this layout: a built-in one, hidden or not, or an added one.
@@ -633,17 +653,17 @@ const baysOn = (e: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–9 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–10 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "10" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 9
+      // Compared as the old code did, so a version given as "11" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 10
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -701,34 +721,37 @@ export function validateState(s: unknown): ProgressState {
   // bay moved to another floor is 8 (#190): an older release would drop bayFloors and put the
   // bay back. A link to or from the vehicles' own fuel (#206) is 9 (#220): a place releases
   // before #218 do not know, so they would refuse the state as malformed instead of asking for
-  // an update.
-  clean.version = linksNeedV9(clean.factoryGroups)
-    ? 9
-    : clean.storageEdits.bayFloors
-      ? 8
-      : clean.factoryGroups.links
-        ? 7
-        : clean.storageEdits.hiddenFloors.length
-          ? 6
-          : clean.storageEdits.hiddenBays.length
-            ? 5
-            : hasAddedSlots(clean.storageEdits)
-              ? 4
-              : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                ? 3
-                : hasEdits(clean.storageEdits)
-                  ? 2
-                  : 1;
+  // an update. Bays put in their own order on a floor are 10 (#191): an older release would
+  // drop bayOrder and put them back in letter order.
+  clean.version = clean.storageEdits.bayOrder
+    ? 10
+    : linksNeedV9(clean.factoryGroups)
+      ? 9
+      : clean.storageEdits.bayFloors
+        ? 8
+        : clean.factoryGroups.links
+          ? 7
+          : clean.storageEdits.hiddenFloors.length
+            ? 6
+            : clean.storageEdits.hiddenBays.length
+              ? 5
+              : hasAddedSlots(clean.storageEdits)
+                ? 4
+                : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                  ? 3
+                  : hasEdits(clean.storageEdits)
+                    ? 2
+                    : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
 }
 // Operations that send a whole value the tab worked out from the state it last showed: a
-// phase's full step order, a note's whole text, a step's title/body/link. Applied on top of
+// phase's full step order, a floor's bay order (#191), a note's whole text, a step's title/body/link. Applied on top of
 // a newer state (another tab or device wrote in between), they would silently undo that
 // write, so both editions refuse them unless the tab saw the current revision (#165).
 // Small operations (a tick, a count, one assignment) merge safely and are never refused.
-const baseSensitive = ['taskOrder', 'note', 'taskEdit'];
+const baseSensitive = ['taskOrder', 'note', 'taskEdit', 'storageBayOrder'];
 export const staleWrite =
   'This profile was changed in another tab or on another device, so your last change was not ' +
   'saved. The page now shows the latest version; text you typed is kept, and saving it again ' +
@@ -918,6 +941,8 @@ function clearBayRecords(s: SavedState, e: StorageEdits, id: string) {
     if (Object.keys(rest).length) e.bayFloors = rest;
     else delete e.bayFloors;
   }
+  // And its place in a floor's order (#191).
+  dropFromOrder(e, id);
   for (const k of Object.keys(e.slots)) if (slotAddr(k) && bayOfSlot(k) === id) delete e.slots[k];
   e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== id);
   for (const records of [s.checks, s.notes] as Record<string, unknown>[])
@@ -925,6 +950,25 @@ function clearBayRecords(s: SavedState, e: StorageEdits, id: string) {
       const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(k)?.[1];
       if (address && bayOfSlot(address) === id) delete records[k];
     }
+}
+// The floor bay `id` stands on: an added bay's own (also under a hidden handbook letter, #167),
+// else a handbook bay's move (#190) or its handbook floor. null for a letter that is neither.
+function bayFloor(e: StorageEdits, id: string): string | null {
+  const added = e.bays.find(b => b.id === id);
+  if (added) return added.floor;
+  return handbookBay(id) ? (e.bayFloors?.[id] ?? handbookFloor(id)) : null;
+}
+// Takes bay `id` out of every floor's order (#191): it moved or went, so a letter reused later
+// starts at its default place.
+function dropFromOrder(e: StorageEdits, id: string) {
+  if (!e.bayOrder) return;
+  const order: Record<string, string[]> = {};
+  for (const [f, list] of Object.entries(e.bayOrder)) {
+    const kept = list.filter(x => x !== id);
+    if (kept.length) order[f] = kept;
+  }
+  if (Object.keys(order).length) e.bayOrder = order;
+  else delete e.bayOrder;
 }
 // Storage layout edits. Only added floors and bays can be removed; built-in floors can only be
 // renamed, and handbook bays hidden and restored (storageBayHide/Restore, #166), which keeps
@@ -971,6 +1015,11 @@ function mutateLayout(s: SavedState, op: Raw) {
     e.floors = e.floors.filter(f => f.id !== op.id);
     // The first check above matched an added floor, so the id is a string.
     delete e.floorNames[op.id as string];
+    if (e.bayOrder?.[op.id as string]) {
+      const { [op.id as string]: _gone, ...rest } = e.bayOrder;
+      if (Object.keys(rest).length) e.bayOrder = rest;
+      else delete e.bayOrder;
+    }
   } else if (op.type === 'storageBayAdd') {
     if (!bayId(op.id) || !label(op.name) || !floorId(op.floor)) fail('Invalid bay.');
     if (e.bays.some(b => b.id === op.id))
@@ -1013,6 +1062,26 @@ function mutateLayout(s: SavedState, op: Raw) {
       if (Object.keys(moved).length) e.bayFloors = moved;
       else delete e.bayFloors;
     } else fail('Unknown bay.');
+    // It joins the new floor at its default place and leaves the old floor's order.
+    dropFromOrder(e, op.id);
+  } else if (op.type === 'storageBayOrder') {
+    // The order of the bays on one floor (#191), sent whole by Move left / Move right. Only bays
+    // on that floor; one left out keeps its default place (views/storage.ts orderBays).
+    if (!knownFloor(e, op.floor)) fail('Unknown floor.');
+    const list = op.order;
+    if (
+      !Array.isArray(list) ||
+      list.length > 60 ||
+      list.some((id: unknown) => !bayId(id)) ||
+      new Set(list).size !== list.length
+    )
+      fail('Invalid bay order.');
+    if (list.some((id: string) => bayFloor(e, id) !== op.floor))
+      fail('Only bays on this floor can be put in order.');
+    const { [op.floor]: _old, ...rest } = e.bayOrder || {};
+    if (list.length) rest[op.floor] = [...list];
+    if (Object.keys(rest).length) e.bayOrder = rest;
+    else delete e.bayOrder;
   } else if (op.type === 'storageBayHide' || op.type === 'storageBayRestore') {
     if (typeof op.id !== 'string' || !handbookBay(op.id))
       fail('Only handbook bays can be hidden. Remove an added bay instead.');

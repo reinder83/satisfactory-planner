@@ -20,6 +20,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
+  floorOrder,
   hiddenStorageBays,
   hiddenStorageFloors,
   storageBays,
@@ -41,6 +42,15 @@ const CALCULATED_TASKS = [
   },
 ];
 
+// Hall order for bays listed from the entrance: rows of two from the back of the hall (the top
+// of the grid) to the front, each row left then right. An odd bay out sits alone on the left
+// of the back row; the empty place beside it is an empty string.
+function inHallOrder(ids: string[]): string[] {
+  const rows: string[][] = [];
+  for (let i = 0; i < ids.length; i += 2) rows.push([ids[i]!, ids[i + 1] ?? '']);
+  return rows.reverse().flat();
+}
+
 const page = computed(() =>
   legacy(() => {
     const floors = storageFloors();
@@ -61,13 +71,23 @@ const page = computed(() =>
     // arrangement reads as a jumble, so the document keeps the bays in address order and
     // their hall positions are grid placement only. Keyboard focus then follows the stacked
     // order too.
-    const placed = [...display]
-      .sort(
-        (a, b) =>
-          Math.floor((b.id.charCodeAt(0) - 65) / 2) - Math.floor((a.id.charCodeAt(0) - 65) / 2) ||
-          a.id.localeCompare(b.id),
-      )
-      .map(b => b.id);
+    // A floor with its own bay order (#191) pairs the bays in that order instead: the first two
+    // share the row by the entrance, left then right, the next two the row behind, and so on.
+    const order = floorOrder(
+        floor,
+        floorBays.map(b => b.id).sort((a, b) => a.localeCompare(b)),
+      ),
+      shown = new Set(display.map(b => b.id));
+    const placed = order
+      ? inHallOrder(order.filter(id => shown.has(id)))
+      : [...display]
+          .sort(
+            (a, b) =>
+              Math.floor((b.id.charCodeAt(0) - 65) / 2) -
+                Math.floor((a.id.charCodeAt(0) - 65) / 2) || a.id.localeCompare(b.id),
+          )
+          .map(b => b.id);
+    const byId = new Map(display.map(b => [b.id, b]));
     return {
       floors: floors.map(f => ({ ...f, active: f.id === floor })),
       current,
@@ -104,9 +124,13 @@ const page = computed(() =>
       hidden: hiddenStorageBays(),
       hiddenFloors: hiddenStorageFloors(),
       unplaced: hiddenStorageBays().flatMap(b => b.items),
-      bays: [...display]
-        .sort((a, b) => a.id.localeCompare(b.id))
-        .map(b => ({ bay: b, position: placed.indexOf(b.id) })),
+      // In the floor's order, which the narrow single column and keyboard focus follow.
+      bays: (order
+        ? order.filter(id => shown.has(id)).map(id => byId.get(id)!)
+        : [...display].sort((a, b) => a.id.localeCompare(b.id))
+      ).map(b => ({ bay: b, position: placed.indexOf(b.id) })),
+      // Every bay on the floor in its current order, search or not, for Move left / right.
+      order: order ?? floorBays.map(b => b.id).sort((a, b) => a.localeCompare(b)),
       aisles: Math.floor(placed.length / 2),
       tasks: calculated ? CALCULATED_TASKS : plan.storageTasks,
       calculated: !!calculated,
@@ -263,7 +287,12 @@ function toggleLayout() {
       ><div v-for="r in page.aisles" :key="'aisle' + r" class="aisle" :style="`--aisle-row:${r}`">
         MAIN AISLE
       </div>
-      <StorageBay v-for="b in page.bays" :key="b.bay.id" :bay="b.bay" :position="b.position"
+      <StorageBay
+        v-for="b in page.bays"
+        :key="b.bay.id"
+        :bay="b.bay"
+        :position="b.position"
+        :order="page.order"
     /></template>
     <div v-else-if="!page.workshop" class="empty-state">
       {{

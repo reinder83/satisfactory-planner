@@ -135,6 +135,13 @@ export const version9 = {
   },
 } satisfies SavedState;
 
+// Version 10: the bays on a floor put in their own order (#191).
+export const version10 = {
+  ...version9,
+  version: 10,
+  storageEdits: { ...version9.storageEdits, bayOrder: { ground: ['B', 'A', 'C'] } },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -147,6 +154,7 @@ export const states: [SavedState, number][] = [
   [version7, 7],
   [version8, 8],
   [version9, 9],
+  [version10, 10],
 ];
 
 export const backup = {
