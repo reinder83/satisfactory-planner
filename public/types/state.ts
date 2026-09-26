@@ -11,8 +11,8 @@ import type { Phase } from './common.ts';
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
 // handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link, 8 a
-// handbook bay moved to another floor.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+// handbook bay moved to another floor, 9 bays put in their own order on a floor.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -46,6 +46,10 @@ export interface StorageEdits {
   // floor. Absent or missing a letter: the handbook's floor. Added bays keep their own `floor`.
   // The letter, and so every address, check and note of the bay, stays the same (version 8).
   bayFloors?: Record<string, string>;
+  // The order of the bays on a floor (#191): floor id → bay letters, set by Move left / Move right
+  // in layout edit mode. A bay missing from its floor's list keeps its default place; letters no
+  // longer on the floor are skipped. Only kept for a floor with an order (version 9).
+  bayOrder?: Record<string, string[]>;
 }
 
 // Build-plan step edits, keyed by step id (version 3).
@@ -159,6 +163,7 @@ export type UpdateOp =
   | { type: 'storageBayRename'; id: string; name: string }
   // Any bay to another floor, keeping its letter and records (#190).
   | { type: 'storageBayMove'; id: string; floor: string }
+  | { type: 'storageBayOrder'; floor: string; order: string[] }
   | { type: 'storageBayRemove'; id: string }
   // Hide or bring back a handbook bay; its records are kept either way.
   | { type: 'storageBayHide'; id: string }

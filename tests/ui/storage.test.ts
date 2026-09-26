@@ -608,3 +608,86 @@ test('the update stand-in applies an op like the server: a refused one leaves th
   assert.equal(next.version, 5);
   assert.deepEqual(state, before);
 });
+
+test('bays move left and right on their floor in edit mode, and the hall pairs them in that order (#191)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ state: { version: 1, checks: { 'slot-A01-built': true } } });
+  render();
+  await nextTick();
+  const place = (id: string) => {
+    const bay = $(`[data-slot="${id}01"]`)!.closest<HTMLElement>('.bay')!.style;
+    return ['--bay-row', '--bay-col'].map(p => bay.getPropertyValue(p).trim());
+  };
+  // The handbook's pairing: A and B share the row by the entrance, G and H the rear one.
+  assert.deepEqual(letters(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+  assert.deepEqual(place('A'), ['4', '1']);
+  assert.deepEqual(place('H'), ['1', '3']);
+  assert.equal($('[data-bay-left]'), null, 'only while editing the layout');
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  assert.equal($<HTMLButtonElement>('[data-bay-left="A"]')!.disabled, true, 'A is first');
+  assert.equal($<HTMLButtonElement>('[data-bay-right="H"]')!.disabled, true, 'H is last');
+  assert.equal($('[data-bay-left="A"]')!.getAttribute('aria-label'), 'Move bay A left');
+  $('[data-bay-right="A"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'storageBayOrder',
+    floor: 'ground',
+    order: ['B', 'A', 'C', 'D', 'E', 'F', 'G', 'H'],
+  });
+  assert.equal(state.version, 9);
+  assert.deepEqual(letters(), ['B', 'A', 'C', 'D', 'E', 'F', 'G', 'H']);
+  assert.deepEqual(place('B'), ['4', '1']);
+  assert.deepEqual(place('A'), ['4', '3']);
+  assert.equal(state.checks['slot-A01-built'], true, 'its progress stays with the bay');
+  // Moving right from the right-hand side goes to the next row back.
+  $('[data-bay-right="A"]')!.click();
+  await settle();
+  assert.deepEqual(letters(), ['B', 'C', 'A', 'D', 'E', 'F', 'G', 'H']);
+  assert.deepEqual(place('A'), ['3', '1']);
+  // A bay moved onto the floor takes its default place: last here, alone at the back.
+  const menu = () => $<HTMLSelectElement>('[data-move-bay="I"]')!;
+  setFloor('upper');
+  render();
+  await nextTick();
+  menu().value = 'ground';
+  menu().dispatchEvent(new Event('change'));
+  await settle();
+  setFloor('ground');
+  render();
+  await nextTick();
+  assert.deepEqual(letters(), ['B', 'C', 'A', 'D', 'E', 'F', 'G', 'H', 'I']);
+  assert.deepEqual(place('I'), ['1', '1']);
+  assert.equal($$('.aisle').length, 5, 'an aisle beside every row');
+  // The search keeps the order.
+  setQuery('A0');
+  render();
+  await nextTick();
+  assert.equal(letters().indexOf('C') < letters().indexOf('A'), true);
+  setQuery('');
+});
+
+test('a stored bay order skips letters no longer on the floor and places the rest (#191)', async () => {
+  open({
+    state: {
+      version: 9,
+      storageEdits: {
+        floors: [],
+        floorNames: {},
+        bays: [],
+        bayNames: {},
+        slots: {},
+        clearedSlots: [],
+        hiddenBays: ['D'],
+        hiddenFloors: [],
+        bayOrder: { ground: ['Z', 'D', 'C', 'B'] },
+      },
+    },
+  });
+  setLayoutEditing(false);
+  render();
+  await nextTick();
+  // B and C trade places; D is hidden and Z does not exist, so both are skipped.
+  assert.deepEqual(letters(), ['A', 'C', 'B', 'E', 'F', 'G', 'H']);
+});

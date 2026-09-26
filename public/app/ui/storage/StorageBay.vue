@@ -4,7 +4,8 @@
   Done box writes all four of its saved `slot-<address>-<step>` checks in one save; "Complete
   room" does that for every named container of the bay. While editing the layout, the bay
   can be renamed, a container cleared (its checkmarks stay with the address), an item added
-  (a free position first, then the next address) and an added bay removed.
+  (a free position first, then the next address) and an added bay removed. Move left / Move right
+  set the order of the bays on the floor (#191): `order` is every bay on it, in its current order.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -18,9 +19,10 @@ import { legacy } from '../bridge.ts';
 import type { StorageBayView } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
-const props = withDefaults(defineProps<{ bay: StorageBayView; position?: number }>(), {
-  position: 0,
-});
+const props = withDefaults(
+  defineProps<{ bay: StorageBayView; position?: number; order?: string[] }>(),
+  { position: 0, order: () => [] },
+);
 
 const view = computed(() =>
   legacy(() => {
@@ -34,6 +36,9 @@ const view = computed(() =>
       canHide: !b.custom && !storageBays().some(x => x.custom && x.id === b.id),
       // The floors this bay can move to (#190): every other floor in the tabs.
       moveTo: storageFloors().filter(f => f.id !== b.floor),
+      // Its place in the floor's order (#191), for Move left / Move right.
+      at: props.order.indexOf(b.id),
+      bays: props.order.length,
       done: items.filter(x => slotDone(x.id)).length,
       named: items.length,
       slots: b.items.map(x => ({
@@ -157,6 +162,26 @@ async function moveBay(e: Event) {
   }
 }
 
+// "Move left" / "Move right": swap the bay with its neighbour in the floor's order and save the
+// whole order (#191). Its containers and progress are untouched: only its place changes.
+// Both buttons stay disabled while it saves.
+const shifting = ref(false);
+async function shiftBay(by: -1 | 1) {
+  const order = [...props.order],
+    at = order.indexOf(props.bay.id),
+    to = at + by;
+  if (at < 0 || to < 0 || to >= order.length) return;
+  [order[at], order[to]] = [order[to]!, order[at]!];
+  shifting.value = true;
+  try {
+    await save({ type: 'storageBayOrder', floor: props.bay.floor, order });
+    render();
+  } catch {
+  } finally {
+    shifting.value = false;
+  }
+}
+
 function removeBay(e: Event) {
   if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
     return;
@@ -218,6 +243,29 @@ async function addContainer(e: Event) {
         >
           Remove bay
         </button>
+        <template v-if="view.editing && view.bays > 1 && view.at >= 0"
+          ><button
+            class="btn quiet"
+            :data-bay-left="bay.id"
+            :aria-label="'Move bay ' + bay.id + ' left'"
+            title="Move left"
+            :class="{ unavailable: !shifting }"
+            :disabled="shifting || view.at === 0"
+            @click="shiftBay(-1)"
+          >
+            ←</button
+          ><button
+            class="btn quiet"
+            :data-bay-right="bay.id"
+            :aria-label="'Move bay ' + bay.id + ' right'"
+            title="Move right"
+            :class="{ unavailable: !shifting }"
+            :disabled="shifting || view.at === view.bays - 1"
+            @click="shiftBay(1)"
+          >
+            →
+          </button></template
+        >
         <select
           v-if="view.editing && view.moveTo.length"
           class="move-bay"

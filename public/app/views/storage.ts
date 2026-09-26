@@ -46,7 +46,7 @@ export function inputText(inputs: ItemRates): string {
 // renamed floors and bays, `slots` (address → item name filled in by the user) and
 // `clearedSlots` (handbook addresses the user emptied, kept as reserved positions) and
 // `hiddenBays` (handbook bays taken out of the room, their records kept) and `bayFloors`
-// (handbook bays moved to another floor, #190).
+// (handbook bays moved to another floor, #190) and `bayOrder` (the bays' order per floor, #191).
 function storageEdits(): StorageEdits {
   const e: Partial<StorageEdits> = state?.storageEdits || {};
   return {
@@ -59,6 +59,7 @@ function storageEdits(): StorageEdits {
     hiddenBays: e.hiddenBays || [],
     hiddenFloors: e.hiddenFloors || [],
     ...(e.bayFloors ? { bayFloors: e.bayFloors } : {}),
+    ...(e.bayOrder ? { bayOrder: e.bayOrder } : {}),
   };
 }
 
@@ -98,6 +99,20 @@ export function hiddenStorageFloors(): { id: string; label: string }[] {
     id,
     label: e.floorNames[id] || label,
   }));
+}
+
+// The order of the bays `ids` on `floor` (#191), given in their default (address) order, or null
+// when the floor has no order of its own. Bays in the saved order take its sequence; a bay
+// missing from it (added or moved here since) keeps its default place, and letters no longer on
+// the floor are skipped.
+export function floorOrder(floor: string, ids: string[]): string[] | null {
+  const listed = storageEdits().bayOrder?.[floor];
+  if (!listed) return null;
+  const here = new Set(ids),
+    order = listed.filter(id => here.has(id)),
+    ordered = new Set(order);
+  let next = 0;
+  return ids.map(id => (ordered.has(id) ? order[next++]! : id));
 }
 
 // The id for a bay the user adds (#add-bay, ui/storage/LayoutEditor.vue): the first unused letter,
