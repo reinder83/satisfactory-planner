@@ -261,6 +261,16 @@ test('a refill keeps an earlier undo, and offers none when nothing was typed', a
   assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 3);
 });
 
+test('typed nitrogen counts are typed too: a refill over them can be undone', async () => {
+  survey(3, { purity: 'vanilla', distribution: 'original' });
+  await change('input[name="well:Nitrogen Gas:normal"]', '99');
+  await change('select[name=purity]', 'pure');
+  assert.equal(wizard!.extraction!.wells!['Nitrogen Gas']!.normal, 0, 'refilled from the preset');
+  assert.equal($('[data-node-undo]')!.textContent!.trim(), 'Undo refill');
+  await click('[data-node-undo]');
+  assert.equal(wizard!.extraction!.wells!['Nitrogen Gas']!.normal, 99, 'the typed count is back');
+});
+
 test('a world with no table says why, and fills nothing', async () => {
   // A purity with no fixed layout.
   survey(2, { purity: 'random', distribution: 'original' });
