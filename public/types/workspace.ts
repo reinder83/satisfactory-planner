@@ -2,7 +2,7 @@
 // the two export formats. The browser edition (browser-api.ts) answers the same /api/ paths
 // with the same shapes from IndexedDB.
 import type { Choice, ItemRates, Phase } from './common.ts';
-import type { StoredCalculatedPlan, StoredSettings } from './calculated.ts';
+import type { AlternateRanking, StoredCalculatedPlan, StoredSettings } from './calculated.ts';
 import type { Handbook } from './handbook.ts';
 import type { ProgressState, SavedState } from './state.ts';
 
@@ -17,6 +17,16 @@ export interface StoredProfile {
   plan?: StoredCalculatedPlan | null;
   handbook?: Handbook;
   state: SavedState;
+  // The last hard-drive payoff ranking (#203). Derived, not progress: left out of exports and
+  // shares, and only shown while planCreatedAt matches the plan it was ranked against.
+  payoff?: StoredPayoff;
+}
+
+// POST /api/rank-alternates: rankAlternates (planner.ts) on the profile's plan settings, with
+// the createdAt of the plan it compared against.
+export interface StoredPayoff {
+  planCreatedAt: string;
+  ranking: AlternateRanking;
 }
 
 export interface StoredSave {
@@ -136,6 +146,8 @@ export interface ContextReply {
   state: ProgressState;
   plan: StoredCalculatedPlan | null;
   handbook?: Handbook;
+  // The stored ranking while it still matches the plan, otherwise null.
+  payoff?: StoredPayoff | null;
 }
 
 // GET /api/export: one profile's progress, restored with /api/import (which also takes a

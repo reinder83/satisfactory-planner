@@ -48,9 +48,17 @@ export async function createApp({
   user = process.env.APP_USER || 'pioneer',
   password = process.env.APP_PASSWORD || '',
   dev = false,
+  // Time limit of one hard-drive payoff ranking (see openWorkspace); tests pass a small one.
+  rankBudgetMs = undefined as number | undefined,
 } = {}) {
   await fs.mkdir(dataDir, { recursive: true });
-  const workspace = await openWorkspace({ dataDir, initialState, validateState, mutate });
+  const workspace = await openWorkspace({
+    dataDir,
+    initialState,
+    validateState,
+    mutate,
+    rankBudgetMs,
+  });
   const hash = (s: string) => createHash('sha256').update(s).digest();
   // JSON replies are never cached, so a browser never shows stale progress.
   const send = (

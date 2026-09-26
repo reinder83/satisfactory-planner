@@ -205,10 +205,16 @@ async function buildPages() {
     await minifyJs(`const ready = import('./planner.mjs');
 self.onmessage = async ({ data }) => {
   try {
-    const { calculate } = await ready;
+    const { calculate, rankAlternates } = await ready;
     self.postMessage({
       id: data.id,
-      result: calculate(data.settings, phase => self.postMessage({ id: data.id, phase })),
+      result: data.rank
+        ? rankAlternates(data.settings, {
+            phase: data.rank.phase,
+            budgetMs: data.rank.budgetMs,
+            onProgress: (done, total) => self.postMessage({ id: data.id, done, total }),
+          })
+        : calculate(data.settings, phase => self.postMessage({ id: data.id, phase })),
     });
   } catch (e) {
     self.postMessage({ id: data.id, error: e.message });
