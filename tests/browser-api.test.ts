@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { browserRequest, createBrowserApi } from '../public/browser-api.ts';
+import {
+  browserRequest,
+  createBrowserApi,
+  workerCalculator,
+  type CalculatorWorker,
+} from '../public/browser-api.ts';
 import { calculate } from '../planner.ts';
 import type {
   BrowserWorkspace,
@@ -227,6 +232,70 @@ test('a failed start is not cached: the next browser request tries again', async
   } finally {
     Object.assign(globalThis, saved);
   }
+});
+
+// A stand-in worker that records what it is sent; the test answers for it with reply().
+function fakeWorkers() {
+  interface Spawned {
+    posted: unknown[];
+    terminated: boolean;
+    worker: CalculatorWorker;
+  }
+  const spawned: Spawned[] = [];
+  const spawn = () => {
+    const entry: Spawned = {
+      posted: [],
+      terminated: false,
+      worker: {
+        onmessage: null,
+        onerror: null,
+        postMessage: (m: unknown) => entry.posted.push(m),
+        terminate: () => (entry.terminated = true),
+      },
+    };
+    spawned.push(entry);
+    return entry.worker;
+  };
+  const reply = (index: number, data: object) =>
+    spawned[index]!.worker.onmessage?.(new MessageEvent('message', { data }));
+  return { spawned, spawn, reply };
+}
+const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+test('a calculation timeout fails only the running calculation; queued ones move to a fresh worker', async () => {
+  const { spawned, spawn, reply } = fakeWorkers();
+  const calculate = workerCalculator(spawn, 40);
+  const first = Promise.resolve(calculate({ n: 1 }));
+  const second = Promise.resolve(calculate({ n: 2 }));
+  const firstFailed = assert.rejects(first, /timed out/);
+  await wait(60);
+  await firstFailed;
+  assert.equal(spawned.length, 2, 'a fresh worker was started');
+  assert.equal(spawned[0]!.terminated, true);
+  assert.deepEqual(spawned[1]!.posted, [{ id: 2, settings: { n: 2 } }]);
+  reply(1, { id: 2, result: { name: 'second' } });
+  assert.deepEqual(await second, { name: 'second' });
+});
+
+test("a queued calculation's time limit starts when it runs, not while it waits", async () => {
+  const { spawned, spawn, reply } = fakeWorkers();
+  const calculate = workerCalculator(spawn, 60);
+  const progress: number[] = [];
+  const first = Promise.resolve(calculate({ n: 1 }));
+  const second = Promise.resolve(calculate({ n: 2 }, phase => progress.push(phase)));
+  await wait(40);
+  reply(0, { id: 1, phase: 2 });
+  await wait(40);
+  reply(0, { id: 1, result: { name: 'first' } });
+  assert.deepEqual(await first, { name: 'first' });
+  // 80 ms after it was queued, past the 60 ms limit, the second one is only now starting.
+  await wait(40);
+  reply(0, { id: 2, phase: 1 });
+  await wait(40);
+  reply(0, { id: 2, result: { name: 'second' } });
+  assert.deepEqual(await second, { name: 'second' });
+  assert.deepEqual(progress, [1]);
+  assert.equal(spawned.length, 1, 'no timeout restarted the worker');
 });
 
 test('a full export past the import limit is not recorded as a backup', async () => {
