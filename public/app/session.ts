@@ -26,6 +26,7 @@ import type {
 export const VIEWS = [
   'plan',
   'factories',
+  'logistics',
   'storage',
   'resources',
   'backup',
