@@ -52,7 +52,9 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   } catch {
     throw new Error('The server returned an unreadable response.');
   }
-  if (r.status === 401) sessionEnded();
+  // The server's own password (HTTP Basic, server.ts) also answers 401, with a
+  // WWW-Authenticate challenge the browser handles; only the app's 401 means a session ended.
+  if (r.status === 401 && !r.headers.has('WWW-Authenticate')) sessionEnded();
   if (!r.ok) throw new Error(data.error || 'Request failed.');
   return data;
 }

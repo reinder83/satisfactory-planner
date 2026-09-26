@@ -104,6 +104,26 @@ test('signed out, a 401 (a wrong password) does not reload the sign-in screen', 
   assert.deepEqual(calls, ['/api/login']);
 });
 
+test('a 401 from the server password (HTTP Basic) is not taken for an ended session', async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (path: RequestInfo | URL) => {
+    calls.push(String(path));
+    return new Response(JSON.stringify({ error: 'Sign in to the planner.' }), {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Basic realm="Satisfactory Planner", charset="UTF-8"' },
+    });
+  };
+  go('plan');
+  render();
+  await assert.rejects(
+    request('/api/update', { method: 'POST', body: '{}' }),
+    /Sign in to the planner/,
+  );
+  await settle();
+  assert.deepEqual(calls, ['/api/update'], 'no re-check of the session');
+  assert.ok($('.layout'), 'the page stays');
+});
+
 test('a failed tick puts the box back', async () => {
   stubFetch({});
   go('plan');
