@@ -7,7 +7,8 @@ import { beforeEach, test } from 'vitest';
 import { bayCapacity } from '../../public/state.ts';
 import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { openSlot, slotKeys } from '../../public/app/views/storage.ts';
+import { containerMove, openSlot, slotKeys, storageBays } from '../../public/app/views/storage.ts';
+import { moveContainer } from '../../public/app/ui/actions.ts';
 import {
   $,
   $$,
@@ -690,4 +691,75 @@ test('a stored bay order skips letters no longer on the floor and places the res
   await nextTick();
   // B and C trade places; D is hidden and Z does not exist, so both are skipped.
   assert.deepEqual(letters(), ['A', 'C', 'B', 'E', 'F', 'G', 'H']);
+});
+
+test('containers get drag handles in edit mode, and a drop moves or swaps them with their progress (#208)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({
+    state: {
+      version: 1,
+      checks: { 'slot-A02-built': true, 'slot-A03-verified': true },
+      notes: { 'slot-A02': evil },
+    },
+  });
+  render();
+  await nextTick();
+  const name = (id: string) =>
+    storageBays()
+      .flatMap(b => b.items)
+      .find(x => x.id === id)?.name ?? null;
+  const [a01, a02, a03] = ['A01', 'A02', 'A03'].map(name);
+  assert.equal($('[data-drag-slot]'), null, 'nothing drags outside edit mode');
+  // A container card is not made a disabled button: its Done box and details stay usable.
+  const cardAttrs = () =>
+    ['role', 'tabindex', 'aria-disabled'].filter(a => $('[data-drop="A01"]')!.hasAttribute(a));
+  await settle();
+  assert.deepEqual(cardAttrs(), []);
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  // A handle on every filled position, a drop target on every position, and one past the end.
+  const named = storageBays()
+    .filter(b => b.floor === 'ground')
+    .flatMap(b => b.items)
+    .filter(x => x.name);
+  assert.equal($$('[data-drag-slot]').length, named.length);
+  assert.equal(
+    $('[data-drag-slot="A01"]')!.getAttribute('aria-label'),
+    `Move container A01: ${a01}. Space to pick it up, arrow keys to move, Space to drop.`,
+  );
+  assert.ok($('[data-drop="A09"].drop-new'), 'a drop past A08 makes A09');
+  await settle();
+  assert.deepEqual(cardAttrs(), [], 'in edit mode the handle carries the drag attributes');
+  assert.equal($('[data-drag-slot="A01"]')!.getAttribute('aria-roledescription'), 'draggable');
+  // Clear C05, then drop A02 on it: a move, the reserved address left behind.
+  await moveContainer('C04', 'C04');
+  assert.equal(calls.length, 0, 'a drop on its own place saves nothing');
+  $('[data-clear-slot="C05"]')!.click();
+  await settle();
+  await moveContainer('A02', 'C05');
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'storageSlotMove',
+    from: 'A02',
+    to: 'C05',
+    fromName: a02,
+    toName: null,
+  });
+  assert.equal(name('C05'), a02);
+  assert.equal(name('A02'), null);
+  assert.equal(state.checks['slot-C05-built'], true, 'its checkmarks went along');
+  assert.equal(state.notes['slot-C05'], evil, 'and its note');
+  assert.match($('#toast')!.textContent!, new RegExp(`moved from A02 to C05`));
+  // A drop on a filled position swaps the two.
+  await moveContainer('A03', 'A01');
+  assert.equal(name('A01'), a03);
+  assert.equal(name('A03'), a01);
+  assert.equal(state.checks['slot-A01-verified'], true);
+  assert.match($('#toast')!.textContent!, /swapped places \(A03 ↔ A01\)/);
+  // Past the end of a bay: only the next address takes a container.
+  await moveContainer('A01', 'A09');
+  assert.equal(name('A09'), a03);
+  assert.equal(containerMove('A04', 'A12'), null, 'not a gap past the end');
+  assert.equal(containerMove('A02', 'A04'), null, 'an empty position has nothing to move');
+  noMarkup();
 });

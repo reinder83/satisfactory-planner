@@ -7,6 +7,7 @@ import {
   bayCapacity,
   handbookBay,
   handbookFloor,
+  checkBase,
 } from '../public/state.ts';
 import plan from '../public/plan.json' with { type: 'json' };
 import type { SavedState, UpdateOp } from '../public/types/index.ts';
@@ -540,4 +541,91 @@ test('a bay order with unknown floors, bays elsewhere or bad letters is refused 
     storageEdits: { ...s.storageEdits, bayOrder: { ground: ['Z', 'B'], upper: [] } },
   });
   assert.deepEqual(kept.storageEdits.bayOrder, { ground: ['Z', 'B'] });
+});
+
+test('a container moves or swaps with its checks and note, into any bay and past 08 (#208)', () => {
+  const move = (
+    s: SavedState,
+    from: string,
+    to: string,
+    fromName: string,
+    toName: string | null = null,
+  ) => mutate(s, { type: 'storageSlotMove', from, to, fromName, toName });
+  let s = initialState();
+  for (const step of ['built', 'labelled', 'connected', 'verified'])
+    s = mutate(s, { type: 'check', key: `slot-A02-${step}`, value: true });
+  s = mutate(s, { type: 'note', key: 'slot-A02', value: 'Left of the door' });
+  s = mutate(s, { type: 'check', key: 'slot-C05-built', value: true });
+  // A move into another bay's reserved position: the handbook address left behind is reserved,
+  // and the four checks and the note go along.
+  s = mutate(s, { type: 'storageSlotClear', key: 'C05' });
+  s = move(s, 'A02', 'C05', 'Iron Plate');
+  assert.equal(s.storageEdits.slots.C05, 'Iron Plate');
+  assert.ok(!s.storageEdits.clearedSlots.includes('C05'));
+  assert.ok(s.storageEdits.clearedSlots.includes('A02'));
+  for (const step of ['built', 'labelled', 'connected', 'verified'])
+    assert.equal(s.checks[`slot-C05-${step}`], true, step);
+  assert.equal(s.notes['slot-C05'], 'Left of the door');
+  // The reserved position's leftover check went to the address left behind, not away.
+  assert.equal(s.checks['slot-A02-built'], true);
+  assert.equal(s.checks['slot-A02-labelled'], undefined);
+  assert.equal(s.notes['slot-A02'], undefined);
+  // A swap within a bay trades the items and both sets of records.
+  s = mutate(s, { type: 'check', key: 'slot-C06-verified', value: true });
+  s = move(s, 'C05', 'C06', 'Iron Plate', 'Screws');
+  assert.equal(s.storageEdits.slots.C06, 'Iron Plate');
+  assert.equal(s.storageEdits.slots.C05, 'Screws');
+  assert.equal(s.checks['slot-C06-built'], true);
+  assert.equal(s.checks['slot-C05-verified'], true);
+  assert.equal(s.checks['slot-C05-built'], undefined);
+  assert.equal(s.notes['slot-C06'], 'Left of the door');
+  // Onto a position past 08, which is new content (version 4); leaving an added position drops
+  // that address, as clearing it does.
+  s = move(s, 'C06', 'C09', 'Iron Plate');
+  assert.equal(s.storageEdits.slots.C09, 'Iron Plate');
+  assert.equal(s.version, 4);
+  assert.equal(s.notes['slot-C09'], 'Left of the door');
+  s = move(s, 'C09', 'B01', 'Iron Plate', 'Modular Frame');
+  assert.equal(s.storageEdits.slots.C09, 'Modular Frame');
+  s = move(s, 'C09', 'C04', 'Modular Frame', null);
+  assert.equal(s.storageEdits.slots.C09, undefined);
+  assert.ok(!s.storageEdits.clearedSlots.includes('C09'), 'an added position is not reserved');
+  // Into an added bay, and it round-trips.
+  s = mutate(s, { type: 'storageBayAdd', id: 'S', name: 'Extra', floor: 'ground' });
+  s = move(s, 'B01', 'S03', 'Iron Plate');
+  assert.equal(s.storageEdits.slots.S03, 'Iron Plate');
+  assert.equal(s.checks['slot-S03-built'], true);
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(round.storageEdits, s.storageEdits);
+  assert.deepEqual(round.checks, s.checks);
+});
+
+test('a container move to the same, an unknown or a malformed address is refused (#208)', () => {
+  const s = mutate(initialState(), { type: 'check', key: 'slot-A01-built', value: true });
+  for (const [op, why] of [
+    [{ from: 'A01', to: 'A01', fromName: 'Concrete', toName: null }, /Invalid container move/],
+    [{ from: 'A01', to: 'A00', fromName: 'Concrete', toName: null }, /Invalid container move/],
+    [{ from: 'A1', to: 'A02', fromName: 'Concrete', toName: null }, /Invalid container move/],
+    [{ from: 'A01', to: 'Z01', fromName: 'Concrete', toName: null }, /Unknown bay/],
+    [{ from: 'A01', to: 'A02', fromName: ' ', toName: null }, /Invalid container/],
+    [{ from: 'A01', to: 'A02', fromName: 'Concrete', toName: 5 }, /Invalid container/],
+  ] as const) {
+    const before = structuredClone(s);
+    assert.throws(
+      () => mutate(before, { type: 'storageSlotMove', ...op } as unknown as UpdateOp),
+      why,
+      JSON.stringify(op),
+    );
+  }
+  assert.equal(s.checks['slot-A01-built'], true);
+  // It carries what the tab showed at both addresses, so a stale tab cannot send it.
+  const op = {
+    type: 'storageSlotMove',
+    from: 'A01',
+    to: 'A02',
+    fromName: 'Concrete',
+    toName: null,
+  };
+  assert.throws(() => checkBase({ ...s, revision: 3 }, op, '2'), /changed in another tab/);
+  assert.doesNotThrow(() => checkBase({ ...s, revision: 3 }, op, '3'));
 });

@@ -173,4 +173,5 @@ export type UpdateOp =
   | { type: 'storageFloorRestore'; id: string }
   | { type: 'storageBayRestore'; id: string }
   | { type: 'storageSlotAssign'; key: string; name: string }
-  | { type: 'storageSlotClear'; key: string };
+  | { type: 'storageSlotClear'; key: string }
+  | { type: 'storageSlotMove'; from: string; to: string; fromName: string; toName: string | null };

@@ -6,6 +6,8 @@ The interface ships two typefaces as self-hosted WOFF2 files, both licensed unde
 
 The HiGHS JavaScript/WebAssembly solver is the `highs` npm package, 1.15.3 (MIT), from https://github.com/lovasoa/highs-js, installed from the npm registry and checked against the integrity value in `package-lock.json`. Its license ships in the package and, for the Pages edition, as `HIGHS-LICENSE` next to the solver. No runtime download is needed.
 
+Dragging storage containers in layout edit mode uses the `@dnd-kit/vue` npm package, 0.5.0 (MIT, copyright Claudéric Demers, https://github.com/clauderic/dnd-kit), with its `@dnd-kit/abstract`, `@dnd-kit/dom`, `@dnd-kit/state`, `@dnd-kit/geometry` and `@dnd-kit/collision` dependencies (0.5.0, MIT), `@preact/signals-core` (MIT) and `tslib` (0BSD). It is a development dependency that Vite bundles into the page script, so the Docker image installs nothing extra and nothing is loaded at runtime.
+
 Recipe data is derived from the Satisfactory Tools dataset at https://github.com/greeny/SatisfactoryTools. The dataset revision is recorded in `recipes.json`; item stack sizes come from the same revision, and the vehicle slot counts and fuel burn rates in `public/app/logistics.ts` from its building data. Satisfactory game content belongs to Coffee Stain Studios. This is an unofficial planner.
 
 Reference resource limits use the standard node counts, with crude oil wells excluded. Nitrogen is a separate configurable budget. Randomizer resource-rich settings can change counts and are not inferred from purity: confirm the per-resource budgets for the actual seed. Reference: https://satisfactory.wiki.gg/wiki/Resource_Node .

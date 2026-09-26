@@ -7,7 +7,7 @@ import { bayOfSlot, slotPosition } from '../../state.ts';
 import { num } from '../format.ts';
 import { calculated, checked, plan, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
-import type { ItemRates, StorageEdits } from '../../types/index.ts';
+import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
 
 // A container position: its address and the item it holds, or null when reserved (empty).
 export interface StoragePosition {
@@ -246,4 +246,20 @@ export const SLOT_STEPS: [step: string, label: string][] = [
 export function openSlot(id: string) {
   if (!storageBays().some(b => b.items.some(x => x.id === id && x.name))) return;
   showDetail({ kind: 'slot', id });
+}
+
+// The update for dropping the container at `from` on position `to` (#208), with the items the page
+// shows at both, or null when there is nothing to move: no container at `from`, the same place,
+// or an address past the end of its bay other than the next one there.
+export function containerMove(from: string, to: string): UpdateOp | null {
+  if (from === to) return null;
+  const all = storageBays().flatMap(b => b.items);
+  const fromName = all.find(x => x.id === from)?.name;
+  if (!fromName) return null;
+  const target = all.find(x => x.id === to);
+  if (!target) {
+    const bay = storageBays().find(b => b.id === bayOfSlot(to));
+    if (!bay || slotPosition(to) !== bay.items.length + 1) return null;
+  }
+  return { type: 'storageSlotMove', from, to, fromName, toName: target?.name ?? null };
 }

@@ -11,6 +11,7 @@ import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
 import { required } from '../format.ts';
+import { containerMove } from '../views/storage.ts';
 
 // A link to a factory's dialog: a handbook factory or a calculated row.
 export type FactoryLink = { factory: string } | { calcFactory: string };
@@ -89,3 +90,21 @@ export function cancelDetail(e: Event) {
 // "Create a save" on the profiles page, and in the wizard when there is no draft.
 // startWizard checks for unsaved notes itself.
 export const newSave = () => startWizard();
+
+// A storage container dropped on another position (#208, StoragePage.vue): one save that moves
+// it, or swaps it with the container there, its checks and note going along.
+export async function moveContainer(from: string, to: string) {
+  const op = containerMove(from, to);
+  if (!op || op.type !== 'storageSlotMove') return;
+  try {
+    await save(op);
+    toast(
+      op.toName
+        ? `${op.fromName} and ${op.toName} swapped places (${from} ↔ ${to}), each with its checkmarks and note.`
+        : `${op.fromName} moved from ${from} to ${to}, with its checkmarks and note.`,
+    );
+  } catch {
+  } finally {
+    render();
+  }
+}

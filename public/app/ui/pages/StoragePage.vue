@@ -19,6 +19,8 @@ import {
   setQuery,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { DragDropProvider } from '@dnd-kit/vue';
+import type { DragEndEvent } from '@dnd-kit/vue';
 import {
   floorOrder,
   hiddenStorageBays,
@@ -27,6 +29,7 @@ import {
   storageFloors,
 } from '../../views/storage.ts';
 import { save, toast } from '../../api.ts';
+import { moveContainer } from '../actions.ts';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
@@ -178,6 +181,14 @@ async function restoreFloor(e: Event, id: string) {
   }
 }
 
+// A container dropped on another position (#208, ui/storage/SlotCell.vue): one save that moves or
+// swaps it, its checks and note going along. A cancelled drag, or a drop back on its own place,
+// saves nothing.
+function dropped(event: DragEndEvent) {
+  const { source, target } = event.operation;
+  if (event.canceled || !source || !target) return;
+  return moveContainer(String(source.id), String(target.id));
+}
 // "Edit layout" / "Done editing": show or hide the layout editor (view state only).
 function toggleLayout() {
   setLayoutEditing(!layoutEditing);
@@ -282,26 +293,28 @@ function toggleLayout() {
     Filtered view: showing matching bays only. Clear search to see the full floor arrangement.
   </p>
   <p v-if="page.bays.length" class="eyebrow floor-marker">REAR OF HALL ↑</p>
-  <div class="floor-grid">
-    <template v-if="page.aisles || page.bays.length"
-      ><div v-for="r in page.aisles" :key="'aisle' + r" class="aisle" :style="`--aisle-row:${r}`">
-        MAIN AISLE
+  <DragDropProvider @drag-end="dropped"
+    ><div class="floor-grid">
+      <template v-if="page.aisles || page.bays.length"
+        ><div v-for="r in page.aisles" :key="'aisle' + r" class="aisle" :style="`--aisle-row:${r}`">
+          MAIN AISLE
+        </div>
+        <StorageBay
+          v-for="b in page.bays"
+          :key="b.bay.id"
+          :bay="b.bay"
+          :position="b.position"
+          :order="page.order"
+      /></template>
+      <div v-else-if="!page.workshop" class="empty-state">
+        {{
+          page.floorBays
+            ? 'No matching item on this floor. Try another floor.'
+            : 'No bays on this floor yet. Use Edit layout to add one.'
+        }}
       </div>
-      <StorageBay
-        v-for="b in page.bays"
-        :key="b.bay.id"
-        :bay="b.bay"
-        :position="b.position"
-        :order="page.order"
-    /></template>
-    <div v-else-if="!page.workshop" class="empty-state">
-      {{
-        page.floorBays
-          ? 'No matching item on this floor. Try another floor.'
-          : 'No bays on this floor yet. Use Edit layout to add one.'
-      }}
-    </div>
-  </div>
+    </div></DragDropProvider
+  >
   <template v-if="page.bays.length"
     ><div class="entry floor-marker">↓ ENTRANCE / STAIRS</div>
     <div class="small muted">
