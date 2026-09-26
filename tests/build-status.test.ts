@@ -119,21 +119,60 @@ test('with no single step adding delivery, the next one frees the most built mac
   close(s.next!.unblocks, 3, 'machine-equivalents freed');
 });
 
-test('power compares built factories with built generators and the listed spare power', () => {
+test('power is measured as the planner balances it, and Phase 1 is never flagged', () => {
+  // Two ingot machines at 50 MW each (peakMW 100 at powerFactor 1), a 20% utility allowance
+  // (requiredMW / peakMW), and a coal generator whose 60 MW the augmenter boost raises by 10%.
   const powered = stage(
     [
-      row('ingot', { Ore: 30 }, { Ingot: 30 }, { power: 50, equivalent: 2 }),
-      row('power-coal', { Ore: 0 }, {}, { power: -75, generationMW: 60 }),
+      row(
+        'ingot',
+        { Ore: 30 },
+        { Ingot: 30 },
+        { power: 50, equivalent: 2, machines: 2, peakMW: 100 },
+      ),
+      row('power-coal', {}, {}, { power: -75, peakMW: 0, generationMW: 60 }),
     ],
-    { raw: { Ore: 30 } },
+    { peakMW: 100, requiredMW: 120, boost: 0.1, generationMW: 60, availableMW: 60 * 1.1 + 30 },
   );
-  assert.deepEqual(buildStatus(powered, ticked('ingot'), '1', 30).power, {
-    drawMW: 100,
-    supplyMW: 30,
-    short: true,
-  });
-  const both = buildStatus(powered, ticked('ingot', 'power-coal'), '1', 50).power;
-  assert.deepEqual(both, { drawMW: 100, supplyMW: 110, short: false });
+  const at = (...ids: string[]) => Object.fromEntries(ids.map(id => ['calc-2-' + id, true]));
+  // Only the factory: 120 MW against the 30 MW spare part of availableMW.
+  const alone = buildStatus(powered, at('ingot'), '2').power;
+  close(alone.drawMW, 120, 'draw');
+  close(alone.supplyMW, 30, 'supply');
+  assert.equal(alone.short, true);
+  // With its generator: 30 + 66 = 96 MW, still short of 120.
+  const both = buildStatus(powered, at('ingot', 'power-coal'), '2').power;
+  close(both.supplyMW, 96, 'supply with the generator');
+  assert.equal(both.short, true);
+  // A plan saved without availableMW falls back to the spare power passed in.
+  const old = { ...powered, availableMW: undefined };
+  close(buildStatus(old, at('ingot', 'power-coal'), '2', 60).power.supplyMW, 126, 'fallback');
+  assert.equal(buildStatus(old, at('ingot', 'power-coal'), '2', 60).power.short, false);
+  // Phase 1 runs on hand-fed biomass: no power constraint, so never short.
+  assert.equal(buildStatus(powered, ticked('ingot'), '1').power.short, false);
+});
+
+test('no fully built stage is flagged short of power, whatever the power settings (#188)', () => {
+  for (const settings of [
+    {},
+    { augmenters: 4, fueledAugmenters: 2 },
+    { somersloops: 20, amplifySloops: 10 },
+    { powerFactor: 2 },
+    { utilityPercent: 50 },
+    { availablePowerGW: 5, installedPowerGW: 5 },
+  ]) {
+    const plan = calculate(settings);
+    for (const [key, st] of Object.entries(plan.stages) as [string, StoredStage][]) {
+      if (!st.feasible || !st.rows?.length) continue;
+      const all = Object.fromEntries(st.rows.map(r => [`calc-${key}-${r.id}`, true]));
+      const { power } = buildStatus(st, all, key);
+      assert.equal(
+        power.short,
+        false,
+        `${JSON.stringify(settings)} phase ${key}: ${JSON.stringify(power)}`,
+      );
+    }
+  }
 });
 
 test('real plans, current and saved: nothing built delivers nothing, fully built every part', () => {
