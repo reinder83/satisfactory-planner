@@ -122,11 +122,24 @@ export const version8 = {
   storageEdits: { ...version7.storageEdits, bayFloors: { D: 'upper' } },
 } satisfies SavedState;
 
-// Version 9: the bays on a floor put in their own order (#191).
+// Version 9: a factory-group link to the vehicle fuel place (#206, #220).
 export const version9 = {
   ...version8,
   version: 9,
-  storageEdits: { ...version8.storageEdits, bayOrder: { ground: ['B', 'A', 'C'] } },
+  factoryGroups: {
+    ...version8.factoryGroups,
+    links: {
+      ...version8.factoryGroups.links,
+      'fg-plates1:vehicles': { mode: 'tractor', roundTripMin: 3, fuel: 'Packaged Fuel' },
+    },
+  },
+} satisfies SavedState;
+
+// Version 10: the bays on a floor put in their own order (#191).
+export const version10 = {
+  ...version9,
+  version: 10,
+  storageEdits: { ...version9.storageEdits, bayOrder: { ground: ['B', 'A', 'C'] } },
 } satisfies SavedState;
 
 // Each state and the version validateState must mark it with.
@@ -141,6 +154,7 @@ export const states: [SavedState, number][] = [
   [version7, 7],
   [version8, 8],
   [version9, 9],
+  [version10, 10],
 ];
 
 export const backup = {

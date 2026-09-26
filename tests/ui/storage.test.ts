@@ -636,7 +636,7 @@ test('bays move left and right on their floor in edit mode, and the hall pairs t
     floor: 'ground',
     order: ['B', 'A', 'C', 'D', 'E', 'F', 'G', 'H'],
   });
-  assert.equal(state.version, 9);
+  assert.equal(state.version, 10);
   assert.deepEqual(letters(), ['B', 'A', 'C', 'D', 'E', 'F', 'G', 'H']);
   assert.deepEqual(place('B'), ['4', '1']);
   assert.deepEqual(place('A'), ['4', '3']);

@@ -199,6 +199,26 @@ const storable = (name: string) =>
 // Its ore and its power are already spent in your world, so — exactly as for
 // spare existing power — the resource budgets and the spare-power figure are
 // entered net of it. Zero is dropped so an untouched profile stays untouched.
+// Fuel for the vehicles on factory-group links (#206), per phase: { phase: { fuel: rate/min } },
+// worked out by the Factories page from the links' vehicles (#205) and frozen with a new profile
+// revision. Only vehicle fuels (preferences.ts) count; zero rates and empty phases are dropped.
+const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) err('Invalid transport fuel.');
+  const out: Partial<Record<StageKey, ItemRates>> = {};
+  for (const [phase, rates] of Object.entries(raw)) {
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(rates))
+      err('Invalid transport fuel.');
+    const clean: ItemRates = {};
+    for (const [name, rate] of Object.entries(rates)) {
+      if (!vehicleFuels.includes(name)) err(`${name} is not a vehicle fuel.`);
+      const q = number(rate, 0, 100000, 0);
+      if (q > 0) clean[name] = q;
+    }
+    if (Object.keys(clean).length) out[phase as StageKey] = clean;
+  }
+  return out;
+};
 const suppliable = (name: string) => !RAW.includes(name) && !!DATA.items[name];
 const supplyRates = (raw: unknown): ItemRates => {
   if (raw === undefined) return {};
@@ -336,6 +356,7 @@ export function settings(input: unknown = {}): CurrentSettings {
     buildRate: number(input.buildRate, 0, 300, number(input.storageRate, 0.1, 300, 1)),
     storageOverrides: rateOverrides(input.storageOverrides),
     existingSupply: supplyRates(input.existingSupply),
+    transportFuel: transportFuelRates(input.transportFuel),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(
@@ -762,6 +783,13 @@ export function run(
     if (!maximum) demand[n] = (demand[n] || 0) + rate;
   }
   for (const [n, q] of Object.entries(drone)) demand[n] = (demand[n] || 0) + q;
+  // Vehicle fuel for the factory-group links (#206), where this phase can make it.
+  const transport: ItemRates = {};
+  for (const [n, q] of Object.entries(s.transportFuel?.[String(phase) as StageKey] || {}))
+    if (reachable.has(n)) {
+      transport[n] = q;
+      demand[n] = (demand[n] || 0) + q;
+    }
   if (phase === 5 && s.cellsPerMinute)
     demand['Singularity Cell'] = (demand['Singularity Cell'] || 0) + s.cellsPerMinute;
   // Each fueled augmenter needs 5 Alien Power Matrix/min. The rate is derived from the augmenter
@@ -1014,6 +1042,7 @@ export function run(
     supplied,
     storage,
     drone,
+    transport,
     delivery,
     surplus,
     plutoniumSink: solved.values['sink-plutonium'] || 0,
@@ -1284,6 +1313,34 @@ export function calculate(
     if (lost.length)
       warnings.push(
         `Phase ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
+      );
+  }
+  // Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
+  // cannot make yet, which is left out there.
+  {
+    const rate = (q: number) => Math.round(q * 100) / 100;
+    const planned = Object.entries(s.transportFuel) as [StageKey, ItemRates][];
+    if (planned.length)
+      warnings.push(
+        `Fuel for the vehicles on your factory-group links is planned as extra demand: ${planned
+          .map(
+            ([p, fuels]) =>
+              `Phase ${p} ${Object.entries(fuels)
+                .map(([n, q]) => `${rate(q)} ${n}/min`)
+                .join(', ')}`,
+          )
+          .join(
+            '; ',
+          )}. It comes from the previous revision's links, as if the vehicles never stop; the fuel chain adds a little traffic of its own, so recalculating again can raise it slightly.`,
+      );
+    const missing = planned.flatMap(([p, fuels]) =>
+      Object.keys(fuels)
+        .filter(n => stages[p]?.feasible && !stages[p]?.transport?.[n])
+        .map(n => `${n} in Phase ${p}`),
+    );
+    if (missing.length)
+      warnings.push(
+        `This plan cannot make ${missing.join(', ')} yet, so that vehicle fuel is left out there. Pick a fuel the phase can make, or plan the vehicles for a later phase.`,
       );
   }
   if (s.fueledAugmenters)

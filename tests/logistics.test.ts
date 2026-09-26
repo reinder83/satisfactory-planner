@@ -53,7 +53,7 @@ test('a link’s vehicle is saved as version 7 and going back to belts restores 
   assert.equal(s.version, 7, 'a version-6 planner must refuse it rather than drop the choice');
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 10 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 11 }), /newer planner version/);
   // Removing a group takes its links along; belts again forget the entry.
   s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-motors1' });
   assert.deepEqual(Object.keys(s.factoryGroups.links!), ['mines:fg-plates1']);
@@ -62,6 +62,23 @@ test('a link’s vehicle is saved as version 7 and going back to belts restores 
   assert.equal(s.version, 3);
   // A state without links keeps its exact shape.
   assert.deepEqual(Object.keys(grouped().factoryGroups), ['groups', 'assignments']);
+});
+
+test('a link to or from the vehicle fuel place marks version 9, which older releases refuse with the update message (#220)', () => {
+  let s = mutate(grouped(), link({}));
+  assert.equal(s.version, 7);
+  s = mutate(s, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'tractor' }));
+  assert.equal(s.version, 9, 'a release before #218 does not know the place');
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.equal(round.version, 9);
+  assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
+  assert.throws(() => validateState({ ...round, version: 11 }), /newer planner version/);
+  // Back to belts, the link goes and the version with it.
+  s = mutate(s, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'belt' }));
+  assert.equal(s.version, 7);
+  // A state saved as 7 with such a link (made by #218 before this fix) still loads, marked 9.
+  const early = validateState({ ...JSON.parse(JSON.stringify(round)), version: 7 });
+  assert.equal(early.version, 9);
 });
 
 test('a malformed link choice is refused and changes nothing', () => {

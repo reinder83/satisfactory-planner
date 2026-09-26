@@ -21,6 +21,7 @@ import {
   setFactoryFilter,
   setQuery,
   state,
+  workspace,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
@@ -678,5 +679,63 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   await pick(`[data-link-mode="${key}"]`, 'belt');
   assert.equal(state.factoryGroups.links, undefined);
   assert.match($(`[data-link="${key}"]`)!.textContent!, /Mk\.\d (belt|pipe)/);
+  noMarkup();
+});
+
+test('between groups: recalculating with transport fuel creates a revision that plans it (#206)', async () => {
+  const rows = plan.stages['3'].rows!;
+  const assignments = Object.fromEntries(
+    rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
+  );
+  const factoryGroups = {
+    groups: [
+      { id: 'fg-smelt1', name: evil },
+      { id: 'fg-parts1', name: 'Parts' },
+    ],
+    assignments,
+    links: {
+      'fg-smelt1:fg-parts1': { mode: 'truck' as const, roundTripMin: 6, fuel: 'Packaged Fuel' },
+    },
+  };
+  open({
+    calculated: plan,
+    workspace: { catalog: catalog() },
+    state: { version: 7, factoryGroups },
+  });
+  go('factories');
+  render();
+  await nextTick();
+  const note = () => $('[data-transport-fuel-note]')!.textContent!.replace(/\s+/g, ' ');
+  assert.match(
+    note(),
+    /The vehicles on these links burn up to Phase 3: [\d.,]+ Packaged Fuel\/min/,
+  );
+  // The new revision's context: the same plan, now with the fuel in its settings.
+  let sent: { settings: { transportFuel: object }; carryFrom: string; name: string } | undefined;
+  const calls = stubFetch({
+    '/api/profiles': (body: typeof sent) => {
+      sent = body;
+      return { saveId: 's', profileId: 'p', reviewCount: 2, workspace };
+    },
+    '/api/context': () => ({
+      save: { id: 's', name: 'World' },
+      profile: { id: 'p', kind: 'calculated', name: 'Fuelled' },
+      state: { ...state, factoryGroups },
+      plan: {
+        ...plan,
+        settings: { ...plan.settings, transportFuel: sent!.settings.transportFuel },
+      },
+    }),
+  });
+  $('[data-recalc-transport]')!.click();
+  await settle();
+  await settle();
+  assert.equal(calls[0]![0], '/api/profiles');
+  assert.equal(sent!.carryFrom, 'p');
+  assert.equal(sent!.name, `${evil} · transport fuel`);
+  assert.deepEqual(Object.keys(sent!.settings.transportFuel), ['3', '4', '5']);
+  assert.match($('#toast')!.textContent!, /2 completed factory checks need review/);
+  assert.match(note(), /This plan already includes the vehicle fuel/);
+  assert.equal($('[data-recalc-transport]'), null);
   noMarkup();
 });

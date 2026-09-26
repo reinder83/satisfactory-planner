@@ -263,11 +263,24 @@ function validateGroups(raw: unknown): FactoryGroups {
 }
 // The places a link can join besides factory groups: group-links.ts's UNGROUPED, MINES and
 // OUTSIDE ids (a test keeps the two lists in step).
-export const linkPlaces = ['ungrouped', 'mines', 'storage', 'drone', 'elevator', 'sink'];
+export const linkPlaces = [
+  'ungrouped',
+  'mines',
+  'storage',
+  'drone',
+  'vehicles',
+  'elevator',
+  'sink',
+];
 const linkModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'train', 'drone'];
 // The vehicles that burn fuel from their own slot; a train is electric and a drone's fuel
 // depends on the flight distance, which the planner does not know.
 export const fuelledModes: LinkMode[] = ['truck', 'tractor', 'explorer'];
+// Link places added after version 7 introduced links, with the version that knows them: a new
+// place is new content an older release cannot read (#220).
+const laterPlaces = ['vehicles'];
+const linksNeedV9 = (g: FactoryGroups) =>
+  Object.keys(g.links || {}).some(k => k.split(':').some(p => laterPlaces.includes(p)));
 // Whether from and to name two different places: a known group or one of linkPlaces.
 const linkKey = (from: unknown, to: unknown, known: Set<string>) =>
   [from, to].every(p => typeof p === 'string' && (known.has(p) || linkPlaces.includes(p))) &&
@@ -640,17 +653,17 @@ const baysOn = (e: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–9 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–10 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "10" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 9
+      // Compared as the old code did, so a version given as "11" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 10
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -706,25 +719,29 @@ export function validateState(s: unknown): ProgressState {
   // and show the floor again. A vehicle picked for a group link is 7 (#205): an older
   // validateGroups keeps only groups and assignments and would drop the choice. A handbook
   // bay moved to another floor is 8 (#190): an older release would drop bayFloors and put the
-  // bay back. Bays put in their own order on a floor are 9 (#191): an older release would drop
-  // bayOrder and put them back in letter order.
+  // bay back. A link to or from the vehicles' own fuel (#206) is 9 (#220): a place releases
+  // before #218 do not know, so they would refuse the state as malformed instead of asking for
+  // an update. Bays put in their own order on a floor are 10 (#191): an older release would
+  // drop bayOrder and put them back in letter order.
   clean.version = clean.storageEdits.bayOrder
-    ? 9
-    : clean.storageEdits.bayFloors
-      ? 8
-      : clean.factoryGroups.links
-        ? 7
-        : clean.storageEdits.hiddenFloors.length
-          ? 6
-          : clean.storageEdits.hiddenBays.length
-            ? 5
-            : hasAddedSlots(clean.storageEdits)
-              ? 4
-              : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                ? 3
-                : hasEdits(clean.storageEdits)
-                  ? 2
-                  : 1;
+    ? 10
+    : linksNeedV9(clean.factoryGroups)
+      ? 9
+      : clean.storageEdits.bayFloors
+        ? 8
+        : clean.factoryGroups.links
+          ? 7
+          : clean.storageEdits.hiddenFloors.length
+            ? 6
+            : clean.storageEdits.hiddenBays.length
+              ? 5
+              : hasAddedSlots(clean.storageEdits)
+                ? 4
+                : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                  ? 3
+                  : hasEdits(clean.storageEdits)
+                    ? 2
+                    : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
