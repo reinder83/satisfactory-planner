@@ -15,6 +15,34 @@ const UNREADABLE =
   'The saves in this browser could not be read. Nothing has been changed; reload to try ' +
   'again, and keep this browser data until you have restored a backup.';
 
+// Whether a stored record has the shape browser-api.ts reads without checking: a saves list
+// whose saves each have an id and a profiles list, and whose profiles each have an id and a
+// progress state with checks and settings. Every release wrote records like this; anything
+// else is damaged and is refused (UNREADABLE) instead of failing later with a raw TypeError.
+// Deeper checks (the state's own fields) stay with validateState where the state is used.
+const object = (x: unknown): x is Record<string, unknown> =>
+  !!x && typeof x === 'object' && !Array.isArray(x);
+function workspaceRecord(found: unknown): found is BrowserWorkspace {
+  return (
+    object(found) &&
+    Array.isArray(found.saves) &&
+    found.saves.every(
+      (s: unknown) =>
+        object(s) &&
+        typeof s.id === 'string' &&
+        Array.isArray(s.profiles) &&
+        s.profiles.every(
+          (p: unknown) =>
+            object(p) &&
+            typeof p.id === 'string' &&
+            object(p.state) &&
+            object(p.state.checks) &&
+            object(p.state.settings),
+        ),
+    )
+  );
+}
+
 // The store browser-api.ts works through (tests pass a stand-in with the same method).
 export interface BrowserStore {
   transaction(): Promise<BrowserWorkspace>;
@@ -65,19 +93,15 @@ export function openBrowserStore(
         const r = store.get('main');
         r.onsuccess = () => {
           try {
+            // Saved data is unknown until checked (AGENTS.md).
+            const found: unknown = r.result;
             // Version 1 is the only workspace format so far; a later one is refused unread.
-            if (typeof r.result?.version === 'number' && r.result.version > 1) throw Error(NEWER);
+            if (object(found) && typeof found.version === 'number' && found.version > 1)
+              throw Error(NEWER);
             // Only a missing record (a new browser) starts blank; anything else not shaped like
             // a workspace, falsy values included, is refused unread.
-            const found: unknown = r.result;
-            if (
-              found !== undefined &&
-              (!found ||
-                typeof found !== 'object' ||
-                !Array.isArray((found as { saves?: unknown }).saves))
-            )
-              throw Error(UNREADABLE);
-            const data: BrowserWorkspace = r.result || {
+            if (found !== undefined && !workspaceRecord(found)) throw Error(UNREADABLE);
+            const data: BrowserWorkspace = found ?? {
               version: 1,
               activeSave: null,
               saves: [],

@@ -116,7 +116,27 @@ test('a current workspace reads and writes as before, and a missing one starts b
 });
 
 test('a corrupt workspace record is refused, never replaced by a blank workspace', async () => {
-  for (const corrupt of [0, '', false, null, 'text', 42, [], { saves: 'x' }]) {
+  // A profile as every release stored it, to damage one part at a time below.
+  const profile = { id: 'p', name: 'P', kind: 'calculated', state: { checks: {}, settings: {} } };
+  const save = (profiles: unknown[]) => ({ version: 1, saves: [{ id: 's', profiles }] });
+  for (const corrupt of [
+    0,
+    '',
+    false,
+    null,
+    'text',
+    42,
+    [],
+    { saves: 'x' },
+    // Damage below the saves list, which summary() and the routes would hit as a TypeError (#143).
+    { version: 1, saves: [1] },
+    { version: 1, saves: [{ id: 's' }] },
+    save([null]),
+    save([{ ...profile, id: 7 }]),
+    save([{ ...profile, state: null }]),
+    save([{ ...profile, state: { settings: {} } }]),
+    save([{ ...profile, state: { checks: {}, settings: [] } }]),
+  ]) {
     const records = new Map<string, unknown>([['main', corrupt]]);
     const store = openBrowserStore(fakeIndexedDB(1, records));
     await assert.rejects(store.transaction(), /could not be read/, JSON.stringify(corrupt));
@@ -146,7 +166,18 @@ test('after another tab upgrades the database, this tab says to reload', async (
 
 test('a record saved before lastBackup existed reads as never exported, and keeps its saves', async () => {
   // A version-1 record from before the field was added.
-  const old = { version: 1, activeSave: 's', saves: [{ id: 's', name: 'Old world' }] };
+  const old = {
+    version: 1,
+    activeSave: 's',
+    saves: [
+      {
+        id: 's',
+        name: 'Old world',
+        activeProfile: 'p',
+        profiles: [{ id: 'p', name: 'P', kind: 'calculated', state: { checks: {}, settings: {} } }],
+      },
+    ],
+  };
   const records = new Map<string, unknown>([['main', structuredClone(old)]]);
   const store = openBrowserStore(fakeIndexedDB(1, records));
   const read = await store.transaction();
