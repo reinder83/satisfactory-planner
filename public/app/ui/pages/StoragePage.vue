@@ -72,6 +72,11 @@ const page = computed(() =>
       floors: floors.map(f => ({ ...f, active: f.id === floor })),
       current,
       floorBays: floorBays.length,
+      // Hidden handbook bays moved onto this floor: not shown, but the floor cannot be hidden
+      // or removed while they are here (#216).
+      hiddenHere: hiddenStorageBays()
+        .filter(b => b.moved && b.floor === floor)
+        .map(b => b.id),
       workshop: floor === 'workshop',
       // The floor's notice. The ground-floor instructions describe the owner's built room,
       // so only original (handbook) profiles get them, copies included: a duplicated or
@@ -84,6 +89,15 @@ const page = computed(() =>
           : floor === 'upper'
             ? 'upper'
             : '',
+      // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
+      movedOff: storageBays()
+        .filter(
+          b =>
+            !b.custom &&
+            b.floor !== 'ground' &&
+            plan.storage.find(x => x.id === b.id)?.floor === 'ground',
+        )
+        .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
       query,
       editing: layoutEditing,
       // Hidden handbook bays (#166) and the planned items left without a container.
@@ -217,15 +231,24 @@ function toggleLayout() {
       </button>
     </div>
   </section>
-  <LayoutEditor v-if="page.editing" :floor="page.current" :bays="page.floorBays" /><WorkshopPanel
-    v-if="page.workshop"
-  />
+  <LayoutEditor
+    v-if="page.editing"
+    :floor="page.current"
+    :bays="page.floorBays"
+    :hidden-here="page.hiddenHere"
+  /><WorkshopPanel v-if="page.workshop" />
   <div v-if="page.notice === 'template'" class="notice blue">
     Optional storage template. Each position has its own checklist; nothing is assumed built.
   </div>
   <div v-else-if="page.notice === 'built'" class="notice blue">
     <b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and
     Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.
+    <template v-if="page.movedOff.length"
+      ><br /><span data-moved-off
+        >Moved in this plan: bay {{ page.movedOff.join(', ') }}. The built room still has
+        {{ page.movedOff.length === 1 ? 'it' : 'them' }} here.</span
+      ></template
+    >
   </div>
   <div v-else-if="page.notice === 'upper'" class="notice blue">
     Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay
