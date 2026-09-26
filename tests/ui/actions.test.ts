@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { openFactory } from '../../public/app/factory-detail.ts';
-import { acceptRoute, request } from '../../public/app/api.ts';
-import { calcStage, setQuery, state, wizard } from '../../public/app/session.ts';
+import { acceptRoute, refreshState, request } from '../../public/app/api.ts';
+import { calcStage, setQuery, setWizard, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generated, go, open, page, stubFetch } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
@@ -235,4 +235,60 @@ test('"Create a save" on the profiles page starts the wizard', () => {
   $('[data-new-save]')!.click();
   assert.ok(wizard, 'a draft is open');
   assert.equal(wizard.saveId, null, 'for a new save');
+});
+
+test('a note refused as stale shows the latest state, keeps the typed text and says why', async () => {
+  state.revision = 4;
+  const headers: Record<string, string>[] = [];
+  const newer = {
+    ...state,
+    revision: state.revision + 1,
+    notes: { 'phase-3': 'From the other tab' },
+  };
+  globalThis.fetch = async (path: RequestInfo | URL, options: RequestInit = {}) => {
+    headers.push({ path: String(path), ...(options.headers as Record<string, string>) });
+    if (String(path) === '/api/state') return new Response(JSON.stringify(newer));
+    return new Response(JSON.stringify({ error: 'This profile was changed in another tab.' }), {
+      status: 409,
+    });
+  };
+  go('plan');
+  render();
+  const seen = state.revision;
+  const box = $<HTMLTextAreaElement>('#phase-note')!;
+  box.value = 'Mine';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  $('[data-save-note="phase-3"]')!.click();
+  await settle();
+  assert.equal(headers[0]!['X-Planner-Revision'], String(seen), 'the write names what it saw');
+  assert.equal(headers[1]!.path, '/api/state', 'the refusal reloads the state');
+  assert.equal(state.notes['phase-3'], 'From the other tab');
+  assert.equal(state.revision, seen + 1);
+  assert.match($('#toast')!.textContent, /changed in another tab/);
+  assert.ok($('#toast')!.classList.contains('error'));
+  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Mine', 'the typed note survives');
+});
+
+test('coming back to a tab picks up changes saved elsewhere, unless something is unsaved', async () => {
+  state.revision = 4;
+  const newer = { ...state, revision: 5, checks: { 'factory-3-wire': true } };
+  stubFetch({ '/api/state': newer });
+  go('factories');
+  render();
+  // A note with unsaved text holds the refresh back.
+  go('plan');
+  render();
+  $<HTMLTextAreaElement>('#phase-note')!.value = 'Typing';
+  assert.equal(await refreshState(), false);
+  assert.equal(state.checks['factory-3-wire'], undefined);
+  $<HTMLTextAreaElement>('#phase-note')!.value = '';
+  // So does an open wizard, whose typed answers are read only when a step is left.
+  const draft = wizard;
+  setWizard(draft || ({} as NonNullable<typeof wizard>));
+  assert.equal(await refreshState(), false);
+  setWizard(null);
+  // The listener in listeners.ts calls refreshState on visibilitychange.
+  assert.equal(await refreshState(), true);
+  assert.equal(state.checks['factory-3-wire'], true);
+  assert.equal(await refreshState(), false, 'nothing new the second time');
 });

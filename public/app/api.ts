@@ -8,9 +8,12 @@ import {
   boot,
   currentProfile,
   currentSave,
+  editingTask,
   setState,
   setView,
   state,
+  stateLoaded,
+  wizard,
   workspace,
   type View,
 } from './session.ts';
@@ -55,7 +58,8 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   // The server's own password (HTTP Basic, server.ts) also answers 401, with a
   // WWW-Authenticate challenge the browser handles; only the app's 401 means a session ended.
   if (r.status === 401 && !r.headers.has('WWW-Authenticate')) sessionEnded();
-  if (!r.ok) throw new Error(data.error || 'Request failed.');
+  // The status goes with the error, so a caller can tell a conflict (409) from a refusal.
+  if (!r.ok) throw Object.assign(new Error(data.error || 'Request failed.'), { status: r.status });
   return data;
 }
 
@@ -102,16 +106,36 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
   const scope = { ...scopeHeaders() };
   pending++;
   saveIndicator();
+  const stillOpen = () =>
+    scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id;
   const run = writeQueue.then(async () => {
-    const next = await request<ProgressState>(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...scope },
-      body: JSON.stringify(body),
-    });
-    // Ignore the reply if the user has since opened another save or profile.
-    if (scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id)
-      setState(next);
-    return next;
+    // An update names the revision this tab's state has now, after the writes queued before
+    // it, so a whole-value write made on stale data is refused instead of undoing another
+    // tab's change (checkBase in state.ts, #165). Omitted once another profile is open.
+    const base: Record<string, string> =
+      endpoint === '/api/update' && stillOpen() && typeof state.revision === 'number'
+        ? { 'X-Planner-Revision': String(state.revision) }
+        : {};
+    try {
+      const next = await request<ProgressState>(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Planner-Request': '1',
+          ...scope,
+          ...base,
+        },
+        body: JSON.stringify(body),
+      });
+      // Ignore the reply if the user has since opened another save or profile.
+      if (stillOpen()) setState(next);
+      return next;
+    } catch (e) {
+      // Refused as stale: load the latest state so the page shows what is saved now, then
+      // reject with the explanation for save() to show.
+      if ((e as { status?: number }).status === 409) await refreshState(true).catch(() => {});
+      throw e;
+    }
   });
   // A failed write must not block the writes queued after it.
   writeQueue = run.catch(() => {});
@@ -119,6 +143,23 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
     pending--;
     saveIndicator();
   });
+}
+
+// Reloads the open profile's progress if another tab or device changed it, so this tab does
+// not keep showing (and writing from) an old copy (#165). Called when the tab becomes visible
+// again (listeners.ts) and after a write refused as stale (`force`). Without force it leaves
+// the page alone while a write is pending, a note has unsaved text, a step is being edited or
+// the wizard is open, so nothing typed is redrawn away. Returns whether the state changed.
+export async function refreshState(force = false): Promise<boolean> {
+  const quiet = () => !pending && !hasUnsavedNotes() && !editingTask && !wizard;
+  if (!stateLoaded || !currentSave?.id || (!force && !quiet())) return false;
+  const scope = { ...scopeHeaders() };
+  const next = await request<ProgressState>('/api/state', { headers: scope });
+  const same = scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id;
+  if (!same || next.revision === state.revision || (!force && !quiet())) return false;
+  setState(next);
+  render();
+  return true;
 }
 
 // Refreshes the sidebar save status ("Saving…" while a write is pending), which

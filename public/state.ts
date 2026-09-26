@@ -592,6 +592,27 @@ export function validateState(s: unknown): ProgressState {
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
 }
+// Operations that send a whole value the tab worked out from the state it last showed: a
+// phase's full step order, a note's whole text, a step's title/body/link. Applied on top of
+// a newer state (another tab or device wrote in between), they would silently undo that
+// write, so both editions refuse them unless the tab saw the current revision (#165).
+// Small operations (a tick, a count, one assignment) merge safely and are never refused.
+const baseSensitive = ['taskOrder', 'note', 'taskEdit'];
+export const staleWrite =
+  'This profile was changed in another tab or on another device, so your last change was not ' +
+  'saved. The page now shows the latest version; text you typed is kept, and saving it again ' +
+  'replaces the other version.';
+// `base` is the X-Planner-Revision header: the revision the tab's state had when it sent
+// the write. Without the header (an older page, a script) nothing is compared.
+export function checkBase(current: SavedState, update: unknown, base: string | null | undefined) {
+  if (base === null || base === undefined || base === '') return;
+  const type = (update as { type?: unknown } | null)?.type;
+  if (typeof type !== 'string' || !baseSensitive.includes(type)) return;
+  const seen = Number(base);
+  if (!Number.isSafeInteger(seen)) return;
+  if (seen !== (current.revision ?? 0)) throw Object.assign(Error(staleWrite), { status: 409 });
+}
+
 // Applies one /api/update operation (op.type below) to a state and returns the validated
 // result. It changes s in place first: the server passes the profile inside its draft copy
 // of the workspace and browser-api.ts passes a structuredClone, so a throw from the final
