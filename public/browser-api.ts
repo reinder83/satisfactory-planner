@@ -366,6 +366,94 @@ export function createBrowserApi(
     return read ? operation(await store.transaction()) : store.transaction(operation);
   };
 }
+// The part of a Worker the calculator wrapper uses; tests pass a stand-in.
+export interface CalculatorWorker {
+  onmessage: ((e: MessageEvent) => void) | null;
+  onerror: ((e: ErrorEvent) => void) | null;
+  postMessage(message: unknown): void;
+  terminate(): void;
+}
+// Runs calculations on a worker from `spawn`, created on first use and reused. Each request posts
+// { id, settings }; the worker replies { id, phase } as each of the five phases starts, then
+// { id, result } or { id, error }. The worker runs one calculation at a time in the order posted,
+// so the oldest pending request is the running one and only it has a timer: it starts when the
+// request reaches the front and restarts on each progress message, so the limit applies per phase
+// and never includes time spent waiting. The worker cannot be interrupted mid-solve, so a timeout
+// terminates it and fails only the running request; the ones queued behind it are posted again
+// to a fresh worker (#158).
+export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000): Calculator {
+  type Entry = {
+    id: number;
+    settings: unknown;
+    resolve: (plan: CurrentCalculatedPlan) => void;
+    reject: (error: Error) => void;
+    onProgress?: ((phase: number) => void) | undefined;
+  };
+  let worker: CalculatorWorker | null = null;
+  let serial = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // In the order posted; the first entry is the one the worker is running.
+  const pending = new Map<number, Entry>();
+  const front = () => pending.values().next().value;
+  const restartTimer = () => {
+    clearTimeout(timer);
+    timer = pending.size ? setTimeout(expire, limit) : undefined;
+  };
+  const expire = () => {
+    const running = front();
+    if (!running) return;
+    worker?.terminate();
+    worker = null;
+    pending.delete(running.id);
+    running.reject(Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.'));
+    const queued = [...pending.values()];
+    if (queued.length) {
+      const next = start();
+      for (const entry of queued) next.postMessage({ id: entry.id, settings: entry.settings });
+    }
+    restartTimer();
+  };
+  const start = () => {
+    const created = spawn();
+    worker = created;
+    created.onmessage = e => {
+      if (worker !== created) return;
+      const entry = pending.get(e.data.id);
+      if (!entry) return;
+      if (e.data.phase) {
+        if (entry === front()) restartTimer();
+        try {
+          entry.onProgress?.(e.data.phase);
+        } catch {}
+        return;
+      }
+      const wasRunning = entry === front();
+      pending.delete(e.data.id);
+      if (wasRunning) restartTimer();
+      e.data.error ? entry.reject(Error(e.data.error)) : entry.resolve(e.data.result);
+    };
+    // Script or WASM load failure: fail everything pending and let the next request retry.
+    created.onerror = () => {
+      if (worker !== created) return;
+      clearTimeout(timer);
+      timer = undefined;
+      for (const p of pending.values())
+        p.reject(Error('The calculator could not load. Refresh and try again.'));
+      pending.clear();
+      created.terminate();
+      worker = null;
+    };
+    return created;
+  };
+  return (settings, onProgress) =>
+    new Promise<CurrentCalculatedPlan>((resolve, reject) => {
+      const target = worker || start();
+      const id = ++serial;
+      pending.set(id, { id, settings, resolve, reject, onProgress });
+      if (pending.size === 1) restartTimer();
+      target.postMessage({ id, settings });
+    });
+}
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
 // wrapper and the catalog. If that fails (no IndexedDB, the catalog did not load), the calls
 // already waiting fail with that error and the next call tries again, so a passing network
@@ -377,71 +465,9 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
         throw Error(
           'Browser storage is unavailable. Use a regular browser window with site storage enabled.',
         );
-      let worker: Worker | null = null;
-      let serial = 0;
-      const pending = new Map<
-        number,
-        {
-          resolve: (plan: CurrentCalculatedPlan) => void;
-          reject: (error: Error) => void;
-          timer: ReturnType<typeof setTimeout>;
-          onProgress?: (phase: number) => void;
-        }
-      >();
-      // The worker cannot be interrupted mid-solve, so a timeout terminates it and fails every
-      // pending calculation; the next one starts a fresh worker.
-      const expire = () => {
-        worker?.terminate();
-        worker = null;
-        for (const p of pending.values()) {
-          clearTimeout(p.timer);
-          p.reject(Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.'));
-        }
-        pending.clear();
-      };
-      // Posts { id, settings } to the worker and settles when the reply with that id arrives. The
-      // worker is created on first use and reused. It replies { id, phase } as each of the five
-      // phases starts, then { id, result } or { id, error }. Each progress message restarts the
-      // three-minute timer, so the limit applies per phase, not to the whole plan. The worker
-      // runs one calculation at a time, so a queued request's timer also covers its wait.
-      const calculate: Calculator = (settings, onProgress) =>
-        new Promise<CurrentCalculatedPlan>((resolve, reject) => {
-          if (!worker) {
-            const created = new Worker(new URL('./calculator-worker.js', import.meta.url), {
-              type: 'module',
-            });
-            worker = created;
-            created.onmessage = e => {
-              const entry = pending.get(e.data.id);
-              if (!entry) return;
-              if (e.data.phase) {
-                clearTimeout(entry.timer);
-                entry.timer = setTimeout(expire, 180000);
-                try {
-                  entry.onProgress?.(e.data.phase);
-                } catch {}
-                return;
-              }
-              pending.delete(e.data.id);
-              clearTimeout(entry.timer);
-              e.data.error ? entry.reject(Error(e.data.error)) : entry.resolve(e.data.result);
-            };
-            // Script or WASM load failure: fail everything pending and let the next request retry.
-            created.onerror = () => {
-              for (const p of pending.values()) {
-                clearTimeout(p.timer);
-                p.reject(Error('The calculator could not load. Refresh and try again.'));
-              }
-              pending.clear();
-              created.terminate();
-              worker = null;
-            };
-          }
-          const id = ++serial,
-            timer = setTimeout(expire, 180000);
-          pending.set(id, { resolve, reject, timer, onProgress });
-          worker.postMessage({ id, settings });
-        });
+      const calculate = workerCalculator(
+        () => new Worker(new URL('./calculator-worker.js', import.meta.url), { type: 'module' }),
+      );
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
       return createBrowserApi(
