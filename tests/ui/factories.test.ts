@@ -572,7 +572,7 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
   assert.equal($('[data-build-status]'), null);
 });
 
-test('between groups: what one group hands the next, with its belts, names escaped', async () => {
+test('between groups: a card per group with what comes in and goes out, names escaped (#213)', async () => {
   const rows = plan.stages['3'].rows!;
   const assignments = Object.fromEntries(
     rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
@@ -584,6 +584,7 @@ test('between groups: what one group hands the next, with its belts, names escap
         groups: [
           { id: 'fg-smelt1', name: evil },
           { id: 'fg-parts1', name: 'Parts' },
+          { id: 'fg-spare1', name: 'Spare' },
         ],
         assignments,
       },
@@ -595,11 +596,66 @@ test('between groups: what one group hands the next, with its belts, names escap
   noMarkup();
   const section = $('[data-group-links]')!;
   assert.ok(section, 'shown once the profile has groups');
-  const heads = $$('[data-group-link] h3').map(h => h.textContent);
-  assert.ok(heads.includes(`${evil} → Parts`), JSON.stringify(heads));
-  assert.ok(heads.some(h => h.endsWith('→ Space Elevator')));
-  assert.ok(heads.some(h => h.startsWith('Mines and existing supply →')));
-  assert.match(section.textContent!, /\/min · \d+ × Mk\.\d (belt|pipe)/);
+  // One card per group, in the groups' order; mines and the elevator are only row ends.
+  const cards = $$('[data-group-card]');
+  assert.deepEqual(
+    cards.map(c => c.querySelector('h3')!.textContent),
+    [evil, 'Parts'],
+  );
+  // A group nothing reaches or leaves gets a line, not an empty card.
+  assert.match(
+    $('[data-idle-groups]')!.textContent!,
+    /Nothing moves in or out of Spare in this phase/,
+  );
+  const [smelt, parts] = cards as [HTMLElement, HTMLElement];
+  const flow = (card: HTMLElement, dir: string) => card.querySelector(`[data-flow="${dir}"]`)!;
+  const text = (e: Element) => e.textContent!.replace(/\s+/g, ' ').trim();
+  // Each link shows twice: out of its sender and into its receiver, with the controls on Out only.
+  const key = 'fg-smelt1:fg-parts1';
+  const out = flow(smelt, 'out').querySelector(`[data-link-out="${key}"]`)!;
+  const into = flow(parts, 'in').querySelector(`[data-link-in="${key}"]`)!;
+  assert.match(text(out), /^→ to Parts /);
+  assert.ok(text(into).startsWith(`← from ${evil} `), text(into));
+  assert.ok(out.querySelector('[data-link-mode]'));
+  assert.equal($$('[data-link-in] select, [data-link-in] input').length, 0);
+  assert.equal($$('[data-link-mode]').length, $$('[data-link-out]').length);
+  const ends = (dir: string) => $$(`[data-flow="${dir}"] .flow-end`).map(text);
+  assert.ok(ends('in').includes('← from Mines and existing supply'));
+  assert.ok(ends('out').includes('→ to Space Elevator'));
+  // The items with their rates, named for screen readers; the belts totalled per mark.
+  const item = out.querySelector('.flow-items li')!;
+  assert.match(text(item), /^[A-Z][\w ]+: [\d.,]+( m³)?$/);
+  assert.match(item.getAttribute('title')!, /^[A-Z][\w ]+: [\d.,]+( m³)?\/min$/);
+  for (const b of $$('[data-link-badge]'))
+    assert.match(text(b), /^\d+ × Mk\.\d (belt|pipe)s?( · \d+ × Mk\.\d (belt|pipe)s?)*$/);
+  const badge = (row: Element) => text(row.querySelector('[data-link-badge]')!);
+  assert.equal(badge(out), badge(into));
+  // Each part counts its links and adds up what they carry.
+  const inRows = flow(parts, 'in').querySelectorAll('[data-link-in]').length;
+  assert.match(
+    text(flow(parts, 'in').querySelector('[data-flow-sum]')!),
+    new RegExp(`^${inRows} links? · [\\d.,]+/min`),
+  );
+  noMarkup();
+  // Rows outside every group make an Ungrouped card, listed last.
+  open({
+    calculated: plan,
+    state: {
+      factoryGroups: {
+        groups: [{ id: 'fg-parts1', name: 'Parts' }],
+        assignments: Object.fromEntries(
+          rows.slice(1).map(r => [r.id, [{ group: 'fg-parts1', rate: null }]]),
+        ),
+      },
+    },
+  });
+  go('factories');
+  render();
+  await nextTick();
+  assert.deepEqual(
+    $$('[data-group-card]').map(c => c.dataset.group),
+    ['fg-parts1', 'ungrouped'],
+  );
   // Without groups there is nothing to show.
   open({ calculated: plan });
   go('factories');
@@ -650,12 +706,17 @@ test('between groups: a link can go by truck, train or back to belts, with the v
     fuel: 'Packaged Fuel',
   });
   assert.equal(state.version, 7);
-  const linkEl = $(`[data-link="${key}"]`)!;
+  const linkEl = $(`[data-link-out="${key}"]`)!;
   assert.match(
     linkEl.querySelector('[data-link-load]')!.textContent!,
     /^\d+ trucks?, \d+ of 48 slots each trip\. Up to [\d.,]+ Packaged Fuel\/min/,
   );
   assert.doesNotMatch(linkEl.textContent!, /Mk\.\d belt/, 'the belt advice gives way');
+  // The receiving group's In row shows the vehicles, without controls.
+  assert.match(
+    $(`[data-link-in="${key}"] [data-link-badge]`)!.textContent!.trim(),
+    /^\d+ trucks?$/,
+  );
   // A round trip out of range is refused before anything is sent.
   const sent = calls.length;
   await pick(`[data-link-trip="${key}"]`, '0');
@@ -673,12 +734,12 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   assert.deepEqual(state.factoryGroups.links![key], { mode: 'train', roundTripMin: 12 });
   assert.equal($(`[data-link-fuel="${key}"]`), null);
   assert.match(
-    $(`[data-link="${key}"] [data-link-load]`)!.textContent!,
+    $(`[data-link-out="${key}"] [data-link-load]`)!.textContent!,
     /^1 train: \d+ freight cars?/,
   );
   await pick(`[data-link-mode="${key}"]`, 'belt');
   assert.equal(state.factoryGroups.links, undefined);
-  assert.match($(`[data-link="${key}"]`)!.textContent!, /Mk\.\d (belt|pipe)/);
+  assert.match($(`[data-link-out="${key}"]`)!.textContent!, /Mk\.\d (belt|pipe)/);
   noMarkup();
 });
 

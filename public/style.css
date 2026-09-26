@@ -1062,12 +1062,102 @@ p.eyebrow {
 .group-links {
   margin-top: 18px;
 }
-.group-link h3 {
-  margin: 14px 0 4px;
+/* One card per group (#213): In and Out side by side, stacking (In first) when narrow. */
+.group-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr));
+  gap: 12px;
+  margin-top: 10px;
 }
-.group-link ul {
-  margin: 0;
-  padding-left: 18px;
+.group-card {
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+.group-card h3 {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.group-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 6px 20px;
+}
+.flow-part h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+  margin: 4px 0 0;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--blue);
+  color: var(--blue);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.flow-part.out h4 {
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+.flow-sum {
+  color: var(--muted);
+  font-weight: normal;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.flow-part > p {
+  margin: 8px 0 0;
+}
+.flow-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line2);
+  min-width: 0;
+}
+.flow-end {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.flow-end b {
+  color: var(--ink);
+}
+.flow-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 2px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.flow-items li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.flow-items .item-icon {
+  width: 24px;
+  height: 24px;
+}
+/* The item names are for screen readers and copy-paste; the icon (and its tooltip) show them. */
+.flow-item-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.flow-badge {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.flow-badge.vehicle {
+  color: var(--accent-hi);
 }
 /* A link's vehicle, round trip and fuel (#205): one wrapping row of labelled controls. */
 .link-transport {
@@ -1086,7 +1176,7 @@ p.eyebrow {
 .link-transport input {
   width: 5.5em;
 }
-.group-link [data-link-load] {
+.flow-row [data-link-load] {
   margin: 4px 0 0;
   color: var(--accent-hi);
 }

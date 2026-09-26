@@ -3,9 +3,14 @@
   the next per minute, and the belt or pipe it needs, from groupLinks (group-links.ts). Only
   shown when the profile has groups; flows inside a group are the group's own belts and are
   left out. Group names are user text, rendered as text.
+  One card per group (#213), Ungrouped too when it has links, with an In part (where each flow
+  comes from) and an Out part (where it goes). Places that are not groups (mines, storage, fuel,
+  the Space Elevator, the sink) only show as the other end of a row.
   Each link can instead go by truck, tractor, explorer, train or drone (#205): the user gives the
   round trip in minutes and, for a road vehicle, its fuel; linkLoad (logistics.ts) works out the
-  vehicles and fuel. The choice saves as a factoryLinkTransport update (factoryGroups.links).
+  vehicles and fuel. The controls sit on the sender's Out row only, so each link is edited in one
+  place; the receiver's In row shows the belt or vehicle badge. The choice saves as a
+  factoryLinkTransport update (factoryGroups.links).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -28,6 +33,7 @@ import { factoryGroupsState } from '../../views/factories.ts';
 import { fuelledModes } from '../../../state.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import ItemIcon from '../ItemIcon.vue';
 import type {
   ItemRates,
   LinkMode,
@@ -52,21 +58,27 @@ const DEFAULT_TRIP_MIN = 5;
 const DEFAULT_FUEL = 'Packaged Fuel';
 const plural = (n: number, word: string) => `${num(n)} ${word}${n === 1 ? '' : 's'}`;
 
-// The line under a link that goes by vehicle.
-function loadText(items: { item: string; rate: number }[], t: LinkTransport): string[] {
+// For a link that goes by vehicle: the lines under its Out row, and the short badge on its In row.
+function vehicleText(
+  items: { item: string; rate: number }[],
+  t: LinkTransport,
+): { lines: string[]; badge: string } {
   const c = workspace.catalog,
     l = linkLoad(items, t, c, FLUIDS),
     v = VEHICLES[t.mode],
     lines: string[] = [];
+  let badge = l.vehicles ? plural(l.vehicles, v.name.toLowerCase()) : `By ${v.name.toLowerCase()}`;
   if (t.mode === 'train') {
     const cars = [
       l.freightCars ? plural(l.freightCars, 'freight car') : '',
       l.fluidCars ? `${plural(l.fluidCars, 'fluid car')} (${num(FLUID_CAR_M3)} m³ each)` : '',
     ].filter(Boolean);
-    if (l.vehicles)
+    if (l.vehicles) {
       lines.push(
         `1 train: ${cars.join(' and ')}. Electric: the locomotive draws 25–110 MW from the grid while moving.`,
       );
+      badge = `1 train: ${cars.join(' and ')}`;
+    }
   } else if (l.vehicles) {
     const fuel =
       t.mode === 'drone'
@@ -80,7 +92,32 @@ function loadText(items: { item: string; rate: number }[], t: LinkTransport): st
   }
   for (const n of l.unpackable)
     lines.push(`${n} cannot be packaged: keep it on a pipe, or send it by train.`);
-  return lines;
+  return { lines, badge };
+}
+
+// "3 × Mk.4 belts · 1 × Mk.2 pipe": the belts and pipes a link needs, totalled per mark.
+function beltBadge(items: { item: string; rate: number }[]): string {
+  const marks = new Map<string, { count: number; mark: string; word: string }>();
+  for (const { item, rate } of items) {
+    const p = lanePlan(rate, FLUIDS.has(item)),
+      key = p.lane.mark + p.word,
+      m = marks.get(key) ?? { count: 0, mark: p.lane.mark, word: p.word };
+    m.count += p.count;
+    marks.set(key, m);
+  }
+  return [...marks.values()]
+    .map(m => `${m.count} × ${m.mark} ${m.word}${m.count > 1 ? 's' : ''}`)
+    .join(' · ');
+}
+
+// "215/min · 96 m³/min": items and fluids add up separately.
+function total(items: { rate: number; fluid: boolean }[]): string {
+  let solid = 0,
+    fluid = 0;
+  for (const i of items) i.fluid ? (fluid += i.rate) : (solid += i.rate);
+  return [solid ? `${num(solid)}/min` : '', fluid ? `${num(fluid)} m³/min` : '']
+    .filter(Boolean)
+    .join(' · ');
 }
 
 const view = computed(() =>
@@ -89,10 +126,23 @@ const view = computed(() =>
       g = factoryGroupsState();
     if (!calculated || !x?.rows?.length || !g.groups.length) return null;
     const name = (id: string) => g.groups.find(x => x.id === id)?.name ?? PLACES[id] ?? id;
-    return groupLinks(x, g).map(l => {
+    const links = groupLinks(x, g).map(l => {
       const key = l.from + ':' + l.to,
         t = g.links?.[key];
       const mode: 'belt' | LinkMode = t?.mode ?? 'belt';
+      const vehicle = t ? vehicleText(l.items, t) : null;
+      const items = l.items.map(({ item, rate }) => {
+        const fluid = FLUIDS.has(item),
+          pack = fluid && t && t.mode !== 'train' ? workspace.catalog.packaged?.[item]?.item : '';
+        return {
+          item,
+          rate,
+          fluid,
+          pack: pack || '',
+          text: `${num(rate)}${fluid ? ' m³' : ''}`,
+          title: `${item}: ${num(rate)}${fluid ? ' m³' : ''}/min${pack ? `, as ${pack}` : ''}`,
+        };
+      });
       return {
         key,
         from: l.from,
@@ -102,29 +152,44 @@ const view = computed(() =>
         transport: t,
         mode,
         fuelled: !!t && fuelledModes.includes(t.mode),
-        load: t ? loadText(l.items, t) : [],
-        items: l.items.map(({ item, rate }) => {
-          const fluid = FLUIDS.has(item),
-            p = lanePlan(rate, fluid),
-            pack = fluid && t && t.mode !== 'train' ? workspace.catalog.packaged?.[item] : null;
-          return {
-            item,
-            text:
-              `${num(rate)}${fluid ? ' m³/min' : '/min'}` +
-              (t
-                ? pack
-                  ? ` · as ${pack.item}`
-                  : ''
-                : ` · ${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`),
-          };
-        }),
+        items,
+        packed: items.filter(i => i.pack),
+        load: vehicle?.lines ?? [],
+        badge: vehicle?.badge ?? beltBadge(l.items),
       };
     });
+    type Row = (typeof links)[number];
+    const part = (dir: 'in' | 'out', rows: Row[]) => ({
+      dir,
+      rows,
+      count: plural(rows.length, 'link'),
+      total: total(rows.flatMap(r => r.items)),
+    });
+    const places = g.groups.map(x => x.id);
+    if (links.some(l => l.from === UNGROUPED || l.to === UNGROUPED)) places.push(UNGROUPED);
+    // Groups nothing reaches or leaves (yet, in this phase) share one line instead of empty cards.
+    const used = (id: string) => links.some(l => l.from === id || l.to === id);
+    const cards = places.filter(used).map(id => ({
+      id,
+      name: name(id),
+      parts: [
+        part(
+          'in',
+          links.filter(l => l.to === id),
+        ),
+        part(
+          'out',
+          links.filter(l => l.from === id),
+        ),
+      ],
+    }));
+    const idle = places.filter(id => !used(id)).map(name);
+    return { links, cards, idle };
   }),
 );
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
 
-type Link = NonNullable<typeof view.value>[number];
+type Link = NonNullable<typeof view.value>['links'][number];
 // Saves a link's transport with `change` applied; the page redraws with what was saved.
 async function setTransport(
   el: HTMLInputElement | HTMLSelectElement,
@@ -248,63 +313,124 @@ async function recalculate(e: Event) {
   <section v-if="view" class="panel group-links" data-group-links>
     <h2>Between groups</h2>
     <p class="small muted">
-      What each group hands the next per minute, with the best belt or pipe you have unlocked. Flows
-      inside a group are left out. Pick a vehicle for a link and give its round trip to see how many
-      it takes.
+      What comes into each group and what goes out per minute, with the best belt or pipe you have
+      unlocked. Flows inside a group are left out. Pick a vehicle on a group's outgoing link and
+      give its round trip to see how many it takes.
     </p>
-    <p v-if="!view.length" class="small">Nothing moves between groups yet.</p>
-    <div v-for="l in view" :key="l.key" class="group-link" data-group-link :data-link="l.key">
-      <h3>{{ l.fromName }} → {{ l.toName }}</h3>
-      <div class="link-transport">
-        <label
-          >By
-          <select
-            :data-link-mode="l.key"
-            :value="l.mode"
-            @change="
-              setTransport($event.target as HTMLSelectElement, l, {
-                mode: ($event.target as HTMLSelectElement).value as LinkMode,
-              })
-            "
+    <p v-if="!view.links.length" class="small">Nothing moves between groups yet.</p>
+    <div v-else class="group-cards">
+      <article
+        v-for="c in view.cards"
+        :key="c.id"
+        class="group-card"
+        data-group-card
+        :data-group="c.id"
+      >
+        <h3>{{ c.name }}</h3>
+        <div class="group-flow">
+          <section
+            v-for="p in c.parts"
+            :key="p.dir"
+            :class="['flow-part', p.dir]"
+            :data-flow="p.dir"
           >
-            <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">{{ label }}</option>
-          </select></label
-        >
-        <label v-if="l.transport"
-          >Round trip
-          <input
-            type="number"
-            min="0.1"
-            max="1440"
-            step="0.1"
-            :data-link-trip="l.key"
-            :value="l.transport.roundTripMin"
-            @change="setTrip($event, l)"
-          />
-          min</label
-        >
-        <label v-if="l.fuelled"
-          >Fuel
-          <select
-            :data-link-fuel="l.key"
-            :value="l.transport!.fuel"
-            @change="
-              setTransport($event.target as HTMLSelectElement, l, {
-                fuel: ($event.target as HTMLSelectElement).value,
-              })
-            "
-          >
-            <option v-for="f in fuels" :key="f.name" :value="f.name">{{ f.name }}</option>
-          </select></label
-        >
-      </div>
-      <ul>
-        <li v-for="i in l.items" :key="i.item">
-          <b>{{ i.item }}</b> · {{ i.text }}
-        </li>
-      </ul>
-      <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>{{ line }}</p>
+            <h4>
+              {{ p.dir === 'in' ? 'In' : 'Out' }}
+              <span class="flow-sum" data-flow-sum
+                >{{ p.count }}<template v-if="p.total"> · {{ p.total }}</template></span
+              >
+            </h4>
+            <p v-if="!p.rows.length" class="small muted">
+              {{ p.dir === 'in' ? 'Nothing comes in.' : 'Nothing goes out.' }}
+            </p>
+            <div
+              v-for="l in p.rows"
+              :key="l.key"
+              class="flow-row"
+              v-bind="p.dir === 'in' ? { 'data-link-in': l.key } : { 'data-link-out': l.key }"
+            >
+              <div class="flow-end">
+                <template v-if="p.dir === 'in'"
+                  >← from <b>{{ l.fromName }}</b></template
+                >
+                <template v-else
+                  >→ to <b>{{ l.toName }}</b></template
+                >
+              </div>
+              <ul class="flow-items">
+                <li v-for="i in l.items" :key="i.item" :title="i.title">
+                  <ItemIcon :name="i.item" /><span class="flow-item-name">{{ i.item }}: </span
+                  >{{ i.text }}
+                </li>
+              </ul>
+              <template v-if="p.dir === 'out'">
+                <div class="link-transport">
+                  <label
+                    >By
+                    <select
+                      :data-link-mode="l.key"
+                      :value="l.mode"
+                      @change="
+                        setTransport($event.target as HTMLSelectElement, l, {
+                          mode: ($event.target as HTMLSelectElement).value as LinkMode,
+                        })
+                      "
+                    >
+                      <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">
+                        {{ label }}
+                      </option>
+                    </select></label
+                  >
+                  <label v-if="l.transport"
+                    >Round trip
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="1440"
+                      step="0.1"
+                      :data-link-trip="l.key"
+                      :value="l.transport.roundTripMin"
+                      @change="setTrip($event, l)"
+                    />
+                    min</label
+                  >
+                  <label v-if="l.fuelled"
+                    >Fuel
+                    <select
+                      :data-link-fuel="l.key"
+                      :value="l.transport!.fuel"
+                      @change="
+                        setTransport($event.target as HTMLSelectElement, l, {
+                          fuel: ($event.target as HTMLSelectElement).value,
+                        })
+                      "
+                    >
+                      <option v-for="f in fuels" :key="f.name" :value="f.name">{{ f.name }}</option>
+                    </select></label
+                  >
+                </div>
+                <template v-if="l.transport">
+                  <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>
+                    {{ line }}
+                  </p>
+                  <p v-if="l.packed.length" class="small muted">
+                    Packaged for the trip:
+                    {{ l.packed.map(i => `${i.item} as ${i.pack}`).join(', ') }}.
+                  </p>
+                </template>
+                <p v-else class="flow-badge" data-link-badge>{{ l.badge }}</p>
+              </template>
+              <p v-else :class="['flow-badge', { vehicle: l.transport }]" data-link-badge>
+                {{ l.badge }}
+              </p>
+            </div>
+          </section>
+        </div>
+      </article>
     </div>
+    <p v-if="view.links.length && view.idle.length" class="small muted" data-idle-groups>
+      Nothing moves in or out of {{ view.idle.join(', ') }} in this phase.
+    </p>
     <div v-if="fuel" class="notice blue" data-transport-fuel-note>
       <template v-if="fuel.same"
         >This plan already includes the vehicle fuel for these links: {{ fuel.text }}.</template
