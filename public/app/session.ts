@@ -233,9 +233,12 @@ export async function boot() {
     if (!workspace.user) {
       authMode = 'login';
       // Signed out: the previous user's progress is dropped, and no page reads the state until
-      // the next boot(); the hashchange listener checks stateLoaded before drawing.
+      // the next boot(); the hashchange listener checks stateLoaded before drawing. So is an
+      // unfinished wizard draft (their save id and settings), which the next boot() would
+      // otherwise reopen for whoever signs in on this tab.
       state = initialState();
       stateLoaded = false;
+      wizard = null;
       showSignedOut(required('#app'));
       return;
     }
