@@ -102,7 +102,10 @@ const page = computed(() =>
                 ...r,
                 check: 'completion-' + r.id,
                 done: checked('completion-' + r.id),
-                line: `${num(r.output)}/min · ${num(r.machines)} ${r.machine} · last at ${num(r.lastClock)}%`,
+                // The last machine is only named when it runs below 100%.
+                line:
+                  `${num(r.output)}/min · ${num(r.machines)} ${r.machine}` +
+                  ((r.lastClock ?? 100) < 100 ? ` · last at ${num(r.lastClock)}%` : ''),
                 inputText: inputText(r.inputs),
                 byproducts: Object.keys(r.byproducts).length ? inputText(r.byproducts) : '',
               }))

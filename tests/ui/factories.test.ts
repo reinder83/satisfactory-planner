@@ -124,6 +124,17 @@ test('post-game lists the completion modules with their own checks', () => {
   assert.ok(modules.length > 0);
   assert.match(modules[0]!.querySelector('input')!.dataset.check!, /^completion-/);
   assert.match(modules[0]!.textContent, /Inputs:/);
+  // The last machine is named only when it runs below 100%.
+  assert.doesNotMatch(
+    $(`[data-check="completion-portable-miner"]`)!.closest('.completion-item')!.querySelector('p')!
+      .textContent,
+    /last at/,
+  );
+  assert.match(
+    $(`[data-check="completion-fabric"]`)!.closest('.completion-item')!.querySelector('p')!
+      .textContent,
+    /· last at 33[.,]33%/,
+  );
 });
 
 test('groups show their share of a split factory, and edit mode offers the editor', async () => {
