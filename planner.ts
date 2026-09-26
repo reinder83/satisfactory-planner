@@ -798,10 +798,10 @@ export function run(
   const spareMW =
     s.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
   // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
-  // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
-  // constraint (its power is hand-fed biomass). Under `maximum` it applies in Phase 1 too, where
-  // there are no generators, so only the entered spare power can run that phase.
-  if (phase >= 2 || maximum) model.constraints.power = { max: spareMW };
+  // generation (x augmenter boost) may not exceed the spare figure. Phase 1 has no power
+  // constraint under any goal: its power is hand-fed biomass and it has no generators, so a
+  // spare-power limit there (0 GW by default) would leave maximum output no Phase 1 plan at all.
+  if (phase >= 2) model.constraints.power = { max: spareMW };
   // One variable per recipe: its level is machine-equivalents at 100% clock, and its
   // coefficients are its per-machine outputs (+) and inputs (-) in each item balance.
   for (const r of pool) {

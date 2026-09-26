@@ -322,6 +322,11 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
   const max = calculate({ goal: 'maximum', limitsConfirmed: true, recipes: 'all' });
   assert.ok(max.stages[5].feasible);
   assert.ok(max.stages[5].hours < standard.stages[5].hours!);
+  // Phase 1 has no generators and runs on hand-fed biomass, so the spare-power figure (0 GW by
+  // default) must not limit it under maximum output any more than under the other goals.
+  const maxDefault = calculate({ goal: 'maximum', limitsConfirmed: true });
+  for (const ph of ['1', '2', '3', '4', '5'] as const)
+    assert.ok(maxDefault.stages[ph].feasible, `Phase ${ph} has a maximum-output plan by default`);
   const impossible = calculate({ limits: { 'Iron Ore': 0, 'Copper Ore': 0 }, sam: 'avoid' });
   assert.equal(impossible.stages[3].feasible, false);
 });
