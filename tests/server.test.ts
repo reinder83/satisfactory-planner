@@ -270,3 +270,59 @@ test('a workspace from a newer planner stops start-up with "update the app", unt
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('a whole-value write from a tab that missed a change is refused, small ones still merge', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const app = await start(dir);
+  try {
+    const state = async () => (await (await fetch(app.url + '/api/state')).json()).revision;
+    const seen = await state();
+    const at = (revision: number) => ({ 'X-Planner-Revision': String(revision) });
+    // Tab one saves a note from what it saw; tab two, still on that revision, saves its own.
+    assert.equal(
+      (await post(app.url, '/api/update', { type: 'note', key: 'n', value: 'one' }, at(seen)))
+        .status,
+      200,
+    );
+    const stale = await post(
+      app.url,
+      '/api/update',
+      { type: 'note', key: 'n', value: 'two' },
+      at(seen),
+    );
+    assert.equal(stale.status, 409);
+    assert.match((await stale.json()).error, /changed in another tab/);
+    const order = { type: 'taskOrder', phase: '3', ids: ['a', 'b'] };
+    assert.equal((await post(app.url, '/api/update', order, at(seen))).status, 409);
+    let s = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(s.notes.n, 'one', "the first tab's note is kept");
+    // A tick from the stale tab merges, and so does anything without the header.
+    assert.equal(
+      (await post(app.url, '/api/update', { type: 'check', key: 'k', value: true }, at(seen)))
+        .status,
+      200,
+    );
+    assert.equal(
+      (await post(app.url, '/api/update', { type: 'note', key: 'n', value: 'script' })).status,
+      200,
+    );
+    // With the current revision the same write goes through.
+    assert.equal(
+      (
+        await post(
+          app.url,
+          '/api/update',
+          { type: 'note', key: 'n', value: 'two' },
+          at(await state()),
+        )
+      ).status,
+      200,
+    );
+    s = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(s.notes.n, 'two');
+    assert.equal(s.checks.k, true);
+  } finally {
+    await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

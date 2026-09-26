@@ -5,8 +5,8 @@
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
-// cancel (Escape), beforeunload, wizard input and change (capture).
-import { acceptRoute, hasUnsavedNotes, pending } from './api.ts';
+// cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange.
+import { acceptRoute, hasUnsavedNotes, pending, refreshState } from './api.ts';
 import { required } from './format.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
@@ -66,3 +66,9 @@ for (const type of ['input', 'change'])
     },
     true,
   );
+
+// Coming back to this tab: pick up changes another tab or device saved meanwhile, so the
+// page does not show, or write from, an old copy (#165). A failed refresh changes nothing.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshState().catch(() => {});
+});

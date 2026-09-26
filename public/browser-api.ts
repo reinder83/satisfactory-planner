@@ -17,7 +17,7 @@
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
-import { validateState, mutate, shareState, newProfileState } from './state.ts';
+import { validateState, mutate, shareState, newProfileState, checkBase } from './state.ts';
 import {
   validateTransfer,
   transferFormat,
@@ -357,6 +357,8 @@ export function createBrowserApi(
           throw Error('Wrong backup format.');
         if (ep === '/api/import' && body.profileId && body.profileId !== profile.id)
           throw Error('Switch to the matching profile before restoring progress.');
+        // As on the server: a stale whole-value write is refused (checkBase, #165).
+        if (ep === '/api/update') checkBase(profile.state, body, headers['X-Planner-Revision']);
         const next =
           ep === '/api/update'
             ? // The body is the operation as sent; mutate checks it.

@@ -1,5 +1,5 @@
 import { validateTransfer, transferFormat } from './public/transfer.ts';
-import { shareState, newProfileState } from './public/state.ts';
+import { shareState, newProfileState, checkBase } from './public/state.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
@@ -706,7 +706,8 @@ export async function openWorkspace({
     // /api/import replaces it with a progress backup (or a bare state), refusing a backup
     // that names another profile. Both are validated before the state is replaced and
     // written in one commit, so a rejected change leaves the saved state as it was. The
-    // revision counts accepted writes; the client's revision is not compared. An original
+    // revision counts accepted writes. An update can carry the revision its tab last saw
+    // (X-Planner-Revision); checkBase refuses a stale whole-value one (#165). An original
     // profile cannot be moved before Phase 3, which its handbook does not cover.
     if (['/api/update', '/api/import'].includes(endpoint) && req.method === 'POST') {
       const b = await body(req);
@@ -722,6 +723,8 @@ export async function openWorkspace({
           .find(s => s.id === save.id && s.userId === u.id)
           ?.profiles.find(p => p.id === profile.id);
         if (!p) fail('Profile not found.', 404);
+        // A whole-value write from a tab that has not seen the latest change is refused (409).
+        if (!imported) checkBase(p.state, b, [req.headers['x-planner-revision']].flat()[0]);
         // mutate() checks the operation and throws for one it does not know.
         const state = imported || mutate(p.state, b as UpdateOp);
         if (p.kind === 'original' && !['3', '4', '5', 'post'].includes(state.settings.phase))

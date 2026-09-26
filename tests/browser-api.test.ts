@@ -315,3 +315,36 @@ test('a full export past the import limit is not recorded as a backup', async ()
   await api('/api/export-saves');
   assert.ok(data.lastBackup, 'a normal full export still counts as a backup');
 });
+
+test('the browser edition refuses a stale whole-value write like the server', async () => {
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  const api = createBrowserApi(store, calculate, {} as Catalog);
+  await api('/api/profiles', {
+    body: JSON.stringify({ saveName: 'W', name: 'P', settings: { phase: '1', goal: 'minimal' } }),
+  });
+  const seen = data.saves[0]!.profiles[0]!.state.revision ?? 0;
+  const update = (op: object, revision: number) =>
+    api('/api/update', {
+      body: JSON.stringify(op),
+      headers: { 'X-Planner-Revision': String(revision) },
+    });
+  await update({ type: 'note', key: 'n', value: 'one' }, seen);
+  await assert.rejects(
+    update({ type: 'note', key: 'n', value: 'two' }, seen),
+    (e: Error & { status?: number }) =>
+      e.status === 409 && /changed in another tab/.test(e.message),
+  );
+  await update({ type: 'check', key: 'k', value: true }, seen);
+  const state = data.saves[0]!.profiles[0]!.state;
+  assert.equal(state.notes.n, 'one');
+  assert.equal(state.checks.k, true);
+});
