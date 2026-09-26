@@ -111,6 +111,21 @@ test('a shared profile exports one profile without progress and imports as a fre
       (await fetch(`${app.url}/api/export-saves?save=${a.saveId}&profile=missing`)).status,
       404,
     );
+    // A selection of saves (#160): exactly those, and any unknown id refuses the whole export.
+    const all = (await (await fetch(`${app.url}/api/export-saves`)).json()) as SaveExport;
+    assert.ok(all.saves.length >= 3);
+    const picked = [all.saves[0]!.id, all.saves[2]!.id];
+    const chosen = (await (
+      await fetch(`${app.url}/api/export-saves?saves=${picked.join(',')}`)
+    ).json()) as SaveExport;
+    assert.deepEqual(
+      chosen.saves.map(s => s.id),
+      picked,
+    );
+    assert.equal(
+      (await fetch(`${app.url}/api/export-saves?saves=${picked[0]},missing`)).status,
+      404,
+    );
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });
@@ -232,4 +247,16 @@ test('browser edition shares and duplicates through the same portable format', a
   const full = (await api('/api/export-saves')) as SaveExport;
   assert.ok(data.lastBackup, 'a full export still counts as a backup');
   assert.equal(full.saves.length, 2);
+  // A selection of saves (#160): only those, and it is not recorded as a full backup.
+  data.lastBackup = null;
+  const [first, second] = full.saves.map(s => s.id);
+  const one = (await api('/api/export-saves?saves=' + second)) as SaveExport;
+  assert.deepEqual(
+    one.saves.map(s => s.id),
+    [second],
+  );
+  const both = (await api(`/api/export-saves?saves=${first},${second}`)) as SaveExport;
+  assert.equal(both.saves.length, 2);
+  assert.equal(data.lastBackup, null, 'a selection is not a full backup');
+  await assert.rejects(api(`/api/export-saves?saves=${first},missing`), /Save not found/);
 });
