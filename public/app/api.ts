@@ -81,20 +81,30 @@ export let writeQueue: Promise<unknown> = Promise.resolve();
 
 // Saves one progress change. `op` is an operation for mutate() in state.ts, e.g.
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
-// profile's full new state. Writes run one at a time in call order. The save/profile is
-// captured now, so a write made before a profile switch still goes to its own profile, and
-// its reply only replaces `state` if that profile is still open. Does not render: callers
-// render() after it resolves. On failure it shows an error toast and rejects, and callers
-// usually just restore their control instead of rendering.
+// profile's full new state. Does not render: callers render() after it resolves. On failure
+// it shows an error toast and rejects, and callers usually just restore their control
+// instead of rendering.
 export function save(op: UpdateOp): Promise<ProgressState> {
+  return queuedWrite('/api/update', op).catch((e: Error) => {
+    toast(e.message, true);
+    throw e;
+  });
+}
+
+// A write that replies with the profile's full new state: save() and restoring a progress
+// backup (/api/import). Writes run one at a time in call order, and count as pending ("Saving…"
+// and the close-tab warning in listeners.ts) until they finish. The save/profile is captured
+// now, so a write made before a profile switch still goes to its own profile, and its reply
+// only replaces `state` if that profile is still open. Rejects with the request's error.
+export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressState> {
   const scope = { ...scopeHeaders() };
   pending++;
   saveIndicator();
   const run = writeQueue.then(async () => {
-    const next = await request<ProgressState>('/api/update', {
+    const next = await request<ProgressState>(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...scope },
-      body: JSON.stringify(op),
+      body: JSON.stringify(body),
     });
     // Ignore the reply if the user has since opened another save or profile.
     if (scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id)
@@ -103,28 +113,10 @@ export function save(op: UpdateOp): Promise<ProgressState> {
   });
   // A failed write must not block the writes queued after it.
   writeQueue = run.catch(() => {});
-  return run
-    .catch((e: Error) => {
-      toast(e.message, true);
-      throw e;
-    })
-    .finally(() => {
-      pending--;
-      saveIndicator();
-    });
-}
-
-// Runs a write that does not go through save() (restoring a progress backup) as a pending
-// one, so it shows "Saving…" and the close-tab warning (listeners.ts) covers it too.
-export async function writing<T>(work: () => Promise<T>): Promise<T> {
-  pending++;
-  saveIndicator();
-  try {
-    return await work();
-  } finally {
+  return run.finally(() => {
     pending--;
     saveIndicator();
-  }
+  });
 }
 
 // Refreshes the sidebar save status ("Saving…" while a write is pending), which

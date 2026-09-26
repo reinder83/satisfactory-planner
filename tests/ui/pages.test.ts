@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { pending } from '../../public/app/api.ts';
+import { pending, save } from '../../public/app/api.ts';
 import { currentSave, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
@@ -195,6 +195,54 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   assert.equal(pending, 0);
   assert.notEqual($('#saved')!.textContent, 'Saving…');
   assert.match($('#toast')!.textContent, /Backup restored/);
+});
+
+// Starts restoring a backup on the Backup page with a server that answers only when told.
+async function slowRestore() {
+  const sent: string[] = [];
+  const replies: ((body: unknown) => void)[] = [];
+  globalThis.fetch = async (path: RequestInfo | URL) => {
+    sent.push(String(path));
+    return new Promise<Response>(
+      r => void replies.push(body => r(new Response(JSON.stringify(body), { status: 200 }))),
+    );
+  };
+  globalThis.confirm = () => true;
+  go('backup');
+  render();
+  const input = $<HTMLInputElement>('#import-file')!;
+  const restored = { ...state, notes: { global: 'From the backup' } };
+  const file = new File(
+    [JSON.stringify({ format: 'satisfactory-planner-backup', state: restored })],
+    'b.json',
+  );
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 20));
+  return { sent, replies, restored };
+}
+
+test('a save made during a restore waits for it, and lands on top of it', async () => {
+  const { sent, replies, restored } = await slowRestore();
+  const tick = save({ type: 'check', key: 'after-restore', value: true });
+  await new Promise(r => setTimeout(r, 20));
+  assert.deepEqual(sent, ['/api/import'], 'the tick waits for the restore');
+  replies[0]!(restored);
+  await new Promise(r => setTimeout(r, 20));
+  assert.deepEqual(sent, ['/api/import', '/api/update']);
+  replies[1]!({ ...restored, checks: { 'after-restore': true } });
+  await tick;
+  assert.equal(state.notes.global, 'From the backup');
+  assert.equal(state.checks['after-restore'], true, 'the later write is what is shown');
+});
+
+test('a restore reply does not replace another profile opened meanwhile', async () => {
+  const { replies, restored } = await slowRestore();
+  // The user opens the calculated profile before the reply lands.
+  open({ calculated: true, notes: { global: 'Other profile' } });
+  replies[0]!(restored);
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(state.notes.global, 'Other profile');
 });
 
 test('a redraw keeps unsaved save-wide notes on the backup page', async () => {
