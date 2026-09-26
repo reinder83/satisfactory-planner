@@ -18,7 +18,6 @@ import {
   minedResources,
   minerMarks,
   nodeYield,
-  presetSurvey,
   resourcePool,
   wellYield,
 } from '../../../preferences.ts';
@@ -31,6 +30,7 @@ import {
   leaveExtraction,
   moveExtraction,
   readExtraction,
+  refillExtraction,
 } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
@@ -104,10 +104,8 @@ function changed(e: Event) {
   if (!/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))) return;
   readExtraction(e.currentTarget as HTMLFormElement);
   if (['purity', 'distribution'].includes(el.name)) {
-    const w = draft(),
-      s = w.settings;
-    if (knownWorld(s.purity, s.distribution))
-      w.extraction = presetSurvey(s.purity, extractionOf(w), s.distribution);
+    const s = draft().settings;
+    if (knownWorld(s.purity, s.distribution)) refillExtraction();
   }
   render();
 }
