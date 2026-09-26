@@ -98,7 +98,8 @@ const page = computed(() =>
 
 // Any survey field, once committed: read the screen into the survey and redraw, since the
 // totals and budgets follow the counts. Choosing a purity and distribution whose world is
-// fully known (knownWorld) refills every count from that preset.
+// fully known (knownWorld) refills every count from that preset. Any other edit drops a
+// pending undo (of a reset or refill): undoing after it would silently throw the edit away.
 function changed(e: Event) {
   const el = e.target as HTMLInputElement | HTMLSelectElement;
   if (!/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))) return;
@@ -106,7 +107,7 @@ function changed(e: Event) {
   if (['purity', 'distribution'].includes(el.name)) {
     const s = draft().settings;
     if (knownWorld(s.purity, s.distribution)) refillExtraction();
-  }
+  } else draft().extractionUndo = null;
   render();
 }
 
