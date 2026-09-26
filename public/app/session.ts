@@ -252,6 +252,10 @@ export async function boot() {
       state = initialState();
       stateLoaded = false;
       wizard = null;
+      // #detail sits outside #app, which showSignedOut replaces, so a factory or storage
+      // dialog still open would stay modal over the sign-in form with the previous user's data.
+      document.querySelector<HTMLDialogElement>('#detail')?.close();
+      activeDetail = null;
       showSignedOut(required('#app'));
       return;
     }

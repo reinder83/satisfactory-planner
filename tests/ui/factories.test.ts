@@ -14,6 +14,8 @@ import {
   openGroupChain,
 } from '../../public/app/factory-detail.ts';
 import {
+  activeDetail,
+  boot,
   calcStage,
   setFactoryEditing,
   setFactoryFilter,
@@ -438,4 +440,16 @@ test('a group build order stages suppliers before consumers', () => {
   assert.match(detail(), /Needs/);
   assert.match(detail(), /Feeds/);
   assert.match(detail(), /stage 1/, 'the consumer names the stage that supplies it');
+});
+
+test('a dialog left open when the session ends closes with the sign-in screen', async () => {
+  render();
+  openFactory('wire');
+  assert.equal($<HTMLDialogElement>('#detail')!.open, true);
+  // boot() after an ended session: /api/workspace answers with no user.
+  stubFetch({ '/api/workspace': { user: null, accountsEnabled: true, saves: [] } });
+  await boot();
+  assert.ok($('#auth-form'), 'the sign-in screen is up');
+  assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'no dialog over it');
+  assert.equal(activeDetail, null);
 });
