@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { carryOptions } from '../../public/state.ts';
-import { setWizard, view, wizard, workspace } from '../../public/app/session.ts';
+import { boot, setWizard, view, wizard, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import GuidedPage from '../../public/app/ui/pages/GuidedPage.vue';
@@ -870,4 +870,14 @@ test('the item search works from the keyboard', async () => {
   await click('[data-supply-remove="0"]');
   assert.deepEqual(wizard!.settings.existingSupply, {});
   assert.equal(wizard!.supplyRows!.length, 1);
+});
+
+test('signing out drops an unfinished wizard draft, so the next user never sees it', async () => {
+  wizardAt(2, { saveId: 's', saveName: 'Previous user' });
+  assert.ok(wizard);
+  // boot() after a sign-out or an ended session: /api/workspace answers with no user.
+  stubFetch({ '/api/workspace': { user: null, accountsEnabled: true, saves: [] } });
+  await boot();
+  assert.equal(wizard, null);
+  assert.ok($('#auth-form'), 'the sign-in screen is up');
 });
