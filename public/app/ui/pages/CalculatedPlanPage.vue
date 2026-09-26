@@ -1,9 +1,10 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, summary tiles, the checklist
   (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with
-  phase notes (`phase-<phase>`), and a side column with the Space Elevator deliveries and
-  the profile's assumptions. Everything reads the frozen calculation snapshot through
-  calcStage(). A delivery's id is `<stage>-<item slug>`, a saved key.
+  phase notes (`phase-<phase>`), and a side column with the Space Elevator deliveries,
+  "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions. Everything
+  reads the frozen calculation snapshot through calcStage(). A delivery's id is
+  `<stage>-<item slug>`, a saved key.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -25,6 +26,7 @@ import { useNoteDraft } from '../note-draft.ts';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
+import BuildStatusPanel from '../plan/BuildStatusPanel.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
@@ -117,6 +119,7 @@ const note = useNoteDraft(
           <h2>Elevator delivery</h2>
           <DeliveryCounter v-for="d in page.deliveries" :key="d.id" :delivery="d" />
         </section>
+        <BuildStatusPanel />
         <section class="panel">
           <h2>Profile assumptions</h2>
           <p v-for="(w, i) in page.warnings" :key="i" class="small">{{ w }}</p>

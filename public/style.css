@@ -1100,6 +1100,24 @@ p.eyebrow {
   pointer-events: none;
 }
 
+/* Build-so-far panel (ui/plan/BuildStatusPanel.vue): factory names read as inline links. */
+.build-status button.link,
+.factory-card .build-held button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.build-status .notice {
+  margin-top: 12px;
+}
+.factory-card .build-held {
+  color: var(--accent-hi);
+}
+
 /* ── Tables ────────────────────────────────────────────── */
 .table-wrap {
   overflow: auto;

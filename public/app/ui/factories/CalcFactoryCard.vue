@@ -8,6 +8,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
+import { currentBuildStatus } from '../../views/calculated.ts';
 import { allocationText } from '../../views/factories.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -43,6 +44,13 @@ const card = computed(() =>
           )
         : '',
       editing: factoryEditing,
+      // A row marked running that a missing supplier holds back (build-status.ts, #66).
+      held: (() => {
+        const s = currentBuildStatus()?.rows.find(x => x.id === r.id);
+        return s?.built && s.share < 1 && s.shortOf
+          ? `Running at ${Math.round(s.share * 100)}%: short of ${s.shortOf}`
+          : '';
+      })(),
     };
   }),
 );
@@ -67,6 +75,7 @@ const card = computed(() =>
       ><template v-else>{{ card.power }}</template>
     </p>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
+    <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
     <footer>
       <label class="check-row"
         ><input

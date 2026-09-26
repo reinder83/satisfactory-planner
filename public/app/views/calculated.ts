@@ -4,6 +4,7 @@
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.ts';
+import { buildStatus, type BuildStatus } from '../build-status.ts';
 import { num } from '../format.ts';
 import {
   calcStage,
@@ -177,4 +178,23 @@ export function calcExpansion(id: string) {
     installed = Math.max(installed, required);
     return { phase: ph, required: required || '—', add: add ? '+' + add : '—' };
   });
+}
+
+// The open calculated stage's build-so-far status (build-status.ts, #66): what the factory rows
+// ticked as built produce now. null without a calculated plan with rows. The pages and ADA ask
+// for it on every redraw, and finding the next step recalculates the stage once per unbuilt row,
+// so the last answer is kept until the plan, the stage or a row tick changes.
+let buildCache: { key: string; status: BuildStatus | null } | null = null;
+let buildPlan: unknown = null;
+export function currentBuildStatus(): BuildStatus | null {
+  const x = calcStage();
+  if (!calculated || !x?.rows?.length) return null;
+  const prefix = 'calc-' + stage() + '-';
+  const key = stage() + '|' + x.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('');
+  if (buildPlan !== calculated || buildCache?.key !== key) {
+    buildPlan = calculated;
+    const spareMW = (calculated.settings.availablePowerGW || 0) * 1000;
+    buildCache = { key, status: buildStatus(x, state.checks, stage(), spareMW) };
+  }
+  return buildCache.status;
 }

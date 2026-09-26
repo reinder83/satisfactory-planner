@@ -42,6 +42,22 @@ export interface AdaFacts {
   post: boolean;
   startPhase: string;
   assumptions: number;
+  // A calculated profile's build-so-far status (app/build-status.ts), or null: factories marked
+  // running of all, the share of the elevator delivery rate flowing now (0-100), the step to
+  // build next (name, % of delivery it adds, built machines it frees), the rows marked running
+  // but held back by a missing supplier and what they are short of, and whether the built
+  // factories draw more power than built generators and the listed spare give.
+  build: {
+    built: number;
+    total: number;
+    share: number;
+    next: string;
+    nextGain: number;
+    nextUnblocks: number;
+    waiting: string[];
+    shortOf: string[];
+    powerShort: boolean;
+  } | null;
 }
 
 // A line ADA says: a remark, an encore, or a fault line (which also has a name).
@@ -191,6 +207,31 @@ const RULES: AdaRule[] = [
     when: f => f.factories?.total && f.factories.done && f.factories.done < f.factories.total,
     text: f =>
       `${f.factories.done} of ${f.factories.total} factory targets marked running. The other ${f.factories.total - f.factories.done} remain, technically, a diagram.`,
+  },
+  // Build-so-far (#66): what the factories marked running actually deliver, from f.build.
+  {
+    id: 'build-waiting',
+    on: ['plan', 'factories'],
+    tone: 'warn',
+    when: f => f.build?.waiting.length,
+    text: f =>
+      `${names(f.build!.waiting)} ${f.build!.waiting.length === 1 ? 'is' : 'are'} marked running but short of ${names(f.build!.shortOf)}. A machine with nothing to process is a very loud sculpture.${f.build!.next ? ` Build ${f.build!.next} next.` : ''}`,
+  },
+  {
+    id: 'build-dry',
+    on: ['plan', 'factories'],
+    tone: 'calm',
+    when: f => f.build?.built && !f.build.share && f.build.next,
+    text: f =>
+      `${f.build!.built} ${f.build!.built === 1 ? 'factory' : 'factories'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${f.build!.next}.`,
+  },
+  {
+    id: 'build-next',
+    on: ['plan', 'factories'],
+    tone: 'calm',
+    when: f => f.build?.next && f.build.nextGain > 0,
+    text: f =>
+      `${f.build!.share}% of ${f.phaseLabel}'s elevator delivery is flowing. Build ${f.build!.next} next: on its own it adds ${f.build!.nextGain}%. I checked every other option, so you do not have to.`,
   },
   {
     id: 'storage',

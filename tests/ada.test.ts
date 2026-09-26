@@ -252,3 +252,47 @@ test('remarks stay plain text for the caller to escape', () => {
   assert.match(nasty.find(r => r.id === 'start')!.text, /Weld the <boat>/);
   assert.match(nasty.find(r => r.id === 'one-profile')!.text, /World <one>/);
 });
+
+test('ADA reads the build-so-far status: held-back rows, nothing flowing, the next step', () => {
+  const build = (over: Partial<NonNullable<AdaFacts['build']>> = {}) => ({
+    built: 3,
+    total: 10,
+    share: 0,
+    next: 'Steel Beam',
+    nextGain: 25,
+    nextUnblocks: 0,
+    waiting: [],
+    shortOf: [],
+    powerShort: false,
+    ...over,
+  });
+  // A row marked running without its supplier is a problem: it leads, with the next step.
+  const waiting = first(
+    facts({ view: 'factories', build: build({ waiting: ['Screw'], shortOf: ['Iron Rod'] }) }),
+  );
+  assert.equal(waiting.id, 'build-waiting');
+  assert.equal(waiting.tone, 'warn');
+  assert.match(waiting.text, /Screw is marked running but short of Iron Rod\./);
+  assert.match(waiting.text, /Build Steel Beam next\./);
+  assert.match(
+    adaRemarks(facts({ build: build({ waiting: ['A', 'B'], shortOf: ['X'] }) }))[0]!.text,
+    /A, B are marked running/,
+  );
+  // Built but nothing reaches the elevator: the missing link.
+  const dry = ids(facts({ build: build() }));
+  assert.ok(dry.includes('build-dry'));
+  assert.match(
+    adaRemarks(facts({ build: build() })).find(r => r.id === 'build-dry')!.text,
+    /3 factories marked running, and not one Space Elevator part moves yet[^]*Steel Beam/,
+  );
+  // Some flowing: the best next step and what it adds.
+  const flowing = adaRemarks(facts({ build: build({ share: 40, nextGain: 20 }) }));
+  assert.ok(!flowing.some(r => r.id === 'build-dry'));
+  assert.match(
+    flowing.find(r => r.id === 'build-next')!.text,
+    /40% of Phase 3's elevator delivery is flowing\. Build Steel Beam next: on its own it adds 20%/,
+  );
+  // Nothing to say without a status (the handbook) or with everything built.
+  for (const f of [facts({ build: null }), facts({ build: build({ next: '', share: 100 }) })])
+    assert.ok(!ids(f).some(id => id.startsWith('build-')));
+});
