@@ -345,6 +345,60 @@ test('with completed steps hidden, moving a step passes the neighbour on screen'
   });
 });
 
+test('a cleared step title restores the original, and an automatic link can be removed', async () => {
+  const calls = stubFetch({ '/api/update': () => state });
+  const editStep = async (id: string) => {
+    $(`[data-edit-task="${id}"]`)!.click();
+    await nextTick();
+    return $<HTMLFormElement>(`[data-task-edit="${id}"]`)!;
+  };
+  const retitled: Partial<TaskEdits> = { titles: { 'phase-3-iron': 'Iron halls' } };
+  open({ state: { taskEdits: retitled as TaskEdits } });
+  render();
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  let form = await editStep('phase-3-iron');
+  const title = form.querySelector<HTMLInputElement>('[name=title]')!;
+  assert.equal(title.required, false, 'the title can be cleared');
+  title.value = '';
+  form.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'taskEdit',
+    id: 'phase-3-iron',
+    title: '',
+    body: '',
+    link: '',
+  });
+  // A calculated step links to its own row; "No linked factory" is saved as '-'.
+  const row = generated.stages['3'].rows![0]!,
+    id = 'calc-3-' + row.id;
+  open({ calculated: generated });
+  render();
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  form = await editStep(id);
+  form.querySelector<HTMLSelectElement>('[name=link]')!.value = '';
+  form.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'taskEdit', id, title: '', body: '', link: '-' });
+  // Saved like that, the step has no link and the form says so.
+  const unlinked: Partial<TaskEdits> = { links: { [id]: '-' } };
+  open({ calculated: generated, state: { taskEdits: unlinked as TaskEdits } });
+  render();
+  await nextTick();
+  assert.equal(!!$(`[data-task="${id}"] .task-link`), false, 'no "Open factory" link');
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  form = await editStep(id);
+  assert.equal(form.querySelector<HTMLSelectElement>('[name=link]')!.value, '');
+  // Choosing its own row again goes back to the automatic link.
+  form.querySelector<HTMLSelectElement>('[name=link]')!.value = row.id;
+  form.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'taskEdit', id, title: '', body: '', link: '' });
+});
+
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
   const plan = structuredClone(generated);
   plan.warnings = [evil];
