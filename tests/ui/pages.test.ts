@@ -187,6 +187,18 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   assert.match($('#toast')!.textContent, /Backup restored/);
 });
 
+test('a redraw keeps unsaved save-wide notes on the backup page', async () => {
+  go('backup');
+  render();
+  const note = $<HTMLTextAreaElement>('#global-note')!;
+  note.value = 'Unsaved thought';
+  note.dispatchEvent(new Event('input'));
+  // What the save indicator does while another write is in flight.
+  invalidate();
+  await nextTick();
+  assert.equal($<HTMLTextAreaElement>('#global-note')!.value, 'Unsaved thought');
+});
+
 test('the calculated backup page names the profile and lists its assumptions', () => {
   open({ calculated: true });
   go('backup');
