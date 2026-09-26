@@ -4,6 +4,12 @@
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI.
 import type { BrowserWorkspace } from './types/index.ts';
 
+// What an older planner says about saves a newer one wrote, whether the database itself or the
+// workspace record is newer. Neither is read or written: AGENTS.md forbids downgrading them.
+const NEWER =
+  'The saves in this browser were written by a newer version of the planner. Open the latest ' +
+  'version to use them; nothing has been changed.';
+
 // The store browser-api.ts works through (tests pass a stand-in with the same method).
 export interface BrowserStore {
   transaction(): Promise<BrowserWorkspace>;
@@ -24,7 +30,8 @@ export function openBrowserStore(
       r.result.onversionchange = () => r.result.close();
       resolve(r.result);
     };
-    r.onerror = () => reject(r.error);
+    // A database a newer release has upgraded refuses this older schema version.
+    r.onerror = () => reject(r.error?.name === 'VersionError' ? Error(NEWER) : r.error);
     r.onblocked = () => reject(Error('Close other planner tabs to upgrade browser storage.'));
   });
   return {
@@ -43,6 +50,8 @@ export function openBrowserStore(
         const r = store.get('main');
         r.onsuccess = () => {
           try {
+            // Version 1 is the only workspace format so far; a later one is refused unread.
+            if (typeof r.result?.version === 'number' && r.result.version > 1) throw Error(NEWER);
             const data: BrowserWorkspace = r.result || {
               version: 1,
               activeSave: null,
