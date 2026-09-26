@@ -59,6 +59,15 @@ test('browser imports reject invalid data atomically and deletion preserves othe
     confirmed: true,
   });
   assert.equal(((await api('/api/state')) as ProgressState).checks.remember, true);
+  // A progress backup is refused under any other format, as the server refuses it.
+  const backup = (await api('/api/export')) as { format: string };
+  const unchanged = structuredClone(data);
+  await assert.rejects(
+    post('/api/import', { ...backup, format: 'satisfactory-planner-saves' }),
+    /Wrong backup format/,
+  );
+  assert.deepEqual(data, unchanged);
+  await post('/api/import', backup);
   const exported = await api('/api/export-saves');
   await post('/api/import-saves', exported);
   const workspace = (await api('/api/workspace')) as WorkspaceSummary;
