@@ -58,6 +58,9 @@ export interface AdaFacts {
     shortOf: string[];
     powerShort: boolean;
   } | null;
+  // The alternate that pays off most in a stored hard-drive payoff ranking of this phase, on
+  // what the profile's goal optimises (app/payoff.ts), with that gain in words; null without one.
+  payoff: { name: string; gain: string } | null;
 }
 
 // A line ADA says: a remark, an encore, or a fault line (which also has a name).
@@ -232,6 +235,15 @@ const RULES: AdaRule[] = [
     when: f => f.build?.next && f.build.nextGain > 0,
     text: f =>
       `${f.build!.share}% of ${f.phaseLabel}'s elevator delivery is flowing. Build ${f.build!.next} next: on its own it adds ${f.build!.nextGain}%. I checked every other option, so you do not have to.`,
+  },
+  // Hard-drive payoff (#204): the best alternate of a stored ranking, from f.payoff.
+  {
+    id: 'payoff-best',
+    on: ['plan'],
+    tone: 'calm',
+    when: f => f.payoff,
+    text: f =>
+      `Allowing ${f.payoff!.name} would mean ${f.payoff!.gain} in ${f.phaseLabel}. The hard-drive payoff table on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
   },
   {
     id: 'storage',

@@ -708,6 +708,7 @@ export async function openWorkspace({
       throttle(req, 5);
       const payoff: StoredPayoff = {
         planCreatedAt: plan.createdAt,
+        rankedAt: new Date().toISOString(),
         ranking: rankAlternates(plan.settings, { phase, budgetMs: rankBudgetMs }),
       };
       await commit(d => {

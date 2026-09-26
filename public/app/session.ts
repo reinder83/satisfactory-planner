@@ -18,6 +18,7 @@ import type {
   ProgressState,
   StageKey,
   StoredCalculatedPlan,
+  StoredPayoff,
   WorkspaceSummary,
 } from '../types/index.ts';
 
@@ -58,6 +59,8 @@ export let currentProfile: OpenProfile;
 // The open profile's frozen calculated plan, or null for the original handbook.
 // Views branch on this to pick the calculated or the handbook rendering.
 export let calculated: StoredCalculatedPlan | null = null;
+// The open profile's stored hard-drive payoff ranking (#203), while it matches the plan.
+export let payoff: StoredPayoff | null = null;
 // The in-progress wizard (settings being edited, step, preview) while #wizard is open.
 export let wizard: WizardDraft | null = null;
 // Which form the signed-out screen shows; see ui/SignedOut.vue.
@@ -112,6 +115,9 @@ export function setAuthMode(value: 'login' | 'register') {
 export function setState(value: ProgressState) {
   state = value;
   stateLoaded = true;
+}
+export function setPayoff(value: StoredPayoff | null) {
+  payoff = value;
 }
 export function setView(value: View) {
   view = value;
@@ -214,6 +220,7 @@ export function setContext(c: ContextReply) {
   state = c.state;
   stateLoaded = true;
   calculated = c.plan;
+  payoff = c.payoff ?? null;
   plan = c.handbook || basePlan || plan;
   query = '';
   endEditing();

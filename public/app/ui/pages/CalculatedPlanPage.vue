@@ -2,7 +2,8 @@
   #plan on a calculated profile: the calculation's warnings, summary tiles, the checklist
   (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with
   phase notes (`phase-<phase>`), and a side column with the Space Elevator deliveries,
-  "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions. Everything
+  "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions, then the
+  hard-drive payoff table (ui/plan/PayoffPanel.vue) across the page's width. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key.
 -->
@@ -31,6 +32,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import PayoffPanel from '../plan/PayoffPanel.vue';
 import { saveNote } from '../actions.ts';
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
@@ -126,5 +128,6 @@ const note = useNoteDraft(
         </section>
       </aside>
     </div>
+    <PayoffPanel />
   </template>
 </template>

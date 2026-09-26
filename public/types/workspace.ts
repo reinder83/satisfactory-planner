@@ -26,6 +26,8 @@ export interface StoredProfile {
 // the createdAt of the plan it compared against.
 export interface StoredPayoff {
   planCreatedAt: string;
+  // When it was ranked; missing from one stored by the first release of the route.
+  rankedAt?: string;
   ranking: AlternateRanking;
 }
 

@@ -338,7 +338,11 @@ export function createBrowserApi(
         const { profile } = scope(d, url, headers);
         if (profile.plan?.createdAt !== plan.createdAt)
           throw Error('The profile changed while ranking. Rank again.');
-        profile.payoff = { planCreatedAt: plan.createdAt, ranking };
+        profile.payoff = {
+          planCreatedAt: plan.createdAt,
+          rankedAt: new Date().toISOString(),
+          ranking,
+        };
         return profile.payoff;
       });
     }
