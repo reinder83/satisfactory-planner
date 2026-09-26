@@ -45,7 +45,8 @@ export function inputText(inputs: ItemRates): string {
 // The profile's storage layout edits with defaults filled in: added floors and bays,
 // renamed floors and bays, `slots` (address → item name filled in by the user) and
 // `clearedSlots` (handbook addresses the user emptied, kept as reserved positions) and
-// `hiddenBays` (handbook bays taken out of the room, their records kept).
+// `hiddenBays` (handbook bays taken out of the room, their records kept) and `bayFloors`
+// (handbook bays moved to another floor, #190).
 function storageEdits(): StorageEdits {
   const e: Partial<StorageEdits> = state?.storageEdits || {};
   return {
@@ -57,6 +58,7 @@ function storageEdits(): StorageEdits {
     clearedSlots: e.clearedSlots || [],
     hiddenBays: e.hiddenBays || [],
     hiddenFloors: e.hiddenFloors || [],
+    ...(e.bayFloors ? { bayFloors: e.bayFloors } : {}),
   };
 }
 
@@ -175,6 +177,8 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   // collectables bays Q and R when its settings keep collectables.
   const base: StorageBayView[] = plan.storage.map(b => ({
     ...b,
+    // A handbook bay moved to another floor (#190) keeps everything else.
+    floor: e.bayFloors?.[b.id] ?? b.floor,
     name: e.bayNames[b.id] || b.name,
     items: [
       ...b.items.map(x => {

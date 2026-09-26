@@ -514,3 +514,32 @@ test('a handbook bay sharing its letter with an added bay stored before #91 offe
   assert.equal($('[data-hide-bay="C"]'), null, 'remove the added bay first');
   assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
 });
+
+test('a bay moves to another floor from edit mode, with its records, and the built room says so (#190)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  open({ state: { version: 1, checks: { 'slot-D01-built': true } } });
+  render();
+  assert.equal($('[data-move-bay]'), null, 'only while editing the layout');
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  const menu = $<HTMLSelectElement>('[data-move-bay="D"]')!;
+  assert.deepEqual(
+    [...menu.options].map(o => o.value),
+    ['', 'upper', 'workshop'],
+    'every other floor in the tabs',
+  );
+  menu.value = 'upper';
+  menu.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageBayMove', id: 'D', floor: 'upper' });
+  assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');
+  assert.match($('#toast')!.textContent!, /Bay D moved to Upper floor/);
+  assert.match($('[data-moved-off]')!.textContent!, /bay D to Upper floor/);
+  setFloor('upper');
+  render();
+  await nextTick();
+  assert.ok($('[data-slot="D01"]'), 'and arrived upstairs');
+  assert.equal(state.checks['slot-D01-built'], true, 'its checkmark came along');
+  noMarkup();
+});

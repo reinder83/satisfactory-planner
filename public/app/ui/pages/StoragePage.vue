@@ -84,6 +84,15 @@ const page = computed(() =>
           : floor === 'upper'
             ? 'upper'
             : '',
+      // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
+      movedOff: storageBays()
+        .filter(
+          b =>
+            !b.custom &&
+            b.floor !== 'ground' &&
+            plan.storage.find(x => x.id === b.id)?.floor === 'ground',
+        )
+        .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
       query,
       editing: layoutEditing,
       // Hidden handbook bays (#166) and the planned items left without a container.
@@ -226,6 +235,12 @@ function toggleLayout() {
   <div v-else-if="page.notice === 'built'" class="notice blue">
     <b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and
     Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.
+    <template v-if="page.movedOff.length"
+      ><br /><span data-moved-off
+        >Moved in this plan: bay {{ page.movedOff.join(', ') }}. The built room still has
+        {{ page.movedOff.length === 1 ? 'it' : 'them' }} here.</span
+      ></template
+    >
   </div>
   <div v-else-if="page.notice === 'upper'" class="notice blue">
     Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay

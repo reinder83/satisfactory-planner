@@ -13,7 +13,7 @@ import { save, toast } from '../../api.ts';
 import { slug } from '../../format.ts';
 import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { openSlot, slotDone, slotKeys, storageBays } from '../../views/storage.ts';
+import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import type { StorageBayView } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
@@ -32,6 +32,8 @@ const view = computed(() =>
       // A handbook bay sharing its letter with an added bay (stored before #91) cannot be
       // hidden until that bay is removed (storageBayHide in state.ts).
       canHide: !b.custom && !storageBays().some(x => x.custom && x.id === b.id),
+      // The floors this bay can move to (#190): every other floor in the tabs.
+      moveTo: storageFloors().filter(f => f.id !== b.floor),
       done: items.filter(x => slotDone(x.id)).length,
       named: items.length,
       slots: b.items.map(x => ({
@@ -136,6 +138,25 @@ function hideBay(e: Event) {
   saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayHide', id: props.bay.id });
 }
 
+// "Move to…": the bay goes to another floor with its letter, so its containers, checkmarks
+// and notes go with it (#190). The menu is reset either way; the bay leaves this floor on success.
+async function moveBay(e: Event) {
+  const el = e.target as HTMLSelectElement,
+    floor = el.value,
+    label = storageFloors().find(f => f.id === floor)?.label;
+  el.value = '';
+  if (!floor) return;
+  el.disabled = true;
+  try {
+    await save({ type: 'storageBayMove', id: props.bay.id, floor });
+    render();
+    toast(`Bay ${props.bay.id} moved to ${label}, with its containers and checkmarks.`);
+  } catch {
+  } finally {
+    el.disabled = false;
+  }
+}
+
 function removeBay(e: Event) {
   if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
     return;
@@ -197,6 +218,16 @@ async function addContainer(e: Event) {
         >
           Remove bay
         </button>
+        <select
+          v-if="view.editing && view.moveTo.length"
+          class="move-bay"
+          :data-move-bay="bay.id"
+          :aria-label="'Move bay ' + bay.id + ' to another floor'"
+          @change="moveBay"
+        >
+          <option value="">Move to…</option>
+          <option v-for="f in view.moveTo" :key="f.id" :value="f.id">{{ f.label }}</option>
+        </select>
         <button
           v-if="view.editing && view.canHide"
           class="btn quiet"

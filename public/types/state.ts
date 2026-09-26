@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–6). Later versions only add optional sections, so an older
+//                  version (1–7). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -10,8 +10,8 @@ import type { Phase } from './common.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
-// handbook bay, 6 a hidden built-in floor.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6;
+// handbook bay, 6 a hidden built-in floor, 7 a handbook bay moved to another floor.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -41,6 +41,10 @@ export interface StorageEdits {
   // Built-in floors ('ground', 'upper', 'workshop') the user took out of the tabs (#168), once
   // no bay on them was showing. Restoring one brings its tab back.
   hiddenFloors: string[];
+  // Handbook bays (A–R) moved to another floor (#190): letter → floor id, a built-in or added
+  // floor. Absent or missing a letter: the handbook's floor. Added bays keep their own `floor`.
+  // The letter, and so every address, check and note of the bay, stays the same (version 7).
+  bayFloors?: Record<string, string>;
 }
 
 // Build-plan step edits, keyed by step id (version 3).
@@ -130,6 +134,8 @@ export type UpdateOp =
   // replace: take a hidden handbook bay's letter, clearing its kept records (#167).
   | { type: 'storageBayAdd'; id: string; name: string; floor: string; replace?: boolean }
   | { type: 'storageBayRename'; id: string; name: string }
+  // Any bay to another floor, keeping its letter and records (#190).
+  | { type: 'storageBayMove'; id: string; floor: string }
   | { type: 'storageBayRemove'; id: string }
   // Hide or bring back a handbook bay; its records are kept either way.
   | { type: 'storageBayHide'; id: string }
