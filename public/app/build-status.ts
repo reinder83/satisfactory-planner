@@ -108,7 +108,7 @@ function flows(stage: StoredStage, built: Set<string>, share: Map<string, number
   const deliveryShare = parts.length
     ? parts.reduce((t, d) => t + d.now / d.planned, 0) / parts.length
     : 0;
-  return { produced, delivery, deliveryShare };
+  return { produced, demand, delivery, deliveryShare };
 }
 
 // `checks` is the profile's progress checks and `stageKey` the stage's key in the plan ('1'-'5'),
@@ -122,15 +122,16 @@ export function buildStatus(
   const rows = stage.rows || [];
   const built = new Set(rows.filter(r => checks[`calc-${stageKey}-${r.id}`]).map(r => r.id));
   const share = shares(stage, built);
-  const { produced, delivery, deliveryShare } = flows(stage, built, share);
+  const { produced, demand, delivery, deliveryShare } = flows(stage, built, share);
   const statusRows: RowStatus[] = rows.map(r => {
     const s = share.get(r.id)!;
     const status: RowStatus = { id: r.id, built: built.has(r.id), share: s };
     if (status.built && s < 1) {
-      // The input with the lowest supply against the plan's demand for it.
+      // The input with the lowest supply against everything that asks for it (the ratio
+      // shares() limits the row by), so a competing consumer or storage counts too.
       let worst = Infinity;
       for (const n of Object.keys(r.inputs || {})) {
-        const ratio = (produced[n] || 0) / (r.inputs[n] || 1);
+        const ratio = demand[n]! > EPSILON ? (produced[n] || 0) / demand[n]! : Infinity;
         if (ratio < worst) [worst, status.shortOf] = [ratio, n];
       }
     }

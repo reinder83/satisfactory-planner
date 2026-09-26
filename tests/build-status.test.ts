@@ -91,6 +91,18 @@ test('a short item is shared in proportion to what the plan gives each use', () 
   close(s.deliveryShare, 0.5, 'delivery share');
 });
 
+test('the input a row is short of counts what competes for it, not only its own need', () => {
+  // A covers half this row's need, but B, which storage also takes, only a tenth of the demand.
+  const competing = stage([row('x', { A: 100, B: 50 }, { P: 10 })], {
+    raw: { A: 50, B: 100 },
+    storage: { B: 950 },
+    delivery: { P: { target: 100, rate: 10 } },
+  });
+  const s = buildStatus(competing, ticked('x'), '1');
+  close(s.rows[0]!.share, 0.1, 'share');
+  assert.equal(s.rows[0]!.shortOf, 'B', 'B holds the row at 0.1, not A at 0.5');
+});
+
 test('with no single step adding delivery, the next one frees the most built machines', () => {
   // Ore -> ingot -> plate -> frame -> elevator, with only the plate line built.
   const long = stage(
