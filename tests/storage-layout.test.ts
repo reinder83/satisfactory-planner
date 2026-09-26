@@ -56,7 +56,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
   assert.equal(round.storageEdits.floorNames.ground, 'Main hall');
   assert.equal(round.storageEdits.floors[0]!.label, 'Basement overflow');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 10 }),
     /newer planner version/,
   );
 });
@@ -72,7 +72,7 @@ test('a bay takes containers past its printed eight and marks the state version 
   assert.equal(round.storageEdits.slots.A09, 'Alclad Aluminum Sheet');
   assert.equal(round.storageEdits.slots.A12, 'Aluminum Casing');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 10 }),
     /newer planner version/,
   );
   // An added position has no handbook container behind it, so clearing one drops
@@ -257,7 +257,7 @@ test('a handbook bay can be hidden and restored, keeping every record, as versio
   assert.deepEqual(round.storageEdits.hiddenBays, ['C']);
   assert.equal(round.version, 5);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 10 }),
     /newer planner version/,
   );
   // Restoring brings back exactly what was there, at the version the rest needs.
@@ -292,7 +292,7 @@ test('a built-in floor can be hidden once empty and restored, as version 6 (#168
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.deepEqual(round.storageEdits.hiddenFloors, ['workshop']);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 10 }),
     /newer planner version/,
   );
   s = mutate(s, { type: 'storageFloorRestore', id: 'workshop' });
@@ -415,7 +415,7 @@ test('any bay can move to another floor with every record, as version 8 when a h
   assert.equal(s.storageEdits.bayNames.D, 'Control');
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.deepEqual(round.storageEdits.bayFloors, { D: 'upper' });
-  assert.throws(() => validateState({ ...round, version: 9 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 10 }), /newer planner version/);
   // The floor it moved to counts it: upper cannot be hidden, an added floor not removed.
   assert.throws(() => mutate(s, { type: 'storageFloorHide', id: 'upper' }), /bays on this floor/);
   s = mutate(s, { type: 'storageFloorAdd', id: 'cf-base01', label: 'Basement' });
