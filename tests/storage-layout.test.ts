@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, validateState, mutate, bayCapacity, handbookBay } from '../public/state.ts';
+import {
+  initialState,
+  validateState,
+  mutate,
+  bayCapacity,
+  handbookBay,
+  handbookFloor,
+} from '../public/state.ts';
 import plan from '../public/plan.json' with { type: 'json' };
 import type { SavedState, UpdateOp } from '../public/types/index.ts';
 
@@ -49,7 +56,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
   assert.equal(round.storageEdits.floorNames.ground, 'Main hall');
   assert.equal(round.storageEdits.floors[0]!.label, 'Basement overflow');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 8 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
     /newer planner version/,
   );
 });
@@ -65,7 +72,7 @@ test('a bay takes containers past its printed eight and marks the state version 
   assert.equal(round.storageEdits.slots.A09, 'Alclad Aluminum Sheet');
   assert.equal(round.storageEdits.slots.A12, 'Aluminum Casing');
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 8 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
     /newer planner version/,
   );
   // An added position has no handbook container behind it, so clearing one drops
@@ -250,7 +257,7 @@ test('a handbook bay can be hidden and restored, keeping every record, as versio
   assert.deepEqual(round.storageEdits.hiddenBays, ['C']);
   assert.equal(round.version, 5);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 8 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
     /newer planner version/,
   );
   // Restoring brings back exactly what was there, at the version the rest needs.
@@ -285,7 +292,7 @@ test('a built-in floor can be hidden once empty and restored, as version 6 (#168
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.deepEqual(round.storageEdits.hiddenFloors, ['workshop']);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 8 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 9 }),
     /newer planner version/,
   );
   s = mutate(s, { type: 'storageFloorRestore', id: 'workshop' });
@@ -393,4 +400,71 @@ test('a handbook bay sharing its letter with a pre-#91 added bay is not hidden, 
   s = mutate(s, { type: 'storageBayHide', id: 'C' });
   assert.deepEqual(s.storageEdits.hiddenBays, ['C']);
   assert.equal(s.checks['slot-C01-built'], true);
+});
+
+test('any bay can move to another floor with every record, as version 8 when a handbook bay moves (#190)', () => {
+  let s = initialState();
+  s = mutate(s, { type: 'check', key: 'slot-D01-built', value: true });
+  s = mutate(s, { type: 'note', key: 'slot-D01', value: 'By the lift' });
+  s = mutate(s, { type: 'storageBayRename', id: 'D', name: 'Control' });
+  s = mutate(s, { type: 'storageBayMove', id: 'D', floor: 'upper' });
+  assert.deepEqual(s.storageEdits.bayFloors, { D: 'upper' });
+  assert.equal(s.version, 8, 'a version-7 planner must refuse it rather than put the bay back');
+  assert.equal(s.checks['slot-D01-built'], true, 'the letter, and so every record, stays');
+  assert.equal(s.notes['slot-D01'], 'By the lift');
+  assert.equal(s.storageEdits.bayNames.D, 'Control');
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(round.storageEdits.bayFloors, { D: 'upper' });
+  assert.throws(() => validateState({ ...round, version: 9 }), /newer planner version/);
+  // The floor it moved to counts it: upper cannot be hidden, an added floor not removed.
+  assert.throws(() => mutate(s, { type: 'storageFloorHide', id: 'upper' }), /bays on this floor/);
+  s = mutate(s, { type: 'storageFloorAdd', id: 'cf-base01', label: 'Basement' });
+  s = mutate(s, { type: 'storageBayMove', id: 'J', floor: 'cf-base01' });
+  assert.throws(
+    () => mutate(s, { type: 'storageFloorRemove', id: 'cf-base01' }),
+    /bays on this floor/,
+  );
+  // Back on its own floor it has not moved; with no moves left the version drops again.
+  s = mutate(s, { type: 'storageBayMove', id: 'J', floor: 'upper' });
+  s = mutate(s, { type: 'storageBayMove', id: 'D', floor: 'ground' });
+  assert.equal(s.storageEdits.bayFloors, undefined);
+  assert.equal(s.version, 2);
+  // An added bay moves by its own floor.
+  s = mutate(s, { type: 'storageBayAdd', id: 'S', name: 'Extra', floor: 'ground' });
+  s = mutate(s, { type: 'storageBayMove', id: 'S', floor: 'cf-base01' });
+  assert.equal(s.storageEdits.bays.find(b => b.id === 'S')!.floor, 'cf-base01');
+  assert.equal(s.storageEdits.bayFloors, undefined);
+});
+
+test('a bay move to a missing or hidden floor, or of an unknown bay, is refused', () => {
+  let s = mutate(initialState(), { type: 'storageFloorHide', id: 'workshop' });
+  for (const [op, why] of [
+    [{ type: 'storageBayMove', id: 'D', floor: 'attic' }, /Unknown floor/],
+    [{ type: 'storageBayMove', id: 'D', floor: 'cf-none01' }, /Unknown floor/],
+    [{ type: 'storageBayMove', id: 'D', floor: 'workshop' }, /Restore that floor/],
+    [{ type: 'storageBayMove', id: 'ZZ', floor: 'upper' }, /Unknown bay/],
+    [{ type: 'storageBayMove', id: 'd', floor: 'upper' }, /Invalid bay/],
+  ] as [UpdateOp, RegExp][])
+    assert.throws(() => mutate(structuredClone(s), op), why, JSON.stringify(op));
+  for (const bayFloors of [[], { S: 'upper' }, { D: 'attic' }, { D: 'cf-none01' }, { D: 1 }])
+    assert.throws(
+      () => validateState({ ...s, storageEdits: { ...s.storageEdits, bayFloors } }),
+      /Invalid storage bay floors/,
+      JSON.stringify(bayFloors),
+    );
+  // A bay taking a hidden handbook letter (#167) starts on its own floor, not the old bay's.
+  s = mutate(initialState(), { type: 'storageBayMove', id: 'C', floor: 'upper' });
+  s = mutate(s, { type: 'storageBayHide', id: 'C' });
+  s = mutate(s, {
+    type: 'storageBayAdd',
+    id: 'C',
+    name: 'Mine',
+    floor: 'ground',
+    replace: true,
+  });
+  assert.equal(s.storageEdits.bayFloors, undefined);
+});
+
+test("handbookFloor matches every handbook bay's floor in plan.json", () => {
+  for (const b of plan.storage) assert.equal(handbookFloor(b.id), b.floor, b.id);
 });

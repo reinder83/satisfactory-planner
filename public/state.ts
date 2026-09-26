@@ -8,7 +8,7 @@
 //                  e.g. '3-versatile-framework'
 //   settings       { phase } the selected phase; nothing else in settings is kept
 //   customTasks    [{ id: 'custom-…', title, phase }] steps the user added
-//   storageEdits   storage room layout edits (blankEdits), version 2+/4/5/6
+//   storageEdits   storage room layout edits (blankEdits), version 2+/4/5/6/8
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3;
 //                  links, the vehicle picked per group link, version 7
@@ -117,6 +117,9 @@ const bayId = (k: unknown): k is string => typeof k === 'string' && /^[A-Z]{1,2}
 // one of these letters only while that handbook bay is hidden (#167), and only after the hidden
 // bay's kept records are cleared, so two bays never share addresses or progress.
 export const handbookBay = (k: string) => /^[A-R]$/.test(k);
+// A handbook bay's own floor in plan.json: A–H on the ground floor, I–R upstairs (a test keeps
+// this in step too). Moving a bay back there forgets its entry in bayFloors (#190).
+export const handbookFloor = (k: string) => (k <= 'H' ? 'ground' : 'upper');
 // An added floor's id as validateEdits has always checked it: the pattern test alone, which
 // stringifies what it is given. Kept exactly, so no stored layout that passed before fails now.
 const addedFloorId = (k: unknown) => /^cf-[a-z0-9]{4,32}$/.test(k as string);
@@ -594,22 +597,40 @@ function validateEdits(raw: unknown): StorageEdits {
     if (e.hiddenFloors.length === builtinFloors.length && !e.floors.length)
       fail('Invalid hidden storage floors.');
   }
+  if (raw.bayFloors !== undefined) {
+    if (!plain(raw.bayFloors)) fail('Invalid storage bay floors.');
+    const moved: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw.bayFloors)) {
+      if (!handbookBay(k) || !knownFloor(e, v)) fail('Invalid storage bay floors.');
+      // A bay recorded on its own floor has not moved.
+      if (v !== handbookFloor(k)) moved[k] = v;
+    }
+    // Only kept when a bay moved, so a layout without moves keeps its old shape.
+    if (Object.keys(moved).length) e.bayFloors = moved;
+  }
   return e;
 }
+// A floor that exists in this layout: a built-in one, hidden or not, or an added one.
+const knownFloor = (e: StorageEdits, id: unknown): id is string =>
+  builtinFloors.some(([f]) => f === id) || e.floors.some(f => f.id === id);
+// Whether any bay the layout places itself sits on a floor: an added bay, or a handbook bay
+// moved there. Handbook bays on their own floor are the page's to count (plan.json).
+const baysOn = (e: StorageEdits, id: string) =>
+  e.bays.some(b => b.floor === id) || Object.values(e.bayFloors || {}).includes(id);
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–7 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–8 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "8" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 7
+      // Compared as the old code did, so a version given as "9" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 8
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -663,20 +684,24 @@ export function validateState(s: unknown): ProgressState {
   // silently dropping those edits (and showing the bay again as if nothing happened).
   // A hidden built-in floor is 6: a version-5 release would drop the list it does not know
   // and show the floor again. A vehicle picked for a group link is 7 (#205): an older
-  // validateGroups keeps only groups and assignments and would drop the choice.
-  clean.version = clean.factoryGroups.links
-    ? 7
-    : clean.storageEdits.hiddenFloors.length
-      ? 6
-      : clean.storageEdits.hiddenBays.length
-        ? 5
-        : hasAddedSlots(clean.storageEdits)
-          ? 4
-          : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-            ? 3
-            : hasEdits(clean.storageEdits)
-              ? 2
-              : 1;
+  // validateGroups keeps only groups and assignments and would drop the choice. A handbook
+  // bay moved to another floor is 8 (#190): an older release would drop bayFloors and put the
+  // bay back.
+  clean.version = clean.storageEdits.bayFloors
+    ? 8
+    : clean.factoryGroups.links
+      ? 7
+      : clean.storageEdits.hiddenFloors.length
+        ? 6
+        : clean.storageEdits.hiddenBays.length
+          ? 5
+          : hasAddedSlots(clean.storageEdits)
+            ? 4
+            : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+              ? 3
+              : hasEdits(clean.storageEdits)
+                ? 2
+                : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
@@ -870,6 +895,12 @@ function mutateGroups(s: SavedState, op: Raw) {
 // positions, and its 'slot-<address>' notes and 'slot-<address>-<step>' checks.
 function clearBayRecords(s: SavedState, e: StorageEdits, id: string) {
   delete e.bayNames[id];
+  // A handbook bay's move goes too, so a bay taking its letter starts on its own floor.
+  if (e.bayFloors?.[id]) {
+    const { [id]: _gone, ...rest } = e.bayFloors;
+    if (Object.keys(rest).length) e.bayFloors = rest;
+    else delete e.bayFloors;
+  }
   for (const k of Object.keys(e.slots)) if (slotAddr(k) && bayOfSlot(k) === id) delete e.slots[k];
   e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== id);
   for (const records of [s.checks, s.notes] as Record<string, unknown>[])
@@ -909,7 +940,7 @@ function mutateLayout(s: SavedState, op: Raw) {
     const id = op.id as string;
     if (op.type === 'storageFloorRestore') e.hiddenFloors = e.hiddenFloors.filter(f => f !== id);
     else {
-      if (e.bays.some(b => b.floor === id)) fail('Remove or move the bays on this floor first.');
+      if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
       const hidden = new Set([...e.hiddenFloors, id]);
       if (hidden.size === builtinFloors.length && !e.floors.length)
         fail('Keep at least one floor in the storage room.');
@@ -917,7 +948,7 @@ function mutateLayout(s: SavedState, op: Raw) {
     }
   } else if (op.type === 'storageFloorRemove') {
     if (!e.floors.some(f => f.id === op.id)) fail('Only added floors can be removed.');
-    if (e.bays.some(b => b.floor === op.id)) fail('Remove or move the bays on this floor first.');
+    if (baysOn(e, op.id as string)) fail('Remove or move the bays on this floor first.');
     if (e.hiddenFloors.length === builtinFloors.length && e.floors.length === 1)
       fail('Keep at least one floor in the storage room.');
     e.floors = e.floors.filter(f => f.id !== op.id);
@@ -949,6 +980,22 @@ function mutateLayout(s: SavedState, op: Raw) {
       if (!label(op.name)) fail('Invalid bay name.');
       e.bayNames[op.id] = op.name.trim();
     }
+  } else if (op.type === 'storageBayMove') {
+    // Any bay can move to another floor (#190), keeping its letter and so every address,
+    // check, note and name. An added bay (also one holding a hidden handbook letter, #167)
+    // changes its own floor; a handbook bay is recorded in bayFloors. Only to a floor in the
+    // tabs: a hidden built-in floor is restored first.
+    if (!bayId(op.id)) fail('Invalid bay.');
+    if (!knownFloor(e, op.floor)) fail('Unknown floor.');
+    if (e.hiddenFloors.includes(op.floor)) fail('Restore that floor before moving a bay onto it.');
+    const added = e.bays.find(b => b.id === op.id);
+    if (added) added.floor = op.floor;
+    else if (handbookBay(op.id)) {
+      const { [op.id]: _old, ...moved } = e.bayFloors || {};
+      if (op.floor !== handbookFloor(op.id)) moved[op.id] = op.floor;
+      if (Object.keys(moved).length) e.bayFloors = moved;
+      else delete e.bayFloors;
+    } else fail('Unknown bay.');
   } else if (op.type === 'storageBayHide' || op.type === 'storageBayRestore') {
     if (typeof op.id !== 'string' || !handbookBay(op.id))
       fail('Only handbook bays can be hidden. Remove an added bay instead.');

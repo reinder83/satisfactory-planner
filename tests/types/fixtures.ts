@@ -115,6 +115,13 @@ export const version7 = {
   },
 } satisfies SavedState;
 
+// Version 8: a handbook bay moved to another floor (#190), its records kept.
+export const version8 = {
+  ...version7,
+  version: 8,
+  storageEdits: { ...version7.storageEdits, bayFloors: { D: 'upper' } },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -125,6 +132,7 @@ export const states: [SavedState, number][] = [
   [version5, 5],
   [version6, 6],
   [version7, 7],
+  [version8, 8],
 ];
 
 export const backup = {

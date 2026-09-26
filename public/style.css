@@ -1335,6 +1335,12 @@ td:first-child {
   border-color: var(--accent);
   color: var(--bright);
 }
+/* "Move to…" on a bay while editing the layout (#190): sized like the buttons beside it. */
+.bay-actions .move-bay {
+  width: auto;
+  font-size: 11.5px;
+  padding: 5px 8px;
+}
 .bay-items {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
