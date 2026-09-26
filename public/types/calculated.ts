@@ -283,3 +283,41 @@ export interface StoredCalculatedPlan {
   warnings: string[];
   createdAt: string;
 }
+
+// Hard-drive payoff (#67): what allowing one more alternate recipe does to one phase of a
+// profile's plan, from rankAlternates in planner.ts. Deltas are candidate minus the profile's
+// own plan: fewer buildings or less raw is negative.
+export interface PhaseFigures {
+  buildings: number;
+  // Per-minute raw draw, summed over every resource.
+  rawTotal: number;
+  requiredMW: number;
+  // Delivery hours; null when the phase never finishes (a rate of 0).
+  hours: number | null;
+}
+export interface AlternatePayoff {
+  id: string;
+  name: string;
+  machine: string;
+  // The phase the recipe unlocks in.
+  phase: number;
+  // 'same': the plan does not pick it up. 'infeasible': with it the phase does not fit (possible
+  // under whole machines). 'error': the calculation failed; `error` says why.
+  status: 'better' | 'worse' | 'mixed' | 'same' | 'infeasible' | 'error';
+  buildings: number;
+  raw: ItemRates;
+  rawTotal: number;
+  powerMW: number;
+  // null when either plan never finishes the phase.
+  hours: number | null;
+  error?: string;
+}
+export interface AlternateRanking {
+  phase: StageKey;
+  base: PhaseFigures;
+  candidates: AlternatePayoff[];
+  // How many candidates there were in all; fewer are listed when `stopped` (budget reached).
+  total: number;
+  stopped: boolean;
+  elapsedMs: number;
+}
