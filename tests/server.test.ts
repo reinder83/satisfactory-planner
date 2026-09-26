@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createApp } from '../server.ts';
+import { contentTypes, createApp } from '../server.ts';
+import { fontNames } from '../fonts.ts';
 import type { Handbook } from '../public/types/index.ts';
 async function start(dir: string, config: Parameters<typeof createApp>[0] = {}) {
   const server = await createApp({ dataDir: dir, ...config });
@@ -193,4 +194,10 @@ test('a missing workspace with a backup beside it stops start-up instead of star
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+test('the interface fonts are served as font/woff2, not a generic download', () => {
+  // The fonts build.ts copies into the image's public/fonts; nosniff is on every response.
+  assert.ok(fontNames.length);
+  for (const name of fontNames) assert.equal(contentTypes[path.extname(name)], 'font/woff2', name);
 });
