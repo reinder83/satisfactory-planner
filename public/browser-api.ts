@@ -331,9 +331,11 @@ export function createBrowserApi(
         return summary(d);
       }
       // /api/update applies one save-queue operation through mutate() (state.ts); /api/import
-      // restores a progress backup through validateState. Either way the revision is bumped. Unlike
-      // the server, a backup with a different `format` is not rejected here before validateState.
+      // restores a progress backup through validateState. Either way the revision is bumped. As on
+      // the server, a backup with a different `format` is rejected before validateState.
       if (ep === '/api/update' || ep === '/api/import') {
+        if (ep === '/api/import' && body.format && body.format !== 'satisfactory-planner-backup')
+          throw Error('Wrong backup format.');
         if (ep === '/api/import' && body.profileId && body.profileId !== profile.id)
           throw Error('Switch to the matching profile before restoring progress.');
         const next =
