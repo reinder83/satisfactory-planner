@@ -104,6 +104,7 @@ async function removeFloor() {
         v-if="!floor.builtin"
         class="btn danger"
         :data-remove-floor="floor.id"
+        :class="{ unavailable: !removing }"
         :disabled="removing || bays > 0"
         @click="removeFloor"
       >

@@ -110,6 +110,10 @@ test('layout edits show custom floors, bays and assignments, escaped', async () 
     'not while it has bays',
   );
   assert.equal($('[data-remove-floor="cf-abcd12"]')!.textContent.trim(), 'Remove its bays first');
+  assert.ok(
+    $('[data-remove-floor="cf-abcd12"]')!.classList.contains('unavailable'),
+    'no wait cursor',
+  );
   assert.equal(
     $('[data-clear-slot="S01"]')!.getAttribute('aria-label'),
     `Clear container S01: ${evil}`,
@@ -191,7 +195,11 @@ test('Done and "Complete room" write the four checks of each container', async (
   for (const k of named.flatMap(slotKeys)) state.checks[k] = true;
   render();
   await nextTick();
-  assert.equal(bay.querySelector<HTMLButtonElement>('[data-complete-bay]')!.disabled, true);
+  const complete = bay.querySelector<HTMLButtonElement>('[data-complete-bay]')!;
+  assert.equal(complete.disabled, true);
+  // Nothing is saving, so it is marked .unavailable (no wait cursor) and says it is done.
+  assert.ok(complete.classList.contains('unavailable'));
+  assert.equal(complete.textContent.trim(), 'Room A completed ✓');
   assert.equal(
     bay.querySelector('.bay-actions .muted')!.textContent,
     `${named.length}/${named.length} containers done`,
