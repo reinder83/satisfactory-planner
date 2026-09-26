@@ -1343,7 +1343,26 @@ td:first-child {
   background: var(--panel2);
   color: #5f686e;
   cursor: default;
-  justify-content: center;
+}
+/* A reserved position's stand-ins for the icon and the Done box (StorageBay.vue, #200). */
+.slot-icon-space {
+  display: block;
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.slot-space {
+  visibility: hidden;
+}
+/* The stand-in's label is drawn by CSS, so the page's text stays just the id and Reserved. */
+.slot-space::after {
+  content: 'Done';
+}
+/* "Reserved" keeps its small type but takes an item name's line (13.5px x 1.2). */
+.slot-reserved {
+  min-height: 16.2px;
+  display: flex;
+  align-items: center;
 }
 .slot.match {
   outline: 2px solid var(--accent);
