@@ -19,7 +19,8 @@ import {
   setQuery,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { storageBays, storageFloors } from '../../views/storage.ts';
+import { hiddenStorageBays, storageBays, storageFloors } from '../../views/storage.ts';
+import { save, toast } from '../../api.ts';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
@@ -80,6 +81,9 @@ const page = computed(() =>
             : '',
       query,
       editing: layoutEditing,
+      // Hidden handbook bays (#166) and the planned items left without a container.
+      hidden: hiddenStorageBays(),
+      unplaced: hiddenStorageBays().flatMap(b => b.items),
       bays: [...display]
         .sort((a, b) => a.id.localeCompare(b.id))
         .map(b => ({ bay: b, position: placed.indexOf(b.id) })),
@@ -100,6 +104,20 @@ function showFloor(id: string) {
 function search(e: Event) {
   setQuery((e.target as HTMLInputElement).value);
   render();
+}
+
+// "Restore": bring a hidden handbook bay back, with everything saved for it.
+async function restoreBay(e: Event, id: string) {
+  const button = e.currentTarget as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    await save({ type: 'storageBayRestore', id });
+    toast(`Bay ${id} is back, with its containers, checkmarks and notes.`);
+  } catch {
+  } finally {
+    button.disabled = false;
+    render();
+  }
 }
 
 // "Edit layout" / "Done editing": show or hide the layout editor (view state only).
@@ -146,6 +164,27 @@ function toggleLayout() {
       {{ page.editing ? 'Done editing' : 'Edit layout' }}
     </button>
   </div>
+  <div v-if="page.unplaced.length" class="notice" data-unplaced>
+    <b
+      >{{ page.unplaced.length }} planned item{{ page.unplaced.length === 1 ? ' has' : 's have' }}
+      no container while
+      {{ page.hidden.length === 1 ? 'a bay is' : 'bays are' }} hidden:</b
+    >
+    {{ page.unplaced.join(', ') }}. Restore the bay under Edit layout, or add them to another bay.
+  </div>
+  <section v-if="page.editing && page.hidden.length" class="panel hidden-bays" data-hidden-bays>
+    <h2>Hidden bays</h2>
+    <p class="small muted">
+      Their containers, checkmarks and notes are kept until you restore them.
+    </p>
+    <div v-for="b in page.hidden" :key="b.id" class="check-row">
+      <span
+        ><b>{{ b.id }}</b> · {{ b.name }}</span
+      ><button class="btn" :data-restore-bay="b.id" @click="restoreBay($event, b.id)">
+        Restore
+      </button>
+    </div>
+  </section>
   <LayoutEditor v-if="page.editing" :floor="page.current" :bays="page.floorBays" /><WorkshopPanel
     v-if="page.workshop"
   />

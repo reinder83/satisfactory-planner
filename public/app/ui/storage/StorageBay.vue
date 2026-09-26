@@ -121,6 +121,18 @@ const clearSlot = (e: Event, id: string) =>
     toast('Container cleared. Its saved checkmarks are kept with the address.'),
   );
 
+// A handbook bay is hidden rather than removed (#166): everything saved for it stays, and
+// "Hidden bays" on the storage page brings it back.
+function hideBay(e: Event) {
+  if (
+    !confirm(
+      `Hide bay ${props.bay.id}? Its containers, checkmarks and notes are kept, and you can restore it under Hidden bays.`,
+    )
+  )
+    return;
+  saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayHide', id: props.bay.id });
+}
+
 function removeBay(e: Event) {
   if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
     return;
@@ -181,6 +193,14 @@ async function addContainer(e: Event) {
           @click="removeBay"
         >
           Remove bay
+        </button>
+        <button
+          v-if="view.editing && !bay.custom"
+          class="btn quiet"
+          :data-hide-bay="bay.id"
+          @click="hideBay"
+        >
+          Hide bay
         </button>
         <button
           class="btn quiet"
