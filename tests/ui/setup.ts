@@ -2,7 +2,14 @@
 // loadContext() opens one, with a hostile name wherever user text appears.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { setContext, setProgressionData, setView, setWorkspace } from '../../public/app/session.ts';
+import {
+  setContext,
+  setProgressionData,
+  setView,
+  setWorkspace,
+  state,
+} from '../../public/app/session.ts';
+import { mutate } from '../../public/state.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import type { View } from '../../public/app/session.ts';
 import type {
@@ -15,6 +22,7 @@ import type {
   ProgressState,
   StoredCalculatedPlan,
   StoredSettings,
+  UpdateOp,
   WorkspaceSummary,
 } from '../../public/types/index.ts';
 
@@ -115,8 +123,11 @@ export function open({
   setContext({
     save: { id: 's', name },
     profile,
-    // Only the fields these pages read; the app fills nothing else in.
+    // The fields these pages read, plus the version and revision every stored state has, so an
+    // update applied by applyUpdate below is validated as the server would validate it.
     state: {
+      version: 1,
+      revision: 0,
       settings: { phase },
       checks: {},
       notes,
@@ -142,6 +153,11 @@ export function open({
 export function go(view: View) {
   setView(view);
 }
+
+// A stand-in for POST /api/update that applies `op` the way the server does: to a copy of the open
+// profile's state, validated. A refused op throws (the stub then answers 500, so save() fails)
+// and leaves the page's state alone; mutate on the live state would change it before refusing.
+export const applyUpdate = (op: UpdateOp) => mutate(structuredClone(state), op);
 
 // Replies to fetch() calls from a table of path -> reply (a value, or a function of the
 // parsed body), recording each call as [path, body]. `B` is the request body's shape, for a
