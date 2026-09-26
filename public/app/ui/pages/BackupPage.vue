@@ -44,6 +44,12 @@ const page = computed(() =>
     note: state.notes.global || '',
     warnings: calculated?.warnings || [],
     sources: plan?.sources || [],
+    // For "Choose saves to export": every save of this user with its profile count.
+    saves: workspace.saves.map(s => ({
+      id: s.id,
+      name: s.name,
+      profiles: s.profiles.length,
+    })),
     lastBackup: workspace.lastBackup
       ? 'Last export: ' + new Date(workspace.lastBackup).toLocaleString()
       : 'No full backup has been exported from this browser yet.',
@@ -55,15 +61,21 @@ const note = useNoteDraft(
   () => page.value.note,
 );
 const exporting = ref(false);
+// The saves ticked under "Choose saves to export" (#160), by id.
+const chosen = ref<string[]>([]);
 
-// "Export all saves": wait for queued saves, download every save of this user as one
-// full-save file, then refetch the workspace, which carries lastBackup (when a full export
-// last ran in the browser edition).
-async function exportSaves() {
+// "Export all saves" (no `selection`) or "Export selected" (the ticked save ids): wait for
+// queued saves, download them as one full-save file, then refetch the workspace, which
+// carries lastBackup (when a full export last ran in the browser edition; a selection is not
+// a full backup and does not count).
+async function exportSaves(selection?: string[]) {
   exporting.value = true;
   try {
     await writeQueue;
-    const data = await request('/api/export-saves');
+    const data = await request(
+      '/api/export-saves' +
+        (selection ? '?saves=' + selection.map(encodeURIComponent).join(',') : ''),
+    );
     // Past the import limit the file could not be imported back, so it is refused rather than
     // downloaded (the owner's choice on #118). The browser edition does not record such an
     // export as a backup either (browser-api.ts).
@@ -72,12 +84,18 @@ async function exportSaves() {
       throw Error(
         `This export would be ${Math.ceil(size / 1024 / 1024)} MB, more than the ` +
           `${transferImportLimit / 1024 / 1024} MB an import accepts, so nothing was downloaded. ` +
-          "Download each profile's progress JSON below instead, or delete profiles you no longer need.",
+          (selection
+            ? 'Tick fewer saves and export them in smaller groups.'
+            : 'Use “Choose saves to export” to export them in smaller groups.'),
       );
-    downloadJson(data, 'satisfactory-full-saves.json');
+    downloadJson(data, selection ? 'satisfactory-saves.json' : 'satisfactory-full-saves.json');
     setWorkspace(await request('/api/workspace'));
     invalidate();
-    toast('Full save backup downloaded.');
+    toast(
+      selection
+        ? `${selection.length} save${selection.length === 1 ? '' : 's'} downloaded.`
+        : 'Full save backup downloaded.',
+    );
   } catch (err) {
     toast((err as Error).message, true);
   } finally {
@@ -172,7 +190,7 @@ async function persistStorage() {
       Export all your saves, profile calculations, checkmarks and notes. Account passwords and
       sessions are excluded. Import adds copies without replacing existing saves.
     </p>
-    <button class="btn primary" data-export-saves :disabled="exporting" @click="exportSaves">
+    <button class="btn primary" data-export-saves :disabled="exporting" @click="exportSaves()">
       Export all saves
     </button>
     <label class="btn"
@@ -183,6 +201,27 @@ async function persistStorage() {
         hidden
         @change="importSaves"
     /></label>
+    <details v-if="page.saves.length > 1" class="choose-saves">
+      <summary>Choose saves to export</summary>
+      <p class="small muted">
+        Export some saves on their own, for example to move them or to keep a file under the import
+        limit. This is not recorded as a full backup.
+      </p>
+      <label v-for="s in page.saves" :key="s.id" class="check-row"
+        ><input type="checkbox" :value="s.id" v-model="chosen" data-choose-save />{{ s.name }}
+        <span class="small muted"
+          >· {{ s.profiles }} profile{{ s.profiles === 1 ? '' : 's' }}</span
+        ></label
+      >
+      <button
+        class="btn"
+        data-export-selected
+        :disabled="exporting || !chosen.length"
+        @click="exportSaves(chosen.filter(id => page.saves.some(s => s.id === id)))"
+      >
+        Export selected
+      </button>
+    </details>
   </section>
 
   <section v-if="page.kind === 'browser'" class="panel">

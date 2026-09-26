@@ -1070,6 +1070,17 @@ p.eyebrow {
   padding-left: 18px;
 }
 
+/* "Choose saves to export" on the Backup page (BackupPage.vue). */
+.choose-saves {
+  margin-top: 16px;
+}
+.choose-saves summary {
+  cursor: pointer;
+}
+.choose-saves .btn {
+  margin-top: 10px;
+}
+
 /* ── Deliveries ────────────────────────────────────────── */
 .delivery {
   border-bottom: 1px solid var(--row);
