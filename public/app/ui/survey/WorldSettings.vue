@@ -3,8 +3,9 @@
   and what the planner can fill in for them. They are All settings step 1's purity and
   distribution: readExtraction writes them to the draft's settings at once, and a world that
   is fully known (knownWorld) refills every count when either changes. Below them are "Reset
-  all counts to zero" and, after a reset, "Undo reset" in its place. There is deliberately no
-  confirmation: the undo is the safety net.
+  all counts to zero" and, after a reset, "Undo reset" in its place, or "Undo refill" after a
+  refill replaced counts typed by hand. There is deliberately no confirmation: the undo is the
+  safety net.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -169,7 +170,7 @@ function undo() {
         ><button type="button" class="btn quiet" data-node-undo @click="undo">Undo refill</button>
         <span class="muted"
           >Your typed counts were replaced by the map's totals for these settings. This puts them
-          back.</span
+          back; the world settings above stay as you chose them.</span
         ></template
       ><template v-else-if="view.undo"
         ><button type="button" class="btn quiet" data-node-undo @click="undo">Undo reset</button>

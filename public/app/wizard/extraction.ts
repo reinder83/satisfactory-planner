@@ -4,7 +4,8 @@
 // controls are handled there and in ui/survey/. This module keeps the draft.
 // Draft fields it adds to `wizard`: extraction (the survey being edited),
 // extractionStep (1-4), extractionReturn (where to go back to) and
-// extractionUndo (the counts before "Reset all counts").
+// extractionUndo with extractionUndoKind (the counts before "Reset all counts", or typed
+// counts a refill replaced).
 import {
   blankCounts,
   blankExtraction,
@@ -58,15 +59,21 @@ export function resetExtraction() {
 
 // The survey's purity or distribution changed to a fully known world: every count is refilled
 // from that world's preset. Counts that match no preset were typed by hand (a reading of a
-// Random world, say), so they are kept aside to undo, as a reset's are; a preset's own counts
-// can simply be filled again, and the refill spends any earlier undo like "Fill in" does.
+// Random world, say), so they are kept aside to undo, as a reset's are. A preset's own counts,
+// or none at all, lose nothing: any earlier undo is kept, so a reset or typed counts stay
+// recoverable through several refills in a row (arrowing through the select changes it once
+// per step).
 export function refillExtraction() {
   const w = draft(),
     s = w.settings;
   const previous = extractionOf(w);
-  const typed = !matchingPreset(previous);
-  w.extractionUndo = typed ? JSON.parse(JSON.stringify(previous)) : null;
-  w.extractionUndoKind = 'refill';
+  const counted = [previous.nodes, previous.wells].some(map =>
+    Object.values(map || {}).some(c => c.impure || c.normal || c.pure),
+  );
+  if (counted && !matchingPreset(previous)) {
+    w.extractionUndo = JSON.parse(JSON.stringify(previous));
+    w.extractionUndoKind = 'refill';
+  }
   w.extraction = presetSurvey(s.purity, previous, s.distribution);
 }
 

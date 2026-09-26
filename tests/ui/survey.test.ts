@@ -221,7 +221,7 @@ test('the survey asks the two World Randomization settings and fills what it can
   assert.match(text('.node-presets'), /node totals at All Pure\./);
 });
 
-test('a refill over hand-typed counts can be undone; one over a preset needs no undo', async () => {
+test('a refill over hand-typed counts can be undone', async () => {
   survey(2, { purity: 'vanilla', distribution: 'original' });
   await change('input[name="node:Iron Ore:pure"]', '3');
   await change('select[name=purity]', 'pure');
@@ -232,11 +232,33 @@ test('a refill over hand-typed counts can be undone; one over a preset needs no 
   assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 3, 'the typed count is back');
   assert.equal(wizard!.extractionUndo, null, 'and the undo spent');
   assert.match($('#toast')!.textContent!, /counts you typed/);
-  // The pure preset's own counts are not typed, so refilling over them offers nothing to undo.
+});
+
+test('a refill keeps an earlier undo, and offers none when nothing was typed', async () => {
+  // Reset, then refill: the reset's undo still brings back the counts from before it.
+  survey(2, { purity: 'vanilla', distribution: 'original' });
+  await click('[data-node-reset]');
   await change('select[name=purity]', 'pure');
-  await change('select[name=purity]', 'vanilla');
-  assert.equal(wizard!.extractionUndo, null);
-  assert.ok($('[data-node-reset]'), 'the reset button, not an undo');
+  assert.equal($('[data-node-undo]')!.textContent!.trim(), 'Undo reset');
+  await click('[data-node-undo]');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.normal, 42, 'the Default counts are back');
+  // A blank survey (a world with no table) set to a known one: nothing typed, nothing to undo.
+  page();
+  open({ workspace: { catalog: catalog() } });
+  survey(2, { purity: 'random', distribution: 'original' });
+  await change('select[name=purity]', 'pure');
+  assert.ok(!wizard!.extractionUndo, 'no undo');
+  assert.ok($('[data-node-reset]'));
+  // Typed, then two refills in a row (arrowing through the select): the typed counts survive.
+  page();
+  open({ workspace: { catalog: catalog() } });
+  survey(2, { purity: 'vanilla', distribution: 'original' });
+  await change('input[name="node:Iron Ore:pure"]', '3');
+  await change('select[name=purity]', 'pure');
+  await change('select[name=purity]', 'mostly-impure');
+  assert.equal($('[data-node-undo]')!.textContent!.trim(), 'Undo refill');
+  await click('[data-node-undo]');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 3);
 });
 
 test('a world with no table says why, and fills nothing', async () => {
