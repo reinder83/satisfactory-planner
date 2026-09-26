@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBrowserApi } from '../public/browser-api.ts';
+import { browserRequest, createBrowserApi } from '../public/browser-api.ts';
 import { calculate } from '../planner.ts';
 import type {
   BrowserWorkspace,
@@ -197,4 +197,34 @@ test('the browser edition carries the same world progress into a new profile', a
     true,
     'the profile carried from is untouched',
   );
+});
+
+test('with no save open, a server-only route says it needs a server, not "Save not found"', async () => {
+  const empty: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(empty) as BrowserWorkspace;
+      return (change ? change(copy) : copy) as T;
+    },
+  };
+  const api = createBrowserApi(store, calculate, {} as Catalog);
+  await assert.rejects(api('/api/logout', { body: '{}' }), /needs a self-hosted server/);
+  await assert.rejects(api('/api/state'), /Save not found/, 'a real save route still says so');
+});
+
+test('a failed start is not cached: the next browser request tries again', async () => {
+  const saved = { indexedDB: globalThis.indexedDB, fetch: globalThis.fetch };
+  let fetches = 0;
+  // Enough of an IndexedDB to pass the first check; the catalog request then fails.
+  Object.assign(globalThis, {
+    indexedDB: {},
+    fetch: async () => (fetches++, new Response('', { status: 503 })),
+  });
+  try {
+    await assert.rejects(browserRequest('/api/workspace'), /recipe catalog/);
+    await assert.rejects(browserRequest('/api/workspace'), /recipe catalog/);
+    assert.equal(fetches, 2, 'the catalog is requested again');
+  } finally {
+    Object.assign(globalThis, saved);
+  }
 });
