@@ -12,11 +12,10 @@ import {
   downloadJson,
   navigate,
   post,
+  queuedWrite,
   request,
-  scopeHeaders,
   toast,
   writeQueue,
-  writing,
 } from '../../api.ts';
 import {
   boot,
@@ -24,7 +23,6 @@ import {
   currentProfile,
   currentSave,
   plan,
-  setState,
   setWorkspace,
   state,
   workspace,
@@ -104,9 +102,10 @@ async function importSaves(e: Event) {
 }
 
 // "Choose backup file" (server edition): replace this profile's progress with a
-// progress-only backup, after a confirmation. It waits for queued saves and posts itself
-// rather than through save(), so it toasts its own errors; "Backup restored." only follows
-// a successful response. writing() shows "Saving…" and the close-tab warning meanwhile.
+// progress-only backup, after a confirmation. It goes through queuedWrite, like save(): after
+// the saves already queued, before any made meanwhile, shown as "Saving…", and its reply only
+// shown if this profile is still open. It toasts its own errors; "Backup restored." only
+// follows a successful response.
 async function restoreProgress(e: Event) {
   const el = e.target as HTMLInputElement,
     file = el.files?.[0];
@@ -118,20 +117,7 @@ async function restoreProgress(e: Event) {
       el.value = '';
       return;
     }
-    await writeQueue;
-    setState(
-      await writing(() =>
-        request('/api/import', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Planner-Request': '1',
-            ...scopeHeaders(),
-          },
-          body: JSON.stringify(data),
-        }),
-      ),
-    );
+    await queuedWrite('/api/import', data);
     render();
     toast('Backup restored.');
   } catch (err) {
