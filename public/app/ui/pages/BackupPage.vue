@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
+import { transferFileSize, transferImportLimit } from '../../../transfer.ts';
 import {
   downloadJson,
   navigate,
@@ -54,8 +55,6 @@ const note = useNoteDraft(
   () => page.value.note,
 );
 const exporting = ref(false);
-// The largest full-save file an import accepts, here and on the server (server.ts).
-const IMPORT_LIMIT = 50 * 1024 * 1024;
 
 // "Export all saves": wait for queued saves, download every save of this user as one
 // full-save file, then refetch the workspace, which carries lastBackup (when a full export
@@ -65,18 +64,16 @@ async function exportSaves() {
   try {
     await writeQueue;
     const data = await request('/api/export-saves');
-    // The file as downloadJson writes it. Past the import limit it could not be imported back
-    // in one piece (the owner's choice on #118: warn at export time), so say so first.
-    const size = new Blob([JSON.stringify(data, null, 2)]).size;
-    if (
-      size > IMPORT_LIMIT &&
-      !confirm(
-        `This export is ${Math.ceil(size / 1024 / 1024)} MB, more than the ${IMPORT_LIMIT / 1024 / 1024} MB ` +
-          'an import accepts, so it could not be imported back in one piece. Export fewer saves ' +
-          'at a time to move them. Download it anyway as a backup?',
-      )
-    )
-      return;
+    // Past the import limit the file could not be imported back, so it is refused rather than
+    // downloaded (the owner's choice on #118). The browser edition does not record such an
+    // export as a backup either (browser-api.ts).
+    const size = transferFileSize(data);
+    if (size > transferImportLimit)
+      throw Error(
+        `This export would be ${Math.ceil(size / 1024 / 1024)} MB, more than the ` +
+          `${transferImportLimit / 1024 / 1024} MB an import accepts, so nothing was downloaded. ` +
+          "Download each profile's progress JSON below instead, or delete profiles you no longer need.",
+      );
     downloadJson(data, 'satisfactory-full-saves.json');
     setWorkspace(await request('/api/workspace'));
     invalidate();
@@ -99,7 +96,7 @@ async function importSaves(e: Event) {
   if (!file) return;
   try {
     // Checked before reading, so a huge file is never parsed.
-    if (file.size > IMPORT_LIMIT) throw Error('Choose a save export smaller than 50 MB.');
+    if (file.size > transferImportLimit) throw Error('Choose a save export smaller than 50 MB.');
     const data = JSON.parse(await file.text());
     if (!confirm('Import these saves as new copies? Existing saves will be kept.')) return;
     await writeQueue;

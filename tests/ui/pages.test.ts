@@ -268,12 +268,12 @@ test('after a restore the file box is cleared, so the same backup can be chosen 
   assert.equal(chosen, '', 'cleared after a successful restore');
 });
 
-test('an export over the import limit asks first, and nothing downloads without a yes', async () => {
+test('an export over the import limit is refused with a reason, and nothing downloads', async () => {
   let downloads = 0;
   URL.createObjectURL = () => (downloads++, 'blob:x');
   URL.revokeObjectURL = () => {};
-  let asked = '';
-  globalThis.confirm = (m?: string) => ((asked = m || ''), false);
+  let asked = false;
+  globalThis.confirm = () => ((asked = true), true);
   const summary = { ...workspace };
   // A normal export downloads without a question.
   stubFetch({
@@ -284,9 +284,8 @@ test('an export over the import limit asks first, and nothing downloads without 
   render();
   $('[data-export-saves]')!.click();
   await new Promise(r => setTimeout(r, 30));
-  assert.equal(asked, '');
   assert.equal(downloads, 1);
-  // One over 50 MB says how big it is and what that means; No downloads nothing.
+  // One over 50 MB is refused outright: no question, no download, and a toast saying why.
   stubFetch({
     '/api/export-saves': {
       format: 'satisfactory-planner-saves',
@@ -297,8 +296,11 @@ test('an export over the import limit asks first, and nothing downloads without 
   });
   $('[data-export-saves]')!.click();
   await new Promise(r => setTimeout(r, 200));
-  assert.match(asked, /This export is 5\d MB, more than the 50 MB an import accepts/);
+  assert.equal(asked, false, 'no "download anyway" question');
   assert.equal(downloads, 1, 'nothing downloaded');
+  const text = $('#toast')!.textContent!;
+  assert.ok(/would be 5\d MB, more than the 50 MB an import accepts/.test(text), text);
+  assert.ok($('#toast')!.classList.contains('error'));
 });
 
 test('a redraw keeps unsaved save-wide notes on the backup page', async () => {

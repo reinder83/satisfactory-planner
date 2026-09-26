@@ -18,7 +18,12 @@
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
 import { validateState, mutate, shareState, newProfileState } from './state.ts';
-import { validateTransfer, transferFormat } from './transfer.ts';
+import {
+  validateTransfer,
+  transferFormat,
+  transferFileSize,
+  transferImportLimit,
+} from './transfer.ts';
 import type {
   BrowserSave,
   BrowserWorkspace,
@@ -191,8 +196,12 @@ export function createBrowserApi(
           if (share) for (const p of s.profiles) p.state = shareState(p.state);
         }
         const exportedAt = new Date().toISOString();
-        if (!saveId && !profileId && !share) d.lastBackup = exportedAt;
-        return { format: transferFormat, version: 1, exportedAt, saves };
+        const exported = { format: transferFormat, version: 1, exportedAt, saves };
+        // Only a full export counts as a backup, and not one past the import limit: the
+        // Backup page refuses to download that (#118), so it must not reset the reminder.
+        if (!saveId && !profileId && !share && transferFileSize(exported) <= transferImportLimit)
+          d.lastBackup = exportedAt;
+        return exported;
       });
     }
     // Mirrors POST /api/duplicate-profile: a deep copy with a new id, selected afterwards.

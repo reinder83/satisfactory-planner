@@ -228,3 +228,29 @@ test('a failed start is not cached: the next browser request tries again', async
     Object.assign(globalThis, saved);
   }
 });
+
+test('a full export past the import limit is not recorded as a backup', async () => {
+  // A partial fixture: an empty workspace, without lastBackup.
+  const blank: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
+  let data = blank as BrowserWorkspace;
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  const api = createBrowserApi(store, calculate, {} as Catalog);
+  await api('/api/profiles', {
+    body: JSON.stringify({ saveName: 'Big', name: 'P', settings: { phase: '1', goal: 'minimal' } }),
+  });
+  // An oversized note written straight into the record, past what the page could download.
+  data.saves[0]!.profiles[0]!.state.notes.huge = 'x'.repeat(51 * 1024 * 1024);
+  await api('/api/export-saves');
+  assert.equal(data.lastBackup, undefined, 'the refused export left the reminder alone');
+  delete data.saves[0]!.profiles[0]!.state.notes.huge;
+  await api('/api/export-saves');
+  assert.ok(data.lastBackup, 'a normal full export still counts as a backup');
+});

@@ -33,6 +33,11 @@ interface IncomingSave {
 // The ids only keep activeProfile pointing at the right profile: both importers give every
 // save and profile a new id, so an import always adds copies and never overwrites.
 export const transferFormat = 'satisfactory-planner-saves';
+// The largest full-save file an import accepts (validateTransfer, the Backup page and the
+// server's body limit in server.ts all use 50 MB).
+export const transferImportLimit = 50 * 1024 * 1024;
+// The size in bytes of an export as downloadJson (app/api.ts) writes it.
+export const transferFileSize = (data: unknown) => new Blob([JSON.stringify(data, null, 2)]).size;
 // A refused export. The status makes the server answer 400 with this message, like state.ts's
 // fail; the browser edition shows the message either way.
 function invalid(message: string): never {
@@ -62,7 +67,7 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
     invalid('Choose a full planner save export.');
   // Only accept data objects; executable links never belong in a portable handbook.
   const text = JSON.stringify(data);
-  if (text.length > 50 * 1024 * 1024 || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))
+  if (text.length > transferImportLimit || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))
     invalid('Invalid or oversized save export.');
   const saves = (d.saves as IncomingSave[]).map(s => {
     if (!record(s) || !Array.isArray(s.profiles) || !s.profiles.length || s.profiles.length > 30)
