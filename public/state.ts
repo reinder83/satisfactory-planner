@@ -263,7 +263,15 @@ function validateGroups(raw: unknown): FactoryGroups {
 }
 // The places a link can join besides factory groups: group-links.ts's UNGROUPED, MINES and
 // OUTSIDE ids (a test keeps the two lists in step).
-export const linkPlaces = ['ungrouped', 'mines', 'storage', 'drone', 'elevator', 'sink'];
+export const linkPlaces = [
+  'ungrouped',
+  'mines',
+  'storage',
+  'drone',
+  'vehicles',
+  'elevator',
+  'sink',
+];
 const linkModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'train', 'drone'];
 // The vehicles that burn fuel from their own slot; a train is electric and a drone's fuel
 // depends on the flight distance, which the planner does not know.

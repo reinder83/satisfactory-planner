@@ -9,17 +9,33 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { save, toast } from '../../api.ts';
+import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num } from '../../format.ts';
 import { FLUIDS, lanePlan } from '../../flow.ts';
 import { groupLinks, MINES, OUTSIDE, UNGROUPED } from '../../group-links.ts';
-import { FLUID_CAR_M3, LINK_MODES, linkLoad, VEHICLES } from '../../logistics.ts';
-import { calcStage, calculated, workspace } from '../../session.ts';
+import { FLUID_CAR_M3, LINK_MODES, linkLoad, transportFuel, VEHICLES } from '../../logistics.ts';
+import {
+  calcStage,
+  calculated,
+  currentProfile,
+  currentSave,
+  loadContext,
+  setWorkspace,
+  workspace,
+} from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { fuelledModes } from '../../../state.ts';
+import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
-import type { LinkMode, LinkTransport, UpdateOp } from '../../../types/index.ts';
+import type {
+  ItemRates,
+  LinkMode,
+  LinkTransport,
+  StageKey,
+  UpdateOp,
+  WorkspaceSummary,
+} from '../../../types/index.ts';
 
 // Names for the places that are not factory groups.
 const PLACES: Record<string, string> = {
@@ -27,6 +43,7 @@ const PLACES: Record<string, string> = {
   [MINES]: 'Mines and existing supply',
   [OUTSIDE.storage]: 'Protected storage',
   [OUTSIDE.drone]: 'Drone fuel',
+  [OUTSIDE.transport]: 'Vehicle fuel',
   [OUTSIDE.delivery]: 'Space Elevator',
   [OUTSIDE.surplus]: 'AWESOME Sink',
 };
@@ -147,6 +164,84 @@ function setTrip(e: Event, l: Link) {
   }
   setTransport(el, l, { roundTripMin: minutes });
 }
+
+// The fuel the links' vehicles burn per phase (#206), and whether this plan already plans for
+// exactly that; the note under the links offers a recalculated revision when it does not.
+type PhaseFuel = Partial<Record<StageKey, ItemRates>>;
+const sameFuel = (a: PhaseFuel, b: PhaseFuel) => {
+  const flat = (x: PhaseFuel) =>
+    Object.entries(x)
+      .flatMap(([p, f]) => Object.entries(f || {}).map(([n, q]) => `${p}|${n}|${q}`))
+      .sort()
+      .join(',');
+  return flat(a) === flat(b);
+};
+const fuel = computed(() =>
+  legacy(() => {
+    if (!calculated) return null;
+    const want = transportFuel(calculated, factoryGroupsState(), workspace.catalog, FLUIDS);
+    const have = calculated.settings.transportFuel || {};
+    if (!Object.keys(want).length && !Object.keys(have).length) return null;
+    const text = (x: PhaseFuel) =>
+      Object.entries(x)
+        .map(
+          ([p, f]) =>
+            `Phase ${p}: ` +
+            Object.entries(f || {})
+              .map(([n, q]) => `${num(q)} ${n}/min`)
+              .join(', '),
+        )
+        .join('; ');
+    return { want, same: sameFuel(want, have), text: text(want), had: text(have) };
+  }),
+);
+
+// "Recalculate with transport fuel": after the unsaved-notes check, a new profile in this save
+// with the fuel as extra demand (planner settings.transportFuel), carrying this profile's
+// progress the way a new profile does (calc rows that grew are left for review). It opens; this
+// profile stays as it is. The button shows the calculation's progress meanwhile.
+async function recalculate(e: Event) {
+  const b = e.currentTarget as HTMLButtonElement,
+    want = fuel.value?.want;
+  if (!calculated || !want || !allowSwitch()) return;
+  b.disabled = true;
+  try {
+    await writeQueue;
+    const r = await post<{
+      workspace: WorkspaceSummary;
+      saveId: string;
+      profileId: string;
+      reviewCount: number;
+    }>(
+      '/api/profiles',
+      {
+        saveId: currentSave.id,
+        name: (currentProfile.name.replace(/ · transport fuel$/, '') + ' · transport fuel').slice(
+          0,
+          80,
+        ),
+        settings: { ...calculated.settings, transportFuel: want },
+        carryFrom: currentProfile.id,
+      },
+      true,
+      calcProgress(b, 'Recalculating…'),
+    );
+    setWorkspace(r.workspace);
+    await loadContext(r.saveId, r.profileId);
+    render();
+    toast(
+      'Created a profile that plans the vehicle fuel. ' +
+        (r.reviewCount
+          ? r.reviewCount +
+            ' completed factory checks need review; the previous profile is unchanged.'
+          : 'The previous profile is unchanged.'),
+    );
+  } catch (err) {
+    toast((err as Error).message, true);
+    b.disabled = false;
+    b.textContent = 'Recalculate with transport fuel';
+  }
+}
 </script>
 
 <template>
@@ -209,6 +304,21 @@ function setTrip(e: Event, l: Link) {
         </li>
       </ul>
       <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>{{ line }}</p>
+    </div>
+    <div v-if="fuel" class="notice blue" data-transport-fuel-note>
+      <template v-if="fuel.same"
+        >This plan already includes the vehicle fuel for these links: {{ fuel.text }}.</template
+      >
+      <template v-else
+        ><template v-if="fuel.text"
+          >The vehicles on these links burn up to {{ fuel.text }}. </template
+        ><template v-else>No link burns fuel any more. </template
+        ><template v-if="fuel.had">This plan was calculated with {{ fuel.had }}. </template>
+        <button class="btn primary" data-recalc-transport @click="recalculate">
+          Recalculate with transport fuel
+        </button>
+        creates a new profile that plans for it and opens it; this profile stays as it is.</template
+      >
     </div>
   </section>
 </template>
