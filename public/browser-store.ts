@@ -25,14 +25,20 @@ export function openBrowserStore(
   indexedDB: IDBFactory,
   name = 'satisfactory-planner-browser-v1',
 ): BrowserStore {
+  // Set once another tab upgrades the schema and this connection closes for it.
+  let upgradedElsewhere = false;
   const opened = new Promise<IDBDatabase>((resolve, reject) => {
     const r = indexedDB.open(name, 1);
     // Schema version 1 is the only one so far: a brand-new database just gets the empty store.
     r.onupgradeneeded = () => r.result.createObjectStore('workspace');
     r.onsuccess = () => {
       // Close when another tab asks to upgrade the schema, so a future upgrade is not blocked by
-      // tabs left open. Such a tab then rejects its later transactions until it is reloaded.
-      r.result.onversionchange = () => r.result.close();
+      // tabs left open. Such a tab then refuses its later transactions, saying why, until it is
+      // reloaded (rather than the browser's raw "connection is closing" error).
+      r.result.onversionchange = () => {
+        upgradedElsewhere = true;
+        r.result.close();
+      };
       resolve(r.result);
     };
     // A database a newer release has upgraded refuses this older schema version.
@@ -47,6 +53,10 @@ export function openBrowserStore(
     // transaction commits once no request is pending.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
       const db = await opened;
+      if (upgradedElsewhere)
+        throw Error(
+          'A newer version of the planner was opened in another tab. Reload this tab to continue; nothing has been changed.',
+        );
       return new Promise<T>((resolve, reject) => {
         const tx = db.transaction('workspace', change ? 'readwrite' : 'readonly'),
           store = tx.objectStore('workspace');

@@ -15,12 +15,17 @@ interface FakeRequest {
   onblocked?: () => void;
 }
 const later = (fn: () => void) => setTimeout(fn, 0);
+// The database object the latest fake open() handed out, so a test can fire its events.
+let lastDb: { onversionchange: unknown; closed: boolean } | null = null;
 
 // A database already at `version`, whose `workspace` store holds `records`.
 function fakeIndexedDB(version: number, records: Map<string, unknown>) {
   const db = {
     onversionchange: null as unknown,
-    close() {},
+    closed: false,
+    close() {
+      db.closed = true;
+    },
     createObjectStore() {},
     transaction(_store: string, mode: string) {
       const puts = new Map<string, unknown>();
@@ -70,6 +75,7 @@ function fakeIndexedDB(version: number, records: Map<string, unknown>) {
           return r.onerror?.();
         }
         r.result = db;
+        lastDb = db;
         if (version < wanted) r.onupgradeneeded?.();
         r.onsuccess?.();
       });
@@ -121,4 +127,19 @@ test('a corrupt workspace record is refused, never replaced by a blank workspace
     );
     assert.deepEqual(records.get('main'), corrupt, 'left as it was');
   }
+});
+
+test('after another tab upgrades the database, this tab says to reload', async () => {
+  const records = new Map<string, unknown>();
+  const store = openBrowserStore(fakeIndexedDB(0, records));
+  await store.transaction(d => (d.activeSave = 'x'));
+  // A newer planner in another tab asks to upgrade: this connection closes.
+  (lastDb!.onversionchange as () => void)();
+  assert.equal(lastDb!.closed, true);
+  await assert.rejects(store.transaction(), /opened in another tab\. Reload this tab/);
+  await assert.rejects(
+    store.transaction(d => (d.activeSave = 'y')),
+    /Reload this tab/,
+  );
+  assert.equal((records.get('main') as { activeSave: string }).activeSave, 'x', 'nothing written');
 });
