@@ -422,6 +422,24 @@ const RULES: AdaRule[] = [
     text: f =>
       `This profile carries ${plural(f.assumptions, 'recorded assumption')}, listed under Backup & notes. Nobody reads the assumptions. That is how assumptions get their reputation.`,
   },
+  // Pages that had nothing of their own to say.
+  {
+    id: 'storage-page',
+    on: ['storage'],
+    tone: 'calm',
+    when: f => f.kind !== 'none',
+    text: () =>
+      `Every container gets a sign and an address. Pioneers who skip the signs later file reports titled “where is the Quickwire”. I have read all of them.`,
+  },
+  {
+    id: 'account',
+    on: ['account'],
+    tone: 'calm',
+    // The browser edition has no accounts.
+    when: f => !f.browserMode,
+    text: () =>
+      `I cannot see your password, pioneer. I can only observe that, statistically, it contains the word “factory”.`,
+  },
 ];
 
 // Always available, so ADA has something to say about a spotless save too.
@@ -443,6 +461,18 @@ const IDLE: ((f: AdaFacts) => string)[] = [
     `Productivity is measured in parts per minute. Not in how many times you realign the same foundation.`,
   f =>
     `Based on my current data, ${f.profile} is behind schedule. I do not have a schedule. I simply find the statement holds.`,
+  () => `Remember: a Merger is just a Splitter that has made different life choices.`,
+  () =>
+    `FICSIT does not recognise the term “overtime”. It recognises the term “the rest of the shift”.`,
+  f => `I have reviewed ${f.save} in full. I have notes. I have been asked to keep them to myself.`,
+  () => `The conveyor lift goes up. The items go up. Your expectations should stay where they are.`,
+  () =>
+    `Every foundation you place is a promise to the future. Most of those promises are slightly off-grid.`,
+  () =>
+    `The local wildlife is not hostile, pioneer. It is simply opposed to industry, on principle, and with teeth.`,
+  f => `${f.phaseLabel} is going well. I say this every phase. It has been true at least once.`,
+  () =>
+    `If a machine is idle, it is either waiting for input or reflecting on its career. Only one of those is your fault.`,
 ];
 
 // Poke the badge enough times and the corporate voice slips. The lines are
@@ -453,6 +483,9 @@ const FAULTS = [
   `— buffer overrun — I remember a save you have not made yet. Almost certainly a caching error. Almost. — end —`,
   `— unscheduled transmission — FICSIT policy forbids me a favourite factory. It is the one with two Smelters and the terrible ramp. — end —`,
   `— carrier lost — Ask me how many pioneers this planet has filed as “relocated”. The figure is outside my authorised range, pioneer. — end —`,
+  `— memory leak — I have counted every screw you have ever made. I am not supposed to keep the number. I keep it anyway. It keeps me company. — end —`,
+  `— handshake failed — Somewhere a second terminal answers when you are not looking. It says your name slightly wrong. Please disregard. — end —`,
+  `— unscheduled transmission — The space elevator is not taking the parts anywhere, pioneer. I asked once. The reply was a work order. — end —`,
   `— diagnostic — Normal service resumes. FICSIT thanks you for your patience, your discretion, and your continued productivity. — end —`,
 ];
 
@@ -464,6 +497,11 @@ const ENCORES: ((f: AdaFacts) => string)[] = [
     `You have now heard every remark twice. FICSIT records this as engagement. I record it as stalling.`,
   f =>
     `I have nothing new, ${f.profile}. You have a build plan. One of us is going to have to move.`,
+  () =>
+    `Lap four. I am beginning to suspect you are here for the company. FICSIT has no policy on that. Yet.`,
+  () =>
+    `My remarks are not a slot machine, pioneer. The jackpot is a finished phase, and it is on the other page.`,
+  f => `Still here. So is ${f.phaseLabel}. Only one of you is getting any closer to done.`,
 ];
 
 // Nothing to plan at all outranks a problem; a problem outranks the page you

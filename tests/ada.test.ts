@@ -195,7 +195,7 @@ test('a full lap of the remarks is answered, and the badge can be prodded', () =
     seen.add(f.text);
   }
   assert.ok(seen.size >= 6, 'prodding again gives a different transmission');
-  assert.match(adaFault(6).text, /Normal service resumes/, 'the last one hands the terminal back');
+  assert.match(adaFault(9).text, /Normal service resumes/, 'the last one hands the terminal back');
 });
 
 test('ADA always has something to say, and never throws', () => {
@@ -295,4 +295,32 @@ test('ADA reads the build-so-far status: held-back rows, nothing flowing, the ne
   // Nothing to say without a status (the handbook) or with everything built.
   for (const f of [facts({ build: null }), facts({ build: build({ next: '', share: 100 }) })])
     assert.ok(!ids(f).some(id => id.startsWith('build-')));
+});
+
+test('the storage and account pages have a line of their own, and there is more to say (#85)', () => {
+  const storage = adaRemarks(facts({ view: 'storage' })).find(r => r.id === 'storage-page')!;
+  assert.match(storage.text, /sign and an address/);
+  assert.ok(!ids(facts({ view: 'storage', kind: 'none' })).includes('storage-page'));
+  assert.match(first(facts({ view: 'account' })).text, /cannot see your password/);
+  assert.notEqual(
+    first(facts({ view: 'plan' })).id,
+    'account',
+    'it leads only on the account page',
+  );
+  assert.ok(
+    !ids(facts({ browserMode: true })).includes('account'),
+    'no accounts in the browser edition',
+  );
+  // The idle lines, encores and faults all got longer, and none repeats.
+  const idle = adaRemarks(facts()).filter(r => r.id.startsWith('idle-'));
+  assert.ok(idle.length >= 20, 'idle lines: ' + idle.length);
+  assert.equal(new Set(idle.map(r => r.text)).size, idle.length);
+  const encores = [1, 2, 3, 4, 5, 6].map(lap => adaEncore(lap, facts()).text);
+  assert.equal(new Set(encores).size, 6, 'six different encores before they cycle');
+  const faults = Array.from({ length: 9 }, (_, i) => adaFault(i + 1).text);
+  assert.equal(new Set(faults).size, 9);
+  assert.ok(faults.every(t => t.startsWith('— ') && t.endsWith(' — end —')));
+  // Lines that name the save or phase say it as given, and carry no markup of their own.
+  for (const r of adaRemarks(facts({ save: 'My World', phaseLabel: 'Phase 4' })))
+    assert.ok(!/[<>]/.test(r.text), r.text);
 });
