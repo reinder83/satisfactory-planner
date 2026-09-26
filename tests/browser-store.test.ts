@@ -4,11 +4,13 @@
 // does with the record it finds; the real browser is exercised by browser-check.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openBrowserStore } from '../public/browser-store.ts';
+import { openBrowserStore, readStoredData } from '../public/browser-store.ts';
 
 interface FakeRequest {
   result?: unknown;
   error?: unknown;
+  // The upgrade transaction, while onupgradeneeded runs.
+  transaction?: { abort(): void };
   onsuccess?: () => void;
   onerror?: () => void;
   onupgradeneeded?: () => void;
@@ -27,6 +29,8 @@ function fakeIndexedDB(version: number, records: Map<string, unknown>) {
       db.closed = true;
     },
     createObjectStore() {},
+    // Version 0 stands for a browser without the database: it has no store yet.
+    objectStoreNames: { contains: (store: string) => version > 0 && store === 'workspace' },
     transaction(_store: string, mode: string) {
       const puts = new Map<string, unknown>();
       let aborted = false;
@@ -62,9 +66,20 @@ function fakeIndexedDB(version: number, records: Map<string, unknown>) {
   };
   // Only open() is used; a partial stand-in, so one cast from the wider `object`.
   const factory: object = {
-    open(_name: string, wanted: number) {
+    // Without `wanted` (readStoredData), a database opens at the version it has; a missing one
+    // would be created at 1, which that caller aborts.
+    open(_name: string, wanted = version || 1) {
       const r: FakeRequest = {};
       later(() => {
+        if (version === 0 && arguments.length < 2) {
+          let aborted = false;
+          r.transaction = { abort: () => (aborted = true) };
+          r.onupgradeneeded?.();
+          if (aborted) {
+            r.error = Object.assign(new Error('aborted'), { name: 'AbortError' });
+            return r.onerror?.();
+          }
+        }
         if (version > wanted) {
           r.error = Object.assign(
             new Error('The requested version is less than the existing version.'),
@@ -190,4 +205,30 @@ test('a record saved before lastBackup existed reads as never exported, and keep
     { ...old, lastBackup: null },
     'a write only adds the field',
   );
+});
+
+test('a refused record carries storedData, and readStoredData hands it back exactly as stored', async () => {
+  // Damaged: refused with the ways out named, and flagged for the error page's download.
+  const damaged = { version: 1, saves: [1], note: 'keep me' };
+  const records = new Map<string, unknown>([['main', structuredClone(damaged)]]);
+  const refusal = await openBrowserStore(fakeIndexedDB(1, records))
+    .transaction()
+    .then(
+      () => null,
+      (e: Error & { storedData?: boolean }) => e,
+    );
+  assert.equal(refusal?.storedData, true);
+  assert.match(refusal!.message, /another browser or the Docker edition/);
+  assert.match(refusal!.message, /Download the stored data/);
+  assert.deepEqual(await readStoredData(fakeIndexedDB(1, records)), damaged);
+  assert.deepEqual(records.get('main'), damaged, 'reading it changed nothing');
+  // Written by a newer release: the database is at version 2, which the store refuses to open.
+  const newer = new Map<string, unknown>([['main', { version: 2, saves: [] }]]);
+  const newerRefusal = await openBrowserStore(fakeIndexedDB(2, newer))
+    .transaction()
+    .catch((e: Error & { storedData?: boolean }) => e);
+  assert.equal((newerRefusal as { storedData?: boolean }).storedData, true);
+  assert.deepEqual(await readStoredData(fakeIndexedDB(2, newer)), { version: 2, saves: [] });
+  // No database at all: nothing to hand back, and no empty database is created.
+  assert.equal(await readStoredData(fakeIndexedDB(0, new Map())), undefined);
 });

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
-import { currentSave, state, workspace } from '../../public/app/session.ts';
+import { boot, currentSave, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
@@ -548,4 +548,44 @@ test('chosen saves export on their own, and a single save offers no choice (#160
   render();
   await nextTick();
   assert.equal($('[data-choose-save]'), null);
+});
+
+test('a refused browser record offers its stored data as a download on the error page', async () => {
+  // What browser-store.ts throws for a damaged record; fetch stands in for the request.
+  const refusal = Object.assign(new Error('The saves in this browser could not be read.'), {
+    storedData: true,
+  });
+  globalThis.fetch = async () => {
+    throw refusal;
+  };
+  await boot();
+  assert.match($('#app .loading p')!.textContent!, /could not be read/);
+  const button = $<HTMLButtonElement>('#download-stored-data')!;
+  assert.ok(button, 'the download is offered');
+  // A minimal IndexedDB holding the damaged record; the download is that record, unchanged.
+  const record = { version: 1, saves: [1], note: 'keep me' };
+  const request = <T>(result: T) => {
+    const r: { result: T; onsuccess?: () => void; onerror?: () => void } = { result };
+    setTimeout(() => r.onsuccess?.());
+    return r;
+  };
+  const db = {
+    objectStoreNames: { contains: () => true },
+    close() {},
+    transaction: () => ({ objectStore: () => ({ get: () => request(record) }) }),
+  };
+  Object.assign(globalThis, { indexedDB: { open: () => request(db) } });
+  let saved: Blob | undefined;
+  URL.createObjectURL = (b: Blob | MediaSource) => ((saved = b as Blob), 'blob:x');
+  URL.revokeObjectURL = () => {};
+  button.click();
+  await new Promise(r => setTimeout(r, 30));
+  assert.deepEqual(JSON.parse(await saved!.text()), record);
+  // Any other start-up failure shows no such button.
+  globalThis.fetch = async () => {
+    throw new Error('offline');
+  };
+  await boot();
+  assert.equal($('#download-stored-data'), null);
+  assert.ok($('#retry'));
 });
