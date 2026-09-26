@@ -122,7 +122,8 @@ const clearSlot = (e: Event, id: string) =>
   );
 
 function removeBay(e: Event) {
-  if (!confirm('Remove this added bay? Saved checkmarks for its addresses are kept.')) return;
+  if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
+    return;
   saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayRemove', id: props.bay.id });
 }
 

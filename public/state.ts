@@ -731,8 +731,9 @@ function mutateGroups(s: SavedState, op: Raw) {
   } else fail('Unknown update.');
 }
 // Storage layout edits. Only added floors and bays can be removed; built-in ones can only be
-// renamed. These edits change names and addresses only: 'slot-' checks and notes for a
-// removed bay's containers stay in checks and notes.
+// renamed. These edits change names and addresses only, with one exception: removing an added
+// bay also deletes the 'slot-' checks and notes of its addresses (the owner's decision in #51),
+// so a bay that later reuses the letter starts clean. A removed floor has no records of its own.
 function mutateLayout(s: SavedState, op: Raw) {
   const e = (s.storageEdits = validateEdits(
     s.storageEdits === undefined ? undefined : s.storageEdits,
@@ -780,6 +781,12 @@ function mutateLayout(s: SavedState, op: Raw) {
     for (const k of Object.keys(e.slots))
       if (slotAddr(k) && bayOfSlot(k) === op.id) delete e.slots[k];
     e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== op.id);
+    // 'slot-<address>' notes and 'slot-<address>-<step>' checks.
+    for (const records of [s.checks, s.notes] as Record<string, unknown>[])
+      for (const k of Object.keys(records || {})) {
+        const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(k)?.[1];
+        if (address && bayOfSlot(address) === op.id) delete records[k];
+      }
   } else if (op.type === 'storageSlotAssign') {
     if (!slotAddr(op.key) || !label(op.name, 120)) fail('Invalid container.');
     e.slots[op.key] = op.name.trim();
