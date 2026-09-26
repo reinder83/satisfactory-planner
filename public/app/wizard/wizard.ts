@@ -7,7 +7,12 @@
 // and SurveyPage.vue (ui/survey/), which read their forms back through the
 // readers here and handle their own controls.
 import { browserMode } from '../../browser-api.ts';
-import { GUIDED_TOPUP_RATE, resourceDefaults } from '../../preferences.ts';
+import {
+  GUIDED_TOPUP_RATE,
+  knownWorld,
+  presetSurvey,
+  resourceDefaults,
+} from '../../preferences.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { $, esc, plural, required } from '../format.ts';
@@ -279,10 +284,15 @@ export function readWizard(form: HTMLFormElement) {
   if (w.step === 4) s.limitsConfirmed = f.has('limitsConfirmed');
   readCarry(form, f);
   // Changing purity or distribution on step 1 replaces the budgets with that
-  // world's starting estimates, which then need confirming again.
+  // world's starting estimates, which then need confirming again. The node survey
+  // follows as it does when the same settings change inside it (SurveyPage.vue):
+  // a fully known world refills every count, keeping the mark, clock and usage;
+  // otherwise the counts stay as typed.
   if (w.step === 1 && oldPreset !== s.purity + '|' + s.distribution) {
     s.limits = resourceDefaults(s.purity, s.distribution).limits;
     s.limitsConfirmed = false;
+    if (knownWorld(s.purity, s.distribution))
+      w.extraction = presetSurvey(s.purity, w.extraction ?? s.extraction, s.distribution);
   }
   w.preview = null;
 }
