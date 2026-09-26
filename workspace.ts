@@ -146,11 +146,12 @@ export async function openWorkspace({
     if (code(e) !== 'ENOENT')
       throw new Error('Workspace could not be read; existing data has not been overwritten.');
     // workspace.json is missing but its backup is not: starting fresh would overwrite that
-    // backup on the first save, so stop and say how to recover instead.
+    // backup on the first save, so stop and say how to recover instead. Only a backup that is
+    // certainly absent (ENOENT) lets start-up continue; any other stat error might hide one.
     if (
       await fs.stat(file + '.bak').then(
         () => true,
-        () => false,
+        e => code(e) !== 'ENOENT',
       )
     )
       throw new Error(
