@@ -13,8 +13,6 @@ export interface GuidedOption {
   set: Partial<CurrentSettings>;
   // The All settings step the flow hands over to after this answer.
   handoff?: number;
-  // A follow-up field shown with this option ('hours' for a deadline).
-  ask?: 'hours';
 }
 
 export interface GuidedQuestion {

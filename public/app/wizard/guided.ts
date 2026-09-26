@@ -210,7 +210,6 @@ export function toAdvanced(step?: number) {
   const form = $<HTMLFormElement>('#wizard-form');
   if (form && w.mode === 'guided') readGuidedForm(form, { topics: true });
   w.mode = 'advanced';
-  w.usedGuided = true;
   w.step = Math.min(Math.max(step || 1, 1), 4);
   render();
 }

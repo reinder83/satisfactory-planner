@@ -36,12 +36,6 @@ export type View = (typeof VIEWS)[number];
 export const viewOf = (hash: string): View =>
   (VIEWS as readonly string[]).includes(hash) ? (hash as View) : 'plan';
 
-// Which dialog #detail shows (factory-detail.ts, views/storage.ts), or null.
-export interface ActiveDetail {
-  type: 'factory' | 'calc' | 'group' | 'slot';
-  id: string;
-}
-
 // The open save and profile. kind is 'original' for the preserved handbook and 'calculated'
 // for a wizard-made profile; the empty workspace's placeholder profile has none.
 export interface OpenSave {
@@ -89,7 +83,6 @@ export let factoryFilter = 'all';
 // ADA's mute switch it is remembered in this browser and never touches a saved profile.
 const HIDE_DONE_KEY = 'planner-hide-done';
 export let hideDone = hideDoneStored();
-export let activeDetail: ActiveDetail | null = null;
 export let layoutEditing = false;
 export let planEditing = false;
 // The id of the build-plan step whose edit form is open.
@@ -143,9 +136,6 @@ function hideDoneStored() {
   } catch {
     return false;
   }
-}
-export function setActiveDetail(value: ActiveDetail | null) {
-  activeDetail = value;
 }
 export function setLayoutEditing(value: boolean) {
   layoutEditing = value;
@@ -225,7 +215,6 @@ export function setContext(c: ContextReply) {
   calculated = c.plan;
   plan = c.handbook || basePlan || plan;
   query = '';
-  activeDetail = null;
   planEditing = false;
   editingTask = null;
   factoryEditing = false;
@@ -255,7 +244,6 @@ export async function boot() {
       // #detail sits outside #app, which showSignedOut replaces, so a factory or storage
       // dialog still open would stay modal over the sign-in form with the previous user's data.
       document.querySelector<HTMLDialogElement>('#detail')?.close();
-      activeDetail = null;
       showSignedOut(required('#app'));
       return;
     }

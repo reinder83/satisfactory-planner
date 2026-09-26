@@ -64,7 +64,6 @@ export interface WizardDraft {
   guidedStep: number;
   guidedAsk: string[] | null;
   guidedTopics?: string[];
-  usedGuided: boolean;
   tutorial: string;
   supplyRows?: { name: string; rate: string }[];
   extraction?: Survey;
@@ -145,7 +144,6 @@ export function startWizard(saveId: string | null = null) {
   //   mode              'guided' | 'advanced' | 'extraction': which screen draws
   //   guidedStep, guidedAsk, tutorial  guided.ts state; tutorial also feeds
   //                     guidedBuiltKeys and ada-panel.ts
-  //   usedGuided        set by toAdvanced; nothing reads it at present
   // Added later: guidedTopics (guided.ts), supplyRows (supply.ts) and extraction, extractionStep,
   // extractionReturn, extractionUndo (extraction.ts).
   setWizard({
@@ -187,7 +185,6 @@ export function startWizard(saveId: string | null = null) {
     mode: 'guided',
     guidedStep: 1,
     guidedAsk: null,
-    usedGuided: false,
     tutorial: 'doing',
   });
   // Fresh settings only: Concrete starts pre-ticked as a guided top-up, and the
@@ -246,7 +243,6 @@ export function readWizard(form: HTMLFormElement) {
         'droneBridgeRate',
         'multiplier',
         'powerFactor',
-        'availablePowerGW',
         'uraniumReactors',
         'storageRate',
         'buildRate',

@@ -167,7 +167,7 @@ function ui() {
 }
 const guided = (c: Context, extra = '') =>
   vm.runInContext(
-    `wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};${extra}`,
+    `wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,tutorial:'doing'};${extra}`,
     c,
   );
 
