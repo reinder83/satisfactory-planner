@@ -22,9 +22,7 @@ interface ProfileReply {
   reviewCount: number;
 }
 test('browser imports reject invalid data atomically and deletion preserves other profiles', async () => {
-  // A partial fixture: an empty workspace, without lastBackup.
-  const blank: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
-  let data = blank as BrowserWorkspace;
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
     // Like openBrowserStore: without `change` the answer is the record itself.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
@@ -83,9 +81,7 @@ test('browser imports reject invalid data atomically and deletion preserves othe
 });
 
 test('preview and profile calculation forward the progress callback to the calculator', async () => {
-  // A partial fixture: an empty workspace, without lastBackup.
-  const blank: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
-  let data = blank as BrowserWorkspace;
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
     // Like openBrowserStore: without `change` the answer is the record itself.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
@@ -121,9 +117,7 @@ test('preview and profile calculation forward the progress callback to the calcu
 });
 
 test('the browser edition carries the same world progress into a new profile', async () => {
-  // A partial fixture: an empty workspace, without lastBackup.
-  const blank: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
-  let data = blank as BrowserWorkspace;
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
     // Like openBrowserStore: without `change` the answer is the record itself.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
@@ -205,10 +199,10 @@ test('the browser edition carries the same world progress into a new profile', a
 });
 
 test('with no save open, a server-only route says it needs a server, not "Save not found"', async () => {
-  const empty: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
+  const empty: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
-      const copy = structuredClone(empty) as BrowserWorkspace;
+      const copy = structuredClone(empty);
       return (change ? change(copy) : copy) as T;
     },
   };
@@ -299,9 +293,7 @@ test("a queued calculation's time limit starts when it runs, not while it waits"
 });
 
 test('a full export past the import limit is not recorded as a backup', async () => {
-  // A partial fixture: an empty workspace, without lastBackup.
-  const blank: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
-  let data = blank as BrowserWorkspace;
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
       const copy = structuredClone(data);
@@ -318,7 +310,7 @@ test('a full export past the import limit is not recorded as a backup', async ()
   // An oversized note written straight into the record, past what the page could download.
   data.saves[0]!.profiles[0]!.state.notes.huge = 'x'.repeat(51 * 1024 * 1024);
   await api('/api/export-saves');
-  assert.equal(data.lastBackup, undefined, 'the refused export left the reminder alone');
+  assert.equal(data.lastBackup, null, 'the refused export left the reminder alone');
   delete data.saves[0]!.profiles[0]!.state.notes.huge;
   await api('/api/export-saves');
   assert.ok(data.lastBackup, 'a normal full export still counts as a backup');

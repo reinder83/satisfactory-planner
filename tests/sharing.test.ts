@@ -175,9 +175,8 @@ test('duplicating a profile copies plan and progress and keeps the original inde
 });
 
 test('browser edition shares and duplicates through the same portable format', async () => {
-  // The record starts without lastBackup, which the test checks a share does not set.
-  const empty: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
-  let data = empty as BrowserWorkspace;
+  // The record starts never exported, which the test checks a share does not change.
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   function transaction(): Promise<BrowserWorkspace>;
   function transaction<T>(change: (data: BrowserWorkspace) => T): Promise<T>;
   async function transaction<T>(change?: (data: BrowserWorkspace) => T) {
@@ -208,7 +207,7 @@ test('browser edition shares and duplicates through the same portable format', a
   assert.ok(
     share.saves[0]!.profiles[0]!.state.factoryGroups!.groups!.some(g => g.name === 'Cable factory'),
   );
-  assert.equal(data.lastBackup, undefined, 'a share is not recorded as a full backup');
+  assert.equal(data.lastBackup, null, 'a share is not recorded as a full backup');
   await post('/api/import-saves', share);
   assert.equal(((await api('/api/workspace')) as WorkspaceSummary).saves.length, 2);
   const copy = (await post('/api/duplicate-profile', {
