@@ -127,7 +127,8 @@ export type UpdateOp =
   // A blank label restores the built-in name.
   | { type: 'storageFloorRename'; id: string; label: string }
   | { type: 'storageFloorRemove'; id: string }
-  | { type: 'storageBayAdd'; id: string; name: string; floor: string }
+  // replace: take a hidden handbook bay's letter, clearing its kept records (#167).
+  | { type: 'storageBayAdd'; id: string; name: string; floor: string; replace?: boolean }
   | { type: 'storageBayRename'; id: string; name: string }
   | { type: 'storageBayRemove'; id: string }
   // Hide or bring back a handbook bay; its records are kept either way.

@@ -1,7 +1,9 @@
 <!--
   The "Storage layout" panel while editing the layout of floor `floor`: add a bay to this
-  floor (named by the next free letter, so existing addresses and their progress never
-  move), add a floor, rename this floor, and remove an added floor once it has no bays.
+  floor under any free letter (the next free one is filled in; the owner's choice on #167),
+  add a floor, rename this floor, and remove an added floor once it has no bays. Existing
+  addresses and their progress never move. A hidden handbook bay's letter can be taken after a
+  confirmation, which clears the records kept for that bay.
   Each form ignores an empty name and empties after a successful save.
 -->
 <script setup lang="ts">
@@ -9,7 +11,7 @@ import { ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { setFloor } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { nextBayLetter } from '../../views/storage.ts';
+import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/storage.ts';
 import type { StorageFloor } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
@@ -36,14 +38,38 @@ async function submit(e: Event, op: (name: string) => UpdateOp | null) {
   } catch {}
 }
 
+// The letter box starts on the next free letter; the user may type any other.
+const suggested = () => nextBayLetter() || '';
 const addBay = (e: Event) =>
   submit(e, name => {
-    const letter = nextBayLetter();
-    if (!letter) {
-      toast('No free bay letters left.', true);
+    const field = new FormData(e.target as HTMLFormElement).get('letter');
+    const letter = String(field || '')
+      .trim()
+      .toUpperCase();
+    if (!/^[A-Z]{1,2}$/.test(letter)) {
+      toast('Choose a bay letter: one or two letters, A to ZZ.', true);
       return null;
     }
-    return { type: 'storageBayAdd', id: letter, name, floor: props.floor.id };
+    if (storageBays().some(b => b.id === letter)) {
+      toast(`Bay ${letter} is already in the room. Choose another letter.`, true);
+      return null;
+    }
+    // A hidden handbook bay keeps its records until the user agrees to replace it.
+    const replace = hiddenStorageBays().some(b => b.id === letter);
+    if (
+      replace &&
+      !confirm(
+        `Bay ${letter} still has saved progress from the handbook bay. Use ${letter} anyway? Its old checks, notes and names will be removed.`,
+      )
+    )
+      return null;
+    return {
+      type: 'storageBayAdd',
+      id: letter,
+      name,
+      floor: props.floor.id,
+      ...(replace ? { replace: true } : {}),
+    };
   });
 const addFloor = (e: Event) =>
   submit(e, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
@@ -88,6 +114,15 @@ async function removeFloor() {
     <div class="edit-grid">
       <form id="add-bay" class="inline-form" @submit.prevent="addBay">
         <input
+          id="new-bay-letter"
+          class="new-bay-letter"
+          name="letter"
+          maxlength="2"
+          required
+          pattern="[A-Za-z]{1,2}"
+          :value="suggested()"
+          aria-label="New bay letter"
+        /><input
           id="new-bay-name"
           name="name"
           maxlength="80"
@@ -138,10 +173,10 @@ async function removeFloor() {
       </button>
     </div>
     <p class="small muted">
-      Handbook bays and their addresses stay put: rename them or fill reserved positions. Added bays
-      get the next free letter so container addresses and progress stay stable. A bay with no free
-      position takes extra containers at 09 and upwards. Removing a container keeps its saved
-      checkmarks.
+      Handbook bays and their addresses stay put: rename them, hide them or fill reserved positions.
+      Added bays take any free letter (the next one is filled in), and their addresses and progress
+      stay with that letter. A bay with no free position takes extra containers at 09 and upwards.
+      Removing a container keeps its saved checkmarks.
     </p>
   </section>
 </template>
