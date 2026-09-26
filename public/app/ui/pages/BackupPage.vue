@@ -16,6 +16,7 @@ import {
   scopeHeaders,
   toast,
   writeQueue,
+  writing,
 } from '../../api.ts';
 import {
   boot,
@@ -98,7 +99,7 @@ async function importSaves(e: Event) {
 // "Choose backup file" (server edition): replace this profile's progress with a
 // progress-only backup, after a confirmation. It waits for queued saves and posts itself
 // rather than through save(), so it toasts its own errors; "Backup restored." only follows
-// a successful response.
+// a successful response. writing() shows "Saving…" and the close-tab warning meanwhile.
 async function restoreProgress(e: Event) {
   const el = e.target as HTMLInputElement,
     file = el.files?.[0];
@@ -112,15 +113,17 @@ async function restoreProgress(e: Event) {
     }
     await writeQueue;
     setState(
-      await request('/api/import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Planner-Request': '1',
-          ...scopeHeaders(),
-        },
-        body: JSON.stringify(data),
-      }),
+      await writing(() =>
+        request('/api/import', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Planner-Request': '1',
+            ...scopeHeaders(),
+          },
+          body: JSON.stringify(data),
+        }),
+      ),
     );
     render();
     toast('Backup restored.');

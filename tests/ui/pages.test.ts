@@ -3,7 +3,8 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { currentSave } from '../../public/app/session.ts';
+import { pending } from '../../public/app/api.ts';
+import { currentSave, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
@@ -140,6 +141,32 @@ test('the handbook backup page keeps the save-wide note exactly and lists the so
   assert.equal($('a[download]')!.getAttribute('href'), '/api/export?save=s&profile=original');
   assert.equal($$('.list-links a').length, handbook.sources!.length);
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));
+});
+
+test('restoring a progress backup shows "Saving…" and counts as a pending write', async () => {
+  go('backup');
+  render();
+  let reply: (r: Response) => void = () => {};
+  globalThis.fetch = async () => new Promise<Response>(r => (reply = r));
+  globalThis.confirm = () => true;
+  const input = $<HTMLInputElement>('#import-file')!;
+  const file = new File(
+    [JSON.stringify({ format: 'satisfactory-planner-backup', state: {} })],
+    'b.json',
+  );
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 20));
+  await nextTick();
+  // pending is what the close-tab warning (listeners.ts) checks.
+  assert.equal(pending, 1);
+  assert.equal($('#saved')!.textContent, 'Saving…');
+  reply(new Response(JSON.stringify(state), { status: 200 }));
+  await new Promise(r => setTimeout(r, 20));
+  await nextTick();
+  assert.equal(pending, 0);
+  assert.notEqual($('#saved')!.textContent, 'Saving…');
+  assert.match($('#toast')!.textContent, /Backup restored/);
 });
 
 test('the calculated backup page names the profile and lists its assumptions', () => {

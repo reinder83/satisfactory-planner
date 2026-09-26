@@ -86,6 +86,19 @@ export function save(op: UpdateOp): Promise<ProgressState> {
     });
 }
 
+// Runs a write that does not go through save() (restoring a progress backup) as a pending
+// one, so it shows "Saving…" and the close-tab warning (listeners.ts) covers it too.
+export async function writing<T>(work: () => Promise<T>): Promise<T> {
+  pending++;
+  saveIndicator();
+  try {
+    return await work();
+  } finally {
+    pending--;
+    saveIndicator();
+  }
+}
+
 // Refreshes the sidebar save status ("Saving…" while a write is pending), which
 // ui/Shell.vue reads from `pending`.
 export function saveIndicator() {
