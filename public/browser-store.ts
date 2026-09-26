@@ -9,6 +9,11 @@ import type { BrowserWorkspace } from './types/index.ts';
 const NEWER =
   'The saves in this browser were written by a newer version of the planner. Open the latest ' +
   'version to use them; nothing has been changed.';
+// A record that is there but is not a workspace. It is refused rather than treated as missing,
+// which would put a blank workspace in its place on the next write.
+const UNREADABLE =
+  'The saves in this browser could not be read. Nothing has been changed; reload to try ' +
+  'again, and keep this browser data until you have restored a backup.';
 
 // The store browser-api.ts works through (tests pass a stand-in with the same method).
 export interface BrowserStore {
@@ -52,6 +57,16 @@ export function openBrowserStore(
           try {
             // Version 1 is the only workspace format so far; a later one is refused unread.
             if (typeof r.result?.version === 'number' && r.result.version > 1) throw Error(NEWER);
+            // Only a missing record (a new browser) starts blank; anything else not shaped like
+            // a workspace, falsy values included, is refused unread.
+            const found: unknown = r.result;
+            if (
+              found !== undefined &&
+              (!found ||
+                typeof found !== 'object' ||
+                !Array.isArray((found as { saves?: unknown }).saves))
+            )
+              throw Error(UNREADABLE);
             const data: BrowserWorkspace = r.result || {
               version: 1,
               activeSave: null,

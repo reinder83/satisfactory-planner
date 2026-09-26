@@ -108,3 +108,17 @@ test('a current workspace reads and writes as before, and a missing one starts b
   await store.transaction(d => (d.activeSave = 'x'));
   assert.equal((records.get('main') as { activeSave: string }).activeSave, 'x');
 });
+
+test('a corrupt workspace record is refused, never replaced by a blank workspace', async () => {
+  for (const corrupt of [0, '', false, null, 'text', 42, [], { saves: 'x' }]) {
+    const records = new Map<string, unknown>([['main', corrupt]]);
+    const store = openBrowserStore(fakeIndexedDB(1, records));
+    await assert.rejects(store.transaction(), /could not be read/, JSON.stringify(corrupt));
+    await assert.rejects(
+      store.transaction(d => (d.activeSave = 'x')),
+      /could not be read/,
+      JSON.stringify(corrupt),
+    );
+    assert.deepEqual(records.get('main'), corrupt, 'left as it was');
+  }
+});
