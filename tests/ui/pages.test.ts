@@ -111,6 +111,16 @@ test('a failed sign-out says so and leaves the user signed in', async () => {
   assert.ok($('[data-logout]'), 'still on the account page');
 });
 
+test('the username pattern is a valid regular expression under the v flag browsers use', () => {
+  open({ workspace: { user: null, accountsEnabled: true } });
+  showSignedOut($('#app')!);
+  const pattern = $<HTMLInputElement>('#auth-form input[name=username]')!.pattern;
+  // Browsers compile pattern as ^(?:…)$ with the v flag and ignore it when that throws.
+  const re = new RegExp('^(?:' + pattern + ')$', 'v');
+  assert.equal(re.test('pioneer_1-a'), true);
+  assert.equal(re.test('a b'), false);
+});
+
 test('the sign-in screen switches between signing in and registering', async () => {
   open({ workspace: { user: null, registration: true } });
   showSignedOut($('#app')!);
