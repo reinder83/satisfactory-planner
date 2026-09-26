@@ -205,6 +205,42 @@ test('a train counts freight cars for solids and one fluid car per 1,600 m³ of 
   // 20,000 plates is 100 slots: four 32-slot cars. 3,000 m³ of water: 2 cars; 1,000 of nitrogen: 1.
   assert.deepEqual([t.vehicles, t.freightCars, t.fluidCars, t.fuelPerMin], [1, 4, 3, 0]);
   assert.equal(t.unpackable.length, 0, 'a fluid car takes any fluid');
+  // Seven cars take two locomotives, at one per four cars (#232).
+  assert.equal(t.locomotives, 2);
+  assert.deepEqual([t.beltLimited, t.pipeLimited], [false, false], 'without speeds only capacity');
+});
+
+test('a freight car moves at most one belt or pipe, and a train gets a locomotive per four cars (#232)', () => {
+  const lanes = { belt: 780, pipe: 600 };
+  const train = (items: [string, number][], roundTripMin: number) =>
+    linkLoad(
+      items.map(([item, rate]) => ({ item, rate })),
+      { mode: 'train', roundTripMin },
+      c,
+      fluids,
+      lanes,
+    );
+  // A short trip: 2,000 plates fit one car, but one car loads at most 780/min, so three cars.
+  const short = train([['Iron Plate', 2000]], 1);
+  assert.deepEqual([short.freightCars, short.beltLimited, short.pipeLimited], [3, true, false]);
+  assert.equal(short.locomotives, 1);
+  // Exactly one belt's worth needs one car, not two.
+  assert.equal(train([['Iron Plate', 780]], 1).freightCars, 1);
+  // Water at 900 m³/min fits one fluid car per trip, but that is one and a half pipes: two cars.
+  const water = train([['Water', 900]], 1);
+  assert.deepEqual([water.fluidCars, water.pipeLimited, water.beltLimited], [2, true, false]);
+  // A long trip is limited by capacity instead, and a long train gets more locomotives.
+  const long = train([['Iron Plate', 2000]], 60);
+  assert.equal(long.beltLimited, false);
+  assert.equal(long.freightCars, Math.ceil((2000 * 60) / (c.stacks!['Iron Plate']! * 32)));
+  assert.equal(long.locomotives, Math.ceil(long.freightCars / 4));
+  assert.ok(long.locomotives > 1, JSON.stringify(long));
+  // Road vehicles are unchanged by belt speeds.
+  const truck = { mode: 'truck' as const, roundTripMin: 5, fuel: 'Packaged Fuel' };
+  assert.deepEqual(
+    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, c, fluids, lanes),
+    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, c, fluids),
+  );
 });
 
 test('a new profile carrying plan edits keeps the links of the groups it carries', () => {

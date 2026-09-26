@@ -750,7 +750,7 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   assert.equal($(`[data-link-fuel="${key}"]`), null);
   assert.match(
     $(`[data-link-out="${key}"] [data-link-load]`)!.textContent!,
-    /^1 train: \d+ freight cars?/,
+    /^1 train: \d+ locomotives?, \d+ freight cars?/,
   );
   await pick(`[data-link-mode="${key}"]`, 'belt');
   assert.equal(state.factoryGroups.links, undefined);

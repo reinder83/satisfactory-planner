@@ -17,7 +17,7 @@
 import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num } from '../../format.ts';
-import { FLUIDS, lanePlan } from '../../flow.ts';
+import { bestLane, FLUIDS, lanePlan } from '../../flow.ts';
 import { groupLinks, MINES, OUTSIDE, UNGROUPED } from '../../group-links.ts';
 import { FLUID_CAR_M3, LINK_MODES, linkLoad, transportFuel, VEHICLES } from '../../logistics.ts';
 import {
@@ -64,8 +64,11 @@ function vehicleText(
   items: { item: string; rate: number }[],
   t: LinkTransport,
 ): { lines: string[]; badge: string } {
+  // The best belt and pipe unlocked: a freight car loads at no more than one of each (#232).
+  const belt = bestLane(false),
+    pipe = bestLane(true);
   const c = workspace.catalog,
-    l = linkLoad(items, t, c, FLUIDS),
+    l = linkLoad(items, t, c, FLUIDS, { belt: belt.cap, pipe: pipe.cap }),
     v = VEHICLES[t.mode],
     lines: string[] = [];
   let badge = l.vehicles ? plural(l.vehicles, v.name.toLowerCase()) : `By ${v.name.toLowerCase()}`;
@@ -75,10 +78,19 @@ function vehicleText(
       l.fluidCars ? `${plural(l.fluidCars, 'fluid car')} (${num(FLUID_CAR_M3)} m³ each)` : '',
     ].filter(Boolean);
     if (l.vehicles) {
+      const locos = plural(l.locomotives, 'locomotive');
       lines.push(
-        `1 train: ${cars.join(' and ')}. Electric: the locomotive draws 25–110 MW from the grid while moving.`,
+        `1 train: ${locos}, ${cars.join(' and ')}. Electric: each locomotive draws 25–110 MW from the grid while moving.`,
       );
-      badge = `1 train: ${cars.join(' and ')}`;
+      const limits = [
+        l.beltLimited ? `one ${belt.mark} belt (${num(belt.cap)}/min)` : '',
+        l.pipeLimited ? `one ${pipe.mark} pipe (${num(pipe.cap)} m³/min)` : '',
+      ].filter(Boolean);
+      if (limits.length)
+        lines.push(
+          `A car loads and unloads at no more than ${limits.join(' or ')}, so this flow needs that many cars.`,
+        );
+      badge = `1 train: ${locos}, ${cars.join(' and ')}`;
     }
   } else if (l.vehicles) {
     const fuel =

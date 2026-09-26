@@ -27,6 +27,10 @@ export const VEHICLES: Record<LinkMode, { name: string; slots: number; burnMW: n
 };
 // What one Fluid Freight Car holds, in m³.
 export const FLUID_CAR_M3 = 1600;
+// Freight cars per Electric Locomotive (#232): the owner's rule of thumb of one locomotive per
+// four cars. The wiki's Freight Car weight table has one locomotive pulling 5 fully loaded cars
+// up the steepest buildable incline (2 m ramps) and 13 up 1 m ramps, so four leaves a margin.
+export const CARS_PER_LOCOMOTIVE = 4;
 // The choices a link offers, in menu order; 'belt' is the default belt or pipe.
 export const LINK_MODES: ['belt' | LinkMode, string][] = [
   ['belt', 'Belt or pipe'],
@@ -43,9 +47,17 @@ export interface LinkLoad {
   // Inventory slots one vehicle fills per trip, of `slots`. For a train: freight cars.
   slotsUsed: number;
   slots: number;
-  // A train's cars: for solid items (32 slots each) and one per fluid per 1,600 m³.
+  // A train's cars: for solid items (32 slots each) and one per fluid per 1,600 m³, or more when
+  // the flow needs them (#232): a car is loaded and unloaded at no more than one belt (or pipe)
+  // of the best mark unlocked, so a flow of several belts needs a car per belt.
   freightCars: number;
   fluidCars: number;
+  // Whether the belt limit set the freight cars, or the pipe limit a fluid's cars, rather than
+  // their capacity.
+  beltLimited: boolean;
+  pipeLimited: boolean;
+  // A train's locomotives: one per CARS_PER_LOCOMOTIVE cars.
+  locomotives: number;
   // Fuel items burned per minute by all the link's vehicles if they drive all the time (an
   // upper bound: a vehicle waiting at a station burns nothing). 0 when nothing burns.
   fuelPerMin: number;
@@ -56,12 +68,14 @@ export interface LinkLoad {
 // The load for items [{ item, rate }] (items/min, or m³/min for a fluid) on transport `t`.
 // Road vehicles and drones carry fluids packaged (catalog.packaged: the item and the m³ one
 // holds); a slot holds one item type, so every item takes whole slots, and the vehicle count is
-// the smallest that fits each vehicle's share of a round trip's load into its slots.
+// the smallest that fits each vehicle's share of a round trip's load into its slots. `lanes` is
+// the best belt (items/min) and pipe (m³/min) unlocked, which cap what one freight car moves.
 export function linkLoad(
   items: { item: string; rate: number }[],
   t: LinkTransport,
   catalog: Pick<Catalog, 'stacks' | 'packaged' | 'vehicleFuels'>,
   fluids: Set<string>,
+  lanes?: { belt: number; pipe: number },
 ): LinkLoad {
   const v = VEHICLES[t.mode],
     trip = t.roundTripMin;
@@ -71,18 +85,26 @@ export function linkLoad(
     slots: v.slots,
     freightCars: 0,
     fluidCars: 0,
+    beltLimited: false,
+    pipeLimited: false,
+    locomotives: 0,
     fuelPerMin: 0,
     unpackable: [],
   };
   // [amount per round trip, amount per slot] for each item a slot can hold.
   const perTrip: [number, number][] = [];
+  let solidRate = 0;
   for (const { item, rate } of items) {
     if (rate <= 0) continue;
     const fluid = fluids.has(item);
     if (t.mode === 'train' && fluid) {
-      load.fluidCars += Math.ceil((rate * trip) / FLUID_CAR_M3);
+      const held = Math.ceil((rate * trip) / FLUID_CAR_M3),
+        piped = lanes ? Math.ceil(rate / lanes.pipe - 1e-9) : 0;
+      load.fluidCars += Math.max(held, piped);
+      if (piped > held) load.pipeLimited = true;
       continue;
     }
+    if (!fluid) solidRate += rate;
     const pack = fluid ? catalog.packaged?.[item] : undefined;
     if (fluid && !pack) {
       load.unpackable.push(item);
@@ -96,9 +118,14 @@ export function linkLoad(
   }
   const slotsFor = (n: number) => perTrip.reduce((t, [q, s]) => t + Math.ceil(q / n / s), 0);
   if (t.mode === 'train') {
-    const slots = slotsFor(1);
-    load.freightCars = Math.ceil(slots / v.slots);
-    load.vehicles = load.freightCars + load.fluidCars ? 1 : 0;
+    const slots = slotsFor(1),
+      held = Math.ceil(slots / v.slots),
+      belted = lanes && perTrip.length ? Math.ceil(solidRate / lanes.belt - 1e-9) : 0;
+    load.freightCars = Math.max(held, belted);
+    if (belted > held) load.beltLimited = true;
+    const cars = load.freightCars + load.fluidCars;
+    load.vehicles = cars ? 1 : 0;
+    load.locomotives = cars ? Math.ceil(cars / CARS_PER_LOCOMOTIVE) : 0;
     load.slotsUsed = slots;
     load.slots = load.freightCars * v.slots;
     return load;
