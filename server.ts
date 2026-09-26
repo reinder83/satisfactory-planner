@@ -54,15 +54,15 @@ export async function createApp({
     res.end(JSON.stringify(value));
   };
   // Reads a JSON request body, stopping at 2 MB (50 MB for a full-save import, which carries
-  // whole plans and handbooks) so a huge upload cannot exhaust memory. The error text
-  // always says 2 MB. Passed to workspace routes, which call it only when they need a body.
+  // whole plans and handbooks) so a huge upload cannot exhaust memory. The error names the
+  // limit that applied. Passed to workspace routes, which call it only when they need a body.
   const body = async (req: IncomingMessage): Promise<unknown> => {
     let chunks: Buffer[] = [],
       length = 0;
+    const limit = req.url?.split('?')[0] === '/api/import-saves' ? 50 : 2;
     for await (const chunk of req) {
       length += chunk.length;
-      if (length > (req.url?.split('?')[0] === '/api/import-saves' ? 50 : 2) * 1024 * 1024)
-        fail('Backup or update exceeds 2 MB.', 413);
+      if (length > limit * 1024 * 1024) fail(`Backup or update exceeds ${limit} MB.`, 413);
       chunks.push(chunk);
     }
     try {
