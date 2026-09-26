@@ -106,6 +106,11 @@ export interface Catalog {
   limits: ItemRates;
   pureLimits: ItemRates;
   goals: { id: string; name: string; description: string }[];
+  // Vehicle transport on factory-group links (#205): items per inventory slot, the packaged
+  // item a fluid travels as (with the m³ one item holds), and the fuels a vehicle can burn with their MJ per item.
+  stacks: ItemRates;
+  packaged: Record<string, { item: string; m3: number }>;
+  vehicleFuels: { name: string; mj: number }[];
 }
 
 // A profile in the save list: its settings and tick count instead of the full state.

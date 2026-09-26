@@ -23,6 +23,9 @@ export interface ItemInfo {
   energy: number;
   sink: number;
   radioactive: boolean;
+  // How many fit in one inventory slot (SatisfactoryTools stackSize, same revision); for a
+  // fluid this is the dataset's figure, and vehicles carry fluids packaged instead.
+  stack: number;
 }
 
 export interface RecipeData {
