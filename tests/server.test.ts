@@ -239,3 +239,34 @@ test('the interface fonts are served as font/woff2, not a generic download', () 
   assert.ok(fontNames.length);
   for (const name of fontNames) assert.equal(contentTypes[path.extname(name)], 'font/woff2', name);
 });
+
+test('a workspace from a newer planner stops start-up with "update the app", untouched', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  try {
+    const app = await start(dir);
+    await close(app.server);
+    const file = path.join(dir, 'workspace.json');
+    const current = JSON.parse(await fs.readFile(file, 'utf8'));
+    // A newer workspace format, then a current one holding a newer profile state.
+    for (const workspace of [
+      { ...current, version: 3 },
+      {
+        ...current,
+        saves: current.saves.map((s: { profiles: { state: object }[] }) => ({
+          ...s,
+          profiles: s.profiles.map(p => ({ ...p, state: { ...p.state, version: 99 } })),
+        })),
+      },
+    ]) {
+      const text = JSON.stringify(workspace);
+      await fs.writeFile(file, text);
+      await assert.rejects(start(dir), /newer version of the planner\. Update the app/);
+      assert.equal(await fs.readFile(file, 'utf8'), text, 'left exactly as it was');
+    }
+    // A damaged one keeps the generic message.
+    await fs.writeFile(file, '{"version":2}');
+    await assert.rejects(start(dir), /Workspace could not be read/);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

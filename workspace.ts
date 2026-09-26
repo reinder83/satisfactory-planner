@@ -107,8 +107,18 @@ export async function openWorkspace({
   // validateState refuses) stops start-up and leaves the file untouched, so a damaged or
   // newer workspace never turns into an empty one. Normalised states are only held in
   // memory until the next write.
+  // A workspace, or a profile's progress, from a newer release is refused with this rather than
+  // the generic message, so the owner knows an update is what is needed.
+  const newer = () =>
+    Object.assign(
+      new Error(
+        'workspace.json was written by a newer version of the planner. Update the app to open it; existing data has not been overwritten.',
+      ),
+      { newer: true },
+    );
   try {
     db = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (typeof db.version === 'number' && db.version > 2) throw newer();
     if (
       db.version !== 2 ||
       !Array.isArray(db.users) ||
@@ -124,9 +134,15 @@ export async function openWorkspace({
         !save.profiles.some(p => p.id === save.activeProfile)
       )
         throw Error();
-      for (const p of save.profiles) p.state = validateState(p.state);
+      for (const p of save.profiles)
+        try {
+          p.state = validateState(p.state);
+        } catch (e) {
+          throw /newer planner version/.test((e as Error).message) ? newer() : e;
+        }
     }
   } catch (e) {
+    if ((e as { newer?: boolean })?.newer) throw e;
     if (code(e) !== 'ENOENT')
       throw new Error('Workspace could not be read; existing data has not been overwritten.');
     // workspace.json is missing but its backup is not: starting fresh would overwrite that
