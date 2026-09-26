@@ -112,8 +112,11 @@ async function importSaves(e: Event) {
   }
 }
 
-// "Choose backup file" (server edition): replace this profile's progress with a
-// progress-only backup, after a confirmation. It goes through queuedWrite, like save(): after
+// "Choose backup file": replace this profile's progress with a progress-only backup. Only the
+// two server versions of the page bind it (calculated and handbook); the browser edition's page
+// has no progress download or restore, and moves saves with Export/Import saves instead, though
+// browser-api.ts answers /api/import the same way for parity.
+// After a confirmation it goes through queuedWrite, like save(): after
 // the saves already queued, before any made meanwhile, shown as "Saving…", and its reply only
 // shown if this profile is still open. It toasts its own errors; "Backup restored." only
 // follows a successful response.
