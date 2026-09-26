@@ -68,10 +68,11 @@ const page = computed(() =>
       floorBays: floorBays.length,
       workshop: floor === 'workshop',
       // The floor's notice. The ground-floor instructions describe the owner's built room,
-      // so only the original profile gets them.
+      // so only original (handbook) profiles get them, copies included: a duplicated or
+      // imported one has a new id but keeps its kind and the built ground floor.
       notice:
         floor === 'ground'
-          ? currentProfile.id !== 'original'
+          ? currentProfile.kind !== 'original'
             ? 'template'
             : 'built'
           : floor === 'upper'

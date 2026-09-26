@@ -300,6 +300,12 @@ test('the workshop floor shows its checklist and no bays', async () => {
   assert.equal($('#main .empty-state'), null, 'no empty-floor message on the workshop');
 });
 
+test('a copied original profile keeps the built ground-floor notice', () => {
+  open({ profileId: 'copy-of-original' });
+  render();
+  assert.match($('#main .notice')!.textContent, /Ground floor is built\./);
+});
+
 test('a calculated profile shows only the items it stores, and its one checklist step', () => {
   open({ calculated: generated() });
   render();
