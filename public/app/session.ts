@@ -215,6 +215,13 @@ export function setContext(c: ContextReply) {
   calculated = c.plan;
   plan = c.handbook || basePlan || plan;
   query = '';
+  endEditing();
+}
+
+// Closes every editing mode: step editing and its open step form, factory editing and the
+// storage layout editor. They belong to the profile on screen, so opening another profile,
+// the empty workspace or the sign-in screen starts without them.
+function endEditing() {
   planEditing = false;
   editingTask = null;
   factoryEditing = false;
@@ -241,6 +248,13 @@ export async function boot() {
       state = initialState();
       stateLoaded = false;
       wizard = null;
+      // The rest of the view state goes too, so whoever signs in next starts on the default
+      // floor and filter with no editing mode open (#132). "Hide completed" stays: like ADA's
+      // mute switch it is this browser's preference, kept in localStorage, not the user's.
+      query = '';
+      floor = 'ground';
+      factoryFilter = 'all';
+      endEditing();
       // #detail sits outside #app, which showSignedOut replaces, so a factory or storage
       // dialog still open would stay modal over the sign-in form with the previous user's data.
       document.querySelector<HTMLDialogElement>('#detail')?.close();
@@ -268,6 +282,7 @@ export async function boot() {
       state = { ...initialState(), settings: { phase: browserMode ? '1' : '3' } };
       stateLoaded = true;
       calculated = null;
+      endEditing();
       startWizard();
     }
   } catch (e) {

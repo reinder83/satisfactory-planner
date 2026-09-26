@@ -6,7 +6,27 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { carryOptions } from '../../public/state.ts';
-import { boot, setWizard, view, wizard, workspace } from '../../public/app/session.ts';
+import {
+  boot,
+  editingTask,
+  factoryEditing,
+  factoryFilter,
+  floor,
+  layoutEditing,
+  planEditing,
+  query,
+  setEditingTask,
+  setFactoryEditing,
+  setFactoryFilter,
+  setFloor,
+  setLayoutEditing,
+  setPlanEditing,
+  setQuery,
+  setWizard,
+  view,
+  wizard,
+  workspace,
+} from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import GuidedPage from '../../public/app/ui/pages/GuidedPage.vue';
@@ -15,7 +35,7 @@ import WizardPage from '../../public/app/ui/pages/WizardPage.vue';
 import { extractionOf } from '../../public/app/wizard/extraction.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { presetSurvey } from '../../public/preferences.ts';
-import { $, $$, catalog, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import { $, $$, catalog, evil, generated, go, handbook, open, page, stubFetch } from './setup.ts';
 import { noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
@@ -906,6 +926,37 @@ test('signing out drops an unfinished wizard draft, so the next user never sees 
   await boot();
   assert.equal(wizard, null);
   assert.ok($('#auth-form'), 'the sign-in screen is up');
+});
+
+test('signing out or reaching an empty workspace closes the previous view state', async () => {
+  setFloor('upper');
+  setFactoryFilter('open');
+  setQuery('coal');
+  setPlanEditing(true);
+  setEditingTask('phase-3-iron');
+  setFactoryEditing(true);
+  setLayoutEditing(true);
+  stubFetch({ '/api/workspace': { user: null, accountsEnabled: true, saves: [] } });
+  await boot();
+  assert.deepEqual(
+    [floor, factoryFilter, query, planEditing, editingTask, factoryEditing, layoutEditing],
+    ['ground', 'all', '', false, null, false, false],
+  );
+  // A new user with no saves yet: the editing modes of whoever used the tab before are gone.
+  setPlanEditing(true);
+  setEditingTask('phase-3-iron');
+  setFactoryEditing(true);
+  setLayoutEditing(true);
+  stubFetch({
+    '/api/workspace': { user: { id: 'u2', username: 'next' }, accountsEnabled: true, saves: [] },
+    '/plan.json': handbook,
+    '/progression.json': {},
+  });
+  await boot();
+  assert.deepEqual(
+    [planEditing, editingTask, factoryEditing, layoutEditing],
+    [false, null, false, false],
+  );
 });
 
 test('Cancel asks only once something was entered since the wizard started', async () => {
