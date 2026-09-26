@@ -6,7 +6,7 @@
   calcStage(). A delivery's id is `<stage>-<item slug>`, a saved key.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { num, slug } from '../../format.ts';
 import {
   calcStage,
@@ -21,6 +21,7 @@ import {
 import { planTasks } from '../../tasks.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
+import { useNoteDraft } from '../note-draft.ts';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
@@ -57,12 +58,10 @@ const page = computed(() =>
     };
   }),
 );
-// The phase notes box keeps its own text, so a redraw (a ticked step, the save indicator) does not
-// put the saved note back over unsaved typing. It follows the saved note when the phase or that note changes (another phase or profile).
-const note = ref(page.value?.note ?? '');
-watch(
-  [() => page.value?.phase, () => page.value?.note],
-  () => (note.value = page.value?.note ?? ''),
+// The phase notes box: its own text, kept through redraws and saved-note changes (note-draft.ts).
+const note = useNoteDraft(
+  () => page.value?.phase ?? '',
+  () => page.value?.note ?? '',
 );
 </script>
 

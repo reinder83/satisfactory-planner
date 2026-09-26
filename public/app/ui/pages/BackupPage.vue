@@ -6,7 +6,7 @@
   the dialogs do.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   downloadJson,
@@ -29,6 +29,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { invalidate, legacy } from '../bridge.ts';
+import { useNoteDraft } from '../note-draft.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import { saveNote } from '../actions.ts';
@@ -47,12 +48,10 @@ const page = computed(() =>
       : 'No full backup has been exported from this browser yet.',
   })),
 );
-// The save-wide notes box keeps its own text, so a redraw (a ticked step, the save indicator) does not
-// put the saved note back over unsaved typing. It follows the saved note when that note changes (another save).
-const note = ref(page.value.note);
-watch(
+// The save-wide notes box: its own text, kept through redraws and saved-note changes (note-draft.ts).
+const note = useNoteDraft(
+  () => currentSave.id,
   () => page.value.note,
-  saved => (note.value = saved),
 );
 const exporting = ref(false);
 

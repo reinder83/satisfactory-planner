@@ -469,6 +469,37 @@ test('reordering keeps a removed step’s place, so restoring it puts it back', 
   assert.equal(ids.length, before.length + 1);
 });
 
+test('another tab’s saved note never replaces an unsaved draft, but fills an untouched box', async () => {
+  // Every save reply carries a phase note another tab saved meanwhile.
+  stubFetch({
+    '/api/update': () => ({ ...state, notes: { ...state.notes, 'phase-3': 'From the other tab' } }),
+  });
+  const tick = async () => {
+    const box = $<HTMLInputElement>('#main .checklist [data-check]:not(:checked)')!;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+  };
+  const note = () => $<HTMLTextAreaElement>('#phase-note')!;
+  render();
+  await nextTick();
+  note().value = 'My draft';
+  note().dispatchEvent(new Event('input'));
+  await tick();
+  assert.equal(note().value, 'My draft', 'the draft is kept');
+  assert.match($('#toast')!.textContent!, /saved note changed while you were editing/);
+  // An untouched box simply shows the newer saved note.
+  page();
+  open();
+  stubFetch({
+    '/api/update': () => ({ ...state, notes: { ...state.notes, 'phase-3': 'From the other tab' } }),
+  });
+  render();
+  await nextTick();
+  await tick();
+  assert.equal(note().value, 'From the other tab');
+});
+
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
   const plan = structuredClone(generated);
   plan.warnings = [evil];
