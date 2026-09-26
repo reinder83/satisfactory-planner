@@ -16,6 +16,7 @@ import { extractionOf } from '../../public/app/wizard/extraction.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { presetSurvey } from '../../public/preferences.ts';
 import { $, $$, catalog, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import { noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -895,4 +896,42 @@ test('signing out drops an unfinished wizard draft, so the next user never sees 
   await boot();
   assert.equal(wizard, null);
   assert.ok($('#auth-form'), 'the sign-in screen is up');
+});
+
+test('Cancel asks only once something was entered since the wizard started', async () => {
+  let asked = 0;
+  globalThis.confirm = () => (asked++, false);
+  // Untouched: Continue to the next question and back again changes no answer.
+  startWizard();
+  render();
+  await submit();
+  await click('[data-guided-back]');
+  await click('[data-cancel-wizard]');
+  assert.equal(asked, 0, 'nothing entered, nothing asked');
+  assert.equal(wizard, null);
+  // Nor through All settings: step 2 and back reads each form without changing an answer.
+  startWizard();
+  render();
+  await click('[data-guided-advanced]');
+  await click('[data-wizard-step="2"]');
+  await click('[data-wizard-step="1"]');
+  await click('[data-cancel-wizard]');
+  assert.equal(asked, 0, 'reading unchanged forms is not a change');
+  assert.equal(wizard, null);
+  // A changed answer is asked about; keeping it keeps the draft as it was.
+  startWizard();
+  render();
+  $<HTMLInputElement>('input[name=saveName]')!.value = 'My world';
+  // What the input listener in listeners.ts (not loaded by these tests) does for typing.
+  noteWizardEdit();
+  await submit();
+  await click('[data-guided-back]');
+  await click('[data-cancel-wizard]');
+  assert.equal(asked, 1);
+  assert.ok(wizard, 'kept');
+  assert.equal((wizard as WizardDraft | null)?.saveName, 'My world');
+  globalThis.confirm = () => true;
+  await click('[data-cancel-wizard]');
+  assert.equal(wizard, null);
+  assert.equal(view, 'profiles');
 });

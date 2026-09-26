@@ -197,6 +197,28 @@ export function startWizard(saveId: string | null = null) {
   navigate('wizard');
 }
 
+// Drafts the user has entered or changed something in since startWizard: a typed or chosen
+// value on any wizard screen (the input/change listener in listeners.ts) or a survey button
+// that changes counts (Fill in, Reset, Apply). Reading an untouched screen into the draft
+// fills in defaults, so comparing the draft itself with how it started would count that too.
+const edited = new WeakSet<WizardDraft>();
+export function noteWizardEdit() {
+  if (wizard) edited.add(wizard);
+}
+
+// "Cancel" on the first screen of either mode: drop the draft and show the profiles page.
+// Nothing has been saved yet, so it only asks when something was entered (the owner's choice
+// in #58); an untouched draft goes without a question.
+export function cancelWizard() {
+  if (
+    edited.has(draft()) &&
+    !confirm('Discard the answers you entered? Nothing has been saved yet.')
+  )
+    return;
+  setWizard(null);
+  navigate('profiles');
+}
+
 // Copy the five-step form on screen into the draft (all steps share this one
 // reader; each only finds its own fields). Mutates wizard and wizard.settings
 // and clears the preview. Does not re-render.

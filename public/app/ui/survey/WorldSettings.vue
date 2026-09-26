@@ -29,6 +29,7 @@ import {
   resetExtraction,
   undoExtractionReset,
 } from '../../wizard/extraction.ts';
+import { noteWizardEdit } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import SelectField from '../form/SelectField.vue';
@@ -70,6 +71,7 @@ const view = computed(() =>
 // forgets any pending "Undo reset", and keeps the recorded purity in step with the counts.
 function fill() {
   const w = draft();
+  noteWizardEdit();
   const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
   // The button is only drawn with the view.

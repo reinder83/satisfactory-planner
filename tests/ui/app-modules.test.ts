@@ -41,6 +41,8 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     '#detail click',
     '#detail cancel',
     'window beforeunload',
+    'document input',
+    'document change',
     'rendered',
   ]);
   // Importing the entry point compiles every component through Vite, which takes about 5 s
