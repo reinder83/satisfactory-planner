@@ -25,8 +25,19 @@ import {
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
-import { $, $$, catalog, evil, generated, go, open, page, stubFetch } from './setup.ts';
-import { mutate } from '../../public/state.ts';
+import {
+  $,
+  $$,
+  applyUpdate,
+  catalog,
+  evil,
+  generated,
+  go,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
+
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
@@ -616,7 +627,7 @@ test('between groups: a link can go by truck, train or back to belts, with the v
       },
     },
   });
-  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   go('factories');
   render();
   await nextTick();
