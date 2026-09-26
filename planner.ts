@@ -30,6 +30,8 @@ import {
 import fs from 'node:fs';
 import { solve, type LpModel } from './optimizer.ts';
 import type {
+  AlternatePayoff,
+  AlternateRanking,
   Catalog,
   CurrentCalculatedPlan,
   CurrentSettings,
@@ -41,6 +43,7 @@ import type {
   ItemRates,
   MainPower,
   NodeCounts,
+  PhaseFigures,
   Purity,
   Recipe,
   RecipeData,
@@ -1414,3 +1417,114 @@ export const catalog = (): Catalog => ({
     },
   ],
 });
+
+// Hard-drive payoff (#67): for each alternate recipe the profile does not allow yet, calculate
+// the plan again with it allowed and compare one phase with the profile's own plan. `input` is
+// the profile's settings (normalised by settings() like calculate's). Candidates are the
+// alternates available by `phase` that the recipe setting leaves out: every one for 'standard'
+// (the two MAM recipes it already has aside), the unticked ones for 'custom', none for 'all';
+// the pure ingot alternates are skipped while `pureIngots` brings them in anyway. Each trial runs
+// under recipes: 'custom' with the owned list plus the candidate, so nothing else changes.
+// A trial that throws or does not fit is reported, not thrown. `onProgress(done, total)` runs
+// after each trial; past `budgetMs` the rest are skipped and `stopped` is set.
+export function rankAlternates(
+  input: unknown,
+  {
+    phase,
+    onProgress,
+    budgetMs = Infinity,
+  }: { phase: StageKey; onProgress?: (done: number, total: number) => void; budgetMs?: number },
+): AlternateRanking {
+  const started = Date.now();
+  const s = settings(input);
+  const owned =
+    s.recipes === 'custom' ? s.alternateRecipes : s.recipes === 'standard' ? MAM_RECIPES : null;
+  const phaseNumber = Number(phase);
+  const candidates = owned
+    ? DATA.recipes.filter(
+        r =>
+          r.alternate &&
+          r.phase <= phaseNumber &&
+          !owned.includes(r.id) &&
+          !(s.pureIngots && pureNames.includes(r.name)),
+      )
+    : [];
+  const figures = (st: CurrentStage | undefined): PhaseFigures | null =>
+    st?.feasible && st.rows
+      ? {
+          buildings: st.rows.reduce((t, r) => t + r.machines, 0),
+          rawTotal: Object.values(st.raw || {}).reduce((t, v) => t + v, 0),
+          requiredMW: st.requiredMW || 0,
+          hours: Number.isFinite(st.hours) ? st.hours! : null,
+        }
+      : null;
+  const baseStage = calculate(s).stages[phase];
+  const base = figures(baseStage);
+  if (!base) err('This phase has no plan to compare alternates against.');
+  const list: AlternatePayoff[] = [];
+  let stopped = false;
+  for (const r of candidates) {
+    if (Date.now() - started > budgetMs) {
+      stopped = true;
+      break;
+    }
+    const entry: AlternatePayoff = {
+      id: r.id,
+      name: r.name.replace('Alternate: ', ''),
+      machine: r.machine,
+      phase: r.phase,
+      status: 'same',
+      buildings: 0,
+      raw: {},
+      rawTotal: 0,
+      powerMW: 0,
+      hours: 0,
+    };
+    try {
+      const st = calculate({ ...s, recipes: 'custom', alternateRecipes: [...owned!, r.id] }).stages[
+        phase
+      ];
+      const f = figures(st);
+      if (!f) {
+        entry.status = 'infeasible';
+        entry.error = st?.reason;
+      } else {
+        entry.buildings = f.buildings - base.buildings;
+        entry.rawTotal = f.rawTotal - base.rawTotal;
+        entry.powerMW = f.requiredMW - base.requiredMW;
+        entry.hours = f.hours === null || base.hours === null ? null : f.hours - base.hours;
+        for (const n of new Set([
+          ...Object.keys(st!.raw || {}),
+          ...Object.keys(baseStage!.raw || {}),
+        ])) {
+          const d = (st!.raw?.[n] || 0) - (baseStage!.raw?.[n] || 0);
+          if (Math.abs(d) > 1e-6) entry.raw[n] = d;
+        }
+        // Better or worse on buildings, raw and hours together; 'mixed' when they disagree.
+        const signs = [entry.buildings, entry.rawTotal, entry.hours ?? 0].map(d =>
+          Math.abs(d) < 1e-6 ? 0 : Math.sign(d),
+        );
+        entry.status = signs.every(x => x === 0)
+          ? 'same'
+          : signs.every(x => x <= 0)
+            ? 'better'
+            : signs.every(x => x >= 0)
+              ? 'worse'
+              : 'mixed';
+      }
+    } catch (e) {
+      entry.status = 'error';
+      entry.error = (e as Error).message;
+    }
+    list.push(entry);
+    onProgress?.(list.length, candidates.length);
+  }
+  return {
+    phase,
+    base,
+    candidates: list,
+    total: candidates.length,
+    stopped,
+    elapsedMs: Date.now() - started,
+  };
+}
