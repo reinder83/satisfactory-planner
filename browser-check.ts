@@ -1,15 +1,20 @@
 import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createApp } from './server.ts';
 import os from 'node:os';
-const { chromium } = await import(
+import type { Page } from 'playwright';
+import type { ProgressState, SaveExport, WorkspaceSummary } from './public/types/index.ts';
+// The shipped browser-api.js is public/browser-api.ts with its types stripped.
+type BrowserApi = typeof import('./public/browser-api.ts');
+const { chromium }: typeof import('playwright') = await import(
   process.env.PLANNER_PLAYWRIGHT ? pathToFileURL(process.env.PLANNER_PLAYWRIGHT).href : 'playwright'
 );
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dist');
-const types = {
+const types: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
   '.mjs': 'text/javascript',
@@ -21,7 +26,7 @@ const types = {
 };
 const server = http.createServer(async (req, res) => {
   try {
-    let name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    let name = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
     if (name.endsWith('/')) name += 'index.html';
     const file = path.resolve(root, '.' + name);
     if (!file.startsWith(root + path.sep)) throw Error();
@@ -32,9 +37,11 @@ const server = http.createServer(async (req, res) => {
     res.end('Missing');
   }
 });
-await new Promise(r => server.listen(0, '127.0.0.1', r));
-const base = 'http://127.0.0.1:' + server.address().port + '/satisfactory-planner/';
-let browser, backend;
+await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+// Listening on a TCP port, so the address is an AddressInfo.
+const port = (s: http.Server) => (s.address() as AddressInfo).port;
+const base = 'http://127.0.0.1:' + port(server) + '/satisfactory-planner/';
+let browser: import('playwright').Browser | undefined, backend: http.Server | undefined;
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-browser-check-'));
 try {
   browser = await chromium.launch({
@@ -45,7 +52,7 @@ try {
   });
   const context = await browser.newContext(),
     page = await context.newPage();
-  const errors = [];
+  const errors: string[] = [];
   page.on('response', r => {
     if (r.status() >= 400) errors.push('HTTP ' + r.status() + ': ' + new URL(r.url()).pathname);
   });
@@ -95,13 +102,16 @@ try {
   await page.locator('#phase-note').waitFor();
   assert.equal(await page.locator('#phase-note').inputValue(), 'Remember my iron site');
   assert.ok(await page.locator(`[data-check="${key}"]`).isChecked());
-  const api = async (route, body) =>
+  // Calls the page's own API, as the interface does. `T` is the reply's shape.
+  const api = async <T = unknown>(route: string, body?: unknown) =>
     page.evaluate(
-      async ({ route, body }) =>
-        (await import('./browser-api.js')).browserRequest(
-          route,
-          body ? { method: 'POST', body: JSON.stringify(body) } : {},
-        ),
+      async ({ route, body }) => {
+        // Sent as the interface's fetch-style options; browserRequest reads the body.
+        const options: RequestInit = body ? { method: 'POST', body: JSON.stringify(body) } : {};
+        // A path in the published site, which TypeScript cannot resolve from here.
+        const { browserRequest } = (await import('./browser-api.js' as string)) as BrowserApi;
+        return browserRequest(route, options) as Promise<T>;
+      },
       { route, body },
     );
   const checkStorage = async () => {
@@ -111,26 +121,31 @@ try {
       .locator('.bay')
       .filter({ has: page.locator('[data-complete-bay="A"]') })
       .locator('[data-complete-slot]')
-      .evaluateAll(xs => xs.map(x => x.dataset.completeSlot));
+      .evaluateAll(xs => xs.map(x => x.dataset.completeSlot ?? ''));
     await page.locator('[data-complete-bay="A"]').click();
-    await page.waitForFunction(() => document.querySelector('[data-complete-bay="A"]').disabled);
-    let s = await api('/api/state');
+    // These functions run in the page, which has the button and the dialog.
+    await page.waitForFunction(
+      () => document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
+    );
+    let s = await api<ProgressState>('/api/state');
     for (const id of shown)
       for (const k of ['built', 'labelled', 'connected', 'verified'])
         assert.equal(s.checks['slot-' + id + '-' + k], true);
     await page.locator('[data-complete-slot="A01"]').uncheck();
-    await page.waitForFunction(() => !document.querySelector('[data-complete-bay="A"]').disabled);
-    assert.equal(await page.locator('#detail').evaluate(x => x.open), false);
+    await page.waitForFunction(
+      () => !document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
+    );
+    assert.equal(await page.locator('#detail').evaluate((x: HTMLDialogElement) => x.open), false);
     await page.locator('[data-slot="A01"]').click();
     await page.locator('#detail-note').fill('Storage test note');
     await page.locator('#detail [data-save-note]').click();
-    await page.waitForFunction(() => !document.querySelector('#detail').open);
-    assert.equal((await api('/api/state')).notes['slot-A01'], 'Storage test note');
+    await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+    assert.equal((await api<ProgressState>('/api/state')).notes['slot-A01'], 'Storage test note');
     await page.locator('[data-slot="A01"]').click();
     await page.locator('#detail-note').fill('  ');
     await page.locator('#detail [data-save-note]').click();
-    await page.waitForFunction(() => !document.querySelector('#detail').open);
-    assert.equal(Object.hasOwn((await api('/api/state')).notes, 'slot-A01'), false);
+    await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+    assert.equal(Object.hasOwn((await api<ProgressState>('/api/state')).notes, 'slot-A01'), false);
     await page.reload();
     await page.locator('[data-complete-slot="A01"]').waitFor();
     assert.equal(await page.locator('[data-complete-slot="A01"]').isChecked(), false);
@@ -138,19 +153,20 @@ try {
       assert.ok(await page.locator('[data-complete-slot="' + id + '"]').isChecked());
   };
   await checkStorage();
-  const first = (await api('/api/workspace')).saves[0];
+  // The browser workspace has the save the wizard just created.
+  const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
   const second = await api('/api/profiles', {
     saveId: first.id,
     name: 'Second profile',
     settings: { phase: '1', goal: 'minimal' },
   });
-  assert.equal(Object.keys((await api('/api/state')).checks).length, 0);
+  assert.equal(Object.keys((await api<ProgressState>('/api/state')).checks).length, 0);
   await api('/api/select', { saveId: first.id, profileId: first.activeProfile });
-  assert.equal((await api('/api/state')).notes['phase-1'], 'Remember my iron site');
-  const exported = await api('/api/export-saves');
-  assert.equal(exported.saves[0].profiles.length, 2);
+  assert.equal((await api<ProgressState>('/api/state')).notes['phase-1'], 'Remember my iron site');
+  const exported = await api<SaveExport>('/api/export-saves');
+  assert.equal(exported.saves[0]!.profiles.length, 2);
   await api('/api/import-saves', exported);
-  assert.equal((await api('/api/workspace')).saves.length, 2);
+  assert.equal((await api<WorkspaceSummary>('/api/workspace')).saves.length, 2);
   const separate = await browser.newContext(),
     other = await separate.newPage();
   await other.goto(base);
@@ -165,23 +181,24 @@ try {
   const tab = await context.newPage();
   await tab.goto(base);
   await tab.locator('#main').waitFor();
-  const write = (p, k) =>
+  const write = (p: Page, k: string) =>
     p.evaluate(
       async k =>
-        (await import('./browser-api.js')).browserRequest('/api/update', {
+        ((await import('./browser-api.js' as string)) as BrowserApi).browserRequest('/api/update', {
           body: JSON.stringify({ type: 'check', key: k, value: true }),
         }),
       k,
     );
   await Promise.all([write(page, 'parallel-one'), write(tab, 'parallel-two')]);
-  const state = await api('/api/state');
+  const state = await api<ProgressState>('/api/state');
   assert.equal(state.checks['parallel-one'], true);
   assert.equal(state.checks['parallel-two'], true);
   // Docker export contains portable handbook and progress, never accounts or sessions.
   backend = await createApp({ dataDir: temp, password: '' });
-  await new Promise(r => backend.listen(0, '127.0.0.1', r));
-  const backendURL = 'http://127.0.0.1:' + backend.address().port;
-  const updateServer = async body =>
+  const listening = backend;
+  await new Promise<void>(r => listening.listen(0, '127.0.0.1', r));
+  const backendURL = 'http://127.0.0.1:' + port(listening);
+  const updateServer = async (body: unknown) =>
     fetch(backendURL + '/api/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
@@ -199,11 +216,14 @@ try {
   );
   await updateServer({ type: 'note', key: 'slot-B01', value: 'Old note' });
   await updateServer({ type: 'note', key: 'slot-B01', value: '' });
-  const serverState = await (await fetch(backendURL + '/api/state')).json();
+  const serverState: ProgressState = await (await fetch(backendURL + '/api/state')).json();
   assert.equal(serverState.checks['slot-B01-verified'], true);
   assert.equal(Object.hasOwn(serverState.notes, 'slot-B01'), false);
-  const backup = await (await fetch(backendURL + '/api/export-saves')).json();
-  assert.ok(backup.saves[0].profiles[0].handbook);
+  // Typed with the fields the export must not have, to check they are absent.
+  const backup: SaveExport & { users?: unknown; sessions?: unknown } = await (
+    await fetch(backendURL + '/api/export-saves')
+  ).json();
+  assert.ok(backup.saves[0]!.profiles[0]!.handbook);
   assert.equal(backup.users, undefined);
   assert.equal(backup.sessions, undefined);
   await api('/api/import-saves', backup);
@@ -217,7 +237,7 @@ try {
     body: JSON.stringify(exported),
   });
   assert.equal(roundtrip.status, 200);
-  const reexport = await (await fetch(backendURL + '/api/export-saves')).json();
+  const reexport: SaveExport = await (await fetch(backendURL + '/api/export-saves')).json();
   assert.equal(reexport.saves.length, 2);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(temp, 'browser-check.png'), fullPage: true });
@@ -226,7 +246,8 @@ try {
   );
 } finally {
   await browser?.close();
-  if (backend) await new Promise(r => backend.close(r));
-  await new Promise(r => server.close(r));
+  const opened = backend;
+  if (opened) await new Promise<void>(r => opened.close(() => r()));
+  await new Promise<void>(r => server.close(() => r()));
   await fs.rm(temp, { recursive: true, force: true });
 }

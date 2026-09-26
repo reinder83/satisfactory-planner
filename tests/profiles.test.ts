@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { createApp, initialState } from '../server.ts';
 import {
   calculate,
@@ -14,19 +16,27 @@ import {
   DELIVERIES,
 } from '../planner.ts';
 import { elevatorParts } from '../public/preferences.ts';
-async function start(dir) {
+import type {
+  CurrentCalculatedPlan,
+  CurrentStage,
+  ProgressState,
+  StageKey,
+  WorkspaceSummary,
+} from '../public/types/index.ts';
+async function start(dir: string) {
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  return { server, url: 'http://127.0.0.1:' + server.address().port };
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  // Listening on a TCP port, so address() is an AddressInfo.
+  return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = s => new Promise(r => s.close(r));
-const post = (url, endpoint, b, headers = {}) =>
+const close = (s: Server) => new Promise(r => s.close(r));
+const post = (url: string, endpoint: string, b: unknown, headers: Record<string, string> = {}) =>
   fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
     body: JSON.stringify(b),
   });
-const json = async r => {
+const json = async (r: Response) => {
   assert.ok(r.ok, await r.clone().text());
   return r.json();
 };
@@ -50,8 +60,10 @@ test('profile removal requires confirmation, preserves other progress and surviv
     );
     const remove = { saveId: b.saveId, profileId: b.profileId };
     assert.equal((await post(app.url, '/api/remove-profile', remove)).status, 400);
-    let w = await json(await post(app.url, '/api/remove-profile', { ...remove, confirmed: true }));
-    assert.equal(w.saves.find(s => s.id === a.saveId).activeProfile, a.profileId);
+    let w: WorkspaceSummary = await json(
+      await post(app.url, '/api/remove-profile', { ...remove, confirmed: true }),
+    );
+    assert.equal(w.saves.find(s => s.id === a.saveId)!.activeProfile, a.profileId);
     assert.equal(
       (await json(await fetch(app.url + '/api/state', { headers: ah }))).notes.global,
       'Keep this',
@@ -167,15 +179,15 @@ test('account setup requires host token; sessions and all data routes enforce ow
       setupToken: await fs.readFile(path.join(dir, 'account-setup-token.txt'), 'utf8'),
     });
     assert.equal(setup.status, 200);
-    const ownerCookie = setup.headers.get('set-cookie').split(';')[0];
-    assert.match(setup.headers.get('set-cookie'), /HttpOnly/);
+    const ownerCookie = setup.headers.get('set-cookie')!.split(';')[0]!;
+    assert.match(setup.headers.get('set-cookie')!, /HttpOnly/);
     assert.equal((await fetch(app.url + '/api/state')).status, 401);
     const signup = await post(app.url, '/api/register', {
       username: 'second-user',
       password: 'Different-long-password',
     });
     assert.equal(signup.status, 200);
-    const other = { Cookie: signup.headers.get('set-cookie').split(';')[0] };
+    const other = { Cookie: signup.headers.get('set-cookie')!.split(';')[0]! };
     assert.equal(
       (await fetch(app.url + '/api/state?save=original-save&profile=original', { headers: other }))
         .status,
@@ -262,7 +274,7 @@ test('account setup requires host token; sessions and all data routes enforce ow
       password: owner.password,
     });
     assert.equal(login.status, 200);
-    const session = { Cookie: login.headers.get('set-cookie').split(';')[0] };
+    const session = { Cookie: login.headers.get('set-cookie')!.split(';')[0]! };
     await post(app.url, '/api/logout', {}, session);
     assert.equal((await fetch(app.url + '/api/state', { headers: session })).status, 401);
   } finally {
@@ -283,13 +295,13 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
     nuclear: 'recycle',
     storage: 'all',
   });
-  assert.equal(large.stages[3].delivery['Modular Engine'].target, 5000);
+  assert.equal(large.stages[3].delivery!['Modular Engine']!.target, 5000);
   assert.equal(large.stages[5].feasible, true);
-  assert.ok(large.stages[3].rows.some(r => r.name === 'Alternate: Pure Iron Ingot'));
-  assert.ok(!large.stages[3].rows.some(r => r.name === 'Iron Ingot'));
+  assert.ok(large.stages[3].rows!.some(r => r.name === 'Alternate: Pure Iron Ingot'));
+  assert.ok(!large.stages[3].rows!.some(r => r.name === 'Iron Ingot'));
   for (const ph of Object.values(large.stages)) {
     if (!ph.feasible) continue;
-    for (const n of RAW) assert.ok(ph.raw[n] <= large.settings.limits[n] + 0.01);
+    for (const n of RAW) assert.ok(ph.raw[n]! <= large.settings.limits[n]! + 0.01);
     for (const [n, rate] of Object.entries(ph.storage)) {
       const made = ph.rows.reduce((a, r) => a + (r.outputs[n] || 0), 0),
         used = ph.rows.reduce((a, r) => a + (r.inputs[n] || 0), 0);
@@ -309,7 +321,7 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
   assert.throws(() => calculate({ goal: 'maximum' }), /Confirm/);
   const max = calculate({ goal: 'maximum', limitsConfirmed: true, recipes: 'all' });
   assert.ok(max.stages[5].feasible);
-  assert.ok(max.stages[5].hours < standard.stages[5].hours);
+  assert.ok(max.stages[5].hours < standard.stages[5].hours!);
   const impossible = calculate({ limits: { 'Iron Ore': 0, 'Copper Ore': 0 }, sam: 'avoid' });
   assert.equal(impossible.stages[3].feasible, false);
 });
@@ -317,7 +329,7 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
 test('whole production recalculates upstream inputs and makes surplus without changing old profiles', async () => {
   const rounded = calculate({ wholeMachines: true });
   assert.equal(rounded.stages[3].feasible, true);
-  const rubber = rounded.stages[3].rows.find(r => r.name === 'Rubber');
+  const rubber = rounded.stages[3].rows.find(r => r.name === 'Rubber')!;
   assert.equal(rubber.equivalent, rubber.machines);
   assert.ok(Object.values(rounded.stages[3].surplus).some(q => q > 0));
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-rounded-'));
@@ -369,7 +381,7 @@ test('new calculated profiles start with default factory groups covering every p
         settings: {},
       }),
     );
-    const state = await json(
+    const state: ProgressState = await json(
       await fetch(app.url + '/api/state', {
         headers: {
           'X-Planner-Request': '1',
@@ -386,7 +398,7 @@ test('new calculated profiles start with default factory groups covering every p
       assert.ok(groups.assignments[id]?.length, 'row ' + id + ' is assigned to a group');
     for (const a of Object.values(groups.assignments))
       assert.ok(
-        groups.groups.some(g => g.id === a[0].group),
+        groups.groups.some(g => g.id === a[0]!.group),
         'assignments point at existing groups',
       );
     const original = await json(
@@ -462,7 +474,7 @@ test('a turbofuel-burning all-recipes optimum round-trips through Planner’s ch
   ].sort();
   for (const id of MAM) assert.ok(used.includes(id), id + ' is ticked by Planner’s choice');
   const custom = calculate({ ...input, recipes: 'custom', alternateRecipes: used });
-  for (const phase of Object.keys(all.stages)) {
+  for (const phase of Object.keys(all.stages) as StageKey[]) {
     assert.equal(
       custom.stages[phase].feasible,
       all.stages[phase].feasible,
@@ -470,7 +482,7 @@ test('a turbofuel-burning all-recipes optimum round-trips through Planner’s ch
     );
     if (all.stages[phase].feasible)
       assert.ok(
-        custom.stages[phase].hours <= all.stages[phase].hours + 1e-6,
+        custom.stages[phase].hours! <= all.stages[phase].hours + 1e-6,
         'phase ' + phase + ' custom picks reach the all-recipes optimum',
       );
   }
@@ -482,7 +494,7 @@ test('preferred recipes replace competing recipes for their product', () => {
     alternateRecipes: ['Recipe_Alternate_IngotSteel_1_C'],
     phase: '3',
   };
-  const steel = p => [
+  const steel = (p: CurrentCalculatedPlan) => [
     ...new Set(
       Object.values(p.stages).flatMap(s =>
         (s.rows || []).filter(r => r.outputs['Steel Ingot']).map(r => r.name),
@@ -518,7 +530,7 @@ test('over-budget plans finish quickly with an explained draft instead of hangin
     .filter(r => r.alternate)
     .map(r => r.id)
     .filter(id => !excluded.includes(id));
-  const phases = [];
+  const phases: number[] = [];
   const started = Date.now();
   const plan = calculate(
     {
@@ -583,16 +595,16 @@ test('over-budget phases name the short resources and a phase time that fits', (
   const st = calculate(input).stages[1];
   assert.equal(st.feasible, false, 'the squeezed budget makes phase 1 a draft');
   assert.deepEqual(
-    st.shortfalls.map(f => f.name),
+    st.shortfalls!.map(f => f.name),
     ['Iron Ore'],
     'the short resource is identified',
   );
   assert.ok(
-    st.shortfalls[0].needed > 300 && st.shortfalls[0].budget === 300,
+    st.shortfalls![0]!.needed > 300 && st.shortfalls![0]!.budget === 300,
     'needed and entered rates are reported',
   );
-  assert.ok(st.reason.includes('Iron Ore'), 'the explanation names the resource');
-  assert.ok(st.minHours > 0.25 && st.minHours <= 2000, 'a longer phase time is suggested');
+  assert.ok(st.reason!.includes('Iron Ore'), 'the explanation names the resource');
+  assert.ok(st.minHours! > 0.25 && st.minHours! <= 2000, 'a longer phase time is suggested');
   assert.equal(
     calculate({ ...input, hours: st.minHours }).stages[1].feasible,
     true,
@@ -604,7 +616,7 @@ test('a budget only whole machines exceed names the rounding headroom', () => {
   const base = { phase: '1', goal: 'timed', hours: 1, multiplier: 10, storage: 'none' };
   const precise = calculate(base).stages[1];
   assert.equal(precise.feasible, true, 'precise balancing fits the default budgets');
-  const limit = precise.raw['Iron Ore'] + 0.001; // just above the exact mixed-recipe need
+  const limit = precise.raw['Iron Ore']! + 0.001; // just above the exact mixed-recipe need
   const st = calculate({
     ...base,
     wholeMachines: true,
@@ -621,17 +633,17 @@ test('a budget only whole machines exceed names the rounding headroom', () => {
     'the draft records that only whole-machine production fails',
   );
   assert.deepEqual(
-    st.shortfalls.map(f => f.name),
+    st.shortfalls!.map(f => f.name),
     ['Iron Ore'],
     'the budget short only for whole machines is identified',
   );
-  assert.ok(st.shortfalls[0].needed > limit, 'the whole-machine need exceeds the entered budget');
-  assert.match(st.reason, /Iron Ore/, 'the explanation names the resource');
+  assert.ok(st.shortfalls![0]!.needed > limit, 'the whole-machine need exceeds the entered budget');
+  assert.match(st.reason!, /Iron Ore/, 'the explanation names the resource');
   assert.equal(
     calculate({
       ...base,
       wholeMachines: true,
-      limits: { ...DEFAULT_LIMITS, 'Iron Ore': st.shortfalls[0].needed },
+      limits: { ...DEFAULT_LIMITS, 'Iron Ore': st.shortfalls![0]!.needed },
     }).stages[1].feasible,
     true,
     'the suggested budget fits whole machines',
@@ -741,7 +753,7 @@ test('a new profile for the same save carries the world progress its plan still 
         carryFrom: a.profileId,
       }),
     );
-    const sameState = await json(
+    const sameState: ProgressState = await json(
       await fetch(app.url + '/api/state', {
         headers: { 'X-Save-Id': same.saveId, 'X-Profile-Id': same.profileId },
       }),
@@ -767,7 +779,7 @@ test('a new profile for the same save carries the world progress its plan still 
     assert.equal(sameState.deliveries['1-smart-plating'], 400, 'deliveries handed in carry');
     assert.equal(sameState.taskEdits.titles['startup-biomass'], 'Leaves first', 'step edits carry');
     assert.equal(
-      sameState.factoryGroups.groups.find(g => g.id === 'fg-iron01').name,
+      sameState.factoryGroups.groups.find(g => g.id === 'fg-iron01')!.name,
       'North iron',
       'renamed factory groups carry',
     );
@@ -991,47 +1003,47 @@ test('construction materials get their own storage rate, with per-item overrides
   const base = { phase: '3', goal: 'timed', hours: 8, storage: 'all', storageRate: 1 };
   const flat = calculate(base).stages[3];
   assert.equal(
-    flat.storage.Concrete,
+    flat.storage!.Concrete,
     1,
     'one rate still covers everything when no build rate is given',
   );
   assert.equal(
-    flat.storage.Computer,
+    flat.storage!.Computer,
     1,
     'items are unchanged for settings saved before build rates existed',
   );
   assert.equal(
-    calculate({ ...base, storageRate: 4 }).stages[3].storage.Concrete,
+    calculate({ ...base, storageRate: 4 }).stages[3].storage!.Concrete,
     4,
     'the single rate still drives every item',
   );
 
   const split = calculate({ ...base, buildRate: 30 }).stages[3];
-  assert.equal(split.storage.Concrete, 30, 'construction materials use the build rate');
-  assert.equal(split.storage['Iron Plate'], 30, 'plates are construction materials');
-  assert.equal(split.storage['Steel Pipe'], 30, 'pipes are construction materials');
-  assert.equal(split.storage.Screws, 1, 'other items keep the general rate');
+  assert.equal(split.storage!.Concrete, 30, 'construction materials use the build rate');
+  assert.equal(split.storage!['Iron Plate'], 30, 'plates are construction materials');
+  assert.equal(split.storage!['Steel Pipe'], 30, 'pipes are construction materials');
+  assert.equal(split.storage!.Screws, 1, 'other items keep the general rate');
   assert.deepEqual(
-    Object.keys(split.storage).sort(),
-    Object.keys(flat.storage).sort(),
+    Object.keys(split.storage!).sort(),
+    Object.keys(flat.storage!).sort(),
     'the same items keep a container either way',
   );
 
   const tuned = calculate({ ...base, buildRate: 30, storageOverrides: { Concrete: 60, Screws: 0 } })
     .stages[3];
-  assert.equal(tuned.storage.Concrete, 60, 'a per-item rate beats the build rate');
-  assert.equal(tuned.storage.Screws, 0, 'zero reserves no production');
+  assert.equal(tuned.storage!.Concrete, 60, 'a per-item rate beats the build rate');
+  assert.equal(tuned.storage!.Screws, 0, 'zero reserves no production');
   assert.equal(
-    tuned.storage['Iron Plate'],
+    tuned.storage!['Iron Plate'],
     30,
     'unlisted construction materials keep the build rate',
   );
   assert.ok(
-    Object.keys(tuned.storage).includes('Screws'),
+    Object.keys(tuned.storage!).includes('Screws'),
     'a zero-rate item keeps its container and address',
   );
 
-  const machines = p =>
+  const machines = (p: CurrentCalculatedPlan) =>
     Object.values(p.stages).reduce(
       (a, x) => a + (x.rows || []).reduce((b, r) => b + r.machines, 0),
       0,
@@ -1089,31 +1101,31 @@ test('Space Elevator parts keep a container but no standing storage contract', (
   const base = { phase: '5', goal: 'timed', hours: 10, storage: 'all', storageRate: 4 };
   const p5 = calculate(base).stages[5];
   for (const name of elevatorParts) {
-    if (p5.storage[name] === undefined) continue;
-    assert.equal(p5.storage[name], 0, name + ' reserves no production');
+    if (p5.storage![name] === undefined) continue;
+    assert.equal(p5.storage![name], 0, name + ' reserves no production');
   }
   assert.ok(
-    Object.keys(p5.storage).includes('Nuclear Pasta'),
+    Object.keys(p5.storage!).includes('Nuclear Pasta'),
     'a delivered part still holds its container and address',
   );
-  assert.equal(p5.storage.Concrete, 4, 'other items are unaffected');
-  assert.ok(p5.delivery['Nuclear Pasta'].rate > 0, 'the elevator delivery itself is untouched');
+  assert.equal(p5.storage!.Concrete, 4, 'other items are unaffected');
+  assert.ok(p5.delivery!['Nuclear Pasta']!.rate > 0, 'the elevator delivery itself is untouched');
   const pasta = (p5.rows || [])
     .filter(r => r.outputs['Nuclear Pasta'])
-    .reduce((a, r) => a + r.outputs['Nuclear Pasta'], 0);
+    .reduce((a, r) => a + r.outputs['Nuclear Pasta']!, 0);
   assert.ok(
-    pasta >= p5.delivery['Nuclear Pasta'].rate - 0.001,
+    pasta >= p5.delivery!['Nuclear Pasta']!.rate - 0.001,
     'production still covers the delivery rate',
   );
 
   const buffered = calculate({ ...base, storageOverrides: { 'Nuclear Pasta': 5 } }).stages[5];
   assert.equal(
-    buffered.storage['Nuclear Pasta'],
+    buffered.storage!['Nuclear Pasta'],
     5,
     'a per-item rate still buys a buffer for anyone who wants one',
   );
 
-  const machines = p =>
+  const machines = (p: CurrentCalculatedPlan) =>
     Object.values(p.stages).reduce(
       (a, x) => a + (x.rows || []).reduce((b, r) => b + r.machines, 0),
       0,
@@ -1144,7 +1156,7 @@ test('a final-phase target lets earlier phases use the machines later phases alr
     'every',
     'settings saved before this existed keep one target per phase',
   );
-  for (const ph of ['1', '2', '3', '4', '5'])
+  for (const ph of ['1', '2', '3', '4', '5'] as const)
     assert.equal(
       every.stages[ph].hours,
       calculate(base).stages[ph].hours,
@@ -1156,12 +1168,12 @@ test('a final-phase target lets earlier phases use the machines later phases alr
     'the final phase still hits the target',
   );
 
-  const machines = st => (st.rows || []).reduce((a, r) => a + r.machines, 0);
+  const machines = (st: CurrentStage) => (st.rows || []).reduce((a, r) => a + r.machines, 0);
   let pulled = 0;
-  for (const ph of ['1', '2', '3', '4']) {
+  for (const ph of ['1', '2', '3', '4'] as const) {
     const before = every.stages[ph],
       after = final.stages[ph];
-    assert.ok(after.hours <= before.hours + 1e-6, 'phase ' + ph + ' is never made slower');
+    assert.ok(after.hours! <= before.hours! + 1e-6, 'phase ' + ph + ' is never made slower');
     if (after.aheadOf === undefined) {
       assert.equal(after.hours, before.hours, 'an unchanged phase keeps its plan');
       continue;
@@ -1169,14 +1181,14 @@ test('a final-phase target lets earlier phases use the machines later phases alr
     pulled++;
     assert.equal(after.aheadOf, before.hours, 'phase ' + ph + ' records what it used to take');
     assert.ok(
-      after.hours < before.hours - 1e-6,
+      after.hours! < before.hours! - 1e-6,
       'a phase is only replaced when it finishes sooner',
     );
     // nothing is built that no later phase keeps
     for (const row of after.rows || []) {
       const kept = Math.max(
         0,
-        ...['1', '2', '3', '4', '5']
+        ...(['1', '2', '3', '4', '5'] as const)
           .filter(p => p >= ph)
           .map(p => (every.stages[p].rows || []).find(r => r.id === row.id)?.machines || 0),
       );
@@ -1210,7 +1222,7 @@ test('a final-phase target lets earlier phases use the machines later phases alr
   );
 
   const maxed = calculate({ ...base, goal: 'maximum', limitsConfirmed: true, phaseTime: 'final' });
-  for (const ph of ['1', '2', '3', '4', '5'])
+  for (const ph of ['1', '2', '3', '4', '5'] as const)
     assert.equal(
       maxed.stages[ph].aheadOf,
       undefined,

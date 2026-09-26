@@ -695,7 +695,7 @@ export async function openWorkspace({
           ?.profiles.find(p => p.id === profile.id);
         if (!p) fail('Profile not found.', 404);
         // mutate() checks the operation and throws for one it does not know.
-        const state = imported || mutate(p.state, b as unknown as UpdateOp);
+        const state = imported || mutate(p.state, b as UpdateOp);
         if (p.kind === 'original' && !['3', '4', '5', 'post'].includes(state.settings.phase))
           fail('The original handbook covers Phase 3 onward.');
         state.revision = p.state.revision + 1;

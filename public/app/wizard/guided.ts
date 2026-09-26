@@ -81,7 +81,8 @@ export const guidedAnswer = (q: GuidedQuestion): string => {
   if (q.id === 'exact') return s.wholeMachines === false ? 'precise' : 'whole';
   if (q.id === 'stock')
     return q.options?.some(o => o.value === s.storage) ? s.storage : 'construction';
-  return String((s as unknown as Record<string, unknown>)[q.id] ?? '');
+  const byName: Record<string, unknown> = s;
+  return String(byName[q.id] ?? '');
 };
 
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are

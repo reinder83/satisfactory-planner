@@ -546,7 +546,8 @@ export function validateState(s: unknown): ProgressState {
         fail('Invalid ' + kind + ' value.');
       out[k] = v;
     }
-    (clean as unknown as Raw)[kind] = out;
+    // Every value was checked above against its kind's type.
+    Object.assign(clean, { [kind]: out });
   }
   if (!plain(s.settings) || !isPhase(s.settings.phase)) fail('Invalid selected phase.');
   clean.settings = { phase: s.settings.phase };

@@ -1,10 +1,10 @@
-# Build stage: minify the frontend into dist/web (see build.mjs).
+# Build stage: minify the frontend into dist/web (see build.ts).
 FROM node:24-alpine AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN node build.mjs web
+RUN node build.ts web
 
 FROM node:24-alpine
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data

@@ -1,5 +1,5 @@
 // The planner's data shapes, for TypeScript code and JSDoc `import('…')` types. Types only:
-// this folder has no run-time code, and build.mjs leaves it out of both editions.
+// this folder has no run-time code, and build.ts leaves it out of both editions.
 //   state.ts       a profile's saved progress, and the /api/update operations
 //   handbook.ts    the owner's handbook (plan.json)
 //   calculated.ts  a calculated profile's frozen plan and its settings

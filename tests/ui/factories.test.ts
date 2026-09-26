@@ -18,7 +18,8 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.mjs';
+import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
 
@@ -29,8 +30,9 @@ const settle = async () => {
   await nextTick();
 };
 // The dialog markup with runs of whitespace (template line breaks) as one space.
-const detail = () => $('#detail').innerHTML.replace(/\s+/g, ' ');
-const factoryIds = sel => $$(`${sel} .factory-card button.name`).map(b => b.dataset.factory);
+const detail = () => $('#detail')!.innerHTML.replace(/\s+/g, ' ');
+const factoryIds = (sel: string) =>
+  $$(`${sel} .factory-card button.name`).map(b => b.dataset.factory);
 
 // Two groups, with Wire split between them.
 const GROUPS = {
@@ -46,6 +48,12 @@ const GROUPS = {
   },
 };
 
+// The fields of the group ops this file reads from an /api/update body.
+type GroupOp = { type: UpdateOp['type'] } & Partial<
+  Omit<Extract<UpdateOp, { type: 'factoryGroupAdd' }>, 'type'> &
+    Omit<Extract<UpdateOp, { type: 'factoryAssign' }>, 'type'>
+>;
+
 beforeEach(() => {
   page();
   open();
@@ -59,18 +67,18 @@ beforeEach(() => {
 test('shared sites group their outputs above the individual factory list', async () => {
   render();
   const sites = $$('#main .site-group');
-  assert.equal(sites[0].querySelector('h2').textContent, 'Oil campus');
-  assert.equal(sites[0].querySelector('.eyebrow').textContent, 'SHARED SITE · 2 OUTPUTS');
+  assert.equal(sites[0]!.querySelector('h2')!.textContent, 'Oil campus');
+  assert.equal(sites[0]!.querySelector('.eyebrow')!.textContent, 'SHARED SITE · 2 OUTPUTS');
   assert.equal($$('#main [data-factory="plastic"]').length, 2, 'Plastic sits only in the campus');
   assert.ok(!$$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
-  assert.equal($('#main > .eyebrow').textContent, 'UNGROUPED FACTORIES');
+  assert.equal($('#main > .eyebrow')!.textContent, 'UNGROUPED FACTORIES');
   open({ phase: '5' });
   render();
   await nextTick();
   assert.ok($$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
   assert.ok($('#main [data-factory="uranium-fuel-rod"]'));
-  $('#factory-search').value = 'plastic';
-  $('#factory-search').dispatchEvent(new Event('input'));
+  $<HTMLInputElement>('#factory-search')!.value = 'plastic';
+  $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
   assert.deepEqual(
     $$('#main .site-group h2').map(h => h.textContent),
@@ -79,24 +87,26 @@ test('shared sites group their outputs above the individual factory list', async
   );
   assert.equal($('#main > .eyebrow'), null, 'so does the ungrouped label');
   assert.equal($('#main .empty-state'), null, 'no empty state while a site still matches');
-  $('#factory-search').value = 'no-such-part';
-  $('#factory-search').dispatchEvent(new Event('input'));
+  $<HTMLInputElement>('#factory-search')!.value = 'no-such-part';
+  $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
-  assert.equal($('#main .empty-state').textContent, 'No factories match this filter.');
+  assert.equal($('#main .empty-state')!.textContent, 'No factories match this filter.');
 });
 
 test('the status filter and the Running boxes work on the saved factory checks', async () => {
   open({ state: { checks: { 'factory-3-wire': true } } });
   render();
-  assert.equal($('[data-check="factory-3-wire"]').checked, true);
-  assert.ok($('[data-check="factory-3-wire"]').closest('.factory-card').classList.contains('done'));
-  $('#factory-filter').value = 'done';
-  $('#factory-filter').dispatchEvent(new Event('change'));
+  assert.equal($<HTMLInputElement>('[data-check="factory-3-wire"]')!.checked, true);
+  assert.ok(
+    $('[data-check="factory-3-wire"]')!.closest('.factory-card')!.classList.contains('done'),
+  );
+  $<HTMLSelectElement>('#factory-filter')!.value = 'done';
+  $('#factory-filter')!.dispatchEvent(new Event('change'));
   await nextTick();
   assert.deepEqual(factoryIds('#main'), ['wire']);
-  assert.equal($('#main .toolbar .muted').textContent, '1 targets');
-  $('#factory-filter').value = 'todo';
-  $('#factory-filter').dispatchEvent(new Event('change'));
+  assert.equal($('#main .toolbar .muted')!.textContent, '1 targets');
+  $<HTMLSelectElement>('#factory-filter')!.value = 'todo';
+  $('#factory-filter')!.dispatchEvent(new Event('change'));
   await nextTick();
   assert.ok(!factoryIds('#main').includes('wire'));
 });
@@ -106,8 +116,8 @@ test('post-game lists the completion modules with their own checks', () => {
   render();
   const modules = $$('#main .completion-item');
   assert.ok(modules.length > 0);
-  assert.match(modules[0].querySelector('input').dataset.check, /^completion-/);
-  assert.match(modules[0].textContent, /Inputs:/);
+  assert.match(modules[0]!.querySelector('input')!.dataset.check!, /^completion-/);
+  assert.match(modules[0]!.textContent, /Inputs:/);
 });
 
 test('groups show their share of a split factory, and edit mode offers the editor', async () => {
@@ -115,51 +125,54 @@ test('groups show their share of a split factory, and edit mode offers the edito
   render();
   const groups = $$('#main .user-group');
   assert.deepEqual(
-    groups.map(g => g.querySelector('h2').textContent),
+    groups.map(g => g.querySelector('h2')!.textContent),
     ['Cable factory', 'Stitched plates'],
   );
-  assert.equal(groups[0].querySelector('.eyebrow').textContent, 'FACTORY GROUP · 1 FACTORY');
-  assert.match(groups[0].querySelector('.allocation').textContent, /^Here: 300\/min of /);
-  assert.match(groups[1].querySelector('.allocation').textContent, /^Remaining here: /);
+  assert.equal(groups[0]!.querySelector('.eyebrow')!.textContent, 'FACTORY GROUP · 1 FACTORY');
+  assert.match(groups[0]!.querySelector('.allocation')!.textContent, /^Here: 300\/min of /);
+  assert.match(groups[1]!.querySelector('.allocation')!.textContent, /^Remaining here: /);
   assert.ok(!factoryIds('#main > .cards').includes('wire'), 'a grouped factory leaves the list');
   assert.equal($('[data-group-chain]'), null, 'a one-factory group has no build order');
-  $('[data-toggle-factory-edit]').click();
+  $('[data-toggle-factory-edit]')!.click();
   await nextTick();
-  assert.equal($('[data-toggle-factory-edit]').textContent.trim(), 'Done editing');
+  assert.equal($('[data-toggle-factory-edit]')!.textContent.trim(), 'Done editing');
   assert.ok($('#add-group'));
-  assert.equal($('[data-group-rename="fg-cable01"]').value, 'Cable factory');
-  assert.equal($('[data-assign-rate="wire"][data-group="fg-cable01"]').value, '300');
+  assert.equal($<HTMLInputElement>('[data-group-rename="fg-cable01"]')!.value, 'Cable factory');
+  assert.equal(
+    $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!.value,
+    '300',
+  );
   assert.ok($('[data-unassign="wire"][data-group="fg-plates1"]'));
   assert.ok($('[data-assign-add="computer"]'), 'every card offers a group');
 });
 
 test('the group editor saves groups and memberships', async () => {
-  const calls = stubFetch({ '/api/update': () => state });
+  const calls = stubFetch<GroupOp>({ '/api/update': () => state });
   open({ state: { factoryGroups: structuredClone(GROUPS) } });
   setFactoryEditing(true);
   render();
-  const form = $('#add-group');
-  form.querySelector('input').value = evil;
+  const form = $<HTMLFormElement>('#add-group')!;
+  form.querySelector('input')!.value = evil;
   form.dispatchEvent(new Event('submit', { cancelable: true }));
   await settle();
-  assert.equal(calls.at(-1)[1].type, 'factoryGroupAdd');
-  assert.equal(calls.at(-1)[1].name, evil);
-  assert.match(calls.at(-1)[1].id, /^fg-[0-9a-f]{12}$/);
-  assert.equal(form.querySelector('input').value, '', 'the form empties after adding');
-  const rename = $('[data-group-rename="fg-cable01"]');
+  assert.equal(calls.at(-1)![1].type, 'factoryGroupAdd');
+  assert.equal(calls.at(-1)![1].name, evil);
+  assert.match(calls.at(-1)![1].id!, /^fg-[0-9a-f]{12}$/);
+  assert.equal(form.querySelector('input')!.value, '', 'the form empties after adding');
+  const rename = $<HTMLInputElement>('[data-group-rename="fg-cable01"]')!;
   rename.value = 'Cables';
   rename.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls.at(-1)[1], {
+  assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryGroupRename',
     id: 'fg-cable01',
     name: 'Cables',
   });
-  const rate = $('[data-assign-rate="wire"][data-group="fg-cable01"]');
+  const rate = $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!;
   rate.value = '120';
   rate.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls.at(-1)[1], {
+  assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryAssign',
     key: 'wire',
     groups: [
@@ -173,26 +186,26 @@ test('the group editor saves groups and memberships', async () => {
   await settle();
   assert.equal(calls.length, count, 'an invalid rate is not saved');
   assert.equal(rate.value, '300', 'and shows the saved rate again');
-  assert.match($('#toast').textContent, /Enter a rate above 0/);
-  $('[data-unassign="wire"][data-group="fg-plates1"]').click();
+  assert.match($('#toast')!.textContent, /Enter a rate above 0/);
+  $('[data-unassign="wire"][data-group="fg-plates1"]')!.click();
   await settle();
-  assert.deepEqual(calls.at(-1)[1].groups, [{ group: 'fg-cable01', rate: 300 }]);
-  const add = $('[data-assign-add="computer"]');
+  assert.deepEqual(calls.at(-1)![1].groups, [{ group: 'fg-cable01', rate: 300 }]);
+  const add = $<HTMLSelectElement>('[data-assign-add="computer"]')!;
   add.value = 'fg-plates1';
   add.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls.at(-1)[1], {
+  assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryAssign',
     key: 'computer',
     groups: [{ group: 'fg-plates1', rate: null }],
   });
   assert.equal(add.value, '', 'the selector goes back to its prompt');
-  $('[data-remove-group="fg-plates1"]').click();
+  $('[data-remove-group="fg-plates1"]')!.click();
   await settle();
-  assert.deepEqual(calls.at(-1)[1], { type: 'factoryGroupRemove', id: 'fg-plates1' });
+  assert.deepEqual(calls.at(-1)![1], { type: 'factoryGroupRemove', id: 'fg-plates1' });
   globalThis.confirm = () => false;
   const before = calls.length;
-  $('[data-remove-group="fg-cable01"]').click();
+  $('[data-remove-group="fg-cable01"]')!.click();
   await settle();
   assert.equal(calls.length, before, 'a declined confirmation removes nothing');
 });
@@ -212,26 +225,26 @@ test('group names are escaped on the page, in the editor and in the build order'
   });
   render();
   noMarkup();
-  assert.equal($('.user-group h2').textContent, evil);
-  $('[data-group-chain="fg-a"]').click();
+  assert.equal($('.user-group h2')!.textContent, evil);
+  $('[data-group-chain="fg-a"]')!.click();
   await nextTick();
-  assert.equal($('#detail h2').textContent, evil);
+  assert.equal($('#detail h2')!.textContent, evil);
   noMarkup();
   setFactoryEditing(true);
   render();
   await nextTick();
-  assert.equal($('[data-group-rename="fg-a"]').value, evil);
-  assert.equal($('[data-assign-add="computer"] option:last-child').textContent, evil);
+  assert.equal($<HTMLInputElement>('[data-group-rename="fg-a"]')!.value, evil);
+  assert.equal($('[data-assign-add="computer"] option:last-child')!.textContent, evil);
   noMarkup();
   openFactory('computer');
-  assert.equal($('#detail-note').value, evil);
+  assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, evil);
   noMarkup();
 });
 
 test('a handbook factory dialog shows its flow, destinations and local inputs', () => {
   render();
   openFactory('wire');
-  assert.ok($('#detail').open);
+  assert.ok($<HTMLDialogElement>('#detail')!.open);
   assert.match(detail(), /Delivers · Phase 3/);
   assert.match(detail(), /Machines per delivery/, 'delivery rows show machine counts');
   assert.ok($('#detail .rail-link[data-factory="cable"]'), 'consumers link to their factory');
@@ -248,7 +261,7 @@ test('a handbook factory dialog shows its flow, destinations and local inputs', 
   assert.ok($('#detail [data-factory="wire"]'));
   assert.match(detail(), /Recipe · Stitched Iron Plate/);
   assert.match(detail(), /Belts &amp; pipes/);
-  assert.equal($('#detail [data-save-note]').dataset.saveNote, 'factory-reinforced-iron-plate');
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-reinforced-iron-plate');
   open({ phase: '5' });
   openFactory('uranium-fuel-rod');
   assert.match(detail(), /nuclear power fleet/, 'nuclear items point at the power plan');
@@ -271,16 +284,20 @@ test('the oil campus replaces the lane advice for Plastic and Rubber', () => {
 test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   render();
   openFactory('wire');
-  $('#detail-note').value = 'Unsaved thought';
-  $('#detail-note').dispatchEvent(new Event('input'));
+  $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
+  $('#detail-note')!.dispatchEvent(new Event('input'));
   // What toggleCheck (ui/actions.ts) does once the tick is saved.
   state.checks['factory-3-wire'] = true;
   render();
   await nextTick();
-  assert.equal($('#detail [data-check="factory-3-wire"]').checked, true);
-  assert.equal($('#detail-note').value, 'Unsaved thought');
+  assert.equal($<HTMLInputElement>('#detail [data-check="factory-3-wire"]')!.checked, true);
+  assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
   openFactory('wire');
-  assert.equal($('#detail-note').value, '', 'opening the dialog again starts from the saved note');
+  assert.equal(
+    $<HTMLTextAreaElement>('#detail-note')!.value,
+    '',
+    'opening the dialog again starts from the saved note',
+  );
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
@@ -290,15 +307,15 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   open({ calculated: p });
   render();
   noMarkup();
-  const rows = p.stages['3'].rows;
+  const rows = p.stages['3'].rows!;
   assert.equal($$('#main .factory-card').length, rows.length);
-  assert.equal($('#main .toolbar span').textContent, rows.length + ' production lines');
+  assert.equal($('#main .toolbar span')!.textContent, rows.length + ' production lines');
   assert.ok($('[data-round-up]'), 'without whole machines it offers rounding up');
-  assert.match($('#main .notice:not(.blue)').textContent, /Planning draft/);
-  const first = rows[0];
-  assert.equal($(`[data-check="calc-3-${first.id}"]`).checked, false);
-  $('#factory-search').value = first.name;
-  $('#factory-search').dispatchEvent(new Event('input'));
+  assert.match($('#main .notice:not(.blue)')!.textContent, /Planning draft/);
+  const first = rows[0]!;
+  assert.equal($<HTMLInputElement>(`[data-check="calc-3-${first.id}"]`)!.checked, false);
+  $<HTMLInputElement>('#factory-search')!.value = first.name;
+  $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
   assert.ok($$('#main .factory-card').length >= 1);
   assert.ok($$('#main .factory-card').length < rows.length);
@@ -307,27 +324,27 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
 test('a calculated factory dialog shows its flow, setup and expansion', () => {
   open({ calculated: plan });
   render();
-  const x = calcStage();
-  const r = x.rows.find(r =>
-    Object.keys(r.outputs).some(n => x.rows.some(o => o.id !== r.id && o.inputs[n])),
-  );
+  const x = calcStage()!;
+  const r = x.rows!.find(r =>
+    Object.keys(r.outputs).some(n => x.rows!.some(o => o.id !== r.id && o.inputs[n])),
+  )!;
   openCalculatedFactory(r.id);
-  assert.equal($('#detail h2').textContent, r.name);
+  assert.equal($('#detail h2')!.textContent, r.name);
   assert.match(detail(), /Delivers · /);
   assert.ok($('#detail [data-calc-factory]'));
   assert.match(detail(), /Machine setup/);
   assert.match(detail(), /Expansion by phase/);
-  assert.equal($('#detail [data-save-note]').dataset.saveNote, 'factory-' + r.id);
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + r.id);
 });
 
 test('a group build order stages suppliers before consumers', () => {
   const x = plan.stages['3'];
-  const consumer = x.rows.find(r =>
-    x.rows.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
-  );
-  const supplier = x.rows.find(
+  const consumer = x.rows!.find(r =>
+    x.rows!.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
+  )!;
+  const supplier = x.rows!.find(
     o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
-  );
+  )!;
   open({
     calculated: plan,
     state: {
@@ -343,7 +360,7 @@ test('a group build order stages suppliers before consumers', () => {
   render();
   assert.ok($('[data-group-chain="fg-test01"]'), 'the group offers its build order');
   openGroupChain('fg-test01');
-  assert.match($('#detail .eyebrow').textContent, /build order/);
+  assert.match($('#detail .eyebrow')!.textContent, /build order/);
   const names = $$('#detail .chain-title .rail-link').map(b => b.textContent);
   assert.deepEqual(names, [supplier.name + ' ↗', consumer.name + ' ↗'], 'supplier first');
   assert.ok($('#detail .chain-title [data-calc-factory]'), 'stages link to their dialogs');

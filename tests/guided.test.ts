@@ -5,12 +5,21 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import type { Context } from 'node:vm';
+import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS } from '../planner.ts';
 import { nodeCounts } from '../public/preferences.ts';
 import { progression } from '../public/progression.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
-import { appSource } from './helpers/app-source.mjs';
+import { appSource } from './helpers/app-source.ts';
+import type { AdaFacts } from '../public/ada.ts';
+import type {
+  CurrentCalculatedPlan,
+  CurrentStage,
+  StoredCalculatedPlan,
+  StoredSettings,
+} from '../public/types/index.ts';
 import {
   carryOptions,
   pickedRecipeUnlocks,
@@ -156,19 +165,19 @@ function ui() {
   );
   return c;
 }
-const guided = (c, extra = '') =>
+const guided = (c: Context, extra = '') =>
   vm.runInContext(
     `wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,usedGuided:false,tutorial:'doing'};${extra}`,
     c,
   );
 
-// The wizard and guided screens themselves: tests/ui/wizard.test.mjs.
+// The wizard and guided screens themselves: tests/ui/wizard.test.ts.
 
 test('guided answers write the same settings object the wizard writes', () => {
   const c = ui();
   guided(c);
-  const form = answers => ({
-    querySelector: s => (s === '.guided-topup' ? {} : null),
+  const form = (answers: Record<string, string | string[]>) => ({
+    querySelector: (s: string) => (s === '.guided-topup' ? {} : null),
     entries: () => [],
     __answers: answers,
   });
@@ -258,6 +267,7 @@ test('a second profile for a save you already play is asked what changed, not ev
 
 test('a new profile without a list of finished work is exactly the blank state as before', () => {
   const plan = calculate({ phase: '3' });
+  // @ts-expect-error: deliberately called without `built`, as callers did before it existed
   const blank = newProfileState(plan, null, null, undefined);
   const withEmpty = newProfileState(plan, null, null, undefined, []);
   assert.deepEqual(withEmpty.state, blank.state, 'an empty list changes nothing');
@@ -278,7 +288,7 @@ test('a new profile without a list of finished work is exactly the blank state a
 
 test('finished work ticks only keys the plan or the world recognises', () => {
   const plan = calculate({ phase: '3' });
-  const row = plan.stages[3].rows[0].id;
+  const row = plan.stages[3].rows![0]!.id;
   const { state, carried } = newProfileState(plan, null, null, undefined, [
     'calc-3-' + row,
     ...tutorialKeys,
@@ -311,7 +321,7 @@ test('finished work ticks only keys the plan or the world recognises', () => {
 
 test('a source profile still wins over a key reported as already finished', () => {
   const plan = calculate({ phase: '3' });
-  const row = plan.stages[3].rows[0].id,
+  const row = plan.stages[3].rows![0]!.id,
     key = 'calc-3-' + row;
   const source = initialState();
   source.checks[key] = false;
@@ -329,9 +339,9 @@ test('a source profile still wins over a key reported as already finished', () =
 test('a profile created from the guided start keeps its ticks through the server', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'planner-guided-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const url = 'http://127.0.0.1:' + server.address().port;
-  const post = (ep, b) =>
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+  const post = (ep: string, b: unknown) =>
     fetch(url + ep, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
@@ -349,7 +359,7 @@ test('a profile created from the guided start keeps its ticks through the server
       storageOverrides: { Concrete: GUIDED_TOPUP_RATE },
     };
     const plan = calculate(settings);
-    const built = plan.stages[3].rows.slice(0, 4).map(r => 'calc-3-' + r.id);
+    const built = plan.stages[3].rows!.slice(0, 4).map(r => 'calc-3-' + r.id);
     const created = await post('/api/profiles', {
       saveName: 'Guided world',
       name: 'Guided',
@@ -386,12 +396,12 @@ test('a profile created from the guided start keeps its ticks through the server
 
 test('the phase cards use bundled, attributed artwork that matches the deliveries', () => {
   const sources = JSON.parse(
-    fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url)),
+    fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url), 'utf8'),
   );
   for (const [phase, parts] of Object.entries(phaseParts)) {
     assert.deepEqual(
       [...parts].sort(),
-      Object.keys(DELIVERIES[phase]).sort(),
+      Object.keys(DELIVERIES[Number(phase)]!).sort(),
       'phase ' + phase + ' shows the parts it delivers',
     );
   }
@@ -419,8 +429,9 @@ test('every guided question reads as a question and names the step that owns it'
       assert.ok(!q.options, q.id);
       continue;
     }
-    assert.ok(q.options.length >= 2, q.id);
-    for (const o of q.options) {
+    // Every question but the supply one is a choice with options.
+    assert.ok(q.options!.length >= 2, q.id);
+    for (const o of q.options!) {
       assert.ok(o.label && o.detail, q.id + '/' + o.value + ' is a picture and a sentence');
       assert.ok(o.items || o.glyph, q.id + '/' + o.value + ' has artwork');
       assert.ok(o.set && typeof o.set === 'object', q.id + '/' + o.value + ' says what it sets');
@@ -430,7 +441,7 @@ test('every guided question reads as a question and names the step that owns it'
   assert.ok(seen.size >= 15);
   // Every option's settings patch, applied on its own, is a plan the planner makes.
   for (const q of guidedQuestions)
-    for (const o of q.options) {
+    for (const o of q.options!) {
       if (o.handoff) continue;
       assert.doesNotThrow(
         () => calculate({ phase: '3', limitsConfirmed: true, ...o.set }),
@@ -440,14 +451,14 @@ test('every guided question reads as a question and names the step that owns it'
 });
 
 test('ADA has something to say about the guided start', () => {
-  const ids = f => new Set(adaRemarks(f).map(r => r.id));
+  const ids = (f: Partial<AdaFacts>) => new Set(adaRemarks(f).map(r => r.id));
   assert.ok(ids({ view: 'wizard', guided: true, guidedStep: 2, guidedTotal: 6 }).has('guided'));
   assert.ok(ids({ view: 'wizard', supplyDeclared: 2 }).has('guided-supply'));
   assert.ok(ids({ view: 'wizard', tutorialDone: true }).has('guided-tutorial'));
   // The remark repeats the plan's own promise and never claims the plan changed.
   const supply = adaRemarks({ view: 'wizard', supplyDeclared: 2 }).find(
     r => r.id === 'guided-supply',
-  );
+  )!;
   assert.match(supply.text, /2 lines/);
   assert.match(supply.text, /skip the chain behind them/);
   // The existing wizard remark still leads a plain wizard view.
@@ -484,7 +495,7 @@ test('leaving the "what is different" screen starts the questions it chose', asy
   );
   // $('#wizard-form') reads document.querySelector, so stand a form in for it.
   c.formStub = {
-    querySelector: s => (s === '.guided-topics' ? {} : null),
+    querySelector: (s: string) => (s === '.guided-topics' ? {} : null),
     reportValidity: () => true,
   };
   vm.runInContext(
@@ -503,8 +514,11 @@ test('leaving the "what is different" screen starts the questions it chose', asy
 });
 
 // --- Production you already run ---------------------------------------------
-const strip = p => JSON.stringify(p.stages, (k, v) => (k === 'createdAt' ? undefined : v));
-const machines = st => (st.feasible ? (st.rows || []).reduce((a, r) => a + r.machines, 0) : null);
+// A plan's stages, or a single stage, as text without the calculation time.
+const strip = (p: CurrentCalculatedPlan | CurrentStage) =>
+  JSON.stringify('stages' in p ? p.stages : p, (k, v) => (k === 'createdAt' ? undefined : v));
+const machines = (st: CurrentStage) =>
+  st.feasible ? (st.rows || []).reduce((a, r) => a + r.machines, 0) : null;
 const BASE = {
   phase: '3',
   goal: 'balanced',
@@ -530,7 +544,7 @@ test('a profile that declares nothing calculates exactly as it did before', () =
     0,
   );
   // And a plan saved before the field existed still validates and recalculates.
-  const legacy = { ...absent.settings };
+  const legacy: StoredSettings = { ...absent.settings };
   delete legacy.existingSupply;
   assert.equal(strip(calculate(legacy)), strip(absent));
 });
@@ -544,18 +558,19 @@ test('declaring a line you already run removes it and the chain behind it', () =
     !(stage.rows || []).some(r => r.outputs['Modular Frame']),
     'no Modular Frame line is planned',
   );
-  assert.ok(machines(stage) < machines(before.stages[3]), 'fewer buildings');
+  // Both plans fit, so both have a machine count.
+  assert.ok(machines(stage)! < machines(before.stages[3])!, 'fewer buildings');
   // The point of a rate rather than a tick: the ore behind it goes too.
   assert.ok(
-    stage.raw['Iron Ore'] < before.stages[3].raw['Iron Ore'] - 100,
+    stage.raw['Iron Ore']! < before.stages[3].raw!['Iron Ore']! - 100,
     'the iron behind it is not mined either',
   );
-  assert.ok(stage.requiredMW < before.stages[3].requiredMW, 'and its power is not budgeted');
+  assert.ok(stage.requiredMW < before.stages[3].requiredMW!, 'and its power is not budgeted');
   // It draws only what the plan needs, never the whole declared rate.
-  assert.ok(stage.supplied['Modular Frame'] > 0 && stage.supplied['Modular Frame'] <= 50);
+  assert.ok(stage.supplied['Modular Frame']! > 0 && stage.supplied['Modular Frame']! <= 50);
   const plenty = calculate({ ...BASE, existingSupply: { 'Modular Frame': 5000 } });
   assert.equal(
-    plenty.stages[3].supplied['Modular Frame'],
+    plenty.stages[3].supplied!['Modular Frame'],
     stage.supplied['Modular Frame'],
     'declaring more than the plan uses changes nothing further',
   );
@@ -564,12 +579,12 @@ test('declaring a line you already run removes it and the chain behind it', () =
 test('a partial rate is credited and the remainder is still planned', () => {
   const some = calculate({ ...BASE, existingSupply: { 'Modular Frame': 10 } });
   const stage = some.stages[3];
-  assert.equal(stage.supplied['Modular Frame'], 10, 'all of it is used');
+  assert.equal(stage.supplied!['Modular Frame'], 10, 'all of it is used');
   assert.ok(
     (stage.rows || []).some(r => r.outputs['Modular Frame']),
     'and the rest is still built',
   );
-  assert.ok(machines(stage) < machines(calculate(BASE).stages[3]));
+  assert.ok(machines(stage)! < machines(calculate(BASE).stages[3])!);
 });
 
 test('declaring production never costs you a plan', { timeout: 600000 }, () => {
@@ -582,9 +597,9 @@ test('declaring production never costs you a plan', { timeout: 600000 }, () => {
     ['Heavy Modular Frame', 30],
     ['Motor', 40],
     ['Plastic', 300],
-  ]) {
+  ] satisfies [string, number][]) {
     const p = calculate({ ...BASE, existingSupply: { [item]: rate } });
-    for (const ph of ['3', '4', '5'])
+    for (const ph of ['3', '4', '5'] as const)
       assert.equal(p.stages[ph].feasible, true, item + ' made phase ' + ph + ' infeasible');
   }
 });
@@ -658,7 +673,7 @@ test('every guided question can be walked past, including the one that is not a 
   const c = ui();
   guided(c);
   c.formStub = {
-    querySelector: s => (s === '.supply-list' ? {} : null),
+    querySelector: (s: string) => (s === '.supply-list' ? {} : null),
     reportValidity: () => true,
   };
   vm.runInContext(
@@ -687,7 +702,9 @@ test('a plan saved before existing production existed still renders every page',
   const c = ui();
   // Exactly what a profile calculated by an earlier release looks like: no
   // existingSupply in its settings, no supplied on any stage.
-  const legacy = structuredClone(calculate({ phase: '3', limitsConfirmed: true }));
+  const legacy: StoredCalculatedPlan = structuredClone(
+    calculate({ phase: '3', limitsConfirmed: true }),
+  );
   delete legacy.settings.existingSupply;
   for (const stage of Object.values(legacy.stages)) delete stage.supplied;
   c.legacyPlan = legacy;
@@ -706,7 +723,8 @@ test('a plan saved before existing production existed still renders every page',
 test('the item search ranks prefix matches first and stays short', () => {
   const c = ui();
   guided(c);
-  const matches = q => vm.runInContext(`JSON.stringify(supplyMatches(${JSON.stringify(q)}))`, c);
+  const matches = (q: string) =>
+    vm.runInContext(`JSON.stringify(supplyMatches(${JSON.stringify(q)}))`, c);
   assert.equal(matches(''), '[]', 'nothing typed, nothing offered');
   const frame = JSON.parse(matches('frame'));
   assert.ok(
@@ -731,7 +749,10 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
   const c = ui();
   guided(c);
   vm.runInContext(`wizard.guidedStep=guidedFlow().findIndex(q=>q.id==='supply')+1`, c);
-  const form = rows => ({ querySelector: s => (s === '.supply-list' ? {} : null), __rows: rows });
+  const form = (rows: string[][]) => ({
+    querySelector: (s: string) => (s === '.supply-list' ? {} : null),
+    __rows: rows,
+  });
   vm.runInContext(
     `FormData=class{constructor(f){this.f=f;}get(){return null;}getAll(k){return k==='supplyItem'?this.f.__rows.map(r=>r[0]):k==='supplyRate'?this.f.__rows.map(r=>r[1]):[];}has(){return false;}*[Symbol.iterator](){}}`,
     c,
@@ -740,7 +761,7 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
   // Picking a suggestion commits the name before there is any rate to go with
   // it; that row has to survive the redraw or the pick erases itself.
   // Through readGuided, which is the path the screen actually uses.
-  const call = rows =>
+  const call = (rows: string[][]) =>
     `(f=>{readGuided(f);return JSON.stringify(wizard.settings.existingSupply);})(formFor(${JSON.stringify(rows)}))`;
   const kept = vm.runInContext(
     call([
@@ -756,7 +777,7 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
     'but the row is still there',
   );
   // A name that is not an item is kept as typed but not credited (the row says why:
-  // tests/ui/wizard.test.mjs).
+  // tests/ui/wizard.test.ts).
   vm.runInContext(
     call([
       ['Modul', '12'],
@@ -874,7 +895,7 @@ test('the survey is recorded on the profile but never read by the solver', () =>
   });
   const without = calculate({ phase: '3', limitsConfirmed: true, limits: { ...DEFAULT_LIMITS } });
   assert.deepEqual(
-    withSurvey.settings.extraction.nodes['Iron Ore'],
+    withSurvey.settings.extraction!.nodes['Iron Ore'],
     { impure: 39, normal: 42, pure: 46 },
     'it is kept',
   );
@@ -894,7 +915,7 @@ test('the survey is recorded on the profile but never read by the solver', () =>
   assert.throws(() => calculate({ extraction: { used: { Nope: 5 } } }), /not a raw resource/);
 });
 
-// The survey screens themselves are tested in tests/ui/survey.test.mjs.
+// The survey screens themselves are tested in tests/ui/survey.test.ts.
 
 test('applying the survey writes the budgets and confirms them', () => {
   const c = ui();
@@ -924,7 +945,7 @@ test('applying the survey writes the budgets and confirms them', () => {
   );
 });
 
-// The resource tables' ore icons: tests/ui/pages.test.mjs.
+// The resource tables' ore icons: tests/ui/pages.test.ts.
 
 test('every node preset reproduces that purity setting’s shipped budget', () => {
   // The purity settings shift nodes up and down the scale rather than adding or
@@ -941,7 +962,7 @@ test('every node preset reproduces that purity setting’s shipped budget', () =
   for (const [purity] of nodePresets) {
     const e = presetSurvey(purity);
     for (const [name, counts] of Object.entries(nodeCounts)) {
-      const row = (name === 'Nitrogen Gas' ? e.wells : e.nodes)[name];
+      const row = (name === 'Nitrogen Gas' ? e.wells : e.nodes)[name]!;
       assert.equal(
         row.impure + row.normal + row.pure,
         counts[0] + counts[1] + counts[2],
@@ -990,14 +1011,14 @@ test('well yields do not survive the shuffle, so Random leaves the wells alone',
   const def = presetSurvey('pure', null, 'original'),
     rnd = presetSurvey('pure', null, 'randomized');
   assert.deepEqual(rnd.nodes, def.nodes, 'ordinary nodes are the same either way');
-  assert.equal(def.wells['Nitrogen Gas'].pure, 45, 'default distribution fills nitrogen');
+  assert.equal(def.wells['Nitrogen Gas']!.pure, 45, 'default distribution fills nitrogen');
   assert.equal(rnd.wells['Nitrogen Gas'], undefined, 'Random does not');
   // The same holds for a survey started from the settings alone.
   assert.equal(
     JSON.stringify(startingSurvey({ purity: 'pure', distribution: 'randomized' }).wells),
     '{}',
   );
-  assert.equal(startingSurvey({ purity: 'pure' }).wells['Nitrogen Gas'].pure, 45);
+  assert.equal(startingSurvey({ purity: 'pure' }).wells['Nitrogen Gas']!.pure, 45);
   // A count the user already made is never overwritten by the preset.
   const mine = {
     ...blankExtraction(),
@@ -1034,9 +1055,9 @@ test('Random shuffles where the nodes are, not how many of each there are', () =
     for (const purity of presetPurities)
       assert.equal(knownWorld(purity, d), false, d + ' + ' + purity);
   // Random with All Pure fills the ordinary nodes but not the wells; with the map's
-  // own split it fills nothing. (What the screen says about each: tests/ui/survey.test.mjs.)
+  // own split it fills nothing. (What the screen says about each: tests/ui/survey.test.ts.)
   const pure = startingSurvey({ purity: 'pure', distribution: 'randomized' });
-  assert.equal(pure.nodes['Iron Ore'].pure, 127, 'filled from the shuffle-proof totals');
+  assert.equal(pure.nodes['Iron Ore']!.pure, 127, 'filled from the shuffle-proof totals');
   assert.equal(JSON.stringify(pure.wells), '{}', 'nitrogen not filled under Random');
   assert.equal(
     JSON.stringify(startingSurvey({ purity: 'vanilla', distribution: 'randomized' }).nodes),
@@ -1050,12 +1071,12 @@ test('changing a world setting refills the counts, and leaves alone what it cann
   kept.wells = { 'Crude Oil': { impure: 0, normal: 6, pure: 0 } };
   kept.nodes = { 'Iron Ore': { impure: 39, normal: 42, pure: 46 } };
   const e = presetSurvey('pure', kept);
-  assert.equal(e.wells['Crude Oil'].normal, 6, 'the oil wells the user counted survive');
-  assert.equal(e.nodes['Iron Ore'].pure, 127, 'and the rest is refilled');
-  assert.equal(e.nodes['Iron Ore'].impure, 0);
+  assert.equal(e.wells['Crude Oil']!.normal, 6, 'the oil wells the user counted survive');
+  assert.equal(e.nodes['Iron Ore']!.pure, 127, 'and the rest is refilled');
+  assert.equal(e.nodes['Iron Ore']!.impure, 0);
   // Nitrogen is a well, so it is filled there rather than as a node.
   assert.equal(e.nodes['Nitrogen Gas'], undefined);
-  assert.equal(e.wells['Nitrogen Gas'].pure, 45);
+  assert.equal(e.wells['Nitrogen Gas']!.pure, 45);
   // And the counts now match that world, which the screen names.
   assert.equal(matchingPreset(e), 'pure');
 });

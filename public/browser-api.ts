@@ -2,7 +2,7 @@
 // /api/ path here when browserMode is on, and gets back the same JSON the matching route in
 // workspace.ts returns, so the UI does not care which edition it runs in. Data lives in one
 // IndexedDB record (browser-store.ts); calculation runs in calculator-worker.js, which
-// build.mjs generates around the shipped planner.mjs.
+// build.ts generates around the shipped planner.mjs.
 //
 // Emulated routes:
 // GET  /api/workspace          saves/profiles summary
@@ -45,7 +45,7 @@ export type Calculator = (
   onProgress?: (phase: number) => void,
 ) => Promise<CurrentCalculatedPlan> | CurrentCalculatedPlan;
 
-// Set by browser-mode.js, which build.mjs writes only into the Pages build.
+// Set by browser-mode.js, which build.ts writes only into the Pages build.
 export const browserMode = (globalThis as { PLANNER_BROWSER?: unknown }).PLANNER_BROWSER === true;
 // The API created on first use by browserRequest, shared by every later request in this tab.
 let instance: Promise<BrowserRequest> | undefined;
@@ -339,7 +339,7 @@ export function createBrowserApi(
         const next =
           ep === '/api/update'
             ? // The body is the operation as sent; mutate checks it.
-              mutate(structuredClone(profile.state), body as unknown as UpdateOp)
+              mutate(structuredClone(profile.state), body as UpdateOp)
             : validateState(body.format ? body.state : body);
         if (profile.kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
           throw Error('The imported handbook covers Phase 3 onward.');

@@ -195,8 +195,9 @@ export function readWizard(form: HTMLFormElement) {
   const f = new FormData(form),
     w = draft(),
     s = w.settings,
-    // The name-driven writes below go through this view of the same object.
-    byName = s as unknown as Record<string, unknown>,
+    // The name-driven writes below go through this view of the same object. The form's
+    // fields carry the settings' own values, which calculate() checks again.
+    byName: Record<string, unknown> = s,
     oldPreset = s.purity + '|' + s.distribution;
   // Name -> setting: MW fields are stored as GW, saveName/profileName go on the
   // draft, "limit:<r>" into s.limits, then numeric, boolean and text settings.

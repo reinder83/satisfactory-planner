@@ -3,14 +3,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
-async function start(dir, config = {}) {
+import type { Handbook } from '../public/types/index.ts';
+async function start(dir: string, config: Parameters<typeof createApp>[0] = {}) {
   const server = await createApp({ dataDir: dir, ...config });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  return { server, url: 'http://127.0.0.1:' + server.address().port };
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  // Listening on a TCP port, so address() is an AddressInfo.
+  return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = server => new Promise(r => server.close(r));
-async function post(url, endpoint, data, extra = {}) {
+const close = (server: Server) => new Promise(r => server.close(r));
+async function post(
+  url: string,
+  endpoint: string,
+  data: unknown,
+  extra: Record<string, string> = {},
+) {
   return fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...extra },
@@ -86,8 +95,8 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     assert.equal((await fetch(app.url + '/%2e%2e%2fserver.ts')).status, 403);
     assert.equal((await fetch(app.url + '/no-such-file')).status, 404);
     assert.equal((await fetch(app.url + '/')).status, 200);
-    const plan = await (await fetch(app.url + '/plan.json')).json();
-    assert.equal(plan.resources['5'].Coal, 73473.33333333333);
+    const plan: Handbook = await (await fetch(app.url + '/plan.json')).json();
+    assert.equal(plan.resources['5']!.Coal, 73473.33333333333);
     assert.equal(plan.power['5'], 913.925);
     assert.equal(plan.storage.flatMap(b => b.items).filter(x => x.name).length, 132);
   } finally {

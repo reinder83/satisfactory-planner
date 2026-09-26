@@ -1,5 +1,5 @@
 // Thin wrapper around the vendored HiGHS LP/MIP solver (WebAssembly, vendor/highs.cjs). Its only
-// caller is `run` in planner.ts. build.mjs rewrites the import path and the loadHighs() call for
+// caller is `run` in planner.ts. build.ts rewrites the import path and the loadHighs() call for
 // the Pages edition (highs.mjs next to highs.wasm), so keep both exactly as written.
 import loadHighs from './vendor/highs.cjs';
 

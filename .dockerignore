@@ -7,4 +7,4 @@ tests
 README.md
 .sites-runtime
 dist
-browser-check.mjs
+browser-check.ts

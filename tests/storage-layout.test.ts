@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initialState, validateState, mutate, bayCapacity } from '../public/state.ts';
+import type { SavedState, UpdateOp } from '../public/types/index.ts';
 
 test('legacy version-1 states validate unchanged, gain empty layout edits and stay version 1', () => {
   const legacy = {
@@ -43,7 +44,7 @@ test('layout edits round-trip, mark the state version 2 and newer versions are r
   assert.equal(round.storageEdits.slots.S01, 'Iron Plate');
   assert.equal(round.storageEdits.bayNames.S, 'Overflow parts');
   assert.equal(round.storageEdits.floorNames.ground, 'Main hall');
-  assert.equal(round.storageEdits.floors[0].label, 'Basement overflow');
+  assert.equal(round.storageEdits.floors[0]!.label, 'Basement overflow');
   assert.throws(
     () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 5 }),
     /newer planner version/,
@@ -154,7 +155,7 @@ test('handbook floors and bays cannot be removed; added ones can, keeping progre
 
 test('invalid layout updates are rejected without corrupting the state', () => {
   const s = initialState();
-  for (const op of [
+  const ops: UpdateOp[] = [
     { type: 'storageFloorAdd', id: 'ground', label: 'Nope' },
     { type: 'storageFloorAdd', id: 'cf-x', label: 'Too short id' },
     { type: 'storageBayAdd', id: 'abc', name: 'Bad letter', floor: 'ground' },
@@ -165,9 +166,10 @@ test('invalid layout updates are rejected without corrupting the state', () => {
     { type: 'storageSlotAssign', key: 'S01', name: '' },
     { type: 'storageSlotClear', key: '__proto__' },
     { type: 'storageFloorRename', id: 'cf-nothere1', label: 'Missing' },
-  ])
+  ];
+  for (const op of ops)
     assert.throws(() => mutate(structuredClone(s), op), Error, JSON.stringify(op));
-  const bad = structuredClone(initialState());
+  const bad: SavedState = structuredClone(initialState());
   bad.storageEdits = {
     bays: [
       { id: 'S', name: 'x', floor: 'ground' },

@@ -1,5 +1,5 @@
 // Saved data of every released shape, typed with public/types/. The type check proves the
-// types accept them (npm run typecheck); tests/data-types.test.mjs proves validateState and
+// types accept them (npm run typecheck); tests/data-types.test.ts proves validateState and
 // validateTransfer accept them too, so the types and the run-time gate agree.
 import type { ProgressBackup, SaveExport, SavedState } from '../../public/types/index.ts';
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };
@@ -121,6 +121,9 @@ export const saveExport: SaveExport = {
           id: 'p1',
           name: 'First calculation',
           kind: 'calculated',
+          // The one double cast: a JSON import widens string unions ('3') to string, so the
+          // file's type never matches StoredCalculatedPlan. data.types.ts checks this same
+          // file against that type (Loose) and for undeclared fields instead.
           plan: firstPlan as unknown as SaveExport['saves'][number]['profiles'][number]['plan'],
           state: version1,
         },

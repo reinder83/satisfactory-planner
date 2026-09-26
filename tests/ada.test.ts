@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { adaRemarks, adaEncore, adaFault } from '../public/ada.ts';
+import type { AdaFacts } from '../public/ada.ts';
 
-const facts = (over = {}) => ({
+const facts = (over: Partial<AdaFacts> = {}) => ({
   view: 'plan',
   phaseLabel: 'Phase 3',
   kind: 'calculated',
@@ -29,8 +30,9 @@ const facts = (over = {}) => ({
   planEditing: false,
   ...over,
 });
-const first = f => adaRemarks(f)[0];
-const ids = f => adaRemarks(f).map(r => r.id);
+// Every set of facts yields at least one remark (the idle lines), so the first one is there.
+const first = (f: Partial<AdaFacts>) => adaRemarks(f)[0]!;
+const ids = (f: Partial<AdaFacts>) => adaRemarks(f).map(r => r.id);
 
 test('ADA leads with the thing that is actually wrong', () => {
   const draft = first(facts({ feasible: false, reason: 'Iron Ore budget exceeded.' }));
@@ -79,19 +81,19 @@ test('ADA counts the same progress the pages show', () => {
   );
   assert.ok(ids(facts({ retireOpen: 2 })).includes('retire'));
   assert.match(
-    adaRemarks(facts({ retireOpen: 1 })).find(r => r.id === 'retire').text,
+    adaRemarks(facts({ retireOpen: 1 })).find(r => r.id === 'retire')!.text,
     /1 retirement step still open/,
   );
   assert.match(
-    adaRemarks(facts({ storage: { done: 3, total: 12 } })).find(r => r.id === 'storage').text,
+    adaRemarks(facts({ storage: { done: 3, total: 12 } })).find(r => r.id === 'storage')!.text,
     /3 of 12 container positions verified/,
   );
   assert.match(
-    adaRemarks(facts({ deliveries: { open: 2, total: 3 } })).find(r => r.id === 'deliveries').text,
+    adaRemarks(facts({ deliveries: { open: 2, total: 3 } })).find(r => r.id === 'deliveries')!.text,
     /2 elevator parts still short/,
   );
   assert.match(
-    adaRemarks(facts({ factories: { done: 0, total: 6 } })).find(r => r.id === 'factories-none')
+    adaRemarks(facts({ factories: { done: 0, total: 6 } })).find(r => r.id === 'factories-none')!
       .text,
     /6 factory targets for Phase 3, none marked running/,
   );
@@ -108,7 +110,7 @@ test('ADA only raises a backup in the browser edition, and only when it is due',
     'a recent export is not nagged about',
   );
   assert.match(
-    adaRemarks(facts({ browserMode: true, backupDays: 30 })).find(r => r.id === 'backup-old').text,
+    adaRemarks(facts({ browserMode: true, backupDays: 30 })).find(r => r.id === 'backup-old')!.text,
     /30 days ago/,
   );
 });
@@ -145,24 +147,24 @@ test('ADA notices the states that are not just a number', () => {
   assert.equal(first(facts({ steps: { done: 0, total: 0 }, next: '' })).id, 'empty-phase');
   assert.ok(ids(facts({ post: true })).includes('post'));
   assert.match(
-    adaRemarks(facts({ deliveries: { open: 0, total: 2 } })).find(r => r.id === 'deliveries-done')
+    adaRemarks(facts({ deliveries: { open: 0, total: 2 } })).find(r => r.id === 'deliveries-done')!
       .text,
     /Space Elevator has stopped waiting/,
   );
   assert.match(
-    adaRemarks(facts({ storage: { done: 9, total: 9 } })).find(r => r.id === 'storage-done').text,
+    adaRemarks(facts({ storage: { done: 9, total: 9 } })).find(r => r.id === 'storage-done')!.text,
     /All 9 container positions are verified/,
   );
   assert.match(
-    adaRemarks(facts({ groups: 3 })).find(r => r.id === 'groups-some').text,
+    adaRemarks(facts({ groups: 3 })).find(r => r.id === 'groups-some')!.text,
     /3 factory groups on record/,
   );
   assert.match(
-    adaRemarks(facts({ assumptions: 4 })).find(r => r.id === 'assumptions').text,
+    adaRemarks(facts({ assumptions: 4 })).find(r => r.id === 'assumptions')!.text,
     /4 recorded assumptions/,
   );
   assert.match(
-    adaRemarks(facts({ startPhase: '3' })).find(r => r.id === 'start-phase').text,
+    adaRemarks(facts({ startPhase: '3' })).find(r => r.id === 'start-phase')!.text,
     /begins at Phase 3/,
   );
   assert.ok(
@@ -219,7 +221,9 @@ test('ADA always has something to say, and never throws', () => {
     { steps: null, short: 'not a list' },
     { phaseLabel: null, next: {} },
   ]) {
+    // @ts-expect-error: deliberately malformed facts, to check ADA copes with them
     const out = adaRemarks(bad);
+    // @ts-expect-error: the same malformed facts
     assert.doesNotThrow(() => adaEncore(1, bad));
     assert.doesNotThrow(() => adaFault(1));
     assert.ok(
@@ -245,6 +249,6 @@ test('remarks stay plain text for the caller to escape', () => {
       profiles: 1,
     }),
   );
-  assert.match(nasty.find(r => r.id === 'start').text, /Weld the <boat>/);
-  assert.match(nasty.find(r => r.id === 'one-profile').text, /World <one>/);
+  assert.match(nasty.find(r => r.id === 'start')!.text, /Weld the <boat>/);
+  assert.match(nasty.find(r => r.id === 'one-profile')!.text, /World <one>/);
 });

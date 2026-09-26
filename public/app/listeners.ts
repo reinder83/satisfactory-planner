@@ -3,12 +3,12 @@
 // components share (checkboxes, notes, factory links, the dialog's ×, "Create a save") are
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
-// Registration order: app.ts imports this module, and tests/ui/app-modules.test.mjs pins
+// Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click,
 // beforeunload.
 import { pending } from './api.ts';
 import { required } from './format.ts';
-import { setQuery, setView, state, viewOf } from './session.ts';
+import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
 import { closeDetail } from './ui/actions.ts';
 
@@ -30,7 +30,7 @@ document.addEventListener(
 window.addEventListener('hashchange', () => {
   setView(viewOf(location.hash.slice(1)));
   setQuery('');
-  if (state) render();
+  if (stateLoaded) render();
   window.scrollTo(0, 0);
 });
 
