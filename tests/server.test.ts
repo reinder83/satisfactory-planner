@@ -234,7 +234,13 @@ test('a backup that cannot be checked also stops start-up; only a certainly miss
       : stat(p),
   );
   try {
-    await assert.rejects(refused(dir), /workspace\.json\.bak exists/);
+    // It says the backup could not be checked, with the code, not that it exists (#175).
+    await assert.rejects(refused(dir), (e: Error) => {
+      assert.match(e.message, /workspace\.json\.bak could not be checked \(EACCES\)/);
+      assert.match(e.message, /permissions/);
+      assert.doesNotMatch(e.message, /bak exists/);
+      return true;
+    });
     await assert.rejects(fs.access(path.join(dir, 'workspace.json')), 'nothing was written');
   } finally {
     mock.restoreAll();
