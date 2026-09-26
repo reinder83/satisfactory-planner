@@ -4,7 +4,25 @@
 //   - build.ts bundles public/app.ts with it for both published editions;
 //   - Vitest runs the component tests in tests/ui/ with it.
 import vue from '@vitejs/plugin-vue';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import type { Plugin } from 'vite';
+import { fontFile, isFontName } from './fonts.ts';
+
+// Development only: /fonts/<name> from the @fontsource packages (fonts.ts), where the builds
+// put the copies build.ts makes. Any other path under /fonts/ is left to the static files.
+const fonts: Plugin = {
+  name: 'planner-fonts',
+  apply: 'serve',
+  configureServer(server) {
+    server.middlewares.use('/fonts', (req, res, next) => {
+      const name = decodeURIComponent((req.url ?? '').split('?')[0]!.slice(1));
+      if (!isFontName(name)) return next();
+      res.setHeader('Content-Type', 'font/woff2');
+      fs.createReadStream(fontFile(name)).pipe(res);
+    });
+  },
+};
 
 export default {
   root: fileURLToPath(new URL('./public', import.meta.url)),
@@ -16,6 +34,7 @@ export default {
     vue({
       template: { transformAssetUrls: { tags: {} }, compilerOptions: { whitespace: 'preserve' } },
     }),
+    fonts,
   ],
   // Keep Vite's cache out of public/, which the server edition serves as static files.
   cacheDir: fileURLToPath(new URL('./node_modules/.vite', import.meta.url)),

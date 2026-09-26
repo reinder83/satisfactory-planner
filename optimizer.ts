@@ -1,15 +1,8 @@
-// Thin wrapper around the vendored HiGHS LP/MIP solver (WebAssembly, vendor/highs.cjs). Its only
-// caller is `run` in planner.ts. build.ts rewrites the import path and the loadHighs() call for
-// the Pages edition (highs.mjs next to highs.wasm), so keep both exactly as written.
-import loadHighs from './vendor/highs.cjs';
-
-// The part of the HiGHS module this uses: solve an LP-format model.
-interface Highs {
-  solve(
-    lp: string,
-    options: Record<string, unknown>,
-  ): { Status: string; Columns?: Record<string, { Primal?: number }> };
-}
+// Thin wrapper around the HiGHS LP/MIP solver (WebAssembly, the `highs` npm package). Its only
+// caller is `run` in planner.ts. The package loads highs.wasm from next to its own module, in
+// Node and in the browser. build.ts rewrites the import for the Pages edition (highs.mjs next to
+// highs.wasm), so keep it exactly as written.
+import loadHighs from 'highs';
 
 // A model in the planner's shape (see solve below).
 export interface LpModel {
@@ -30,7 +23,7 @@ export interface LpSolution {
 }
 
 // Loaded once, when the module is first imported (server start, or the browser worker's import).
-const highs = (await loadHighs()) as Highs;
+const highs = await loadHighs();
 // Solves one model and returns every variable's value by name.
 //
 // The model shape is the planner's own:
@@ -84,10 +77,15 @@ export function solve(model: LpModel): LpSolution {
   // Three seconds per solve, not per plan: `calculate` makes several solves per phase. The
   // integer searches are the ones that can hit it (see AMPLIFY_CANDIDATES in planner.ts).
   const r = highs.solve(lines.join('\n'), { output_flag: false, time_limit: 3 });
+  // A column of an infeasible solution carries no value; it, and a missing one, read as 0.
+  const primal = (name: string) => {
+    const c = r.Columns?.[name];
+    return (c && 'Primal' in c && c.Primal) || 0;
+  };
   return {
     solverStatus: r.Status,
     feasible: r.Status === 'Optimal',
     bounded: r.Status === 'Optimal',
-    values: Object.fromEntries(names.map((n, i) => [n, r.Columns?.[vars[i]!]?.Primal || 0])),
+    values: Object.fromEntries(names.map((n, i) => [n, primal(vars[i]!)])),
   };
 }

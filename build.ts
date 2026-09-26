@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build as viteBuild } from 'vite';
+import { fontFile, fontNames } from './fonts.ts';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
@@ -55,6 +56,13 @@ const sharedJs = async (name: string) => {
 };
 // The page loads app.ts in development; the editions ship the bundle as app.js.
 const shippedPage = (html: string) => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
+// The typefaces, from their npm packages, as style.css names them (fonts.ts).
+async function writeFonts(out: string) {
+  await fs.mkdir(path.join(out, 'fonts'), { recursive: true });
+  for (const name of fontNames) await fs.copyFile(fontFile(name), path.join(out, 'fonts', name));
+}
+// An installed package's file, by its package path ('highs/runtime').
+const packageFile = (specifier: string) => fileURLToPath(import.meta.resolve(specifier));
 const minifyCss = async (code: string) =>
   (await esbuild.transform(code, { loader: 'css', minify: true, charset: 'utf8' })).code;
 
@@ -123,6 +131,7 @@ async function buildWeb() {
     filter: src => !skip.has(src) && !src.endsWith('.md'),
   });
   await writeScripts(out);
+  await writeFonts(out);
   const page = path.join(out, 'index.html');
   await fs.writeFile(page, shippedPage(await fs.readFile(page, 'utf8')));
   console.log('Docker edition built in dist/web');
@@ -138,7 +147,7 @@ async function buildPages() {
   for (const file of ['index.html', 'favicon.svg', 'progression.json'])
     await fs.copyFile(path.join(publicDir, file), path.join(out, file));
   await fs.cp(path.join(publicDir, 'icons'), path.join(out, 'icons'), { recursive: true });
-  await fs.cp(path.join(publicDir, 'fonts'), path.join(out, 'fonts'), { recursive: true });
+  await writeFonts(out);
   let html = shippedPage(await fs.readFile(path.join(out, 'index.html'), 'utf8'));
   html = replaceOnce(
     html.replaceAll('href="/', 'href="./').replaceAll('src="/', 'src="./'),
@@ -181,20 +190,16 @@ async function buildPages() {
   planner = replaceOnce(planner, "from './optimizer.ts'", "from './optimizer.mjs'");
   await fs.writeFile(path.join(out, 'planner.mjs'), await minifyJs(planner, 'ts'));
   let optimizer = await read('optimizer.ts');
-  optimizer = replaceOnce(optimizer, "'./vendor/highs.cjs'", "'./highs.mjs'");
-  optimizer = replaceOnce(
-    optimizer,
-    'await loadHighs()',
-    'await loadHighs({locateFile:name=>new URL(name,import.meta.url).href})',
-  );
+  optimizer = replaceOnce(optimizer, "from 'highs'", "from './highs.mjs'");
   await fs.writeFile(path.join(out, 'optimizer.mjs'), await minifyJs(optimizer, 'ts'));
-  // The vendored HiGHS build is already minified; it only gains an ES module export.
-  await fs.writeFile(
-    path.join(out, 'highs.mjs'),
-    (await read('vendor/highs.cjs')) + '\nexport default Module;\n',
+  // The highs package's own ES module build, already minified, which loads highs.wasm from
+  // next to itself.
+  await fs.copyFile(packageFile('highs'), path.join(out, 'highs.mjs'));
+  await fs.copyFile(packageFile('highs/runtime'), path.join(out, 'highs.wasm'));
+  await fs.copyFile(
+    path.join(root, 'node_modules', 'highs', 'LICENSE'),
+    path.join(out, 'HIGHS-LICENSE'),
   );
-  await fs.copyFile(path.join(root, 'vendor/highs.wasm'), path.join(out, 'highs.wasm'));
-  await fs.copyFile(path.join(root, 'vendor/HIGHS-LICENSE'), path.join(out, 'HIGHS-LICENSE'));
   await fs.writeFile(
     path.join(out, 'calculator-worker.js'),
     await minifyJs(`const ready = import('./planner.mjs');
