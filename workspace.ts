@@ -147,16 +147,21 @@ export async function openWorkspace({
       throw new Error('Workspace could not be read; existing data has not been overwritten.');
     // workspace.json is missing but its backup is not: starting fresh would overwrite that
     // backup on the first save, so stop and say how to recover instead. Only a backup that is
-    // certainly absent (ENOENT) lets start-up continue; any other stat error might hide one.
-    if (
-      await fs.stat(file + '.bak').then(
-        () => true,
-        e => code(e) !== 'ENOENT',
-      )
-    )
+    // certainly absent (ENOENT) lets start-up continue; any other stat error might hide one,
+    // so it stops too, but says the backup could not be checked rather than that it exists.
+    const backup = await fs.stat(file + '.bak').then(
+      () => 'exists',
+      e => (code(e) === 'ENOENT' ? 'absent' : code(e) || 'unknown error'),
+    );
+    if (backup === 'exists')
       throw new Error(
         'workspace.json is missing but workspace.json.bak exists. Rename the .bak file to ' +
           'workspace.json to recover it, or move it elsewhere to start fresh. Nothing has been changed.',
+      );
+    if (backup !== 'absent')
+      throw new Error(
+        `workspace.json is missing and workspace.json.bak could not be checked (${backup}). ` +
+          "Check the data folder's permissions, then start again. Nothing has been changed.",
       );
     // First start of this format: migrate the single-profile progress.json of earlier
     // releases into the Original profile of one save, or start from server.ts's initial
