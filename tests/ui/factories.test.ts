@@ -357,6 +357,18 @@ test('closing or replacing a dialog asks before dropping an unsaved note', () =>
   assert.equal(asked, 3);
 });
 
+test('a handbook dialog names an underclocked last building only when there is one', () => {
+  const sentence = () =>
+    $$('#detail p.small.muted')
+      .map(p => p.textContent.replace(/\s+/g, ' '))
+      .find(t => t.includes('whole buildings'))!;
+  render();
+  openFactory('circuit-board');
+  assert.match(sentence(), /32 whole buildings\. All at 100%\. Peak/);
+  openFactory('smart-plating');
+  assert.match(sentence(), /58 whole buildings\. All at 100%, except the last at 50%\. Peak/);
+});
+
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
   const p = generated();
   p.stages['3'].feasible = false;
