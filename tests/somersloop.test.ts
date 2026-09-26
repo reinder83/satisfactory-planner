@@ -224,3 +224,36 @@ test('a budget the solver cannot fit never costs the user a plan', () => {
   assert.equal(x.feasible, true, 'the plan survives even if amplification has to be dropped');
   if (x.amplificationDropped) assert.equal(x.sloopsUsed, 0);
 });
+
+test('a phase that does not fit is diagnosed before amplification, and says so', () => {
+  // Every raw budget at 300/min: Phase 5 cannot fit, amplified or not.
+  const tight = {
+    ...base,
+    somersloops: 106,
+    limitsConfirmed: true,
+    limits: Object.fromEntries(
+      [
+        'Iron Ore',
+        'Copper Ore',
+        'Limestone',
+        'Coal',
+        'Caterium Ore',
+        'Raw Quartz',
+        'Sulfur',
+        'Bauxite',
+        'Uranium',
+        'SAM',
+        'Crude Oil',
+        'Nitrogen Gas',
+        'Water',
+      ].map(n => [n, 300]),
+    ),
+  };
+  const plain = calculate({ ...tight, amplifySloops: 0 }).stages[5];
+  const amplified = calculate({ ...tight, amplifySloops: 40 }).stages[5];
+  assert.equal(plain.feasible, false);
+  assert.equal(amplified.feasible, false);
+  assert.deepEqual(amplified.shortfalls, plain.shortfalls, 'the same unamplified shortfalls');
+  assert.match(amplified.reason!, /before production amplification/);
+  assert.doesNotMatch(plain.reason!, /amplification/, 'no note without somersloops budgeted');
+});
