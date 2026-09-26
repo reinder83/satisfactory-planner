@@ -83,6 +83,9 @@ export function openBrowserStore(
               saves: [],
               lastBackup: null,
             };
+            // Records written before lastBackup existed have no such field: read it as null
+            // ("never exported"), as the type says. A change writes the field back (#72).
+            data.lastBackup ??= null;
             answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
           } catch (e) {

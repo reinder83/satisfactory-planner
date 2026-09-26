@@ -143,3 +143,20 @@ test('after another tab upgrades the database, this tab says to reload', async (
   );
   assert.equal((records.get('main') as { activeSave: string }).activeSave, 'x', 'nothing written');
 });
+
+test('a record saved before lastBackup existed reads as never exported, and keeps its saves', async () => {
+  // A version-1 record from before the field was added.
+  const old = { version: 1, activeSave: 's', saves: [{ id: 's', name: 'Old world' }] };
+  const records = new Map<string, unknown>([['main', structuredClone(old)]]);
+  const store = openBrowserStore(fakeIndexedDB(1, records));
+  const read = await store.transaction();
+  assert.equal(read.lastBackup, null);
+  assert.deepEqual(read.saves, old.saves);
+  assert.deepEqual(records.get('main'), old, 'a read writes nothing');
+  await store.transaction(d => (d.activeSave = 's'));
+  assert.deepEqual(
+    records.get('main'),
+    { ...old, lastBackup: null },
+    'a write only adds the field',
+  );
+});
