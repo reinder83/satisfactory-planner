@@ -1058,6 +1058,18 @@ p.eyebrow {
   margin: 3px 0;
 }
 
+/* "Between groups" on the calculated factories page (ui/factories/GroupLinks.vue). */
+.group-links {
+  margin-top: 18px;
+}
+.group-link h3 {
+  margin: 14px 0 4px;
+}
+.group-link ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 /* "Choose saves to export" on the Backup page (BackupPage.vue). */
 .choose-saves {
   margin-top: 16px;

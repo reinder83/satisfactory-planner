@@ -529,3 +529,39 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
   await nextTick();
   assert.equal($('[data-build-status]'), null);
 });
+
+test('between groups: what one group hands the next, with its belts, names escaped', async () => {
+  const rows = plan.stages['3'].rows!;
+  const assignments = Object.fromEntries(
+    rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
+  );
+  open({
+    calculated: plan,
+    state: {
+      factoryGroups: {
+        groups: [
+          { id: 'fg-smelt1', name: evil },
+          { id: 'fg-parts1', name: 'Parts' },
+        ],
+        assignments,
+      },
+    },
+  });
+  go('factories');
+  render();
+  await nextTick();
+  noMarkup();
+  const section = $('[data-group-links]')!;
+  assert.ok(section, 'shown once the profile has groups');
+  const heads = $$('[data-group-link] h3').map(h => h.textContent);
+  assert.ok(heads.includes(`${evil} → Parts`), JSON.stringify(heads));
+  assert.ok(heads.some(h => h.endsWith('→ Space Elevator')));
+  assert.ok(heads.some(h => h.startsWith('Mines and existing supply →')));
+  assert.match(section.textContent!, /\/min · \d+ × Mk\.\d (belt|pipe)/);
+  // Without groups there is nothing to show.
+  open({ calculated: plan });
+  go('factories');
+  render();
+  await nextTick();
+  assert.equal($('[data-group-links]'), null);
+});
