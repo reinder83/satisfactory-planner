@@ -128,9 +128,11 @@ const view = computed(() =>
     <template v-else
       ><LaneAdvice :model="view.flow" />
       <p class="small muted">
-        {{ num(view.r.machines) }} whole buildings. All at 100%, except the last at
-        {{ num(view.r.lastClock) }}%. Peak production load {{ num(view.r.peakMW) }} MW; upstream
-        factories and logistics are separate.{{
+        {{ num(view.r.machines) }} whole buildings. All at 100%<template
+          v-if="(view.r.lastClock ?? 100) < 100"
+          >, except the last at {{ num(view.r.lastClock) }}%</template
+        >. Peak production load {{ num(view.r.peakMW) }} MW; upstream factories and logistics are
+        separate.{{
           view.localInputs
             ? ' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.'
             : ''
