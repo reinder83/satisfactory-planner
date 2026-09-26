@@ -4,11 +4,22 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { bayCapacity, mutate } from '../../public/state.ts';
+import { bayCapacity } from '../../public/state.ts';
 import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openSlot, slotKeys } from '../../public/app/views/storage.ts';
-import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  applyUpdate,
+  evil,
+  generated,
+  go,
+  handbook,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 
 const noMarkup = () =>
@@ -376,7 +387,7 @@ test('"Complete room" stays disabled once the saved room is complete', async () 
 
 test('a handbook bay can be hidden in edit mode and restored, and its items are listed meanwhile', async () => {
   // The update stand-in applies the operation the way the server does.
-  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open({ state: { checks: { 'slot-C01-built': true } } });
   setLayoutEditing(true);
   render();
@@ -428,7 +439,7 @@ test('a reserved position keeps a filled card’s shape, with inert stand-ins (#
 });
 
 test('an empty built-in floor can be hidden and restored from the layout editor (#168)', async () => {
-  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open();
   setLayoutEditing(true);
   // The ground floor still has its bays: hiding waits until they are gone.
@@ -458,7 +469,7 @@ test('an empty built-in floor can be hidden and restored from the layout editor 
 });
 
 test('an added bay takes the letter typed, and a hidden handbook letter only after a yes (#167)', async () => {
-  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open({ state: { checks: { 'slot-C01-built': true } } });
   setLayoutEditing(true);
   render();
@@ -513,4 +524,24 @@ test('a handbook bay sharing its letter with an added bay stored before #91 offe
   render();
   assert.equal($('[data-hide-bay="C"]'), null, 'remove the added bay first');
   assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
+});
+
+test('the update stand-in applies an op like the server: a refused one leaves the page state alone (#214)', () => {
+  open({ state: { checks: { 'slot-C01-built': true } } });
+  const before = structuredClone(state);
+  // Only handbook bays can be hidden, and only a valid state is accepted.
+  assert.throws(
+    () => applyUpdate({ type: 'storageBayHide', id: 'S' }),
+    /Invalid hidden bay|handbook/,
+  );
+  assert.throws(
+    () => applyUpdate({ type: 'check', key: 'x', value: 'yes' as unknown as boolean }),
+    /Invalid checks value/,
+  );
+  assert.deepEqual(state, before, 'nothing on the page changed');
+  // An accepted one returns the new state and still leaves the page's until save() takes it.
+  const next = applyUpdate({ type: 'storageBayHide', id: 'C' });
+  assert.deepEqual(next.storageEdits.hiddenBays, ['C']);
+  assert.equal(next.version, 5);
+  assert.deepEqual(state, before);
 });
