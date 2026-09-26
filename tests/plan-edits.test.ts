@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initialState, validateState, mutate, shareState } from '../public/state.ts';
+import type { UpdateOp } from '../public/types/index.ts';
 
 test('released version 1 and 2 states validate unchanged and gain empty plan edits and groups', () => {
   const v1 = {
@@ -93,7 +94,7 @@ test('factory groups support production splits and removal keeps factories and p
     { group: 'fg-plates1', rate: null },
   ]);
   s = mutate(s, { type: 'factoryGroupRename', id: 'fg-cable01', name: 'Cable hall' });
-  assert.equal(s.factoryGroups.groups[0].name, 'Cable hall');
+  assert.equal(s.factoryGroups.groups[0]!.name, 'Cable hall');
   s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-plates1' });
   assert.deepEqual(s.factoryGroups.assignments.wire, [{ group: 'fg-cable01', rate: 300 }]);
   s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-cable01' });
@@ -104,15 +105,17 @@ test('factory groups support production splits and removal keeps factories and p
 
 test('invalid plan edits and group updates are rejected without corrupting the state', () => {
   const s = initialState();
-  for (const op of [
+  const ops: UpdateOp[] = [
     { type: 'taskEdit', id: '__proto__', title: 'x' },
     { type: 'taskEdit', id: 'ok', title: 'x'.repeat(241) },
+    // @ts-expect-error: '9' is not a phase; mutate must reject it.
     { type: 'taskOrder', phase: '9', ids: ['a'] },
     { type: 'taskOrder', phase: '3', ids: ['a', 'a'] },
     { type: 'factoryGroupAdd', id: 'not-a-group', name: 'Bad id' },
     { type: 'factoryGroupRename', id: 'fg-nothere1', name: 'Missing' },
     { type: 'factoryAssign', key: 'wire', groups: [{ group: 'fg-nothere1', rate: 1 }] },
-  ])
+  ];
+  for (const op of ops)
     assert.throws(() => mutate(structuredClone(s), op), Error, JSON.stringify(op));
   let g = mutate(structuredClone(s), { type: 'factoryGroupAdd', id: 'fg-abcd12', name: 'Hall' });
   for (const rate of [0, -5, '12', NaN, Infinity])
@@ -121,6 +124,7 @@ test('invalid plan edits and group updates are rejected without corrupting the s
         mutate(structuredClone(g), {
           type: 'factoryAssign',
           key: 'wire',
+          // @ts-expect-error: the string rate '12' is invalid input that mutate must reject.
           groups: [{ group: 'fg-abcd12', rate }],
         }),
       Error,
@@ -148,7 +152,7 @@ test('a shared profile keeps plan-shaped content but starts with fresh progress'
   assert.equal(shared.revision, 0);
   assert.equal(shared.customTasks.length, 1);
   assert.equal(shared.storageEdits.slots.S01, 'Iron Plate');
-  assert.equal(shared.factoryGroups.groups[0].name, 'Cable factory');
+  assert.equal(shared.factoryGroups.groups[0]!.name, 'Cable factory');
   assert.equal(shared.taskEdits.titles['phase-3-survey'], 'Renamed step');
   assert.equal(shared.settings.phase, '3');
   assert.equal(shared.version, 3);

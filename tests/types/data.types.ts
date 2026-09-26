@@ -6,7 +6,7 @@
 //   Extra<A, B>    the fields of A that B does not declare, recursively: must be never, so a
 //                  field the data has is never missing from the types.
 // Literal values themselves (a phase '3', a goal 'balanced') are checked at run time by
-// validateState and settings(), and by tests/data-types.test.mjs.
+// validateState and settings(), and by tests/data-types.test.ts.
 import type {
   Catalog,
   CurrentCalculatedPlan,

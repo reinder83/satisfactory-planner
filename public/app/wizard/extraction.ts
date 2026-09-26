@@ -18,7 +18,7 @@ import { draft, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
 import { readGuidedForm } from './guided.ts';
 import { readWizard, wizardBusy, type Survey, type WizardDraft } from './wizard.ts';
-import type { NodeCounts } from '../../types/index.ts';
+import type { Distribution, NodeCounts, Purity } from '../../types/index.ts';
 
 // --- Working out the resource budgets ---------------------------------------
 // The thirteen budget boxes want a rate per minute, which nobody knows. What a
@@ -72,8 +72,9 @@ export function readExtraction(form: HTMLFormElement) {
     f = new FormData(form);
   const raw = new Set(workspace.catalog.raw || []);
   for (const [k, v] of f) {
-    if (k === 'purity' || k === 'distribution')
-      (w.settings as unknown as Record<string, unknown>)[k] = String(v);
+    // The two selects offer only the presets' own values; calculate() checks them again.
+    if (k === 'purity') w.settings.purity = String(v) as Purity;
+    else if (k === 'distribution') w.settings.distribution = String(v) as Distribution;
     else if (k === 'mark') e.mark = Number(v);
     else if (k === 'clock') e.clock = Number(v);
     else if (k.startsWith('node:') || k.startsWith('well:')) {

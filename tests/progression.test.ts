@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { progression } from '../public/progression.ts';
 import { calculate } from '../planner.ts';
-const data = JSON.parse(fs.readFileSync(new URL('../public/progression.json', import.meta.url)));
+import type { CalcRow, Progression, StageKey } from '../public/types/index.ts';
+const data: Progression = JSON.parse(
+  fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
+);
 test('Phase 1 has construction stock and biomass guidance, without later power instructions', () => {
   const plan = calculate({ recipes: 'all' }),
-    g = progression(plan, { checks: {} }, data, 1);
+    g = progression(plan, { checks: {} }, data, '1');
   const power = g.powerTasks.map(t => t.body).join(' ');
   assert.doesNotMatch(power, /nuclear|aluminum|packaging|rocket fuel/i);
   assert.match(power, /120 Leaves\/min/);
@@ -21,31 +24,33 @@ test('Phase 1 has construction stock and biomass guidance, without later power i
 });
 test('milestone material advice uses actual running checkmarks and unlocks change power advice', () => {
   const plan = calculate({}),
-    rows = plan.stages[1].rows;
-  const iron = rows.find(r => r.outputs['Iron Plate']);
-  const checks = { ['calc-1-' + iron.id]: true };
-  let g = progression(plan, { checks }, data, 2);
+    rows = plan.stages['1'].rows!;
+  const iron = rows.find(r => r.outputs['Iron Plate'])!;
+  const checks: Record<string, boolean> = { ['calc-1-' + iron.id]: true };
+  let g = progression(plan, { checks }, data, '2');
   assert.ok(g.milestoneTasks.some(t => t.body.includes('Iron Plate: already producing')));
-  assert.match(g.powerTasks[0].body, /Biomass/);
-  checks['unlock-' + data.entries.find(s => s.name === 'Coal Power').id] = true;
-  g = progression(plan, { checks }, data, 2);
-  assert.match(g.powerTasks[0].body, /Coal Power is marked unlocked/);
+  assert.match(g.powerTasks[0]!.body, /Biomass/);
+  checks['unlock-' + data.entries.find(s => s.name === 'Coal Power')!.id] = true;
+  g = progression(plan, { checks }, data, '2');
+  assert.match(g.powerTasks[0]!.body, /Coal Power is marked unlocked/);
   assert.ok(!g.powerTasks.some(t => t.id === 'startup-biomass'));
 });
 
 test('a phase says which of the previous phase’s lines it stops using', () => {
   const plan = calculate({ phase: '1', recipes: 'all', goal: 'timed', hours: 10, multiplier: 5 });
-  const at = ph => progression(plan, { checks: {} }, data, ph).retire;
+  const at = (ph: number) => progression(plan, { checks: {} }, data, String(ph)).retire;
   assert.deepEqual(at(1), [], 'the first phase of a plan has nothing behind it to retire');
 
-  const dropped = ph => {
-    const now = new Set((plan.stages[ph].rows || []).map(r => r.id));
+  const dropped = (ph: number): CalcRow[] => {
+    const now = new Set((plan.stages[String(ph) as StageKey].rows || []).map(r => r.id));
     const later = new Set(
-      ['1', '2', '3', '4', '5']
+      (['1', '2', '3', '4', '5'] as const)
         .filter(p => Number(p) > Number(ph))
         .flatMap(p => (plan.stages[p].rows || []).map(r => r.id)),
     );
-    return (plan.stages[ph - 1].rows || []).filter(r => !now.has(r.id) && !later.has(r.id));
+    return (plan.stages[String(ph - 1) as StageKey].rows || []).filter(
+      r => !now.has(r.id) && !later.has(r.id),
+    );
   };
   for (const ph of [2, 3, 4, 5]) {
     const expected = dropped(ph),
@@ -55,20 +60,20 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
       continue;
     }
     assert.equal(step.length, 1, 'phase ' + ph + ' raises one retirement step');
-    assert.equal(step[0].id, 'retire-' + ph, 'the step keeps a stable checklist key');
+    assert.equal(step[0]!.id, 'retire-' + ph, 'the step keeps a stable checklist key');
     assert.match(
-      step[0].body,
+      step[0]!.body,
       new RegExp('last needed in Phase ' + (ph - 1)),
       'it says when the lines were last needed',
     );
     assert.match(
-      step[0].body,
+      step[0]!.body,
       /Commission and prove the replacement chain first/,
       'it warns against dismantling too early',
     );
     // exactly the dropped lines, largest first, at most ten spelled out:
     // anything the plan picks up again later must not appear
-    const listed = [...step[0].body.matchAll(/× (.+?) [(]/g)].map(m => m[1]);
+    const listed = [...step[0]!.body.matchAll(/× (.+?) [(]/g)].map(m => m[1]);
     const expectedNames = [...expected]
       .sort((a, b) => b.machines - a.machines)
       .slice(0, 10)
@@ -80,7 +85,7 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
     );
     if (expected.length > 10)
       assert.match(
-        step[0].body,
+        step[0]!.body,
         new RegExp('and ' + (expected.length - 10) + ' more line'),
         'the rest are counted',
       );
@@ -89,14 +94,14 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
   // a profile that starts later never retires a line it was never told to build
   const late = calculate({ phase: '3', recipes: 'all', goal: 'timed', hours: 10, multiplier: 5 });
   assert.deepEqual(
-    progression(late, { checks: {} }, data, 3).retire,
+    progression(late, { checks: {} }, data, '3').retire,
     [],
     'the starting phase retires nothing',
   );
-  const p4 = progression(late, { checks: {} }, data, 4).retire;
+  const p4 = progression(late, { checks: {} }, data, '4').retire;
   if (p4.length)
     assert.match(
-      p4[0].body,
+      p4[0]!.body,
       /last needed in Phase 3/,
       'later phases still retire what the plan did build',
     );

@@ -1,9 +1,9 @@
 {
   // Type checking only: Vite, Vitest and esbuild strip the types when they run or bundle
   // the code, and Node 24 strips them itself for server files, so nothing is emitted.
-  // `npm run typecheck` (vue-tsc) checks the .ts files and <script lang="ts"> components;
-  // plain .js files are read for their types but not checked (allowJs without checkJs), so
-  // modules can move to TypeScript one at a time. See "TypeScript" in AGENTS.md.
+  // `npm run typecheck` (vue-tsc) checks every .ts file and <script lang="ts"> component. The
+  // only JavaScript is the vendored HiGHS build, typed by vendor/highs.d.cts. See "TypeScript"
+  // in AGENTS.md.
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
@@ -12,8 +12,6 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "isolatedModules": true,
@@ -26,6 +24,6 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["public/**/*", "tests/**/*", "*.ts", "*.mjs"],
+  "include": ["public/**/*", "tests/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", "vendor", "public/fonts", "public/icons"]
 }

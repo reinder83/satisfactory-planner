@@ -3,22 +3,33 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
+import type { BrowserStore } from '../public/browser-store.ts';
 import { calculate } from '../planner.ts';
-async function start(dir) {
+import type {
+  BrowserWorkspace,
+  Catalog,
+  ProgressState,
+  SaveExport,
+  WorkspaceSummary,
+} from '../public/types/index.ts';
+async function start(dir: string) {
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise(r => server.listen(0, '127.0.0.1', r));
-  return { server, url: 'http://127.0.0.1:' + server.address().port };
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  // Listening on a TCP port, so address() is an AddressInfo.
+  return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = s => new Promise(r => s.close(r));
-const post = (url, endpoint, b, headers = {}) =>
+const close = (s: Server) => new Promise(r => s.close(r));
+const post = (url: string, endpoint: string, b: unknown, headers: Record<string, string> = {}) =>
   fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
     body: JSON.stringify(b),
   });
-const json = async r => {
+const json = async (r: Response) => {
   assert.ok(r.ok, await r.clone().text());
   return r.json();
 };
@@ -58,7 +69,7 @@ test('a shared profile exports one profile without progress and imports as a fre
     );
     assert.equal(share.saves.length, 1);
     assert.equal(share.saves[0].profiles.length, 1, 'only the shared profile is included');
-    const state = share.saves[0].profiles[0].state;
+    const state: ProgressState = share.saves[0].profiles[0].state;
     assert.deepEqual(state.checks, {});
     assert.deepEqual(state.notes, {});
     assert.ok(
@@ -71,12 +82,12 @@ test('a shared profile exports one profile without progress and imports as a fre
     );
     assert.ok(share.saves[0].profiles[0].plan, 'the calculation snapshot travels with the share');
     assert.ok(!JSON.stringify(share).includes('Private seed notes'));
-    const w = await json(await post(app.url, '/api/import-saves', share));
+    const w: WorkspaceSummary = await json(await post(app.url, '/api/import-saves', share));
     assert.equal(w.saves.length, 3, 'the default save, the shared world and the imported copy');
     const importedSave = w.saves.find(s => s.id !== a.saveId && s.name === 'Shared world');
     assert.ok(importedSave, 'the share imports as a new copy');
     assert.equal(
-      importedSave.profiles[0].completed,
+      importedSave.profiles[0]!.completed,
       0,
       'the imported copy starts without progress',
     );
@@ -164,49 +175,62 @@ test('duplicating a profile copies plan and progress and keeps the original inde
 });
 
 test('browser edition shares and duplicates through the same portable format', async () => {
-  let data = { version: 1, activeSave: null, saves: [] };
-  const store = {
-    async transaction(change) {
-      const copy = structuredClone(data);
-      if (!change) return copy;
-      const result = change(copy);
-      data = copy;
-      return structuredClone(result);
-    },
-  };
-  const api = createBrowserApi(store, calculate, {}),
-    post = (route, body) => api(route, { body: JSON.stringify(body) });
-  const a = await post('/api/profiles', {
+  // The record starts without lastBackup, which the test checks a share does not set.
+  const empty: Omit<BrowserWorkspace, 'lastBackup'> = { version: 1, activeSave: null, saves: [] };
+  let data = empty as BrowserWorkspace;
+  function transaction(): Promise<BrowserWorkspace>;
+  function transaction<T>(change: (data: BrowserWorkspace) => T): Promise<T>;
+  async function transaction<T>(change?: (data: BrowserWorkspace) => T) {
+    const copy = structuredClone(data);
+    if (!change) return copy;
+    const result = change(copy);
+    data = copy;
+    return structuredClone(result);
+  }
+  const store: BrowserStore = { transaction };
+  // The routes used here never read the catalog.
+  const api = createBrowserApi(store, calculate, {} as Catalog),
+    post = (route: string, body: unknown) => api(route, { body: JSON.stringify(body) });
+  // The replies are unknown to the API's type; each is cast to the shape its route returns.
+  type Created = { saveId: string; profileId: string };
+  const a = (await post('/api/profiles', {
     saveName: 'Browser world',
     name: 'Balanced',
     settings: { phase: '1', goal: 'minimal' },
-  });
+  })) as Created;
   await post('/api/update', { type: 'check', key: 'calc-1-iron-ingot', value: true });
   await post('/api/update', { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
-  const share = await api(`/api/export-saves?save=${a.saveId}&profile=${a.profileId}&share=1`);
+  const share = (await api(
+    `/api/export-saves?save=${a.saveId}&profile=${a.profileId}&share=1`,
+  )) as SaveExport;
   assert.equal(share.saves.length, 1);
-  assert.deepEqual(share.saves[0].profiles[0].state.checks, {});
+  assert.deepEqual(share.saves[0]!.profiles[0]!.state.checks, {});
   assert.ok(
-    share.saves[0].profiles[0].state.factoryGroups.groups.some(g => g.name === 'Cable factory'),
+    share.saves[0]!.profiles[0]!.state.factoryGroups!.groups!.some(g => g.name === 'Cable factory'),
   );
   assert.equal(data.lastBackup, undefined, 'a share is not recorded as a full backup');
   await post('/api/import-saves', share);
-  assert.equal((await api('/api/workspace')).saves.length, 2);
-  const copy = await post('/api/duplicate-profile', { saveId: a.saveId, profileId: a.profileId });
+  assert.equal(((await api('/api/workspace')) as WorkspaceSummary).saves.length, 2);
+  const copy = (await post('/api/duplicate-profile', {
+    saveId: a.saveId,
+    profileId: a.profileId,
+  })) as Created;
   assert.notEqual(copy.profileId, a.profileId);
   assert.equal(
-    (await api('/api/state')).checks['calc-1-iron-ingot'],
+    ((await api('/api/state')) as ProgressState).checks['calc-1-iron-ingot'],
     true,
     'the duplicate becomes active and carries progress',
   );
   await post('/api/update', { type: 'check', key: 'calc-1-iron-ingot', value: false });
-  const original = await api(`/api/state?save=${a.saveId}&profile=${a.profileId}`);
+  const original = (await api(
+    `/api/state?save=${a.saveId}&profile=${a.profileId}`,
+  )) as ProgressState;
   assert.equal(
     original.checks['calc-1-iron-ingot'],
     true,
     'the original profile is untouched by the experiment',
   );
-  const full = await api('/api/export-saves');
+  const full = (await api('/api/export-saves')) as SaveExport;
   assert.ok(data.lastBackup, 'a full export still counts as a backup');
   assert.equal(full.saves.length, 2);
 });

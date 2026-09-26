@@ -2,21 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initialState, mutate, validateState } from '../public/state.ts';
 import fs from 'node:fs';
+import type { Handbook } from '../public/types/index.ts';
 
 test('every assigned storage item has a bundled PNG and source attribution', () => {
-  const storage = JSON.parse(
-    fs.readFileSync(new URL('../public/plan.json', import.meta.url)),
+  const storage: Handbook['storage'] = JSON.parse(
+    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
   ).storage;
-  const sources = JSON.parse(
-    fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url)),
+  const sources: Record<string, { source: string; url: string }> = JSON.parse(
+    fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url), 'utf8'),
   );
-  for (const item of storage.flatMap(b => b.items).filter(x => x.name)) {
+  for (const item of storage
+    .flatMap(b => b.items)
+    .filter((x): x is { id: string; name: string } => !!x.name)) {
     const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const png = fs.readFileSync(new URL('../public/icons/' + slug + '.png', import.meta.url));
     assert.equal(png.subarray(1, 4).toString(), 'PNG', item.name);
-    assert.match(sources[item.name].source, /^https:\/\/satisfactory\.wiki\.gg\//);
+    assert.match(sources[item.name]!.source, /^https:\/\/satisfactory\.wiki\.gg\//);
     assert.doesNotMatch(
-      sources[item.name].url,
+      sources[item.name]!.url,
       /Unknown_item/,
       item.name + ' uses the unknown-item placeholder instead of its real icon',
     );
@@ -60,6 +63,7 @@ test('saving an empty note removes only that note without changing existing data
   assert.equal(next.notes['slot-B01'], ' Keep whitespace and content ');
   assert.equal(next.checks['slot-A01-built'], true);
   assert.throws(() =>
+    // @ts-expect-error: a null note value is invalid input that mutate must reject.
     mutate(structuredClone(next), { type: 'note', key: 'slot-A02', value: null }),
   );
 });

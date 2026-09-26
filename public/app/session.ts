@@ -72,9 +72,10 @@ let basePlan: Handbook | undefined;
 // The handbook in use: the profile's own copy for an original profile, otherwise plan.json.
 export let plan: Handbook;
 // The open profile's saved progress (settings, checks, notes, deliveries, customTasks,
-// taskEdits, ...). Replaced wholesale by every successful save() in api.ts. null while
-// signed out.
+// taskEdits, ...). Replaced wholesale by every successful save() in api.ts. Unset until boot()
+// opens a profile and blank while signed out: `stateLoaded` says whether it is a profile's.
 export let state: ProgressState;
+export let stateLoaded = false;
 // The current hash route; render() in shell.ts picks the view from it.
 export let view: View = 'plan';
 // The current page's search text and UI toggles. View state only, never saved;
@@ -113,6 +114,7 @@ export function setAuthMode(value: 'login' | 'register') {
 }
 export function setState(value: ProgressState) {
   state = value;
+  stateLoaded = true;
 }
 export function setView(value: View) {
   view = value;
@@ -206,6 +208,7 @@ export function setContext(c: ContextReply) {
   currentSave = c.save;
   currentProfile = c.profile;
   state = c.state;
+  stateLoaded = true;
   calculated = c.plan;
   plan = c.handbook || basePlan || plan;
   query = '';
@@ -229,9 +232,10 @@ export async function boot() {
     workspace = await request<WorkspaceSummary>('/api/workspace');
     if (!workspace.user) {
       authMode = 'login';
-      // Signed out: no page reads the state until the next boot(); the hashchange listener
-      // checks it before drawing.
-      state = null as unknown as ProgressState;
+      // Signed out: the previous user's progress is dropped, and no page reads the state until
+      // the next boot(); the hashchange listener checks stateLoaded before drawing.
+      state = initialState();
+      stateLoaded = false;
       showSignedOut(required('#app'));
       return;
     }
@@ -254,6 +258,7 @@ export async function boot() {
       currentSave = { id: '', name: 'New save' };
       currentProfile = { id: '', name: 'Choose a profile' };
       state = { ...initialState(), settings: { phase: browserMode ? '1' : '3' } };
+      stateLoaded = true;
       calculated = null;
       startWizard();
     }

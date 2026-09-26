@@ -1,7 +1,7 @@
 // The handlers for the controls several components share: progress checkboxes, "Save notes",
 // links to a factory's dialog, the dialog's ×, and "Create a save". Each component binds
 // them itself (@change, @click, or v-bind with factoryLink()). The data-* attributes stay
-// on the elements: they carry the saved keys these handlers read, and browser-check.mjs,
+// on the elements: they carry the saved keys these handlers read, and browser-check.ts,
 // the tests and allowSwitch() in api.ts look for them.
 // Progress changes go through save() in api.ts: it queues the write, toasts a failure
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw

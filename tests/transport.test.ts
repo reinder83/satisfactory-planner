@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { calculate, settings } from '../planner.ts';
 import { droneFuels } from '../public/preferences.ts';
 import { progression } from '../public/progression.ts';
+import type { Progression, StageKey } from '../public/types/index.ts';
 test('utilities percentage affects actual power sizing with backward-compatible default', () => {
   assert.equal(settings({}).utilityPercent, 20);
   for (const utilityPercent of [0, 20, 50]) {
@@ -19,7 +20,9 @@ test('utilities percentage affects actual power sizing with backward-compatible 
   assert.throws(() => settings({ utilityPercent: -1 }));
 });
 test('drone contracts start at unlock phase, balance fuel and upgrade ionized fuel', () => {
-  const data = JSON.parse(fs.readFileSync(new URL('../public/progression.json', import.meta.url)));
+  const data: Progression = JSON.parse(
+    fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
+  );
   for (const droneFuel of droneFuels.filter(x => x !== 'none')) {
     const p = calculate({
       droneFuel,
@@ -28,7 +31,7 @@ test('drone contracts start at unlock phase, balance fuel and upgrade ionized fu
       nuclear: droneFuel === 'Plutonium Fuel Rod' ? 'sink' : 'none',
     });
     for (let phase = 1; phase <= 5; phase++) {
-      const x = p.stages[phase];
+      const x = p.stages[String(phase) as StageKey];
       assert.ok(x.feasible, droneFuel + ' phase ' + phase);
       if (phase < 4) {
         assert.deepEqual(x.drone, {});

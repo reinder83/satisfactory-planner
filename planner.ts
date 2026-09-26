@@ -5,14 +5,14 @@
 // (`stage()` in public/app/session.ts).
 //
 // Callers: workspace.ts (`/api/preview`, `/api/profiles`, `/api/round-up`, and `catalog()` in
-// the session summary) for the Docker edition. The Pages edition runs a copy that build.mjs adapts
+// the session summary) for the Docker edition. The Pages edition runs a copy that build.ts adapts
 // for the browser, inside calculator-worker.js, which public/browser-api.ts drives; `catalog()` is
-// written to catalog.json at build time. tests/*.test.mjs import this module directly.
+// written to catalog.json at build time. tests/*.test.ts import this module directly.
 //
 // Units: items per minute (m³ per minute for fluids) and MW. Recipe rates in recipes.json are for
 // one machine at 100% clock, so a recipe's LP variable counts machine-equivalents.
 //
-// build.mjs finds the node:fs import, the preferences.ts path and the recipes.json read below by
+// build.ts finds the node:fs import, the preferences.ts path and the recipes.json read below by
 // exact string match and replaces them for the browser; keep those three snippets unchanged.
 import {
   droneFuels,
@@ -109,7 +109,7 @@ export const RAW: string[] = [
 // Resource budgets per minute for the default map at its own purities, every node worked at 250%
 // clock: Miner Mk.3 300/600/1200 on impure/normal/pure, Oil Extractor 150/300/600 (resource wells
 // excluded), Resource Well Extractor 75/150/300 per nitrogen satellite. These are `nodeCounts`
-// in public/preferences.ts through that extraction table, and a test (guided.test.mjs) rebuilds
+// in public/preferences.ts through that extraction table, and a test (guided.test.ts) rebuilds
 // both tables from it. Water is a planning allowance, not a map total. Shipped to the interface
 // as `catalog().limits`; a profile's own budgets live in `settings.limits`.
 export const DEFAULT_LIMITS: ItemRates = {
@@ -1330,7 +1330,7 @@ export function calculate(
 }
 // Static data the interface needs before any calculation: recipe lists for the wizard's
 // alternate picker, storage, supply and raw-resource options, default budgets and goal labels.
-// The Docker edition sends it with the session summary (workspace.ts); build.mjs writes it to
+// The Docker edition sends it with the session summary (workspace.ts); build.ts writes it to
 // catalog.json for the Pages edition, which public/browser-api.ts loads. The UI reads it as
 // `workspace.catalog`.
 export const catalog = (): Catalog => ({

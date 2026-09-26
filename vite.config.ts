@@ -1,7 +1,7 @@
 // Vite compiles the Vue components in public/app/ui/. It is used three ways:
 //   - development: server.ts runs it in middleware mode (npm start), so the source is
 //     served as it is, with .vue files compiled on request;
-//   - build.mjs bundles public/app.ts with it for both published editions;
+//   - build.ts bundles public/app.ts with it for both published editions;
 //   - Vitest runs the component tests in tests/ui/ with it.
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,7 @@ export default {
   logLevel: 'warn',
   test: {
     root: fileURLToPath(new URL('.', import.meta.url)),
-    include: ['tests/ui/**/*.test.mjs'],
+    include: ['tests/ui/**/*.test.ts'],
     environment: 'happy-dom',
   },
 };

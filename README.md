@@ -230,6 +230,6 @@ Browser data is specific to the browser, device and site address. Clearing site 
 
 To move an existing Docker plan, update the Docker image, open **Backups → Export all saves**, then import that file on the public site. The transfer includes original handbooks, calculated profiles and progress, but excludes accounts, passwords and sessions. The same full export can be imported into Docker. There is no automatic synchronization between installations.
 
-`npm run build -- pages` creates an allowlisted, minified static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it. `node browser-check.mjs` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; install Playwright and Chromium first.
+`npm run build -- pages` creates an allowlisted, minified static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it. `node browser-check.ts` exercises the browser calculator, persistence, profile isolation, concurrent tabs and Docker transfers; run `npx playwright install chromium` once first (`npm ci` installs Playwright itself).
 
 Pushes to private-source `main` run server, browser and Docker checks, publish the Docker image, and push only the built website to the public `reinder83.github.io` deployment repository. Its Pages workflow publishes the site. `PAGES_DEPLOY_KEY` is a write deploy key limited to that public repository. Source-side pull requests run checks without deploying. Saved user data is never included in the static build.

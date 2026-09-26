@@ -20,9 +20,9 @@ test('every typed state fixture passes validateState with its own version', () =
 
 test('a full-save export with a first-release calculated plan passes validateTransfer', () => {
   const clean = validateTransfer(structuredClone(saveExport));
-  const profile = clean.saves[0].profiles[0];
+  const profile = clean.saves[0]!.profiles[0]!;
   assert.equal(profile.kind, 'calculated');
-  assert.deepEqual(Object.keys(profile.plan.stages), ['1', '2', '3', '4', '5']);
-  assert.equal(profile.plan.settings.phase, '3');
+  assert.deepEqual(Object.keys(profile.plan!.stages), ['1', '2', '3', '4', '5']);
+  assert.equal(profile.plan!.settings.phase, '3');
   assert.equal(profile.state.version, 1);
 });

@@ -9,7 +9,7 @@
 // types, and every script ships as .js. Development needs no build; `npm start` serves public/
 // as it is, with Vite compiling the TypeScript on request.
 //
-// Usage: node build.mjs [web] [pages]    (no argument builds both)
+// Usage: node build.ts [web] [pages]    (no argument builds both)
 import * as esbuild from 'esbuild';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -24,7 +24,7 @@ for (const target of targets)
   if (!['web', 'pages'].includes(target)) throw Error('Unknown target ' + target);
 
 // Scripts at the root of public/ ship as separate files, as they are in development: the
-// server imports some of them, browser-check.mjs imports browser-api.js into the page, and
+// server imports some of them, browser-check.ts imports browser-api.js into the page, and
 // each must stay one module instance. Only public/app/ (and app-root.ts) is bundled. Each
 // public/<name>.ts ships as <name>.js.
 const SHARED = [
@@ -37,32 +37,32 @@ const SHARED = [
   'transfer.ts',
 ];
 const BUNDLED = ['app.ts', 'app-root.ts'];
-const shipped = name => name.replace(/\.ts$/, '.js');
+const shipped = (name: string) => name.replace(/\.ts$/, '.js');
 
 // Source edits for the browser edition must all apply, or the build would ship server-only code.
-const replaceOnce = (text, from, to) => {
+const replaceOnce = (text: string, from: string, to: string) => {
   if (!text.includes(from)) throw Error('Browser build: source no longer contains ' + from);
   return text.replace(from, to);
 };
-const read = file => fs.readFile(path.join(root, file), 'utf8');
-const minifyJs = async (code, loader = 'js') =>
+const read = (file: string) => fs.readFile(path.join(root, file), 'utf8');
+const minifyJs = async (code: string, loader: 'js' | 'ts' = 'js') =>
   (await esbuild.transform(code, { loader, format: 'esm', minify: true, charset: 'utf8' })).code;
 // A shared script as it ships: types stripped, minified, and its imports of the other shared
 // scripts renamed to the .js files they ship as (esbuild keeps the specifiers as written).
-const sharedJs = async name => {
+const sharedJs = async (name: string) => {
   const code = await minifyJs(await read('public/' + name), 'ts');
   return code.replace(/(from\s*|import\s*\(\s*)(["'])(\.\/[\w-]+)\.ts\2/g, '$1$2$3.js$2');
 };
 // The page loads app.ts in development; the editions ship the bundle as app.js.
-const shippedPage = html => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
-const minifyCss = async code =>
+const shippedPage = (html: string) => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
+const minifyCss = async (code: string) =>
   (await esbuild.transform(code, { loader: 'css', minify: true, charset: 'utf8' })).code;
 
 // public/app.ts with public/app/ (including the Vue components) and Vue itself, as one
 // minified module, built by Vite. The shared root scripts stay imports of their own files.
 async function bundleApp() {
   const result = await viteBuild({
-    configFile: path.join(root, 'vite.config.mjs'),
+    configFile: path.join(root, 'vite.config.ts'),
     build: {
       write: false,
       minify: true,
@@ -84,13 +84,14 @@ async function bundleApp() {
       },
     },
   });
-  const chunks = (Array.isArray(result) ? result[0] : result).output;
-  const app = chunks.filter(c => c.type === 'chunk');
+  // With write: false and no watch option Vite returns the bundle itself.
+  const bundle = Array.isArray(result) ? result[0] : result;
+  if (!bundle || !('output' in bundle)) throw Error('build.ts: Vite returned no bundle');
+  const chunks = bundle.output;
+  const app = chunks.flatMap(c => (c.type === 'chunk' ? [c] : []));
   if (app.length !== 1 || chunks.some(c => c.type === 'asset'))
-    throw Error(
-      'build.mjs: expected app.js as the only output, got ' + chunks.map(c => c.fileName),
-    );
-  return app[0].code;
+    throw Error('build.ts: expected app.js as the only output, got ' + chunks.map(c => c.fileName));
+  return app[0]!.code;
 }
 
 // Every script at the root of public/ must be classified above, so a new one is never
@@ -98,9 +99,9 @@ async function bundleApp() {
 const rootScripts = (await fs.readdir(publicDir)).filter(name => /\.(js|ts)$/.test(name));
 for (const name of rootScripts)
   if (!SHARED.includes(name) && !BUNDLED.includes(name))
-    throw Error(`build.mjs: add public/${name} to SHARED or BUNDLED`);
+    throw Error(`build.ts: add public/${name} to SHARED or BUNDLED`);
 
-async function writeScripts(out) {
+async function writeScripts(out: string) {
   await fs.writeFile(path.join(out, 'app.js'), await bundleApp());
   for (const name of SHARED)
     await fs.writeFile(path.join(out, shipped(name)), await sharedJs(name));

@@ -2,28 +2,32 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
-// The interface tests load the app as one concatenated script (tests/helpers/app-source.mjs),
+// The interface tests load the app as one concatenated script (tests/helpers/app-source.ts),
 // which hides ES-module mistakes: a missing export, or a module reading another's binding
 // before it is initialised. This imports the real entry point with a stub DOM instead,
 // through Vite so the .vue components compile.
 test('the app entry point loads as ES modules and registers its listeners in order', async () => {
-  const registered = [];
-  const element = name => ({
-    addEventListener: type => registered.push(`${name} ${type}`),
-    set innerHTML(html) {
+  const registered: string[] = [];
+  const element = (name: string) => ({
+    addEventListener: (type: string) => registered.push(`${name} ${type}`),
+    set innerHTML(html: string) {
       registered.push('rendered');
     },
-    set onclick(handler) {},
+    set onclick(handler: unknown) {},
   });
-  globalThis.document = {
-    ...element('document'),
-    querySelector: element,
-    querySelectorAll: () => [],
-    // Vue's DOM runtime makes a <template> element as it loads.
-    createElement: () => ({}),
-  };
-  globalThis.window = { ...element('window'), scrollTo() {} };
-  globalThis.location = { hash: '#plan' };
+  // Only what the entry point touches while it loads, so the stubs are assigned through
+  // Object.assign rather than typed as a full Document, Window and Location.
+  Object.assign(globalThis, {
+    document: {
+      ...element('document'),
+      querySelector: element,
+      querySelectorAll: () => [],
+      // Vue's DOM runtime makes a <template> element as it loads.
+      createElement: () => ({}),
+    },
+    window: { ...element('window'), scrollTo() {} },
+    location: { hash: '#plan' },
+  });
   globalThis.fetch = async () => {
     throw new Error('offline');
   };

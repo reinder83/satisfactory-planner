@@ -47,7 +47,8 @@ import {
 } from '../public/state.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { calculate, catalog } from '../planner.ts';
-import { appSource } from './helpers/app-source.mjs';
+import { appSource } from './helpers/app-source.ts';
+import type { calcExpansion } from '../public/app/views/calculated.ts';
 const source = appSource();
 function ui() {
   const node = { addEventListener() {}, close() {}, showModal() {}, innerHTML: '' };
@@ -123,12 +124,12 @@ function ui() {
   );
   return c;
 }
-// The wizard and guided screens themselves: tests/ui/wizard.test.mjs.
+// The wizard and guided screens themselves: tests/ui/wizard.test.ts.
 
 // Every page is a component; each is rendered with hostile names in tests/ui/.
 
 // The storage page and its container dialog are components, tested in
-// tests/ui/storage.test.mjs. Their data stays here.
+// tests/ui/storage.test.ts. Their data stays here.
 test('an added bay takes the next free letter after the handbook bays', () => {
   const c = ui();
   assert.equal(vm.runInContext('nextBayLetter()', c), 'S');
@@ -186,10 +187,10 @@ test('machine instructions separate total, full-speed and adjustable machines', 
 });
 
 // The factories pages, their group editor and the factory and group build-order dialogs are
-// components, tested in tests/ui/factories.test.mjs.
+// components, tested in tests/ui/factories.test.ts.
 test('ADA comments on the plan from the sidebar and can be muted', () => {
   const c = ui();
-  // What the panel shows; its markup is covered by tests/ui/shell.test.mjs.
+  // What the panel shows; its markup is covered by tests/ui/shell.test.ts.
   const ada = () => JSON.parse(vm.runInContext('JSON.stringify(adaView())', c));
   const panel = ada();
   assert.equal(panel.tone, 'calm');
@@ -293,7 +294,8 @@ test('wizard tabs retain edits and recalculate Review', async () => {
   );
   const form = {
     reportValidity: () => true,
-    querySelector: sel => (['.alt-list', '.carry-list'].includes(sel) ? null : { textContent: '' }),
+    querySelector: (sel: string) =>
+      ['.alt-list', '.carry-list'].includes(sel) ? null : { textContent: '' },
   };
   c.document.querySelector = () => form;
   c.FormData = class {
@@ -345,7 +347,7 @@ test('the wizard shows calculation progress and options when the calculation tim
   const submitNode = { textContent: 'Calculate plan' };
   const form = {
     reportValidity: () => true,
-    querySelector: sel =>
+    querySelector: (sel: string) =>
       ['.alt-list', '.carry-list'].includes(sel)
         ? null
         : sel === 'button[type="submit"]'
@@ -397,7 +399,7 @@ test('the wizard shows calculation progress and options when the calculation tim
   assert.equal(errorNode.innerHTML, '', 'no guidance is attached to unrelated errors');
 });
 
-// The alternate picker itself: tests/ui/wizard.test.mjs.
+// The alternate picker itself: tests/ui/wizard.test.ts.
 test('Planner’s choice collects the alternates a plan uses', () => {
   const c = ui();
   assert.equal(
@@ -423,7 +425,7 @@ test('Planner’s choice collects the alternates a plan uses', () => {
   );
 });
 
-// The carry panel itself: tests/ui/wizard.test.mjs.
+// The carry panel itself: tests/ui/wizard.test.ts.
 test('the carry-over choices are read into the draft', () => {
   const c = ui();
   vm.runInContext(
@@ -447,7 +449,7 @@ test('the carry-over choices are read into the draft', () => {
   assert.equal(vm.runInContext('wizard.carryFrom', c), 'p1');
 });
 
-// The storage rate fields themselves: tests/ui/wizard.test.mjs.
+// The storage rate fields themselves: tests/ui/wizard.test.ts.
 test('per-item storage rates are read back, keeping zero and leaving blanks unset', () => {
   const c = ui();
   vm.runInContext(
@@ -455,7 +457,7 @@ test('per-item storage rates are read back, keeping zero and leaving blanks unse
     c,
   );
   const form = {
-    querySelector: sel => (sel === '.rate-list' ? {} : null),
+    querySelector: (sel: string) => (sel === '.rate-list' ? {} : null),
     reportValidity: () => true,
   };
   c.FormData = class {
@@ -482,7 +484,7 @@ test('per-item storage rates are read back, keeping zero and leaving blanks unse
   );
 });
 
-// The goals step and Review themselves: tests/ui/wizard.test.mjs.
+// The goals step and Review themselves: tests/ui/wizard.test.ts.
 test('the target-time choice is read out of the goals step', () => {
   const c = ui();
   vm.runInContext(
@@ -519,7 +521,9 @@ test('the expansion table only claims an addition where there is one', () => {
     `calculated={stages:{1:{rows:[]},2:{rows:[{id:'iron',machines:4}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:9}]},5:{rows:[]}}};`,
     c,
   );
-  const rows = JSON.parse(vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c));
+  const rows: ReturnType<typeof calcExpansion> = JSON.parse(
+    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c),
+  );
   assert.equal(rows.length, 5, 'every phase is listed');
   const cells = rows.map(r => [r.required, r.add]);
   assert.deepEqual(cells[0], ['—', '—'], 'a phase without the line has nothing to show or add');
@@ -560,7 +564,7 @@ test('a profile only offers the phases it was created for', () => {
     `calculated={...generated,settings:{...generated.settings,phase:'1'}};state.settings.phase='1';`,
     c,
   );
-  // Review flags only the phases the profile plans: tests/ui/wizard.test.mjs.
+  // Review flags only the phases the profile plans: tests/ui/wizard.test.ts.
 
   assert.equal(
     vm.runInContext('JSON.stringify(phaseOptions())', c),
@@ -583,7 +587,9 @@ test('a profile only offers the phases it was created for', () => {
     `calculated={settings:{phase:'3'},stages:{1:{rows:[{id:'iron',machines:9}]},2:{rows:[{id:'iron',machines:9}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:6}]},5:{rows:[]}}};`,
     c,
   );
-  const rows = JSON.parse(vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c));
+  const rows: ReturnType<typeof calcExpansion> = JSON.parse(
+    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c),
+  );
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
   assert.deepEqual(
     rows[0],

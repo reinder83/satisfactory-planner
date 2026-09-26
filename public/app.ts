@@ -1,5 +1,5 @@
 // Entry point. listeners.ts registers the page-wide listeners as a side effect,
-// in the order they must run (tests/ui/app-modules.test.mjs pins it).
+// in the order they must run (tests/ui/app-modules.test.ts pins it).
 //
 // How the frontend fits together (read this first):
 // 1. boot() in app/session.ts fetches /api/workspace (the saves and their profiles), then

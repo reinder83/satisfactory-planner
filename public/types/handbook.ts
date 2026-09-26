@@ -1,6 +1,6 @@
 // The owner's handbook (public/plan.json), which the original profile reads. An imported or
 // copied original profile may carry its own copy (`handbook` on the profile). The Pages
-// edition ships an empty template of the same shape (buildPages in build.mjs).
+// edition ships an empty template of the same shape (buildPages in build.ts).
 //
 // Phases, stages and ids arrive from JSON as plain strings, so these fields are `string`
 // rather than Phase: tests/types/data.types.ts checks plan.json against this type.

@@ -125,7 +125,7 @@ export async function createApp({
       }
       // In development Vite serves the page and its modules, compiling .vue files.
       if (vite && (await vite.handle(req, res, url))) return;
-      // Static files come from public/ (built by build.mjs in the Docker image). A path that
+      // Static files come from public/ (built by build.ts in the Docker image). A path that
       // resolves outside it, such as one with ../, is refused, so data/ is never served.
       const publicDir = path.join(root, 'public');
       const relative = decodeURIComponent(url.pathname);
@@ -182,7 +182,7 @@ async function devFrontend(server: Server) {
     vite = await (
       await import('vite')
     ).createServer({
-      configFile: path.join(root, 'vite.config.mjs'),
+      configFile: path.join(root, 'vite.config.ts'),
       appType: 'custom',
       server: {
         middlewareMode: true,

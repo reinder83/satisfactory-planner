@@ -20,11 +20,11 @@ import { stripTypeScriptTypes } from 'node:module';
 // stripTypeScriptTypes is marked experimental and warns on its first call; the warning is
 // noise in the test output, so only that one is dropped.
 const emitWarning = process.emitWarning;
-const stripTypes = code => {
-  process.emitWarning = (warning, ...rest) => {
+const stripTypes = (code: string) => {
+  process.emitWarning = ((warning: string | Error, ...rest: never[]) => {
     if (!String(warning).includes('stripTypeScriptTypes'))
       emitWarning.call(process, warning, ...rest);
-  };
+  }) as typeof process.emitWarning;
   try {
     return stripTypeScriptTypes(code);
   } finally {
@@ -44,12 +44,12 @@ const SHARED = new Set([
 const IMPORT = /^import\s(?:[^;]*?\sfrom\s)?'([^']+)';\r?\n/gm;
 
 export function appSource() {
-  const seen = new Set();
-  const ordered = [];
-  const stubs = new Set();
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const stubs = new Set<string>();
   // A Vue-layer file is not included, but the plain modules it imports are, so that
   // module state the components read (ADA's, for one) is there for the tests.
-  const visit = url => {
+  const visit = (url: URL) => {
     if (seen.has(url.href)) return;
     seen.add(url.href);
     const source = fs.readFileSync(url, 'utf8');
@@ -57,9 +57,10 @@ export function appSource() {
     const ui = url.href.startsWith(UI);
     for (const [statement, specifier] of text.matchAll(IMPORT)) {
       if (specifier === 'vue') continue;
-      const dependency = new URL(specifier, url);
+      // The pattern's one group always matches.
+      const dependency = new URL(specifier!, url);
       if (dependency.href.startsWith(UI) && !ui)
-        for (const name of statement.match(/\{([^}]*)\}/)?.[1].split(',') || [])
+        for (const name of statement.match(/\{([^}]*)\}/)?.[1]?.split(',') || [])
           if (name.trim()) stubs.add(name.trim());
       if (!SHARED.has(dependency.href.slice(PUBLIC.href.length))) visit(dependency);
     }
