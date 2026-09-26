@@ -238,7 +238,12 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   const order = planTasks().map(t => t.id);
   const i = order.indexOf('phase-3-iron');
   [order[i], order[i + 1]] = [order[i + 1]!, order[i]!];
-  assert.deepEqual(calls.at(-1)![1], { type: 'taskOrder', phase: '3', ids: order });
+  // The removed survey step keeps its slot at the top for when it is restored.
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'taskOrder',
+    phase: '3',
+    ids: ['phase-3-survey', ...order],
+  });
   $('[data-remove-step="phase-3-iron"]')!.click();
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'taskRemove', id: 'phase-3-iron' });
@@ -439,6 +444,29 @@ test('ticking a step keeps an unsaved phase note on both plan pages', async () =
     await nextTick();
     assert.equal(note().value, 'Phase 4 plans');
   }
+});
+
+test('reordering keeps a removed step’s place, so restoring it puts it back', async () => {
+  // The /api/update stand-in applies the saved order the way the server does.
+  stubFetch<UpdateOp>({
+    '/api/update': (op: UpdateOp) =>
+      op.type === 'taskOrder'
+        ? { ...state, taskEdits: { ...state.taskEdits!, order: { [op.phase]: op.ids } } }
+        : state,
+  });
+  const removed: Partial<TaskEdits> = { removed: ['phase-3-retire-power'] };
+  open({ state: { taskEdits: removed as TaskEdits } });
+  render();
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  const before = planTasks().map(t => t.id);
+  $('[data-move-task="phase-3-steel"][data-dir="-1"]')!.click();
+  await settle();
+  // Restore the removed step: it is back second, where it was, not at the end.
+  state.taskEdits!.removed = [];
+  const ids = planTasks().map(t => t.id);
+  assert.equal(ids.indexOf('phase-3-retire-power'), 1);
+  assert.equal(ids.length, before.length + 1);
 });
 
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
