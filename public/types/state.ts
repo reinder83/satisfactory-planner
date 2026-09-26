@@ -12,8 +12,8 @@ import type { Phase } from './common.ts';
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
 // handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link, 8 a
 // handbook bay moved to another floor, 9 a factory-group link to the vehicle fuel, 10 bays put in
-// their own order on a floor.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+// their own order on a floor, 11 a link from one raw resource or existing-supply item.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -154,6 +154,9 @@ export type UpdateOp =
       mode: LinkMode | 'belt';
       roundTripMin?: number;
       fuel?: string;
+      // For a link from a source (#231) while its mines link still has a choice saved before
+      // #231: the other sources going the same way, which keep that choice as their own.
+      siblings?: string[];
     }
   | { type: 'storageFloorAdd'; id: string; label: string }
   // A blank label restores the built-in name.

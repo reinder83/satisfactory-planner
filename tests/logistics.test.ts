@@ -53,7 +53,7 @@ test('a link’s vehicle is saved as version 7 and going back to belts restores 
   assert.equal(s.version, 7, 'a version-6 planner must refuse it rather than drop the choice');
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 11 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 12 }), /newer planner version/);
   // Removing a group takes its links along; belts again forget the entry.
   s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-motors1' });
   assert.deepEqual(Object.keys(s.factoryGroups.links!), ['mines:fg-plates1']);
@@ -72,13 +72,69 @@ test('a link to or from the vehicle fuel place marks version 9, which older rele
   const round = validateState(JSON.parse(JSON.stringify(s)));
   assert.equal(round.version, 9);
   assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 11 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 12 }), /newer planner version/);
   // Back to belts, the link goes and the version with it.
   s = mutate(s, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'belt' }));
   assert.equal(s.version, 7);
   // A state saved as 7 with such a link (made by #218 before this fix) still loads, marked 9.
   const early = validateState({ ...JSON.parse(JSON.stringify(round)), version: 7 });
   assert.equal(early.version, 9);
+});
+
+test('a link from one source item marks version 11, and splits a mines link saved before #231 without losing it', () => {
+  const ore = 'supply/Iron Ore',
+    coal = 'supply/Coal';
+  // A mines link with a truck, as saved before #231.
+  let s = mutate(grouped(), link({ from: MINES, to: 'fg-plates1' }));
+  assert.equal(s.version, 7);
+  // The first choice for one of its items: the other items keep the truck as their own, and the
+  // old entry goes.
+  s = mutate(s, {
+    type: 'factoryLinkTransport',
+    from: ore,
+    to: 'fg-plates1',
+    mode: 'train',
+    roundTripMin: 9,
+    siblings: [ore, coal],
+  });
+  assert.deepEqual(s.factoryGroups.links, {
+    [ore + ':fg-plates1']: { mode: 'train', roundTripMin: 9 },
+    [coal + ':fg-plates1']: { mode: 'truck', roundTripMin: 4, fuel: 'Packaged Fuel' },
+  });
+  assert.equal(s.version, 11, 'a release before #231 knows only the one mines place');
+  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
+  assert.throws(() => validateState({ ...round, version: 12 }), /newer planner version/);
+  // Belts again for both: nothing left, and the version drops.
+  s = mutate(s, { type: 'factoryLinkTransport', from: ore, to: 'fg-plates1', mode: 'belt' });
+  s = mutate(s, { type: 'factoryLinkTransport', from: coal, to: 'fg-plates1', mode: 'belt' });
+  assert.equal(s.factoryGroups.links, undefined);
+  assert.equal(s.version, 3);
+  // A source is only ever the start of a link, and its name must be an item name.
+  for (const [from, to] of [
+    ['fg-plates1', ore],
+    ['supply/', 'fg-plates1'],
+    ['supply/ Iron', 'fg-plates1'],
+    ['supply/Iron Ore ', 'fg-plates1'],
+    ['supply/a:b', 'fg-plates1'],
+  ])
+    assert.throws(
+      () => mutate(structuredClone(s), link({ from, to })),
+      /Unknown factory group link|Invalid/,
+      from + ' -> ' + to,
+    );
+  const bad = mutate(grouped(), link({ from: MINES, to: 'fg-plates1' }));
+  assert.throws(
+    () =>
+      mutate(bad, {
+        type: 'factoryLinkTransport',
+        from: ore,
+        to: 'fg-plates1',
+        mode: 'belt',
+        siblings: ['fg-plates1'],
+      }),
+    /Invalid factory group link/,
+  );
 });
 
 test('a malformed link choice is refused and changes nothing', () => {

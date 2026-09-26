@@ -2,7 +2,16 @@
 // groups, on hand-made stages and on a real plan.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLinks, rowShares, MINES, OUTSIDE, UNGROUPED } from '../public/app/group-links.ts';
+import {
+  groupLinks,
+  isSource,
+  linkTransportFor,
+  rowShares,
+  sourceOf,
+  MINES,
+  OUTSIDE,
+  UNGROUPED,
+} from '../public/app/group-links.ts';
 import { calculate } from '../planner.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../public/types/index.ts';
 
@@ -71,7 +80,7 @@ test('each link carries what one place hands the next, and flows inside a group 
       plate: [{ group: 'fg-parts1', rate: null }],
     }),
   );
-  close(rate(links, MINES, 'fg-smelt1', 'Ore'), 30, 'ore to smelting');
+  close(rate(links, sourceOf('Ore'), 'fg-smelt1', 'Ore'), 30, 'ore to smelting');
   close(rate(links, 'fg-smelt1', 'fg-parts1', 'Ingot'), 30, 'ingots to parts');
   close(rate(links, 'fg-parts1', OUTSIDE.delivery, 'Plate'), 20, 'plates to the elevator');
   assert.equal(links.length, 3);
@@ -86,7 +95,7 @@ test('each link carries what one place hands the next, and flows inside a group 
   assert.deepEqual(
     one.map(l => [l.from, l.to]),
     [
-      [MINES, 'fg-smelt1'],
+      [sourceOf('Ore'), 'fg-smelt1'],
       ['fg-smelt1', OUTSIDE.delivery],
     ],
   );
@@ -130,7 +139,7 @@ test('on a real plan the flows add up to its rows, its mining and its deliveries
   for (const [item, q] of Object.entries(st.raw!)) {
     if (q < 1e-6) continue;
     const mined = links
-      .filter(l => l.from === MINES)
+      .filter(l => l.from === sourceOf(item))
       .reduce((t, l) => t + (l.items.find(x => x.item === item)?.rate ?? 0), 0);
     close(mined, q, 'mined ' + item);
   }
@@ -178,4 +187,36 @@ test('memberships without a rate split what is left evenly (#197)', () => {
   );
   close(rate(links, 'fg-smelt1', 'fg-parts1', 'Ingot'), 15, 'Parts');
   close(rate(links, 'fg-smelt1', 'fg-parts2', 'Ingot'), 15, 'Parts two');
+});
+
+test('each raw resource and existing-supply item is a source of its own (#231)', () => {
+  const st = {
+    ...chain,
+    raw: { ...chain.raw, Coal: 12 },
+    supplied: { Ingot: 5 },
+  } as typeof chain;
+  const links = groupLinks(
+    st,
+    groups({
+      ingot: [{ group: 'fg-smelt1', rate: null }],
+      plate: [{ group: 'fg-parts1', rate: null }],
+    }),
+  );
+  // One link per source item and destination, never a mixed mines link.
+  for (const l of links.filter(l => isSource(l.from)))
+    assert.deepEqual(
+      l.items.map(x => sourceOf(x.item)),
+      [l.from],
+    );
+  assert.ok(!links.some(l => l.from === MINES));
+  assert.ok(links.some(l => l.from === sourceOf('Ingot') && l.to === 'fg-parts1'));
+  // A vehicle saved on the whole mines link before #231 applies to each source until one has its
+  // own choice; other links fall back to nothing.
+  const truck = { mode: 'truck' as const, roundTripMin: 4, fuel: 'Coal' };
+  const train = { mode: 'train' as const, roundTripMin: 9 };
+  const links2 = { 'mines:fg-smelt1': truck, [sourceOf('Coal') + ':fg-smelt1']: train };
+  assert.deepEqual(linkTransportFor(links2, sourceOf('Ore'), 'fg-smelt1'), truck);
+  assert.deepEqual(linkTransportFor(links2, sourceOf('Coal'), 'fg-smelt1'), train);
+  assert.equal(linkTransportFor(links2, 'fg-smelt1', 'fg-parts1'), undefined);
+  assert.equal(linkTransportFor(undefined, sourceOf('Ore'), 'fg-smelt1'), undefined);
 });

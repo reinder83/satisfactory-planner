@@ -142,6 +142,19 @@ export const version10 = {
   storageEdits: { ...version9.storageEdits, bayOrder: { ground: ['B', 'A', 'C'] } },
 } satisfies SavedState;
 
+// Version 11: a link from one raw resource as a source of its own (#231).
+export const version11 = {
+  ...version10,
+  version: 11,
+  factoryGroups: {
+    ...version10.factoryGroups,
+    links: {
+      ...version10.factoryGroups.links,
+      'supply/Iron Ore:fg-plates1': { mode: 'train', roundTripMin: 6 },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -155,6 +168,7 @@ export const states: [SavedState, number][] = [
   [version8, 8],
   [version9, 9],
   [version10, 10],
+  [version11, 11],
 ];
 
 export const backup = {
