@@ -194,3 +194,23 @@ test('a missing workspace with a backup beside it stops start-up instead of star
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('only the development server lets Vite start a blob: worker', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const csp = async (dev: boolean) => {
+    const app = await start(dir, { dev });
+    try {
+      return (await fetch(app.url + '/health')).headers.get('content-security-policy') || '';
+    } finally {
+      await close(app.server);
+    }
+  };
+  try {
+    const production = await csp(false);
+    assert.match(production, /script-src 'self';/);
+    assert.doesNotMatch(production, /blob:/);
+    assert.match(await csp(true), /worker-src 'self' blob:;/);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

@@ -76,11 +76,15 @@ export async function createApp({
     // only this origin's own scripts and requests, so injected markup cannot load or send
     // anything elsewhere; inline styles and data: images are allowed because the interface
     // uses them. frame-ancestors 'none' prevents embedding the planner to trick clicks.
+    // In development only, Vite's client starts a blob: SharedWorker to wait for a restarted
+    // dev server and then reload the page; the production server never allows blob: workers.
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; " +
+        (dev ? "worker-src 'self' blob:; " : '') +
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
