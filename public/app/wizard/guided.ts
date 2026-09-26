@@ -222,6 +222,9 @@ export function toGuided() {
   const form = $<HTMLFormElement>('#wizard-form');
   if (form && w.mode !== 'guided') readWizard(form);
   w.mode = 'guided';
+  // No topics ticked on "What is different" leaves no questions, and an empty flow would keep
+  // the five steps on screen: go back to that screen instead, with its ticks as they were.
+  if (w.guidedAsk && !w.guidedAsk.length) w.guidedAsk = null;
   const flow = guidedFlow();
   if (!(w.guidedStep >= 1)) w.guidedStep = 1;
   w.guidedStep = Math.min(w.guidedStep, Math.max(flow.length, 1));

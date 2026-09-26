@@ -738,6 +738,21 @@ test('a failed calculation with no topics ticked stays on the "what is different
   assert.match($('#main h2')!.textContent, /^Review /);
 });
 
+test('"← Guided start" after All settings with no topics ticked returns to the topics', async () => {
+  guidedAt(1, { saveId: 's', saveName: 'World', carryFrom: 'p' });
+  await change('input[name=topic][value=phase]', false);
+  await click('[data-guided-advanced]');
+  assert.equal(vuePage('wizard', null, wizard), WizardPage, 'All settings shows the five steps');
+  await click('[data-guided-start]');
+  assert.equal(vuePage('wizard', null, wizard), GuidedPage);
+  assert.ok($('.guided-topics'), 'back on "What is different this time?"');
+  assert.deepEqual(
+    $$<HTMLInputElement>('input[name=topic]:checked').map(el => el.value),
+    [],
+    'still with nothing ticked',
+  );
+});
+
 test('the already-running question asks for a rate, with an item search we own', async () => {
   guidedAt(1);
   const at = guidedFlow().findIndex(q => q.id === 'supply') + 1;
