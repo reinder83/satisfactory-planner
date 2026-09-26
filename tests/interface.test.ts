@@ -248,8 +248,13 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
     seen[1],
     'the lap resumes where it left off',
   );
-  // Prod the badge five times and the corporate voice slips.
-  vm.runInContext('adaIndex=0;for(let i=0;i<4;i++)adaPoke();', c);
+  // Prod the badge five times and the corporate voice slips. Pokes only count within 2.5 s of
+  // each other, so the page's clock stands still here (#221): a stall on a busy machine would
+  // otherwise start the count over.
+  vm.runInContext('pokeClock=1e12;Date.now=()=>pokeClock;', c);
+  vm.runInContext('adaIndex=0;for(let i=0;i<3;i++)adaPoke();pokeClock+=2501;adaPoke();', c);
+  assert.notEqual(ada().name, '???', 'a gap over 2.5 s starts the count over');
+  vm.runInContext('for(let i=0;i<3;i++)adaPoke();', c);
   assert.notEqual(ada().name, '???', 'four prods are within tolerance');
   vm.runInContext('adaPoke()', c);
   const fault = ada();
