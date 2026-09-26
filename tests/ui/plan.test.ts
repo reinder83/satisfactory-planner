@@ -500,6 +500,24 @@ test('another tab’s saved note never replaces an unsaved draft, but fills an u
   assert.equal(note().value, 'From the other tab');
 });
 
+test('a reorder keeps the saved order within its 600-id limit', async () => {
+  const calls = stubFetch({ '/api/update': () => state });
+  // A saved order already full of places for steps no longer in the plan, then the real ones.
+  const ghosts = Array.from({ length: 600 }, (_, i) => 'gone-' + i);
+  const real = planTasks().map(t => t.id);
+  const full: Partial<TaskEdits> = { order: { '3': [...ghosts, ...real] }, removed: [real[0]!] };
+  open({ state: { taskEdits: full as TaskEdits } });
+  render();
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  $(`[data-move-task="${real[2]}"][data-dir="-1"]`)!.click();
+  await settle();
+  const ids = (calls.at(-1)![1] as { ids: string[] }).ids;
+  assert.equal(ids.length, 600, 'within the limit the server enforces');
+  for (const id of real) assert.ok(ids.includes(id), id + ' keeps its place');
+  assert.equal(ids.indexOf(real[2]!) < ids.indexOf(real[1]!), true, 'the move itself is saved');
+});
+
 test('the calculated plan shows its snapshot, warnings, deliveries and assumptions', async () => {
   const plan = structuredClone(generated);
   plan.warnings = [evil];
