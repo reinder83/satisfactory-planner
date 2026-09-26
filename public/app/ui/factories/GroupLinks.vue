@@ -252,11 +252,21 @@ async function setTransport(
 ) {
   const mode = change.mode ?? l.mode;
   // A mines link with a choice saved before #231 splits on the first change to one of its items:
-  // the other sources going the same way keep that choice (state.ts factoryLinkTransport).
+  // the other sources going the same way keep that choice (state.ts factoryLinkTransport). The
+  // old entry applied in every phase, so its siblings are the sources going there in any phase of
+  // the plan, not only the one on screen (#235).
   const g = factoryGroupsState();
   const siblings =
     isSource(l.from) && g.links?.[MINES + ':' + l.to]
-      ? (view.value?.links ?? []).filter(x => isSource(x.from) && x.to === l.to).map(x => x.from)
+      ? [
+          ...new Set(
+            Object.values(calculated?.stages ?? {})
+              .filter(st => st.rows?.length)
+              .flatMap(st => groupLinks(st, g))
+              .filter(x => isSource(x.from) && x.to === l.to)
+              .map(x => x.from),
+          ),
+        ]
       : undefined;
   const op: UpdateOp =
     mode === 'belt'

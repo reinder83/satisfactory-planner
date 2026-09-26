@@ -675,7 +675,7 @@ const baysOn = (e: StorageEdits, id: string) =>
 export function validateState(s: unknown): ProgressState {
   if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "11" also gets the update message.
+      // Compared as the old code did, so a version given as "12" also gets the update message.
       ((s as Raw | null | undefined)?.version as number) > 11
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',

@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { createApp, h, nextTick } from 'vue';
 import { lanePlan } from '../../public/app/flow.ts';
+import { groupLinks } from '../../public/app/group-links.ts';
 import { num } from '../../public/app/format.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
@@ -886,6 +887,57 @@ test('between groups: a vehicle saved on a whole mines link applies to each sour
   assert.deepEqual(links[first!], { mode: 'train', roundTripMin: 7 });
   for (const k of rest) assert.deepEqual(links[k], truck, k);
   assert.equal(state.version, 11);
+  noMarkup();
+});
+
+test('between groups: splitting an old mines vehicle keeps it for sources that arrive only in another phase (#235)', async () => {
+  // Every phase's rows in one group, so its mines sources differ from phase to phase.
+  const allRows = Object.values(plan.stages).flatMap(st => st.rows || []);
+  const truck = { mode: 'truck' as const, roundTripMin: 7, fuel: 'Coal' };
+  open({
+    calculated: plan,
+    workspace: { catalog: catalog() },
+    state: {
+      version: 7,
+      factoryGroups: {
+        groups: [{ id: 'fg-smelt1', name: 'All' }],
+        assignments: Object.fromEntries(
+          allRows.map(r => [r.id, [{ group: 'fg-smelt1', rate: null }]]),
+        ),
+        links: { 'mines:fg-smelt1': truck },
+      },
+    },
+  });
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  go('logistics');
+  render();
+  await nextTick();
+  const shown = $$('[data-link-out]')
+    .map(r => r.dataset.linkOut!)
+    .filter(k => k.startsWith('supply/') && k.endsWith(':fg-smelt1'));
+  // A source that reaches the group in some phase, but not in the one on screen.
+  const everywhere = new Set(
+    Object.values(plan.stages)
+      .filter(st => st.rows?.length)
+      .flatMap(st => groupLinks(st, state.factoryGroups))
+      .filter(l => l.from.startsWith('supply/') && l.to === 'fg-smelt1')
+      .map(l => l.from + ':' + l.to),
+  );
+  const later = [...everywhere].filter(k => !shown.includes(k));
+  assert.ok(later.length > 0, 'the plan has a source this phase does not show');
+  const mode = $<HTMLSelectElement>(`[data-link-mode="${shown[0]}"]`)!;
+  mode.value = 'train';
+  mode.dispatchEvent(new Event('change'));
+  await settle();
+  const sent = calls.at(-1)![1] as Extract<UpdateOp, { type: 'factoryLinkTransport' }>;
+  assert.deepEqual(
+    [...sent.siblings!].sort(),
+    [...everywhere].map(k => k.split(':')[0]).sort(),
+    'the siblings cover every phase',
+  );
+  const links = state.factoryGroups.links!;
+  assert.equal(links['mines:fg-smelt1'], undefined);
+  for (const k of later) assert.deepEqual(links[k], truck, `${k} keeps the truck`);
   noMarkup();
 });
 
