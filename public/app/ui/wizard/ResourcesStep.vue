@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { resourceDefaults } from '../../../preferences.ts';
-import { draft, wizard, workspace } from '../../session.ts';
+import { draft, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';

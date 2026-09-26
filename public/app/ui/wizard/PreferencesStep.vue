@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { droneFuels, powerOptions, storageOptions } from '../../../preferences.ts';
-import { draft, wizard } from '../../session.ts';
+import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';

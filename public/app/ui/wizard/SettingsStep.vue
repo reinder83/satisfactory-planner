@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { distributions, purities } from '../../../preferences.ts';
-import { draft, wizard } from '../../session.ts';
+import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import InputField from '../form/InputField.vue';

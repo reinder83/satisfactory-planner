@@ -16,7 +16,7 @@ import {
 } from '../../preferences.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
-import { $, esc, plural, required } from '../format.ts';
+import { esc, plural, required } from '../format.ts';
 import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
 import { extractionOf } from './extraction.ts';

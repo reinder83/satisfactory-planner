@@ -22,7 +22,9 @@
     "allowImportingTsExtensions": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // An import or local nothing reads fails the type check, so dead code cannot pile up.
+    "noUnusedLocals": true
   },
   "include": ["public/**/*", "tests/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", "public/icons"]
