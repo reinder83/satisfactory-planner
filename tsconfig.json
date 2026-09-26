@@ -25,5 +25,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["public/**/*", "tests/**/*", "*.ts"],
-  "exclude": ["node_modules", "dist", "vendor", "public/fonts", "public/icons"]
+  "exclude": ["node_modules", "dist", "public/icons"]
 }

@@ -16,6 +16,8 @@
     "build": "node build.ts"
   },
   "devDependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/saira-condensed": "5.3.0",
     "@types/node": "24.13.6",
     "@vitejs/plugin-vue": "6.0.9",
     "@vue/test-utils": "2.5.1",
@@ -26,9 +28,10 @@
     "typescript": "6.0.3",
     "vite": "8.3.0",
     "vitest": "5.0.1",
+    "vue": "3.5.43",
     "vue-tsc": "3.3.11"
   },
   "dependencies": {
-    "vue": "3.5.43"
+    "highs": "1.15.3"
   }
 }

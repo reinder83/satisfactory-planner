@@ -25,7 +25,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `public/transfer.ts` | Portable full-save format and validation |
 | `public/browser-api.ts`, `public/browser-store.ts` | Browser API adapter, worker orchestration, IndexedDB transactions |
 | `planner.ts`, `optimizer.ts`, `recipes.json` | Production calculation, HiGHS solver, recipe data |
-| `vendor/`, `THIRD_PARTY.md` | Bundled solver and attribution; retain licenses |
+| `fonts.ts`, `THIRD_PARTY.md` | The typefaces' npm packages and attribution; retain licenses |
 | `server.ts`, `workspace.ts` | HTTP/authentication boundary, scoped saves, durable server persistence |
 | `docker-start.ts`, `Dockerfile`, `compose*.yaml` | Container startup and Synology ownership support |
 | `build.ts` | Release build: minified Docker frontend (`dist/web`) and allowlisted Pages edition (`dist/satisfactory-planner`); adapts the calculator for browser execution |
@@ -108,7 +108,7 @@ npm run build
 
 ### TypeScript
 
-All code is TypeScript. It moved one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.ts`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, in two pull requests: (a) everything under `public/app/`, which Vite bundles (done), then (b) the shared scripts at the root of `public/`, which the server imports too and `build.ts` ships as separate files (done); (4) the components (done); (5) the server, `workspace.ts`, `planner.ts`, `optimizer.ts` and `docker-start.ts`; (6) the build tooling (`build.ts`, `browser-check.ts`, `vite.config.ts`) and the tests. Each stage was its own pull request and left both editions working. The only JavaScript left is the vendored HiGHS build, which `vendor/highs.d.cts` types.
+All code is TypeScript. It moved one module at a time, in stages like the Vue migration: (1) the tooling, with `public/app/format.ts`, `ui/ItemIcon.vue` and `ui/StatTile.vue` as the first typed files (done); (2) types for the saved progress state (`state.ts`, every version), the handbook (`plan.json`), the calculated plan and the workspace, in `public/types/` (done); (3) the plain modules in `public/`, in two pull requests: (a) everything under `public/app/`, which Vite bundles (done), then (b) the shared scripts at the root of `public/`, which the server imports too and `build.ts` ships as separate files (done); (4) the components (done); (5) the server, `workspace.ts`, `planner.ts`, `optimizer.ts` and `docker-start.ts`; (6) the build tooling (`build.ts`, `browser-check.ts`, `vite.config.ts`) and the tests. Each stage was its own pull request and left both editions working. No JavaScript is left in the repository: the solver (`highs`) and the typefaces (`@fontsource/*`) come from npm, pinned in `package.json`, and `highs` ships its own types. `highs` is the one runtime dependency, which the Docker image installs with `npm ci --omit=dev`; everything else is a dev dependency.
 
 Nothing compiles TypeScript to files: Vite and Vitest strip the types when they serve, test or bundle the code, esbuild when `build.ts` minifies, and Node 24 itself when it runs a `.ts` file. `tsconfig.json` only drives the type check (`npm run typecheck`, also in CI), with `strict` and `noUncheckedIndexedAccess` on. Rules:
 

@@ -1,7 +1,6 @@
 # Generated, vendored or data files: kept byte-for-byte.
 dist/
 node_modules/
-vendor/
 public/icons/
 public/*.json
 recipes.json

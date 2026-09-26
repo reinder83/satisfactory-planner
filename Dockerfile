@@ -9,8 +9,11 @@ RUN node build.ts web
 FROM node:24-alpine
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data
 WORKDIR /app
-COPY --chown=node:node package.json server.ts workspace.ts planner.ts optimizer.ts docker-start.ts recipes.json ./
-COPY --chown=node:node vendor ./vendor
+# Only the runtime package: highs, the solver the server calculates with. Owned by root, so
+# the server can read but not change it.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --chown=node:node server.ts workspace.ts planner.ts optimizer.ts docker-start.ts recipes.json ./
 COPY --from=build --chown=node:node /src/dist/web ./public
 # The server imports the shared scripts' TypeScript sources (state.ts, transfer.ts,
 # preferences.ts, ...), which Node runs as they are; the browser gets the built .js files.
