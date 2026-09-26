@@ -105,7 +105,7 @@ function adaFacts(): AdaFacts {
     : plan.deliveries.filter(d => d.phase === phase());
   // Same default as ui/plan/DeliveryCounter.vue: the original handbook starts from its recorded amounts.
   const delivered = (d: { id: string; initial: number }) =>
-    state.deliveries[d.id] ?? (currentProfile.id === 'original' ? d.initial : 0);
+    state.deliveries[d.id] ?? (currentProfile.kind === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
   // Plain data only; ada.ts decides which remarks apply.

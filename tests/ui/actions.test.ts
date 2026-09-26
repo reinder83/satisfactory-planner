@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { openFactory } from '../../public/app/factory-detail.ts';
+import { acceptRoute } from '../../public/app/api.ts';
 import { calcStage, setQuery, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generated, go, open, page, stubFetch } from './setup.ts';
@@ -79,6 +80,42 @@ test('"Save notes" saves the phase notes on the plan page', async () => {
     { type: 'note', key: 'phase-3', value: 'Remember the coal' },
   ]);
   assert.match($('#toast')!.textContent, /Notes saved/);
+});
+
+test('a blank note saves without asking about unsaved notes afterwards', async () => {
+  // A whitespace-only note is saved by deleting it, as mutate in state.ts does.
+  const calls = stubFetch<CheckOrNote>({
+    '/api/update': (op: CheckOrNote) => {
+      const notes = { ...state.notes };
+      delete notes[op.key];
+      return { ...state, notes };
+    },
+  });
+  let asked = 0;
+  globalThis.confirm = () => (asked++, false);
+  go('plan');
+  render();
+  history.replaceState(null, '', '#plan');
+  acceptRoute();
+  $<HTMLTextAreaElement>('#phase-note')!.value = '  ';
+  $('[data-save-note="phase-3"]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'phase-3', value: '  ' });
+  assert.equal(state.notes['phase-3'], undefined);
+  history.replaceState(null, '', '#storage');
+  assert.equal(acceptRoute(), true, 'leaving the plan page after the save');
+  history.replaceState(null, '', '#plan');
+  acceptRoute();
+
+  go('factories');
+  render();
+  openFactory('wire');
+  $<HTMLTextAreaElement>('#detail-note')!.value = '  ';
+  $('#detail [data-save-note]')!.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'factory-wire', value: '  ' });
+  assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'the saved dialog closes');
+  assert.equal(asked, 0);
 });
 
 test('a factory link opens its dialog; saving its notes or the × closes it', async () => {

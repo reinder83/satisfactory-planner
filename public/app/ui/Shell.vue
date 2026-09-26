@@ -7,7 +7,7 @@
 import { computed } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import { purities } from '../../preferences.ts';
-import { pending, save } from '../api.ts';
+import { allowSwitch, pending, save } from '../api.ts';
 import { num } from '../format.ts';
 import {
   calculated,
@@ -79,10 +79,14 @@ function profileFooter() {
 }
 
 // The "Working on" select: save the profile's selected phase, clear the search and redraw;
-// on failure it shows the saved phase again. There is no unsaved-notes check, so an unsaved
-// phase note edit is lost in the redraw.
+// on failure it shows the saved phase again. The redraw shows the new phase's notes, so an
+// unsaved note is asked about first; kept, the select goes back to the saved phase.
 async function pickPhase(e: Event) {
   const el = e.target as HTMLSelectElement;
+  if (!allowSwitch()) {
+    el.value = phase();
+    return;
+  }
   el.disabled = true;
   try {
     // The options are phaseOptions(), so the value is a phase.

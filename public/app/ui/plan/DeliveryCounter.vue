@@ -1,9 +1,10 @@
 <!--
   One Space Elevator delivery counter on the build plan. `delivery` is { id, name, target,
   rate, initial }: a handbook delivery from plan.json, or a calculated one with the id
-  `<stage>-<item slug>` and initial 0. An unsaved count falls back to `initial` only on the
-  original profile. A committed entry must be a whole number from 0 to the target; an
-  invalid one, or a failed write, puts the saved count back.
+  `<stage>-<item slug>` and initial 0. An unsaved count falls back to `initial` only on an
+  original (handbook) profile, by kind rather than id, so a duplicated or imported copy does
+  too. A committed entry must be a whole number from 0 to the target; an invalid one, or a
+  failed write, puts the saved count back.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -21,7 +22,7 @@ const props = defineProps<{
 
 const saved = () =>
   state.deliveries[props.delivery.id] ??
-  (currentProfile.id === 'original' ? (props.delivery.initial ?? 0) : 0);
+  (currentProfile.kind === 'original' ? (props.delivery.initial ?? 0) : 0);
 
 const counter = computed(() =>
   legacy(() => {
