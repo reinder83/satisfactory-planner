@@ -1069,6 +1069,27 @@ p.eyebrow {
   margin: 0;
   padding-left: 18px;
 }
+/* A link's vehicle, round trip and fuel (#205): one wrapping row of labelled controls. */
+.link-transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 4px 0 6px;
+  font-size: 12px;
+}
+.link-transport select,
+.link-transport input {
+  margin-left: 6px;
+  width: auto;
+}
+.link-transport input {
+  width: 5.5em;
+}
+.group-link [data-link-load] {
+  margin: 4px 0 0;
+  color: var(--accent-hi);
+}
 
 /* "Choose saves to export" on the Backup page (BackupPage.vue). */
 .choose-saves {

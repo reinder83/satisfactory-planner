@@ -24,7 +24,8 @@ import {
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
-import { $, $$, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import { $, $$, catalog, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import { mutate } from '../../public/state.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
@@ -593,4 +594,78 @@ test('between groups: what one group hands the next, with its belts, names escap
   render();
   await nextTick();
   assert.equal($('[data-group-links]'), null);
+});
+
+test('between groups: a link can go by truck, train or back to belts, with the vehicle math (#205)', async () => {
+  const rows = plan.stages['3'].rows!;
+  const assignments = Object.fromEntries(
+    rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
+  );
+  open({
+    calculated: plan,
+    workspace: { catalog: catalog() },
+    state: {
+      version: 3,
+      factoryGroups: {
+        groups: [
+          { id: 'fg-smelt1', name: evil },
+          { id: 'fg-parts1', name: 'Parts' },
+        ],
+        assignments,
+      },
+    },
+  });
+  const calls = stubFetch<UpdateOp>({ '/api/update': (op: UpdateOp) => mutate(state, op) });
+  go('factories');
+  render();
+  await nextTick();
+  const key = 'fg-smelt1:fg-parts1';
+  const pick = async (sel: string, value: string) => {
+    const el = $<HTMLSelectElement | HTMLInputElement>(sel)!;
+    el.value = value;
+    el.dispatchEvent(new Event('change'));
+    await settle();
+  };
+  assert.equal($<HTMLSelectElement>(`[data-link-mode="${key}"]`)!.value, 'belt');
+  assert.equal($(`[data-link-trip="${key}"]`), null, 'belts need no round trip');
+  await pick(`[data-link-mode="${key}"]`, 'truck');
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'factoryLinkTransport',
+    from: 'fg-smelt1',
+    to: 'fg-parts1',
+    mode: 'truck',
+    roundTripMin: 5,
+    fuel: 'Packaged Fuel',
+  });
+  assert.equal(state.version, 7);
+  const linkEl = $(`[data-link="${key}"]`)!;
+  assert.match(
+    linkEl.querySelector('[data-link-load]')!.textContent!,
+    /^\d+ trucks?, \d+ of 48 slots each trip\. Up to [\d.,]+ Packaged Fuel\/min/,
+  );
+  assert.doesNotMatch(linkEl.textContent!, /Mk\.\d belt/, 'the belt advice gives way');
+  // A round trip out of range is refused before anything is sent.
+  const sent = calls.length;
+  await pick(`[data-link-trip="${key}"]`, '0');
+  assert.equal(calls.length, sent);
+  assert.equal($<HTMLInputElement>(`[data-link-trip="${key}"]`)!.value, '5');
+  await pick(`[data-link-trip="${key}"]`, '12');
+  await pick(`[data-link-fuel="${key}"]`, 'Coal');
+  assert.deepEqual(state.factoryGroups.links![key], {
+    mode: 'truck',
+    roundTripMin: 12,
+    fuel: 'Coal',
+  });
+  // A train keeps the round trip, drops the fuel and counts cars.
+  await pick(`[data-link-mode="${key}"]`, 'train');
+  assert.deepEqual(state.factoryGroups.links![key], { mode: 'train', roundTripMin: 12 });
+  assert.equal($(`[data-link-fuel="${key}"]`), null);
+  assert.match(
+    $(`[data-link="${key}"] [data-link-load]`)!.textContent!,
+    /^1 train: \d+ freight cars?/,
+  );
+  await pick(`[data-link-mode="${key}"]`, 'belt');
+  assert.equal(state.factoryGroups.links, undefined);
+  assert.match($(`[data-link="${key}"]`)!.textContent!, /Mk\.\d (belt|pipe)/);
+  noMarkup();
 });

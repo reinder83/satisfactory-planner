@@ -101,6 +101,20 @@ export const version6 = {
   storageEdits: { ...version5.storageEdits, hiddenFloors: ['workshop'] },
 } satisfies SavedState;
 
+// Version 7: a vehicle picked for a factory-group link (#205).
+export const version7 = {
+  ...version6,
+  version: 7,
+  factoryGroups: {
+    groups: [{ id: 'fg-plates1', name: 'Plates' }],
+    assignments: {},
+    links: {
+      'fg-plates1:elevator': { mode: 'truck', roundTripMin: 4, fuel: 'Packaged Fuel' },
+      'mines:fg-plates1': { mode: 'train', roundTripMin: 12 },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -110,6 +124,7 @@ export const states: [SavedState, number][] = [
   [version4, 4],
   [version5, 5],
   [version6, 6],
+  [version7, 7],
 ];
 
 export const backup = {

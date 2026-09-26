@@ -6,6 +6,6 @@ The interface ships two typefaces as self-hosted WOFF2 files, both licensed unde
 
 The HiGHS JavaScript/WebAssembly solver is the `highs` npm package, 1.15.3 (MIT), from https://github.com/lovasoa/highs-js, installed from the npm registry and checked against the integrity value in `package-lock.json`. Its license ships in the package and, for the Pages edition, as `HIGHS-LICENSE` next to the solver. No runtime download is needed.
 
-Recipe data is derived from the Satisfactory Tools dataset at https://github.com/greeny/SatisfactoryTools. The dataset revision is recorded in `recipes.json`. Satisfactory game content belongs to Coffee Stain Studios. This is an unofficial planner.
+Recipe data is derived from the Satisfactory Tools dataset at https://github.com/greeny/SatisfactoryTools. The dataset revision is recorded in `recipes.json`; item stack sizes come from the same revision, and the vehicle slot counts and fuel burn rates in `public/app/logistics.ts` from its building data. Satisfactory game content belongs to Coffee Stain Studios. This is an unofficial planner.
 
 Reference resource limits use the standard node counts, with crude oil wells excluded. Nitrogen is a separate configurable budget. Randomizer resource-rich settings can change counts and are not inferred from purity: confirm the per-resource budgets for the actual seed. Reference: https://satisfactory.wiki.gg/wiki/Resource_Node .

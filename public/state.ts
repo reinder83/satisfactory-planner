@@ -10,13 +10,15 @@
 //   customTasks    [{ id: 'custom-…', title, phase }] steps the user added
 //   storageEdits   storage room layout edits (blankEdits), version 2+/4/5/6
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
-//   factoryGroups  named production areas and row assignments (blankGroups), version 3
+//   factoryGroups  named production areas and row assignments (blankGroups), version 3;
+//                  links, the vehicle picked per group link, version 7
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
 // 'unlock-<schematic>', 'recipe-unlock-<recipe>', 'early-base-…', 'startup-…', 'custom-…'.
 // Notes use 'factory-<id>' and 'slot-<address>' without a phase or step.
 //
+import { vehicleFuels } from './preferences.ts';
 // Types: ProgressState is what validateState returns, SavedState anything it accepts
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
@@ -25,6 +27,8 @@ import type {
   CustomTask,
   FactoryGroups,
   GroupAssignment,
+  LinkMode,
+  LinkTransport,
   Phase,
   ProgressState,
   SavedState,
@@ -239,7 +243,52 @@ function validateGroups(raw: unknown): FactoryGroups {
       });
     }
   }
+  if (raw.links !== undefined) {
+    if (!plain(raw.links) || Object.keys(raw.links).length > 500)
+      fail('Invalid factory group links.');
+    const known = new Set(g.groups.map(x => x.id));
+    const links: Record<string, LinkTransport> = {};
+    for (const [k, v] of Object.entries(raw.links)) {
+      const [from, to, extra] = k.split(':');
+      if (extra !== undefined || !linkKey(from, to, known)) fail('Invalid group link.');
+      links[k] = linkTransport(v);
+    }
+    // Only kept when there is one, so a state without vehicle links keeps its old shape.
+    if (Object.keys(links).length) g.links = links;
+  }
   return g;
+}
+// The places a link can join besides factory groups: group-links.ts's UNGROUPED, MINES and
+// OUTSIDE ids (a test keeps the two lists in step).
+export const linkPlaces = ['ungrouped', 'mines', 'storage', 'drone', 'elevator', 'sink'];
+const linkModes: LinkMode[] = ['truck', 'tractor', 'explorer', 'train', 'drone'];
+// The vehicles that burn fuel from their own slot; a train is electric and a drone's fuel
+// depends on the flight distance, which the planner does not know.
+export const fuelledModes: LinkMode[] = ['truck', 'tractor', 'explorer'];
+// Whether from and to name two different places: a known group or one of linkPlaces.
+const linkKey = (from: unknown, to: unknown, known: Set<string>) =>
+  [from, to].every(p => typeof p === 'string' && (known.has(p) || linkPlaces.includes(p))) &&
+  from !== to;
+// A link's transport as saved: a vehicle mode, a round trip of up to a day in minutes, and a
+// fuel for the vehicles that burn one.
+function linkTransport(v: unknown): LinkTransport {
+  if (
+    !plain(v) ||
+    !linkModes.includes(v.mode as LinkMode) ||
+    typeof v.roundTripMin !== 'number' ||
+    !Number.isFinite(v.roundTripMin) ||
+    v.roundTripMin < 0.1 ||
+    v.roundTripMin > 1440
+  )
+    fail('Invalid transport for a group link.');
+  const mode = v.mode as LinkMode;
+  if (fuelledModes.includes(mode) !== vehicleFuels.includes(v.fuel as string))
+    fail('Invalid vehicle fuel for a group link.');
+  return {
+    mode,
+    roundTripMin: v.roundTripMin,
+    ...(fuelledModes.includes(mode) ? { fuel: v.fuel as string } : {}),
+  };
 }
 // A new profile for a save you are already playing describes the same world.
 // These groups say which of the previous profile's records are facts about that
@@ -449,7 +498,12 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
       }
     if (list.every(m => known.has(m.group))) assignments[key] = list;
   }
-  return validateGroups({ groups, assignments });
+  // Vehicle links (#205) join carried groups or fixed places, all still known here.
+  return validateGroups({
+    groups,
+    assignments,
+    ...(carried.links ? { links: carried.links } : {}),
+  });
 }
 // A profile's stored hard-drive payoff ranking (#203) while it was ranked against the plan the
 // profile has now, otherwise null. GET /api/context sends this in both editions.
@@ -545,17 +599,17 @@ function validateEdits(raw: unknown): StorageEdits {
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–6 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–7 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5, 6].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "7" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 6
+      // Compared as the old code did, so a version given as "8" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 7
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -608,18 +662,21 @@ export function validateState(s: unknown): ProgressState {
   // marked 4, and one with a hidden handbook bay 5, so old versions refuse it instead of
   // silently dropping those edits (and showing the bay again as if nothing happened).
   // A hidden built-in floor is 6: a version-5 release would drop the list it does not know
-  // and show the floor again.
-  clean.version = clean.storageEdits.hiddenFloors.length
-    ? 6
-    : clean.storageEdits.hiddenBays.length
-      ? 5
-      : hasAddedSlots(clean.storageEdits)
-        ? 4
-        : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-          ? 3
-          : hasEdits(clean.storageEdits)
-            ? 2
-            : 1;
+  // and show the floor again. A vehicle picked for a group link is 7 (#205): an older
+  // validateGroups keeps only groups and assignments and would drop the choice.
+  clean.version = clean.factoryGroups.links
+    ? 7
+    : clean.storageEdits.hiddenFloors.length
+      ? 6
+      : clean.storageEdits.hiddenBays.length
+        ? 5
+        : hasAddedSlots(clean.storageEdits)
+          ? 4
+          : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+            ? 3
+            : hasEdits(clean.storageEdits)
+              ? 2
+              : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
@@ -767,6 +824,25 @@ function mutateGroups(s: SavedState, op: Raw) {
       if (kept.length) g.assignments[k] = kept;
       else delete g.assignments[k];
     }
+    // Its links go too; they joined a place that no longer exists.
+    for (const k of Object.keys(g.links || {}))
+      if (k.split(':').includes(op.id as string)) delete g.links![k];
+    if (g.links && !Object.keys(g.links).length) delete g.links;
+  } else if (op.type === 'factoryLinkTransport') {
+    if (!linkKey(op.from, op.to, new Set(g.groups.map(x => x.id))))
+      fail('Unknown factory group link.');
+    const key = op.from + ':' + op.to;
+    const links = { ...g.links };
+    if (op.mode === 'belt') delete links[key];
+    else
+      links[key] = linkTransport({
+        mode: op.mode,
+        roundTripMin: op.roundTripMin,
+        ...(op.fuel === undefined ? {} : { fuel: op.fuel }),
+      });
+    if (Object.keys(links).length > 500) fail('You can set up to 500 group links.');
+    if (Object.keys(links).length) g.links = links;
+    else delete g.links;
   } else if (op.type === 'factoryAssign') {
     if (!safeKey(op.key) || !Array.isArray(op.groups) || op.groups.length > 12)
       fail('Invalid factory group assignment.');

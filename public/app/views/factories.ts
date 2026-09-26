@@ -11,7 +11,11 @@ import type { FactoryGroups, GroupAssignment } from '../../types/index.ts';
 // a null rate means the whole output, or the remainder once other groups take theirs.
 export function factoryGroupsState(): FactoryGroups {
   const g: Partial<FactoryGroups> = state?.factoryGroups || {};
-  return { groups: g.groups || [], assignments: g.assignments || {} };
+  return {
+    groups: g.groups || [],
+    assignments: g.assignments || {},
+    ...(g.links ? { links: g.links } : {}),
+  };
 }
 
 export const membershipsOf = (key: string): GroupAssignment[] =>

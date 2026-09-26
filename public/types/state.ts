@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–6). Later versions only add optional sections, so an older
+//                  version (1–7). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -10,8 +10,8 @@ import type { Phase } from './common.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
-// handbook bay, 6 a hidden built-in floor.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6;
+// handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -67,6 +67,19 @@ export interface FactoryGroups {
   groups: { id: string; name: string }[];
   // Plan row id (not a 'calc-' key) to its group shares.
   assignments: Record<string, GroupAssignment[]>;
+  // The transport picked for a link between two places (#205), keyed '<from>:<to>' with a
+  // group id or a place from group-links.ts. Absent or missing a key: belt or pipe (version 7).
+  links?: Record<string, LinkTransport>;
+}
+
+export type LinkMode = 'truck' | 'tractor' | 'explorer' | 'train' | 'drone';
+export interface LinkTransport {
+  mode: LinkMode;
+  // Minutes for one vehicle there and back, loading included.
+  roundTripMin: number;
+  // What a truck, tractor or explorer burns (preferences.ts vehicleFuels); absent for a train
+  // (electric) and a drone.
+  fuel?: string;
 }
 
 // Normalised progress, as validateState returns it.
@@ -123,6 +136,15 @@ export type UpdateOp =
   | { type: 'factoryGroupRename'; id: string; name: string }
   | { type: 'factoryGroupRemove'; id: string }
   | { type: 'factoryAssign'; key: string; groups: { group: string; rate?: number | null }[] }
+  // mode 'belt' goes back to belt or pipe and forgets the link's entry.
+  | {
+      type: 'factoryLinkTransport';
+      from: string;
+      to: string;
+      mode: LinkMode | 'belt';
+      roundTripMin?: number;
+      fuel?: string;
+    }
   | { type: 'storageFloorAdd'; id: string; label: string }
   // A blank label restores the built-in name.
   | { type: 'storageFloorRename'; id: string; label: string }
