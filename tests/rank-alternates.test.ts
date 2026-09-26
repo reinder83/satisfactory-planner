@@ -62,3 +62,21 @@ test('past the time budget the rest are skipped and the ranking says so', () => 
   assert.equal(r.candidates.length, 0);
   assert.ok(r.total > 0);
 });
+
+test("a leftover preferred list does not change a standard profile's trials (#185)", () => {
+  const plain = rankAlternates({}, { phase: '3' });
+  for (const name of ['Recycled Rubber', 'Bolted Frame']) {
+    const candidate = plain.candidates.find(c => c.name === name)!;
+    assert.ok(candidate, name + ' is a Phase 3 candidate');
+    // Once custom with this alternate preferred, now back on standard: the lists stay stored.
+    const leftover = rankAlternates(
+      { recipes: 'standard', alternateRecipes: [candidate.id], preferredRecipes: [candidate.id] },
+      { phase: '3' },
+    ).candidates.find(c => c.id === candidate.id)!;
+    assert.deepEqual(
+      [leftover.status, leftover.buildings, leftover.rawTotal],
+      [candidate.status, candidate.buildings, candidate.rawTotal],
+      name,
+    );
+  }
+});

@@ -1481,9 +1481,14 @@ export function rankAlternates(
       hours: 0,
     };
     try {
-      const st = calculate({ ...s, recipes: 'custom', alternateRecipes: [...owned!, r.id] }).stages[
-        phase
-      ];
+      const st = calculate({
+        ...s,
+        recipes: 'custom',
+        alternateRecipes: [...owned!, r.id],
+        // A preferred list only counts under 'custom'. A standard profile can still carry one
+        // from when it was custom; the trial would force it where the base plan ignores it (#185).
+        preferredRecipes: s.recipes === 'custom' ? s.preferredRecipes : [],
+      }).stages[phase];
       const f = figures(st);
       if (!f) {
         entry.status = 'infeasible';
