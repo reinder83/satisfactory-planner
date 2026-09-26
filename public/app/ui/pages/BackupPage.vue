@@ -6,7 +6,7 @@
   the dialogs do.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   downloadJson,
@@ -48,6 +48,13 @@ const page = computed(() =>
       ? 'Last export: ' + new Date(workspace.lastBackup).toLocaleString()
       : 'No full backup has been exported from this browser yet.',
   })),
+);
+// The save-wide notes box keeps its own text, so a redraw (a ticked step, the save indicator) does not
+// put the saved note back over unsaved typing. It follows the saved note when that note changes (another save).
+const note = ref(page.value.note);
+watch(
+  () => page.value.note,
+  saved => (note.value = saved),
 );
 const exporting = ref(false);
 
@@ -235,7 +242,7 @@ async function persistStorage() {
     </div>
     <section class="panel">
       <h2>Save-wide notes for this profile</h2>
-      <textarea id="global-note" class="notes" maxlength="6000" :value="page.note"></textarea>
+      <textarea id="global-note" class="notes" maxlength="6000" v-model="note"></textarea>
       <button class="btn" data-save-note="global" @click="saveNote" data-input="global-note">
         Save notes
       </button>
@@ -292,7 +299,7 @@ async function persistStorage() {
         class="notes"
         maxlength="6000"
         aria-label="Save-wide notes"
-        :value="page.note"
+        v-model="note"
       ></textarea>
       <div class="note-save">
         <span class="small muted">Seed, locations, routes and decisions.</span

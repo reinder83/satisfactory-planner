@@ -6,7 +6,7 @@
   calcStage(). A delivery's id is `<stage>-<item slug>`, a saved key.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { num, slug } from '../../format.ts';
 import {
   calcStage,
@@ -57,6 +57,13 @@ const page = computed(() =>
     };
   }),
 );
+// The phase notes box keeps its own text, so a redraw (a ticked step, the save indicator) does not
+// put the saved note back over unsaved typing. It follows the saved note when the phase or that note changes (another phase or profile).
+const note = ref(page.value?.note ?? '');
+watch(
+  [() => page.value?.phase, () => page.value?.note],
+  () => (note.value = page.value?.note ?? ''),
+);
 </script>
 
 <template>
@@ -96,7 +103,7 @@ const page = computed(() =>
         <Checklist />
         <AddTaskForm placeholder="Add a task…" />
         <h2>Phase notes</h2>
-        <textarea id="phase-note" class="notes" maxlength="6000" :value="page.note"></textarea>
+        <textarea id="phase-note" class="notes" maxlength="6000" v-model="note"></textarea>
         <button
           class="btn"
           :data-save-note="'phase-' + page.phase"
