@@ -9,6 +9,8 @@ import {
   blankCounts,
   blankExtraction,
   extractionLimits,
+  matchingPreset,
+  presetSurvey,
   purities3,
   startingSurvey,
 } from '../../preferences.ts';
@@ -50,10 +52,26 @@ export function resetExtraction() {
   const w = draft();
   const previous = extractionOf(w);
   w.extractionUndo = JSON.parse(JSON.stringify(previous));
+  w.extractionUndoKind = 'reset';
   w.extraction = { ...blankExtraction(), mark: previous.mark, clock: previous.clock };
 }
 
-// Put back the counts resetExtraction set aside; offered until the survey closes.
+// The survey's purity or distribution changed to a fully known world: every count is refilled
+// from that world's preset. Counts that match no preset were typed by hand (a reading of a
+// Random world, say), so they are kept aside to undo, as a reset's are; a preset's own counts
+// can simply be filled again, and the refill spends any earlier undo like "Fill in" does.
+export function refillExtraction() {
+  const w = draft(),
+    s = w.settings;
+  const previous = extractionOf(w);
+  const typed = !matchingPreset(previous);
+  w.extractionUndo = typed ? JSON.parse(JSON.stringify(previous)) : null;
+  w.extractionUndoKind = 'refill';
+  w.extraction = presetSurvey(s.purity, previous, s.distribution);
+}
+
+// Put back the counts resetExtraction or refillExtraction set aside; offered until the survey
+// closes.
 export function undoExtractionReset() {
   const w = draft();
   if (!w.extractionUndo) return;

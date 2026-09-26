@@ -71,6 +71,8 @@ export interface WizardDraft {
   extractionStep?: number;
   extractionReturn?: SurveyReturn | null;
   extractionUndo?: Survey | null;
+  // What extractionUndo undoes: "Reset all counts", or a refill that replaced typed counts.
+  extractionUndoKind?: 'reset' | 'refill';
 }
 
 // The reply of POST /api/profiles.

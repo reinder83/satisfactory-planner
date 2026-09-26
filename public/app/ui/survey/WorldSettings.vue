@@ -60,7 +60,7 @@ const view = computed(() =>
       shuffled: s.distribution === 'randomized',
       purityLabel: (purities.find(([v]) => v === s.purity) || [, ''])[1],
       rich: richShape[s.distribution] || '',
-      undo: !!wizard.extractionUndo,
+      undo: wizard.extractionUndo ? (wizard.extractionUndoKind ?? 'reset') : null,
     };
   }),
 );
@@ -95,9 +95,14 @@ function reset() {
 }
 
 function undo() {
+  const kind = view.value?.undo;
   undoExtractionReset();
   render();
-  toast('Put back the counts you had before the reset.');
+  toast(
+    kind === 'refill'
+      ? 'Put back the counts you typed.'
+      : 'Put back the counts you had before the reset.',
+  );
 }
 </script>
 
@@ -160,7 +165,13 @@ function undo() {
       >
     </div>
     <p class="small">
-      <template v-if="view.undo"
+      <template v-if="view.undo === 'refill'"
+        ><button type="button" class="btn quiet" data-node-undo @click="undo">Undo refill</button>
+        <span class="muted"
+          >Your typed counts were replaced by the map's totals for these settings. This puts them
+          back.</span
+        ></template
+      ><template v-else-if="view.undo"
         ><button type="button" class="btn quiet" data-node-undo @click="undo">Undo reset</button>
         <span class="muted"
           >Every count was cleared. This puts back what was there before.</span

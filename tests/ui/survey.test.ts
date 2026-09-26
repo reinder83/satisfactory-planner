@@ -221,6 +221,24 @@ test('the survey asks the two World Randomization settings and fills what it can
   assert.match(text('.node-presets'), /node totals at All Pure\./);
 });
 
+test('a refill over hand-typed counts can be undone; one over a preset needs no undo', async () => {
+  survey(2, { purity: 'vanilla', distribution: 'original' });
+  await change('input[name="node:Iron Ore:pure"]', '3');
+  await change('select[name=purity]', 'pure');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 127, 'refilled');
+  assert.equal($('[data-node-undo]')!.textContent!.trim(), 'Undo refill');
+  assert.match(text('.node-presets'), /Your typed counts were replaced/);
+  await click('[data-node-undo]');
+  assert.equal(wizard!.extraction!.nodes!['Iron Ore']!.pure, 3, 'the typed count is back');
+  assert.equal(wizard!.extractionUndo, null, 'and the undo spent');
+  assert.match($('#toast')!.textContent!, /counts you typed/);
+  // The pure preset's own counts are not typed, so refilling over them offers nothing to undo.
+  await change('select[name=purity]', 'pure');
+  await change('select[name=purity]', 'vanilla');
+  assert.equal(wizard!.extractionUndo, null);
+  assert.ok($('[data-node-reset]'), 'the reset button, not an undo');
+});
+
 test('a world with no table says why, and fills nothing', async () => {
   // A purity with no fixed layout.
   survey(2, { purity: 'random', distribution: 'original' });
