@@ -330,6 +330,11 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
   // A hair under the multiple, as a solver value can be, is still every lane full (#88).
   assert.match(advice(2 * cap * (1 - 1e-10)).text, /all 2 full\.$/);
   assert.match(advice(2 * cap).text, /→ 2 × Mk\.\d belts — all 2 full\.$/);
+  // A hair over the multiple needs a third lane, which carries almost nothing (#89).
+  assert.match(
+    advice(2 * cap + 0.001).text,
+    /3 × Mk\.\d belts — 2 full \+ 1 carrying under 0\.01\/min\.$/,
+  );
   assert.match(advice(cap + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
 });
 

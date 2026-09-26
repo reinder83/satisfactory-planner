@@ -41,6 +41,10 @@ interface AdviceRow {
   local: FlowInput['local'];
 }
 
+// The last lane's rate as printed. A remainder that rounds to 0 at two decimals (a rate a hair
+// over a multiple) says so, rather than a lane carrying "0/min".
+const lastRate = (r: number) => (num(r) === '0' ? 'under 0.01' : num(r));
+
 const advice = computed(() => {
   const m = props.model;
   if (!m || !m.inputs.length) return null;
@@ -67,7 +71,7 @@ const advice = computed(() => {
           p.count > 1
             ? p.full === p.count
               ? ` — all ${p.count} full`
-              : ` — ${p.full} full + 1 carrying ${num(p.last)}${l.unit}`
+              : ` — ${p.full} full + 1 carrying ${lastRate(p.last)}${l.unit}`
             : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`,
         feed: null,
         spare: null,
