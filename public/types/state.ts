@@ -11,8 +11,8 @@ import type { Phase } from './common.ts';
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
 // handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link, 8 a
-// handbook bay moved to another floor.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+// handbook bay moved to another floor, 9 a factory-group link to the vehicle fuel.
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
