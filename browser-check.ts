@@ -155,7 +155,7 @@ try {
   await checkStorage();
   // The browser workspace has the save the wizard just created.
   const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
-  const second = await api('/api/profiles', {
+  await api('/api/profiles', {
     saveId: first.id,
     name: 'Second profile',
     settings: { phase: '1', goal: 'minimal' },
