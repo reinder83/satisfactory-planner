@@ -277,6 +277,64 @@ try {
     assert.equal(await saved(), before);
   };
   await checkStrayDrop();
+  // While the page scrolls under a pointer held still (an auto-scroll, the wheel), the highlight
+  // moves to the position now under the pointer (#303). dnd-kit kept it on the one that had
+  // scrolled away until the pointer moved again.
+  const checkScrollFollow = async () => {
+    await page.locator('[data-toggle-layout]').click();
+    const bayA = page.locator('.bay').filter({ has: page.locator('[data-complete-bay="A"]') });
+    const from = (await bayA.locator('[data-drag-slot]').first().getAttribute('data-drag-slot'))!;
+    // Two positions of bay A, one above the other (a row holds four), neither the one picked up.
+    const ids = await bayA
+      .locator('[data-drop]')
+      .evaluateAll(xs => xs.map(x => (x as HTMLElement).dataset.drop ?? ''));
+    const column = [1, 2, 3].find(i => ids[i] !== from && ids[i + 4] && ids[i + 4] !== from)!;
+    const [upper, lower] = [ids[column]!, ids[column + 4]!];
+    await page
+      .locator(`[data-drop="${upper}"]`)
+      .evaluate(cell => cell.scrollIntoView({ block: 'center' }));
+    const handle = (await page.locator(`[data-drag-slot="${from}"]`).boundingBox())!;
+    const cell = (await page.locator(`[data-drop="${upper}"]`).boundingBox())!;
+    const x = cell.x + cell.width / 2,
+      y = cell.y + cell.height / 2;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 + 10, handle.y + handle.height / 2 + 10, {
+      steps: 5,
+    });
+    await page.mouse.move(x, y, { steps: 20 });
+    await page.locator(`[data-drop="${upper}"].drop-over`).waitFor();
+    const dy = (await page.locator(`[data-drop="${lower}"]`).boundingBox())!.y - cell.y;
+    await page.evaluate(dy => scrollBy(0, dy), dy);
+    await page.waitForTimeout(300);
+    const shown = await page.evaluate(
+      ({ x, y }) => ({
+        under: [...document.querySelectorAll<HTMLElement>('[data-drop]:not(.dragging)')]
+          .filter(c => {
+            const r = c.getBoundingClientRect();
+            return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+          })
+          .map(c => c.dataset.drop),
+        over: [...document.querySelectorAll<HTMLElement>('.drop-over')].map(c => c.dataset.drop),
+      }),
+      { x, y },
+    );
+    assert.deepEqual(
+      shown.under,
+      [lower],
+      'the page scrolled the lower position under the pointer',
+    );
+    assert.deepEqual(shown.over, [lower], 'the highlight followed the scroll');
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    // Once the card is back, dnd-kit's stand-in beside it is gone.
+    await page.waitForFunction(
+      from => document.querySelectorAll(`[data-drag-slot="${from}"]`).length === 1,
+      from,
+    );
+    await page.locator('[data-toggle-layout]').click();
+  };
+  await checkScrollFollow();
   // The browser workspace has the save the wizard just created.
   const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
   await api('/api/profiles', {

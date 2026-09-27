@@ -20,8 +20,8 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { DragDropProvider } from '@dnd-kit/vue';
-import type { DragDropManager, DragEndEvent } from '@dnd-kit/vue';
-import { landsOnTarget } from '../storage/drop-point.ts';
+import type { DragDropManager, DragEndEvent, DragStartEvent } from '@dnd-kit/vue';
+import { followScroll, landsOnTarget } from '../storage/drop-point.ts';
 import {
   floorOrder,
   hiddenStorageBays,
@@ -235,6 +235,11 @@ async function dropped(event: DragEndEvent, manager: DragDropManager) {
     await new Promise(resolve => setTimeout(resolve, 20));
   return moveContainer(String(source.id), String(target.id));
 }
+// While a drag lasts, the target follows the page as it scrolls under the pointer
+// (ui/storage/drop-point.ts, #303).
+function dragStarted(_event: DragStartEvent, manager: DragDropManager) {
+  followScroll(manager);
+}
 // "Edit layout" / "Done editing": show or hide the layout editor (view state only).
 function toggleLayout() {
   setLayoutEditing(!layoutEditing);
@@ -339,7 +344,7 @@ function toggleLayout() {
     Filtered view: showing matching bays only. Clear search to see the full floor arrangement.
   </p>
   <p v-if="page.bays.length" class="eyebrow floor-marker">REAR OF HALL ↑</p>
-  <DragDropProvider @drag-end="dropped"
+  <DragDropProvider @drag-start="dragStarted" @drag-end="dropped"
     ><div class="floor-grid">
       <template v-if="page.aisles || page.bays.length"
         ><div v-for="r in page.aisles" :key="'aisle' + r" class="aisle" :style="`--aisle-row:${r}`">

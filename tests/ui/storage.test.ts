@@ -913,6 +913,57 @@ test('a position is the drop target only while the pointer is over it, in the wi
   assert.equal(at(10, innerHeight + 80, keys), true);
 });
 
+test('the drop target follows the page as it scrolls under a pointer held still (#303)', async () => {
+  open();
+  setLayoutEditing(true);
+  render();
+  await settle();
+  const manager = dropManager();
+  // dnd-kit's drag feedback asks for the page's animations, which happy-dom does not have.
+  document.getAnimations ??= () => [];
+  Element.prototype.getAnimations ??= () => [];
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  const over = () => $$('.drop-over').map(c => c.dataset.drop);
+  // A02 is picked up and held over A06, with A07 below.
+  placeCell('A06', 200, 200);
+  placeCell('A07', 200, 320);
+  manager.actions.start({
+    source: 'A02',
+    coordinates: { x: 250, y: 250 },
+    event: new PointerEvent('pointerdown'),
+  });
+  // dnd-kit measures the positions as they come into view, which happy-dom never reports.
+  for (const d of manager.registry.droppables) d.refreshShape();
+  manager.actions.move({ to: { x: 250, y: 251 } });
+  await settle();
+  assert.deepEqual(over(), ['A06']);
+  // The page scrolls 120 px (an auto-scroll, the wheel); the pointer does not move. A07 is now
+  // under it. dnd-kit kept A06 until the pointer moved again, measured 75 ms late or later.
+  placeCell('A06', 200, 80);
+  placeCell('A07', 200, 200);
+  document.dispatchEvent(new Event('scroll'));
+  await frame();
+  await settle();
+  assert.deepEqual(over(), ['A07'], 'the position under the pointer is the target');
+  assert.equal(manager.dragOperation.target?.id, 'A07');
+  // Scrolled on past every position: none is the target.
+  placeCell('A07', 200, 60);
+  document.dispatchEvent(new Event('scroll'));
+  await frame();
+  await settle();
+  assert.deepEqual(over(), []);
+  manager.actions.stop({ canceled: true });
+  await settle();
+  // After the drag, a scroll measures nothing again.
+  // A06 is registered: its cell is on the page.
+  const a06 = manager.registry.droppables.get('A06')!;
+  const shape = a06.shape;
+  placeCell('A06', 200, 200);
+  document.dispatchEvent(new Event('scroll'));
+  await frame();
+  assert.equal(a06.shape, shape, 'the listener went with the drag');
+});
+
 test('a drop let go away from the position dnd-kit names saves nothing (#298)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open();
