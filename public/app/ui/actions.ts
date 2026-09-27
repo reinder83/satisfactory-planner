@@ -50,19 +50,28 @@ export const factoryLink = (link: FactoryLink | null | undefined) =>
 
 // Closes the shared #detail dialog (its × or a backdrop click). Closing unmounts the dialog's
 // app (ui/detail.ts), so allowSwitch() first sends a note still waiting for its pause in
-// typing, and asks about one that could not be saved; the dialog stays open when the user
-// keeps it. Notes save themselves (ui/note-draft.ts), so saving one no longer closes it.
-export function closeDetail() {
+// typing, and asks about one that could not be saved (the question opens above the dialog);
+// the dialog stays open when the user keeps it. Notes save themselves (ui/note-draft.ts), so
+// saving one no longer closes it.
+export async function closeDetail() {
   const d = required<HTMLDialogElement>('#detail');
-  if (d.open && !allowSwitch(d)) return;
-  d.close();
+  if (!d.open) return;
+  const asked = allowSwitch(d);
+  if (asked === true || (await asked)) d.close();
 }
 
 // Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
-// cancel event, so a note that could not be saved is asked about here, as the × does, and kept by cancelling
-// the close. A browser may still close it after repeated presses, whatever the answer.
+// cancel event, so with a note that could not be saved the close is cancelled here and the
+// note asked about, as the × does; leaving anyway closes it then. A browser may still close
+// it after repeated presses, whatever the answer.
 export function cancelDetail(e: Event) {
-  if (!allowSwitch(required('#detail'))) e.preventDefault();
+  const d = required<HTMLDialogElement>('#detail');
+  const asked = allowSwitch(d);
+  if (asked === true) return;
+  e.preventDefault();
+  void asked.then(ok => {
+    if (ok && d.open) d.close();
+  });
 }
 
 // "Create a save" on the profiles page, and in the wizard when there is no draft.

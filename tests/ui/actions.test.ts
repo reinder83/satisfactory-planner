@@ -10,7 +10,7 @@ import { acceptRoute, refreshState, request } from '../../public/app/api.ts';
 import { calcStage, setQuery, setWizard, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { NOTE_SAVE_DELAY } from '../../public/app/ui/note-draft.ts';
-import { $, $$, generated, go, open, page, stubFetch } from './setup.ts';
+import { answerConfirms, $, $$, generated, go, open, page, stubFetch } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
@@ -206,8 +206,7 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
       return { ...state, notes };
     },
   });
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   go('plan');
   render();
   history.replaceState(null, '', '#plan');
@@ -230,13 +229,13 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
   assert.equal($<HTMLDialogElement>('#detail')!.open, true, 'saving no longer closes the dialog');
   $('#detail .close[data-close]')!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, false);
-  assert.equal(asked, 0);
+  await settle();
+  assert.equal(asked.length, 0);
 });
 
 test('a factory link opens its dialog; the × sends a note still being typed and closes it', async () => {
   const calls = applying();
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   go('factories');
   render();
   $('.factory-card button.name[data-factory="wire"]')!.click();
@@ -251,8 +250,8 @@ test('a factory link opens its dialog; the × sends a note still being typed and
   typeInto('#detail-note', 'Needs a second copper line');
   $('#detail .close[data-close]')!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'nothing to ask: the note is sent');
-  assert.equal(asked, 0);
   await settle();
+  assert.equal(asked.length, 0);
   assert.deepEqual(calls.at(-1)![1], {
     type: 'note',
     key: 'factory-wire',
@@ -309,8 +308,7 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
       status: 409,
     });
   };
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   go('plan');
   render();
   history.replaceState(null, '', '#plan');
@@ -332,7 +330,9 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   // Leaving now would lose it, so the page asks, and stays when the answer is no.
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), false);
-  assert.equal(asked, 1);
+  await settle();
+  assert.equal(asked.length, 1);
+  assert.match(asked[0]!, /could not be saved/, 'asked in the app (#confirm)');
   assert.equal(location.hash, '#plan');
 
   // Retry sends the kept text again; it replaces the other tab's version.
@@ -345,7 +345,8 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   assert.equal($('[data-note-retry]'), null);
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), true, 'nothing left to ask about');
-  assert.equal(asked, 1);
+  await settle();
+  assert.equal(asked.length, 1);
 });
 
 test('a note whose write fails after its page has gone comes back marked unsaved', async () => {

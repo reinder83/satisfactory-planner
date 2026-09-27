@@ -11,7 +11,18 @@ import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
-import { $, $$, evil, generated, go, handbook, open, page, stubFetch } from './setup.ts';
+import {
+  answerConfirms,
+  $,
+  $$,
+  evil,
+  generated,
+  go,
+  handbook,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { Catalog, StoredCalculatedPlan } from '../../public/types/index.ts';
 
 // User text inserted as markup would create an <x-evil> element. (innerHTML cannot tell:
@@ -178,7 +189,7 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   render();
   let reply: (r: Response) => void = () => {};
   globalThis.fetch = async () => new Promise<Response>(r => (reply = r));
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   const input = $<HTMLInputElement>('#import-file')!;
   const file = new File(
     [JSON.stringify({ format: 'satisfactory-planner-backup', state: {} })],
@@ -211,7 +222,7 @@ async function slowRestore() {
       r => void replies.push(body => r(new Response(JSON.stringify(body), { status: 200 }))),
     );
   };
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   go('backup');
   render();
   const input = $<HTMLInputElement>('#import-file')!;
@@ -251,7 +262,7 @@ test('a restore reply does not replace another profile opened meanwhile', async 
 
 test('after a restore the file box is cleared, so the same backup can be chosen again', async () => {
   stubFetch({ '/api/import': () => state });
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   go('backup');
   render();
   const input = $<HTMLInputElement>('#import-file')!;
@@ -275,8 +286,7 @@ test('an export over the import limit is refused with a reason, and nothing down
   let downloads = 0;
   URL.createObjectURL = () => (downloads++, 'blob:x');
   URL.revokeObjectURL = () => {};
-  let asked = false;
-  globalThis.confirm = () => ((asked = true), true);
+  const asked = answerConfirms(true);
   const summary = { ...workspace };
   // A normal export downloads without a question.
   stubFetch({
@@ -299,7 +309,7 @@ test('an export over the import limit is refused with a reason, and nothing down
   $('[data-export-saves]')!.click();
   // The refusal's toast is the last thing the click does.
   await vi.waitFor(() => assert.ok($('#toast')!.classList.contains('error')), { timeout: 5000 });
-  assert.equal(asked, false, 'no "download anyway" question');
+  assert.equal(asked.length, 0, 'no "download anyway" question');
   assert.equal(downloads, 1, 'nothing downloaded');
   const text = $('#toast')!.textContent!;
   assert.ok(/would be 5\d MB, more than the 50 MB an import accepts/.test(text), text);

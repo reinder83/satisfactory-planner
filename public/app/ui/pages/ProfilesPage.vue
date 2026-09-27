@@ -31,6 +31,7 @@ import {
 import { render } from '../../shell.ts';
 import { startWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { confirmAction } from '../confirm.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave } from '../actions.ts';
@@ -66,7 +67,7 @@ const renaming = ref(false);
 
 // "Duplicate": copy the profile with its progress and open the copy.
 async function duplicate(s: SaveCard, p: ProfileCard) {
-  if (!allowSwitch()) return;
+  if (!(await allowSwitch())) return;
   busy.value = key('duplicate', s, p);
   try {
     await writeQueue;
@@ -113,16 +114,20 @@ async function share(s: SaveCard, p: ProfileCard) {
 // goes too, as its last profile), then remove it and reload everything with boot(). Other
 // profiles keep their progress.
 async function remove(s: SaveCard, p: ProfileCard) {
-  if (!allowSwitch()) return;
+  if (!(await allowSwitch())) return;
   if (
-    !confirm(
-      'Are you sure? Remove "' +
+    !(await confirmAction({
+      title: 'Remove this profile?',
+      body:
+        'Are you sure? Remove "' +
         p.name +
         '" and its progress and notes?' +
         (s.profiles.length === 1
           ? ' This also removes the empty save.'
           : ' Other profiles keep their progress.'),
-    )
+      confirmLabel: 'Remove profile',
+      danger: true,
+    }))
   )
     return;
   busy.value = key('remove', s, p);
@@ -142,7 +147,7 @@ async function remove(s: SaveCard, p: ProfileCard) {
 // "Open profile" / "Continue current profile": make it the active profile on the server,
 // load it and show its plan.
 async function openProfile(s: SaveCard, p: ProfileCard) {
-  if (!allowSwitch()) return;
+  if (!(await allowSwitch())) return;
   busy.value = key('open', s, p);
   try {
     await writeQueue;

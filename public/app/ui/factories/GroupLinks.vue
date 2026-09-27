@@ -346,7 +346,7 @@ const fuel = computed(() =>
 async function recalculate(e: Event) {
   const b = e.currentTarget as HTMLButtonElement,
     want = fuel.value?.want;
-  if (!calculated || !want || !allowSwitch()) return;
+  if (!calculated || !want || !(await allowSwitch())) return;
   b.disabled = true;
   try {
     await writeQueue;

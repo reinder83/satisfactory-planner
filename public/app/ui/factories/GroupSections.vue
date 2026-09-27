@@ -13,6 +13,7 @@ import { factoryEditing } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { confirmAction } from '../confirm.ts';
 
 // The factories to sort into groups (handbook factories or calculated rows), and the key
 // their memberships are saved under.
@@ -47,7 +48,14 @@ async function rename(e: Event, id: string) {
 // "Remove group", after a confirmation: only the group goes; its factories and their
 // progress stay.
 async function remove(id: string) {
-  if (!confirm('Remove this group? The factories stay in the list and keep their progress.'))
+  if (
+    !(await confirmAction({
+      title: 'Remove this group?',
+      body: 'Remove this group? The factories stay in the list and keep their progress.',
+      confirmLabel: 'Remove group',
+      danger: true,
+    }))
+  )
     return;
   try {
     await save({ type: 'factoryGroupRemove', id });

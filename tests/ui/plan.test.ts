@@ -15,6 +15,7 @@ import { acceptRoute } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import {
+  answerConfirms,
   $,
   $$,
   evil,
@@ -52,7 +53,7 @@ beforeEach(() => {
   open();
   setQuery('');
   setHideDone(false);
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   go('plan');
 });
 
@@ -265,7 +266,7 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
 
 test('a declined confirmation removes nothing', async () => {
   const calls = stubFetch({ '/api/update': () => state });
-  globalThis.confirm = () => false;
+  answerConfirms(false);
   open({
     state: { customTasks: [{ id: 'custom-1', phase: '3', title: 'Mine' }] },
   });
@@ -318,15 +319,17 @@ test('leaving the page or changing phase asks before dropping an unsaved phase n
   // The page on screen is #plan (the hashchange listener in listeners.ts calls acceptRoute).
   history.replaceState(null, '', '#plan');
   assert.equal(acceptRoute(), true, 'nothing to ask without an edit');
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   const note = $<HTMLTextAreaElement>('#phase-note')!;
   note.value = 'Unsaved thought';
-  // A sidebar link, a typed address or Back: kept notes put the address back.
+  // A sidebar link, a typed address or Back: the address goes back while it asks, and stays
+  // back when the notes are kept.
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), false);
   assert.equal(location.hash, '#plan');
-  assert.equal(asked, 1);
+  await settle();
+  assert.equal(location.hash, '#plan');
+  assert.equal(asked.length, 1);
   // The working-phase select: kept notes leave the phase as it was, unsaved.
   const picker = $<HTMLSelectElement>('#phase-picker')!;
   picker.value = '4';
@@ -335,11 +338,17 @@ test('leaving the page or changing phase asks before dropping an unsaved phase n
   assert.equal(calls.length, 0);
   assert.equal(picker.value, '3');
   assert.equal(note.value, 'Unsaved thought');
-  assert.equal(asked, 2);
-  // Agreeing to drop them follows the route.
-  globalThis.confirm = () => true;
+  assert.equal(asked.length, 2);
+  // Agreeing to drop them goes to the address asked for, without asking again when its
+  // hashchange arrives (acceptRoute, as the listener calls it).
+  const agreed = answerConfirms(true);
   history.replaceState(null, '', '#storage');
+  assert.equal(acceptRoute(), false);
+  await settle();
+  assert.equal(location.hash, '#storage');
   assert.equal(acceptRoute(), true);
+  assert.equal(agreed.length, 1);
+  note.value = '';
   history.replaceState(null, '', '#plan');
   acceptRoute();
 });

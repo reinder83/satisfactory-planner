@@ -22,7 +22,7 @@ const account = computed(() =>
 // "Sign out": after the unsaved-notes check and any queued saves, sign out; boot() then
 // shows the sign-in screen. A failed request is a toast, and the user stays signed in.
 async function signOut() {
-  if (!allowSwitch()) return;
+  if (!(await allowSwitch())) return;
   await writeQueue;
   try {
     await post('/api/logout', {});
