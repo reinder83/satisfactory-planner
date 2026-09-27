@@ -4,7 +4,8 @@
   factory dialog (factoryLink()). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
   The same structure as CalcFactoryCard.vue (SP-14): the output with its unit as the headline,
-  machines and the last one's clock on the line below it, then the recipe.
+  machines and the last one's clock on the line below it, then the recipe. The chip at the top
+  says whether it runs (RunningChip.vue, SP-15) and follows the Running box.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -14,6 +15,7 @@ import { allocationText, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
+import RunningChip from './RunningChip.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
 
@@ -47,6 +49,7 @@ const card = computed(() =>
 
 <template>
   <article :class="['factory-card', card.done ? 'done' : '']">
+    <RunningChip :status="card.done ? 'running' : 'idle'" />
     <div class="card-top">
       <span class="card-icon"><ItemIcon :name="factory.name" /></span>
       <div class="card-main">
