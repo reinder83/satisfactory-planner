@@ -3,12 +3,14 @@
   `factory-<stage>-<id>` (toggleCheck in ui/actions.ts); its name and "Details ↗" open the
   factory dialog (factoryLink()). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
+  The same structure as CalcFactoryCard.vue (SP-14): the output with its unit as the headline,
+  machines and the last one's clock on the line below it, then the recipe.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
-import { allocationText } from '../../views/factories.ts';
+import { allocationText, machineLine } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
@@ -30,8 +32,11 @@ const card = computed(() =>
       check,
       done: checked(check),
       output: num(r.output),
+      unit: '/min',
       recipe: r.recipe.replace('Alternate: ', ''),
-      machines: r.machines ? `${num(r.machines)} × ${r.machine}` : 'See shared oil campus',
+      machines: r.machines
+        ? machineLine(r.machines, r.machine, r.lastClock)
+        : 'See shared oil campus',
       storage: `· storage ${num(r.storage)}/min`,
       allocation: props.group ? allocationText(f.id, props.group, r.output, r.machines) : '',
       editing: factoryEditing,
@@ -48,14 +53,16 @@ const card = computed(() =>
         <button class="name" v-bind="factoryLink({ factory: factory.id })">
           {{ factory.name }}
         </button>
-        <div class="output">{{ card.output }} <span>/min</span></div>
+        <div class="output">
+          {{ card.output }} <span>{{ card.unit }}</span>
+        </div>
+        <div class="small machines">{{ card.machines }}</div>
       </div>
       <span v-if="factory.local" class="badge">Local</span>
       <span v-else-if="factory.conversion" class="badge orange">Convert</span>
     </div>
-    <div class="recipe">{{ card.recipe }}</div>
-    <div class="small">
-      {{ card.machines }}
+    <div class="recipe">
+      {{ card.recipe }}
       <span class="muted">{{ card.storage }}</span>
     </div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
