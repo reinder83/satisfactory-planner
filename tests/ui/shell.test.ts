@@ -89,6 +89,22 @@ test('the phase picker offers the profile’s phases and shows the working one',
   assert.equal(picker.disabled, false);
 });
 
+test('the top bar carries a short save status for phone widths, announced politely', () => {
+  render();
+  const short = $('.topbar .save-status #saved-short')!;
+  assert.equal(short.textContent, 'Saved');
+  assert.equal(short.getAttribute('role'), 'status');
+  assert.equal(short.getAttribute('aria-live'), 'polite');
+  // The sidebar's full status is announced the same way; only one is shown at a time.
+  assert.equal($('.sidebar .save-status #saved')!.getAttribute('aria-live'), 'polite');
+  for (const dot of document.querySelectorAll('.save-status .dot'))
+    assert.equal(dot.getAttribute('aria-hidden'), 'true', 'the dot is decorative');
+  // The widest label sits hidden in the same cell, so the width never changes.
+  const sizer = $('.topbar .save-label [aria-hidden="true"]')!;
+  assert.equal(sizer.textContent, 'Saving…');
+  assert.equal($('.topbar-tools #phase-picker')!.id, 'phase-picker');
+});
+
 test('ADA speaks, cycles, mutes and unmutes', async () => {
   render();
   assert.match($('.ada')!.textContent, /Artificial Directory and Assistant/);

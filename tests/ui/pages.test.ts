@@ -189,11 +189,13 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   // pending is what the close-tab warning (listeners.ts) checks.
   assert.equal(pending, 1);
   assert.equal($('#saved')!.textContent, 'Saving…');
+  assert.equal($('#saved-short')!.textContent, 'Saving…');
   reply(new Response(JSON.stringify(state), { status: 200 }));
   await new Promise(r => setTimeout(r, 20));
   await nextTick();
   assert.equal(pending, 0);
   assert.notEqual($('#saved')!.textContent, 'Saving…');
+  assert.equal($('#saved-short')!.textContent, 'Saved');
   assert.match($('#toast')!.textContent, /Backup restored/);
 });
 
