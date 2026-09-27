@@ -1,7 +1,9 @@
 // Shared set-up for the component tests: a page with #app, and a save opened the way
 // loadContext() opens one, with a hostile name wherever user text appears.
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { afterEach } from 'vitest';
 import {
   setContext,
   setProgressionData,
@@ -67,6 +69,17 @@ export const catalog = (): Catalog =>
     )),
   );
 export const evil = '<x-evil onclick=alert(1)> & "quoted"';
+
+// Every notice names exactly one tone (SP-12, #247); .blue is only the stylesheet's older name
+// for .info. Checked after every component test, on whatever page it left drawn.
+export const TONES = ['info', 'warn', 'error'];
+export const untonedNotices = () =>
+  [...document.querySelectorAll('.notice')]
+    .filter(
+      n => TONES.filter(t => n.classList.contains(t)).length !== 1 || n.classList.contains('blue'),
+    )
+    .map(n => `${n.className}: ${(n.textContent || '').trim().slice(0, 60)}`);
+afterEach(() => assert.deepEqual(untonedNotices(), [], 'every notice names one tone'));
 // Typed as HTMLElement, which every element these tests look up is; `$` still returns null
 // for a missing one.
 export const $ = <E extends Element = HTMLElement>(s: string) => document.querySelector<E>(s);

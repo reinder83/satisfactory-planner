@@ -75,7 +75,7 @@ const view = computed(() =>
       </table>
     </div>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
-    <div v-for="d in view.drafts" :key="d.phase" class="notice">
+    <div v-for="d in view.drafts" :key="d.phase" class="notice warn">
       <b>Phase {{ d.phase }}:</b> {{ d.reason
       }}<template v-if="d.fixes.length"
         ><p><b>Options</b></p>

@@ -164,7 +164,9 @@ test('a timed profile sorts by delivery time; a ranking of another phase is only
   render();
   await nextTick();
   assert.match($('[data-payoff-summary]')!.textContent!, /7 of 20/);
-  assert.ok($('[data-payoff-stopped]'));
+  // It failed to finish: an error notice, announced like the toast.
+  assert.ok($('[data-payoff-stopped]')!.classList.contains('error'));
+  assert.equal($('[data-payoff-stopped]')!.getAttribute('role'), 'status');
   setPayoff(stored({ candidates: [], total: 0 }));
   render();
   await nextTick();

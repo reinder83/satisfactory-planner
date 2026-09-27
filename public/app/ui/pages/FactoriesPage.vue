@@ -131,7 +131,7 @@ function filter(e: Event) {
     title="Factory targets"
     subtitle="Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history."
   />
-  <div v-if="page.post" class="notice">
+  <div v-if="page.post" class="notice info">
     These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage
     items priority before committing all spare output to sinks.
   </div>
@@ -174,7 +174,7 @@ function filter(e: Event) {
   </div>
   <section v-if="page.post" style="margin-top: 32px">
     <h2>Additional completion modules</h2>
-    <div class="notice">
+    <div class="notice info">
       These recipe inputs are additional to the main resource budget. Allocate their supply first.
       Gathered feedstock and byproducts still need handling.
     </div>

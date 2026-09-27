@@ -103,7 +103,7 @@ async function roundUp(e: Event) {
       title="Factory targets"
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
-    <div v-if="!page.whole" class="notice blue">
+    <div v-if="!page.whole" class="notice info">
       Prefer extra production over underclocking?
       <button class="btn primary" data-round-up @click="roundUp">Round up production</button>
       <p>
@@ -111,7 +111,7 @@ async function roundUp(e: Event) {
         factory requirements are marked for review.
       </p>
     </div>
-    <div v-else class="notice blue">
+    <div v-else class="notice info">
       Whole-machine production: protect downstream supply first, refill storage, then sink surplus
       solids. Liquid and nuclear balances remain controlled.
     </div>

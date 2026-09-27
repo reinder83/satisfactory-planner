@@ -95,7 +95,7 @@ const view = computed(() =>
         </tr>
       </tbody>
     </table>
-    <div v-if="view.easy" class="notice blue">
+    <div v-if="view.easy" class="notice info">
       <b>Easier optional setting: set only the adjustable machine to {{ view.easy.clock }}%.</b>
       <p>Its output: {{ view.easy.output }}.</p>
       <p>

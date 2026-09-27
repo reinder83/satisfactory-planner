@@ -40,7 +40,7 @@ const view = computed(() =>
 
 <template>
   <template v-if="view">
-    <div class="notice blue">
+    <div class="notice info">
       <b>Somersloop ledger.</b>
       <template v-if="view.augmenters"
         >{{ view.augmenters }} augmenter{{ view.augmenters > 1 ? 's' : '' }} cost

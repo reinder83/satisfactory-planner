@@ -65,7 +65,7 @@ test('the handbook room shows its printed bays, notice and checklist', () => {
   render();
   assert.equal($('#main h1')!.textContent, 'Storage room');
   assert.ok($('[data-slot="A01"]'), 'a state without storageEdits shows the handbook layout');
-  assert.match($('#main .notice')!.textContent, /Ground floor is built\./);
+  assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
   assert.deepEqual(
     $$('.tabs .tab').map(t => t.textContent.trim()),
     ['Ground floor', 'Upper floor', 'Workshop'],
@@ -407,7 +407,7 @@ test('the workshop floor shows its checklist and no bays', async () => {
 test('a copied original profile keeps the built ground-floor notice', () => {
   open({ profileId: 'copy-of-original' });
   render();
-  assert.match($('#main .notice')!.textContent, /Ground floor is built\./);
+  assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
 });
 
 test('a calculated profile shows only the items it stores, and its one checklist step', () => {
@@ -415,7 +415,7 @@ test('a calculated profile shows only the items it stores, and its one checklist
   render();
   assert.ok($$('#main .slot-details span').some(s => s.textContent === 'Iron Plate'));
   assert.equal($('[data-slot="G01"]'), null);
-  assert.match($('#main .notice')!.textContent, /Optional storage template/);
+  assert.match($('#main .notice.info')!.textContent, /Optional storage template/);
   assert.deepEqual(
     $$('#main section:last-child [data-check]').map(b => b.dataset.check),
     ['calc-storage-layout'],

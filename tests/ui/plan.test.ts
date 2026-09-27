@@ -542,8 +542,8 @@ test('the calculated plan shows its snapshot, warnings, deliveries and assumptio
   noMarkup();
   assert.equal($('#main h1')!.textContent, 'Phase 3');
   assert.equal($('#main .subtitle')!.textContent, evil);
-  assert.match($('#main .notice')!.textContent, /Planning draft/);
-  assert.match($('#main .notice')!.textContent, /at least 12 hours per phase/);
+  assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
+  assert.match($('#main .notice.warn')!.textContent, /at least 12 hours per phase/);
   assert.equal($$('#main .stat strong')[0]!.textContent, '1/' + planTasks().length);
   assert.equal($<HTMLInputElement>(`[data-check="calc-3-${row.id}"]`)!.checked, true);
   assert.equal(

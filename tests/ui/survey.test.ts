@@ -158,7 +158,7 @@ test('a committed count updates its total, and the budgets take off what is comm
   // Iron now has no nodes, so the budgets screen names it.
   wizard!.extractionStep = 4;
   await redraw();
-  assert.match(text('#main .notice'), /One resource has no nodes entered: Iron Ore\./);
+  assert.match(text('#main .notice.warn'), /One resource has no nodes entered: Iron Ore\./);
   const copper = () =>
     $$('#main tbody tr').find(
       r => r.querySelector('.resource-name span')!.textContent === 'Copper Ore',
@@ -174,7 +174,7 @@ test('an unsurveyed resource is called out on the budgets screen, a complete sur
   const partial = blankExtraction();
   partial.nodes = { 'Iron Ore': { impure: 39, normal: 42, pure: 46 } };
   survey(4, {}, { extraction: partial });
-  const notice = $$('#main .notice').find(n => /no nodes entered/.test(n.textContent))!;
+  const notice = $$('#main .notice.warn').find(n => /no nodes entered/.test(n.textContent))!;
   assert.equal(notice.querySelector('b')!.textContent, '11 resources have no nodes entered:');
   assert.match(notice.textContent, /Copper Ore/);
   assert.doesNotMatch(notice.textContent, /Iron Ore/, 'the one that was surveyed is not listed');

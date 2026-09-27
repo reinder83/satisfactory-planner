@@ -33,15 +33,15 @@ const page = computed(() =>
         : ''
     "
   />
-  <div v-if="!page.calculated" class="notice blue" data-logistics-empty="handbook">
+  <div v-if="!page.calculated" class="notice info" data-logistics-empty="handbook">
     Logistics works from a calculated plan's factory groups: what each group sends the others, by
     belt, pipe or vehicle. The handbook profile has no calculated plan.
     <a href="#profiles">Create or open a calculated profile</a> under Saves &amp; profiles.
   </div>
-  <div v-else-if="!page.rows" class="notice blue" data-logistics-empty="phase">
+  <div v-else-if="!page.rows" class="notice info" data-logistics-empty="phase">
     This phase has no production lines, so nothing moves between groups yet.
   </div>
-  <div v-else-if="!page.groups" class="notice blue" data-logistics-empty="groups">
+  <div v-else-if="!page.groups" class="notice info" data-logistics-empty="groups">
     Nothing to show until the factories are in groups.
     <a href="#factories">Group them on the Factories page</a>, and what each group sends the others
     appears here.

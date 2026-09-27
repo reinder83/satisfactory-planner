@@ -149,7 +149,7 @@ function submit() {
     >
       <template v-if="page.step === 1">
         <h2>Where your numbers come from</h2>
-        <div class="notice blue">
+        <div class="notice info">
           <b>You do not have to count nodes by hand.</b> Open the
           <a :href="MAP_URL" target="_blank" rel="noreferrer"
             >Satisfactory Calculator interactive map</a
@@ -172,7 +172,7 @@ function submit() {
           <SelectField label="Miner" name="mark" :options="marks" :value="page.mark" />
           <SelectField label="Clock speed" name="clock" :options="clocks" :value="page.clock" />
         </div>
-        <div class="notice">
+        <div class="notice info">
           <b>At these settings</b> one iron node gives {{ page.samples.impure }}/min impure,
           {{ page.samples.normal }}/min normal and {{ page.samples.pure }}/min pure. A crude oil
           node gives {{ page.samples.oil }}/min normal, and one resource-well satellite
@@ -201,7 +201,7 @@ function submit() {
         <CountTable kind="node" :names="['Crude Oil']" />
         <h3>Resource well satellites</h3>
         <CountTable kind="well" :names="['Crude Oil', 'Nitrogen Gas']" />
-        <div class="notice blue">
+        <div class="notice info">
           <ItemIcon name="Water" /> <b>Water is not counted.</b> Extractors sit on any lake or ocean
           and there is far more coastline than a factory can draw on, so a node count would be a
           fiction. The planner keeps its standing water allowance of {{ page.water }}/min, which you
@@ -249,7 +249,7 @@ function submit() {
             </tbody>
           </table>
         </div>
-        <div v-if="page.empty" class="notice">
+        <div v-if="page.empty" class="notice warn">
           <b>{{ page.empty.heading }}</b>
           {{ page.empty.names }}. A zero budget means this plan may not use that resource at all — a
           fine answer for something you have genuinely not found, but if you simply have not counted

@@ -140,7 +140,7 @@ async function rank() {
         {{ view.phase }}<template v-if="view.when">, {{ view.when }}</template
         >. Negative is better: fewer buildings, less raw, less power, sooner done.
       </p>
-      <p v-if="view.ranking.stopped" class="notice" data-payoff-stopped>
+      <p v-if="view.ranking.stopped" class="notice error" data-payoff-stopped role="status">
         The ranking stopped at its time limit; Re-rank to try again.
       </p>
       <p v-if="!view.ranking.total" class="small" data-payoff-none>

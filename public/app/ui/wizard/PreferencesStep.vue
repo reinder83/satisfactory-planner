@@ -181,7 +181,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     />
   </div>
   <SloopLedger /><StorageRates /><AltPicker v-if="s.recipes === 'custom'" />
-  <div class="notice blue">
+  <div class="notice info">
     SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
     parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have
     an unlimited automatic source.

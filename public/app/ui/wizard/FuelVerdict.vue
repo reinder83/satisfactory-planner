@@ -36,11 +36,11 @@ const v = computed(() => {
 
 <template>
   <template v-if="v">
-    <div v-if="v.carrying" class="notice blue">
+    <div v-if="v.carrying" class="notice info">
       <b>Fueled augmenters are carrying this plan.</b> Phase 5 does not fit its budgets without
       them, so the {{ v.matrix }} Alien Power Matrix/min is doing real work.
     </div>
-    <div v-else :class="['notice', v.worth ? 'blue' : '']">
+    <div v-else class="notice" :class="v.worth ? 'info' : 'warn'">
       <b>{{
         v.worth
           ? 'Fueling these augmenters pays off.'

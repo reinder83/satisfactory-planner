@@ -527,7 +527,7 @@ async function recalculate(e: Event) {
     <p v-if="view.links.length && view.idle.length" class="small muted" data-idle-groups>
       Nothing moves in or out of {{ view.idle.join(', ') }} in this phase.
     </p>
-    <div v-if="fuel" class="notice blue" data-transport-fuel-note>
+    <div v-if="fuel" class="notice info" data-transport-fuel-note>
       <template v-if="fuel.same"
         >This plan already includes the vehicle fuel for these links: {{ fuel.text }}.</template
       >

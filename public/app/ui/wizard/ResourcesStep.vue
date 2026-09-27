@@ -39,7 +39,7 @@ const view = computed(() =>
     power fuel. Starter values are full-map estimates at endgame extraction, not resources already
     connected.
   </p>
-  <div class="notice blue">
+  <div class="notice info">
     {{ view.description }}
     {{ view.seed
     }}<a href="https://satisfactoryworldseed.com/" target="_blank" rel="noreferrer"
