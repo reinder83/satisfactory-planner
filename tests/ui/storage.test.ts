@@ -10,6 +10,7 @@ import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public
 import { render } from '../../public/app/shell.ts';
 import { containerMove, openSlot, slotKeys, storageBays } from '../../public/app/views/storage.ts';
 import { moveContainer } from '../../public/app/ui/actions.ts';
+import { inView, landsOnTarget, pointerOnly } from '../../public/app/ui/storage/drop-point.ts';
 import {
   answerConfirms,
   $,
@@ -771,7 +772,7 @@ test('containers get drag handles in edit mode, and a drop moves or swaps them w
 // the page's DragDropProvider gives its cells, found through a cell's component instance.
 const isManager = (x: unknown): x is DragDropManager =>
   !!x && typeof x === 'object' && 'registry' in x && 'monitor' in x;
-function dropTargets(): Map<string, string | null> {
+function dropManager(): DragDropManager {
   const cell = $('[data-drop]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
   const instance = cell?.__vueParentComponent as { provides?: object } | undefined;
   const provides = instance?.provides;
@@ -785,8 +786,11 @@ function dropTargets(): Map<string, string | null> {
       if (isManager(ref)) manager = ref;
     }
   assert.ok(manager, 'the storage page provides a drag and drop manager');
+  return manager;
+}
+function dropTargets(): Map<string, string | null> {
   return new Map(
-    [...manager.registry.droppables].map(d => [
+    [...dropManager().registry.droppables].map(d => [
       String(d.id),
       d.element?.getAttribute('data-drop') ?? null,
     ]),
@@ -829,13 +833,9 @@ test('a drop past the end lands on the position it shows, also once the one befo
   noMarkup();
 });
 
-test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mid-drop (#292)', async () => {
-  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open();
-  setLayoutEditing(true);
-  render();
-  await settle();
-  // The page's DragDropProvider, whose dragEnd handler the page binds (StoragePage.vue).
+// The dragEnd handler the page binds on its DragDropProvider (StoragePage.vue), found through a
+// cell's component instance.
+function pageDragEnd(): (event: unknown, manager: unknown) => Promise<void> {
   type Instance = { parent: Instance | null; vnode: { props: Record<string, unknown> | null } };
   const cell = $('[data-drop="A01"]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
   let at = cell?.__vueParentComponent as Instance | null | undefined;
@@ -844,12 +844,39 @@ test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mi
     | ((event: unknown, manager: unknown) => Promise<void>)
     | undefined;
   assert.ok(dragEnd, 'the page handles dragend');
+  return dragEnd;
+}
+
+// Gives a drop cell a box on screen (happy-dom lays nothing out): 100 × 100 at (left, top).
+function placeCell(id: string, left: number, top: number): HTMLElement {
+  const cell = $(`[data-drop="${id}"]`)!;
+  cell.getBoundingClientRect = () => new DOMRect(left, top, 100, 100);
+  return cell;
+}
+
+// A finished mouse drag of `from` onto the cell `to`, let go at (x, y).
+const mouseDrop = (from: string, to: HTMLElement, x: number, y: number) => ({
+  canceled: false,
+  operation: {
+    source: { id: from },
+    target: { id: to.dataset.drop, element: to },
+    position: { current: { x, y } },
+    activatorEvent: new PointerEvent('pointerdown'),
+  },
+});
+
+test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mid-drop (#292)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open();
+  setLayoutEditing(true);
+  render();
+  await settle();
+  const dragEnd = pageDragEnd();
   // dnd-kit is still animating the drop: the operation is not idle yet.
   const status = { idle: false };
-  const done = dragEnd(
-    { canceled: false, operation: { source: { id: 'A02' }, target: { id: 'A09' } } },
-    { dragOperation: { status } },
-  );
+  const done = dragEnd(mouseDrop('A02', placeCell('A09', 200, 200), 250, 250), {
+    dragOperation: { status },
+  });
   await settle();
   await settle();
   assert.equal(calls.length, 0, 'nothing is saved or redrawn while the drop is running');
@@ -859,4 +886,72 @@ test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mi
   assert.equal(calls[0]![1].type, 'storageSlotMove');
   assert.equal($('[data-drop="A09"] [data-slot="A09"]') !== null, true, 'A02 is drawn at A09');
   assert.equal($('[data-slot="A02"]'), null);
+});
+
+test('a position is the drop target only while the pointer is over it, in the window (#298)', async () => {
+  open();
+  setLayoutEditing(true);
+  render();
+  await settle();
+  const droppables = [...dropManager().registry.droppables];
+  assert.ok(droppables.length > 8);
+  // dnd-kit's default would fall back to the dragged card's shape when no position is under the
+  // pointer, so a card let go in the aisle landed on whichever position it overlapped.
+  for (const d of droppables)
+    assert.equal(d.collisionDetector, pointerOnly, `drop target ${String(d.id)}`);
+  // Where the detector looks at all: a pointer outside the window hits nothing, not the
+  // out-of-sight position below or beside it.
+  const at = (x: number, y: number, activatorEvent: Event) =>
+    inView({ activatorEvent, position: { current: { x, y } } });
+  const mouse = new PointerEvent('pointerdown'),
+    keys = new KeyboardEvent('keydown');
+  assert.equal(at(10, 10, mouse), true);
+  assert.equal(at(10, innerHeight + 80, mouse), false);
+  assert.equal(at(innerWidth + 5, 10, mouse), false);
+  assert.equal(at(-1, 10, mouse), false);
+  // The keyboard moves the card's centre and never auto-scrolls, so it is not held to the window.
+  assert.equal(at(10, innerHeight + 80, keys), true);
+});
+
+test('a drop let go away from the position dnd-kit names saves nothing (#298)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open();
+  setLayoutEditing(true);
+  render();
+  await settle();
+  const dragEnd = pageDragEnd(),
+    idle = { dragOperation: { status: { idle: true } } };
+  const a07 = placeCell('A07', 200, 200);
+  // In the aisle beside the position; after an auto-scroll dnd-kit kept a target that had
+  // scrolled away from under the pointer, and G02 was swapped with C05.
+  await dragEnd(mouseDrop('A02', a07, 320, 250), idle);
+  await dragEnd(mouseDrop('A02', a07, 250, 150), idle);
+  // Outside the window, over a position that is out of sight.
+  const below = placeCell('A08', 200, innerHeight + 10);
+  await dragEnd(mouseDrop('A02', below, 250, innerHeight + 50), idle);
+  // A target with no element on the page.
+  const lost = mouseDrop('A02', a07, 250, 250);
+  await dragEnd({ ...lost, operation: { ...lost.operation, target: { id: 'A07' } } }, idle);
+  // Cancelled.
+  await dragEnd({ ...mouseDrop('A02', a07, 250, 250), canceled: true }, idle);
+  await settle();
+  assert.equal(calls.length, 0, 'nothing is saved');
+  assert.ok($('[data-slot="A02"]'), 'A02 stays where it was');
+  // Let go on the position itself, it swaps; a keyboard drop is judged by the card's centre.
+  const a07name = $('[data-slot="A07"] span')!.textContent;
+  await dragEnd(mouseDrop('A02', a07, 250, 250), idle);
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]![1].type, 'storageSlotMove');
+  assert.equal($('[data-slot="A02"] span')!.textContent, a07name);
+  const keyDrop = mouseDrop('A03', placeCell('A08', 200, innerHeight + 10), 250, innerHeight + 50);
+  await dragEnd(
+    {
+      ...keyDrop,
+      operation: { ...keyDrop.operation, activatorEvent: new KeyboardEvent('keydown') },
+    },
+    idle,
+  );
+  assert.equal(calls.length, 2, 'the keyboard drop is saved');
+  assert.equal(landsOnTarget({ ...keyDrop.operation, target: null }), false);
 });
