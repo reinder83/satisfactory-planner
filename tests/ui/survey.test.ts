@@ -166,7 +166,7 @@ test('a committed count updates its total, and the budgets take off what is comm
   const pool = Number(copper()!.querySelectorAll('td')[1]!.textContent.replace(/\D/g, ''));
   await change('input[name="used:Copper Ore"]', String(pool + 1));
   assert.equal(wizard!.extraction!.used!['Copper Ore'], pool + 1);
-  assert.equal(copper()!.querySelectorAll('td')[3]!.textContent, '0', 'nothing is left');
+  assert.equal(copper()!.querySelectorAll('td')[3]!.textContent, '0/min', 'nothing is left');
   assert.ok(copper()!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over the pool');
 });
 
@@ -493,4 +493,52 @@ test('leaving the survey by the address with a count still being typed keeps it 
   render();
   await nextTick();
   assert.equal($<HTMLInputElement>('input[name="well:Nitrogen Gas:normal"]')!.value, '4');
+});
+
+// Option 1 on #363: the budgets table mixes ores and fluids, so its headers drop "/min" and each
+// rate carries its own unit. The committed input keeps a bare number: its unit is a visible
+// suffix beside it and part of its name, and what the survey saves does not change.
+test('the budgets screen writes each rate with its own unit, and a unit beside each input (#363)', async () => {
+  survey(4, { purity: 'vanilla', distribution: 'original' }, { extraction: defaultSurvey() });
+  assert.deepEqual(
+    $$('#main thead th').map(th => th.textContent),
+    ['Resource', 'Whole pool', 'Already committed', 'Budget'],
+    'no header names a unit',
+  );
+  const row = (name: string) =>
+    $$('#main tbody tr').find(r => r.querySelector('.resource-name span')!.textContent === name)!;
+  const cells = (name: string) =>
+    [...row(name).querySelectorAll('td')].map(td => td.textContent.trim());
+  // Fluids in m³/min, joined by a no-break space; ores in /min.
+  assert.match(cells('Crude Oil')[1]!, /^[\d.,]+ m³\/min$/);
+  assert.match(cells('Crude Oil')[3]!, /^[\d.,]+ m³\/min$/);
+  assert.match(cells('Nitrogen Gas')[1]!, /^[\d.,]+ m³\/min$/);
+  assert.match(cells('Iron Ore')[1]!, /^[\d.,]+\/min$/);
+  assert.match(cells('Iron Ore')[3]!, /^[\d.,]+\/min$/);
+  // The input holds the number only; the unit sits beside it and in its accessible name.
+  const input = (name: string) => row(name).querySelector<HTMLInputElement>('input.used-input')!;
+  const suffix = (name: string) => row(name).querySelector('.used-field .used-unit')!;
+  assert.equal(suffix('Crude Oil').textContent, 'm³/min');
+  assert.equal(suffix('Iron Ore').textContent, '/min');
+  assert.equal(suffix('Crude Oil').getAttribute('aria-hidden'), 'true', 'read once, in the name');
+  assert.equal(
+    input('Crude Oil').getAttribute('aria-label'),
+    'Crude Oil already committed, cubic metres per minute',
+  );
+  assert.equal(
+    input('Iron Ore').getAttribute('aria-label'),
+    'Iron Ore already committed per minute',
+  );
+  assert.equal(input('Crude Oil').type, 'number');
+  // What is saved is unchanged: the typed numbers, and the budgets as pool less committed.
+  await change('input[name="used:Crude Oil"]', '150');
+  await change('input[name="used:Iron Ore"]', '480');
+  assert.equal(input('Crude Oil').value, '150', 'no unit in the value');
+  assert.deepEqual(wizard!.extraction!.used, { 'Crude Oil': 150, 'Iron Ore': 480 });
+  $('#wizard-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await nextTick();
+  assert.deepEqual(wizard!.settings.extraction!.used, { 'Crude Oil': 150, 'Iron Ore': 480 });
+  assert.equal(wizard!.settings.limits!['Crude Oil'], 9750);
+  assert.equal(wizard!.settings.limits!['Iron Ore'], 91620);
+  assert.equal(wizard!.settings.limits!['Nitrogen Gas'], 12000);
 });

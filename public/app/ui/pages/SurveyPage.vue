@@ -21,6 +21,7 @@ import {
   resourcePool,
   wellYield,
 } from '../../../preferences.ts';
+import { FLUIDS, itemRate, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -58,11 +59,16 @@ const page = computed(() =>
     const budgets = BUDGET_ROWS.map(name => {
       const pool = Math.round(resourcePool(e, name)),
         used = Number(e.used?.[name]) || 0;
+      // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore. The
+      // committed input keeps a bare number; its unit is a suffix beside it and in its name.
+      const fluid = FLUIDS.has(name);
       return {
         name,
-        pool: pool ? num(pool) : '—',
+        pool: pool ? itemRate(name, pool) : '—',
         used: used || '',
-        left: pool ? num(Math.max(0, pool - used)) : '—',
+        unit: rateUnit(name),
+        label: name + ' already committed' + (fluid ? ', cubic metres' : '') + ' per minute',
+        left: pool ? itemRate(name, Math.max(0, pool - used)) : '—',
         over: pool && used > pool,
       };
     });
@@ -220,9 +226,9 @@ function submit() {
             <thead>
               <tr>
                 <th>Resource</th>
-                <th>Whole pool /min</th>
-                <th>Already committed /min</th>
-                <th>Budget /min</th>
+                <th>Whole pool</th>
+                <th>Already committed</th>
+                <th>Budget</th>
               </tr>
             </thead>
             <tbody>
@@ -232,17 +238,19 @@ function submit() {
                 </td>
                 <td class="number">{{ r.pool }}</td>
                 <td>
-                  <input
-                    class="used-input"
-                    :name="'used:' + r.name"
-                    type="number"
-                    min="0"
-                    max="10000000"
-                    step="any"
-                    :value="r.used"
-                    placeholder="0"
-                    :aria-label="r.name + ' already committed per minute'"
-                  />
+                  <span class="used-field"
+                    ><input
+                      class="used-input"
+                      :name="'used:' + r.name"
+                      type="number"
+                      min="0"
+                      max="10000000"
+                      step="any"
+                      :value="r.used"
+                      placeholder="0"
+                      :aria-label="r.label"
+                    /><span class="used-unit" aria-hidden="true">{{ r.unit }}</span></span
+                  >
                 </td>
                 <td :class="['number', r.over ? 'warn' : '']">{{ r.left }}</td>
               </tr>

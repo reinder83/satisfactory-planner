@@ -4306,6 +4306,23 @@ button.rail-tile:hover {
   color: var(--ink);
   text-align: right;
 }
+/* The committed input with its unit beside it (#363): the unit is fixed width, so the inputs
+   line up whether a row is in /min or m³/min, and never wraps away from the field. */
+.used-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.used-field .used-input {
+  flex: 1 1 auto;
+  min-width: 64px;
+}
+.used-unit {
+  flex: none;
+  width: 7ch;
+  color: var(--muted);
+  white-space: nowrap;
+}
 .extraction-panel .notice .item-icon {
   width: 26px;
   height: 26px;

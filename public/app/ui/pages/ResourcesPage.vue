@@ -51,11 +51,16 @@ const page = computed(() =>
           // The same use figure and bar as a calculated profile's page (views/resources.ts).
           const cap = plan.capacities[name],
             u = cap ? resourceUse(q, cap) : null;
+          // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore.
           return {
             name,
-            required: num(q),
-            available: cap ? num(cap) : name === 'Water' ? 'Extraction limited' : 'Verify wells',
-            remaining: cap ? num(cap - q) : '—',
+            required: itemRate(name, q),
+            available: cap
+              ? itemRate(name, cap)
+              : name === 'Water'
+                ? 'Extraction limited'
+                : 'Verify wells',
+            remaining: cap ? itemRate(name, cap - q) : '—',
             tight: !!u?.tight,
             over: !!u?.over,
             use: u?.use ?? null,
@@ -95,9 +100,9 @@ const page = computed(() =>
         <thead>
           <tr>
             <th scope="col">Fresh resource</th>
-            <th scope="col">Required /min</th>
-            <th scope="col">Available /min</th>
-            <th scope="col">Remaining /min</th>
+            <th scope="col">Required</th>
+            <th scope="col">Available</th>
+            <th scope="col">Remaining</th>
             <th scope="col">Use</th>
           </tr>
         </thead>
