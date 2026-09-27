@@ -16,7 +16,8 @@
 // 3. Session state is not reactive: components read it inside legacy() from
 //    app/ui/bridge.ts, which re-runs whenever render() calls invalidate().
 // 4. Components handle their own controls; the ones several components share (checkboxes,
-//    "Save notes", factory links, ...) call the handlers in app/ui/actions.ts. The few
+//    factory links, ...) call the handlers in app/ui/actions.ts, and every notes box is
+//    app/ui/NoteBox.vue, which saves as you type. The few
 //    page-wide listeners live in app/listeners.ts: the hashchange listener there switches
 //    the view, and navigate() in api.ts does too.
 // 5. Changes go through save(op) in app/api.ts: a serialized queue that POSTs the op to

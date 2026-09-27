@@ -1,5 +1,5 @@
-// The handlers for the controls several components share: progress checkboxes, "Save notes",
-// links to a factory's dialog, the dialog's ×, and "Create a save". Each component binds
+// The handlers for the controls several components share: progress checkboxes, links to a
+// factory's dialog, the dialog's ×, and "Create a save". Each component binds
 // them itself (@change, @click, or v-bind with factoryLink()). The data-* attributes stay
 // on the elements: they carry the saved keys these handlers read, and browser-check.ts,
 // the tests and allowSwitch() in api.ts look for them.
@@ -34,29 +34,6 @@ export async function toggleCheck(e: Event) {
   }
 }
 
-// @click on "Save notes" under a notes box: phase notes (plan page), save-wide notes (Backup
-// page) and the notes in factory and container dialogs. data-save-note is the notes key and
-// data-input the textarea's id. Inside a dialog a successful save also closes it. There is
-// no redraw: save() has already stored the new state. "Notes saved." only appears after the
-// write succeeded.
-export async function saveNote(e: Event) {
-  const button = e.currentTarget as HTMLButtonElement;
-  const noteDialog = button.closest('dialog');
-  button.disabled = true;
-  try {
-    await save({
-      type: 'note',
-      key: button.dataset.saveNote || '',
-      value: required<HTMLTextAreaElement>('#' + button.dataset.input).value,
-    });
-    if (noteDialog?.open && noteDialog.contains(button)) closeDetail();
-    toast('Notes saved.');
-  } catch {
-  } finally {
-    button.disabled = false;
-  }
-}
-
 // A link to another factory's dialog, as the flow models, the group chain and the plan's
 // steps carry it: { factory: <handbook id> } or { calcFactory: <calculated row id> }. Bound
 // with v-bind, it gives the button its data-factory or data-calc-factory attribute and the
@@ -71,9 +48,10 @@ export const factoryLink = (link: FactoryLink | null | undefined) =>
         }
       : { 'data-factory': link.factory, onClick: () => openFactory(link.factory) };
 
-// Closes the shared #detail dialog (its ×, a backdrop click, a saved note). Closing unmounts
-// the dialog's app (ui/detail.ts), so an unsaved note in the dialog is asked about first and
-// the dialog stays open when the user keeps it. After a saved note there is nothing to ask.
+// Closes the shared #detail dialog (its × or a backdrop click). Closing unmounts the dialog's
+// app (ui/detail.ts), so allowSwitch() first sends a note still waiting for its pause in
+// typing, and asks about one that could not be saved; the dialog stays open when the user
+// keeps it. Notes save themselves (ui/note-draft.ts), so saving one no longer closes it.
 export function closeDetail() {
   const d = required<HTMLDialogElement>('#detail');
   if (d.open && !allowSwitch(d)) return;
@@ -81,7 +59,7 @@ export function closeDetail() {
 }
 
 // Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
-// cancel event, so an unsaved note is asked about here, as the × does, and kept by cancelling
+// cancel event, so a note that could not be saved is asked about here, as the × does, and kept by cancelling
 // the close. A browser may still close it after repeated presses, whatever the answer.
 export function cancelDetail(e: Event) {
   if (!allowSwitch(required('#detail'))) e.preventDefault();

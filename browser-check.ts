@@ -98,8 +98,12 @@ try {
   console.log('Saving browser profile');
   await page.getByRole('button', { name: 'Create profile', exact: true }).click();
   await page.locator('#phase-note').waitFor({ timeout: 180000 });
-  await page.locator('#phase-note').fill('Remember my iron site');
-  await page.locator('[data-save-note="phase-1"]').click();
+  // Notes save themselves after a pause in typing (#237); the status line says so.
+  await page.locator('[data-save-note="phase-1"]').fill('Remember my iron site');
+  await page
+    .locator('#phase-note-status')
+    .getByText(/^Saved · /)
+    .waitFor();
   const check = page.locator('[data-check]').first();
   const key = await check.getAttribute('data-check');
   await check.check();
@@ -150,15 +154,29 @@ try {
     );
     assert.equal(await page.locator('#detail').evaluate((x: HTMLDialogElement) => x.open), false);
     await page.locator('[data-slot="A01"]').click();
-    await page.locator('#detail-note').fill('Storage test note');
-    await page.locator('#detail [data-save-note]').click();
-    await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+    await page.locator('#detail [data-save-note]').fill('Storage test note');
+    await page
+      .locator('#detail-note-status')
+      .getByText(/^Saved · /)
+      .waitFor();
     assert.equal((await api<ProgressState>('/api/state')).notes['slot-A01'], 'Storage test note');
-    await page.locator('[data-slot="A01"]').click();
-    await page.locator('#detail-note').fill('  ');
-    await page.locator('#detail [data-save-note]').click();
+    assert.equal(await page.locator('#detail').evaluate((x: HTMLDialogElement) => x.open), true);
+    await page.locator('#detail [data-close]').click();
     await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
-    assert.equal(Object.hasOwn((await api<ProgressState>('/api/state')).notes, 'slot-A01'), false);
+    await page.locator('[data-slot="A01"]').click();
+    assert.equal(await page.locator('#detail-note').inputValue(), 'Storage test note');
+    // Emptying a note deletes it; closing the dialog sends it without waiting for the pause.
+    await page.locator('#detail-note').fill('  ');
+    await page.locator('#detail [data-close]').click();
+    await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+    for (
+      let i = 0;
+      Object.hasOwn((await api<ProgressState>('/api/state')).notes, 'slot-A01');
+      i++
+    ) {
+      assert.ok(i < 50, 'the emptied note is deleted');
+      await page.waitForTimeout(100);
+    }
     await page.reload();
     await page.locator('[data-complete-slot="A01"]').waitFor();
     assert.equal(await page.locator('[data-complete-slot="A01"]').isChecked(), false);

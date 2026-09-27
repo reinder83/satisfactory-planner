@@ -165,7 +165,9 @@ test('the handbook backup page keeps the save-wide note exactly and lists the so
     note,
     'the note keeps its line break and indent',
   );
-  assert.equal($('[data-save-note="global"]')!.dataset.input, 'global-note');
+  assert.equal($('[data-save-note="global"]')!.id, 'global-note', 'the notes key is on the box');
+  assert.equal($('#global-note-status')!.getAttribute('aria-live'), 'polite');
+  assert.equal($$('#main .note-save button').length, 0, 'no "Save notes" button');
   assert.equal($('a[download]')!.getAttribute('href'), '/api/export?save=s&profile=original');
   assert.equal($$('.list-links a').length, handbook.sources!.length);
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));

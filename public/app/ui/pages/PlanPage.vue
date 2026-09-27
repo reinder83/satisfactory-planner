@@ -2,24 +2,23 @@
   #plan for the original handbook: summary tiles, the phase checklist with its edit toggle,
   personal tasks and phase notes, and a side column with the next step and the Space
   Elevator deliveries. Post-game ('post') reads the Phase 5 stage of the handbook: stage()
-  maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The notes'
-  "Save notes" button uses saveNote in ui/actions.ts.
+  maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The phase notes
+  save themselves as you type (NoteBox.vue).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { checked, phase, phaseLabel, plan, stage, state } from '../../session.ts';
+import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
 import { planTasks } from '../../tasks.ts';
 import { storageBays } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
-import { useNoteDraft } from '../note-draft.ts';
+import NoteBox from '../NoteBox.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
-import { saveNote } from '../actions.ts';
 
 const page = computed(() =>
   legacy(() => {
@@ -47,15 +46,9 @@ const page = computed(() =>
       slots: slots.length,
       power: num(plan.power[stage()]),
       next: next && { title: next.title, body: next.body },
-      note: state.notes['phase-' + phase()] || '',
       deliveries: plan.deliveries.filter(d => d.phase === phase()),
     };
   }),
-);
-// The phase notes box: its own text, kept through redraws and saved-note changes (note-draft.ts).
-const note = useNoteDraft(
-  () => page.value.phase,
-  () => page.value.note,
 );
 </script>
 
@@ -98,24 +91,7 @@ const note = useNoteDraft(
       <section class="panel">
         <h2>Phase notes</h2>
         <p class="small muted">Locations, train routes, things to check on your next session.</p>
-        <textarea
-          id="phase-note"
-          class="notes"
-          maxlength="6000"
-          aria-label="Phase notes"
-          v-model="note"
-        ></textarea>
-        <div class="note-save">
-          <span class="small muted">Saved only when you click Save notes.</span
-          ><button
-            class="btn"
-            :data-save-note="'phase-' + page.phase"
-            @click="saveNote"
-            data-input="phase-note"
-          >
-            Save notes
-          </button>
-        </div>
+        <NoteBox id="phase-note" :note-key="'phase-' + page.phase" aria-label="Phase notes" />
       </section>
     </section>
     <aside class="side-panels">
