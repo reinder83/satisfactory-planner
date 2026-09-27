@@ -184,8 +184,8 @@ async function persistStorage() {
 </script>
 
 <template>
-  <!-- Full-save export and import (the satisfactory-planner-saves format), in both editions.
-       Import always adds copies; it never replaces a save. -->
+  <!-- The page header comes first in every version, before the full-saves panel all three
+       share (#309). -->
   <template v-if="page.kind === 'browser'">
     <PageHeader
       eyebrow="SAVED ON THIS DEVICE"
@@ -194,6 +194,22 @@ async function persistStorage() {
     />
     <BrowserNotice />
   </template>
+  <PageHeader
+    v-else-if="page.kind === 'calculated'"
+    eyebrow="THIS PROFILE"
+    title="Backup & notes"
+    :subtitle="
+      'Checkmarks, deliveries and notes belong to ' + page.saveName + ' / ' + page.profileName
+    "
+  />
+  <PageHeader
+    v-else
+    eyebrow="YOUR PROGRESS"
+    title="Backup & notes"
+    subtitle="Progress is stored on the server, so the same Docker instance works across your devices."
+  />
+  <!-- Full-save export and import (the satisfactory-planner-saves format), in both editions.
+       Import always adds copies; it never replaces a save. -->
   <section class="panel">
     <h2>Full saves & transfer</h2>
     <p>
@@ -265,13 +281,6 @@ async function persistStorage() {
   </section>
 
   <template v-else-if="page.kind === 'calculated'">
-    <PageHeader
-      eyebrow="THIS PROFILE"
-      title="Backup & notes"
-      :subtitle="
-        'Checkmarks, deliveries and notes belong to ' + page.saveName + ' / ' + page.profileName
-      "
-    />
     <div class="backup-grid">
       <section class="panel">
         <h2>Download progress</h2>
@@ -308,11 +317,6 @@ async function persistStorage() {
   </template>
 
   <template v-else>
-    <PageHeader
-      eyebrow="YOUR PROGRESS"
-      title="Backup & notes"
-      subtitle="Progress is stored on the server, so the same Docker instance works across your devices."
-    />
     <div class="backup-grid">
       <section class="panel">
         <h2>Download a backup</h2>
