@@ -6,6 +6,7 @@
 // destructive action (`danger`), otherwise on the confirm button, and goes back afterwards to
 // whatever had it when the question was asked, if that is still on the page.
 import { createApp, type App } from 'vue';
+import { onBackdropClick } from '../backdrop.ts';
 import { required } from '../format.ts';
 import ConfirmDialog from './ConfirmDialog.vue';
 
@@ -40,21 +41,11 @@ function settle(ok: boolean) {
   current.resolve(ok);
 }
 
-// A click on the backdrop reaches the <dialog> itself, outside its box; the hazard strip on
-// top (dialog::before) is inside the box, so a click there does not cancel.
-function backdropClick(e: MouseEvent) {
-  const d = e.currentTarget as HTMLDialogElement;
-  if (e.target !== d) return;
-  const r = d.getBoundingClientRect();
-  const inside =
-    e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  if (!inside) settle(false);
-}
-
 export function confirmAction(options: ConfirmOptions): Promise<boolean> {
   const d = required<HTMLDialogElement>('#confirm');
   if (listening !== d) {
-    d.addEventListener('click', backdropClick);
+    // A click on the backdrop (outside the box, pressed there too) answers Cancel.
+    onBackdropClick(d, () => settle(false));
     // Escape: answer Cancel here rather than letting the browser close the dialog by itself.
     d.addEventListener('cancel', e => {
       e.preventDefault();

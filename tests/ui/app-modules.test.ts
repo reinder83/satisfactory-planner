@@ -38,6 +38,7 @@ test('the app entry point loads as ES modules and registers its listeners in ord
   assert.deepEqual(registered, [
     'document error',
     'window hashchange',
+    '#detail mousedown',
     '#detail click',
     '#detail cancel',
     'window beforeunload',
