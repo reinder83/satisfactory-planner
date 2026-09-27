@@ -20,7 +20,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { DragDropProvider } from '@dnd-kit/vue';
-import type { DragEndEvent } from '@dnd-kit/vue';
+import type { DragDropManager, DragEndEvent } from '@dnd-kit/vue';
 import {
   floorOrder,
   hiddenStorageBays,
@@ -184,9 +184,18 @@ async function restoreFloor(e: Event, id: string) {
 // A container dropped on another position (#208, ui/storage/SlotCell.vue): one save that moves or
 // swaps it, its checks and note going along. A cancelled drag, or a drop back on its own place,
 // saves nothing.
-function dropped(event: DragEndEvent) {
+//
+// The save waits until dnd-kit has finished the drop. At dragend the dragged card is still in the
+// top layer with a placeholder beside its place, and dnd-kit puts both back only after its drop
+// animation. A quick save (the browser edition, a nearby server) redrew the bay before that, so Vue
+// patched around nodes dnd-kit had moved, threw, and left the bay half drawn: the moved container
+// missing and a blank position that took no drops, until a reload showed what had been saved
+// (#292). A drop that never settles is saved after two seconds anyway.
+async function dropped(event: DragEndEvent, manager: DragDropManager) {
   const { source, target } = event.operation;
   if (event.canceled || !source || !target) return;
+  for (let waited = 0; !manager.dragOperation.status.idle && waited < 2000; waited += 20)
+    await new Promise(resolve => setTimeout(resolve, 20));
   return moveContainer(String(source.id), String(target.id));
 }
 // "Edit layout" / "Done editing": show or hide the layout editor (view state only).

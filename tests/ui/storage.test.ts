@@ -3,6 +3,7 @@
 // mounted the way the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
+import type { DragDropManager } from '@dnd-kit/vue';
 import { beforeEach, test } from 'vitest';
 import { bayCapacity } from '../../public/state.ts';
 import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
@@ -763,4 +764,99 @@ test('containers get drag handles in edit mode, and a drop moves or swaps them w
   assert.equal(containerMove('A04', 'A12'), null, 'not a gap past the end');
   assert.equal(containerMove('A02', 'A04'), null, 'an empty position has nothing to move');
   noMarkup();
+});
+
+// The drop targets @dnd-kit/vue has registered for the page, by the address each answers to,
+// with the address the cell registered under it shows (its data-drop). Read from the manager
+// the page's DragDropProvider gives its cells, found through a cell's component instance.
+const isManager = (x: unknown): x is DragDropManager =>
+  !!x && typeof x === 'object' && 'registry' in x && 'monitor' in x;
+function dropTargets(): Map<string, string | null> {
+  const cell = $('[data-drop]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
+  const instance = cell?.__vueParentComponent as { provides?: object } | undefined;
+  const provides = instance?.provides;
+  assert.ok(provides, 'a drop cell is a mounted component');
+  let manager: DragDropManager | undefined;
+  // `provides` inherits from the parents' through its prototype chain.
+  for (let p: object | null = provides; p && !manager; p = Object.getPrototypeOf(p))
+    for (const key of Reflect.ownKeys(p)) {
+      const value: unknown = Reflect.get(p, key);
+      const ref = value && typeof value === 'object' && 'value' in value ? value.value : value;
+      if (isManager(ref)) manager = ref;
+    }
+  assert.ok(manager, 'the storage page provides a drag and drop manager');
+  return new Map(
+    [...manager.registry.droppables].map(d => [
+      String(d.id),
+      d.element?.getAttribute('data-drop') ?? null,
+    ]),
+  );
+}
+
+test('a drop past the end lands on the position it shows, also once the one before is filled (#292)', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ state: { version: 1, checks: { 'slot-A02-built': true }, notes: { 'slot-A02': evil } } });
+  setLayoutEditing(true);
+  render();
+  await settle();
+  const name = (id: string) =>
+    storageBays()
+      .flatMap(b => b.items)
+      .find(x => x.id === id)?.name ?? null;
+  const a02 = name('A02');
+  assert.equal($('[data-drop="A09"]')!.classList.contains('drop-new'), true);
+  assert.equal(dropTargets().get('A09'), 'A09');
+  // A container dropped on A09 fills it, and the next free address is offered.
+  await moveContainer('A01', 'A09');
+  await settle();
+  assert.equal($('[data-drop="A09"]')!.classList.contains('drop-new'), false);
+  assert.equal($('[data-drop="A10"]')!.classList.contains('drop-new'), true);
+  // Each drop target answers to the address its cell shows: the filled A09 to A09 and the new
+  // cell to A10. The new cell used to keep answering to A09, so a container dropped on it was
+  // swapped with the one just placed there instead of moving to A10.
+  const targets = dropTargets();
+  assert.equal(targets.get('A09'), 'A09');
+  assert.equal(targets.get('A10'), 'A10', 'the offered position takes drops as A10');
+  for (const [id, shown] of targets) assert.equal(shown, id, `drop target ${id}`);
+  // The drop the page then sees moves A02 there, its progress going along.
+  await moveContainer('A02', 'A10');
+  await settle();
+  assert.equal(name('A10'), a02);
+  assert.equal(name('A02'), null);
+  assert.equal(state.checks['slot-A10-built'], true);
+  assert.equal(state.notes['slot-A10'], evil);
+  assert.equal(dropTargets().get('A11'), 'A11');
+  noMarkup();
+});
+
+test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mid-drop (#292)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open();
+  setLayoutEditing(true);
+  render();
+  await settle();
+  // The page's DragDropProvider, whose dragEnd handler the page binds (StoragePage.vue).
+  type Instance = { parent: Instance | null; vnode: { props: Record<string, unknown> | null } };
+  const cell = $('[data-drop="A01"]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
+  let at = cell?.__vueParentComponent as Instance | null | undefined;
+  while (at && typeof at.vnode.props?.onDragEnd !== 'function') at = at.parent;
+  const dragEnd = at?.vnode.props?.onDragEnd as
+    | ((event: unknown, manager: unknown) => Promise<void>)
+    | undefined;
+  assert.ok(dragEnd, 'the page handles dragend');
+  // dnd-kit is still animating the drop: the operation is not idle yet.
+  const status = { idle: false };
+  const done = dragEnd(
+    { canceled: false, operation: { source: { id: 'A02' }, target: { id: 'A09' } } },
+    { dragOperation: { status } },
+  );
+  await settle();
+  await settle();
+  assert.equal(calls.length, 0, 'nothing is saved or redrawn while the drop is running');
+  status.idle = true;
+  await done;
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]![1].type, 'storageSlotMove');
+  assert.equal($('[data-drop="A09"] [data-slot="A09"]') !== null, true, 'A02 is drawn at A09');
+  assert.equal($('[data-slot="A02"]'), null);
 });
