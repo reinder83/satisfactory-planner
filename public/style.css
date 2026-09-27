@@ -2541,14 +2541,17 @@ button.rail-tile:hover {
   margin-top: 1px;
 }
 .rail-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  /* The rows share one set of columns (icon, name, machines, rate), so a long rate widens the
+     rate column of every row and the machines column stays lined up. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
 }
 .rail-row {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 10px;
   padding: 10px 13px;
   border: 1px solid var(--line);
 }
@@ -2599,7 +2602,7 @@ button.rail-tile:hover {
   color: var(--muted);
 }
 .rail-row .rail-rate {
-  /* At least the column's width; a long fluid rate widens it rather than wrap (#364). */
+  /* At least 90px; a long fluid rate widens every row's rate column rather than wrap (#364). */
   min-width: 90px;
 }
 @media (max-width: 640px) {
@@ -2609,8 +2612,14 @@ button.rail-tile:hover {
   .rail-recipe-arrow {
     transform: rotate(90deg);
   }
+  .rail-rows {
+    display: flex;
+    flex-direction: column;
+  }
   .rail-row {
+    display: flex;
     flex-wrap: wrap;
+    gap: 10px;
   }
   .rail-mach {
     width: calc(100% - 36px);
