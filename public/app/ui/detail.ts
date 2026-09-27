@@ -16,7 +16,11 @@ export interface DetailTarget {
 }
 
 let app: App | null = null;
-let listening = false;
+// The #detail element the close listener is on (a test page may replace it).
+let listening: HTMLDialogElement | null = null;
+// The control that had focus when the dialog opened, where closing it puts focus back. A link
+// inside the dialog that puts another one in its place keeps it: the dialog never closed.
+let opener: HTMLElement | null = null;
 
 // Opens `target` ({ kind: 'factory' | 'calc' | 'group' | 'slot' | 'alt', id }) in #detail, replacing whatever
 // it shows, and opens the dialog if it is not open yet. Replacing an open dialog drops its
@@ -24,9 +28,12 @@ let listening = false;
 // ask it opens at once, before this returns.
 export function showDetail(target: DetailTarget) {
   const d = required<HTMLDialogElement>('#detail');
-  if (!listening) {
-    d.addEventListener('close', unmountDetail);
-    listening = true;
+  if (listening !== d) {
+    d.addEventListener('close', () => {
+      unmountDetail();
+      returnFocus(d);
+    });
+    listening = d;
   }
   const asked = d.open ? allowSwitch(d) : true;
   if (asked === true) replaceDetail(d, target);
@@ -41,12 +48,49 @@ function replaceDetail(d: HTMLDialogElement, target: DetailTarget) {
   d.textContent = '';
   app = createApp(DetailDialog, { target });
   app.mount(d);
-  if (!d.open) d.showModal();
+  if (!d.open) {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    d.showModal();
+  } else if (!d.contains(document.activeElement)) {
+    // Replaced while open (a link inside it, #319): emptying the dialog took the focused link
+    // away, and showModal() does not run again, so focus would fall to <body>. It goes where
+    // showModal() puts it on opening, so a replaced dialog starts like a freshly opened one.
+    focusFirstControl(d);
+  }
   // The <dialog> is the scroll container and keeps its offset while closed and while its
   // content is replaced, so each opening would start where the last dialog was left (#316).
   // Reset it after showModal(): a closed dialog has no box to scroll. showModal() focuses the
   // first control, which sits in the sticky header, so the reset never hides the focus.
   d.scrollTop = 0;
+}
+
+// What showModal() focuses: an [autofocus] element, else the first control that takes focus,
+// which in every #detail dialog sits in the sticky header (a Running box, else the ×). Hidden
+// and disabled controls refuse focus(), so the first one that accepts it wins. The dialog is
+// scrolled to its top right after, so focus() does not scroll it.
+const FOCUSABLE =
+  'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable]';
+function focusFirstControl(d: HTMLDialogElement) {
+  const candidates = [d.querySelector('[autofocus]'), ...d.querySelectorAll(FOCUSABLE)];
+  for (const el of candidates) {
+    if (!(el instanceof HTMLElement) || el.matches(':disabled')) continue;
+    el.focus({ preventScroll: true });
+    if (document.activeElement === el) return;
+  }
+}
+
+// On close, focus goes back to the control that opened the dialog, however many dialogs
+// replaced the first one in between. Browsers do this themselves for a modal dialog (so this
+// usually finds focus already there and leaves it), but only while the opener is still on the
+// page; one that is gone is left to the page. A dialog opened again before this close event
+// arrived keeps its own opener.
+function returnFocus(d: HTMLDialogElement) {
+  if (d.open) return;
+  const back = opener;
+  opener = null;
+  const current = document.activeElement;
+  const lost = !current || current === document.body || !current.isConnected || d.contains(current);
+  if (lost && back?.isConnected) back.focus();
 }
 
 export function unmountDetail() {
