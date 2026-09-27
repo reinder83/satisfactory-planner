@@ -376,7 +376,8 @@ try {
   assert.equal(state.checks['parallel-one'], true);
   assert.equal(state.checks['parallel-two'], true);
   // Docker export contains portable handbook and progress, never accounts or sessions.
-  backend = await createApp({ dataDir: temp, password: '' });
+  // Vite serves the Docker edition's frontend, as `npm start` does, so its pages can be measured.
+  backend = await createApp({ dataDir: temp, password: '', dev: true });
   const listening = backend;
   await new Promise<void>(r => listening.listen(0, '127.0.0.1', r));
   const backendURL = 'http://127.0.0.1:' + port(listening);
@@ -430,6 +431,39 @@ try {
   assert.equal(roundtrip.status, 200);
   const reexport: SaveExport = await (await fetch(backendURL + '/api/export-saves')).json();
   assert.equal(reexport.saves.length, 2);
+  // The calculated Backup page as the Docker edition draws it: the grid is spaced from the
+  // full-saves panel above it (#309) and from the notes panel below it (#311) as stacked panels
+  // are, and its two panels share a top edge (#309).
+  const { activeSave } = await (await fetch(backendURL + '/api/workspace')).json();
+  const created = await fetch(backendURL + '/api/profiles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
+    body: JSON.stringify({
+      saveId: activeSave,
+      name: 'Calculated backup check',
+      settings: { phase: '1', goal: 'minimal' },
+    }),
+  });
+  assert.equal(created.status, 201);
+  const dockerPage = await context.newPage();
+  dockerPage.on('pageerror', e => errors.push(e.message));
+  await dockerPage.goto(backendURL + '/#backup');
+  await dockerPage.getByText('Save-wide notes for this profile', { exact: true }).waitFor();
+  const boxes = await dockerPage
+    .locator('#main > *')
+    .evaluateAll(els =>
+      els.map(e => ({ grid: e.matches('.backup-grid'), ...e.getBoundingClientRect().toJSON() })),
+    );
+  const grid = boxes.findIndex(b => b.grid);
+  const gap = (above: number) => Math.round(boxes[above + 1]!.top - boxes[above]!.bottom);
+  assert.equal(gap(grid - 1), 16, 'the grid is spaced from the full-saves panel');
+  assert.equal(gap(grid), 16, 'the notes panel is spaced from the grid');
+  const backupTops = await dockerPage
+    .locator('.backup-grid > .panel')
+    .evaluateAll(panels => panels.map(p => p.getBoundingClientRect().top));
+  assert.equal(backupTops.length, 2);
+  assert.equal(backupTops[1], backupTops[0], 'the Backup grid panels start level');
+  await dockerPage.close();
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(temp, 'browser-check.png'), fullPage: true });
   console.log(

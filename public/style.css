@@ -2484,8 +2484,10 @@ button.rail-tile:hover {
   gap: 16px;
   align-items: start;
 }
-/* Spaced from a panel above it (the Backup page's full-saves panel) as panels are (#309). */
-.panel + .backup-grid {
+/* Spaced from a panel above or below it as panels are: the Backup page's full-saves panel
+   (#309) and the calculated Backup page's notes panel (#311). */
+.panel + .backup-grid,
+.backup-grid + .panel {
   margin-top: 16px;
 }
 /* Side by side, the gap spaces the panels: `.panel + .panel` would push the second one 16px
