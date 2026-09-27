@@ -413,6 +413,15 @@ try {
   await page.reload();
   await page.getByText('Build the first three iron halls', { exact: true }).waitFor();
   await checkStorage();
+  // Side by side, the two panels of a .backup-grid share a top edge (#309): the handbook's
+  // resources page has one in this edition, the server's Backup page two.
+  await page.goto(base + '#resources');
+  await page.locator('.backup-grid > .panel').first().waitFor();
+  const gridTops = await page
+    .locator('.backup-grid > .panel')
+    .evaluateAll(panels => panels.map(p => p.getBoundingClientRect().top));
+  assert.equal(gridTops.length, 2);
+  assert.equal(gridTops[1], gridTops[0], 'the second grid panel starts level with the first');
   const roundtrip = await fetch(backendURL + '/api/import-saves', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },

@@ -390,6 +390,19 @@ test('the calculated backup page names the profile and lists its assumptions', (
   assert.equal($('a[download]')!.getAttribute('href'), '/api/export?save=s&profile=p');
 });
 
+// #309: on the server the "Full saves & transfer" panel came before the page header, so the page
+// opened on a panel with no title. The header comes first in both server versions.
+for (const kind of ['handbook', 'calculated'] as const)
+  test(`the ${kind} backup page opens with its header, then the full-saves panel`, () => {
+    open({ calculated: kind === 'calculated' });
+    go('backup');
+    render();
+    const [first, second] = [...$('#main')!.children];
+    assert.equal(first!.querySelector('h1')!.textContent, 'Backup & notes');
+    assert.equal(second!.querySelector('h2')!.textContent, 'Full saves & transfer');
+    assert.equal($$('#main h1').length, 1, 'one header');
+  });
+
 test('the handbook resources page shows every resource with its icon, and the power checks', async () => {
   go('resources');
   render();

@@ -2484,6 +2484,17 @@ button.rail-tile:hover {
   gap: 16px;
   align-items: start;
 }
+/* Spaced from a panel above it (the Backup page's full-saves panel) as panels are (#309). */
+.panel + .backup-grid {
+  margin-top: 16px;
+}
+/* Side by side, the gap spaces the panels: `.panel + .panel` would push the second one 16px
+   below the first (#309). Stacked in one column (720px and narrower) it keeps that spacing. */
+@media (min-width: 721px) {
+  .backup-grid > .panel + .panel {
+    margin-top: 0;
+  }
+}
 .danger-zone {
   margin-top: 20px;
   padding-top: 16px;
