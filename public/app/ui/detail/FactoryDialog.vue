@@ -1,9 +1,9 @@
 <!--
   The dialog for one handbook factory (plan.factories id): the "Running at Phase N target" check
-  in the sticky header (#239), then stats, flow, lane advice, expansion table and the factory
-  notes. It shows the
-  current phase, or the factory's first phase when it has no stage in the current one.
-  Plastic and Rubber come from the shared oil campus, which replaces the lane advice. The check
+  in the sticky header (#239), then stats, flow, lane advice, the machine cells (MachineCells,
+  SP-20), expansion table and the factory notes. It shows the current phase, or the factory's
+  first phase when it has no stage in the current one. Plastic and Rubber come from the shared
+  oil campus, which replaces the lane advice and the machine cells. The check
   key `factory-<phase>-<id>` and the note key `factory-<id>` (shared by every phase) are saved
   progress. Opened by openFactory in factory-detail.ts.
 -->
@@ -12,12 +12,15 @@ import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { handbookFlowModel } from '../../flow.ts';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
+import { machineCounts } from '../../views/factories.ts';
+import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import StatTile from '../StatTile.vue';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
+import MachineCells from './MachineCells.vue';
 import OilCampus from './OilCampus.vue';
 import { toggleCheck } from '../actions.ts';
 import type { HandbookFactoryStage } from '../../../types/index.ts';
@@ -66,6 +69,12 @@ const view = computed(() =>
     const usage = consumers || r.delivery ? '' : f.nuclear ? 'nuclear' : r.storage ? 'storage' : '';
     const completion = phase() === 'post' ? plan.completion.filter(c => c.inputs?.[f.name]) : [];
     const check = 'factory-' + st + '-' + f.id;
+    // The three machine cells (SP-20): the clock is the card's (one decimal, never 100%), and
+    // the caption keeps the handbook's own figure where that differs.
+    const lastClock = r.lastClock ?? 100,
+      counts = machineCounts(r.machines, lastClock);
+    const perMachine = r.rate ? num(r.rate) + '/min' : '';
+    const precise = num(lastClock) + '%';
     return {
       f,
       r,
@@ -80,6 +89,19 @@ const view = computed(() =>
       completion: completion.map(c => c.name + ' ' + num(c.inputs[f.name]!) + '/min').join(' · '),
       check,
       done: checked(check),
+      machines: {
+        counts,
+        total: `${r.machine} · peak load ${power(r.peakMW)}`,
+        full: counts.full && perMachine ? perMachine + ' each' : '',
+        adjustable: counts.clock
+          ? [
+              precise === counts.clock + '%' ? '' : 'Set ' + precise,
+              r.rate ? num((r.rate * lastClock) / 100) + '/min' : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : 'No underclock needed',
+      },
     };
   }),
 );
@@ -138,15 +160,14 @@ const view = computed(() =>
     <OilCampus v-if="view.oil" :phase="view.st" />
     <template v-else
       ><LaneAdvice :model="view.flow" />
+      <MachineCells
+        :counts="view.machines.counts"
+        :total-caption="view.machines.total"
+        :full-caption="view.machines.full"
+        :adjustable-caption="view.machines.adjustable"
+      />
       <p class="small muted">
-        <template v-if="view.r.machines === 1"
-          >1 whole building at {{ num(view.r.lastClock ?? 100) }}%</template
-        ><template v-else
-          >{{ num(view.r.machines) }} whole buildings. All at 100%<template
-            v-if="(view.r.lastClock ?? 100) < 100"
-            >, except the last at {{ num(view.r.lastClock) }}%</template
-          ></template
-        >. Peak production load {{ num(view.r.peakMW) }} MW; upstream factories and logistics are
+        Peak load counts this factory's own machines; upstream factories and logistics are
         separate.{{
           view.localInputs
             ? ' Local inputs are produced beside this factory; their machines are part of the shared distributed budget.'

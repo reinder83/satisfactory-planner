@@ -53,11 +53,34 @@ export function allocationText(
 // clock is shown to one decimal and never rounded up to 100%; the dialog has the exact figure.
 export function machineLine(machines: number, machine: string, lastClock = 100): string {
   const text = `${num(machines)} × ${machine}`;
-  if (!(lastClock < 100 - 1e-7)) return text;
-  const clock = Math.min(Math.round(lastClock * 10) / 10, 99.9).toLocaleString(undefined, {
+  const clock = clockText(lastClock);
+  if (!clock) return text;
+  return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
+}
+
+// The last machine's clock as the cards and dialogs show it (SP-14): one decimal, never rounded
+// up to 100%. Undefined when every machine runs at 100%.
+export function clockText(lastClock = 100): string | undefined {
+  if (!(lastClock < 100 - 1e-7)) return undefined;
+  return Math.min(Math.round(lastClock * 10) / 10, 99.9).toLocaleString(undefined, {
     maximumFractionDigits: 1,
   });
-  return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
+}
+
+// The factory dialogs' three machine cells (SP-20, #255): the total, how many run at 100% and
+// the adjustable one with its clock, read from the same count and clock as the card's
+// machineLine, so the two agree. A single machine below 100% is 1 · 0 · 1 at N%; when every
+// machine runs at 100% there is no adjustable machine and no clock.
+export interface MachineCounts {
+  total: number;
+  full: number;
+  adjustable: number;
+  clock?: string;
+}
+export function machineCounts(machines: number, lastClock = 100): MachineCounts {
+  const clock = clockText(lastClock);
+  if (!clock) return { total: machines, full: machines, adjustable: 0 };
+  return { total: machines, full: Math.max(0, machines - 1), adjustable: 1, clock };
 }
 
 // The status filter of both factories pages (SP-16, #251): a chip per status, each with how many
