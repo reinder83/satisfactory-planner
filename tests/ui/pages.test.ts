@@ -987,3 +987,18 @@ test('a refused browser record offers its stored data as a download on the error
   assert.equal($('#download-stored-data'), null);
   assert.ok($('#retry'));
 });
+
+// Nitrogen Gas is a fluid, so the handbook's well check names its rate in m³/min (#363).
+test('the handbook resources page asks for the nitrogen rate in m³/min (#363)', () => {
+  open({ phase: '4' });
+  go('resources');
+  render();
+  const warn = $$('#main .notice.warn').find(n => /nitrogen wells/.test(n.textContent))!;
+  assert.ok(warn, 'Phase 4 has the nitrogen notice');
+  assert.match(
+    warn.textContent.replace(/ /g, ' ').replace(/\s+/g, ' '),
+    new RegExp(
+      `can supply ${num(handbook.resources['4']!['Nitrogen Gas']!).replace(/\./g, '\.')} m³/min at this stage`,
+    ),
+  );
+});

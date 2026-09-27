@@ -408,3 +408,34 @@ test('leaving the survey alone changes no budget', async () => {
   assert.equal(wizard!.mode, 'advanced');
   assert.equal(wizard!.step, 4);
 });
+
+// The oil screen totals crude oil nodes and the crude oil and nitrogen wells in m³/min, the unit
+// the rest of the app measures a fluid in; an ore row keeps /min (#363).
+test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)', async () => {
+  const e = blankExtraction();
+  e.nodes = {
+    'Iron Ore': { impure: 1, normal: 1, pure: 1 },
+    'Crude Oil': { impure: 0, normal: 2, pure: 0 },
+  };
+  e.wells = {
+    'Crude Oil': { impure: 0, normal: 3, pure: 0 },
+    'Nitrogen Gas': { impure: 1, normal: 0, pure: 0 },
+  };
+  survey(3, { purity: 'vanilla', distribution: 'original' }, { extraction: e });
+  const totals = () =>
+    $$('.count-row').map(r => [
+      r.querySelector('.count-name')!.textContent,
+      r.querySelector('.count-total')!.textContent.replace(/ /g, ' '),
+    ]);
+  const fluids = totals();
+  assert.deepEqual(
+    fluids.map(([n]) => n),
+    ['Crude Oil', 'Crude Oil', 'Nitrogen Gas'],
+  );
+  for (const [name, total] of fluids)
+    assert.match(total!, /^[\d.,]+ m³\/min$/, name + ' is a fluid, in m³/min');
+  wizard!.extractionStep = 2;
+  await redraw();
+  const iron = totals().find(([n]) => n === 'Iron Ore')!;
+  assert.match(iron[1]!, /^[\d.,]+\/min$/, 'an ore keeps /min');
+});
