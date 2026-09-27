@@ -4,7 +4,7 @@
 // in happy-dom.
 import assert from 'node:assert/strict';
 import { createApp, h, nextTick } from 'vue';
-import { lanePlan } from '../../public/app/flow.ts';
+import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
 import { num } from '../../public/app/format.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
@@ -1085,6 +1085,12 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
 // last one's clock on the line below (SP-14, #249).
 const cardOf = (sel: string) => $(sel)!.closest('.factory-card')!;
 const headline = (card: Element) => card.querySelector('.card-main .output')!.textContent!.trim();
+// Text with a no-break space (or &nbsp; in markup) and runs of whitespace as one space.
+const plain = (t: string) =>
+  t
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 const machinesLine = (card: Element) => card.querySelector('.card-main .machines')!.textContent;
 
 test('a handbook card shows its output as the headline and machines with the clock below', () => {
@@ -1159,15 +1165,121 @@ test('a calculated card with several outputs names each of them below the headli
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${multi.id}"]`);
   const outputs = Object.entries(multi.outputs);
-  assert.equal(headline(card), num(outputs[0]![1]) + ' /min');
+  assert.equal(plain(headline(card)), num(outputs[0]![1]) + ' ' + rateUnit(outputs[0]![0]));
   assert.deepEqual(
     card
       .querySelector('.recipe')!
       .innerHTML.replace(/<!--.*?-->/g, '')
       .trim()
-      .split('<br>'),
-    outputs.map(([n, q]) => `${n}: ${num(q)}/min`),
+      .split('<br>')
+      .map(plain),
+    outputs.map(([n, q]) => `${n}: ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min`),
   );
+});
+
+// A fluid is measured in m³/min everywhere its rate is written, as the flow diagram and the
+// dialog's summary line already did; solids keep /min (#351, #361). plain() reads a no-break
+// space (or its &nbsp; in markup) as a space.
+const m3 = (q: number) => num(q) + ' m³/min';
+const ROW_FUEL = 'Recipe_ResidualFuel_C'; // Residual Fuel: Heavy Oil Residue in, Fuel out.
+const ROW_OIL = 'Recipe_LiquidFuel_C'; // Fuel: Crude Oil in, Fuel and Polymer Resin out.
+
+test('a handbook card measures a fluid in m³/min, like its dialog (#351)', async () => {
+  open({ phase: '4' });
+  render();
+  const card = cardOf('#main button.name[data-factory="alumina-solution"]');
+  assert.equal(plain(headline(card)), m3(10126.666666666666));
+  assert.equal(card.querySelector('.output span')!.textContent, 'm³/min');
+  assert.match(plain(card.querySelector('.recipe')!.textContent!), /· storage 0 m³\/min$/);
+  // The headline agrees with the dialog's summary line.
+  openFactory('alumina-solution');
+  assert.equal(plain(summary()!).split(' · ')[0], plain(headline(card)));
+  // The output per machine too, in the machine cells and the flow's machine line.
+  assert.match(machineCells()[1]![2]!, / m³\/min each$/);
+  assert.match(plain(detail()), / m³ Alumina Solution\/min out per machine/);
+  // A solid keeps /min.
+  const iron = cardOf('#main button.name[data-factory="iron-ingot"]');
+  assert.equal(iron.querySelector('.output span')!.textContent, '/min');
+  // A group's share of a fluid is in m³/min as well.
+  open({
+    phase: '4',
+    state: {
+      factoryGroups: {
+        groups: GROUPS.groups,
+        assignments: {
+          'alumina-solution': [
+            { group: 'fg-cable01', rate: 600 },
+            { group: 'fg-plates1', rate: null },
+          ],
+        },
+      },
+    },
+  });
+  render();
+  await nextTick();
+  assert.ok(
+    plain($$('#main .user-group')[0]!.querySelector('.allocation')!.textContent).startsWith(
+      `Here: ${m3(600)} of ${m3(10126.666666666666)}`,
+    ),
+  );
+});
+
+test('a calculated card measures a fluid in m³/min, like its dialog (#351)', () => {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const fuel = rows.find(r => r.id === ROW_FUEL)!,
+    oil = rows.find(r => r.id === ROW_OIL)!;
+  assert.ok(fuel && oil, 'the default plan makes Fuel on two lines');
+  open({ calculated: p });
+  render();
+  const card = cardOf(`#main button.name[data-calc-factory="${fuel.id}"]`);
+  assert.equal(plain(headline(card)), m3(fuel.outputs.Fuel!));
+  assert.equal(card.querySelector('.output span')!.textContent, 'm³/min');
+  // Named Residual Fuel, so its one output is listed below, in the same unit.
+  assert.equal(
+    plain(card.querySelector('.recipe')!.textContent!),
+    'Fuel: ' + m3(fuel.outputs.Fuel!),
+  );
+  openCalculatedFactory(fuel.id);
+  assert.equal(plain(summary()!), plain(headline(card)));
+  // A fluid and a solid output: each in its own unit.
+  const both = cardOf(`#main button.name[data-calc-factory="${oil.id}"]`);
+  assert.deepEqual(
+    both
+      .querySelector('.recipe')!
+      .innerHTML.replace(/<!--.*?-->/g, '')
+      .trim()
+      .split('<br>')
+      .map(plain),
+    Object.entries(oil.outputs).map(([n, q]) => `${n}: ${n === 'Fuel' ? m3(q) : num(q) + '/min'}`),
+  );
+});
+
+test('a calculated factory dialog measures fluid inputs and outputs in m³/min (#361)', () => {
+  const p = generated();
+  const fuel = p.stages['3'].rows!.find(r => r.id === ROW_FUEL)!;
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(fuel.id);
+  const easy = plain($('#detail .notice.info')!.textContent!);
+  assert.match(easy, /Its output: Fuel [\d.,]+ m³\/min\./);
+  assert.match(easy, /Extra inputs needed: Heavy Oil Residue [\d.,]+ m³\/min\./);
+  // The outputs list (the row is not named after its output), the machine cells and the flow's
+  // machine line.
+  const all = plain(detail());
+  assert.ok(all.includes('<p>Fuel ' + m3(fuel.outputs.Fuel!) + '</p>'));
+  assert.match(machineCells()[2]![2]!, /≈ [\d.,]+ m³ Fuel\/min$/);
+  assert.match(all, / · 40 m³ Fuel\/min out per machine/);
+  assert.doesNotMatch(all, /Heavy Oil Residue [\d.,]+\/min|[\d.,] Fuel\/min/);
+});
+
+test('the handbook factories page measures a fluid input in m³/min (#361)', () => {
+  open({ phase: 'post' });
+  render();
+  const fabric = $('[data-check="completion-fabric"]')!.closest('.completion-item')!;
+  assert.match(plain(fabric.textContent!), /Inputs: Polymer Resin 10\/min · Water 10 m³\/min/);
+  // A no-break space keeps the number with its m³.
+  assert.ok(fabric.textContent!.includes('Water 10 m³/min'));
 });
 
 test('the calculated card is marked done like the handbook card', () => {

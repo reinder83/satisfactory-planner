@@ -10,6 +10,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { itemRate, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
 import { heldBack, machineSetup } from '../../views/calculated.ts';
@@ -31,22 +32,23 @@ const card = computed(() =>
   legacy(() => {
     const r = props.row,
       outputs = Object.entries(r.outputs || {}),
-      total = outputs[0]?.[1] || 0,
+      [main, total = 0] = outputs[0] || [],
       check = 'calc-' + stage() + '-' + r.id,
       setup = machineSetup(r),
       mw = powerParts(r.generationMW);
     return {
       check,
       done: checked(check),
-      icon: outputs[0]?.[0],
-      // The main output, or a generator's power when the row makes no items.
-      headline: outputs.length ? { value: num(total), unit: '/min' } : mw,
+      icon: main,
+      // The main output, or a generator's power when the row makes no items; a fluid in m³/min,
+      // as the dialog's summary line says it (#351).
+      headline: main ? { value: num(total), unit: rateUnit(main) } : mw,
       machines: machineLine(r.machines, r.machine, setup.partial ? setup.clock : 100),
       // The outputs by name, unless the headline already says all of it: one output that
       // gives the row its name.
       outputs:
         outputs.length > 1 || (outputs[0] && outputs[0][0] !== r.name)
-          ? outputs.map(([n, q]) => `${n}: ${num(q)}/min`)
+          ? outputs.map(([n, q]) => `${n}: ${itemRate(n, q)}`)
           : [],
       allocation: props.group
         ? allocationText(
@@ -54,7 +56,7 @@ const card = computed(() =>
             props.group,
             total || r.generationMW,
             r.machines,
-            total ? '/min' : ' MW',
+            main && total ? q => itemRate(main, q) : q => num(q) + ' MW',
           )
         : '',
       editing: factoryEditing,

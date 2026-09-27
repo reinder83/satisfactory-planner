@@ -3,7 +3,7 @@
 // by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.ts), as
 // is the wizard's alternate recipe (openAltRecipe in wizard/recipes.ts).
 import { num } from './format.ts';
-import { FLUIDS } from './flow.ts';
+import { itemRate } from './flow.ts';
 import { calcStage, calculated, plan, stage } from './session.ts';
 import { showDetail } from './ui/detail.ts';
 import { factoryGroupsState, membershipsOf } from './views/factories.ts';
@@ -157,7 +157,7 @@ export function groupChain(
     const needs = Object.entries(nd.inputs).map(([n, q]) => {
       const from = makers(n).filter(m => m !== nd);
       return {
-        text: `${n} ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min`,
+        text: `${n} ${itemRate(n, q)}`,
         loop: loopIns.includes(n),
         from: from.length
           ? 'stage ' + Math.min(...from.map(m => stageNo.get(m.id)!))

@@ -4,8 +4,7 @@
 // profile shows the same addresses with only the items it selected for storage.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
-import { FLUIDS } from '../flow.ts';
-import { num } from '../format.ts';
+import { itemRate } from '../flow.ts';
 import { calculated, checked, currentProfile, plan, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
@@ -34,12 +33,13 @@ export interface StorageFloor {
 
 // Items kept at a zero rate hold their container and address without reserving
 // production, so they belong on the storage map rather than in a rate list.
-// inputText: plain "Item 12/min · Item 3/min" text for the non-zero entries of an
-// item → rate map. Used across the factory, resource and detail views.
+// inputText: plain "Item 12/min · Water 3 m³/min" text for the non-zero entries of an
+// item → rate map, a fluid in m³/min (itemRate in flow.ts, #361). Used across the factory,
+// resource and detail views.
 export function inputText(inputs: ItemRates): string {
   return Object.entries(inputs)
     .filter(([, q]) => q)
-    .map(([n, q]) => n + ' ' + num(q) + '/min')
+    .map(([n, q]) => n + ' ' + itemRate(n, q))
     .join(' · ');
 }
 
@@ -54,7 +54,7 @@ export interface ItemRateRow {
 export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
   return Object.entries(inputs)
     .filter(([, q]) => q)
-    .map(([n, q]) => ({ name: n, rate: num(q) + (FLUIDS.has(n) ? ' m³/min' : '/min') }));
+    .map(([n, q]) => ({ name: n, rate: itemRate(n, q) }));
 }
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,

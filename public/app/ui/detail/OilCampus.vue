@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { FLUIDS, lanePlan, OIL_RECIPES } from '../../flow.ts';
+import { FLUIDS, itemRate, lanePlan, OIL_RECIPES } from '../../flow.ts';
 import { phaseLabel, plan } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -73,7 +73,7 @@ const campus = computed(() =>
                   text: `${num(p.oilTotals.generators)} Fuel Generators (${num(p.oilTotals.grossGW)} GW gross)`,
                 });
               else if (p.oilTotals.fuel > 0.01)
-                parts.push({ text: `export ${num(p.oilTotals.fuel)}/min`, to: fuelConsumer });
+                parts.push({ text: `export ${itemRate(n, p.oilTotals.fuel)}`, to: fuelConsumer });
             }
             return parts.length ? { item: n, parts } : null;
           })

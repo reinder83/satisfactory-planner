@@ -139,6 +139,22 @@ export const FLUIDS = new Set([
   'Liquid Biofuel',
 ]);
 
+// The unit an item's rate is written in (#351, #361): m³/min for a fluid, /min for anything
+// else. A card's headline shows it in its own span beside the number.
+export const rateUnit = (item: string): string => (FLUIDS.has(item) ? 'm³/min' : '/min');
+
+// An item's rate with that unit, as the rate lists write it after the item's name: "120 m³/min"
+// for a fluid, "45/min" for a solid. A no-break space keeps a fluid's rate on one line, as the
+// dialogs' summary line does.
+export const itemRate = (item: string, q: number): string =>
+  num(q) + (FLUIDS.has(item) ? '\u00a0' : '') + rateUnit(item);
+
+// A rate that leads with the amount and names the item in between: "60 m³ Fuel/min" for a
+// fluid, as the oil campus writes it, "45 Iron Plate/min" for a solid. `fmt` formats the number
+// (num3 for a per-machine rate).
+export const rateOfItem = (item: string, q: number, fmt = num): string =>
+  `${fmt(q)}${FLUIDS.has(item) ? '\u00a0m³' : ''} ${item}/min`;
+
 // Conveyor belt marks in unlock order. cap is items/min per belt; entry is the progression.json
 // milestone id that unlocks the mark.
 const BELT_LANES: Lane[] = [
@@ -384,7 +400,7 @@ export function handbookFlowModel(
     bar: bankOnly
       ? null
       : {
-          sub: `${String(r.recipe || '').replace('Alternate: ', '')} · ${clock} · ${num3(perOut)} ${f.name}/min out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
+          sub: `${String(r.recipe || '').replace('Alternate: ', '')} · ${clock} · ${rateOfItem(f.name, perOut, num3)} out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
           out: { rate: num(r.output), unit },
           outSub: f.local
             ? 'out · distributed'
@@ -570,7 +586,7 @@ export function calcFlowModel(r: CalcRow): FlowModel {
         : [['MW', r.generationMW / eq]],
     },
     bar: {
-      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${num3(r.outputs[outName]! / eq)} ${outName}/min out per machine` : ''}${splitTxt}`,
+      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${rateOfItem(outName, r.outputs[outName]! / eq, num3)} out per machine` : ''}${splitTxt}`,
       out: outName
         ? { rate: num(r.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
         : { text: power(r.generationMW) },

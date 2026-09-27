@@ -24,19 +24,20 @@ export const membershipsOf = (key: string): GroupAssignment[] =>
 // The line on a grouped card saying how much of the factory's output this group gets, or ''
 // when the factory sits whole in a single group. Shares follow rowShares (group-links.ts), so
 // the cards and "Between groups" agree: fixed rates first, and what they leave split evenly
-// between the null-rate memberships (#197). Machines are scaled by the same share.
+// between the null-rate memberships (#197). Machines are scaled by the same share. `rate` writes
+// a rate with its unit: itemRate (flow.ts) for an item, so a fluid reads m³/min (#351), or MW.
 export function allocationText(
   key: string,
   groupId: string,
   total: number,
   machines: number,
-  unit = '/min',
+  rate: (q: number) => string,
 ): string {
   const ms = membershipsOf(key),
     m = ms.find(x => x.group === groupId);
   if (!m || (ms.length === 1 && m.rate == null)) return '';
   const share = total > 0 ? rowShares(total, ms).get(groupId) || 0 : 0;
-  const rate = total > 0 ? share * total : (m.rate ?? 0);
+  const here = total > 0 ? share * total : (m.rate ?? 0);
   const sharing = ms.filter(x => x.rate == null).length;
   return (
     (m.rate != null
@@ -44,7 +45,7 @@ export function allocationText(
       : sharing > 1
         ? `Remaining here, split ${sharing} ways: `
         : 'Remaining here: ') +
-    `${num(rate)}${unit} of ${num(total)}${unit}` +
+    `${rate(here)} of ${rate(total)}` +
     (machines > 0 && share < 1 ? ` · ≈ ${num(machines * share)} of ${num(machines)} machines` : '')
   );
 }

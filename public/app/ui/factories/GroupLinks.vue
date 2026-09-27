@@ -18,7 +18,7 @@
 import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num } from '../../format.ts';
-import { bestLane, FLUIDS, lanePlan } from '../../flow.ts';
+import { bestLane, FLUIDS, lanePlan, rateOfItem } from '../../flow.ts';
 import {
   groupLinks,
   isSource,
@@ -336,7 +336,7 @@ const fuel = computed(() =>
           ([p, f]) =>
             `Phase ${p}: ` +
             Object.entries(f || {})
-              .map(([n, q]) => `${num(q)} ${n}/min`)
+              .map(([n, q]) => rateOfItem(n, q))
               .join(', '),
         )
         .join('; ');
