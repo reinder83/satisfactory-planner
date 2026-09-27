@@ -2,6 +2,7 @@
 // public/app/ui/storage/) and the container dialog (public/app/ui/detail/SlotDialog.vue),
 // mounted the way the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { nextTick } from 'vue';
 import type { DragDropManager } from '@dnd-kit/vue';
 import { beforeEach, test } from 'vitest';
@@ -129,6 +130,94 @@ test('bays stay in address order in the document and take their hall position fr
   assert.deepEqual(at[order.at(-2)!], [1, 1], 'the last pair stays at the rear of the hall');
   assert.equal($$('#main .aisle').length, order.length / 2, 'every row keeps its aisle');
   assert.equal($('#main .eyebrow.floor-marker')!.textContent, 'REAR OF HALL ↑');
+});
+
+// The key to the grid sits above it (SP-24, #259): the bank numbering, then a swatch for Done,
+// reserved and added positions, each beside its words; nothing of it is left after the entrance.
+test('the storage key sits above the grid, a decorative swatch beside each state (SP-24)', () => {
+  render();
+  const key = $('#main [data-storage-key]')!;
+  assert.ok(key, 'a floor with bays has a key');
+  const grid = $('#main .floor-grid')!,
+    rear = $('#main .eyebrow.floor-marker')!,
+    entry = $('#main .entry.floor-marker')!;
+  const before = (a: Node, b: Node) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(
+    before(key, rear) && before(key, grid),
+    'the key comes before the rear marker and grid',
+  );
+  assert.equal(key.getAttribute('aria-label'), 'Storage key');
+  const items = [...key.querySelectorAll('li')];
+  assert.deepEqual(
+    items.map(li => li.className),
+    ['key-banks', 'key-done', 'key-reserved', 'key-added'],
+  );
+  const words = items.map(li => li.textContent.replace(/\s+/g, ' ').trim());
+  assert.match(words[0]!, /01–04 rear bank, 05–08 front bank/);
+  assert.equal(words[1], 'Done');
+  assert.match(words[2]!, /Reserved \(unassigned\)/);
+  assert.match(words[3]!, /09\+ added past the printed bay/);
+  const swatches = [...key.querySelectorAll('.key-swatch')];
+  assert.deepEqual(
+    swatches.map(s => [...s.classList].filter(c => c !== 'key-swatch')),
+    [['done'], ['empty'], ['added']],
+  );
+  for (const s of swatches) {
+    assert.equal(s.getAttribute('aria-hidden'), 'true', 'a swatch is decoration');
+    assert.equal(s.textContent, '', 'a swatch holds no words of its own');
+  }
+  assert.equal(
+    entry.nextElementSibling!.tagName,
+    'SECTION',
+    'the checklist follows the entrance marker, with no key between',
+  );
+  assert.doesNotMatch($('#main')!.textContent, /Grey positions remain unassigned/);
+});
+
+test('a floor without bays draws no key, the workshop and an added floor alike (SP-24)', async () => {
+  render();
+  $('[data-floor="workshop"]')!.click();
+  await nextTick();
+  assert.equal($('#main [data-storage-key]'), null, 'the workshop has no key');
+  open({
+    state: { storageEdits: someEdits({ floors: [{ id: 'cf-abcd12', label: 'Basement' }] }) },
+  });
+  setFloor('cf-abcd12');
+  render();
+  await nextTick();
+  assert.equal($('#main [data-storage-key]'), null, 'an empty added floor has no key');
+  open({ state: { storageEdits: structuredClone(EDITS) } });
+  setFloor('cf-abcd12');
+  render();
+  await nextTick();
+  assert.ok($('#main [data-storage-key]'), 'an added floor with a bay has one');
+});
+
+test('the key swatches share the grid states’ colour rules, and a phone keeps only "added" (SP-24)', () => {
+  const css = fs.readFileSync('public/style.css', 'utf8').replace(/\r\n/g, '\n');
+  const rule = (selector: string) =>
+    [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m =>
+      m[1]!
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split(',')
+        .map(s => s.trim())
+        .includes(selector),
+    );
+  for (const [state, swatch] of [
+    ['.slot.done', '.key-swatch.done'],
+    ['.slot.empty', '.key-swatch.empty'],
+    ['.walkway.added', '.key-swatch.added'],
+  ] as const) {
+    const colours = rule(state).find(m => /background|border/.test(m[2]!))!;
+    assert.ok(colours, `${state} has a colour rule`);
+    assert.ok(
+      rule(swatch).some(m => m[0] === colours[0]),
+      `${swatch} is named in the same rule as ${state}`,
+    );
+  }
+  const phone = css.split('@media (max-width: 720px)').slice(1).join('');
+  assert.match(phone, /\.storage-key li:not\(\.key-added\) \{\s*display: none;/);
 });
 
 test('layout edits show custom floors, bays and assignments, escaped', async () => {
