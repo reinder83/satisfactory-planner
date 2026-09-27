@@ -1,25 +1,27 @@
 <!--
   The notices above a calculated profile's plan, factories and resources pages for the current
   phase: the infeasible-draft warning with its options (draftFixes in views/calculated.ts), and
-  extra power headroom for whole buildings. It draws nothing without a calculated profile.
+  extra power headroom for whole buildings with what that phase can build for it (headroomAdvice,
+  #331). It draws nothing without a calculated profile.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { calcStage, calculated } from '../../session.ts';
-import { draftFixes } from '../../views/calculated.ts';
+import { calcStage, calculated, phase } from '../../session.ts';
+import { draftFixes, headroomAdvice } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 
 const notices = computed(() =>
   legacy(() => {
     const x = calcStage();
-    if (!x) return { draft: null, headroom: '' };
+    if (!x) return { draft: null, headroom: '', advice: '' };
     return {
       draft: !x.feasible && {
         reason: x.reason,
         fixes: draftFixes(x, calculated?.settings),
       },
       headroom: (x.additionalHeadroomMW ?? 0) > 0.01 ? power(x.additionalHeadroomMW!) : '',
+      advice: headroomAdvice(x, phase()),
     };
   }),
 );
@@ -41,7 +43,7 @@ const notices = computed(() =>
     >
   </div>
   <div v-if="notices.headroom" class="notice warn">
-    Allow another {{ notices.headroom }} for whole-building power headroom. Phase 1 needs biomass or
-    existing generation.
+    Allow another {{ notices.headroom }} for whole-building power headroom.
+    {{ notices.advice }}
   </div>
 </template>

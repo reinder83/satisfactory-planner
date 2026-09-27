@@ -14,6 +14,7 @@ import {
 import { acceptRoute } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
+import { headroomAdvice } from '../../public/app/views/calculated.ts';
 import {
   answerConfirms,
   $,
@@ -27,8 +28,10 @@ import {
   stubFetch,
 } from './setup.ts';
 import type {
+  CalcRow,
   HandbookDelivery,
   StoredCalculatedPlan,
+  StoredStage,
   TaskEdits,
   UpdateOp,
 } from '../../public/types/index.ts';
@@ -576,6 +579,78 @@ test('a calculated plan saved before existing production existed still renders',
   open({ calculated: older });
   render();
   assert.ok($$('#main .checklist .task').length > 5);
+});
+
+// #331: the headroom notice ended on "Phase 1 needs biomass or existing generation." on every
+// phase. It now names the phase shown and, from Phase 2 on, the generators its plan builds.
+test('the power headroom notice speaks of the phase shown, on every phase', () => {
+  const plan = structuredClone(generated);
+  // A profile that starts in Phase 1, so the picker offers every phase.
+  plan.settings.phase = '1';
+  const headroom = () =>
+    $$('#main .notice.warn')
+      .map(n => n.textContent.replace(/\s+/g, ' ').trim())
+      .find(t => /whole-building power headroom/.test(t));
+  for (const phase of ['1', '2', '3', '4', '5', 'post'] as const) {
+    const x = plan.stages[phase === 'post' ? '5' : phase]!;
+    assert.ok(x.additionalHeadroomMW! > 0.01, `Phase ${phase} has headroom to allow`);
+    for (const view of ['plan', 'factories', 'resources'] as const) {
+      page();
+      open({ calculated: plan, phase });
+      go(view);
+      render();
+      const text = headroom();
+      assert.ok(text, `${view} on ${phase} draws the notice`);
+      const label = phase === 'post' ? 'Post Phase 5' : 'Phase ' + phase;
+      if (phase === '1') {
+        assert.match(text, /Phase 1 needs biomass or existing generation\.$/);
+        continue;
+      }
+      assert.doesNotMatch(text, /Phase 1|biomass/, `${label} is not told to use biomass`);
+      const machines = new Set(x.rows!.filter(r => r.generationMW > 0).map(r => r.machine));
+      assert.ok(machines.size > 0, `${label} builds generators`);
+      assert.ok(text.includes(label + ' plans '), `${label}: ${text}`);
+      for (const m of machines) assert.ok(text.includes(m + 's'), `${label} names ${m}: ${text}`);
+    }
+  }
+  // The handbook profile has no calculated power figures, so it draws no such notice.
+  page();
+  open();
+  go('plan');
+  render();
+  assert.equal(headroom(), undefined);
+});
+
+test('the headroom advice lists every generator a stage builds, or none', () => {
+  const row = (machine: string, generationMW: number) =>
+    ({ ...generated.stages['3']!.rows![0]!, machine, generationMW }) as CalcRow;
+  const stage = (rows: CalcRow[]): StoredStage => ({ feasible: true, rows });
+  assert.equal(headroomAdvice(stage([]), '1'), 'Phase 1 needs biomass or existing generation.');
+  assert.equal(
+    headroomAdvice(stage([row('Smelter', 0), row('Coal Generator', 750)]), '2'),
+    'Phase 2 plans Coal Generators; add generation beyond those, or count on existing spare power.',
+  );
+  assert.equal(
+    headroomAdvice(
+      stage([
+        row('Fuel Generator', 500),
+        row('Nuclear Power Plant', 2500),
+        row('Coal Generator', 75),
+        row('Fuel Generator', 250),
+      ]),
+      'post',
+    ),
+    'Post Phase 5 plans Fuel Generators, Nuclear Power Plants and Coal Generators; add generation beyond those, or count on existing spare power.',
+  );
+  assert.equal(
+    headroomAdvice(stage([row('Smelter', 0)]), '4'),
+    'Phase 4 needs generation beyond the plan, or existing spare power.',
+  );
+  // A stage frozen without rows (an older or infeasible snapshot).
+  assert.equal(
+    headroomAdvice({ feasible: false }, '3'),
+    'Phase 3 needs generation beyond the plan, or existing spare power.',
+  );
 });
 
 // The handbook's Space Elevator deliveries for a phase.

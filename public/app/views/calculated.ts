@@ -11,12 +11,13 @@ import {
   calculated,
   fromStart,
   phase,
+  phaseLabel,
   progressionData,
   stage,
   state,
 } from '../session.ts';
 import { power } from '../wizard/fields.ts';
-import type { CalcRow, CurrentSettings, ItemRates, StoredStage } from '../../types/index.ts';
+import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
 export interface PlanStepData {
@@ -72,6 +73,24 @@ export function calcTasks(): PlanStepData[] {
     },
     ...(g.retire || []),
   ];
+}
+
+// The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)
+// for stage `x` shown as phase `p` (#331). Phase 1 has no generators in the plan (planner.ts
+// keeps hand-fed biomass burners out of the model), so its power is biomass or what already
+// runs. From Phase 2 on the plan builds its own generators: the sentence names the ones this
+// stage's rows build, and says only that more is needed when a stage builds none.
+export function headroomAdvice(x: StoredStage, p: Phase): string {
+  const label = phaseLabel(p);
+  if (p === '1') return label + ' needs biomass or existing generation.';
+  const machines = [
+    ...new Set((x.rows || []).filter(r => (r.generationMW || 0) > 0).map(r => r.machine)),
+  ];
+  if (!machines.length)
+    return label + ' needs generation beyond the plan, or existing spare power.';
+  const names = machines.map(m => m + 's');
+  const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0];
+  return `${label} plans ${list}; add generation beyond those, or count on existing spare power.`;
 }
 
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
