@@ -49,8 +49,8 @@
   --ink: #dce3e8;
   --bright: #ffffff;
   --muted: #8a949c;
-  --dim: #6b747b;
-  --kicker: #7d878f;
+  --dim: #7d878f;
+  --kicker: #8a949c;
   --accent: #f89c1c;
   --accent-hi: #ffb143;
   --accent-sh: #8a5507;
@@ -226,17 +226,19 @@ input[type='radio'] {
 }
 .eyebrow {
   text-transform: uppercase;
-  font-size: 9.5px;
-  letter-spacing: 0.24em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-wrap: balance;
   font-weight: 400;
   color: var(--kicker);
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
 .sidebar .eyebrow {
-  color: #78828a;
+  color: var(--dim);
   margin-top: 5px;
-  font-size: 8.5px;
-  letter-spacing: 0.2em;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
 }
 .nav {
   display: grid;
@@ -278,14 +280,14 @@ input[type='radio'] {
 .navicon::before {
   content: '0' counter(navstep);
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 0.1em;
-  color: #5f686e;
+  color: var(--dim);
 }
 .save-status {
   margin-top: auto;
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
   display: flex;
@@ -306,7 +308,7 @@ input[type='radio'] {
   margin: 12px 18px 0;
   border-top: 1px dashed var(--line2);
   padding-top: 12px;
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--dim);
   line-height: 1.85;
   text-transform: uppercase;
@@ -346,8 +348,9 @@ input[type='radio'] {
 }
 .ada-head .eyebrow {
   margin-top: 1px;
-  font-size: 7.5px;
-  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
 }
 .ada-mark {
   width: 22px;
@@ -357,7 +360,7 @@ input[type='radio'] {
   place-items: center;
   border: 1px solid var(--accent);
   color: var(--accent);
-  font-size: 10px;
+  font-size: 10.5px;
   animation: fx-blink 3.4s steps(1) infinite;
 }
 .ada[data-tone='warn'] .ada-mark {
@@ -400,16 +403,16 @@ input[type='radio'] {
 }
 .ada-tools .btn.quiet {
   padding: 2px 0;
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
 }
 .ada.is-muted {
   display: flex;
   align-items: center;
   gap: 9px;
   border-left-color: var(--line);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--dim);
 }
@@ -421,7 +424,7 @@ input[type='radio'] {
 .ada.is-muted .btn.quiet {
   margin-left: auto;
   padding: 2px 0;
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 @media (prefers-reduced-motion: reduce) {
   .ada-mark {
@@ -463,8 +466,8 @@ input[type='radio'] {
   text-transform: uppercase;
 }
 .topbar label {
-  font-size: 9px;
-  letter-spacing: 0.2em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   color: var(--dim);
   text-transform: uppercase;
   display: flex;
@@ -569,9 +572,9 @@ p {
 }
 .badge {
   padding: 4px 8px;
-  font-size: 8.5px;
+  font-size: 10.5px;
   font-weight: 400;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   background: transparent;
   border: 1px solid #3c4449;
@@ -625,13 +628,13 @@ p {
   margin: 7px 0 5px;
 }
 .stat small {
-  font-size: 10px;
-  color: #78828a;
+  font-size: 10.5px;
+  color: var(--dim);
   text-wrap: pretty;
 }
 .stat .eyebrow {
-  font-size: 8.5px;
-  letter-spacing: 0.22em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
 }
 .stat .fraction {
   font-size: 15px;
@@ -687,8 +690,8 @@ p {
   border-color: var(--warm-border);
 }
 .next-card .step-no {
-  font-size: 8.5px;
-  letter-spacing: 0.22em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   color: #c99248;
   margin-bottom: 10px;
   text-transform: uppercase;
@@ -760,7 +763,7 @@ p {
 .task summary::after {
   content: '+';
   float: right;
-  color: #5f686e;
+  color: var(--dim);
   margin-left: 10px;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
@@ -778,7 +781,7 @@ p {
   text-wrap: pretty;
 }
 .task:has(input:checked) summary {
-  color: #6f7d76;
+  color: #74837b;
   text-decoration: line-through;
   text-decoration-color: #3c4449;
 }
@@ -894,7 +897,7 @@ p {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #5f686e;
+  color: var(--dim);
 }
 .toolbar select {
   padding: 11px 14px;
@@ -1036,7 +1039,7 @@ p.eyebrow {
 .factory-card .output span {
   font-size: 11px;
   font-weight: 400;
-  color: #78828a;
+  color: var(--dim);
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   letter-spacing: 0;
 }
@@ -1385,9 +1388,9 @@ th {
   vertical-align: top;
 }
 th {
-  font-size: 8.5px;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.12em;
   color: var(--kicker);
   background: var(--panel2);
   font-weight: 400;
@@ -1566,8 +1569,8 @@ td:first-child {
 }
 .slot strong {
   color: var(--kicker);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
   font-weight: 400;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
@@ -1615,7 +1618,7 @@ td:first-child {
 }
 .slot.empty {
   background: var(--panel2);
-  color: #5f686e;
+  color: var(--dim);
   cursor: default;
 }
 /* A reserved position's stand-ins for the icon and the Done box (StorageBay.vue, #200). */
@@ -1647,8 +1650,8 @@ td:first-child {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   margin-top: auto;
@@ -1665,9 +1668,9 @@ td:first-child {
 .walkway {
   grid-column: 1/-1;
   text-align: center;
-  font-size: 9px;
-  color: #5f686e;
-  letter-spacing: 0.3em;
+  font-size: 10.5px;
+  color: var(--dim);
+  letter-spacing: 0.24em;
   padding: 4px;
   background: var(--panel2);
   text-transform: uppercase;
@@ -1788,17 +1791,17 @@ td:first-child {
   justify-content: center;
   background: var(--panel2);
   border: 1px solid var(--line2);
-  color: #5f686e;
-  font-size: 9px;
+  color: var(--dim);
+  font-size: 10.5px;
   writing-mode: vertical-rl;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.3em;
   margin: 0 10px;
 }
 .entry {
   text-align: center;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 400;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.28em;
   color: var(--dim);
   margin: 22px 0;
   text-transform: uppercase;
@@ -1868,16 +1871,16 @@ td:first-child {
 }
 .mini-label {
   display: block;
-  font-size: 9px;
-  letter-spacing: 0.2em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kicker);
   margin-bottom: 6px;
 }
 .mode-label {
   color: var(--accent);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 400;
 }
@@ -2010,8 +2013,8 @@ dialog::backdrop {
 
 /* ── Factory flow rails (2B layout) and belt logistics ── */
 .rail-cap {
-  font-size: 10px;
-  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kicker);
   margin: 16px 0 8px;
@@ -2050,8 +2053,8 @@ dialog::backdrop {
   color: var(--bright);
 }
 .rail-recipe-head span:last-child {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--kicker);
 }
@@ -2246,8 +2249,8 @@ button.rail-tile:hover {
 }
 .rail-machine-out > small {
   display: block;
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
   margin-top: 1px;
@@ -2270,9 +2273,9 @@ button.rail-tile:hover {
 .rail-row.store .rail-main small,
 .rail-row.drone .rail-main small {
   color: var(--accent);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 .rail-row.sink,
 .rail-row.more {
@@ -2369,7 +2372,7 @@ button.rail-tile:hover {
   align-items: center;
 }
 .alt-tools .btn {
-  font-size: 10px;
+  font-size: 10.5px;
   padding: 5px 10px;
 }
 .alt-picker > p {
@@ -2399,11 +2402,11 @@ button.rail-tile:hover {
   display: none;
 }
 .alt-row small {
-  font-size: 10px;
+  font-size: 10.5px;
 }
 .alt-info {
   flex: none;
-  font-size: 10px;
+  font-size: 10.5px;
   padding: 2px 7px;
   white-space: nowrap;
 }
@@ -2621,12 +2624,16 @@ button.rail-tile:hover {
 }
 .field {
   display: block;
-  font-size: 9.5px;
-  letter-spacing: 0.18em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kicker);
   font-weight: 400;
   margin: 6px 0;
+}
+/* The browser draws <small> a size smaller; inside a label that would drop below the type floor. */
+.field small {
+  font-size: 10.5px;
 }
 .field input,
 .field select,
@@ -3102,7 +3109,7 @@ button.rail-tile:hover {
     display: none;
   }
   .slot {
-    font-size: 10px;
+    font-size: 10.5px;
     padding: 7px 5px;
   }
   .dialog-body,
@@ -3636,8 +3643,8 @@ button.rail-tile:hover {
   color: var(--ink);
 }
 .guided-known b {
-  font-size: 8.5px;
-  letter-spacing: 0.2em;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kicker);
   font-weight: 400;
