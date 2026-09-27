@@ -2,21 +2,22 @@
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
   key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
   (factoryLink() in ui/actions.ts). A power-generation row leads with the power it makes (GW
-  above 1000 MW) and measures its group share in MW; a nuclear plant's waste is listed below
-  like any other output (#371). The same structure as FactoryCard.vue (SP-14): the main output
-  with its unit as the headline, machines and the adjustable machine's clock on the line below
-  it, then any other outputs. The chip at the top says whether it runs, or is held back by a
-  missing supplier with the reason above the footer (RunningChip.vue, SP-15); it follows the
-  Running box.
+  above 1000 MW), says in words that it feeds the grid, with an accent edge (#374), and
+  measures its group share in MW; a nuclear plant's waste is listed below like any other
+  output (#371), and its group share is that waste with the power it stands for (#374). The
+  same structure as FactoryCard.vue (SP-14): the main output with its unit as the headline,
+  machines and the adjustable machine's clock on the line below it, then any other outputs.
+  The chip at the top says whether it runs, or is held back by a missing supplier with the
+  reason above the footer (RunningChip.vue, SP-15); it follows the Running box.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { itemRate, rateUnit } from '../../flow.ts';
+import { itemRate, rateOfItem, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
 import { heldBack, machineSetup } from '../../views/calculated.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
-import { powerParts } from '../../wizard/fields.ts';
+import { power, powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
@@ -37,13 +38,15 @@ const card = computed(() =>
       check = 'calc-' + stage() + '-' + r.id,
       setup = machineSetup(r),
       generator = r.generationMW > 0,
-      // A group's share of the row, as a rate: its power for a generator, else its main output.
-      // The share itself is still worked out on the first output, as group-links.ts does, so a
-      // fixed rate saved for a nuclear plant keeps its meaning.
+      // A group's share of the row, as a rate: its main output, or a generator's MW. The share
+      // is worked out on the first output, as group-links.ts does, so a fixed rate saved for a
+      // nuclear plant keeps its meaning: its waste, with the power that stands for (#374).
       share =
-        generator || !main || !total
-          ? (q: number) => num(total ? (q / total) * r.generationMW : q) + ' MW'
-          : (q: number) => itemRate(main, q);
+        !main || !total
+          ? (q: number) => num(q) + ' MW'
+          : generator
+            ? (q: number) => `${rateOfItem(main, q)} (${power((q / total) * r.generationMW)})`
+            : (q: number) => itemRate(main, q);
     return {
       check,
       done: checked(check),
@@ -65,6 +68,15 @@ const card = computed(() =>
         ? allocationText(r.id, props.group, total || r.generationMW, r.machines, share)
         : '',
       editing: factoryEditing,
+      generator,
+      // The group editor's unit (AssignEditor.vue, #374): a fixed rate is in the first output, as
+      // the share is, so a nuclear plant's is its waste, with the MW each one stands for; an
+      // output-less generator's is in MW. A production line keeps the editor's own wording.
+      rateUnit: !generator
+        ? undefined
+        : main && total
+          ? { name: main, mw: r.generationMW / total }
+          : { name: 'MW' },
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
         const h = heldBack(r.id);
@@ -76,7 +88,7 @@ const card = computed(() =>
 </script>
 
 <template>
-  <article :class="['factory-card', card.done ? 'done' : '']">
+  <article :class="['factory-card', card.done ? 'done' : '', card.generator ? 'generator' : '']">
     <RunningChip :status="card.held ? 'held' : card.done ? 'running' : 'idle'" />
     <div class="card-top">
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
@@ -86,6 +98,9 @@ const card = computed(() =>
           {{ card.headline.value }} <span>{{ card.headline.unit }}</span>
         </div>
         <div class="small machines">{{ card.machines }}</div>
+        <div v-if="card.generator" class="small generates" data-generates>
+          <span aria-hidden="true">⚡︎</span> Generates power for the grid
+        </div>
       </div>
     </div>
     <div v-if="card.outputs.length" class="recipe">
@@ -103,6 +118,6 @@ const card = computed(() =>
         />Running</label
       ><button class="btn quiet" v-bind="factoryLink({ calcFactory: row.id })">Details ↗</button>
     </footer>
-    <AssignEditor v-if="card.editing" :factory-key="row.id" />
+    <AssignEditor v-if="card.editing" :factory-key="row.id" :unit="card.rateUnit" />
   </article>
 </template>

@@ -6,8 +6,9 @@ import assert from 'node:assert/strict';
 import { createApp, h, nextTick } from 'vue';
 import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
-import { num } from '../../public/app/format.ts';
+import { num, num3 } from '../../public/app/format.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
+import { calcTasks } from '../../public/app/views/calculated.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import FactoriesPage from '../../public/app/ui/pages/FactoriesPage.vue';
@@ -1218,7 +1219,7 @@ test('a nuclear plant card leads with its power and lists its waste below it (#3
   }
 });
 
-test('a nuclear plant’s group share is in MW (#371)', async () => {
+test('a nuclear plant’s group share says its waste and its power (#371, #374)', async () => {
   const { p, made } = withNuclear();
   const [uranium, plutonium] = made as [(typeof made)[0], (typeof made)[0]];
   const waste = uranium.outputs['Uranium Waste']!;
@@ -1229,7 +1230,8 @@ test('a nuclear plant’s group share is in MW (#371)', async () => {
         groups: GROUPS.groups,
         assignments: {
           // A fixed rate keeps the meaning it has always had for this row, the first output's
-          // rate (group-links.ts shares the row out by it too); the card says that share in MW.
+          // rate (group-links.ts shares the row out by it too); the card says that share as
+          // waste and as the power it stands for.
           'power-uranium': [
             { group: 'fg-cable01', rate: waste / 4 },
             { group: 'fg-plates1', rate: null },
@@ -1251,26 +1253,228 @@ test('a nuclear plant’s group share is in MW (#371)', async () => {
         .closest('.factory-card')!
         .querySelector('.allocation')!.textContent!,
     );
-  const mw = (q: number) => num(q) + ' MW';
+  const both = (r: (typeof made)[0], share: number) => {
+    const [item, total] = Object.entries(r.outputs)[0]!;
+    return `${num(total * share)} ${item}/min (${power(r.generationMW * share)})`;
+  };
   assert.ok(
-    text(0, uranium.id).startsWith(
-      `Here: ${mw(uranium.generationMW / 4)} of ${mw(uranium.generationMW)}`,
-    ),
+    text(0, uranium.id).startsWith(`Here: ${both(uranium, 1 / 4)} of ${both(uranium, 1)}`),
     text(0, uranium.id),
   );
   assert.ok(
     text(1, uranium.id).startsWith(
-      `Remaining here: ${mw((uranium.generationMW * 3) / 4)} of ${mw(uranium.generationMW)}`,
+      `Remaining here: ${both(uranium, 3 / 4)} of ${both(uranium, 1)}`,
     ),
     text(1, uranium.id),
   );
   for (const i of [0, 1])
     assert.ok(
       text(i, plutonium.id).startsWith(
-        `Remaining here, split 2 ways: ${mw(plutonium.generationMW / 2)} of ${mw(plutonium.generationMW)}`,
+        `Remaining here, split 2 ways: ${both(plutonium, 1 / 2)} of ${both(plutonium, 1)}`,
       ),
       text(i, plutonium.id),
     );
+});
+
+// The group editor names the unit a fixed rate is saved in (#374): a nuclear plant's rate is its
+// waste per minute, as it always was, with the power that stands for beside it while typing; an
+// output-less generator's rate is in MW. A production line keeps "Production per minute".
+test('the group editor names a generator’s rate unit and shows the power it stands for (#374)', async () => {
+  const { p, made } = withNuclear();
+  const uranium = made[0]!;
+  const waste = uranium.outputs['Uranium Waste']!;
+  const rows = p.stages['3'].rows!;
+  const coal = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const line = rows.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
+  open({
+    calculated: p,
+    state: {
+      factoryGroups: {
+        groups: GROUPS.groups,
+        assignments: {
+          'power-uranium': [
+            { group: 'fg-cable01', rate: waste / 4 },
+            { group: 'fg-plates1', rate: null },
+          ],
+          [coal.id]: [{ group: 'fg-cable01', rate: null }],
+          [line.id]: [{ group: 'fg-cable01', rate: null }],
+        },
+      },
+    },
+  });
+  setFactoryEditing(true);
+  render();
+  await nextTick();
+  noMarkup();
+  const field = (id: string, group: string) =>
+    $<HTMLInputElement>(`[data-assign-rate="${id}"][data-group="${group}"]`)!;
+  const hint = (el: HTMLInputElement) =>
+    plain(document.getElementById(el.getAttribute('aria-describedby')!)!.textContent!);
+  const fixed = field(uranium.id, 'fg-cable01'),
+    rest = field(uranium.id, 'fg-plates1');
+  assert.equal(fixed.getAttribute('aria-label'), 'Uranium Waste per minute in Cable factory');
+  assert.equal(hint(fixed), `Uranium Waste/min ≈ ${power(uranium.generationMW / 4)}`);
+  assert.equal(hint(rest), 'Uranium Waste/min', 'an empty field has no power figure');
+  // Typing shows the power at once, and the typed text stays through that redraw.
+  fixed.value = '5';
+  fixed.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(fixed.value, '5');
+  assert.equal(hint(fixed), `Uranium Waste/min ≈ ${power(5 * (uranium.generationMW / waste))}`);
+  fixed.value = '-2';
+  fixed.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(hint(fixed), 'Uranium Waste/min', 'no figure for a rate that cannot be saved');
+  // An output-less generator's rate is in MW.
+  const c = field(coal.id, 'fg-cable01');
+  assert.equal(c.getAttribute('aria-label'), 'MW in Cable factory');
+  assert.equal(hint(c), 'MW');
+  // A production line keeps its label and has no hint.
+  const l = field(line.id, 'fg-cable01');
+  assert.equal(l.getAttribute('aria-label'), 'Production per minute in Cable factory');
+  assert.equal(l.getAttribute('aria-describedby'), null);
+});
+
+test('the handbook group editor keeps its label, with no unit hint (#374)', async () => {
+  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  setFactoryEditing(true);
+  render();
+  await nextTick();
+  const rate = $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!;
+  assert.equal(rate.getAttribute('aria-label'), 'Production per minute in Cable factory');
+  assert.equal(rate.getAttribute('aria-describedby'), null);
+  assert.equal($('.assign-unit'), null);
+});
+
+// A nuclear plant's flow, machine cells and build-plan step name its power first and its waste
+// alongside (#373); the waste destinations stay, since the waste is belted onward.
+function withNuclearFlow() {
+  const { p, made } = withNuclear();
+  const uranium = made[0]!;
+  const waste = uranium.outputs['Uranium Waste']!;
+  const rows = p.stages['3'].rows!;
+  const line = rows.find(r => Object.keys(r.outputs).length === 1 && !r.generationMW)!;
+  rows.push({
+    ...line,
+    id: 'waste-recycle',
+    name: 'Non-Fissile Uranium',
+    inputs: { 'Uranium Waste': waste },
+    outputs: { 'Non-Fissile Uranium': waste * 1.5 },
+  });
+  return { p, uranium, waste };
+}
+const escaped = (t: string) => t.replace(/[.,+()?]/g, '\\$&');
+// An element's text with a space between its parts, as it reads on screen.
+const spaced = (el: Element) => plain(el.innerHTML.replace(/<[^>]+>/g, ' '));
+
+test('a nuclear plant’s flow feeds the power grid and sends its waste on (#373)', () => {
+  const { p, uranium, waste } = withNuclearFlow();
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(uranium.id);
+  const rows = $$('#detail .rail-row').map(r => spaced(r));
+  assert.equal(rows[0], `Power grid generation ${power(uranium.generationMW)}`);
+  assert.ok(
+    rows.some(r => r.startsWith('Non-Fissile Uranium ↗')),
+    'the waste consumer stays: ' + rows.join(' | '),
+  );
+  const bar = spaced($('#detail .rail-machine-out')!);
+  assert.ok(bar.startsWith(power(uranium.generationMW) + ' generation + '), bar);
+  assert.match(bar, new RegExp(escaped(`+ ${num(waste)} Uranium Waste/min · `)));
+  const sub = plain($('#detail .rail-machine-main small')!.textContent!);
+  assert.match(sub, new RegExp(escaped(`${num(2500)} MW + 10 Uranium Waste/min out per machine`)));
+  // The recipe panel gives a plant's power, then its waste.
+  const cells = $$('#detail .rail-recipe-outs .rail-cell').map(c => spaced(c));
+  assert.deepEqual(cells, [`${num(2500)} MW Power generation`, '10 Uranium Waste']);
+});
+
+test('a nuclear plant’s machine cells and build-plan step give MW with the waste alongside (#373)', async () => {
+  const { p, uranium } = withNuclearFlow();
+  open({ calculated: p });
+  render();
+  const clock = machinesLine(cardOf(`#main button.name[data-calc-factory="${uranium.id}"]`))!.split(
+    ' · last at ',
+  )[1];
+  openCalculatedFactory(uranium.id);
+  const fraction = uranium.equivalent - (uranium.machines - 1);
+  const last = `${num(2500 * fraction)} MW · ${num(10 * fraction)} Uranium Waste/min`;
+  assert.deepEqual(machineCells().slice(1), [
+    ['At 100%', num(uranium.machines - 1), `${num(2500)} MW · 10 Uranium Waste/min each`],
+    ['Adjustable', '1 at ' + clock, `≈ ${num(fraction * 100)}% → ≈ ${last}`],
+  ]);
+  closeDetail();
+  const step = calcTasks().find(t => t.id === 'calc-3-' + uranium.id)!;
+  assert.match(step.body, new RegExp(escaped(`→ ≈ ${last}.`)));
+  const waste = uranium.outputs['Uranium Waste']!;
+  assert.match(
+    step.body,
+    new RegExp(
+      escaped(`Outputs: ${power(uranium.generationMW)}, Uranium Waste ${num(waste)}/min.`),
+    ),
+  );
+  // All at 100%: "Each machine" gives the power and the waste.
+  Object.assign(uranium, {
+    equivalent: 139,
+    lastClock: 100,
+    outputs: { 'Uranium Waste': 1390 },
+    generationMW: 2500 * 139,
+  });
+  open({ calculated: p });
+  const whole = calcTasks().find(t => t.id === 'calc-3-' + uranium.id)!;
+  assert.match(
+    whole.body,
+    new RegExp(escaped(`Each machine: ${num(2500)} MW · 10 Uranium Waste/min.`)),
+  );
+});
+
+test('a coal plant’s flow, cells and step still give MW alone (#373)', () => {
+  const p = generated();
+  const gen = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  Object.assign(gen, { machines: 5, equivalent: 4.625, lastClock: 62.5, generationMW: 406.8 });
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(gen.id);
+  const rows = $$('#detail .rail-row').map(r => spaced(r));
+  assert.deepEqual(rows, [`Power grid generation ${power(406.8)}`]);
+  assert.equal(spaced($('#detail .rail-machine-out')!), `${power(406.8)} generation`);
+  assert.deepEqual(
+    $$('#detail .rail-recipe-outs .rail-cell').map(c => spaced(c)),
+    [`${num3(406.8 / 4.625)} MW Power generation`],
+  );
+  assert.deepEqual(machineCells().slice(1), [
+    ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
+    ['Adjustable', '1 at ' + pct(62.5), `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`],
+  ]);
+  closeDetail();
+  const step = calcTasks().find(t => t.id === 'calc-3-' + gen.id)!;
+  assert.match(step.body, new RegExp(escaped(`Outputs: ${power(406.8)}.`) + '$'));
+});
+
+// A card for a row that generates power says so in words, with a glyph and an accent edge that
+// are not the Running chip's (#374); a production line has neither.
+test('a power plant’s card is marked as generating power, in text (#374)', async () => {
+  const { p, made } = withNuclear();
+  const rows = p.stages['3'].rows!;
+  const coal = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const line = rows.find(r => !r.generationMW)!;
+  open({ calculated: p, state: { checks: { ['calc-3-' + coal.id]: true } } });
+  render();
+  await nextTick();
+  for (const r of [...made, coal]) {
+    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
+    assert.ok(card.classList.contains('generator'), r.name);
+    const mark = card.querySelector('[data-generates]')!;
+    assert.equal(plain(mark.textContent!), '⚡︎ Generates power for the grid');
+    assert.equal(mark.querySelector('[aria-hidden="true"]')!.textContent, '⚡︎');
+  }
+  const running = cardOf(`#main button.name[data-calc-factory="${coal.id}"]`);
+  assert.ok(running.classList.contains('done'), 'running and generating are separate marks');
+  // The chip keeps saying the running state (held back here: the plan's fuel line is not built).
+  assert.match(chipSays(running), /^(● Running|◐ Held back)$/);
+  assert.ok(running.classList.contains('generator'));
+  const plainCard = cardOf(`#main button.name[data-calc-factory="${line.id}"]`);
+  assert.ok(!plainCard.classList.contains('generator'));
+  assert.equal(plainCard.querySelector('[data-generates]'), null);
 });
 
 test('a calculated card with several outputs names each of them below the headline', () => {

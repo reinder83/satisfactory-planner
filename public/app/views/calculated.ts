@@ -34,6 +34,12 @@ const rateList = (rates: Record<string, number>): string =>
     .map(([n, q]) => n + ' ' + itemRate(n, q))
     .join(', ');
 
+// A step's outputs: a generator's power first, then its items (a nuclear plant's waste, #373).
+const outputList = (r: CalcRow): string =>
+  [...(r.generationMW > 0 ? [power(r.generationMW)] : []), rateList(r.outputs || {})]
+    .filter(Boolean)
+    .join(', ') || power(r.generationMW);
+
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
 // from progression.ts, hard drives, one step per production row, storage, then the lines
@@ -64,7 +70,7 @@ export function calcTasks(): PlanStepData[] {
     ...(p?.rows || []).map(r => ({
       id: 'calc-' + stage() + '-' + r.id,
       title: r.name,
-      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${rateList(r.outputs) || power(r.generationMW)}.`,
+      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${outputList(r)}.`,
     })),
     {
       id: 'calc-' + stage() + '-storage',
@@ -148,14 +154,15 @@ export function machineSetup(r: CalcRow) {
   const rates = Object.fromEntries(
     Object.entries(r.outputs || {}).map(([n, q]) => [n, q / equivalent]),
   );
-  const fullOutput =
-    Object.entries(rates)
-      .map(([n, q]) => rateOfItem(n, q))
-      .join(' · ') || `${num(r.generationMW / equivalent)} MW`;
-  const lastOutput =
-    Object.entries(rates)
-      .map(([n, q]) => rateOfItem(n, q * fraction))
-      .join(' · ') || `${num((r.generationMW / equivalent) * fraction)} MW`;
+  // What one machine makes, at 100% and at the adjustable one's clock: a generator's power
+  // first, then its items, so a nuclear plant gives its MW with its waste alongside (#373).
+  const perMachine = (share: number) =>
+    [
+      ...(r.generationMW > 0 ? [`${num((r.generationMW / equivalent) * share)} MW`] : []),
+      ...Object.entries(rates).map(([n, q]) => rateOfItem(n, q * share)),
+    ].join(' · ') || `${num((r.generationMW / equivalent) * share)} MW`;
+  const fullOutput = perMachine(1);
+  const lastOutput = perMachine(fraction);
   const summary = `${r.machines} ${r.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
   const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(
     [r.name, ...Object.keys(r.inputs || {}), ...Object.keys(r.outputs || {})].join(' '),

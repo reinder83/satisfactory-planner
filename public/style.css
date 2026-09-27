@@ -1129,6 +1129,16 @@ p.eyebrow {
   border-color: #2c4a3a;
   background: #131a16;
 }
+/* A card for a row that generates power (#374): a gold left edge and the line under its machines
+   ("Generates power for the grid") say so, apart from the Running chip's green border and tint,
+   which a running generator keeps on its other sides. */
+.factory-card.generator {
+  border-left: 3px solid var(--gold);
+}
+.factory-card .generates {
+  margin-top: 4px;
+  color: var(--gold);
+}
 /* The status chip at the top of a card (SP-15): its glyph and word say the state without colour. */
 .factory-card .status-chip {
   align-self: flex-start;
@@ -3639,6 +3649,13 @@ button.rail-tile:hover {
 .assign-row .btn.quiet.danger {
   color: var(--red);
   border-bottom-color: rgba(224, 85, 58, 0.5);
+}
+/* What a generator's rate is measured in, under its field, with the power it stands for (#374). */
+.assign-row .assign-unit {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--muted);
 }
 .assign-editor select {
   border: 1px solid var(--line);

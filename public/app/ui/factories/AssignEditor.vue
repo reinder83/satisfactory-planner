@@ -4,18 +4,50 @@
   the remainder) and a ✕; "+ Add to group…" adds another. Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
   state.ts. A field is redrawn with the saved value afterwards, whether or not the save worked.
+  `unit` (a calculated generator's card, #374) names what a rate is measured in: a nuclear
+  plant's first output, its waste per minute, with `mw` the power one of them stands for, shown
+  beside the field while typing; an output-less generator's rate is in MW. Without it the field
+  is "Production per minute", the factory's output.
 -->
+<script lang="ts">
+// Numbers each editor, so the ids of its hints are unique on the page.
+let editors = 0;
+</script>
+
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
+import { vValue } from '../form/value.ts';
+import { power } from '../../wizard/fields.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
-const props = defineProps<{ factoryKey: string }>();
+// What a rate is measured in: an item per minute, with the MW one stands for, or 'MW'.
+export interface RateUnit {
+  name: string;
+  mw?: number;
+}
+
+const props = defineProps<{ factoryKey: string; unit?: RateUnit }>();
+
+// Each editor names its hints apart: a factory in two groups has an editor in each section.
+const uid = 'assign-unit-' + ++editors;
+// What is typed in a rate field and not yet saved, by group, for the power figure beside it.
+const typed = ref<Record<string, string>>({});
+
+// The hint under a rate field: its unit, and for a nuclear plant the power a valid rate stands
+// for (#374). A field left empty (the whole output or the remainder) has no figure.
+function hint(unit: RateUnit, raw: string): string {
+  if (unit.name === 'MW') return 'MW';
+  const q = raw.trim() === '' ? NaN : Number(raw);
+  return (
+    unit.name + '/min' + (unit.mw && Number.isFinite(q) && q > 0 ? ' ≈ ' + power(q * unit.mw) : '')
+  );
+}
 
 const editor = computed(() =>
   legacy(() => {
@@ -24,7 +56,21 @@ const editor = computed(() =>
     const nameOf = (m: GroupAssignment) => g.groups.find(x => x.id === m.group)?.name;
     return {
       any: g.groups.length > 0,
-      rows: ms.map(m => ({ group: m.group, rate: m.rate ?? '', name: nameOf(m) })),
+      rows: ms.map((m, i) => {
+        const name = nameOf(m),
+          u = props.unit;
+        return {
+          group: m.group,
+          rate: m.rate ?? '',
+          name,
+          label:
+            (u ? (u.name === 'MW' ? 'MW' : u.name + ' per minute') : 'Production per minute') +
+            ' in ' +
+            (name || 'this group'),
+          hint: u ? hint(u, typed.value[m.group] ?? String(m.rate ?? '')) : '',
+          hintId: u ? uid + '-' + i : undefined,
+        };
+      }),
       avail: ms.length < 12 ? g.groups.filter(gr => !ms.some(m => m.group === gr.id)) : [],
     };
   }),
@@ -65,12 +111,21 @@ function setRate(e: Event, group: string) {
         'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
         true,
       );
-      el.value = String(membershipsOf(props.factoryKey).find(m => m.group === group)?.rate ?? '');
+      el.value = savedRate(group);
+      delete typed.value[group];
       return;
     }
   }
-  assign(el, ms => ms.map(m => (m.group === group ? { group, rate } : m)));
+  assign(el, ms => ms.map(m => (m.group === group ? { group, rate } : m))).then(() => {
+    // The field is bound with v-value, which only redraws a changed rate, so put the saved one
+    // back here: after a failed save, or a rate typed another way ("120.0").
+    el.value = savedRate(group);
+    delete typed.value[group];
+  });
 }
+
+const savedRate = (group: string) =>
+  String(membershipsOf(props.factoryKey).find(m => m.group === group)?.rate ?? '');
 
 // ✕: leave that group, keeping the other groups' rates. The row goes, and the whole card when it
 // was drawn in that group's section, so focus goes to this factory's next ✕, else its previous
@@ -119,8 +174,10 @@ async function add(e: Event) {
         :data-assign-rate="factoryKey"
         :data-group="m.group"
         placeholder="all / remainder"
-        :value="m.rate"
-        :aria-label="'Production per minute in ' + (m.name || 'this group')"
+        v-value="m.rate"
+        :aria-label="m.label"
+        :aria-describedby="m.hintId"
+        @input="typed[m.group] = ($event.target as HTMLInputElement).value"
         @change="setRate($event, m.group)"
       /><button
         class="btn quiet danger"
@@ -129,8 +186,8 @@ async function add(e: Event) {
         :aria-label="'Remove from ' + (m.name || 'group')"
         @click="unassign($event, m.group)"
       >
-        ✕
-      </button>
+        ✕</button
+      ><small v-if="m.hintId" :id="m.hintId" class="assign-unit">{{ m.hint }}</small>
     </div>
     <select
       v-if="editor.avail.length"
