@@ -83,7 +83,8 @@ export let view: View = 'plan';
 export let query = '';
 // The storage floor shown: a built-in id ('ground', 'upper', 'workshop') or an added 'cf-…'.
 export let floor = 'ground';
-// The factories page's filter (FILTERS in ui/pages/FactoriesPage.vue).
+// The status filter chip on both factories pages (statusFilter() in views/factories.ts,
+// drawn by ui/factories/FilterChips.vue).
 export let factoryFilter = 'all';
 // "Hide completed" on the build plan. A view preference rather than progress, so like
 // ADA's mute switch it is remembered in this browser and never touches a saved profile.
