@@ -101,6 +101,34 @@ export function statusFilter<T>(
   return { chips, active: chips[at]!, list: items.filter(tests[at]![1]) };
 }
 
+// The jump bar of both factories pages (SP-17, #252, ui/factories/JumpBar.vue): one entry per
+// group or shared site the page draws, with how many of its factories are marked running. The
+// counts follow the search, like the status chips, but not the chosen chip: under Running a
+// group would always read 5/5, under Not running 0/3. `key` is the section's id (a group id, or
+// 'site-oil'), which names its element (`section-<key>`) and its folded state.
+export type JumpEntry = { key: string; label: string; running: number; total: number };
+export const jumpEntry = <T>(
+  key: string,
+  label: string,
+  members: T[],
+  running: (x: T) => boolean,
+): JumpEntry => ({ key, label, running: members.filter(running).length, total: members.length });
+
+// The user groups' entries: `found` is what the search found and `shown` what the chip keeps, and
+// a group has an entry exactly when GroupSections.vue draws it (members shown, or editing).
+export function groupJumps<T>(
+  found: T[],
+  shown: T[],
+  keyOf: (x: T) => string,
+  running: (x: T) => boolean,
+  editing: boolean,
+): JumpEntry[] {
+  const inGroup = (id: string) => (x: T) => membershipsOf(keyOf(x)).some(m => m.group === id);
+  return factoryGroupsState()
+    .groups.filter(gr => editing || shown.some(inGroup(gr.id)))
+    .map(gr => jumpEntry(gr.id, gr.name, found.filter(inGroup(gr.id)), running));
+}
+
 // What an empty factories page says: the search found nothing, or the chosen chip keeps none of
 // what it found. `noun` is what the page lists ("factories", "production lines").
 export function filterEmptyText(noun: string, active: FilterChip, query: string): string {

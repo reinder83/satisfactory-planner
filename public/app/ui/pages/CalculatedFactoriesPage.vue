@@ -27,6 +27,7 @@ import { heldBack } from '../../views/calculated.ts';
 import {
   factoryGroupsState,
   filterEmptyText,
+  groupJumps,
   membershipsOf,
   statusFilter,
 } from '../../views/factories.ts';
@@ -40,6 +41,7 @@ import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
+import JumpBar from '../factories/JumpBar.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -54,12 +56,8 @@ const page = computed(() =>
     const found = (calcStage()?.rows || []).filter(r =>
       (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
     );
-    const status = statusFilter(
-      found,
-      factoryFilter,
-      r => checked('calc-' + stage() + '-' + r.id),
-      [['held', r => !!heldBack(r.id)]],
-    );
+    const running = (r: (typeof found)[number]) => checked('calc-' + stage() + '-' + r.id);
+    const status = statusFilter(found, factoryFilter, running, [['held', r => !!heldBack(r.id)]]);
     const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
     // Whether any group section shows: an empty group only shows while editing.
@@ -71,6 +69,7 @@ const page = computed(() =>
       query,
       chips: status.chips,
       active: status.active,
+      jumps: groupJumps(found, rows, r => r.id, running, factoryEditing),
       empty: filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
       rows,
@@ -155,6 +154,7 @@ async function roundUp(e: Event) {
         @pick="v => pickFactoryFilter(v)"
       /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
     </div>
+    <JumpBar :entries="page.jumps" />
     <GroupEditPanel v-if="page.editing" />
     <GroupSections :items="page.rows" :key-of="r => r.id">
       <template #card="{ item, group }"><CalcFactoryCard :row="item" :group="group" /></template>

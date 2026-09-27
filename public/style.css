@@ -140,7 +140,8 @@ textarea:focus-visible {
 }
 /* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304); it shows the
    same ring as a control, after a key press only (:focus-visible), never after a click. */
-h1[tabindex='-1']:focus-visible {
+h1[tabindex='-1']:focus-visible,
+h2[tabindex='-1']:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 4px;
 }
@@ -1058,6 +1059,55 @@ textarea::placeholder {
   margin: 0;
   max-width: 560px;
   text-wrap: pretty;
+}
+/* The factories pages' jump bar and folding sections (SP-17, #252): a button per group or shared
+   site under the toolbar, wrapping on a wide page and one row scrolling within itself on a phone;
+   each section's fold button sits before its title. The jump leaves a gap above the section.
+   The bar is positioned so the buttons' .visually-hidden counts stay inside its scroll box. */
+.jump-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 18px;
+}
+.jump-bar .btn {
+  max-width: 100%;
+  padding: 7px 11px;
+  text-align: left;
+}
+.jump-bar .count {
+  color: var(--muted);
+}
+.site-group {
+  scroll-margin-top: 16px;
+}
+.site-title {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  min-width: 0;
+}
+.collapse-toggle {
+  flex: none;
+  padding: 6px 10px;
+}
+.site-group.collapsed .site-head {
+  margin-bottom: 0;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+@media (max-width: 720px) {
+  .jump-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .jump-bar .btn {
+    flex: none;
+    max-width: none;
+    white-space: nowrap;
+  }
 }
 p.eyebrow {
   margin: 20px 0 10px;
@@ -3588,6 +3638,7 @@ button.rail-tile:hover {
   .sidebar,
   .topbar,
   .toolbar,
+  .jump-bar,
   .checklist-tools,
   .btn,
   #toast,

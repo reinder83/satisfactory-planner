@@ -17,6 +17,7 @@ import {
   phase,
   plan,
   query,
+  sectionCollapsed,
   setQuery,
   stage,
 } from '../../session.ts';
@@ -24,16 +25,20 @@ import { render } from '../../shell.ts';
 import {
   factoryGroupsState,
   filterEmptyText,
+  groupJumps,
+  jumpEntry,
   membershipsOf,
   statusFilter,
 } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import CollapseToggle from '../factories/CollapseToggle.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
+import JumpBar from '../factories/JumpBar.vue';
 import PageHeader from '../PageHeader.vue';
 import { pickFactoryFilter, toggleCheck } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
@@ -60,7 +65,20 @@ const page = computed(() =>
     const p = plan.plans[stage()]!;
     const site = (kind: 'oil' | 'nuclear', label: string, sub: string) => {
       const members = ungrouped.filter(f => siteOf(f) === kind);
-      return members.length ? { kind, label, sub, members } : null;
+      const key = 'site-' + kind;
+      // The jump bar counts what the search found at the site, whatever the chip keeps.
+      const atSite = found.filter(f => !membershipsOf(f.id).length && siteOf(f) === kind);
+      return members.length
+        ? {
+            kind,
+            key,
+            label,
+            sub,
+            members,
+            collapsed: sectionCollapsed(key),
+            jump: jumpEntry(key, label, atSite, running),
+          }
+        : null;
     };
     const sites = [
       site(
@@ -84,6 +102,11 @@ const page = computed(() =>
       query,
       chips: status.chips,
       active: status.active,
+      // Groups first, then the shared sites, as the page draws them.
+      jumps: [
+        ...groupJumps(found, list, f => f.id, running, factoryEditing),
+        ...sites.map(s => s.jump),
+      ],
       empty: filterEmptyText('factories', status.active, query),
       editing: factoryEditing,
       list,
@@ -140,19 +163,28 @@ function search(e: Event) {
       @pick="v => pickFactoryFilter(v)"
     /><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
   </div>
+  <JumpBar :entries="page.jumps" />
   <GroupEditPanel v-if="page.editing" />
   <GroupSections :items="page.list" :key-of="f => f.id">
     <template #card="{ item, group }"><FactoryCard :factory="item" :group="group" /></template>
   </GroupSections>
-  <section v-for="s in page.sites" :key="s.kind" class="site-group">
+  <section
+    v-for="s in page.sites"
+    :id="'section-' + s.key"
+    :key="s.kind"
+    :class="['site-group', s.collapsed ? 'collapsed' : '']"
+  >
     <header class="site-head">
-      <div>
-        <span class="eyebrow">SHARED SITE · {{ s.members.length }} OUTPUTS</span>
-        <h2>{{ s.label }}</h2>
+      <div class="site-title">
+        <CollapseToggle :section-key="s.key" :label="'Outputs of ' + s.label" />
+        <div>
+          <span class="eyebrow">SHARED SITE · {{ s.members.length }} OUTPUTS</span>
+          <h2 tabindex="-1" data-section-heading>{{ s.label }}</h2>
+        </div>
       </div>
       <p class="small muted">{{ s.sub }}</p>
     </header>
-    <div class="cards">
+    <div v-show="!s.collapsed" :id="'cards-' + s.key" class="cards">
       <FactoryCard v-for="f in s.members" :key="f.id" :factory="f" />
     </div>
   </section>
