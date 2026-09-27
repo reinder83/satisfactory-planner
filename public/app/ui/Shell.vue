@@ -42,9 +42,14 @@ const frame = computed(() =>
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
     saved: pending ? 'Saving…' : browserMode ? 'Saved in this browser' : 'Saved on server',
+    savedShort: pending ? 'Saving…' : browserMode ? 'Saved in browser' : 'Saved',
     footer: profileFooter(),
   })),
 );
+
+// The top bar's short save status (shown at phone width, where the sidebar's is hidden)
+// reserves the width of its longest label in this edition, so it never shifts the bar.
+const savedShortWidest = browserMode ? 'Saved in browser' : 'Saving…';
 
 // The sidebar footer: the open profile's name and the game settings it was planned for, as
 // lines. The original handbook's settings are fixed, so they are written out.
@@ -125,7 +130,8 @@ async function pickPhase(e: Event) {
       </nav>
       <AdaPanel />
       <div class="save-status">
-        <span class="dot"></span><span id="saved">{{ frame.saved }}</span>
+        <span class="dot" aria-hidden="true"></span
+        ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
       </div>
       <div class="sidebar-foot">
         <template v-for="(line, i) in frame.footer" :key="i"><br v-if="i" />{{ line }}</template>
@@ -137,18 +143,27 @@ async function pickPhase(e: Event) {
           <a href="#profiles">{{ frame.saveName }}</a> <span aria-hidden="true"> / </span>
           {{ phaseLabel(frame.phase) }}
         </div>
-        <label class="small"
-          >Working on
-          <select
-            id="phase-picker"
-            aria-label="Working phase"
-            :disabled="!frame.canPickPhase"
-            :value="frame.phase"
-            @change="pickPhase"
+        <div class="topbar-tools">
+          <label class="small"
+            >Working on
+            <select
+              id="phase-picker"
+              aria-label="Working phase"
+              :disabled="!frame.canPickPhase"
+              :value="frame.phase"
+              @change="pickPhase"
+            >
+              <option v-for="[p, label] in frame.phases" :key="p" :value="p">{{ label }}</option>
+            </select></label
           >
-            <option v-for="[p, label] in frame.phases" :key="p" :value="p">{{ label }}</option>
-          </select></label
-        >
+          <div class="save-status">
+            <span class="dot" aria-hidden="true"></span
+            ><span class="save-label"
+              ><span id="saved-short" role="status" aria-live="polite">{{ frame.savedShort }}</span
+              ><span aria-hidden="true">{{ savedShortWidest }}</span></span
+            >
+          </div>
+        </div>
       </header>
       <main id="main" class="workspace" tabindex="-1"></main>
     </div>

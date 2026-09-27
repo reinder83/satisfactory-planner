@@ -447,6 +447,32 @@ input[type='radio'] {
   gap: 10px;
   white-space: nowrap;
 }
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+/* The save status is the sidebar's; the top bar carries a short copy for phone widths,
+   where the sidebar's is hidden. Its labels share one grid cell, so the widest one sets
+   the width whichever is showing. */
+.topbar .save-status {
+  display: none;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+.save-label {
+  display: inline-grid;
+}
+.save-label > span {
+  grid-area: 1 / 1;
+}
+.save-label > [aria-hidden] {
+  visibility: hidden;
+}
 .workspace {
   padding: 24px clamp(14px, 2.4vw, 30px) 70px;
   max-width: 1660px;
@@ -2948,6 +2974,13 @@ button.rail-tile:hover {
   .topbar {
     gap: 12px;
     flex-wrap: wrap;
+  }
+  .topbar-tools {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+  .topbar .save-status {
+    display: flex;
   }
   .topbar .breadcrumbs {
     max-width: 100%;
