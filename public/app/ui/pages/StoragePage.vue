@@ -31,6 +31,7 @@ import {
 import { save, toast } from '../../api.ts';
 import { moveContainer } from '../actions.ts';
 import { legacy } from '../bridge.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';
@@ -153,32 +154,60 @@ function search(e: Event) {
   render();
 }
 
-// "Restore": bring a hidden handbook bay back, with everything saved for it.
+// Where focus goes once a Restore leaves "Hidden bays and floors" (ui/refocus.ts, #290): the next
+// row's Restore, else the previous one's, and once the list is empty `after`, what came back.
+const hiddenList = (after: string[]) => ({
+  row: '#main [data-hidden-bays] .check-row',
+  control: '[data-restore-bay], [data-restore-floor]',
+  fallback: after,
+});
+
+// "Restore": bring a hidden handbook bay back, with everything saved for it. Once nothing is
+// left to restore, focus goes to the bay's Hide on this floor, else to its floor's tab.
 async function restoreBay(e: Event, id: string) {
-  const button = e.currentTarget as HTMLButtonElement;
+  const button = e.currentTarget as HTMLButtonElement,
+    on = hiddenStorageBays().find(b => b.id === id)?.floor ?? '';
+  const refocus = refocusAfterRemoval(
+    button,
+    hiddenList([
+      `#main [data-hide-bay="${CSS.escape(id)}"]`,
+      `#main .tabs [data-floor="${CSS.escape(on)}"]`,
+    ]),
+  );
+  let saved = false;
   button.disabled = true;
   try {
     await save({ type: 'storageBayRestore', id });
+    saved = true;
     toast(`Bay ${id} is back, with its containers, checkmarks and notes.`);
   } catch {
   } finally {
     button.disabled = false;
     render();
   }
+  if (saved) await refocus();
 }
 
-// "Restore" on a hidden built-in floor (#168): its tab comes back.
+// "Restore" on a hidden built-in floor (#168): its tab comes back, and takes focus once nothing
+// is left to restore.
 async function restoreFloor(e: Event, id: string) {
   const button = e.currentTarget as HTMLButtonElement;
+  const refocus = refocusAfterRemoval(
+    button,
+    hiddenList([`#main .tabs [data-floor="${CSS.escape(id)}"]`]),
+  );
+  let saved = false;
   button.disabled = true;
   try {
     await save({ type: 'storageFloorRestore', id });
+    saved = true;
     toast('The floor is back.');
   } catch {
   } finally {
     button.disabled = false;
     render();
   }
+  if (saved) await refocus();
 }
 
 // A container dropped on another position (#208, ui/storage/SlotCell.vue): one save that moves or

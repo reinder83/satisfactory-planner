@@ -133,10 +133,21 @@ async function rename(e: Event) {
   }
 }
 
-const clearSlot = (e: Event, id: string) =>
-  saving(e.currentTarget as HTMLButtonElement, { type: 'storageSlotClear', key: id }, () =>
-    toast('Container cleared. Its saved checkmarks are kept with the address.'),
-  );
+// ✕: clear a container. Its ✕ goes with it, so focus goes to the next container's ✕ in this bay,
+// else the previous one's, else the bay's add field or name (ui/refocus.ts, #290).
+function clearSlot(e: Event, id: string) {
+  const button = e.currentTarget as HTMLButtonElement;
+  const refocus = refocusAfterRemoval(button, {
+    scope: button.closest('.bay'),
+    row: '.bay-items > [data-drop]',
+    control: '[data-clear-slot]',
+    fallback: ['.add-container [name=name]', '.bay-rename'],
+  });
+  return saving(button, { type: 'storageSlotClear', key: id }, () => {
+    toast('Container cleared. Its saved checkmarks are kept with the address.');
+    void refocus();
+  });
+}
 
 // Where focus goes once a bay is hidden or removed (ui/refocus.ts, #286): the next bay's Remove
 // or Hide, else the previous bay's, else the new bay's letter field.
