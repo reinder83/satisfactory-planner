@@ -1762,10 +1762,14 @@ td:first-child {
   background: var(--row);
   padding: 1px;
 }
-.slot {
+/* A position's card, and its swatch in the key above the grid (SP-24). */
+.slot,
+.key-swatch {
   background: #15191c;
   border: 0;
   border-top: 2px solid transparent;
+}
+.slot {
   text-align: center;
   padding: 8px 7px 9px;
   min-height: 83px;
@@ -1819,14 +1823,16 @@ td:first-child {
   height: 44px;
   background: radial-gradient(circle at 50% 45%, rgba(248, 156, 28, 0.1), transparent 70%);
 }
-.slot.done {
+.slot.done,
+.key-swatch.done {
   border-top-color: var(--green);
   background: #131a16;
 }
 .slot.done strong {
   color: var(--green);
 }
-.slot.empty {
+.slot.empty,
+.key-swatch.empty {
   background: var(--panel2);
   color: var(--dim);
   cursor: default;
@@ -1886,10 +1892,45 @@ td:first-child {
   text-transform: uppercase;
 }
 /* Positions past the printed eight: marked as an extension of the bay, not part of its two banks. */
-.walkway.added {
+.walkway.added,
+.key-swatch.added {
   color: var(--kicker);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+}
+/* The key above the grid (StoragePage.vue, SP-24): one line of words, each state beside a swatch
+   drawn with that state's own colours (the rules for .slot.done, .slot.empty and .walkway.added
+   above also name these, so no colour is new). */
+.storage-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+.storage-key li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+/* A card in miniature: a position's fill and top edge, outlined as the grid's lines outline a
+   card, since the page behind the key is nearly as dark as a reserved position. */
+.key-swatch {
+  flex: none;
+  width: 18px;
+  height: 16px;
+  outline: 1px solid var(--line);
+}
+/* The added positions' divider in miniature: a strip between two rules. */
+.key-swatch.added {
+  width: 24px;
+  height: 10px;
+  background: var(--panel2);
+  outline: 0;
 }
 /* Layout editor */
 .slot {
@@ -3323,6 +3364,11 @@ button.rail-tile:hover {
   .floor-marker {
     display: none;
   }
+  /* Nor do the banks or the reserved and Done tones need a key there; which positions were added
+     past the printed bay still reads, so that entry stays (SP-24). */
+  .storage-key li:not(.key-added) {
+    display: none;
+  }
   .bay-items {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -3631,6 +3677,7 @@ button.rail-tile:hover {
   .factory-card,
   .bay,
   .slot,
+  .key-swatch,
   .task,
   .checklist,
   .table-wrap,
@@ -3764,6 +3811,7 @@ button.rail-tile:hover {
   }
   .task:has(input:checked),
   .slot.done,
+  .key-swatch.done,
   .factory-card.done,
   .rail-cell.out,
   .rail-machine {

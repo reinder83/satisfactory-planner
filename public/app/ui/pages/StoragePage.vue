@@ -411,6 +411,19 @@ function toggleLayout() {
     Filtered view: showing this floor's bays with a match only. Clear search to see the full floor
     arrangement.
   </p>
+  <!-- The key to the grid, above it (SP-24, #259). Each swatch is drawn with the colours of the
+       state it stands for and is hidden from a screen reader, which reads the words beside it. A
+       phone's single column of bays keeps only the added positions' entry (style.css). -->
+  <ul v-if="page.bays.length" class="storage-key" aria-label="Storage key" data-storage-key>
+    <li class="key-banks">01–04 rear bank, 05–08 front bank, each read left to right</li>
+    <li class="key-done"><span class="key-swatch done" aria-hidden="true"></span>Done</li>
+    <li class="key-reserved">
+      <span class="key-swatch empty" aria-hidden="true"></span>Reserved (unassigned)
+    </li>
+    <li class="key-added">
+      <span class="key-swatch added" aria-hidden="true"></span>09+ added past the printed bay
+    </li>
+  </ul>
   <p v-if="page.bays.length" class="eyebrow floor-marker">REAR OF HALL ↑</p>
   <DragDropProvider @drag-start="dragStarted" @drag-end="dropped"
     ><div class="floor-grid">
@@ -433,14 +446,7 @@ function toggleLayout() {
       </div>
     </div></DragDropProvider
   >
-  <template v-if="page.bays.length"
-    ><div class="entry floor-marker">↓ ENTRANCE / STAIRS</div>
-    <div class="small muted">
-      Within each bay, 01–04 are the rear bank; 05–08 are the front bank. Read left to right on both
-      banks. Grey positions remain unassigned. Positions from 09 are containers added beyond the
-      printed bay.
-    </div></template
-  >
+  <div v-if="page.bays.length" class="entry floor-marker">↓ ENTRANCE / STAIRS</div>
   <section style="margin-top: 28px">
     <h2>Storage build checklist</h2>
     <StorageChecklist :steps="page.tasks" />
