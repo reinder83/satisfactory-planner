@@ -340,6 +340,34 @@ test('a failed Restore leaves focus on it (#299)', async () => {
   assert.ok(focusedOn('[data-restore-bay="C"]'), describeFocus());
 });
 
+test('Done on the ground floor’s moves keeps focus while it saves, then goes to the floor tab (#260)', async () => {
+  const net = heldFetch(updates);
+  go('storage');
+  render();
+  await nextTick();
+  press('[data-ground-moves-done]');
+  await settle();
+  assert.ok(busy('[data-ground-moves-done]'));
+  assert.ok(focusedOn('[data-ground-moves-done]'), describeFocus());
+  press('[data-ground-moves-done]');
+  await settle();
+  assert.equal(net.calls.length, 1, 'a second press while it saves sends nothing');
+  await net.release();
+  assert.equal($('[data-ground-moves-done]'), null, 'the to-do is done');
+  assert.ok(focusedOn('#main .tabs [data-floor="ground"]'), describeFocus());
+});
+
+test('a failed Done on the ground floor’s moves leaves focus on it (#260)', async () => {
+  const net = heldFetch(failing);
+  go('storage');
+  render();
+  await nextTick();
+  press('[data-ground-moves-done]');
+  await net.release();
+  assert.ok(ready('[data-ground-moves-done]'));
+  assert.ok(focusedOn('[data-ground-moves-done]'), describeFocus());
+});
+
 test('a factory’s rate field and Add select keep focus while they save', async () => {
   const net = heldFetch(updates);
   open({
