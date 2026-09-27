@@ -35,7 +35,7 @@ import { render } from './shell.ts';
 import { planTasks, taskEditsState } from './tasks.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
-import { storageBays, storageMatches } from './views/storage.ts';
+import { groundMovesPending, storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import type { StageDelivery, StoredStage } from '../types/index.ts';
@@ -174,6 +174,7 @@ function adaFacts(): AdaFacts {
       total: slots.length,
     },
     storageMiss: view === 'storage' && query && !storageMatches(query).length ? query : '',
+    groundMoves: groundMovesPending(),
     deliveries: {
       open: deliveries.filter(d => delivered(d) < d.target).length,
       total: deliveries.length,

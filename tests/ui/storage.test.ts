@@ -623,9 +623,102 @@ test('a copied original profile keeps the built ground-floor notice', () => {
   assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
 });
 
+// The built room's moves are a to-do (SP-25, #260): Done ticks the handbook's storage step for
+// the same moves, which this profile alone keeps.
+const MOVES = 'storage-filter-moves';
+
+test('the built room’s moves are a to-do: Done saves their step and the notice goes (#260)', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ state: { checks: { 'storage-ground-shell': true } } });
+  render();
+  const notice = $('#main [data-ground-floor]')!;
+  assert.ok(notice.classList.contains('info'), 'guidance, not a warning');
+  assert.match(
+    notice.querySelector('[data-ground-moves]')!.textContent!,
+    /Still to do: move Gas Filters\s+G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08/,
+  );
+  assert.equal($('[data-moved-off]'), null, 'no bay was moved in this plan');
+  const done = $<HTMLButtonElement>('[data-ground-moves-done]')!;
+  assert.equal(done.type, 'button');
+  assert.equal(done.textContent!.replace(/\s+/g, ' ').trim(), 'Done with the ground-floor moves');
+  done.focus();
+  done.click();
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: MOVES, value: true });
+  assert.equal(calls.length, 1, 'one save');
+  assert.equal(state.checks[MOVES], true);
+  assert.equal(state.checks['storage-ground-shell'], true, 'the other checks are untouched');
+  assert.equal($('#main [data-ground-floor]'), null, 'the notice is gone');
+  assert.equal($('[data-ground-moves-done]'), null);
+  assert.equal(document.activeElement, tab('ground'), 'focus moves to the floor’s tab above');
+  assert.match($('#toast')!.textContent!, /Untick “Put the filters together”/);
+  // The storage step shows it ticked; unticking it there brings the notice back.
+  const step = $<HTMLInputElement>(`#main .checklist [data-check="${MOVES}"]`)!;
+  assert.equal(step.checked, true);
+  step.checked = false;
+  step.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: MOVES, value: false });
+  assert.ok($('[data-ground-moves-done]'), 'the to-do is back');
+  noMarkup();
+});
+
+test('Done on the moves is busy while it saves, and a failed save keeps the notice and focus', async () => {
+  let answer!: (r: Response) => void;
+  globalThis.fetch = () => new Promise<Response>(r => (answer = r));
+  render();
+  const done = $<HTMLButtonElement>('[data-ground-moves-done]')!;
+  done.focus();
+  done.click();
+  await nextTick();
+  assert.equal(done.getAttribute('aria-disabled'), 'true', 'busy, not disabled (#299)');
+  assert.equal(done.disabled, false);
+  done.click();
+  answer(new Response(JSON.stringify({ error: 'Disk full' }), { status: 500 }));
+  await settle();
+  assert.equal($('#toast')!.textContent, 'Disk full');
+  assert.equal(state.checks[MOVES], undefined, 'nothing was saved');
+  const again = $<HTMLButtonElement>('[data-ground-moves-done]')!;
+  assert.ok(again, 'the to-do stays');
+  assert.equal(again.getAttribute('aria-disabled'), null, 'ready again');
+  assert.equal(document.activeElement, again, 'focus stays on Done');
+});
+
+test('Done is per profile: a copy with its own records still shows the moves (#260)', async () => {
+  open({ state: { checks: { [MOVES]: true } } });
+  render();
+  assert.equal($('#main [data-ground-floor]'), null, 'this profile did them');
+  open({ profileId: 'copy-of-original', state: { checks: {} } });
+  render();
+  await nextTick();
+  assert.ok($('[data-ground-moves-done]'), 'its copy has not');
+});
+
+test('with the moves done, the bays moved in this plan are still named (#190, #260)', async () => {
+  open({
+    state: {
+      version: 8,
+      checks: { [MOVES]: true },
+      storageEdits: someEdits({ bayFloors: { D: 'upper' } }),
+    },
+  });
+  render();
+  const notice = $('#main [data-ground-floor]')!;
+  assert.ok(notice.classList.contains('info'));
+  assert.equal(notice.querySelector('[data-ground-moves]'), null, 'the moves are done');
+  assert.match(notice.querySelector('[data-moved-off]')!.textContent!, /bay D to Upper floor/);
+  // And beside the moves while they are open.
+  open({ state: { version: 8, storageEdits: someEdits({ bayFloors: { D: 'upper' } }) } });
+  render();
+  await nextTick();
+  assert.ok($('#main [data-ground-floor] [data-ground-moves]'));
+  assert.match($('#main [data-ground-floor] [data-moved-off]')!.textContent!, /bay D/);
+});
+
 test('a calculated profile shows only the items it stores, and its one checklist step', () => {
   open({ calculated: generated() });
   render();
+  assert.equal($('[data-ground-moves]'), null, 'the built room’s moves are the handbook’s');
   assert.ok($$('#main .slot-details span').some(s => s.textContent === 'Iron Plate'));
   assert.equal($('[data-slot="G01"]'), null);
   assert.match($('#main .notice.info')!.textContent, /Optional storage template/);

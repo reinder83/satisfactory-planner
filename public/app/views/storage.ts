@@ -5,7 +5,7 @@
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
 import { num } from '../format.ts';
-import { calculated, checked, plan, state } from '../session.ts';
+import { calculated, checked, currentProfile, plan, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
 
@@ -295,6 +295,15 @@ export function floorProgress(): Map<string, StorageProgress> {
   }
   return totals;
 }
+
+// The handbook's ground-floor moves (SP-25, #260): the owner's built room still has Gas Filters,
+// Nobelisks and Medicinal Inhalers to move, which the ground floor's notice asks for until its
+// Done is pressed. Done ticks the key of the handbook's own storage step for the same moves ("Put
+// the filters together"), so no new record is saved and unticking that step shows the notice
+// again. Only the original handbook profile has the built room; a calculated profile never does.
+export const GROUND_MOVES = 'storage-filter-moves';
+export const groundMovesPending = () =>
+  !calculated && currentProfile?.kind === 'original' && !checked(GROUND_MOVES);
 
 // The four steps of a container, as saved check keys `slot-<address>-<step>` and labels.
 export const SLOT_STEPS: [step: string, label: string][] = [

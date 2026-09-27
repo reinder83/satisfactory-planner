@@ -407,3 +407,12 @@ test('a storage search nothing holds gets a line on the storage page (#240)', ()
   assert.ok(!ids(facts({ view: 'storage', storageMiss: '' })).includes('storage-search-miss'));
   assert.ok(!ids(facts({ view: 'plan', storageMiss: 'x' })).includes('storage-search-miss'));
 });
+
+test('the built ground floor’s open moves get a line on the storage page (SP-25, #260)', () => {
+  const line = first(facts({ view: 'storage', kind: 'original', groundMoves: true }));
+  assert.equal(line.id, 'storage-ground-moves');
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /Gas Filters G08 → H02, Nobelisks H02 → H08/);
+  assert.match(line.text, /Press Done on the ground floor/);
+  assert.ok(!ids(facts({ view: 'storage', groundMoves: false })).includes('storage-ground-moves'));
+});
