@@ -36,7 +36,20 @@ export interface AdaFacts {
   reason: string;
   // Raw resources over their budget.
   short: string[];
-  power: { required: string; spare: string; headroom: string; tight: boolean } | null;
+  // A stage's whole-building power shortfall, as power strings: the draw (requiredMW), the
+  // generation its own rows build with the augmenter boost ('' when none), the spare power
+  // entered, that spare part with what Phase 5's augmenters add ('' when it adds nothing) and
+  // the headroom still missing, which is the draw minus the other two (#334). `biomass` is set
+  // on Phase 1, whose power the plan leaves to biomass or existing generation.
+  power: {
+    required: string;
+    generation?: string;
+    spare: string;
+    augmented?: string;
+    headroom: string;
+    biomass?: boolean;
+    tight: boolean;
+  } | null;
   hours: string;
   profiles: number;
   // Days since the browser edition's last full export, or null.
@@ -119,9 +132,19 @@ const RULES: AdaRule[] = [
     on: ['resources'],
     tone: 'warn',
     when: f => f.power?.tight,
-    // Only after when() found the power figures.
-    text: f =>
-      `${f.power!.headroom} of whole-building power headroom is still unaccounted for: a ${f.power!.required} draw against the ${f.power!.spare} you listed as spare. Unpowered machines are simply very expensive furniture. Build the generation first.`,
+    // Only after when() found the power figures. The draw is set against everything the plan
+    // counts on, so the figures add up to the headroom.
+    text: f => {
+      const p = f.power!;
+      const spare = `the ${p.spare} you listed as spare${p.augmented ? ` (${p.augmented} with the augmenters)` : ''}`;
+      const against = p.generation ? `${p.generation} of planned generation and ${spare}` : spare;
+      const advice = p.biomass
+        ? `${f.phaseLabel} plans no generators: burn biomass, or bring existing generation.`
+        : p.generation
+          ? 'Build generation beyond what the plan lists.'
+          : 'Build the generation first.';
+      return `${p.headroom} of whole-building power headroom is still unaccounted for: a ${p.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
+    },
   },
   // `lead` rules describe a state that makes everything else irrelevant and rank first.
   {

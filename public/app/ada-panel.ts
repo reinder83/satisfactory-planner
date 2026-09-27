@@ -9,6 +9,7 @@ import {
   type AdaLine,
 } from '../ada.ts';
 import { browserMode } from '../browser-api.ts';
+import { stageSupply } from './build-status.ts';
 import { num, slug } from './format.ts';
 import {
   calcStage,
@@ -148,6 +149,8 @@ function adaFacts(): AdaFacts {
     state.deliveries[d.id] ?? (currentProfile.kind === 'original' ? d.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
+  // What the stage's power is balanced against, as build-status.ts measures it (#334).
+  const supply = stageSupply(x, spareMW);
   // Plain data only; ada.ts decides which remarks apply.
   return {
     view,
@@ -191,8 +194,11 @@ function adaFacts(): AdaFacts {
       headroom > 0.01
         ? {
             required: power(x.requiredMW || 0),
+            generation: supply.generationMW > 0.01 ? power(supply.generationMW) : '',
             spare: power(spareMW),
+            augmented: supply.spareMW - spareMW > 0.01 ? power(supply.spareMW) : '',
             headroom: power(headroom),
+            biomass: stage() === '1',
             tight: true,
           }
         : null,
