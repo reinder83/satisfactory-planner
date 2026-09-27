@@ -631,7 +631,7 @@ test('the calculated resources page shows every budget with its icon and what is
   }
   const cells = (r: HTMLElement) =>
     [...r.querySelectorAll('td')].slice(1).map(td => td.textContent.trim());
-  assert.equal(cells(rows[0]!)[2], '-10');
+  assert.equal(cells(rows[0]!)[2], '-10/min', 'Iron Ore, an ore, in /min');
   assert.ok(rows[0]!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over budget');
   for (const row of rows.slice(1))
     assert.ok(!row.querySelectorAll('td')[3]!.classList.contains('warn'), 'the others fit');
@@ -746,8 +746,8 @@ test('the calculated resources page sorts by use, tightest first, and dims unuse
     $$('#main thead th').map(th => [th.textContent, th.getAttribute('scope')]),
     [
       ['Resource', 'col'],
-      ['Required /min', 'col'],
-      ['Budget /min', 'col'],
+      ['Required', 'col'],
+      ['Budget', 'col'],
       ['Remaining', 'col'],
       ['Use', 'col'],
     ],
@@ -1001,4 +1001,79 @@ test('the handbook resources page asks for the nitrogen rate in m³/min (#363)',
       `can supply ${num(handbook.resources['4']!['Nitrogen Gas']!).replace(/\./g, '\.')} m³/min at this stage`,
     ),
   );
+});
+
+// Option 1 on #363: the resource tables mix fluids and ores, so the headers drop "/min" and each
+// rate carries its own unit, m³/min for a fluid and /min for an ore, with a no-break space
+// keeping a fluid's unit on the number's line. "Over by" follows its row; Use stays a percentage.
+const nbsp = (s: string) => s.replace(/ /g, ' ');
+const unitRows = () =>
+  Object.fromEntries(
+    $$('#main tbody tr').map(r => [
+      r.querySelector('.resource-name span')!.textContent,
+      [...r.querySelectorAll('td')].slice(1).map(td => nbsp(td.firstChild!.textContent!.trim())),
+    ]),
+  );
+
+test('the calculated resources table writes each rate with its own unit (#363)', () => {
+  const p = generated();
+  const x = p.stages['3'];
+  p.settings.limits = { 'Iron Ore': 1000, 'Crude Oil': 1200, Water: 5000 };
+  x.raw = { 'Iron Ore': 480, 'Crude Oil': 1500, Water: 0 };
+  openCalculatedResources(p);
+  assert.deepEqual(
+    $$('#main thead th').map(th => th.textContent),
+    ['Resource', 'Required', 'Budget', 'Remaining', 'Use'],
+    'no header names a unit',
+  );
+  const rows = unitRows();
+  assert.deepEqual(rows['Crude Oil']!.slice(0, 3), [
+    num(1500) + ' m³/min',
+    num(1200) + ' m³/min',
+    '-300 m³/min',
+  ]);
+  assert.deepEqual(rows['Iron Ore']!.slice(0, 3), ['480/min', num(1000) + '/min', '520/min']);
+  assert.deepEqual(rows.Water!.slice(0, 3), [
+    '0 m³/min',
+    num(5000) + ' m³/min',
+    num(5000) + ' m³/min',
+  ]);
+  // A fluid's number and unit are joined by a no-break space, so they never wrap apart.
+  const oil = $$('#main tbody tr').find(r => /Crude Oil/.test(r.textContent))!;
+  assert.equal(oil.querySelectorAll('td')[2]!.textContent.trim(), num(1200) + ' m³/min');
+  for (const td of [...oil.querySelectorAll('td')].slice(1, 4))
+    assert.ok(td.classList.contains('number'), 'rates stay in the tabular number cells');
+  // "Over by" is a sentence about one item, in that item's unit; Use stays a percentage.
+  const use = oil.querySelector('[data-use]')!;
+  assert.equal(nbsp(use.querySelector('[data-over]')!.textContent.trim()), '⚠ Over by 300 m³/min');
+  assert.equal(use.firstChild!.textContent!.trim(), num(125) + '%');
+  assert.equal(rows['Iron Ore']![3], num(48) + '%');
+});
+
+test('the handbook resources table writes each rate with its own unit (#363)', () => {
+  go('resources');
+  render();
+  assert.deepEqual(
+    $$('#main thead th').map(th => th.textContent),
+    ['Fresh resource', 'Required', 'Available', 'Remaining', 'Use'],
+    'no header names a unit',
+  );
+  const r = handbook.resources['3']!,
+    cap = handbook.capacities;
+  const rows = unitRows();
+  // Crude oil has a capacity: all three rates in m³/min, and Use a percentage.
+  assert.deepEqual(rows['Crude Oil']!.slice(0, 3), [
+    num(r['Crude Oil']) + ' m³/min',
+    num(cap['Crude Oil']) + ' m³/min',
+    num(cap['Crude Oil']! - r['Crude Oil']!) + ' m³/min',
+  ]);
+  const oil = $$('#main tbody tr').find(t => /Crude Oil/.test(t.textContent))!;
+  assert.match(oil.querySelectorAll('td')[4]!.textContent.trim(), /^[\d.,]+%$/);
+  assert.deepEqual(rows['Iron Ore']!.slice(0, 3), [
+    num(r['Iron Ore']) + '/min',
+    num(cap['Iron Ore']) + '/min',
+    num(cap['Iron Ore']! - r['Iron Ore']!) + '/min',
+  ]);
+  // Water has no capacity: its requirement is in m³/min, the words beside it carry no unit.
+  assert.deepEqual(rows.Water!.slice(0, 3), [num(r.Water) + ' m³/min', 'Extraction limited', '—']);
 });

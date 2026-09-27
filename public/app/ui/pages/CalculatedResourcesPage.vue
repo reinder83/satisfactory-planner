@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { calcStage, calculated, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
@@ -52,13 +53,16 @@ const page = computed(() =>
         .map(n => {
           // The plan's limits hold every raw resource.
           const required = x.raw?.[n] || 0,
-            budget = s.limits[n]!;
+            budget = s.limits[n]!,
+            use = resourceUse(required, budget);
+          // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore.
           return {
-            ...resourceUse(required, budget),
+            ...use,
             name: n,
-            required: num(required),
-            budget: num(budget),
-            remaining: num(budget - required),
+            required: itemRate(n, required),
+            budget: itemRate(n, budget),
+            remaining: itemRate(n, budget - required),
+            overBy: use.over ? itemRate(n, Math.max(0, required) - Math.max(0, budget)) : '',
           };
         })
         .sort(tightestFirst),
@@ -147,8 +151,8 @@ const page = computed(() =>
         <thead>
           <tr>
             <th scope="col">Resource</th>
-            <th scope="col">Required /min</th>
-            <th scope="col">Budget /min</th>
+            <th scope="col">Required</th>
+            <th scope="col">Budget</th>
             <th scope="col">Remaining</th>
             <th scope="col">Use</th>
           </tr>
@@ -170,7 +174,7 @@ const page = computed(() =>
                 <span :style="{ width: r.bar + '%' }"></span>
               </div>
               <div v-if="r.over" class="small" data-over>
-                <span aria-hidden="true">⚠ </span>Over by {{ r.overBy }}/min
+                <span aria-hidden="true">⚠ </span>Over by {{ r.overBy }}
               </div>
             </td>
           </tr>
