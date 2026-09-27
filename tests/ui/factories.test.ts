@@ -331,6 +331,26 @@ test('a handbook factory dialog shows its flow, destinations and local inputs', 
   assert.doesNotMatch(detail(), /only refills the protected storage/);
 });
 
+test('every dialog opens at the top, not where the last one was left (#316)', async () => {
+  render();
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  openFactory('wire');
+  // The <dialog> is the scroll container and keeps its offset while closed.
+  dialog.scrollTop = 300;
+  assert.equal(dialog.scrollTop, 300);
+  void closeDetail();
+  await settle();
+  assert.equal(dialog.open, false);
+  openFactory('wire');
+  assert.equal(dialog.scrollTop, 0, 'reopened after closing a scrolled dialog');
+  // A link inside the dialog replaces it while it stays open.
+  dialog.scrollTop = 300;
+  $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!.click();
+  assert.equal($('#detail h2')!.textContent, 'Cable');
+  assert.ok(dialog.open);
+  assert.equal(dialog.scrollTop, 0, 'replaced by a link inside it');
+});
+
 test('the oil campus replaces the lane advice for Plastic and Rubber', () => {
   render();
   openFactory('plastic');

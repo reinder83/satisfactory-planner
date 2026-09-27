@@ -131,6 +131,31 @@ try {
   assert.ok(payoff.ranking.total > 0);
   assert.equal(payoff.ranking.candidates.length, payoff.ranking.total);
   assert.deepEqual((await api<ContextReply>('/api/context')).payoff, payoff);
+  // Every dialog opens at the top (#316): the <dialog> is the scroll container and kept its
+  // offset while closed, and while a link inside it put another factory in its place.
+  const detailTop = () => page.locator('#detail').evaluate((d: HTMLDialogElement) => d.scrollTop);
+  const scrollDetail = () =>
+    page.locator('#detail').evaluate((d: HTMLDialogElement) => {
+      d.scrollTop = d.scrollHeight;
+      return d.scrollTop;
+    });
+  await page.goto(base + '#factories');
+  await page.locator('[data-calc-factory]').first().click();
+  await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
+  assert.ok((await scrollDetail()) > 0, 'the factory dialog scrolls');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  await page.locator('[data-calc-factory]').first().click();
+  await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
+  assert.equal(await detailTop(), 0, 'reopened at the top');
+  const inner = page.locator('#detail [data-calc-factory]').last();
+  const from = await page.locator('#detail h2').textContent();
+  assert.ok((await scrollDetail()) > 0);
+  await inner.click();
+  await page.waitForFunction(t => document.querySelector('#detail h2')?.textContent !== t, from);
+  assert.equal(await detailTop(), 0, 'a factory opened from the dialog starts at the top');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();
