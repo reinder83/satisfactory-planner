@@ -9,6 +9,7 @@
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { transferFileSize, transferImportLimit } from '../../../transfer.ts';
+import { confirmAction } from '../confirm.ts';
 import {
   downloadJson,
   navigate,
@@ -116,7 +117,14 @@ async function importSaves(e: Event) {
     // Checked before reading, so a huge file is never parsed.
     if (file.size > transferImportLimit) throw Error('Choose a save export smaller than 50 MB.');
     const data = JSON.parse(await file.text());
-    if (!confirm('Import these saves as new copies? Existing saves will be kept.')) return;
+    if (
+      !(await confirmAction({
+        title: 'Import these saves?',
+        body: 'Import these saves as new copies? Existing saves will be kept.',
+        confirmLabel: 'Import saves',
+      }))
+    )
+      return;
     await writeQueue;
     await post('/api/import-saves', data, false);
     await boot();
@@ -145,7 +153,15 @@ async function restoreProgress(e: Event) {
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
     const data = JSON.parse(await file.text());
-    if (!confirm('Replace current progress with this backup?')) return;
+    if (
+      !(await confirmAction({
+        title: 'Restore this backup?',
+        body: 'Replace current progress with this backup?',
+        confirmLabel: 'Replace progress',
+        danger: true,
+      }))
+    )
+      return;
     await queuedWrite('/api/import', data);
     render();
     toast('Backup restored.');

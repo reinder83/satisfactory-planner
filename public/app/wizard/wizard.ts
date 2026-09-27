@@ -19,6 +19,7 @@ import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { esc, plural, required } from '../format.ts';
 import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
+import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
 import { guidedBuiltKeys, guidedFlow } from './guided.ts';
 import { readSupply } from './supply.ts';
@@ -97,8 +98,17 @@ export function readCarry(form: HTMLFormElement | null, data?: FormData) {
 // Open a new draft and show it: saveId null creates a new save, otherwise the
 // profile is added to that save. Callers: "Create a save" / "Try another
 // profile" buttons (ui/actions.ts, ProfilesPage.vue) and session.ts when there is no save.
+// Unsaved notes are asked about first; with none it opens before this returns.
 export function startWizard(saveId: string | null = null) {
-  if (!allowSwitch()) return;
+  const asked = allowSwitch();
+  if (asked === true) openWizard(saveId);
+  else
+    void asked.then(ok => {
+      if (ok) openWizard(saveId);
+    });
+}
+
+function openWizard(saveId: string | null) {
   const existing = workspace.saves.find(s => s.id === saveId);
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
   // A new profile for an existing save starts from its active profile's
@@ -205,13 +215,22 @@ export function noteWizardEdit() {
 
 // "Cancel" on the first screen of either mode: drop the draft and show the profiles page.
 // Nothing has been saved yet, so it only asks when something was entered (the owner's choice
-// in #58); an untouched draft goes without a question.
+// in #58), in the in-app confirmation; an untouched draft goes without a question, at once.
 export function cancelWizard() {
-  if (
-    edited.has(draft()) &&
-    !confirm('Discard the answers you entered? Nothing has been saved yet.')
-  )
-    return;
+  const w = draft();
+  if (!edited.has(w)) return dropWizard();
+  void confirmAction({
+    title: 'Discard these answers?',
+    body: 'Discard the answers you entered? Nothing has been saved yet.',
+    confirmLabel: 'Discard answers',
+    danger: true,
+  }).then(ok => {
+    // Only while the draft asked about is still the open one.
+    if (ok && wizard === w) dropWizard();
+  });
+}
+
+function dropWizard() {
   setWizard(null);
   navigate('profiles');
 }

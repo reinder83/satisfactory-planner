@@ -1896,6 +1896,16 @@ dialog::backdrop {
   align-items: center;
   margin-top: 16px;
 }
+/* The in-app confirmation (ui/confirm.ts): the same dialog, narrower, buttons on the right. */
+#confirm {
+  max-width: 480px;
+}
+#confirm .dialog-body p {
+  margin: 0;
+}
+#confirm .detail-actions {
+  justify-content: flex-end;
+}
 
 /* ── Factory flow rails (2B layout) and belt logistics ── */
 .rail-cap {

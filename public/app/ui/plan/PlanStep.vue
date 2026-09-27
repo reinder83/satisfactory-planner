@@ -11,6 +11,7 @@ import { render } from '../../shell.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
+import { confirmAction } from '../confirm.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(defineProps<{ step: PlanStepView; editing?: boolean }>(), {
@@ -52,9 +53,12 @@ async function remove() {
   const id = props.step.id;
   if (id.startsWith('custom-')) return deletePersonal();
   if (
-    !confirm(
-      'Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.',
-    )
+    !(await confirmAction({
+      title: 'Remove this step?',
+      body: 'Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.',
+      confirmLabel: 'Remove step',
+      danger: true,
+    }))
   )
     return;
   try {
@@ -66,7 +70,15 @@ async function remove() {
 // "Delete personal task" (inside a personal task's details outside edit mode, or Remove on
 // one while editing), after a confirmation.
 async function deletePersonal() {
-  if (!confirm('Delete this personal task?')) return;
+  if (
+    !(await confirmAction({
+      title: 'Delete this personal task?',
+      body: 'Delete this personal task?',
+      confirmLabel: 'Delete task',
+      danger: true,
+    }))
+  )
+    return;
   try {
     await save({ type: 'removeTask', id: props.step.id });
     render();

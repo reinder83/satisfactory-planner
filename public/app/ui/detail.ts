@@ -20,14 +20,23 @@ let listening = false;
 
 // Opens `target` ({ kind: 'factory' | 'calc' | 'group' | 'slot' | 'alt', id }) in #detail, replacing whatever
 // it shows, and opens the dialog if it is not open yet. Replacing an open dialog drops its
-// unsaved note, so that is asked about first; kept, the dialog stays as it is.
+// unsaved note, so that is asked about first; kept, the dialog stays as it is. With nothing to
+// ask it opens at once, before this returns.
 export function showDetail(target: DetailTarget) {
   const d = required<HTMLDialogElement>('#detail');
   if (!listening) {
     d.addEventListener('close', unmountDetail);
     listening = true;
   }
-  if (d.open && !allowSwitch(d)) return;
+  const asked = d.open ? allowSwitch(d) : true;
+  if (asked === true) replaceDetail(d, target);
+  else
+    void asked.then(ok => {
+      if (ok) replaceDetail(d, target);
+    });
+}
+
+function replaceDetail(d: HTMLDialogElement, target: DetailTarget) {
   unmountDetail();
   d.textContent = '';
   app = createApp(DetailDialog, { target });
