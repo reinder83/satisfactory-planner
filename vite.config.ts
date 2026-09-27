@@ -43,5 +43,13 @@ export default {
     root: fileURLToPath(new URL('.', import.meta.url)),
     include: ['tests/ui/**/*.test.ts'],
     environment: 'happy-dom',
+    // node:assert/strict with identity checks that print a page element by a short name
+    // when they fail, rather than hanging on the whole document (#287); see the file.
+    alias: [
+      {
+        find: /^node:assert\/strict$/,
+        replacement: fileURLToPath(new URL('./tests/ui/assert.ts', import.meta.url)),
+      },
+    ],
   },
 };
