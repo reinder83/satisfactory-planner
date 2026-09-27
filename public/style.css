@@ -1633,6 +1633,16 @@ td:first-child {
 .resource-bar.tight span {
   background: var(--accent);
 }
+/* Over budget (SP-27): the Use cell also says so in words, beside the warning icon. */
+.resource-bar.over span {
+  background: var(--red);
+}
+/* A resource this phase does not draw on (CalculatedResourcesPage.vue): listed last, dimmed
+   with the muted text colour rather than opacity, so it keeps its contrast. */
+tr.muted td,
+tr.muted td:first-child {
+  color: var(--muted);
+}
 
 /* ── Storage floor ─────────────────────────────────────── */
 /* The storage search's results on every floor (StoragePage.vue, #240): one button per
