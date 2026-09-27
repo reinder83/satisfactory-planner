@@ -1,7 +1,7 @@
 // The pages that are Vue components (public/app/ui/pages/), mounted through render() the way
 // the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
-import { nextTick } from 'vue';
+import { createApp, h, nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
 import { boot, currentSave, state, workspace } from '../../public/app/session.ts';
@@ -11,6 +11,7 @@ import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
+import ResourcesPage from '../../public/app/ui/pages/ResourcesPage.vue';
 import { resourceUse, tightestFirst } from '../../public/app/views/resources.ts';
 import {
   answerConfirms,
@@ -549,6 +550,27 @@ test('the handbook resources page shows every resource with its icon, and the po
     true,
     'a saved check shows ticked',
   );
+});
+
+// #354: the handbook page stays mounted until render() swaps it out, so it can be drawn while
+// the session's stage is one the handbook has no plan for (a phase 1 or 2 calculated profile).
+// It draws nothing then rather than throwing.
+test('the handbook resources page draws nothing for a phase the handbook has no plan for', async () => {
+  const p = generated();
+  p.settings.phase = '1';
+  for (const phase of ['1', '2'] as const) {
+    open({ calculated: p, phase });
+    assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
+    const el = document.createElement('div');
+    const errors: unknown[] = [];
+    const app = createApp({ render: () => h(ResourcesPage) });
+    app.config.errorHandler = e => void errors.push(e);
+    app.mount(el);
+    await nextTick();
+    assert.deepEqual(errors, [], 'phase ' + phase + ' draws without an error');
+    assert.equal(el.querySelector('h1, table'), null, 'phase ' + phase + ' draws nothing');
+    app.unmount();
+  }
 });
 
 test('moving between pages leaves nothing behind', async () => {
