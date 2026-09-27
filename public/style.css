@@ -1009,6 +1009,23 @@ textarea::placeholder {
   color: var(--bright);
   box-shadow: inset 0 -3px 0 var(--accent);
 }
+/* The factories pages' status filter (FilterChips.vue, SP-16): .tabs as a radio group, a count
+   beside each label. On a narrow page it takes a row of its own and wraps, each chip growing to
+   fill its row. */
+.filter-chips .tab {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+.filter-chips .count {
+  margin-left: 4px;
+  color: var(--muted);
+}
+.filter-chips .tab.active .count {
+  color: var(--accent);
+}
+.empty-state [data-show-all] {
+  margin-left: 12px;
+}
 
 /* ── Factory cards ─────────────────────────────────────── */
 .cards {
@@ -3281,6 +3298,9 @@ button.rail-tile:hover {
   }
   .toolbar {
     gap: 8px;
+  }
+  .filter-chips {
+    flex: 1 1 100%;
   }
   .form-grid,
   .goal-grid,

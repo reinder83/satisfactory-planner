@@ -1,6 +1,8 @@
 <!--
-  #factories on a calculated profile: the rows of the current phase matching the search, user
-  groups first, then the ungrouped rows. What moves between the groups has its own page,
+  #factories on a calculated profile: the rows of the current phase matching the search and the
+  status chips (`factoryFilter`, FilterChips.vue, shared with the handbook page; Held back is this
+  page's own chip, a row ticked Running that a missing supplier holds back), user groups first,
+  then the ungrouped rows. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is.
@@ -11,22 +13,33 @@ import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
 import {
   calcStage,
   calculated,
+  checked,
   factoryEditing,
+  factoryFilter,
   loadContext,
   query,
   setQuery,
   setWorkspace,
+  stage,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import { heldBack } from '../../views/calculated.ts';
+import {
+  factoryGroupsState,
+  filterEmptyText,
+  membershipsOf,
+  statusFilter,
+} from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
+import { pickFactoryFilter } from '../actions.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
+import FilterChips from '../factories/FilterChips.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -36,9 +49,18 @@ import type { WorkspaceSummary } from '../../../types/index.ts';
 const page = computed(() =>
   legacy(() => {
     if (!calculated) return null;
-    const rows = (calcStage()?.rows || []).filter(r =>
+    // The rows matching the search, then those the status chip keeps. The chips count what the
+    // search found.
+    const found = (calcStage()?.rows || []).filter(r =>
       (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
     );
+    const status = statusFilter(
+      found,
+      factoryFilter,
+      r => checked('calc-' + stage() + '-' + r.id),
+      [['held', r => !!heldBack(r.id)]],
+    );
+    const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
@@ -47,6 +69,9 @@ const page = computed(() =>
     return {
       whole: calculated.settings.wholeMachines,
       query,
+      chips: status.chips,
+      active: status.active,
+      empty: filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
       rows,
       ungrouped,
@@ -124,6 +149,10 @@ async function roundUp(e: Event) {
         placeholder="Find a part or recipe…"
         :value="page.query"
         @input="search"
+      /><FilterChips
+        :chips="page.chips"
+        :active="page.active.value"
+        @pick="v => pickFactoryFilter(v)"
       /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
     </div>
     <GroupEditPanel v-if="page.editing" />
@@ -133,6 +162,17 @@ async function roundUp(e: Event) {
     <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
     <div class="cards">
       <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
+      <div v-if="!page.rows.length" class="empty-state" data-filter-empty>
+        {{ page.empty }}
+        <button
+          v-if="page.active.value !== 'all'"
+          class="btn"
+          data-show-all
+          @click="pickFactoryFilter('all', true)"
+        >
+          Show all production lines
+        </button>
+      </div>
     </div>
     <p v-if="page.grouped" class="small muted" data-logistics-link>
       What each group sends the others, and by which belt, pipe or vehicle, is on

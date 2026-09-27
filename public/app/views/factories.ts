@@ -59,3 +59,51 @@ export function machineLine(machines: number, machine: string, lastClock = 100):
   });
   return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
 }
+
+// The status filter of both factories pages (SP-16, #251): a chip per status, each with how many
+// of the factories matching the search it keeps. The chosen value is `factoryFilter` in
+// session.ts, view state only and never saved, and keeps the values the handbook page's old
+// select used ('all', 'todo', 'done', 'local'); the calculated page adds 'held'. Local is a
+// handbook chip and Held back a calculated one, so a value the open page has no chip for (or
+// any other) shows All, and is kept for when the other page is open again. Local and Held back
+// are subsets: a held-back row is ticked Running.
+export type StatusFilter = 'all' | 'todo' | 'done' | 'local' | 'held';
+export type FilterChip = { value: StatusFilter; label: string; count: number };
+const FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All',
+  todo: 'Not running',
+  done: 'Running',
+  local: 'Local',
+  held: 'Held back',
+};
+export function statusFilter<T>(
+  items: T[],
+  current: string,
+  running: (x: T) => boolean,
+  extra: [StatusFilter, (x: T) => boolean][] = [],
+): { chips: FilterChip[]; active: FilterChip; list: T[] } {
+  const tests: [StatusFilter, (x: T) => boolean][] = [
+    ['all', () => true],
+    ['todo', x => !running(x)],
+    ['done', running],
+    ...extra,
+  ];
+  const chips = tests.map(([value, keep]) => ({
+    value,
+    label: FILTER_LABELS[value],
+    count: items.filter(keep).length,
+  }));
+  const at = Math.max(
+    0,
+    tests.findIndex(([value]) => value === current),
+  );
+  // at is an index into tests, which chips maps one to one.
+  return { chips, active: chips[at]!, list: items.filter(tests[at]![1]) };
+}
+
+// What an empty factories page says: the search found nothing, or the chosen chip keeps none of
+// what it found. `noun` is what the page lists ("factories", "production lines").
+export function filterEmptyText(noun: string, active: FilterChip, query: string): string {
+  if (active.value === 'all') return `No ${noun} match this search.`;
+  return `No ${noun} match “${active.label}”${query ? ' and this search' : ''}.`;
+}

@@ -37,6 +37,7 @@ import {
   generated,
   generatedWith,
   go,
+  handbook,
   open,
   page,
   stubFetch,
@@ -113,25 +114,208 @@ test('shared sites group their outputs above the individual factory list', async
   $<HTMLInputElement>('#factory-search')!.value = 'no-such-part';
   $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
-  assert.equal($('#main .empty-state')!.textContent, 'No factories match this filter.');
+  assert.equal($('#main .empty-state')!.textContent!.trim(), 'No factories match this search.');
+  assert.equal($('[data-show-all]'), null, 'All is already chosen: nothing to offer');
 });
 
-test('the status filter and the Running boxes work on the saved factory checks', async () => {
+// The status chips of both factories pages (FilterChips.vue, SP-16, #251).
+const chips = () =>
+  $$('#factory-filter [role="radio"]').map(b => [
+    b.dataset.filter,
+    b.textContent!.trim().replace(/\s+/g, ' '),
+    b.getAttribute('aria-checked'),
+    b.getAttribute('tabindex'),
+  ]);
+const chosen = () => $('#factory-filter [aria-checked="true"]')?.dataset.filter;
+const statusChip = (value: string) =>
+  $<HTMLButtonElement>(`#factory-filter [data-filter="${value}"]`)!;
+const chipText = (value: string) => statusChip(value).textContent!.trim().replace(/\s+/g, ' ');
+const press = (key: string) =>
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+  );
+const find = async (text: string) => {
+  $<HTMLInputElement>('#factory-search')!.value = text;
+  $('#factory-search')!.dispatchEvent(new Event('input'));
+  await nextTick();
+};
+const emptyText = () => $('[data-filter-empty]')!.firstChild!.textContent!.trim();
+
+test('the status chips filter on the saved factory checks, and the Running boxes work', async () => {
   open({ state: { checks: { 'factory-3-wire': true } } });
   render();
   assert.equal($<HTMLInputElement>('[data-check="factory-3-wire"]')!.checked, true);
   assert.ok(
     $('[data-check="factory-3-wire"]')!.closest('.factory-card')!.classList.contains('done'),
   );
-  $<HTMLSelectElement>('#factory-filter')!.value = 'done';
-  $('#factory-filter')!.dispatchEvent(new Event('change'));
+  assert.equal($('#factory-filter')!.getAttribute('role'), 'radiogroup');
+  assert.equal($('#factory-filter')!.getAttribute('aria-label'), 'Factory status');
+  statusChip('done').click();
   await nextTick();
   assert.deepEqual(factoryIds('#main'), ['wire']);
   assert.equal($('#main .toolbar .muted')!.textContent, '1 targets');
-  $<HTMLSelectElement>('#factory-filter')!.value = 'todo';
-  $('#factory-filter')!.dispatchEvent(new Event('change'));
+  statusChip('todo').click();
   await nextTick();
   assert.ok(!factoryIds('#main').includes('wire'));
+  assert.equal(chosen(), 'todo');
+});
+
+test('the handbook chips count what the search finds, Local included', async () => {
+  const at3 = handbook.factories.filter(f => f.stages['3']);
+  const local = at3.filter(f => f.local).length;
+  assert.ok(local > 0, 'the handbook has local factories');
+  open({ state: { checks: { 'factory-3-wire': true } } });
+  render();
+  assert.deepEqual(chips(), [
+    ['all', `All ${at3.length}`, 'true', '0'],
+    ['todo', `Not running ${at3.length - 1}`, 'false', '-1'],
+    ['done', 'Running 1', 'false', '-1'],
+    ['local', `Local ${local}`, 'false', '-1'],
+  ]);
+  // A search narrows every count, whichever chip is chosen.
+  statusChip('done').click();
+  await find('wire');
+  const wires = at3.filter(f =>
+    (f.name + ' ' + f.stages['3']!.recipe).toLowerCase().includes('wire'),
+  );
+  assert.deepEqual(
+    chips().map(c => c[1]),
+    [
+      `All ${wires.length}`,
+      `Not running ${wires.length - 1}`,
+      'Running 1',
+      `Local ${wires.filter(f => f.local).length}`,
+    ],
+  );
+  assert.deepEqual(factoryIds('#main'), ['wire']);
+  // A chip the search leaves empty says so and offers All back, which takes focus.
+  await find('plastic');
+  assert.equal(chipText('done'), 'Running 0');
+  assert.equal(emptyText(), 'No factories match “Running” and this search.');
+  assert.equal($$('#main .factory-card').length, 0);
+  $<HTMLButtonElement>('[data-show-all]')!.click();
+  await settle();
+  assert.equal(chosen(), 'all');
+  assert.equal(document.activeElement, statusChip('all'));
+  assert.ok($$('#main [data-factory="plastic"]').length > 0);
+  assert.equal($('[data-filter-empty]'), null);
+});
+
+test('the chips are a radio group: arrows, Home and End move and choose, one Tab stop', async () => {
+  render();
+  statusChip('all').focus();
+  press('ArrowRight');
+  await nextTick();
+  assert.equal(document.activeElement, statusChip('todo'));
+  assert.equal(chosen(), 'todo');
+  assert.deepEqual(
+    chips().map(c => c[3]),
+    ['-1', '0', '-1', '-1'],
+    'only the chosen chip is in the Tab order',
+  );
+  press('ArrowDown');
+  await nextTick();
+  assert.equal(chosen(), 'done');
+  press('End');
+  await nextTick();
+  assert.equal(document.activeElement, statusChip('local'));
+  assert.equal(chosen(), 'local');
+  press('ArrowRight');
+  await nextTick();
+  assert.equal(document.activeElement, statusChip('all'), 'the arrows wrap around');
+  press('ArrowLeft');
+  await nextTick();
+  assert.equal(chosen(), 'local');
+  press('Home');
+  await nextTick();
+  assert.equal(chosen(), 'all');
+  press('ArrowUp');
+  await nextTick();
+  assert.equal(chosen(), 'local');
+  // Other keys are left alone.
+  const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  statusChip('local').dispatchEvent(tab);
+  assert.equal(tab.defaultPrevented, false);
+  assert.equal(chosen(), 'local');
+});
+
+test('the chosen chip stays through redraws and pages, and older filter values still apply', async () => {
+  render();
+  statusChip('local').click();
+  await nextTick();
+  go('plan');
+  render();
+  await nextTick();
+  go('factories');
+  render();
+  await nextTick();
+  assert.equal(chosen(), 'local', 'kept in factoryFilter while the app is open');
+  assert.ok(factoryIds('#main').length > 0);
+  // The values the old status select stored each choose their chip.
+  for (const value of ['all', 'todo', 'done', 'local']) {
+    setFactoryFilter(value);
+    render();
+    await nextTick();
+    assert.equal(chosen(), value);
+  }
+  // A value this page has no chip for (Held back is the calculated page's), or none at all,
+  // shows All and lists every factory.
+  for (const value of ['held', 'bogus', '']) {
+    setFactoryFilter(value);
+    render();
+    await nextTick();
+    assert.equal(chosen(), 'all', value);
+    assert.equal($('[data-filter-empty]'), null);
+  }
+});
+
+test('the calculated page has the chips too, with Held back for rows a missing supplier holds', async () => {
+  const rows = plan.stages['3'].rows!;
+  const consumer = rows.find(r =>
+    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  )!;
+  open({ calculated: plan, state: { checks: { ['calc-3-' + consumer.id]: true } } });
+  render();
+  noMarkup();
+  assert.deepEqual(chips(), [
+    ['all', `All ${rows.length}`, 'true', '0'],
+    ['todo', `Not running ${rows.length - 1}`, 'false', '-1'],
+    ['done', 'Running 1', 'false', '-1'],
+    ['held', 'Held back 1', 'false', '-1'],
+  ]);
+  statusChip('held').click();
+  await nextTick();
+  assert.equal($$('#main .factory-card').length, 1);
+  assert.ok($(`#main .factory-card [data-calc-factory="${consumer.id}"]`));
+  assert.equal($$('#main [data-build-held]').length, 1);
+  assert.equal($('#main .toolbar > span')!.textContent, '1 production lines');
+  // Counts follow the search here too.
+  await find('no-such-part');
+  assert.deepEqual(
+    chips().map(c => c[1]),
+    ['All 0', 'Not running 0', 'Running 0', 'Held back 0'],
+  );
+  assert.equal(emptyText(), 'No production lines match “Held back” and this search.');
+  $<HTMLButtonElement>('[data-show-all]')!.click();
+  await settle();
+  assert.equal(document.activeElement, statusChip('all'));
+  assert.equal(emptyText(), 'No production lines match this search.');
+  assert.equal($('[data-show-all]'), null);
+  await find('');
+  // Nothing ticked: nothing is held back, and the chosen chip says so.
+  open({ calculated: plan });
+  setFactoryFilter('held');
+  render();
+  await nextTick();
+  assert.equal(chosen(), 'held');
+  assert.equal(chipText('held'), 'Held back 0');
+  assert.equal(emptyText(), 'No production lines match “Held back”.');
+  // Local is the handbook's chip: on this page it shows All.
+  setFactoryFilter('local');
+  render();
+  await nextTick();
+  assert.equal(chosen(), 'all');
+  assert.equal($$('#main .factory-card').length, rows.length);
 });
 
 test('post-game lists the completion modules with their own checks', () => {
@@ -645,7 +829,7 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   noMarkup();
   const rows = p.stages['3'].rows!;
   assert.equal($$('#main .factory-card').length, rows.length);
-  assert.equal($('#main .toolbar span')!.textContent, rows.length + ' production lines');
+  assert.equal($('#main .toolbar > span')!.textContent, rows.length + ' production lines');
   assert.ok($('[data-round-up]'), 'without whole machines it offers rounding up');
   assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
   const first = rows[0]!;
