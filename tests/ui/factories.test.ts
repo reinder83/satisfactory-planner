@@ -1341,6 +1341,29 @@ test('a handbook card measures a fluid in m³/min, like its dialog (#351)', asyn
   );
 });
 
+// happy-dom lays nothing out, so the line boxes were measured in Edge at 1440 and 390 px; this
+// pins what keeps them together: a no-break space before m³, and nowrap on the rates.
+test('the flow diagram keeps a fluid rate’s unit beside its number (#364)', () => {
+  open({ phase: '4' });
+  render();
+  openFactory('alumina-solution');
+  const unit = (el: Element | null | undefined) => el?.querySelector('small')?.textContent;
+  const scrap = $$('#detail .rail-row').find(r => /Aluminum Scrap/.test(r.textContent!))!;
+  const rate = scrap.querySelector('.rail-rate')!;
+  assert.equal(plain(rate.textContent!), m3(10066.666666666666));
+  assert.equal(unit(rate), `${nb}m³/min`, 'the destination row');
+  const water = $$('#detail .rail-tile').find(t => /Water/.test(t.textContent!))!;
+  assert.equal(unit(water.querySelector('.rail-rate')), `${nb}m³/min`, 'the input tile');
+  assert.equal(unit($('#detail .rail-machine-out b')), `${nb}m³/min`, 'the machine bar');
+  assert.ok(
+    $$('#detail .rail-rate, #detail .rail-machine-out b').every(e => !/ m³/.test(e.textContent!)),
+    'no ordinary space before m³ anywhere in the flow',
+  );
+  // A solid's unit has no space to break at.
+  const bauxite = $$('#detail .rail-tile').find(t => /Bauxite/.test(t.textContent!))!;
+  assert.equal(unit(bauxite.querySelector('.rail-rate')), '/min');
+});
+
 test('a calculated card measures a fluid in m³/min, like its dialog (#351)', () => {
   const p = generated();
   const rows = p.stages['3'].rows!;
