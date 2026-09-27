@@ -3,6 +3,8 @@ This is an unofficial fan-made planner and is not affiliated with Coffee Stain S
 
 Icons were obtained from the Official Satisfactory Wiki:
 https://satisfactory.wiki.gg/wiki/Category:Item_icons
+The power generator icons (coal-generator.png, fuel-generator.png, nuclear-power-plant.png) are
+the wiki's building icons for the Coal-Powered Generator, Fuel-Powered Generator and Nuclear Power Plant.
 
 See sources.json in this directory for each icon's original image URL and wiki file-description page.
 The artwork is not covered by the HiGHS solver's MIT license.

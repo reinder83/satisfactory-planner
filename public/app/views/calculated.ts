@@ -40,6 +40,12 @@ const outputList = (r: CalcRow): string =>
     .filter(Boolean)
     .join(', ') || power(r.generationMW);
 
+// The bundled icon a calculated row shows on its card, its dialog and its build-plan step: a
+// generator's building (icons/coal-generator.png and so on), even when it also makes waste
+// (#350), else its main output; '' for neither.
+export const rowIcon = (r: CalcRow): string =>
+  r.generationMW > 0 ? r.machine : Object.keys(r.outputs || {})[0] || '';
+
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
 // from progression.ts, hard drives, one step per production row, storage, then the lines

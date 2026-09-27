@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
 import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
-import { num, num3 } from '../../public/app/format.ts';
+import { num, num3, slug as slugOf } from '../../public/app/format.ts';
+import { taskIcon } from '../../public/app/tasks.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
 import { power } from '../../public/app/wizard/fields.ts';
@@ -1218,6 +1219,29 @@ test('a nuclear plant card leads with its power and lists its waste below it (#3
     assert.match(detail(), new RegExp(Object.keys(r.outputs)[0]!));
     closeDetail();
   }
+});
+
+test('a generator’s card, dialog and build step show its building, not its waste (#350)', () => {
+  const { p, made } = withNuclear();
+  const coal = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const line = p.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
+  open({ calculated: p });
+  render();
+  const src = (el: Element | null) => el!.querySelector('img.item-icon')!.getAttribute('src');
+  for (const r of [coal, ...made]) {
+    const icon = `./icons/${slugOf(r.machine)}.png`;
+    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
+    assert.equal(src(card.querySelector('.card-icon')), icon, r.name);
+    assert.deepEqual(taskIcon({ id: `calc-3-${r.id}`, title: r.name }), { item: r.machine });
+    openCalculatedFactory(r.id);
+    assert.equal(src($('#detail .dialog-icon')), icon, r.name);
+    closeDetail();
+  }
+  // A production line keeps its main output's icon.
+  const [item] = Object.keys(line.outputs);
+  const card = cardOf(`#main button.name[data-calc-factory="${line.id}"]`);
+  assert.equal(src(card.querySelector('.card-icon')), `./icons/${slugOf(item!)}.png`);
+  assert.deepEqual(taskIcon({ id: `calc-3-${line.id}`, title: line.name }), { item });
 });
 
 test('a nuclear plant’s group share says its waste and its power (#371, #374)', async () => {

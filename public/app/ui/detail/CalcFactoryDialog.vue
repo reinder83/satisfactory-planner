@@ -13,7 +13,7 @@ import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel, FLUIDS } from '../../flow.ts';
 import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
-import { calcExpansion, machineSetup } from '../../views/calculated.ts';
+import { calcExpansion, machineSetup, rowIcon } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -50,7 +50,7 @@ const view = computed(() =>
         main && !generator
           ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
           : power(r.generationMW),
-      icon: Object.keys(r.outputs || {})[0] || '',
+      icon: rowIcon(r),
       flow: calcFlowModel(r),
       setup: m,
       // The three machine cells (SP-20), from the count and clock the row's card shows; the
