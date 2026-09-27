@@ -10,7 +10,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
-import { currentBuildStatus, machineSetup } from '../../views/calculated.ts';
+import { heldBack, machineSetup } from '../../views/calculated.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
 import { powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -57,10 +57,8 @@ const card = computed(() =>
       editing: factoryEditing,
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
-        const s = currentBuildStatus()?.rows.find(x => x.id === r.id);
-        return s?.built && s.share < 1 && s.shortOf
-          ? `Running at ${Math.round(s.share * 100)}%: short of ${s.shortOf}`
-          : '';
+        const h = heldBack(r.id);
+        return h ? `Running at ${Math.round(h.share * 100)}%: short of ${h.shortOf}` : '';
       })(),
     };
   }),

@@ -1,8 +1,9 @@
 <!--
   #factories for the original handbook at the current stage, filtered by the step search
-  (view state `query`) and the status select (`factoryFilter`). A factory in a user group is
-  drawn there only; the rest go under the shared sites (Plastic and Rubber out of one oil
-  campus, nuclear factories at the nuclear site), then as single cards. Post-game adds the
+  (view state `query`) and the status chips (`factoryFilter`, StatusChips.vue; Local is this
+  page's own chip). A factory in a user group is drawn there only; the rest go under the shared
+  sites (Plastic and Rubber out of one oil campus, nuclear factories at the nuclear site), then
+  as single cards. When nothing is left, it says why and offers All back. Post-game adds the
   completion modules, whose boxes write `completion-<id>` checks. A calculated profile gets
   CalculatedFactoriesPage.vue instead.
 -->
@@ -16,29 +17,26 @@ import {
   phase,
   plan,
   query,
-  setFactoryFilter,
   setQuery,
   stage,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
+import {
+  factoryGroupsState,
+  filterEmptyText,
+  membershipsOf,
+  statusFilter,
+} from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
+import StatusChips from '../factories/StatusChips.vue';
 import PageHeader from '../PageHeader.vue';
-import { toggleCheck } from '../actions.ts';
+import { pickFactoryFilter, toggleCheck } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
-
-// The status filter: value, label.
-const FILTERS: [value: string, label: string][] = [
-  ['all', 'All factories'],
-  ['todo', 'Not running yet'],
-  ['done', 'Running'],
-  ['local', 'Made beside consumers'],
-];
 
 // Which shared site a factory is drawn under; null means a card of its own.
 const siteOf = (f: HandbookFactory) =>
@@ -47,20 +45,16 @@ const siteOf = (f: HandbookFactory) =>
 const page = computed(() =>
   legacy(() => {
     const running = (f: HandbookFactory) => checked('factory-' + stage() + '-' + f.id);
-    // Factories at this stage that match the search text and the status filter.
-    const list = plan.factories
+    // Factories at this stage that match the search text, then those the status chip keeps. The
+    // chips count what the search found.
+    const found = plan.factories
       .filter(f => f.stages[stage()])
       .filter(f =>
         // The filter above keeps only factories with this stage.
         (f.name + ' ' + f.stages[stage()]!.recipe).toLowerCase().includes(query.toLowerCase()),
-      )
-      .filter(
-        f =>
-          factoryFilter === 'all' ||
-          (factoryFilter === 'todo' && !running(f)) ||
-          (factoryFilter === 'done' && running(f)) ||
-          (factoryFilter === 'local' && f.local),
       );
+    const status = statusFilter(found, factoryFilter, running, [['local', f => !!f.local]]);
+    const list = status.list;
     const ungrouped = list.filter(f => !membershipsOf(f.id).length);
     // The handbook has a stage plan for every phase it covers.
     const p = plan.plans[stage()]!;
@@ -88,7 +82,9 @@ const page = computed(() =>
     return {
       post: phase() === 'post',
       query,
-      filter: factoryFilter,
+      chips: status.chips,
+      active: status.active,
+      empty: filterEmptyText('factories', status.active, query),
       editing: factoryEditing,
       list,
       sites,
@@ -118,11 +114,6 @@ function search(e: Event) {
   setQuery((e.target as HTMLInputElement).value);
   render();
 }
-
-function filter(e: Event) {
-  setFactoryFilter((e.target as HTMLSelectElement).value);
-  render();
-}
 </script>
 
 <template>
@@ -143,11 +134,11 @@ function filter(e: Event) {
       aria-label="Find a factory"
       :value="page.query"
       @input="search"
-    /><select id="factory-filter" aria-label="Factory status" @change="filter">
-      <option v-for="[v, l] in FILTERS" :key="v" :value="v" :selected="page.filter === v">
-        {{ l }}
-      </option></select
-    ><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
+    /><StatusChips
+      :chips="page.chips"
+      :active="page.active.value"
+      @pick="v => pickFactoryFilter(v)"
+    /><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
   </div>
   <GroupEditPanel v-if="page.editing" />
   <GroupSections :items="page.list" :key-of="f => f.id">
@@ -170,7 +161,17 @@ function filter(e: Event) {
     <template v-if="page.singles.length"
       ><FactoryCard v-for="f in page.singles" :key="f.id" :factory="f"
     /></template>
-    <div v-else-if="!page.list.length" class="empty-state">No factories match this filter.</div>
+    <div v-else-if="!page.list.length" class="empty-state" data-filter-empty>
+      {{ page.empty }}
+      <button
+        v-if="page.active.value !== 'all'"
+        class="btn"
+        data-show-all
+        @click="pickFactoryFilter('all', true)"
+      >
+        Show all factories
+      </button>
+    </div>
   </div>
   <section v-if="page.post" style="margin-top: 32px">
     <h2>Additional completion modules</h2>

@@ -8,7 +8,8 @@
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
 // (or put the control back); a success toast never follows a failed write.
 import { allowSwitch, navigate, post, save, toast, writeQueue } from '../api.ts';
-import { boot, loadContext, setAuthMode, setWorkspace } from '../session.ts';
+import { nextTick } from 'vue';
+import { boot, loadContext, setAuthMode, setFactoryFilter, setWorkspace } from '../session.ts';
 import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
@@ -133,4 +134,15 @@ export async function moveContainer(from: string, to: string) {
   } finally {
     render();
   }
+}
+
+// A factories page's status filter (StatusChips.vue, SP-16): the chosen chip, kept in
+// factoryFilter as view state. "Show all" on a page the filter left empty passes focus=true: it
+// chooses All and moves focus to that chip, since the button goes once the page lists something.
+export async function pickFactoryFilter(value: string, focus = false) {
+  setFactoryFilter(value);
+  render();
+  if (!focus) return;
+  await nextTick();
+  document.querySelector<HTMLElement>(`#factory-filter [data-filter="${value}"]`)?.focus();
 }

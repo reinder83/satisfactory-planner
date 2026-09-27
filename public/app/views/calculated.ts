@@ -217,3 +217,11 @@ export function currentBuildStatus(): BuildStatus | null {
   }
   return buildCache.status;
 }
+
+// A row marked running that a missing supplier holds back (build-status.ts, #66): the share of
+// full output it runs at and the item it is short of, or null. Its factory card says so
+// (CalcFactoryCard.vue) and the factories page's Held back chip counts it (SP-16, #251).
+export function heldBack(rowId: string): { share: number; shortOf: string } | null {
+  const s = currentBuildStatus()?.rows.find(x => x.id === rowId);
+  return s?.built && s.share < 1 && s.shortOf ? { share: s.share, shortOf: s.shortOf } : null;
+}
