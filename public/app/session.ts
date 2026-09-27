@@ -147,6 +147,34 @@ function hideDoneStored() {
     return false;
   }
 }
+// The factory groups and shared sites folded on the factories pages (SP-17, #252), as
+// "<save>/<profile>/<section>" (a group id, or 'site-oil' and 'site-nuclear'). Like "Hide
+// completed" a view preference remembered in this browser, never in a saved profile: nothing
+// stored, or anything unreadable, means every section is open. Kept in memory as well, so the
+// toggle still works where the browser refuses storage, and capped so it cannot grow unbounded.
+const COLLAPSED_KEY = 'planner-collapsed-sections';
+const COLLAPSED_MAX = 500;
+const collapsedSections = new Set(collapsedStored());
+function collapsedStored(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+const sectionPath = (id: string) => `${currentSave?.id}/${currentProfile?.id}/${id}`;
+export const sectionCollapsed = (id: string) => collapsedSections.has(sectionPath(id));
+export function setSectionCollapsed(id: string, value: boolean) {
+  const path = sectionPath(id);
+  collapsedSections.delete(path);
+  if (value) collapsedSections.add(path);
+  // A Set keeps insertion order, so the oldest entries go first.
+  for (const old of [...collapsedSections].slice(0, -COLLAPSED_MAX)) collapsedSections.delete(old);
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedSections]));
+  } catch {}
+}
 export function setLayoutEditing(value: boolean) {
   layoutEditing = value;
 }

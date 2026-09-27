@@ -9,7 +9,7 @@ import { groupLinks } from '../../public/app/group-links.ts';
 import { num } from '../../public/app/format.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
-import { beforeEach, test } from 'vitest';
+import { beforeEach, test, vi } from 'vitest';
 import {
   openCalculatedFactory,
   openFactory,
@@ -21,6 +21,7 @@ import {
   setFactoryEditing,
   setFactoryFilter,
   setQuery,
+  setSectionCollapsed,
   state,
   viewOf,
   workspace,
@@ -1596,4 +1597,268 @@ test('between groups: recalculating with transport fuel creates a revision that 
   assert.match(note(), /This plan already includes the vehicle fuel/);
   assert.equal($('[data-recalc-transport]'), null);
   noMarkup();
+});
+
+// The jump bar and folding sections of both factories pages (JumpBar.vue, CollapseToggle.vue,
+// SP-17, #252).
+const jumps = () =>
+  $$('#main .jump-bar [data-jump]').map(b => [
+    b.dataset.jump,
+    b.querySelector('.count')!.textContent,
+    b.textContent!.trim().replace(/\s+/g, ' '),
+  ]);
+const toggleOf = (key: string) => $<HTMLButtonElement>(`[data-collapse="${key}"]`)!;
+const cardsOf = (key: string) => $<HTMLElement>(`#cards-${key}`)!;
+// Every section this file folds, unfolded again for the open profile: the folded state lives in
+// session.ts (and localStorage) across tests, as it does across pages.
+const unfoldAll = () => {
+  for (const key of ['fg-cable01', 'fg-plates1', 'fg-a', 'site-oil', 'site-nuclear'])
+    setSectionCollapsed(key, false);
+};
+// Where scrollIntoView() was asked to go, by element id.
+const scrolled: string[] = [];
+beforeEach(() => {
+  scrolled.length = 0;
+  HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+    scrolled.push(this.id);
+  };
+});
+
+test('the jump bar lists each group and shared site with its running count', async () => {
+  open({ state: { factoryGroups: structuredClone(GROUPS), checks: { 'factory-3-wire': true } } });
+  render();
+  await nextTick();
+  assert.equal($('#main .jump-bar')!.tagName, 'NAV');
+  assert.equal($('#main .jump-bar')!.getAttribute('aria-label'), 'Groups on this page');
+  assert.ok($('#main .toolbar + .jump-bar'), 'right under the toolbar');
+  // Groups first, then the shared sites, in the order the page draws them.
+  assert.deepEqual(jumps(), [
+    ['fg-cable01', '1/1', 'Cable factory 1/1, 1 of 1 running'],
+    ['fg-plates1', '1/1', 'Stitched plates 1/1, 1 of 1 running'],
+    ['site-oil', '0/2', 'Oil campus 0/2, 0 of 2 running'],
+  ]);
+  assert.deepEqual(
+    $$('#main .site-group').map(s => s.id),
+    ['section-fg-cable01', 'section-fg-plates1', 'section-site-oil'],
+  );
+  // The counts follow the search, like the chips, but not the chosen chip: Running keeps the
+  // groups (with their count) and drops the site nothing runs at, as the page does.
+  statusChip('done').click();
+  await nextTick();
+  assert.deepEqual(
+    jumps().map(j => j.slice(0, 2)),
+    [
+      ['fg-cable01', '1/1'],
+      ['fg-plates1', '1/1'],
+    ],
+  );
+  statusChip('all').click();
+  await find('plastic');
+  assert.deepEqual(jumps(), [['site-oil', '0/1', 'Oil campus 0/1, 0 of 1 running']]);
+  await find('no-such-part');
+  assert.equal($('#main .jump-bar'), null, 'nothing to jump to');
+  // Without a group or site to show there is no bar: here only the ungrouped Wire card.
+  open();
+  render();
+  await find('wire');
+  assert.deepEqual(factoryIds('#main'), ['wire']);
+  assert.equal($('#main .jump-bar'), null);
+  await find('');
+});
+
+test('a jump brings the section into view and focuses its heading', async () => {
+  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  render();
+  await nextTick();
+  const button = $<HTMLButtonElement>('[data-jump="site-oil"]')!;
+  button.focus();
+  button.click();
+  await settle();
+  const heading = $('#section-site-oil h2')!;
+  assert.equal(heading.getAttribute('tabindex'), '-1');
+  assert.equal(document.activeElement, heading);
+  assert.deepEqual(scrolled, ['section-site-oil']);
+  $<HTMLButtonElement>('[data-jump="fg-plates1"]')!.click();
+  await settle();
+  assert.equal(document.activeElement, $('#section-fg-plates1 h2'));
+  assert.equal($('#section-fg-plates1 h2')!.textContent, 'Stitched plates');
+  // While groups are edited, the name field stands in for the heading.
+  $('[data-toggle-factory-edit]')!.click();
+  await nextTick();
+  $<HTMLButtonElement>('[data-jump="fg-cable01"]')!.click();
+  await settle();
+  assert.equal(document.activeElement, $('[data-group-rename="fg-cable01"]'));
+});
+
+test('a group folds with its toggle, is remembered, and still counts in the chips', async () => {
+  open({ state: { factoryGroups: structuredClone(GROUPS), checks: { 'factory-3-wire': true } } });
+  unfoldAll();
+  render();
+  await nextTick();
+  const before = structuredClone(state);
+  const counts = chips();
+  const total = $('#main .toolbar > span')!.textContent;
+  const toggle = toggleOf('fg-cable01');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(toggle.getAttribute('aria-controls'), 'cards-fg-cable01');
+  assert.equal(toggle.getAttribute('aria-label'), 'Factories in Cable factory');
+  assert.ok(cardsOf('fg-cable01').classList.contains('cards'));
+  toggle.focus();
+  toggle.click();
+  await nextTick();
+  assert.equal(toggleOf('fg-cable01').getAttribute('aria-expanded'), 'false');
+  assert.equal(cardsOf('fg-cable01').style.display, 'none', 'its cards are hidden');
+  assert.ok($('#section-fg-cable01')!.classList.contains('collapsed'));
+  assert.equal($('#section-fg-cable01 h2')!.textContent, 'Cable factory', 'its header stays');
+  assert.equal(document.activeElement, toggleOf('fg-cable01'), 'focus stays on the toggle');
+  assert.equal(cardsOf('fg-plates1').style.display, '', 'the other group stays open');
+  // A folded group still counts: in the chips, the page's total and the jump bar.
+  assert.deepEqual(chips(), counts);
+  assert.equal($('#main .toolbar > span')!.textContent, total);
+  assert.equal(jumps()[0]![1], '1/1');
+  // Remembered through redraws and pages, and for this profile only.
+  go('plan');
+  render();
+  await nextTick();
+  go('factories');
+  render();
+  await nextTick();
+  assert.equal(toggleOf('fg-cable01').getAttribute('aria-expanded'), 'false');
+  // It is view state in this browser, not progress: nothing in the profile changed.
+  assert.deepEqual(state, before);
+  assert.deepEqual(JSON.parse(localStorage.getItem('planner-collapsed-sections')!), [
+    's/original/fg-cable01',
+  ]);
+  open({ profileId: 'other', state: { factoryGroups: structuredClone(GROUPS) } });
+  render();
+  await nextTick();
+  assert.equal(toggleOf('fg-cable01').getAttribute('aria-expanded'), 'true');
+  // A shared site folds the same way, and still counts too.
+  const otherCounts = chips();
+  toggleOf('site-oil').click();
+  await nextTick();
+  assert.equal(cardsOf('site-oil').style.display, 'none');
+  assert.equal(toggleOf('site-oil').getAttribute('aria-label'), 'Outputs of Oil campus');
+  assert.deepEqual(chips(), otherCounts);
+  toggleOf('site-oil').click();
+  await nextTick();
+  assert.equal(cardsOf('site-oil').style.display, '');
+  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  unfoldAll();
+});
+
+test('jumping to a folded section unfolds it, and folding works while editing groups', async () => {
+  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  unfoldAll();
+  render();
+  await nextTick();
+  toggleOf('fg-plates1').click();
+  await nextTick();
+  assert.equal(cardsOf('fg-plates1').style.display, 'none');
+  $<HTMLButtonElement>('[data-jump="fg-plates1"]')!.click();
+  await settle();
+  assert.equal(cardsOf('fg-plates1').style.display, '', 'going there is asking to see it');
+  assert.equal(toggleOf('fg-plates1').getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, $('#section-fg-plates1 h2'));
+  // Edit groups keeps working: rename and remove are there, and a folded group keeps them.
+  $('[data-toggle-factory-edit]')!.click();
+  await nextTick();
+  toggleOf('fg-cable01').click();
+  await nextTick();
+  assert.ok($('[data-group-rename="fg-cable01"]'));
+  assert.ok($('[data-remove-group="fg-cable01"]'));
+  assert.equal(cardsOf('fg-cable01').style.display, 'none');
+  unfoldAll();
+});
+
+test('an empty group shows in the jump bar while editing, and user names stay text', async () => {
+  open({ state: { factoryGroups: { groups: [{ id: 'fg-a', name: evil }], assignments: {} } } });
+  render();
+  await nextTick();
+  assert.deepEqual(
+    jumps().map(j => j[0]),
+    ['site-oil'],
+    'an empty group is not drawn, so not listed',
+  );
+  setFactoryEditing(true);
+  render();
+  await nextTick();
+  assert.deepEqual(jumps()[0]!.slice(0, 2), ['fg-a', '0/0']);
+  assert.equal(toggleOf('fg-a').getAttribute('aria-label'), 'Factories in ' + evil);
+  noMarkup();
+});
+
+test('the calculated page has the jump bar and folding groups too', async () => {
+  const rows = plan.stages['3'].rows!;
+  const [a, b, c] = rows;
+  open({
+    calculated: plan,
+    state: {
+      checks: { ['calc-3-' + a!.id]: true },
+      factoryGroups: {
+        groups: [
+          { id: 'fg-cable01', name: 'North' },
+          { id: 'fg-plates1', name: 'South' },
+        ],
+        assignments: {
+          [a!.id]: [{ group: 'fg-cable01', rate: null }],
+          [b!.id]: [{ group: 'fg-cable01', rate: null }],
+          [c!.id]: [{ group: 'fg-plates1', rate: null }],
+        },
+      },
+    },
+  });
+  unfoldAll();
+  render();
+  await nextTick();
+  assert.deepEqual(
+    jumps().map(j => j.slice(0, 2)),
+    [
+      ['fg-cable01', '1/2'],
+      ['fg-plates1', '0/1'],
+    ],
+  );
+  const counts = chips();
+  toggleOf('fg-cable01').click();
+  await nextTick();
+  assert.equal(cardsOf('fg-cable01').style.display, 'none');
+  assert.deepEqual(chips(), counts, 'folded rows still count in the chips');
+  assert.equal($('#main .toolbar > span')!.textContent, `${rows.length} production lines`);
+  $<HTMLButtonElement>('[data-jump="fg-cable01"]')!.click();
+  await settle();
+  assert.equal(cardsOf('fg-cable01').style.display, '');
+  assert.equal(document.activeElement, $('#section-fg-cable01 h2'));
+  assert.deepEqual(scrolled, ['section-fg-cable01']);
+  unfoldAll();
+});
+
+test('folded sections survive a page refresh, and anything unreadable opens them all', async () => {
+  // A refresh loads session.ts afresh, which reads what this browser remembered.
+  const fresh = async (stored: string | null) => {
+    if (stored === null) localStorage.removeItem('planner-collapsed-sections');
+    else localStorage.setItem('planner-collapsed-sections', stored);
+    vi.resetModules();
+    const s = await import('../../public/app/session.ts');
+    s.setContext({
+      save: { id: 's', name: 'World' },
+      profile: { id: 'original', kind: 'original', name: 'World' },
+      state: structuredClone(state),
+      plan: null,
+      handbook,
+    });
+    return s;
+  };
+  let s = await fresh('["s/original/fg-cable01","s/other/site-oil"]');
+  assert.equal(s.sectionCollapsed('fg-cable01'), true);
+  assert.equal(s.sectionCollapsed('site-oil'), false, "another profile's choice");
+  for (const bad of [null, 'not json', '{"fg-cable01":true}', '[1,null]']) {
+    s = await fresh(bad);
+    assert.equal(s.sectionCollapsed('fg-cable01'), false, String(bad));
+  }
+  // Folding again writes a clean list.
+  s.setSectionCollapsed('site-oil', true);
+  assert.deepEqual(JSON.parse(localStorage.getItem('planner-collapsed-sections')!), [
+    's/original/site-oil',
+  ]);
+  localStorage.removeItem('planner-collapsed-sections');
 });

@@ -75,6 +75,17 @@ function focusHeading() {
   window.scrollTo(0, 0);
 }
 
+// For the factories pages' jump bar (SP-17, #252): the same move within a page. The section
+// comes to the top of the window (its scroll-margin keeps a gap above it) and its heading takes
+// focus, which a screen reader reads out and where the next Tab starts: the h2 (tabindex="-1",
+// the ring after a key press only, like the page's h1), or the group's name field in its place
+// while groups are edited.
+export function focusSection(section: HTMLElement) {
+  const target = section.querySelector<HTMLElement>('[data-section-heading]') ?? section;
+  target.focus({ preventScroll: true });
+  section.scrollIntoView({ block: 'start' });
+}
+
 // For render() in shell.ts, right after a page took the place of another: focus the heading
 // when focus went with the old page. Every page change passes here, whatever started it (a
 // button's navigate(), a link inside the page, Back), so no handler needs its own call.
