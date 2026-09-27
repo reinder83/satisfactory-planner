@@ -14,6 +14,7 @@ import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 
 // The factories to sort into groups (handbook factories or calculated rows), and the key
 // their memberships are saved under.
@@ -46,8 +47,14 @@ async function rename(e: Event, id: string) {
 }
 
 // "Remove group", after a confirmation: only the group goes; its factories and their
-// progress stay.
-async function remove(id: string) {
+// progress stay. Focus then goes to the next group's Remove, else the previous one's, else the
+// new group field (ui/refocus.ts, #286).
+async function remove(e: Event, id: string) {
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    row: '#main .user-group',
+    control: '[data-remove-group]',
+    fallback: ['#new-group-name'],
+  });
   if (
     !(await confirmAction({
       title: 'Remove this group?',
@@ -60,6 +67,7 @@ async function remove(id: string) {
   try {
     await save({ type: 'factoryGroupRemove', id });
     render();
+    await refocus();
   } catch {}
 }
 </script>
@@ -82,7 +90,12 @@ async function remove(id: string) {
         />
         <h2 v-else>{{ gr.name }}</h2>
       </div>
-      <button v-if="editing" class="btn danger" :data-remove-group="gr.id" @click="remove(gr.id)">
+      <button
+        v-if="editing"
+        class="btn danger"
+        :data-remove-group="gr.id"
+        @click="remove($event, gr.id)"
+      >
         Remove group
       </button>
       <button

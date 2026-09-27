@@ -32,6 +32,7 @@ import { render } from '../../shell.ts';
 import { startWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave } from '../actions.ts';
@@ -112,8 +113,14 @@ async function share(s: SaveCard, p: ProfileCard) {
 
 // "Remove profile": after the unsaved-notes check, confirm by name (and say when its save
 // goes too, as its last profile), then remove it and reload everything with boot(). Other
-// profiles keep their progress.
-async function remove(s: SaveCard, p: ProfileCard) {
+// profiles keep their progress. Focus then goes to the next profile's Remove, else the previous
+// one's, else "Create a save" (ui/refocus.ts, #286).
+async function remove(e: Event, s: SaveCard, p: ProfileCard) {
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    row: '#main .profile-card',
+    control: '[data-remove-profile]',
+    fallback: ['#main [data-new-save]'],
+  });
   if (!(await allowSwitch())) return;
   if (
     !(await confirmAction({
@@ -137,6 +144,7 @@ async function remove(s: SaveCard, p: ProfileCard) {
     await boot();
     if (workspace.saves.length) navigate('profiles');
     toast('Profile removed.');
+    await refocus();
   } catch (err) {
     toast((err as Error).message, true);
   } finally {
@@ -248,7 +256,7 @@ async function rename(e: Event) {
           :data-remove-profile="p.id"
           :data-remove-save="s.id"
           :disabled="busy === key('remove', s, p)"
-          @click="remove(s, p)"
+          @click="remove($event, s, p)"
         >
           Remove profile
         </button>
