@@ -34,20 +34,22 @@ const view = computed(() =>
     const m = machineSetup(r),
       counts = machineCounts(r.machines, m.partial ? m.clock : 100);
     const check = 'calc-' + stage() + '-' + r.id;
-    // The card's headline (SP-21): the main output, or a generator's power when the row makes no
-    // items. The outputs list below stays only where the card lists them too: more than one, or
-    // one that is not what the row is named after.
+    // The card's headline (SP-21): a generator's power, even when it also makes waste (#371),
+    // else the main output. The outputs list below stays only where the card lists them too: a
+    // generator's waste, more than one, or one that is not what the row is named after.
     const outputs = Object.entries(r.outputs || {}),
-      [main, rate] = outputs[0] || [];
+      [main, rate] = outputs[0] || [],
+      generator = r.generationMW > 0;
     return {
       r,
       check,
       done: checked(check),
       running: `Running at ${phaseLabel(stage())} target`,
       subtitle: phaseLabel(phase()),
-      summary: main
-        ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
-        : power(r.generationMW),
+      summary:
+        main && !generator
+          ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
+          : power(r.generationMW),
       icon: Object.keys(r.outputs || {})[0] || '',
       flow: calcFlowModel(r),
       setup: m,
@@ -78,7 +80,10 @@ const view = computed(() =>
               extra: inputText(m.easy.extraOutputs) || 'Additional generation',
             }
           : null,
-      outputs: outputs.length > 1 || (main && main !== r.name) ? inputText(r.outputs) : '',
+      outputs:
+        (generator && main) || outputs.length > 1 || (main && main !== r.name)
+          ? inputText(r.outputs)
+          : '',
       expansion: calcExpansion(r.id),
     };
   }),
