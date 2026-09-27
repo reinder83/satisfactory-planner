@@ -82,10 +82,11 @@ test('ADA counts the plan’s own generation in her power remark, with no spare 
   const plan = generated();
   assert.equal(plan.settings.availablePowerGW, 0);
   assert.equal(checkPlan(plan, 'no spare'), phases.length, 'every phase has headroom');
-  // Phase 2 of the default plan, as in the issue: a draw set against planned generation.
+  // Phase 2 of the default plan, as in the issue: a draw set against planned generation. The
+  // figures are toLocaleString's, so either decimal mark (and digit grouping) is accepted.
   assert.match(
     powerRemark(plan, '2')!,
-    /^[\d,]+ MW of whole-building power headroom is still unaccounted for: a [\d,]+ MW draw against [\d,]+ MW of planned generation and the 0 MW you listed as spare\. .* Build generation beyond what the plan lists\.$/,
+    /^[\d.,]+ MW of whole-building power headroom is still unaccounted for: a [\d.,]+ MW draw against [\d.,]+ MW of planned generation and the 0 MW you listed as spare\. .* Build generation beyond what the plan lists\.$/,
   );
 });
 
@@ -107,7 +108,7 @@ test('ADA’s power figures add up with Phase 5 augmenters', () => {
   assert.ok(checkPlan(augmented, 'augmenters'));
   assert.match(
     powerRemark(augmented, '5')!,
-    /the 3 GW you listed as spare \([\d,]+ GW with the augmenters\)/,
+    /the 3 GW you listed as spare \([\d.,]+ GW with the augmenters\)/,
   );
 }, 60000);
 
