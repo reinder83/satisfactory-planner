@@ -2687,6 +2687,52 @@ button.rail-tile:hover {
   letter-spacing: 0.05em;
   text-transform: none;
 }
+/* One visible action, the others in the ⋯ menu at the card's right edge (#238). */
+.profile-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.profile-actions .action-menu {
+  margin-left: auto;
+}
+
+/* ── Action menu (ui/ActionMenu.vue) ───────────────────── */
+.action-menu {
+  position: relative;
+  display: inline-block;
+}
+.action-menu-button {
+  min-width: 44px;
+  letter-spacing: normal;
+}
+.action-menu-button svg {
+  fill: currentColor;
+  margin: 8px 0;
+}
+.action-menu-list {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  box-shadow: var(--drop);
+}
+.action-menu-list[hidden] {
+  display: none;
+}
+.action-menu-list .btn {
+  justify-content: flex-start;
+  width: 100%;
+  white-space: nowrap;
+}
 .resource-inputs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
