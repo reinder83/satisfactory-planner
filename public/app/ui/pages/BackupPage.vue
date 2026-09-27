@@ -56,6 +56,13 @@ const page = computed(() =>
 const exporting = ref(false);
 // The saves ticked under "Choose saves to export" (#160), by id.
 const chosen = ref<string[]>([]);
+// "Import saves" and "Choose backup (file)" are real buttons that open a file input kept out of
+// sight (.visually-hidden) and out of the tab order, so they can be reached with Tab and
+// pressed with Enter or Space (#307): a label around a `hidden` input could only be clicked.
+// The input keeps its id and change handler, so what happens after a file is chosen is
+// unchanged. Only one restore input exists at a time (calculated or handbook page).
+const importSavesInput = ref<HTMLInputElement>();
+const restoreInput = ref<HTMLInputElement>();
 
 // "Export all saves" (no `selection`) or "Export selected" (the ticked save ids): wait for
 // queued saves, download them as one full-save file, then refetch the workspace, which
@@ -208,14 +215,18 @@ async function persistStorage() {
     >
       Export all saves
     </button>
-    <label class="btn"
-      >Import saves<input
-        id="import-saves"
-        type="file"
-        accept="application/json,.json"
-        hidden
-        @change="importSaves"
-    /></label>
+    <button type="button" class="btn" data-import-saves @click="importSavesInput?.click()">
+      Import saves</button
+    ><input
+      id="import-saves"
+      ref="importSavesInput"
+      class="visually-hidden"
+      type="file"
+      accept="application/json,.json"
+      tabindex="-1"
+      aria-hidden="true"
+      @change="importSaves"
+    />
     <details v-if="page.saves.length > 1" class="choose-saves">
       <summary>Choose saves to export</summary>
       <p class="small muted">
@@ -284,14 +295,18 @@ async function persistStorage() {
       <section class="panel">
         <h2>Restore this profile</h2>
         <p>Restore replaces only this profile’s progress, after confirmation.</p>
-        <label class="btn"
-          >Choose backup<input
-            id="import-file"
-            type="file"
-            accept="application/json,.json"
-            hidden
-            @change="restoreProgress"
-        /></label>
+        <button type="button" class="btn" data-restore-backup @click="restoreInput?.click()">
+          Choose backup</button
+        ><input
+          id="import-file"
+          ref="restoreInput"
+          class="visually-hidden"
+          type="file"
+          accept="application/json,.json"
+          tabindex="-1"
+          aria-hidden="true"
+          @change="restoreProgress"
+        />
       </section>
     </div>
     <section class="panel">
@@ -329,14 +344,18 @@ async function persistStorage() {
           Import a backup from this planner. It replaces current progress after confirmation;
           factory-plan data stays unchanged.
         </p>
-        <label class="btn"
-          >Choose backup file<input
-            id="import-file"
-            type="file"
-            accept="application/json,.json"
-            hidden
-            @change="restoreProgress"
-        /></label>
+        <button type="button" class="btn" data-restore-backup @click="restoreInput?.click()">
+          Choose backup file</button
+        ><input
+          id="import-file"
+          ref="restoreInput"
+          class="visually-hidden"
+          type="file"
+          accept="application/json,.json"
+          tabindex="-1"
+          aria-hidden="true"
+          @change="restoreProgress"
+        />
         <p class="small muted">
           Up to 2 MB. The previous state is also retained as workspace.json.bak on the server. The
           original progress file is kept during migration.
