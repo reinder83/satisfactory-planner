@@ -30,6 +30,11 @@ const caption = (o: FlowOutput) =>
     }) as Record<FlowOutput['kind'], string>
   )[o.kind] || '';
 
+// A unit as a rate writes it after its number: " m³/min" for a fluid, "/min" otherwise. The
+// fluid unit's leading space becomes a no-break space, as itemRate() in flow.ts writes it, so a
+// long fluid rate keeps its unit beside the number (#364); .rail-rate is nowrap as well.
+const unitText = (unit: string | undefined) => (unit || '/min').replace(/^ /, '\u00a0');
+
 const flow = computed(() => {
   const m = props.model;
   if (!m || (!m.inputs.length && !m.outputs.length)) return null;
@@ -48,7 +53,7 @@ const flow = computed(() => {
         lanes: `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''} · ${load}% load`,
         hot: load >= 70,
         rate: num(i.rate),
-        unit: p.lane.unit,
+        unit: unitText(p.lane.unit),
       };
     }),
     // A destination row. `mach` is how many machines' worth of output it takes, rounded up
@@ -110,7 +115,8 @@ const flow = computed(() => {
           <b
             ><template v-if="flow.model.bar.out.text">{{ flow.model.bar.out.text }}</template
             ><template v-else
-              >{{ flow.model.bar.out.rate }}<small>{{ flow.model.bar.out.unit }}</small></template
+              >{{ flow.model.bar.out.rate
+              }}<small>{{ unitText(flow.model.bar.out.unit) }}</small></template
             ></b
           ><small>{{ flow.model.bar.outSub }}</small>
         </div>
@@ -139,7 +145,7 @@ const flow = computed(() => {
           ><span class="rail-rate"
             ><template v-if="o.rateText !== null">{{ o.rateText }}</template
             ><template v-else-if="o.rateValue !== null"
-              >{{ o.rateValue }}<small>{{ o.unit || '/min' }}</small></template
+              >{{ o.rateValue }}<small>{{ unitText(o.unit) }}</small></template
             ></span
           >
         </div>

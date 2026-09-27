@@ -2465,6 +2465,8 @@ button.rail-tile:hover {
   font-size: 14.5px;
   color: var(--ink);
   text-align: right;
+  /* A rate keeps its unit beside the number (#364). */
+  white-space: nowrap;
 }
 .rail-rate small {
   font-weight: 400;
@@ -2514,6 +2516,7 @@ button.rail-tile:hover {
   font-weight: 700;
   font-size: 19px;
   color: var(--accent);
+  white-space: nowrap;
 }
 .rail-machine-out b small {
   font-size: 11px;
@@ -2586,7 +2589,8 @@ button.rail-tile:hover {
   color: var(--muted);
 }
 .rail-row .rail-rate {
-  width: 90px;
+  /* At least the column's width; a long fluid rate widens it rather than wrap (#364). */
+  min-width: 90px;
 }
 @media (max-width: 640px) {
   .rail-recipe-body {
@@ -2605,7 +2609,7 @@ button.rail-tile:hover {
     margin-left: 36px;
   }
   .rail-row .rail-rate {
-    width: auto;
+    min-width: 0;
     margin-left: auto;
   }
 }
