@@ -783,5 +783,30 @@
   "file": "water.png",
   "url": "https://satisfactory.wiki.gg/images/thumb/Water.png/64px-Water.png?6523a3",
   "source": "https://satisfactory.wiki.gg/wiki/File:Water.png"
+ },
+ "Uranium Waste": {
+  "file": "uranium-waste.png",
+  "url": "https://satisfactory.wiki.gg/images/thumb/Uranium_Waste.png/64px-Uranium_Waste.png?81410e",
+  "source": "https://satisfactory.wiki.gg/wiki/File:Uranium_Waste.png"
+ },
+ "Plutonium Waste": {
+  "file": "plutonium-waste.png",
+  "url": "https://satisfactory.wiki.gg/images/thumb/Plutonium_Waste.png/64px-Plutonium_Waste.png?5dd0ae",
+  "source": "https://satisfactory.wiki.gg/wiki/File:Plutonium_Waste.png"
+ },
+ "Coal Generator": {
+  "file": "coal-generator.png",
+  "url": "https://satisfactory.wiki.gg/images/thumb/Coal-Powered_Generator.png/64px-Coal-Powered_Generator.png?564e1e",
+  "source": "https://satisfactory.wiki.gg/wiki/File:Coal-Powered_Generator.png"
+ },
+ "Fuel Generator": {
+  "file": "fuel-generator.png",
+  "url": "https://satisfactory.wiki.gg/images/thumb/Fuel-Powered_Generator.png/64px-Fuel-Powered_Generator.png?8ec9f3",
+  "source": "https://satisfactory.wiki.gg/wiki/File:Fuel-Powered_Generator.png"
+ },
+ "Nuclear Power Plant": {
+  "file": "nuclear-power-plant.png",
+  "url": "https://satisfactory.wiki.gg/images/thumb/Nuclear_Power_Plant.png/64px-Nuclear_Power_Plant.png?3cc693",
+  "source": "https://satisfactory.wiki.gg/wiki/File:Nuclear_Power_Plant.png"
  }
 }

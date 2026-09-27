@@ -15,7 +15,7 @@ import {
   stage,
   state,
 } from './session.ts';
-import { calcTasks } from './views/calculated.ts';
+import { calcTasks, rowIcon } from './views/calculated.ts';
 import type { TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a handbook, calculated or personal one. id is its saved check key;
@@ -232,13 +232,14 @@ export function taskKind(t: Step): string {
 }
 
 // The part a step makes, taken from its linked factory: calculated production
-// steps link themselves, a handbook or personal step uses the chosen link.
+// steps link themselves (a generator shows its building, rowIcon), a handbook or
+// personal step uses the chosen link.
 function taskIconItem(t: Step): string {
   const linked = stepLink(t.id);
   if (!linked) return '';
   if (calculated) {
     const row = (calcStage()?.rows || []).find(r => r.id === linked);
-    return (row && Object.keys(row.outputs || {})[0]) || '';
+    return row ? rowIcon(row) : '';
   }
   const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
   return f ? f.name : '';

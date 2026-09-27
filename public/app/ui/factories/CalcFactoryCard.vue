@@ -15,7 +15,7 @@ import { computed } from 'vue';
 import { itemRate, rateOfItem, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
-import { heldBack, machineSetup } from '../../views/calculated.ts';
+import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
 import { power, powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -50,7 +50,8 @@ const card = computed(() =>
     return {
       check,
       done: checked(check),
-      icon: main,
+      // A generator shows its building, not its waste (#350).
+      icon: rowIcon(r),
       // A generator's power, even when it also makes waste (#371), else the main output; a fluid
       // in m³/min, as the dialog's summary line says it (#351).
       headline:
