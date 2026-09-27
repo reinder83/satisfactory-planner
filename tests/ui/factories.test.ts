@@ -491,6 +491,54 @@ test('a calculated factory dialog shows its flow, setup and expansion', () => {
   assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + r.id);
 });
 
+// The Running box sits in the dialog's sticky header, between the title and the ×, and writes
+// the same key as the factory's card (#239).
+const headerRunning = async (key: string, label: RegExp, openIt: () => void) => {
+  openIt();
+  await nextTick();
+  const box = $<HTMLInputElement>(`#detail .dialog-head [data-check="${key}"]`)!;
+  assert.ok(box, 'the Running box is in the header');
+  assert.equal($$('#detail [data-check]').length, 1, 'and only there');
+  assert.equal($('#detail .dialog-body [data-check]'), null);
+  assert.equal($('#detail .detail-actions'), null, 'no actions row is left in the body');
+  assert.match(box.closest('label')!.textContent!, label, 'it keeps its label');
+  const order = $$('#detail .dialog-head input, #detail .dialog-head button');
+  assert.deepEqual(
+    order.map(e => e.dataset.check ?? (e.dataset.close === undefined ? '?' : 'close')),
+    [key, 'close'],
+    'Tab goes title → Running → ×',
+  );
+  assert.equal(box.checked, false);
+  box.click();
+  await settle();
+  assert.equal(state.checks[key], true, 'saved under the card’s key');
+  assert.equal($<HTMLInputElement>(`#detail .dialog-head [data-check="${key}"]`)!.checked, true);
+  assert.equal(
+    $<HTMLInputElement>(`#main .factory-card [data-check="${key}"]`)!.checked,
+    true,
+    'the card behind the dialog follows',
+  );
+};
+
+test('a handbook factory dialog has its Running box in the header, saved as its card’s', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  render();
+  await headerRunning('factory-3-wire', /^Running at Phase 3 target$/, () => openFactory('wire'));
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'factory-3-wire', value: true });
+  assert.ok($('#main [data-check="factory-3-wire"]')!.closest('.factory-card.done'));
+});
+
+test('a calculated factory dialog has its Running box in the header, saved as its card’s', async () => {
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ calculated: plan });
+  render();
+  const r = calcStage()!.rows![0]!;
+  await headerRunning('calc-3-' + r.id, /^Running at Phase 3 target$/, () =>
+    openCalculatedFactory(r.id),
+  );
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + r.id, value: true });
+});
+
 test('a group build order stages suppliers before consumers', () => {
   const x = plan.stages['3'];
   const consumer = x.rows!.find(r =>

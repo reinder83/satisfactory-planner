@@ -1,14 +1,16 @@
 <!--
-  The dialog for one row of a calculated plan at the current phase: flow diagram, machine
-  setup (machineSetup in views/calculated.ts), lane advice, outputs, expansion by phase and
-  the note saved under `factory-<row id>`. The easier rounded setting is left out when the
-  profile already runs whole machines. Opened by openCalculatedFactory in factory-detail.ts.
+  The dialog for one row of a calculated plan at the current phase: its Running box in the
+  sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
+  step, then the flow diagram, machine setup (machineSetup in views/calculated.ts), lane
+  advice, outputs, expansion by phase and the note saved under `factory-<row id>`. The easier
+  rounded setting is left out when the profile already runs whole machines. Opened by
+  openCalculatedFactory in factory-detail.ts.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel } from '../../flow.ts';
-import { calcStage, calculated, phase, phaseLabel } from '../../session.ts';
+import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
 import { calcExpansion, machineSetup } from '../../views/calculated.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -17,6 +19,7 @@ import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
+import { toggleCheck } from '../actions.ts';
 
 const props = defineProps<{ id: string }>();
 
@@ -25,8 +28,12 @@ const view = computed(() =>
     const r = calcStage()?.rows?.find(r => r.id === props.id);
     if (!r) return null;
     const m = machineSetup(r);
+    const check = 'calc-' + stage() + '-' + r.id;
     return {
       r,
+      check,
+      done: checked(check),
+      running: `Running at ${phaseLabel(stage())} target`,
       subtitle: phaseLabel(phase()),
       icon: Object.keys(r.outputs || {})[0] || '',
       flow: calcFlowModel(r),
@@ -52,6 +59,16 @@ const view = computed(() =>
 
 <template>
   <DialogFrame v-if="view" :title="view.r.name" :subtitle="view.subtitle" :icon="view.icon">
+    <template #actions
+      ><label class="check-row"
+        ><input
+          type="checkbox"
+          :data-check="view.check"
+          @change="toggleCheck"
+          :checked="view.done"
+        />{{ view.running }}</label
+      ></template
+    >
     <FlowDiagram :model="view.flow" />
     <h3>Machine setup</h3>
     <p>
