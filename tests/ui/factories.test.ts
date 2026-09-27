@@ -7,6 +7,8 @@ import { createApp, h, nextTick } from 'vue';
 import { lanePlan } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
 import { num } from '../../public/app/format.ts';
+import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
+import { power } from '../../public/app/wizard/fields.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, test, vi } from 'vitest';
@@ -806,19 +808,142 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
   assert.equal(none.length, 0);
 });
 
-test('a handbook dialog names an underclocked last building only when there is one', () => {
-  const sentence = () =>
-    $$('#detail p.small.muted')
-      .map(p => p.textContent.replace(/\s+/g, ' '))
-      .find(t => t.includes('whole building'))!;
+// The machine instructions are three compact cells, Total · At 100% · Adjustable (SP-20, #255),
+// in a description list so each number is read with its label. Each cell as [label, value,
+// caption], runs of whitespace as one space.
+const machineCells = () =>
+  $$('#detail dl.machine-cells > div.stat.compact').map(d =>
+    [d.querySelector('dt')!, d.querySelector('dd strong')!, d.querySelector('dd small')!].map(e =>
+      e.textContent!.replace(/\s+/g, ' ').trim(),
+    ),
+  );
+const pct = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '%';
+
+test('a handbook dialog shows its machines as Total, At 100% and Adjustable cells', () => {
   render();
-  openFactory('circuit-board');
-  assert.match(sentence(), /32 whole buildings\. All at 100%\. Peak/);
   openFactory('smart-plating');
-  assert.match(sentence(), /58 whole buildings\. All at 100%, except the last at 50%\. Peak/);
-  // One building is one, not "1 whole buildings" (#112).
+  assert.deepEqual(machineCells(), [
+    ['Total', '58', 'Assembler · peak load 435 MW'],
+    ['At 100%', '57', num(2) + '/min each'],
+    ['Adjustable', '1 at 50%', num(1) + '/min'],
+  ]);
+  assert.equal($$('#detail dl.machine-cells dt').length, 3, 'every number has its label');
+  assert.ok(
+    !$$('#detail p').some(p => /whole building/.test(p.textContent!)),
+    'the old sentence is gone',
+  );
+  assert.match(detail(), /upstream factories and logistics are separate/);
+  // Every machine at 100%: no adjustable one and no clock. Above 1,000 MW the peak is in GW.
+  openFactory('copper-ingot');
+  assert.deepEqual(machineCells(), [
+    ['Total', num(168), 'Refinery · peak load ' + num(2.52) + ' GW'],
+    ['At 100%', num(168), num(37.5) + '/min each'],
+    ['Adjustable', '0', 'No underclock needed'],
+  ]);
+  // The cell shows the card's clock (one decimal); the caption keeps the handbook's own figure.
+  openFactory('heavy-modular-frame');
+  assert.deepEqual(machineCells()[2], [
+    'Adjustable',
+    '1 at ' + pct(66.7),
+    'Set ' + num(66.6666666666666) + '% · ' + num((2.8125 * 66.6666666666666) / 100) + '/min',
+  ]);
+  // One building at 100% is 1 · 1 · 0 (#112 kept "1 whole buildings" out; the cells count it).
   openFactory('versatile-framework');
-  assert.match(sentence(), /^1 whole building at 100%\. Peak/);
+  assert.deepEqual(
+    machineCells().map(c => c[1]),
+    ['1', '1', '0'],
+  );
+  // The oil campus lists its own machines per recipe, so its outputs draw no cells.
+  openFactory('plastic');
+  assert.equal($('#detail .machine-cells'), null);
+});
+
+test('the machine counts follow the card’s clock rule: one decimal, never up to 100%', () => {
+  assert.deepEqual(machineCounts(3, 99.96), {
+    total: 3,
+    full: 2,
+    adjustable: 1,
+    clock: (99.9).toLocaleString(),
+  });
+  assert.equal(
+    machineLine(3, 'Smelter', 99.96),
+    `3 × Smelter · last at ${(99.9).toLocaleString()}%`,
+  );
+  assert.deepEqual(machineCounts(4, 100), { total: 4, full: 4, adjustable: 0 });
+  assert.deepEqual(machineCounts(1, 25), { total: 1, full: 0, adjustable: 1, clock: '25' });
+});
+
+test('a single handbook building below 100% is 1 · 0 · 1 at its clock', () => {
+  const st = handbook.factories.find(f => f.id === 'versatile-framework')!.stages['3']!;
+  const saved = { ...st };
+  Object.assign(st, { lastClock: 62.5, equivalent: 0.625 });
+  try {
+    render();
+    openFactory('versatile-framework');
+    assert.deepEqual(machineCells(), [
+      ['Total', '1', 'Assembler · peak load ' + num(7.5) + ' MW'],
+      ['At 100%', '0', ''],
+      ['Adjustable', '1 at ' + pct(62.5), num(3.125) + '/min'],
+    ]);
+  } finally {
+    Object.assign(st, saved);
+  }
+});
+
+test('a calculated dialog shows the same three cells as its card, with output per machine', () => {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const made = rows.find(
+    r => Object.keys(r.outputs).length === 1 && r.machines > 2 && r.lastClock < 99,
+  )!;
+  const gen = rows.find(r => !Object.keys(r.outputs).length)!;
+  const whole = rows.find(r => r !== made && r !== gen && Object.keys(r.outputs).length === 1)!;
+  assert.ok(made && gen && whole, 'the default plan has these lines');
+  // A generator with its last one at 62.5%, a line running all at 100%, one single machine.
+  Object.assign(gen, { machines: 5, equivalent: 4.625, lastClock: 62.5, generationMW: 406.8 });
+  Object.assign(whole, { equivalent: whole.machines, lastClock: 100 });
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(made.id);
+  const [item, rate] = Object.entries(made.outputs)[0]!;
+  const each = rate / made.equivalent,
+    fraction = made.equivalent - (made.machines - 1);
+  const card = $(`#main button.name[data-calc-factory="${made.id}"]`)!
+    .closest('.factory-card')!
+    .querySelector('.machines')!.textContent!;
+  const cells = machineCells();
+  assert.deepEqual(cells, [
+    ['Total', num(made.machines), made.machine + ' · peak load ' + power(made.peakMW)],
+    ['At 100%', num(made.machines - 1), `${num(each)} ${item}/min each`],
+    [
+      'Adjustable',
+      '1 at ' + card.split(' · last at ')[1],
+      `≈ ${num(fraction * 100)}% → ≈ ${num(each * fraction)} ${item}/min`,
+    ],
+  ]);
+  assert.match(cells[2]![1]!, /^1 at [\d.,]+%$/, 'the card and the dialog show one clock');
+  assert.doesNotMatch(detail(), /Clock each/, 'the cells replace the setup table');
+  // A generator's Total says what it generates; it draws no peak load.
+  openCalculatedFactory(gen.id);
+  assert.deepEqual(machineCells(), [
+    ['Total', '5', gen.machine + ' · generates ' + num(406.8) + ' MW'],
+    ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
+    ['Adjustable', '1 at ' + pct(62.5), `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`],
+  ]);
+  // All at 100%: the Adjustable cell is 0, with no clock.
+  openCalculatedFactory(whole.id);
+  assert.deepEqual(machineCells()[2], ['Adjustable', '0', 'No underclock needed']);
+  assert.equal(machineCells()[1]![1], num(whole.machines));
+  // A single machine below 100% is 1 · 0 · 1 at its clock, with nothing at full speed.
+  Object.assign(whole, { machines: 1, equivalent: 0.4, lastClock: 40 });
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(whole.id);
+  assert.deepEqual(
+    machineCells().map(c => c[1]),
+    ['1', '0', '1 at ' + pct(40)],
+  );
+  assert.equal(machineCells()[1]![2], '');
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {

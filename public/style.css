@@ -2194,6 +2194,28 @@ dialog::backdrop {
 .dialog-body .stat strong {
   font-size: 24px;
 }
+/* Compact stat cells: a factory dialog's Total · At 100% · Adjustable machines (SP-20). They
+   stay three across where they fit and wrap two and one below that, on every width. */
+.dialog-body .stats.compact {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 96px), 1fr));
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.stats.compact dd {
+  margin: 0;
+}
+.dialog-body .stat.compact {
+  padding: 9px 11px 8px;
+}
+.dialog-body .stat.compact strong {
+  font-size: 20px;
+  margin: 3px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.stat.compact small {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
 .detail-actions {
   display: flex;
   gap: 12px;
