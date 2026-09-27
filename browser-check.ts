@@ -184,6 +184,59 @@ try {
       assert.ok(await page.locator('[data-complete-slot="' + id + '"]').isChecked());
   };
   await checkStorage();
+  // Drag and drop in the storage room (#208, #292): a container dropped on the position past the
+  // end of its bay moves there with its checks, and the bay is drawn again in full. A save as quick
+  // as this edition's used to redraw the bay in the middle of dnd-kit's drop, which left it half
+  // drawn (the moved container missing, a blank position) until a reload.
+  const dragTo = async (from: string, to: string) => {
+    const bayA = page.locator('.bay').filter({ has: page.locator('[data-complete-bay="A"]') });
+    await bayA.locator('.bay-items').scrollIntoViewIfNeeded();
+    const handle = (await page.locator(`[data-drag-slot="${from}"]`).boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 + 10, handle.y + handle.height / 2 + 10, {
+      steps: 5,
+    });
+    const target = (await page.locator(`[data-drop="${to}"]`).boundingBox())!;
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, {
+      steps: 20,
+    });
+    await page.mouse.up();
+    await page.locator(`[data-slot="${to}"]`).waitFor();
+  };
+  const checkDragDrop = async () => {
+    await page.locator('[data-toggle-layout]').click();
+    const filled = await page
+      .locator('.bay')
+      .filter({ has: page.locator('[data-complete-bay="A"]') })
+      .locator('[data-drag-slot]')
+      .evaluateAll(xs => xs.map(x => (x as HTMLElement).dataset.dragSlot ?? ''));
+    const [first, second] = filled.slice(-2);
+    assert.ok(first && second, 'bay A has two containers to move');
+    const names = await Promise.all(
+      [first, second].map(id => page.locator(`[data-slot="${id}"] span`).textContent()),
+    );
+    // Twice: the second drop goes to the position the first one made room for (A10).
+    await dragTo(first, 'A09');
+    await page.locator('[data-drop="A10"].drop-new').waitFor();
+    await dragTo(second, 'A10');
+    const shown = async () => ({
+      a09: await page.locator('[data-slot="A09"] span').textContent(),
+      a10: await page.locator('[data-slot="A10"] span').textContent(),
+      left: await page.locator(`[data-slot="${first}"], [data-slot="${second}"]`).count(),
+      reserved: await page.locator(`[data-drop="${first}"], [data-drop="${second}"]`).count(),
+    });
+    assert.deepEqual(await shown(), { a09: names[0], a10: names[1], left: 0, reserved: 2 });
+    const s = await api<ProgressState>('/api/state');
+    assert.equal(s.checks['slot-A09-verified'], true, 'the checks went along');
+    assert.equal(s.checks['slot-A10-verified'], true);
+    assert.equal(s.checks[`slot-${first}-verified`], undefined);
+    await page.reload();
+    await page.locator('[data-slot="A10"]').waitFor();
+    // The reload leaves edit mode; reserved positions are drawn outside it too.
+    assert.deepEqual(await shown(), { a09: names[0], a10: names[1], left: 0, reserved: 2 });
+  };
+  await checkDragDrop();
   // The browser workspace has the save the wizard just created.
   const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
   await api('/api/profiles', {

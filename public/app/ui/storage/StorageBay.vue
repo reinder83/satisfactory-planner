@@ -383,9 +383,14 @@ async function addContainer(e: Event) {
           ><span class="slot-complete slot-space" aria-hidden="true"
             ><input type="checkbox" tabindex="-1" disabled /></span></SlotCell
       ></template>
-      <!-- While editing, a drop past the last position makes a new one there (#208). -->
+      <!-- While editing, a drop past the last position makes a new one there (#208). Keyed by its
+           address: once that address is filled, the filled position registers it with dnd-kit, and
+           a live drop target renamed to the next address then never registered that one, so a drop
+           on it went to the nearest other position, often the container just placed (#292). A new
+           cell for each address registers cleanly. -->
       <SlotCell
         v-if="view.editing && view.next"
+        :key="view.next"
         :id="view.next"
         :editing="true"
         class="slot empty drop-new"

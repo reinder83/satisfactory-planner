@@ -11,7 +11,9 @@ import { ref } from 'vue';
 import { useDraggable, useDroppable } from '@dnd-kit/vue';
 
 const props = defineProps<{
-  // The address, which is also the drag and drop id.
+  // The address, which is also the drag and drop id. It must stay the same for the cell's
+  // lifetime: key the cell by it. When another cell registers this cell's id and this one moves on
+  // to a new id, @dnd-kit/vue 0.5 never registers the new one, so the cell takes no drops (#292).
   id: string;
   editing: boolean;
   // "C05: Iron Plate" for a filled position; none for a reserved one.
