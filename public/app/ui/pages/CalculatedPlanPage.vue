@@ -79,7 +79,7 @@ const page = computed(() =>
       <StatTile label="Buildings" :value="page.buildings" caption="Includes new power generation" />
       <StatTile label="New power" :value="page.power" caption="Existing spare power is separate" />
     </div>
-    <div v-if="page.post" class="notice blue">
+    <div v-if="page.post" class="notice info">
       Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
       elevator exports as needed and sink spare parts.
     </div>

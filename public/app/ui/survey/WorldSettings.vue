@@ -155,7 +155,7 @@ function undo(e: Event) {
         Fill in the counts below
       </button>
     </p>
-    <div v-else-if="view.status === 'split'" class="notice">
+    <div v-else-if="view.status === 'split'" class="notice info">
       <b>Only the purity split is missing.</b> Random shuffles which resource sits at each location,
       so your world holds the same number of nodes for each resource as the default map — but it
       shuffles their purities too, and <b>{{ view.purityLabel }}</b> keeps whatever split the
@@ -166,7 +166,7 @@ function undo(e: Event) {
         right, the split is not.</template
       >
     </div>
-    <div v-else class="notice">
+    <div v-else class="notice info">
       <b>No preset for these settings.</b>
       <template v-if="view.rich"
         >A resource-rich distribution changes how many nodes each resource has, and the players who

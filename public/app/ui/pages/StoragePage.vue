@@ -337,7 +337,7 @@ function toggleLayout() {
       address to narrow the search.
     </p>
   </section>
-  <div v-if="page.unplaced.length" class="notice" data-unplaced>
+  <div v-if="page.unplaced.length" class="notice warn" data-unplaced>
     <b
       >{{ page.unplaced.length }} planned item{{ page.unplaced.length === 1 ? ' has' : 's have' }}
       no container while
@@ -376,10 +376,10 @@ function toggleLayout() {
     :bays="page.floorBays"
     :hidden-here="page.hiddenHere"
   /><WorkshopPanel v-if="page.workshop" />
-  <div v-if="page.notice === 'template'" class="notice blue">
+  <div v-if="page.notice === 'template'" class="notice info">
     Optional storage template. Each position has its own checklist; nothing is assumed built.
   </div>
-  <div v-else-if="page.notice === 'built'" class="notice blue">
+  <div v-else-if="page.notice === 'built'" class="notice info">
     <b>Ground floor is built.</b> The shell is marked complete. Move Gas Filters G08 → H02 and
     Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays Iodine-Infused Filter.
     <template v-if="page.movedOff.length"
@@ -389,7 +389,7 @@ function toggleLayout() {
       ></template
     >
   </div>
-  <div v-else-if="page.notice === 'upper'" class="notice blue">
+  <div v-else-if="page.notice === 'upper'" class="notice info">
     Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay
     outside this room.
   </div>

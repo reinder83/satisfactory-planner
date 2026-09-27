@@ -84,7 +84,7 @@ const view = computed(() =>
       >, which {{ view.next.why }}.
     </p>
     <p v-else class="small" data-build-next>Every factory of this phase is marked running.</p>
-    <div v-if="view.waiting.length" class="notice" data-build-waiting>
+    <div v-if="view.waiting.length" class="notice warn" data-build-waiting>
       <b>Built but waiting on a supplier</b>
       <ul>
         <li v-for="w in view.waiting" :key="w.id">
@@ -94,6 +94,6 @@ const view = computed(() =>
       </ul>
       <p v-if="view.more">And {{ view.more }} more.</p>
     </div>
-    <div v-if="view.power" class="notice" data-build-power>{{ view.power }}</div>
+    <div v-if="view.power" class="notice warn" data-build-power>{{ view.power }}</div>
   </section>
 </template>

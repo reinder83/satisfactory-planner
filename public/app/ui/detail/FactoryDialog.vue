@@ -111,8 +111,8 @@ const view = computed(() =>
         :caption="view.oil ? 'Shared oil processes' : view.r.machine"
       />
     </div>
-    <div v-if="view.f.note" class="notice blue">{{ view.f.note }}</div>
-    <div v-if="view.f.local" class="notice">
+    <div v-if="view.f.note" class="notice info">{{ view.f.note }}</div>
+    <div v-if="view.f.local" class="notice info">
       Distributed production budget: build these machines beside the consumers listed below, plus
       the storage refill module. Independent site rounding can require additional machines.
     </div>
@@ -131,7 +131,7 @@ const view = computed(() =>
       Additional completion modules also use {{ view.f.name }}: {{ view.completion }}. Allocate
       their supply on top of this factory's budget.
     </p>
-    <div v-if="view.f.nuclear" class="notice">
+    <div v-if="view.f.nuclear" class="notice info">
       Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a
       generic storage surplus.
     </div>

@@ -1078,6 +1078,10 @@ p.eyebrow {
 }
 
 /* ── Notices ───────────────────────────────────────────── */
+/* Every notice names one tone (SP-12, #247): .warn when something is wrong or at risk and the
+   user should act (the only orange notice, since orange is also the brand accent), .info for
+   guidance, tips and instructions (.blue is its older name), and .error when something failed,
+   drawn like #toast.error. A bare .notice keeps the warn look. */
 .notice {
   border-left: 3px solid var(--accent);
   background: #1a1610;
@@ -1092,14 +1096,26 @@ p.eyebrow {
 .notice strong {
   color: var(--gold);
 }
+.notice.info,
 .notice.blue {
   background: var(--panel2);
   border-color: var(--blue);
   color: #99a2a9;
 }
+.notice.info b,
+.notice.info strong,
 .notice.blue b,
 .notice.blue strong {
   color: #cfe0f5;
+}
+.notice.error {
+  background: #241a18;
+  border-color: var(--red);
+  color: var(--ink);
+}
+.notice.error b,
+.notice.error strong {
+  color: var(--bright);
 }
 .notice .btn {
   margin: 6px 0;
@@ -3435,9 +3451,15 @@ button.rail-tile:hover {
     background: #eee;
   }
   .notice,
-  .notice.blue {
+  .notice.info,
+  .notice.blue,
+  .notice.error {
     background: #f5f5f5;
     color: #333;
+  }
+  .notice.error b,
+  .notice.error strong {
+    color: inherit;
   }
 }
 

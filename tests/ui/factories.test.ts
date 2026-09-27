@@ -647,7 +647,7 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   assert.equal($$('#main .factory-card').length, rows.length);
   assert.equal($('#main .toolbar span')!.textContent, rows.length + ' production lines');
   assert.ok($('[data-round-up]'), 'without whole machines it offers rounding up');
-  assert.match($('#main .notice:not(.blue)')!.textContent, /Planning draft/);
+  assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
   const first = rows[0]!;
   assert.equal($<HTMLInputElement>(`[data-check="calc-3-${first.id}"]`)!.checked, false);
   $<HTMLInputElement>('#factory-search')!.value = first.name;

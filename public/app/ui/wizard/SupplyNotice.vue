@@ -35,7 +35,7 @@ const view = computed(() => {
 </script>
 
 <template>
-  <div v-if="view" class="notice blue supply-notice">
+  <div v-if="view" class="notice info supply-notice">
     <b>Crediting production you already run.</b> These lines are not planned again, and neither is
     the chain behind them.
     <ul class="supply-summary">

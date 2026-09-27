@@ -646,8 +646,8 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
     tiles[5]!.querySelector('small')!.textContent,
     '2 augmenters · 100 MW plus 20% of base production',
   );
-  assert.match($('#main .notice')!.textContent, /Planning draft/);
-  assert.ok($('#main .notice')!.textContent.includes(evil), 'the reason is shown as text');
+  assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
+  assert.ok($('#main .notice.warn')!.textContent.includes(evil), 'the reason is shown as text');
   const conversions = $$('#main .backup-grid .panel')[1]!.querySelector('p')!;
   assert.equal(conversions.querySelectorAll('br').length, 1);
   assert.equal(conversions.textContent.trim(), evil + 'Second conversion');

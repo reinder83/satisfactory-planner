@@ -73,7 +73,7 @@ const page = computed(() =>
     <StatTile label="Production average" :value="page.average" caption="Half-consumption setting" />
     <StatTile label="Coal remaining" :value="page.coal" caption="Against all-pure mining limit" />
   </div>
-  <div class="notice">
+  <div class="notice warn">
     Verify your randomized nitrogen wells can supply <b>{{ page.nitrogen }}/min</b> at this stage.
     The all-pure resource limits assume fully developed extraction and logistics. Additional
     completion modules are not included.
@@ -135,7 +135,7 @@ const page = computed(() =>
         Produces 1,200 Rocket Fuel, 200 Compacted Coal and 100 Rubber/min. These byproducts are not
         credited against other factory contracts.
       </p>
-      <div class="notice blue">
+      <div class="notice info">
         At Phase 5: (579.231 × 1.2 + 20) ÷ 0.8 ≈ <b>894 GW</b> preliminary requirement. Planned
         gross capacity: <b>913.925 GW</b>. Replace the 20 GW existing-load allowance with your
         measured load.

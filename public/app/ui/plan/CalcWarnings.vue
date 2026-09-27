@@ -26,7 +26,7 @@ const notices = computed(() =>
 </script>
 
 <template>
-  <div v-if="notices.draft" class="notice">
+  <div v-if="notices.draft" class="notice warn">
     <b>Planning draft — resource budget exceeded or recipe combination unavailable.</b>
     {{ notices.draft.reason
     }}<template v-if="notices.draft.fixes.length"
@@ -40,7 +40,7 @@ const notices = computed(() =>
       </p></template
     >
   </div>
-  <div v-if="notices.headroom" class="notice">
+  <div v-if="notices.headroom" class="notice warn">
     Allow another {{ notices.headroom }} for whole-building power headroom. Phase 1 needs biomass or
     existing generation.
   </div>
