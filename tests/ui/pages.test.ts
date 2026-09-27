@@ -11,6 +11,7 @@ import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
+import { resourceUse, tightestFirst } from '../../public/app/views/resources.ts';
 import {
   answerConfirms,
   $,
@@ -586,7 +587,7 @@ function openCalculatedResources(p: StoredCalculatedPlan) {
 test('the calculated resources page shows every budget with its icon and what is left', () => {
   const p = generated();
   const x = p.stages['3'];
-  const [first, second] = Object.keys(p.settings.limits);
+  const [first] = Object.keys(p.settings.limits);
   // One resource over budget.
   x.raw![first!] = p.settings.limits[first!]! + 10;
   x.surplus = {};
@@ -594,10 +595,9 @@ test('the calculated resources page shows every budget with its icon and what is
   assert.equal($('#main h1')!.textContent, 'Power & resources');
   assert.equal($('#main .eyebrow')!.textContent, 'CHECK BEFORE EXPANDING');
   const rows = $$('#main tbody tr');
-  assert.deepEqual(
-    rows.map(r => r.querySelector('.resource-name span')!.textContent),
-    Object.keys(p.settings.limits),
-  );
+  const names = rows.map(r => r.querySelector('.resource-name span')!.textContent);
+  assert.deepEqual([...names].sort(), Object.keys(p.settings.limits).sort(), 'every budget');
+  assert.equal(names[0], first, 'the one over budget comes first');
   for (const row of rows) {
     const name = row.querySelector('.resource-name span')!.textContent;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -610,7 +610,8 @@ test('the calculated resources page shows every budget with its icon and what is
     [...r.querySelectorAll('td')].slice(1).map(td => td.textContent.trim());
   assert.equal(cells(rows[0]!)[2], '-10');
   assert.ok(rows[0]!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over budget');
-  assert.ok(!rows[1]!.querySelectorAll('td')[3]!.classList.contains('warn'), second + ' fits');
+  for (const row of rows.slice(1))
+    assert.ok(!row.querySelectorAll('td')[3]!.classList.contains('warn'), 'the others fit');
   // The four power tiles; somersloops and augmenters only when the plan uses them.
   assert.deepEqual(
     $$('#main .stat .eyebrow').map(e => e.textContent),
@@ -623,6 +624,108 @@ test('the calculated resources page shows every budget with its icon and what is
   assert.match($('#main .backup-grid')!.textContent, /No raw-resource conversion required\./);
   assert.match($('#main .backup-grid')!.textContent, /None credited in this phase\./);
   assert.match($('#main .backup-grid')!.textContent, /Surplus solids: None/);
+});
+
+// SP-27 (#262): a Use column with the handbook page's bar, the tightest resource first.
+test('the calculated resources page sorts by use, tightest first, and dims unused resources', () => {
+  const p = generated();
+  const x = p.stages['3'];
+  // Catalogue order, with each case: [budget, required].
+  const cases: Record<string, [number, number]> = {
+    'Iron Ore': [100, 50], // 50%
+    'Copper Ore': [100, 95], // tight
+    Limestone: [100, 110], // over by 10
+    Coal: [0, 5], // required from no budget at all
+    'Caterium Ore': [0, 0], // nothing of nothing
+    'Raw Quartz': [100, 0], // not used
+    Sulfur: [1000, 10], // 1%
+  };
+  p.settings.limits = Object.fromEntries(Object.entries(cases).map(([n, [b]]) => [n, b]));
+  x.raw = Object.fromEntries(Object.entries(cases).map(([n, [, r]]) => [n, r]));
+  openCalculatedResources(p);
+  assert.deepEqual(
+    $$('#main thead th').map(th => [th.textContent, th.getAttribute('scope')]),
+    [
+      ['Resource', 'col'],
+      ['Required /min', 'col'],
+      ['Budget /min', 'col'],
+      ['Remaining', 'col'],
+      ['Use', 'col'],
+    ],
+  );
+  const rows = $$('#main tbody tr');
+  const view = rows.map(r => {
+    const use = r.querySelector<HTMLElement>('[data-use]')!,
+      bar = use.querySelector<HTMLElement>('.resource-bar')!;
+    return {
+      name: r.querySelector('.resource-name span')!.textContent,
+      use: use.firstChild!.textContent!.trim(),
+      bar: [...bar.classList].filter(c => c !== 'resource-bar').join(' '),
+      width: bar.querySelector('span')!.style.width,
+      over: use.querySelector('[data-over]')?.textContent.trim() ?? '',
+      dim: r.classList.contains('muted'),
+    };
+  });
+  assert.deepEqual(view, [
+    {
+      name: 'Coal',
+      use: 'No budget',
+      bar: 'over',
+      width: '100%',
+      over: '⚠ Over by 5/min',
+      dim: false,
+    },
+    {
+      name: 'Limestone',
+      use: '110%',
+      bar: 'over',
+      width: '100%',
+      over: '⚠ Over by 10/min',
+      dim: false,
+    },
+    { name: 'Copper Ore', use: '95%', bar: 'tight', width: '95%', over: '', dim: false },
+    { name: 'Iron Ore', use: '50%', bar: '', width: '50%', over: '', dim: false },
+    { name: 'Sulfur', use: '1%', bar: '', width: '1%', over: '', dim: false },
+    // Nothing required: last, in catalogue order, dimmed.
+    { name: 'Caterium Ore', use: '—', bar: '', width: '0%', over: '', dim: true },
+    { name: 'Raw Quartz', use: '0%', bar: '', width: '0%', over: '', dim: true },
+  ]);
+  // Over budget is said in words and marked, not only drawn red; the icon is not read out.
+  const over = rows[1]!.querySelector('[data-use]')!;
+  assert.ok(over.classList.contains('warn'));
+  assert.equal(over.querySelector('[data-over] [aria-hidden="true"]')!.textContent.trim(), '⚠');
+  assert.ok(rows[1]!.querySelectorAll('td')[3]!.classList.contains('warn'), 'remaining too');
+  assert.ok(!rows[2]!.querySelector('[data-use]')!.classList.contains('warn'), 'tight is not over');
+  // The bar is decoration beside the percentage it draws.
+  for (const bar of $$('#main tbody .resource-bar'))
+    assert.equal(bar.getAttribute('aria-hidden'), 'true');
+});
+
+test('a resource counts as tight above 90% of its budget and over above 100%', () => {
+  const at = (required: number, available: number) => {
+    const u = resourceUse(required, available);
+    return [u.tight, u.over, u.idle];
+  };
+  assert.deepEqual(at(90, 100), [false, false, false], '90% is not tight yet');
+  assert.deepEqual(at(90.5, 100), [true, false, false]);
+  assert.deepEqual(at(100, 100), [true, false, false], 'all of it is tight, not over');
+  assert.deepEqual(at(100.5, 100), [true, true, false]);
+  assert.deepEqual(at(5, 0), [true, true, false], 'something from no budget is over');
+  assert.deepEqual(at(0, 0), [false, false, true]);
+  assert.equal(resourceUse(5, 0).fraction, Infinity);
+  assert.equal(resourceUse(5, 0).overBy, '5');
+  assert.equal(resourceUse(0, 0).bar, 0);
+  // Over budget without a budget is tighter than any percentage; unused goes last.
+  const order = [
+    resourceUse(0, 10),
+    resourceUse(99, 100),
+    resourceUse(1, 0),
+    resourceUse(200, 100),
+  ].sort(tightestFirst);
+  assert.deepEqual(
+    order.map(u => u.use),
+    ['No budget', '200%', '99%', '0%'],
+  );
 });
 
 test('the calculated resources page lists somersloops, augmenters, conversions and credits', () => {

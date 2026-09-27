@@ -9,6 +9,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcStage, calculated, workspace } from '../../session.ts';
+import { resourceUse, tightestFirst } from '../../views/resources.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -44,14 +45,22 @@ const page = computed(() =>
           Math.round(x.boost! * 100) +
           '% of base production',
       },
-      rows: (workspace.catalog.raw || []).map(n => ({
-        name: n,
-        required: num(x.raw?.[n]),
-        budget: num(s.limits[n]),
-        // The plan's limits hold every raw resource.
-        remaining: num(s.limits[n]! - (x.raw?.[n] || 0)),
-        over: (x.raw?.[n] || 0) > s.limits[n]!,
-      })),
+      // Tightest first (SP-27): over budget, then by use, and resources this phase does not
+      // draw on last; the catalogue order breaks ties.
+      rows: (workspace.catalog.raw || [])
+        .map(n => {
+          // The plan's limits hold every raw resource.
+          const required = x.raw?.[n] || 0,
+            budget = s.limits[n]!;
+          return {
+            ...resourceUse(required, budget),
+            name: n,
+            required: num(required),
+            budget: num(budget),
+            remaining: num(budget - required),
+          };
+        })
+        .sort(tightestFirst),
       drone: inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.',
       transport: inputText(x.transport || {}),
       storage: inputText(x.storage || {}) || 'No storage production requested.',
@@ -107,24 +116,40 @@ const page = computed(() =>
       <table>
         <thead>
           <tr>
-            <th>Resource</th>
-            <th>Required /min</th>
-            <th>Budget /min</th>
-            <th>Remaining</th>
+            <th scope="col">Resource</th>
+            <th scope="col">Required /min</th>
+            <th scope="col">Budget /min</th>
+            <th scope="col">Remaining</th>
+            <th scope="col">Use</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in page.rows" :key="r.name">
+          <tr v-for="r in page.rows" :key="r.name" :class="r.idle ? 'muted' : undefined">
             <td class="resource-name">
               <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
             </td>
-            <td>{{ r.required }}</td>
-            <td>{{ r.budget }}</td>
-            <td :class="r.over ? 'warn' : ''">{{ r.remaining }}</td>
+            <td class="number">{{ r.required }}</td>
+            <td class="number">{{ r.budget }}</td>
+            <td :class="['number', r.over ? 'warn' : '']">{{ r.remaining }}</td>
+            <td :class="r.over ? 'warn' : undefined" data-use>
+              {{ r.use }}
+              <div
+                :class="['resource-bar', r.over ? 'over' : r.tight ? 'tight' : '']"
+                aria-hidden="true"
+              >
+                <span :style="{ width: r.bar + '%' }"></span>
+              </div>
+              <div v-if="r.over" class="small" data-over>
+                <span aria-hidden="true">⚠ </span>Over by {{ r.overBy }}/min
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
+    <p class="small muted">
+      Sorted by use, tightest first. Resources this phase does not draw on are listed last.
+    </p>
     <div class="backup-grid">
       <section class="panel">
         <h2>Dedicated drone fuel /min</h2>

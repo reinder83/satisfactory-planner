@@ -207,7 +207,7 @@ test('no text sits on a dark background in print (#330)', () => {
   const { screen, tok, override, skip } = printView();
   // Fills that carry no text: bars, dots and the progress squares.
   const fills =
-    /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight)? span$|^\.guided-progress \.\w+ i$/;
+    /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight|\.over)? span$|^\.guided-progress \.\w+ i$/;
   const dark: string[] = [];
   for (const r of rules(screen))
     for (const selector of r.selector.split(/\s*,\s*/)) {

@@ -10,6 +10,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, plan, stage } from '../../session.ts';
+import { resourceUse } from '../../views/resources.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
@@ -43,16 +44,18 @@ const page = computed(() =>
       rows: Object.entries(resources)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, q]) => {
+          // The same use figure and bar as a calculated profile's page (views/resources.ts).
           const cap = plan.capacities[name],
-            fraction = cap ? q / cap : 0;
+            u = cap ? resourceUse(q, cap) : null;
           return {
             name,
             required: num(q),
             available: cap ? num(cap) : name === 'Water' ? 'Extraction limited' : 'Verify wells',
             remaining: cap ? num(cap - q) : '—',
-            tight: cap && fraction > 0.9,
-            use: cap ? num(fraction * 100) + '%' : null,
-            bar: Math.min(100, fraction * 100),
+            tight: !!u?.tight,
+            over: !!u?.over,
+            use: u?.use ?? null,
+            bar: u?.bar ?? 0,
           };
         }),
       steps: POWER_STEPS.map(([id, title]) => ({ id, title, done: checked(id) })),
@@ -82,11 +85,11 @@ const page = computed(() =>
     <table>
       <thead>
         <tr>
-          <th>Fresh resource</th>
-          <th>Required /min</th>
-          <th>Available /min</th>
-          <th>Remaining /min</th>
-          <th>Use</th>
+          <th scope="col">Fresh resource</th>
+          <th scope="col">Required /min</th>
+          <th scope="col">Available /min</th>
+          <th scope="col">Remaining /min</th>
+          <th scope="col">Use</th>
         </tr>
       </thead>
       <tbody>
@@ -100,7 +103,10 @@ const page = computed(() =>
           <td>
             <template v-if="r.use"
               >{{ r.use }}
-              <div :class="['resource-bar', r.tight ? 'tight' : '']">
+              <div
+                :class="['resource-bar', r.over ? 'over' : r.tight ? 'tight' : '']"
+                aria-hidden="true"
+              >
                 <span :style="{ width: r.bar + '%' }"></span></div
             ></template>
             <template v-else>—</template>
