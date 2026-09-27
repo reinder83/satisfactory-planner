@@ -2192,17 +2192,6 @@ dialog::backdrop {
 .dialog-body p {
   font-size: 11.5px;
 }
-.dialog-body .stats {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 12px 0 18px;
-  gap: 11px;
-}
-.dialog-body .stat {
-  padding: 12px 13px;
-}
-.dialog-body .stat strong {
-  font-size: 24px;
-}
 /* Compact stat cells: a factory dialog's Total · At 100% · Adjustable machines (SP-20). They
    stay three across where they fit and wrap two and one below that, on every width. */
 .dialog-body .stats.compact {
@@ -3366,9 +3355,6 @@ button.rail-tile:hover {
   .dialog-head .dialog-head-actions .check-row {
     grid-column: 1 / -1;
     grid-row: 2;
-  }
-  .dialog-body .stats {
-    grid-template-columns: 1fr;
   }
   .check-columns {
     grid-template-columns: 1fr;

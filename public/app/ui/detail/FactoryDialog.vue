@@ -1,7 +1,8 @@
 <!--
   The dialog for one handbook factory (plan.factories id): the "Running at Phase N target" check
-  in the sticky header (#239), then stats, flow, lane advice, the machine cells (MachineCells,
-  SP-20), expansion table and the factory notes. It shows the current phase, or the factory's
+  in the sticky header (#239) and the output and storage rate under the title (SP-21, #256),
+  then the recipe badge, flow, notices, lane advice, the machine cells (MachineCells, SP-20),
+  expansion table and the factory notes. It shows the current phase, or the factory's
   first phase when it has no stage in the current one. Plastic and Rubber come from the shared
   oil campus, which replaces the lane advice and the machine cells. The check
   key `factory-<phase>-<id>` and the note key `factory-<id>` (shared by every phase) are saved
@@ -10,12 +11,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { handbookFlowModel } from '../../flow.ts';
+import { FLUIDS, handbookFlowModel } from '../../flow.ts';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
-import StatTile from '../StatTile.vue';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
@@ -75,12 +75,16 @@ const view = computed(() =>
       counts = machineCounts(r.machines, lastClock);
     const perMachine = r.rate ? num(r.rate) + '/min' : '';
     const precise = num(lastClock) + '%';
+    // The rates the Output and Storage tiles showed (SP-21), in the flow diagram's unit. No-break
+    // spaces keep each rate on one line, so a narrow header wraps only at the dot.
+    const unit = FLUIDS.has(f.name) ? '\u00a0m³/min' : '/min';
     return {
       f,
       r,
       st,
       oil,
       subtitle: `${phaseLabel(st)} · Handbook page ${f.page}`,
+      summary: `${num(r.output)}${unit} · storage\u00a0${num(r.storage)}${unit}`,
       flow: handbookFlowModel(f, st, r, localInput, oil),
       localInputs: Object.keys(r.inputs).some(localInput),
       history,
@@ -108,7 +112,13 @@ const view = computed(() =>
 </script>
 
 <template>
-  <DialogFrame v-if="view" :title="view.f.name" :subtitle="view.subtitle" :icon="view.f.name">
+  <DialogFrame
+    v-if="view"
+    :title="view.f.name"
+    :subtitle="view.subtitle"
+    :summary="view.summary"
+    :icon="view.f.name"
+  >
     <template #actions
       ><label class="check-row"
         ><input
@@ -120,25 +130,12 @@ const view = computed(() =>
       ></template
     >
     <span class="badge orange">{{ view.r.recipe }}</span>
-    <div class="stats">
-      <StatTile label="Output" :value="num(view.r.output) + '/min'" caption="Total production" />
-      <StatTile
-        label="Storage"
-        :value="num(view.r.storage) + '/min'"
-        caption="Protected allowance"
-      />
-      <StatTile
-        label="Machines"
-        :value="view.oil ? 'Campus' : num(view.r.machines)"
-        :caption="view.oil ? 'Shared oil processes' : view.r.machine"
-      />
-    </div>
+    <FlowDiagram :model="view.flow" />
     <div v-if="view.f.note" class="notice info">{{ view.f.note }}</div>
     <div v-if="view.f.local" class="notice info">
-      Distributed production budget: build these machines beside the consumers listed below, plus
+      Distributed production budget: build these machines beside the consumers listed above, plus
       the storage refill module. Independent site rounding can require additional machines.
     </div>
-    <FlowDiagram :model="view.flow" />
     <p v-if="view.usage === 'nuclear'" class="small muted">
       {{ view.f.name }} is consumed by the nuclear power fleet, which is planned in
       <a href="#resources">Power &amp; resources</a> rather than as a factory target. Keep its flow

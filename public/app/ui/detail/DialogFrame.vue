@@ -3,13 +3,16 @@
      the sticky header, between the title and the × (a factory's Running box, #239), so they stay
      in view while the body scrolls and come between them in the tab order. The h2 names the
      dialog: #detail in index.html has aria-labelledby="detail-title" (#321), and every #detail
-     dialog renders this frame, so the name follows whichever dialog is shown. -->
+     dialog renders this frame, so the name follows whichever dialog is shown. `summary` is a
+     line under the title, as PageHeader has under a page's: a factory's output and storage rate
+     (SP-21, #256), in the units' own case, which the uppercase eyebrow would not keep. -->
 <script setup lang="ts">
 import ItemIcon from '../ItemIcon.vue';
 import { closeDetail } from '../actions.ts';
 
-withDefaults(defineProps<{ title: string; subtitle?: string; icon?: string }>(), {
+withDefaults(defineProps<{ title: string; subtitle?: string; summary?: string; icon?: string }>(), {
   subtitle: '',
+  summary: '',
   icon: '',
 });
 </script>
@@ -21,6 +24,7 @@ withDefaults(defineProps<{ title: string; subtitle?: string; icon?: string }>(),
       <div>
         <div class="eyebrow">{{ subtitle }}</div>
         <h2 id="detail-title">{{ title }}</h2>
+        <div v-if="summary" class="subtitle" data-dialog-summary>{{ summary }}</div>
       </div>
     </div>
     <div class="dialog-head-actions">
