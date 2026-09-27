@@ -431,7 +431,8 @@ export function calcFlowModel(r: CalcRow): FlowModel {
   const x: StoredStage = calcStage() ?? { feasible: false },
     st = stage(),
     settings = calculated?.settings,
-    multi = Object.keys(r.outputs || {}).length > 1;
+    multi = Object.keys(r.outputs || {}).length > 1,
+    generator = r.generationMW > 0;
   const eq = Math.max(r.equivalent || r.machines - 1 + (r.lastClock ?? 100) / 100 || 1, 0.01);
   const beltTxt = (p: LanePlan) => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
   const outputs: FlowOutput[] = [];
@@ -535,10 +536,11 @@ export function calcFlowModel(r: CalcRow): FlowModel {
     if (surplus > 0.002)
       outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: n, rate: surplus, unit, pre });
   }
-  // A generator row has no item outputs; its one destination is the power grid.
+  // A generator feeds the power grid, listed first; a nuclear plant also belts its waste to the
+  // destinations above, which stay (#373). A coal or fuel plant has the grid alone.
   outputs.sort((a, b) => (b.rate || 0) - (a.rate || 0));
-  if (!outputs.length && r.generationMW)
-    outputs.push({
+  if (generator)
+    outputs.unshift({
       kind: 'ship',
       label: 'Power grid',
       shipSub: 'generation',
@@ -576,24 +578,31 @@ export function calcFlowModel(r: CalcRow): FlowModel {
     machineCount: r.machines,
     machineName: r.machine,
     local: false,
-    // Per-machine rates for the recipe panel; a generator's single cell is its MW.
+    // Per-machine rates for the recipe panel; a generator's power is its first cell, before any
+    // waste it makes.
     recipe: {
       name: r.name,
       machine: r.machine,
       ins: inputs.map(i => [i.name, i.rate / eq, i.link]),
-      outs: outName
-        ? Object.entries(r.outputs).map(([n, q]): [string, number] => [n, q / eq])
-        : [['MW', r.generationMW / eq]],
+      outs: [
+        ...(generator || !outName ? [['MW', r.generationMW / eq] as [string, number]] : []),
+        ...Object.entries(r.outputs || {}).map(([n, q]): [string, number] => [n, q / eq]),
+      ],
     },
     bar: {
-      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${rateOfItem(outName, r.outputs[outName]! / eq, num3)} out per machine` : ''}${splitTxt}`,
-      out: outName
-        ? { rate: num(r.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
-        : { text: power(r.generationMW) },
+      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${generator ? num3(r.generationMW / eq) + '\u00a0MW + ' : ''}${rateOfItem(outName, r.outputs[outName]! / eq, num3)} out per machine` : ''}${splitTxt}`,
+      // A generator's bar leads with its power; a nuclear plant's waste follows in the line under
+      // it, with the belts that carry it (#373).
+      out:
+        outName && !generator
+          ? { rate: num(r.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
+          : { text: power(r.generationMW) },
       outSub: outName
-        ? multi
-          ? 'out · ' + outName + ' + byproducts'
-          : 'out · ' + beltTxt(lanePlan(r.outputs[outName]!, FLUIDS.has(outName), st))
+        ? (generator ? 'generation + ' : 'out · ') +
+          (multi
+            ? outName + ' + byproducts'
+            : (generator ? rateOfItem(outName, r.outputs[outName]!) + ' · ' : '') +
+              beltTxt(lanePlan(r.outputs[outName]!, FLUIDS.has(outName), st)))
         : 'generation',
     },
     // Consumer, storage and delivery rates are the item's plan-wide demand, not this row's share.
