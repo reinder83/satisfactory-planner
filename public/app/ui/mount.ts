@@ -10,6 +10,11 @@ import SignedOut from './SignedOut.vue';
 let shell: { app: App; el: Element | null } | null = null;
 let page: { app: App; component: Component; host: Element } | null = null;
 let screen: App | null = null;
+// True while the page's app is being unmounted. Taking a focused field off the page makes
+// Edge and Chrome fire its change event there and then when it holds a value typed since the
+// last one (#366), so a page's change handler, and the render() it calls, can run in the
+// middle of Vue's unmount. render() waits for the unmount to finish (see pageUnmounting).
+let unmounting = false;
 
 // Mounts the frame unless it is already on the page.
 export function mountShell(root: Element) {
@@ -45,9 +50,20 @@ export function mountPage(host: Element, component: Component): boolean {
 
 // When <main> shows no page.
 export function unmountPage() {
-  page?.app.unmount();
-  page = null;
+  if (!page || unmounting) return;
+  unmounting = true;
+  try {
+    page.app.unmount();
+  } finally {
+    page = null;
+    unmounting = false;
+  }
 }
+
+// Whether the page is being unmounted right now: a render() called then would unmount the same
+// app a second time from inside its own unmount, and Vue then walks DOM nodes it has already
+// removed ("Cannot read properties of null (reading 'nextSibling')", #366).
+export const pageUnmounting = () => unmounting;
 
 // The sign-in screen in place of the whole app (boot() with no signed-in user, sign-out).
 export function showSignedOut(root: Element) {

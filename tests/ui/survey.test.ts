@@ -439,3 +439,58 @@ test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)
   const iron = totals().find(([n]) => n === 'Iron Ore')!;
   assert.match(iron[1]!, /^[\d.,]+\/min$/, 'an ore keeps /min');
 });
+
+// Edge and Chrome fire the change event of a focused field that holds a value typed since its
+// last one when the field is taken off the page, which happens while Vue unmounts the survey
+// (#366). happy-dom does not, so this stand-in does it for `el`, once, as its form is removed.
+function changeOnRemoval(el: HTMLInputElement) {
+  const removeChild = Node.prototype.removeChild;
+  Node.prototype.removeChild = function <T extends Node>(this: Node, child: T): T {
+    const removed = removeChild.call(this, child) as T;
+    if (child.contains(el)) {
+      Node.prototype.removeChild = removeChild;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return removed;
+  };
+  return () => (Node.prototype.removeChild = removeChild);
+}
+
+test('leaving the survey by the address with a count still being typed keeps it and throws nothing (#366)', async () => {
+  survey(3, { purity: 'vanilla', distribution: 'original' });
+  await change('input[name="node:Crude Oil:normal"]', '2');
+  await change('input[name="well:Crude Oil:normal"]', '3');
+  const field = $<HTMLInputElement>('input[name="well:Nitrogen Gas:normal"]')!;
+  field.focus();
+  field.value = '4';
+  const errors: unknown[] = [];
+  const onError = (e: ErrorEvent) => errors.push(e.error ?? e.message);
+  window.addEventListener('error', onError);
+  const restore = changeOnRemoval(field);
+  const log = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    // What the hash route does for #resources.
+    go('resources');
+    render();
+    await nextTick();
+  } finally {
+    restore();
+    console.error = log;
+    window.removeEventListener('error', onError);
+  }
+  assert.deepEqual(errors.map(String), [], 'no error while the survey unmounts');
+  assert.equal($('.extraction-panel'), null, 'the survey is gone');
+  assert.ok($('#main h1'), 'and the resources page is drawn');
+  assert.equal($$('#main h1').length, 1, 'once');
+  // Nothing typed is lost: the draft still holds every count, the last one too.
+  const e = wizard!.extraction!;
+  assert.equal(e.nodes!['Crude Oil']!.normal, 2);
+  assert.equal(e.wells!['Crude Oil']!.normal, 3);
+  assert.equal(e.wells!['Nitrogen Gas']!.normal, 4);
+  assert.equal(wizard!.mode, 'extraction', 'the survey is still open in the draft');
+  go('wizard');
+  render();
+  await nextTick();
+  assert.equal($<HTMLInputElement>('input[name="well:Nitrogen Gas:normal"]')!.value, '4');
+});
