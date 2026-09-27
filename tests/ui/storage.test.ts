@@ -33,6 +33,39 @@ const settle = async () => {
   await nextTick();
 };
 const letters = () => $$('#main .bay-letter').map(e => e.textContent);
+// A floor tab's own label, without the count beside it (SP-23, #258).
+const tabLabel = (t: HTMLElement) =>
+  [...t.childNodes]
+    .filter(n => n.nodeType === Node.TEXT_NODE)
+    .map(n => n.textContent)
+    .join('')
+    .trim();
+const tab = (id: string) => $(`#main .tabs [data-floor="${id}"]`)!;
+// A tab's count as drawn ("41/64") and as its name reads it after the label (", 41 of 64 done");
+// null without one.
+const tabCount = (id: string) => {
+  const t = tab(id),
+    drawn = t.querySelector('.count'),
+    name = t.getAttribute('aria-label');
+  if (!drawn) {
+    assert.equal(name, null, 'a tab without a count is named by its label');
+    return null;
+  }
+  assert.equal(drawn.getAttribute('aria-hidden'), 'true', 'the figures are not read out twice');
+  assert.ok(name!.startsWith(tabLabel(t) + ','), 'the name starts with the label drawn');
+  return [drawn.textContent, name!.slice(tabLabel(t).length)];
+};
+// The named containers of the handbook's bays on a floor, leaving out the bays in `except`.
+const namedOn = (floorId: string, except: string[] = []) =>
+  handbook.storage
+    .filter(b => b.floor === floorId && !except.includes(b.id))
+    .flatMap(b => b.items)
+    .filter(x => x.name).length;
+// The named containers of one handbook bay.
+const namedIn = (bayId: string) =>
+  handbook.storage.find(b => b.id === bayId)!.items.filter(x => x.name).length;
+const doneKeys = (...ids: string[]) =>
+  Object.fromEntries(ids.flatMap(slotKeys).map(k => [k, true]));
 const EDITS = {
   floors: [{ id: 'cf-abcd12', label: 'Basement' }],
   floorNames: { ground: 'Main hall' },
@@ -66,10 +99,7 @@ test('the handbook room shows its printed bays, notice and checklist', () => {
   assert.equal($('#main h1')!.textContent, 'Storage room');
   assert.ok($('[data-slot="A01"]'), 'a state without storageEdits shows the handbook layout');
   assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
-  assert.deepEqual(
-    $$('.tabs .tab').map(t => t.textContent.trim()),
-    ['Ground floor', 'Upper floor', 'Workshop'],
-  );
+  assert.deepEqual($$('.tabs .tab').map(tabLabel), ['Ground floor', 'Upper floor', 'Workshop']);
   assert.ok($('.tabs .tab.active')!.dataset.floor === 'ground');
   assert.equal(
     $$('#main section:last-child .checklist [data-check]').length,
@@ -106,10 +136,12 @@ test('layout edits show custom floors, bays and assignments, escaped', async () 
   render();
   noMarkup();
   assert.ok($$('#main h3').some(h => h.textContent === 'Renamed ingots'));
-  assert.deepEqual(
-    $$('.tabs .tab').map(t => t.textContent.trim()),
-    ['Main hall', 'Upper floor', 'Workshop', 'Basement'],
-  );
+  assert.deepEqual($$('.tabs .tab').map(tabLabel), [
+    'Main hall',
+    'Upper floor',
+    'Workshop',
+    'Basement',
+  ]);
   assert.equal($('[data-slot="A01"]'), null, 'a cleared container shows as reserved');
   $('[data-floor="cf-abcd12"]')!.click();
   await nextTick();
@@ -304,6 +336,98 @@ test('Done and "Complete room" write the four checks of each container', async (
     bay.querySelector('.bay-actions .muted')!.textContent,
     `${named.length}/${named.length} containers done`,
   );
+});
+
+test('floor tabs count the Done containers of each floor, as its bays do (SP-23, #258)', () => {
+  // A02 and K01 done; A03 has one of its four checks, which is not Done.
+  open({ state: { checks: { ...doneKeys('A02', 'K01'), 'slot-A03-built': true } } });
+  render();
+  const ground = namedOn('ground'),
+    upper = namedOn('upper');
+  assert.deepEqual(tabCount('ground'), [`1/${ground}`, `, 1 of ${ground} done`]);
+  assert.deepEqual(tabCount('upper'), [`1/${upper}`, `, 1 of ${upper} done`]);
+  // The name reads as the label, then the count: "Ground floor, 1 of 64 done".
+  assert.equal(tab('ground').getAttribute('aria-label'), `Ground floor, 1 of ${ground} done`);
+  assert.equal(tabCount('workshop'), null, 'a floor without containers shows no count');
+  // The bays' own lines add up to the tab's count.
+  const lines = $$('#main .bay-actions .muted').map(e =>
+    e.textContent
+      .match(/^(\d+)\/(\d+) containers done$/)!
+      .slice(1)
+      .map(Number),
+  );
+  assert.deepEqual(
+    lines.reduce((sum, [d, n]) => [sum[0]! + d!, sum[1]! + n!], [0, 0]),
+    [1, ground],
+  );
+  // Bay A's bar sits under its title with its share Done, hidden from a screen reader beside
+  // its "1/8 containers done".
+  const bar = $('#main [data-bay-progress="A"]')!;
+  assert.ok(bar.classList.contains('progress-track'));
+  assert.ok(bar.previousElementSibling!.classList.contains('bay-head'));
+  assert.equal(bar.getAttribute('aria-hidden'), 'true');
+  assert.equal(bar.querySelector('span')!.style.width, `${Math.round((1 / namedIn('A')) * 100)}%`);
+  assert.equal(
+    bar.closest('.bay')!.querySelector('.bay-actions .muted')!.textContent,
+    `1/${namedIn('A')} containers done`,
+  );
+  assert.equal($('#main [data-bay-progress="B"] span')!.style.width, '0%');
+});
+
+test('tab counts leave out reserved positions and hidden bays (SP-23, #258)', () => {
+  // A01 cleared and bay C hidden, each with a Done container: neither counts.
+  assert.equal(handbook.storage.find(b => b.id === 'C')!.floor, 'ground');
+  open({
+    state: {
+      storageEdits: someEdits({ clearedSlots: ['A01'], hiddenBays: ['C'] }),
+      checks: doneKeys('A01', 'C01'),
+    },
+  });
+  render();
+  const ground = namedOn('ground', ['C']) - 1;
+  assert.deepEqual(tabCount('ground'), [`0/${ground}`, `, 0 of ${ground} done`]);
+  // A calculated profile counts only the containers it keeps; the rest are reserved.
+  open({ calculated: generated() });
+  render();
+  const shown = $$('#main [data-slot]').length;
+  assert.ok(shown > 0 && shown < namedOn('ground'));
+  assert.deepEqual(tabCount('ground'), [`0/${shown}`, `, 0 of ${shown} done`]);
+});
+
+test('an added floor counts its bays too, and an empty bay draws no bar (SP-23, #258)', async () => {
+  const edits = structuredClone(EDITS);
+  edits.bays.push({ id: 'T', name: 'Empty', floor: 'cf-abcd12' });
+  open({ state: { storageEdits: edits, checks: doneKeys('S01') } });
+  render();
+  noMarkup();
+  assert.deepEqual(tabCount('cf-abcd12'), ['1/1', ', 1 of 1 done']);
+  tab('cf-abcd12').click();
+  await nextTick();
+  assert.equal($('#main [data-bay-progress="S"] span')!.style.width, '100%');
+  assert.ok($('[data-complete-bay="T"]'), 'the empty bay is drawn');
+  assert.equal($('#main [data-bay-progress="T"]'), null, 'with no bar');
+});
+
+test('ticking a container updates its bay and its floor tab (SP-23, #258)', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  render();
+  const ground = namedOn('ground');
+  assert.deepEqual(tabCount('ground'), [`0/${ground}`, `, 0 of ${ground} done`]);
+  const done = $<HTMLInputElement>('[data-complete-slot="A02"]')!;
+  done.checked = true;
+  done.dispatchEvent(new Event('change'));
+  await settle();
+  assert.deepEqual(tabCount('ground'), [`1/${ground}`, `, 1 of ${ground} done`]);
+  assert.equal(
+    $('#main [data-bay-progress="A"] span')!.style.width,
+    `${Math.round((1 / namedIn('A')) * 100)}%`,
+  );
+  // "Complete room" moves both on at once.
+  $<HTMLButtonElement>('[data-complete-bay="B"]')!.click();
+  await settle();
+  const now = 1 + namedIn('B');
+  assert.deepEqual(tabCount('ground'), [`${now}/${ground}`, `, ${now} of ${ground} done`]);
+  assert.equal($('#main [data-bay-progress="B"] span')!.style.width, '100%');
 });
 
 test('a failed Done save unticks the box again', async () => {

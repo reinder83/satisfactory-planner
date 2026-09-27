@@ -16,6 +16,7 @@ import { slug } from '../../format.ts';
 import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
+  bayProgress,
   openSlot,
   slotDone,
   slotKeys,
@@ -39,7 +40,8 @@ const props = withDefaults(
 const view = computed(() =>
   legacy(() => {
     const b = props.bay,
-      items = b.items.filter(x => x.name);
+      items = b.items.filter(x => x.name),
+      progress = bayProgress(b);
     return {
       editing: layoutEditing,
       // A handbook bay sharing its letter with an added bay (stored before #91) cannot be
@@ -50,8 +52,10 @@ const view = computed(() =>
       // Its place in the floor's order (#191), for Move left / Move right.
       at: props.order.indexOf(b.id),
       bays: props.order.length,
-      done: items.filter(x => slotDone(x.id)).length,
-      named: items.length,
+      done: progress.done,
+      named: progress.named,
+      // The bar under the title (SP-23, #258), in whole percent.
+      pct: progress.named ? Math.round((progress.done / progress.named) * 100) : 0,
       slots: b.items.map(x => ({
         ...x,
         done: x.name ? slotDone(x.id) : false,
@@ -299,6 +303,11 @@ async function addContainer(e: Event) {
       />
       <h3 v-else>{{ bay.name }}</h3>
     </header>
+    <!-- The bar draws the count beside it ("3/8 containers done"), which is what a screen reader
+         reads, so the bar itself is hidden from one (SP-23, #258). -->
+    <div v-if="view.named" class="progress-track" aria-hidden="true" :data-bay-progress="bay.id">
+      <span :style="{ width: view.pct + '%' }"></span>
+    </div>
     <div class="bay-actions">
       <span class="small muted">{{ view.done }}/{{ view.named }} containers done</span
       ><span
