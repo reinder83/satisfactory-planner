@@ -138,6 +138,12 @@ textarea:focus-visible {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
+/* A page's heading takes focus when an action opens that page (ui/refocus.ts, #304); it shows the
+   same ring as a control, after a key press only (:focus-visible), never after a click. */
+h1[tabindex='-1']:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 4px;
+}
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--accent);

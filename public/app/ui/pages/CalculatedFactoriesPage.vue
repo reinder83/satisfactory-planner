@@ -22,7 +22,7 @@ import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
-import { refocusAfterRemoval } from '../refocus.ts';
+import { refocusOnOpenedPage } from '../refocus.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
@@ -64,12 +64,12 @@ function search(e: Event) {
 
 // "Round up production": after the unsaved-notes check, create the rounded revision and open
 // it. The button shows the calculation's progress meanwhile, busy (app/busy.ts) so it keeps
-// focus (#299). The rounded profile's page has no such button, so focus then goes to the page
-// itself (ui/refocus.ts's last resort, #300).
+// focus (#299). The rounded profile's page has no such button, so focus then goes to its
+// heading (refocusOnOpenedPage in ui/refocus.ts, #300, #304).
 async function roundUp(e: Event) {
   const b = e.currentTarget as HTMLButtonElement;
   if (isBusy(b) || !(await allowSwitch())) return;
-  const refocus = refocusAfterRemoval(b, {});
+  const refocus = refocusOnOpenedPage(b);
   await whileBusy(b, async () => {
     try {
       await writeQueue;

@@ -2,7 +2,7 @@
 // to <body> the moment a focused control becomes disabled, so a busy control is aria-disabled
 // instead, and a second press while it is busy sends nothing. A control that stays disabled
 // because of what it did, or whose page goes (Round up production, Recalculate with transport
-// fuel: #300), sends focus on. happy-dom keeps focus on a disabled control, so the observer below
+// fuel: #300; to the new page’s heading, #304), sends focus on. happy-dom keeps focus on a disabled control, so the observer below
 // does what the browsers do. Writes are held until release(), as on a slow connection.
 // The focused element is compared by what identifies it, never two elements with assert.equal
 // (#287).
@@ -386,7 +386,7 @@ test('the "Working on" phase select keeps focus while it saves', async () => {
   assert.ok(focusedOn('#phase-picker'), describeFocus());
 });
 
-test('Round up production keeps focus while it calculates, then focus goes to the new page (#300)', async () => {
+test('Round up production keeps focus while it calculates, then focus goes to the new page’s heading (#300, #304)', async () => {
   const plan = generated();
   open({ calculated: plan });
   go('factories');
@@ -415,14 +415,14 @@ test('Round up production keeps focus while it calculates, then focus goes to th
   await settle();
   assert.equal($('[data-round-up]'), null, 'the rounded profile needs no rounding');
   assert.match($('#toast')!.textContent!, /Created rounded profile/);
-  assert.ok(focusedOn('#main'), describeFocus());
+  assert.ok(focusedOn('#main h1'), describeFocus());
   assert.deepEqual(
     net.calls.map(c => c[0].split('?')[0]),
     ['/api/round-up', '/api/context'],
   );
 });
 
-test('Recalculate with transport fuel keeps focus while it calculates, then focus goes to the new page (#300)', async () => {
+test('Recalculate with transport fuel keeps focus while it calculates, then focus goes to the new page’s heading (#300, #304)', async () => {
   const plan = generated();
   const factoryGroups = {
     groups: [
@@ -473,7 +473,7 @@ test('Recalculate with transport fuel keeps focus while it calculates, then focu
   await net.release();
   await settle();
   assert.equal($('[data-recalc-transport]'), null, 'the new profile plans the fuel');
-  assert.ok(focusedOn('#main'), describeFocus());
+  assert.ok(focusedOn('#main h1'), describeFocus());
 });
 
 test('Add task keeps focus while it saves, and Enter meanwhile adds nothing more', async () => {
