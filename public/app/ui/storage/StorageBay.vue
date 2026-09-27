@@ -15,7 +15,14 @@ import { save, toast } from '../../api.ts';
 import { slug } from '../../format.ts';
 import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
+import {
+  openSlot,
+  slotDone,
+  slotKeys,
+  slotMatches,
+  storageBays,
+  storageFloors,
+} from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
@@ -33,7 +40,6 @@ const view = computed(() =>
   legacy(() => {
     const b = props.bay,
       items = b.items.filter(x => x.name);
-    const q = query.toLowerCase();
     return {
       editing: layoutEditing,
       // A handbook bay sharing its letter with an added bay (stored before #91) cannot be
@@ -49,7 +55,7 @@ const view = computed(() =>
       slots: b.items.map(x => ({
         ...x,
         done: x.name ? slotDone(x.id) : false,
-        match: !!(query && x.name && (x.id + ' ' + x.name).toLowerCase().includes(q)),
+        match: slotMatches(x, query),
         icon: x.name ? `./icons/${slug(x.name)}.png` : '',
       })),
       // A full bay still takes another container: it gets the next address, up to the

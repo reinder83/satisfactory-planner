@@ -332,3 +332,11 @@ test('ADA names the best hard-drive payoff once a ranking exists (#204)', () => 
   assert.match(line.text, /Allowing Pure Iron Ingot would mean 12 fewer buildings in Phase 3/);
   assert.ok(!ids(facts({ payoff: null })).includes('payoff-best'));
 });
+
+test('a storage search nothing holds gets a line on the storage page (#240)', () => {
+  const miss = first(facts({ view: 'storage', storageMiss: 'Unobtainium' }));
+  assert.equal(miss.id, 'storage-search-miss');
+  assert.match(miss.text, /No container on any floor holds “Unobtainium”/);
+  assert.ok(!ids(facts({ view: 'storage', storageMiss: '' })).includes('storage-search-miss'));
+  assert.ok(!ids(facts({ view: 'plan', storageMiss: 'x' })).includes('storage-search-miss'));
+});

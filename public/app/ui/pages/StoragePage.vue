@@ -1,12 +1,13 @@
 <!--
   #storage on both profile kinds: floor tabs and the search, the layout editor, the workshop
-  (on its floor), the bay grid and the storage build checklist. The checklist is the
-  handbook's storageTasks, or for a calculated profile one step with the saved key
-  `calc-storage-layout`. When the remembered floor no longer exists (a removed floor), the
-  page switches to the first one.
+  (on its floor), the bay grid and the storage build checklist. The search looks on every floor
+  (#240): its results above the grid lead to each container, and it narrows the floor shown to
+  the bays with a match. The checklist is the handbook's storageTasks, or for a calculated
+  profile one step with the saved key `calc-storage-layout`. When the remembered floor no longer
+  exists (a removed floor), the page switches to the first one.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick } from 'vue';
 import {
   calculated,
   currentProfile,
@@ -26,19 +27,26 @@ import {
   floorOrder,
   hiddenStorageBays,
   hiddenStorageFloors,
+  slotMatches,
   storageBays,
   storageFloors,
+  storageMatches,
 } from '../../views/storage.ts';
+import type { StorageMatch } from '../../views/storage.ts';
 import { save, toast } from '../../api.ts';
 import { moveContainer } from '../actions.ts';
 import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
+import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';
 import StorageChecklist from '../storage/StorageChecklist.vue';
 import WorkshopPanel from '../storage/WorkshopPanel.vue';
+
+// The most search results listed at once (#240); a short query can match most of the room.
+const RESULT_LIMIT = 24;
 
 const CALCULATED_TASKS = [
   {
@@ -65,13 +73,10 @@ const page = computed(() =>
     const current = floors.find(f => f.id === floor)!;
     // Bays on this floor; the search narrows them to bays with a match.
     const floorBays = storageBays().filter(b => b.floor === floor),
-      display = floorBays.filter(
-        b =>
-          !query ||
-          b.items.some(
-            x => x.name && (x.id + ' ' + x.name).toLowerCase().includes(query.toLowerCase()),
-          ),
-      );
+      display = floorBays.filter(b => !query || b.items.some(x => slotMatches(x, query)));
+    // The containers that answer the search on every floor (#240).
+    const matches = storageMatches(query),
+      floorsHit = new Set(matches.map(m => m.floor)).size;
     // The wide grid reads like the hall itself: the rear row at the top, two bays to a row
     // with the aisle between them. A narrow screen gets a single column, where that
     // arrangement reads as a jumble, so the document keeps the bays in address order and
@@ -125,6 +130,18 @@ const page = computed(() =>
         )
         .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
       query,
+      results: matches.slice(0, RESULT_LIMIT),
+      matches: matches.length,
+      elsewhere: matches.filter(m => m.floor !== floor).length,
+      // Read out politely as the results change (the status line is always on the page, so a
+      // screen reader hears the first count too).
+      status: !query
+        ? ''
+        : !matches.length
+          ? 'No container holds ' + query
+          : `${matches.length} container${matches.length === 1 ? ' matches' : 's match'} ${query}${
+              floorsHit > 1 ? `, on ${floorsHit} floors` : ''
+            }`,
       editing: layoutEditing,
       // Hidden handbook bays (#166) and the planned items left without a container.
       hidden: hiddenStorageBays(),
@@ -144,11 +161,25 @@ const page = computed(() =>
   }),
 );
 
-// A floor tab: switch floor and clear the search.
+// A floor tab: switch floor. The search stays (#240), and narrows the new floor.
 function showFloor(id: string) {
   setFloor(id);
-  setQuery('');
   render();
+}
+
+// A search result (#240): switch to its floor, where it is marked as a match, and focus the
+// container's button (the target its dialog and Complete room use too). Focus moves without the
+// browser's own scroll, then the container is scrolled just into view.
+async function showMatch(m: StorageMatch) {
+  if (m.floor !== floor) {
+    setFloor(m.floor);
+    render();
+    await nextTick();
+  }
+  const target = document.querySelector<HTMLElement>(`#main [data-slot="${CSS.escape(m.id)}"]`);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function search(e: Event) {
@@ -272,8 +303,8 @@ function toggleLayout() {
     <input
       id="storage-search"
       class="search"
-      aria-label="Find storage on this floor"
-      placeholder="Find an item or address on this floor…"
+      aria-label="Find storage on every floor"
+      placeholder="Find an item or address on any floor…"
       :value="page.query"
       @input="search"
     /><button
@@ -284,6 +315,28 @@ function toggleLayout() {
       {{ page.editing ? 'Done editing' : 'Edit layout' }}
     </button>
   </div>
+  <p class="visually-hidden" role="status" data-search-status>{{ page.status }}</p>
+  <section
+    v-if="page.query"
+    class="storage-results"
+    aria-label="Containers found"
+    data-search-results
+  >
+    <ul v-if="page.matches" class="storage-results-list">
+      <li v-for="m in page.results" :key="m.id">
+        <button type="button" class="storage-result" :data-find-slot="m.id" @click="showMatch(m)">
+          <ItemIcon :name="m.name" /><span
+            ><b>{{ m.name }}</b> · {{ m.floorLabel }} · {{ m.id }}</span
+          >
+        </button>
+      </li>
+    </ul>
+    <div v-else class="empty-state" data-search-empty>No container holds {{ page.query }}</div>
+    <p v-if="page.matches > page.results.length" class="small muted">
+      Showing the first {{ page.results.length }} of {{ page.matches }}. Type more of the name or
+      address to narrow the search.
+    </p>
+  </section>
   <div v-if="page.unplaced.length" class="notice" data-unplaced>
     <b
       >{{ page.unplaced.length }} planned item{{ page.unplaced.length === 1 ? ' has' : 's have' }}
@@ -340,8 +393,9 @@ function toggleLayout() {
     Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay
     outside this room.
   </div>
-  <p v-if="page.query" class="small muted">
-    Filtered view: showing matching bays only. Clear search to see the full floor arrangement.
+  <p v-if="page.query && page.matches" class="small muted">
+    Filtered view: showing this floor's bays with a match only. Clear search to see the full floor
+    arrangement.
   </p>
   <p v-if="page.bays.length" class="eyebrow floor-marker">REAR OF HALL ↑</p>
   <DragDropProvider @drag-start="dragStarted" @drag-end="dropped"
@@ -357,12 +411,11 @@ function toggleLayout() {
           :position="b.position"
           :order="page.order"
       /></template>
-      <div v-else-if="!page.workshop" class="empty-state">
-        {{
-          page.floorBays
-            ? 'No matching item on this floor. Try another floor.'
-            : 'No bays on this floor yet. Use Edit layout to add one.'
-        }}
+      <div v-else-if="!page.floorBays && !page.workshop" class="empty-state">
+        No bays on this floor yet. Use Edit layout to add one.
+      </div>
+      <div v-else-if="page.elsewhere" class="empty-state">
+        Nothing on this floor matches. The results above are on other floors.
       </div>
     </div></DragDropProvider
   >

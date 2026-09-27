@@ -165,6 +165,45 @@ export function hiddenStorageBays(): {
     }));
 }
 
+// Whether position `x` answers the storage search `q`: a container whose address or item
+// contains it, ignoring case. The page narrows each floor's bays with it, a bay marks its
+// matching positions (.slot.match) and storageMatches() lists them on every floor.
+export function slotMatches(x: StoragePosition, q: string): boolean {
+  return !!(q && x.name && (x.id + ' ' + x.name).toLowerCase().includes(q.toLowerCase()));
+}
+
+// A container found by the storage search, with the floor it is on (#240).
+export interface StorageMatch {
+  id: string;
+  name: string;
+  floor: string;
+  floorLabel: string;
+}
+
+// The containers answering `q` on every floor, in floor-tab order and then by address (#240).
+// Only positions the room shows: bays in storageBays(), on a floor with a tab. A hidden bay's
+// containers are not in the room (the page lists its items as unplaced), and a hidden floor has
+// no bay showing, so a result never leads to something the page does not draw.
+export function storageMatches(q: string): StorageMatch[] {
+  if (!q) return [];
+  const floors = storageFloors(),
+    at = (id: string) => floors.findIndex(f => f.id === id);
+  return storageBays()
+    .filter(b => at(b.floor) >= 0)
+    .flatMap(b =>
+      b.items
+        .filter(x => slotMatches(x, q))
+        .map(x => ({
+          id: x.id,
+          // slotMatches() only accepts a named position.
+          name: x.name!,
+          floor: b.floor,
+          floorLabel: floors[at(b.floor)]!.label,
+        })),
+    )
+    .sort((a, b) => at(a.floor) - at(b.floor) || a.id.localeCompare(b.id));
+}
+
 // Every bay, hidden handbook bays included; storageBays() and hiddenStorageBays() split it.
 // Handbook bays in `planOnly` show just the plan's items, without the user's container edits.
 function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {

@@ -21,6 +21,7 @@ import {
   phaseLabel,
   plan,
   planEditing,
+  query,
   stage,
   startPhase,
   state,
@@ -33,7 +34,7 @@ import { render } from './shell.ts';
 import { planTasks, taskEditsState } from './tasks.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
-import { storageBays } from './views/storage.ts';
+import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import type { StageDelivery, StoredStage } from '../types/index.ts';
@@ -169,6 +170,7 @@ function adaFacts(): AdaFacts {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,
       total: slots.length,
     },
+    storageMiss: view === 'storage' && query && !storageMatches(query).length ? query : '',
     deliveries: {
       open: deliveries.filter(d => delivered(d) < d.target).length,
       total: deliveries.length,

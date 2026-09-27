@@ -1429,6 +1429,50 @@ td:first-child {
 }
 
 /* ── Storage floor ─────────────────────────────────────── */
+/* The storage search's results on every floor (StoragePage.vue, #240): one button per
+   container, leading to it on its floor. */
+.storage-results {
+  margin: -8px 0 20px;
+}
+.storage-results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px;
+}
+.storage-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: left;
+  color: var(--muted);
+}
+.storage-result:hover {
+  border-color: var(--accent);
+}
+.storage-result .item-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.storage-result b {
+  font-family: var(--head);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--bright);
+}
+.storage-results .small {
+  margin: 8px 0 0;
+}
+
 .floor-grid {
   display: grid;
   grid-template-columns: 1fr 44px 1fr;
