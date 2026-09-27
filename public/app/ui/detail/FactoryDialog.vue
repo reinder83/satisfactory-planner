@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { FLUIDS, handbookFlowModel } from '../../flow.ts';
+import { FLUIDS, handbookFlowModel, itemRate } from '../../flow.ts';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { power } from '../../wizard/fields.ts';
@@ -73,7 +73,7 @@ const view = computed(() =>
     // the caption keeps the handbook's own figure where that differs.
     const lastClock = r.lastClock ?? 100,
       counts = machineCounts(r.machines, lastClock);
-    const perMachine = r.rate ? num(r.rate) + '/min' : '';
+    const perMachine = r.rate ? itemRate(f.name, r.rate) : '';
     const precise = num(lastClock) + '%';
     // The rates the Output and Storage tiles showed (SP-21), in the flow diagram's unit. No-break
     // spaces keep each rate on one line, so a narrow header wraps only at the dot.
@@ -90,7 +90,9 @@ const view = computed(() =>
       history,
       usage,
       // completion keeps only the modules with this input.
-      completion: completion.map(c => c.name + ' ' + num(c.inputs[f.name]!) + '/min').join(' · '),
+      completion: completion
+        .map(c => c.name + ' ' + itemRate(f.name, c.inputs[f.name]!))
+        .join(' · '),
       check,
       done: checked(check),
       machines: {
@@ -100,7 +102,7 @@ const view = computed(() =>
         adjustable: counts.clock
           ? [
               precise === counts.clock + '%' ? '' : 'Set ' + precise,
-              r.rate ? num((r.rate * lastClock) / 100) + '/min' : '',
+              r.rate ? itemRate(f.name, (r.rate * lastClock) / 100) : '',
             ]
               .filter(Boolean)
               .join(' · ')

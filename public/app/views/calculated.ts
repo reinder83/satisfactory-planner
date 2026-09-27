@@ -5,6 +5,7 @@
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
+import { rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
 import {
   calcStage,
@@ -150,11 +151,11 @@ export function machineSetup(r: CalcRow) {
   );
   const fullOutput =
     Object.entries(rates)
-      .map(([n, q]) => `${num(q)} ${n}/min`)
+      .map(([n, q]) => rateOfItem(n, q))
       .join(' · ') || `${num(r.generationMW / equivalent)} MW`;
   const lastOutput =
     Object.entries(rates)
-      .map(([n, q]) => `${num(q * fraction)} ${n}/min`)
+      .map(([n, q]) => rateOfItem(n, q * fraction))
       .join(' · ') || `${num((r.generationMW / equivalent) * fraction)} MW`;
   const summary = `${r.machines} ${r.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
   const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(

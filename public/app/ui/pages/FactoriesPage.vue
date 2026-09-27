@@ -9,6 +9,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
 import {
   checked,
@@ -126,7 +127,7 @@ const page = computed(() =>
                 done: checked('completion-' + r.id),
                 // The last machine is only named when it runs below 100%.
                 line:
-                  `${num(r.output)}/min · ${num(r.machines)} ${r.machine}` +
+                  `${itemRate(r.name, r.output)} · ${num(r.machines)} ${r.machine}` +
                   ((r.lastClock ?? 100) < 100 ? ` · last at ${num(r.lastClock)}%` : ''),
                 inputText: inputText(r.inputs),
                 byproducts: Object.keys(r.byproducts).length ? inputText(r.byproducts) : '',

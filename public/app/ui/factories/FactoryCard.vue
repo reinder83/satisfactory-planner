@@ -9,6 +9,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { itemRate, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
@@ -34,13 +35,16 @@ const card = computed(() =>
       check,
       done: checked(check),
       output: num(r.output),
-      unit: '/min',
+      // m³/min for a fluid, as the dialog's summary line says it (#351).
+      unit: rateUnit(f.name),
       recipe: r.recipe.replace('Alternate: ', ''),
       machines: r.machines
         ? machineLine(r.machines, r.machine, r.lastClock)
         : 'See shared oil campus',
-      storage: `· storage ${num(r.storage)}/min`,
-      allocation: props.group ? allocationText(f.id, props.group, r.output, r.machines) : '',
+      storage: `· storage ${itemRate(f.name, r.storage)}`,
+      allocation: props.group
+        ? allocationText(f.id, props.group, r.output, r.machines, q => itemRate(f.name, q))
+        : '',
       editing: factoryEditing,
     };
   }),
