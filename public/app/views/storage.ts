@@ -4,6 +4,7 @@
 // profile shows the same addresses with only the items it selected for storage.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
+import { FLUIDS } from '../flow.ts';
 import { num } from '../format.ts';
 import { calculated, checked, currentProfile, plan, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
@@ -40,6 +41,20 @@ export function inputText(inputs: ItemRates): string {
     .filter(([, q]) => q)
     .map(([n, q]) => n + ' ' + num(q) + '/min')
     .join(' · ');
+}
+
+// One entry of an item → rate map as a row (ui/pages/CalculatedResourcesPage.vue, SP-28):
+// the item's name and its rate with the unit, m³/min for a fluid and /min for anything else.
+export interface ItemRateRow {
+  name: string;
+  rate: string;
+}
+
+// itemRateRows: the same non-zero entries inputText lists, in the same order, as rows.
+export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
+  return Object.entries(inputs)
+    .filter(([, q]) => q)
+    .map(([n, q]) => ({ name: n, rate: num(q) + (FLUIDS.has(n) ? ' m³/min' : '/min') }));
 }
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,
