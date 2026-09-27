@@ -4,7 +4,9 @@
   (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its headline and
   its group share are measured in MW (GW above 1000 MW). The same structure as FactoryCard.vue
   (SP-14): the main output with its unit as the headline, machines and the adjustable machine's
-  clock on the line below it, then any other outputs.
+  clock on the line below it, then any other outputs. The chip at the top says whether it runs,
+  or is held back by a missing supplier with the reason above the footer (RunningChip.vue,
+  SP-15); it follows the Running box.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -16,6 +18,7 @@ import { powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
+import RunningChip from './RunningChip.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import type { CalcRow } from '../../../types/index.ts';
 
@@ -69,6 +72,7 @@ const card = computed(() =>
 
 <template>
   <article :class="['factory-card', card.done ? 'done' : '']">
+    <RunningChip :status="card.held ? 'held' : card.done ? 'running' : 'idle'" />
     <div class="card-top">
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
       <div class="card-main">
