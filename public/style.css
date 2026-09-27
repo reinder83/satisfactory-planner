@@ -1009,18 +1009,18 @@ textarea::placeholder {
   color: var(--bright);
   box-shadow: inset 0 -3px 0 var(--accent);
 }
-/* The factories pages' status filter (StatusChips.vue, SP-16): .tabs as a radio group, a count
+/* The factories pages' status filter (FilterChips.vue, SP-16): .tabs as a radio group, a count
    beside each label. On a narrow page it takes a row of its own and wraps, each chip growing to
    fill its row. */
-.status-chips .tab {
+.filter-chips .tab {
   flex: 1 1 auto;
   white-space: nowrap;
 }
-.status-chips .count {
+.filter-chips .count {
   margin-left: 4px;
   color: var(--muted);
 }
-.status-chips .tab.active .count {
+.filter-chips .tab.active .count {
   color: var(--accent);
 }
 .empty-state [data-show-all] {
@@ -3299,7 +3299,7 @@ button.rail-tile:hover {
   .toolbar {
     gap: 8px;
   }
-  .status-chips {
+  .filter-chips {
     flex: 1 1 100%;
   }
   .form-grid,

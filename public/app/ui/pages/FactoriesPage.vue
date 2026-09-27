@@ -1,6 +1,6 @@
 <!--
   #factories for the original handbook at the current stage, filtered by the step search
-  (view state `query`) and the status chips (`factoryFilter`, StatusChips.vue; Local is this
+  (view state `query`) and the status chips (`factoryFilter`, FilterChips.vue; Local is this
   page's own chip). A factory in a user group is drawn there only; the rest go under the shared
   sites (Plastic and Rubber out of one oil campus, nuclear factories at the nuclear site), then
   as single cards. When nothing is left, it says why and offers All back. Post-game adds the
@@ -33,7 +33,7 @@ import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
-import StatusChips from '../factories/StatusChips.vue';
+import FilterChips from '../factories/FilterChips.vue';
 import PageHeader from '../PageHeader.vue';
 import { pickFactoryFilter, toggleCheck } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
@@ -134,7 +134,7 @@ function search(e: Event) {
       aria-label="Find a factory"
       :value="page.query"
       @input="search"
-    /><StatusChips
+    /><FilterChips
       :chips="page.chips"
       :active="page.active.value"
       @pick="v => pickFactoryFilter(v)"

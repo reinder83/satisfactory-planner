@@ -136,7 +136,7 @@ export async function moveContainer(from: string, to: string) {
   }
 }
 
-// A factories page's status filter (StatusChips.vue, SP-16): the chosen chip, kept in
+// A factories page's status filter (FilterChips.vue, SP-16): the chosen chip, kept in
 // factoryFilter as view state. "Show all" on a page the filter left empty passes focus=true: it
 // chooses All and moves focus to that chip, since the button goes once the page lists something.
 export async function pickFactoryFilter(value: string, focus = false) {

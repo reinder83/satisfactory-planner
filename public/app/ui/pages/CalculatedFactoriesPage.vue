@@ -1,6 +1,6 @@
 <!--
   #factories on a calculated profile: the rows of the current phase matching the search and the
-  status chips (`factoryFilter`, StatusChips.vue, shared with the handbook page; Held back is this
+  status chips (`factoryFilter`, FilterChips.vue, shared with the handbook page; Held back is this
   page's own chip, a row ticked Running that a missing supplier holds back), user groups first,
   then the ungrouped rows. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
@@ -39,7 +39,7 @@ import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
-import StatusChips from '../factories/StatusChips.vue';
+import FilterChips from '../factories/FilterChips.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -149,7 +149,7 @@ async function roundUp(e: Event) {
         placeholder="Find a part or recipe…"
         :value="page.query"
         @input="search"
-      /><StatusChips
+      /><FilterChips
         :chips="page.chips"
         :active="page.active.value"
         @pick="v => pickFactoryFilter(v)"
