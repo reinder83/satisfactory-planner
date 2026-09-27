@@ -8,6 +8,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, plan, stage } from '../../session.ts';
 import { resourceUse } from '../../views/resources.ts';
@@ -42,7 +43,8 @@ const page = computed(() =>
       peak: num(p.manufacturingPeakGW) + ' GW',
       average: num(p.manufacturingAvgGW) + ' GW',
       coal: num(74400 - resources.Coal!) + '/min',
-      nitrogen: num(resources['Nitrogen Gas'] || 0),
+      // Nitrogen Gas is a fluid, in m³/min (#363).
+      nitrogen: itemRate('Nitrogen Gas', resources['Nitrogen Gas'] || 0),
       rows: Object.entries(resources)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, q]) => {
@@ -84,8 +86,8 @@ const page = computed(() =>
       <StatTile label="Coal remaining" :value="page.coal" caption="Against all-pure mining limit" />
     </div>
     <div class="notice warn">
-      Verify your randomized nitrogen wells can supply <b>{{ page.nitrogen }}/min</b> at this stage.
-      The all-pure resource limits assume fully developed extraction and logistics. Additional
+      Verify your randomized nitrogen wells can supply <b>{{ page.nitrogen }}</b> at this stage. The
+      all-pure resource limits assume fully developed extraction and logistics. Additional
       completion modules are not included.
     </div>
     <div class="table-wrap">

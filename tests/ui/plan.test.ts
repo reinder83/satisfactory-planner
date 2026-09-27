@@ -589,3 +589,27 @@ test('a step edit refused as stale keeps what was typed while the page catches u
   assert.equal(form.querySelector<HTMLTextAreaElement>('[name=body]')!.value, 'My details');
   assert.match($('#toast')!.textContent, /changed in another tab/);
 });
+
+// A calculated build-plan step names each input and output with its own rate: a fluid in
+// m³/min, a solid in /min, as the factory cards and dialogs write them (#361, #363). A no-break
+// space keeps a fluid's number with its m³.
+test('a calculated step writes a fluid input or output in m³/min and a solid in /min (#363)', async () => {
+  open({ calculated: generated });
+  render();
+  await nextTick();
+  const rows = generated.stages['3'].rows!;
+  const body = (id: string) =>
+    $(`[data-check="calc-3-${id}"]`)!
+      .closest('.task')!
+      .querySelector('p')!
+      .textContent.replace(/ /g, ' ');
+  const fuel = rows.find(r => r.id === 'Recipe_ResidualFuel_C')!;
+  assert.ok(fuel, 'the default plan makes Fuel from Heavy Oil Residue');
+  const text = body(fuel.id);
+  assert.match(text, /Inputs: Heavy Oil Residue [\d.,]+ m³\/min\./);
+  assert.match(text, /Outputs: Fuel [\d.,]+ m³\/min\./);
+  assert.doesNotMatch(text, /\/min:/, 'no "Inputs /min:" heading any more');
+  // A solid keeps /min.
+  const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
+  assert.match(body(iron.id), /Inputs: Iron Ore [\d.,]+\/min\. Outputs: Iron Ingot [\d.,]+\/min\./);
+});

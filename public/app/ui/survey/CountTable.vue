@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { blankCounts, nodeYield, purities3, wellYield } from '../../../preferences.ts';
-import { num } from '../../format.ts';
+import { itemRate } from '../../flow.ts';
 import { wizard } from '../../session.ts';
 import { extractionOf } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
@@ -33,7 +33,8 @@ const rows = computed(() =>
       return {
         name,
         cells: purities3.map(([key, label]) => ({ key, label, value: counts[key] || 0 })),
-        total: total ? num(Math.round(total)) + '/min' : '—',
+        // Crude oil and nitrogen are fluids, so their totals read m³/min (#363).
+        total: total ? itemRate(name, Math.round(total)) : '—',
       };
     });
   }),

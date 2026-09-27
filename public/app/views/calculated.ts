@@ -5,7 +5,7 @@
 // snapshot through calcStage(); nothing here recalculates.
 import { progression } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
-import { rateOfItem } from '../flow.ts';
+import { itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
 import {
   calcStage,
@@ -26,6 +26,13 @@ export interface PlanStepData {
   title: string;
   body: string;
 }
+
+// A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item
+// with its own rate, a fluid in m³/min (itemRate in flow.ts, #363), or '' for none.
+const rateList = (rates: Record<string, number>): string =>
+  Object.entries(rates)
+    .map(([n, q]) => n + ' ' + itemRate(n, q))
+    .join(', ');
 
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
@@ -57,15 +64,7 @@ export function calcTasks(): PlanStepData[] {
     ...(p?.rows || []).map(r => ({
       id: 'calc-' + stage() + '-' + r.id,
       title: r.name,
-      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs /min: ${
-        Object.entries(r.inputs)
-          .map(([n, q]) => n + ' ' + num(q))
-          .join(', ') || 'none'
-      }. Outputs /min: ${
-        Object.entries(r.outputs)
-          .map(([n, q]) => n + ' ' + num(q))
-          .join(', ') || power(r.generationMW)
-      }.`,
+      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${rateList(r.outputs) || power(r.generationMW)}.`,
     })),
     {
       id: 'calc-' + stage() + '-storage',
