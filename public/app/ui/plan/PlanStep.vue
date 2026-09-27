@@ -12,6 +12,7 @@ import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(defineProps<{ step: PlanStepView; editing?: boolean }>(), {
@@ -46,12 +47,21 @@ function edit() {
   render();
 }
 
+// Where focus goes once a step is removed (ui/refocus.ts, #286): `control` on the next step,
+// else the previous one, else the personal task field under the list.
+const stepList = (control: string) => ({
+  row: '#main .checklist .task',
+  control,
+  fallback: ['#add-task [name=title]'],
+});
+
 // "Remove", after a confirmation. A personal task (id custom-…) is deleted; a plan step is
 // only hidden (taskRemove) and keeps its checkmark, so it can be put back from "Removed
 // steps in this phase".
-async function remove() {
+async function remove(e: Event) {
   const id = props.step.id;
-  if (id.startsWith('custom-')) return deletePersonal();
+  if (id.startsWith('custom-')) return deletePersonal(e);
+  const refocus = refocusAfterRemoval(e.currentTarget, stepList('[data-remove-step]'));
   if (
     !(await confirmAction({
       title: 'Remove this step?',
@@ -64,12 +74,18 @@ async function remove() {
   try {
     await save({ type: 'taskRemove', id });
     render();
+    await refocus();
   } catch {}
 }
 
 // "Delete personal task" (inside a personal task's details outside edit mode, or Remove on
-// one while editing), after a confirmation.
-async function deletePersonal() {
+// one while editing), after a confirmation. Outside edit mode the next step's Delete is inside
+// its closed details, so focus goes to that step's summary instead.
+async function deletePersonal(e: Event) {
+  const refocus = refocusAfterRemoval(
+    e.currentTarget,
+    stepList(props.editing ? '[data-remove-step]' : 'summary'),
+  );
   if (
     !(await confirmAction({
       title: 'Delete this personal task?',
@@ -82,6 +98,7 @@ async function deletePersonal() {
   try {
     await save({ type: 'removeTask', id: props.step.id });
     render();
+    await refocus();
   } catch {}
 }
 </script>

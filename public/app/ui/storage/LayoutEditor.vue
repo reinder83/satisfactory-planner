@@ -14,6 +14,7 @@ import { render } from '../../shell.ts';
 import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/storage.ts';
 import type { StorageFloor } from '../../views/storage.ts';
 import { confirmAction } from '../confirm.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
 // bays: how many bays the floor has; an added floor can only go once it has none.
@@ -94,10 +95,15 @@ const addFloor = (e: Event) =>
 const renameFloor = (e: Event) =>
   submit(e, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
 
+// Once a floor is hidden or removed, focus goes to the tab of the floor now shown
+// (ui/refocus.ts, #286).
+const floorTabs = { fallback: ['#main .tabs [data-floor].active'] };
+
 // "Hide this floor" (built-in floors, #168): once none of its bays is showing, the tab goes; the
 // storage page's Hidden panel brings it back. The page then shows the first visible floor.
 const hiding = ref(false);
-async function hideFloor() {
+async function hideFloor(e: Event) {
+  const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
   if (
     !(await confirmAction({
       title: `Hide ${props.floor.label}?`,
@@ -110,6 +116,7 @@ async function hideFloor() {
   try {
     await save({ type: 'storageFloorHide', id: props.floor.id });
     render();
+    await refocus();
   } catch {
   } finally {
     hiding.value = false;
@@ -118,7 +125,8 @@ async function hideFloor() {
 
 // "Remove this floor", after a confirmation; then back to the ground floor.
 const removing = ref(false);
-async function removeFloor() {
+async function removeFloor(e: Event) {
+  const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
   if (
     !(await confirmAction({
       title: 'Remove this floor?',
@@ -133,6 +141,7 @@ async function removeFloor() {
     await save({ type: 'storageFloorRemove', id: props.floor.id });
     setFloor('ground');
     render();
+    await refocus();
   } catch {
   } finally {
     removing.value = false;

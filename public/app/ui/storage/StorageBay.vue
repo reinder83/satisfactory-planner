@@ -18,6 +18,7 @@ import { render } from '../../shell.ts';
 import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import SlotCell from './SlotCell.vue';
 import type { StorageBayView } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
@@ -137,11 +138,20 @@ const clearSlot = (e: Event, id: string) =>
     toast('Container cleared. Its saved checkmarks are kept with the address.'),
   );
 
+// Where focus goes once a bay is hidden or removed (ui/refocus.ts, #286): the next bay's Remove
+// or Hide, else the previous bay's, else the new bay's letter field.
+const bayList = {
+  row: '#main .floor-grid .bay',
+  control: '[data-remove-bay], [data-hide-bay]',
+  fallback: ['#new-bay-letter'],
+};
+
 // A handbook bay is hidden rather than removed (#166): everything saved for it stays, and
 // "Hidden bays" on the storage page brings it back.
 async function hideBay(e: Event) {
   // Read before the question: currentTarget is only set while the click is dispatched.
   const button = e.currentTarget as HTMLButtonElement;
+  const refocus = refocusAfterRemoval(button, bayList);
   if (
     !(await confirmAction({
       title: `Hide bay ${props.bay.id}?`,
@@ -150,7 +160,7 @@ async function hideBay(e: Event) {
     }))
   )
     return;
-  saving(button, { type: 'storageBayHide', id: props.bay.id });
+  saving(button, { type: 'storageBayHide', id: props.bay.id }, refocus);
 }
 
 // "Move to…": the bay goes to another floor with its letter, so its containers, checkmarks
@@ -195,6 +205,7 @@ async function shiftBay(by: -1 | 1) {
 async function removeBay(e: Event) {
   // Read before the question: currentTarget is only set while the click is dispatched.
   const button = e.currentTarget as HTMLButtonElement;
+  const refocus = refocusAfterRemoval(button, bayList);
   if (
     !(await confirmAction({
       title: `Remove bay ${props.bay.id}?`,
@@ -204,7 +215,7 @@ async function removeBay(e: Event) {
     }))
   )
     return;
-  saving(button, { type: 'storageBayRemove', id: props.bay.id });
+  saving(button, { type: 'storageBayRemove', id: props.bay.id }, refocus);
 }
 
 // "+ Add": put an item in this bay, in a free position first; a bay with none gets the next
