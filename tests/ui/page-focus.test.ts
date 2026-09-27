@@ -125,6 +125,8 @@ test('Duplicate moves focus to the heading of the copy’s plan', async () => {
     '/api/context': original('Copy'),
   });
   show('profiles');
+  // Duplicate is in the card's ⋯ menu (#238).
+  await press('[data-profile-menu="original"]');
   await press('[data-duplicate-profile="original"]');
   assert.equal(view, 'plan');
   assert.match($('#toast')!.textContent!, /Copy created and opened/);

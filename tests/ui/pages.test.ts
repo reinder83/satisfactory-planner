@@ -64,6 +64,122 @@ test('Saves & profiles lists every profile, escaped, with its actions', () => {
   assert.ok($('#rename-form select[name=target]'));
 });
 
+// A key pressed on the focused element, as a browser sends it.
+const key = (k: string) =>
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }),
+  );
+const focusedHook = () =>
+  Object.keys((document.activeElement as HTMLElement | null)?.dataset ?? {}).join(',');
+
+test('a profile card shows one action and keeps the others in its ⋯ menu (#238)', async () => {
+  go('profiles');
+  render();
+  const card = $$('.profile-card')[1]!;
+  const visible = [...card.querySelectorAll<HTMLElement>('.profile-actions > button')];
+  assert.deepEqual(
+    visible.map(b => b.textContent!.trim()),
+    ['Open profile'],
+    'only the primary action is a button of its own',
+  );
+  const trigger = card.querySelector<HTMLButtonElement>('[data-profile-menu="p"]')!;
+  const menu = $('#profile-menu-s-p')!;
+  assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+  assert.equal(trigger.getAttribute('aria-controls'), 'profile-menu-s-p');
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  assert.equal(trigger.getAttribute('aria-label'), 'More actions for ' + evil);
+  assert.equal(menu.getAttribute('role'), 'menu');
+  assert.equal(menu.hidden, true, 'the menu starts closed');
+  const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  assert.deepEqual(
+    items.map(b => b.textContent!.trim()),
+    ['Duplicate', 'Share (without progress)', 'Remove profile…'],
+  );
+  assert.ok(
+    items.every(b => b.tabIndex === -1),
+    'the arrow keys move between items, not Tab',
+  );
+  assert.ok(items[2]!.classList.contains('danger'), 'Remove is last and red');
+  assert.ok(!items[0]!.classList.contains('danger') && !items[1]!.classList.contains('danger'));
+  noMarkup();
+
+  // Enter or Space on ⋯ is a click: it opens the menu on the first item.
+  trigger.focus();
+  trigger.click();
+  await nextTick();
+  assert.equal(menu.hidden, false);
+  assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+  assert.equal(focusedHook(), 'duplicateProfile,duplicateSave');
+  key('ArrowDown');
+  assert.equal(focusedHook(), 'shareProfile,shareSave');
+  key('End');
+  assert.equal(focusedHook(), 'removeProfile,removeSave');
+  key('ArrowDown');
+  assert.equal(focusedHook(), 'duplicateProfile,duplicateSave', 'the arrows wrap');
+  key('ArrowUp');
+  assert.equal(focusedHook(), 'removeProfile,removeSave');
+  key('Home');
+  assert.equal(focusedHook(), 'duplicateProfile,duplicateSave');
+  // Escape closes it and returns focus to ⋯.
+  key('Escape');
+  await nextTick();
+  assert.equal(menu.hidden, true);
+  assert.equal(document.activeElement, trigger);
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+  // ArrowDown on ⋯ opens on the first item, ArrowUp on the last.
+  key('ArrowDown');
+  await nextTick();
+  assert.equal(focusedHook(), 'duplicateProfile,duplicateSave');
+  key('Escape');
+  key('ArrowUp');
+  await nextTick();
+  assert.equal(focusedHook(), 'removeProfile,removeSave');
+  // Tab closes it (and the browser moves on).
+  key('Tab');
+  await nextTick();
+  assert.equal(menu.hidden, true);
+
+  // Only one menu is open at a time, and a click outside closes it.
+  trigger.click();
+  await nextTick();
+  const other = $<HTMLButtonElement>('[data-profile-menu="original"]')!;
+  other.click();
+  await nextTick();
+  assert.equal(menu.hidden, true, 'opening another menu closes this one');
+  assert.equal($('#profile-menu-s-original')!.hidden, false);
+  $('.save-panel h2')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  await nextTick();
+  assert.equal($('#profile-menu-s-original')!.hidden, true, 'a click outside closes it');
+  assert.equal(other.getAttribute('aria-expanded'), 'false');
+});
+
+test('Duplicate says "Copying…" on ⋯ while it runs, and ⋯ stays focused and busy', async () => {
+  let reply: (r: Response) => void = () => {};
+  globalThis.fetch = () => new Promise<Response>(r => (reply = r));
+  go('profiles');
+  render();
+  const trigger = $<HTMLButtonElement>('[data-profile-menu="p"]')!;
+  trigger.focus();
+  trigger.click();
+  await nextTick();
+  $<HTMLButtonElement>('[data-duplicate-profile="p"]')!.click();
+  await vi.waitFor(() => assert.equal(trigger.textContent!.trim(), 'Copying…'));
+  assert.equal(document.activeElement, trigger, 'the menu closed and gave ⋯ focus');
+  assert.equal(trigger.getAttribute('aria-disabled'), 'true');
+  assert.equal(trigger.hasAttribute('disabled'), false, 'busy, not disabled (#299)');
+  assert.equal(trigger.getAttribute('aria-label'), null, 'its text names it meanwhile');
+  assert.equal($('#profile-menu-s-p')!.hidden, true);
+  trigger.click();
+  await nextTick();
+  assert.equal($('#profile-menu-s-p')!.hidden, true, 'a busy ⋯ does not open');
+  // The copy fails: ⋯ is ready again, still focused.
+  reply(new Response(JSON.stringify({ error: 'No space left' }), { status: 500 }));
+  await vi.waitFor(() => assert.equal(trigger.getAttribute('aria-disabled'), null));
+  assert.equal(trigger.getAttribute('aria-label'), 'More actions for ' + evil);
+  assert.equal(document.activeElement, trigger);
+});
+
 test('renaming the open save updates the page and the frame', async () => {
   const calls = stubFetch({
     '/api/rename': (body: { name: string }) => ({

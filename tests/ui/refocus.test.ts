@@ -202,7 +202,7 @@ test('removing an added floor or hiding a built-in one moves focus to the floor 
   assert.ok(focusedOn('#main .tabs [data-floor].active'), describeFocus());
 });
 
-test('removing a profile moves focus to the next profile’s Remove', async () => {
+test('removing a profile moves focus to the next profile’s ⋯ menu', async () => {
   const profiles = ['original', 'second', 'third'].map(id => ({
     id,
     kind: 'original' as const,
@@ -235,10 +235,15 @@ test('removing a profile moves focus to the next profile’s Remove', async () =
   location.hash = '#profiles';
   go('profiles');
   render();
+  // Remove is in the card's ⋯ menu (#238), which closes and gives ⋯ focus when it is chosen.
+  press('[data-profile-menu="second"]');
+  await settle();
+  assert.ok(focusedOn('[data-duplicate-profile="second"]'), describeFocus());
   press('[data-remove-profile="second"]');
   await vi.waitFor(() => assert.ok(!$('[data-remove-profile="second"]')));
   await settle();
-  assert.ok(focusedOn('[data-remove-profile="third"]'), describeFocus());
+  assert.ok(focusedOn('[data-profile-menu="third"]'), describeFocus());
+  assert.equal($('#profile-menu-s-third')!.hidden, true, 'its menu stays closed');
 });
 
 test('Cancel, or a removal that fails, leaves focus on the control that asked', async () => {

@@ -33,6 +33,7 @@ import { startWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
+import ActionMenu from '../ActionMenu.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave } from '../actions.ts';
@@ -67,6 +68,11 @@ type ProfileCard = SaveCard['profiles'][number];
 const busy = ref('');
 const key = (action: string, s: SaveCard, p: ProfileCard) => `${action}:${s.id}:${p.id}`;
 const renaming = ref(false);
+// A card's ⋯ menu (ui/ActionMenu.vue) holds Duplicate, Share and Remove (#238). It is busy while
+// one of them runs, and says "Copying…" for Duplicate, since the menu has closed by then.
+const menuId = (s: SaveCard, p: ProfileCard) => `profile-menu-${s.id}-${p.id}`;
+const menuBusy = (s: SaveCard, p: ProfileCard) =>
+  ['duplicate', 'share', 'remove'].some(a => busy.value === key(a, s, p));
 
 // "Duplicate": copy the profile with its progress and open the copy.
 async function duplicate(s: SaveCard, p: ProfileCard) {
@@ -117,13 +123,16 @@ async function share(s: SaveCard, p: ProfileCard) {
 
 // "Remove profile": after the unsaved-notes check, confirm by name (and say when its save
 // goes too, as its last profile), then remove it and reload everything with boot(). Other
-// profiles keep their progress. Focus then goes to the next profile's Remove, else the previous
-// one's, else "Create a save" (ui/refocus.ts, #286).
+// profiles keep their progress. Remove is in the card's ⋯ menu, which has closed and given focus
+// to ⋯ by now, so ⋯ is the control that asked: focus then goes to the next profile's ⋯, else the
+// previous one's, else "Create a save" (ui/refocus.ts, #286).
 async function remove(e: Event, s: SaveCard, p: ProfileCard) {
   if (busy.value === key('remove', s, p)) return;
-  const refocus = refocusAfterRemoval(e.currentTarget, {
+  const item = e.currentTarget instanceof Element ? e.currentTarget : null;
+  const menu = item?.closest('.profile-card')?.querySelector('[data-profile-menu]') ?? item;
+  const refocus = refocusAfterRemoval(menu, {
     row: '#main .profile-card',
-    control: '[data-remove-profile]',
+    control: '[data-profile-menu]',
     fallback: ['#main [data-new-save]'],
   });
   if (!(await allowSwitch())) return;
@@ -231,42 +240,62 @@ async function rename(e: Event) {
         <h3>{{ p.name }}</h3>
         <p>{{ p.summary }}</p>
         <p class="small">{{ p.progress }}</p>
-        <button
-          :class="['btn', p.open ? '' : 'primary']"
-          :data-open-save="s.id"
-          :data-open-profile="p.id"
-          :aria-disabled="busy === key('open', s, p) || undefined"
-          @click="openProfile(s, p)"
-        >
-          {{ p.open ? 'Continue current profile' : 'Open profile' }}
-        </button>
-        <button
-          class="btn"
-          :data-duplicate-profile="p.id"
-          :data-duplicate-save="s.id"
-          :aria-disabled="busy === key('duplicate', s, p) || undefined"
-          @click="duplicate(s, p)"
-        >
-          {{ busy === key('duplicate', s, p) ? 'Copying…' : 'Duplicate' }}
-        </button>
-        <button
-          class="btn"
-          :data-share-profile="p.id"
-          :data-share-save="s.id"
-          :aria-disabled="busy === key('share', s, p) || undefined"
-          @click="share(s, p)"
-        >
-          Share
-        </button>
-        <button
-          class="btn"
-          :data-remove-profile="p.id"
-          :data-remove-save="s.id"
-          :aria-disabled="busy === key('remove', s, p) || undefined"
-          @click="remove($event, s, p)"
-        >
-          Remove profile
-        </button>
+        <div class="profile-actions">
+          <button
+            :class="['btn', p.open ? '' : 'primary']"
+            :data-open-save="s.id"
+            :data-open-profile="p.id"
+            :aria-disabled="busy === key('open', s, p) || undefined"
+            @click="openProfile(s, p)"
+          >
+            {{ p.open ? 'Continue current profile' : 'Open profile' }}
+          </button>
+          <ActionMenu
+            :id="menuId(s, p)"
+            :label="'More actions for ' + p.name"
+            :busy="menuBusy(s, p)"
+            :busy-text="busy === key('duplicate', s, p) ? 'Copying…' : undefined"
+            :data-profile-menu="p.id"
+            :data-profile-menu-save="s.id"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              class="btn"
+              :data-duplicate-profile="p.id"
+              :data-duplicate-save="s.id"
+              :aria-disabled="busy === key('duplicate', s, p) || undefined"
+              @click="duplicate(s, p)"
+            >
+              {{ busy === key('duplicate', s, p) ? 'Copying…' : 'Duplicate' }}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              class="btn"
+              :data-share-profile="p.id"
+              :data-share-save="s.id"
+              :aria-disabled="busy === key('share', s, p) || undefined"
+              @click="share(s, p)"
+            >
+              Share (without progress)
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              tabindex="-1"
+              class="btn danger"
+              :data-remove-profile="p.id"
+              :data-remove-save="s.id"
+              :aria-disabled="busy === key('remove', s, p) || undefined"
+              @click="remove($event, s, p)"
+            >
+              Remove profile…
+            </button>
+          </ActionMenu>
+        </div>
       </article>
     </div>
   </section>
