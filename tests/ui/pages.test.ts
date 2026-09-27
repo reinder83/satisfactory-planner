@@ -7,6 +7,7 @@ import { pending, save } from '../../public/app/api.ts';
 import { boot, currentSave, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
+import { num } from '../../public/app/format.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
@@ -645,7 +646,83 @@ test('the calculated resources page shows every budget with its icon and what is
   );
   assert.match($('#main .backup-grid')!.textContent, /No raw-resource conversion required\./);
   assert.match($('#main .backup-grid')!.textContent, /None credited in this phase\./);
-  assert.match($('#main .backup-grid')!.textContent, /Surplus solids: None/);
+  assert.equal($('#main [data-rate-list="surplus"] h2')!.textContent, 'Surplus solids');
+  assert.equal($('#main [data-rate-list="surplus"] p')!.textContent, 'None');
+});
+
+// SP-28 (#263): each item list is its own panel with an h2 bar, and lists its items as rows of
+// a decorative icon, the name as text and the rate (m³/min for a fluid); an empty list keeps
+// its sentence, and vehicle fuel shows only when the plan burns some.
+test('the calculated resources page lists items as icon rows, one panel per list', async () => {
+  const p = generated();
+  const x = p.stages['3'];
+  Object.assign(x, {
+    drone: { 'Packaged Fuel': 10 },
+    transport: {},
+    storage: { 'Iron Plate': 1, [evil]: 2.5, Wire: 0 },
+    supplied: {},
+    surplus: { 'Polymer Resin': 47.59, Fuel: 12 },
+  });
+  openCalculatedResources(p);
+  noMarkup();
+  const lists = $$<HTMLElement>('#main .backup-grid > .panel[data-rate-list]');
+  assert.deepEqual(
+    lists.map(l => [l.dataset.rateList, l.querySelector(':scope > h2:first-child')!.textContent]),
+    [
+      ['drone', 'Dedicated drone fuel'],
+      ['storage', 'Protected storage'],
+      ['supplied', 'From production you already run'],
+      ['surplus', 'Surplus solids'],
+    ],
+    'a panel with an h2 bar per list, and none for vehicle fuel the plan does not burn',
+  );
+  assert.equal($$('#main .backup-grid > .panel').length, 5, 'and the conversions panel');
+  const rows = (id: string) =>
+    $$(`#main [data-rate-list="${id}"] ul.supply-summary > li`).map(li => {
+      const img = li.querySelector('img.item-icon')!;
+      assert.equal(img.getAttribute('aria-hidden'), 'true', 'the icon is decorative');
+      assert.equal(img.getAttribute('alt'), '');
+      return [li.querySelector('b')!.textContent, li.textContent.replace(/\s+/g, ' ').trim()];
+    });
+  assert.deepEqual(rows('drone'), [['Packaged Fuel', 'Packaged Fuel 10/min']]);
+  assert.deepEqual(
+    rows('storage'),
+    [
+      ['Iron Plate', 'Iron Plate 1/min'],
+      [evil, `${evil} ${num(2.5)}/min`],
+    ],
+    'the name stays text; a zero rate is left out',
+  );
+  assert.deepEqual(rows('surplus'), [
+    ['Polymer Resin', `Polymer Resin ${num(47.59)}/min`],
+    ['Fuel', 'Fuel 12 m³/min'],
+  ]);
+  // Empty lists keep their sentence, and no list.
+  assert.equal($('#main [data-rate-list="supplied"] ul'), null);
+  assert.equal(
+    $('#main [data-rate-list="supplied"] p')!.textContent,
+    'None credited in this phase.',
+  );
+  assert.equal($('#main [data-transport-fuel]'), null);
+  // Vehicle fuel, and the other empty sentences.
+  Object.assign(x, { drone: {}, transport: { 'Packaged Fuel': 3 }, storage: {}, surplus: {} });
+  openCalculatedResources(p);
+  await nextTick();
+  assert.equal(
+    $('#main [data-rate-list="transport"] h2')!.textContent,
+    'Vehicle fuel for group links',
+  );
+  assert.deepEqual(rows('transport'), [['Packaged Fuel', 'Packaged Fuel 3/min']]);
+  assert.ok($('#main [data-rate-list="transport"] ul[data-transport-fuel]'));
+  assert.equal(
+    $('#main [data-rate-list="drone"] p')!.textContent,
+    'No dedicated drone fuel in this phase.',
+  );
+  assert.equal(
+    $('#main [data-rate-list="storage"] p')!.textContent,
+    'No storage production requested.',
+  );
+  assert.equal($('#main [data-rate-list="surplus"] p')!.textContent, 'None');
 });
 
 // SP-27 (#262): a Use column with the handbook page's bar, the tightest resource first.
@@ -776,11 +853,14 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
   );
   assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
   assert.ok($('#main .notice.warn')!.textContent.includes(evil), 'the reason is shown as text');
-  const conversions = $$('#main .backup-grid .panel')[1]!.querySelector('p')!;
+  const conversions = $('#main .backup-grid [data-conversions]')!.querySelector('p')!;
   assert.equal(conversions.querySelectorAll('br').length, 1);
   assert.equal(conversions.textContent.trim(), evil + 'Second conversion');
-  assert.match($('#main .backup-grid')!.textContent, /Iron Plate 30\/min/);
-  assert.match($('#main .backup-grid .small.muted')!.textContent, /does not build these lines/);
+  assert.match($('#main [data-rate-list="supplied"] li')!.textContent, /Iron Plate 30\/min/);
+  assert.match(
+    $('#main [data-rate-list="supplied"] .small.muted')!.textContent,
+    /does not build these lines/,
+  );
 });
 
 // Exactly what a profile calculated by an earlier release looks like: no existingSupply in

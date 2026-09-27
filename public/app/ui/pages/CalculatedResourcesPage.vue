@@ -1,8 +1,9 @@
 <!--
   #resources on a calculated profile, for the current phase: the draft and headroom notices,
   power tiles (somersloop and augmenter tiles only when the plan uses them), raw resources
-  against the entered budgets (settings.limits), then drone fuel, protected storage, credited
-  existing production, conversions and surplus. Everything reads the profile's frozen
+  against the entered budgets (settings.limits), then a panel of icon rows each for drone fuel,
+  vehicle fuel (when the plan has any), protected storage, credited existing production and
+  surplus (SP-28), and one for conversions. Everything reads the profile's frozen
   calculation snapshot; nothing here recalculates.
 -->
 <script setup lang="ts">
@@ -10,7 +11,7 @@ import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcStage, calculated, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
-import { inputText } from '../../views/storage.ts';
+import { itemRateRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -61,14 +62,43 @@ const page = computed(() =>
           };
         })
         .sort(tightestFirst),
-      drone: inputText(x.drone || {}) || 'No dedicated drone fuel in this phase.',
-      transport: inputText(x.transport || {}),
-      storage: inputText(x.storage || {}) || 'No storage production requested.',
-      supplied: inputText(x.supplied || {}) || 'None credited in this phase.',
+      // Each item list is its own panel of icon rows (SP-28); an empty one keeps its sentence.
+      // Vehicle fuel shows only when the plan burns some on its group links.
+      lists: [
+        {
+          id: 'drone',
+          title: 'Dedicated drone fuel',
+          rows: itemRateRows(x.drone || {}),
+          empty: 'No dedicated drone fuel in this phase.',
+        },
+        {
+          id: 'transport',
+          title: 'Vehicle fuel for group links',
+          rows: itemRateRows(x.transport || {}),
+          empty: '',
+        },
+        {
+          id: 'storage',
+          title: 'Protected storage',
+          rows: itemRateRows(x.storage || {}),
+          empty: 'No storage production requested.',
+        },
+        {
+          id: 'supplied',
+          title: 'From production you already run',
+          rows: itemRateRows(x.supplied || {}),
+          empty: 'None credited in this phase.',
+        },
+        {
+          id: 'surplus',
+          title: 'Surplus solids',
+          rows: itemRateRows(x.surplus || {}),
+          empty: 'None',
+        },
+      ].filter(l => l.rows.length || l.empty),
       credited: Object.keys(x.supplied || {}).length > 0,
       conversions: x.conversions || [],
       plutonium: num(x.plutoniumSink),
-      surplus: inputText(x.surplus || {}) || 'None',
     };
   }),
 );
@@ -151,23 +181,26 @@ const page = computed(() =>
       Sorted by use, tightest first. Resources this phase does not draw on are listed last.
     </p>
     <div class="backup-grid">
-      <section class="panel">
-        <h2>Dedicated drone fuel /min</h2>
-        <p>{{ page.drone }}</p>
-        <template v-if="page.transport"
-          ><h2>Vehicle fuel for group links /min</h2>
-          <p data-transport-fuel>{{ page.transport }}</p></template
+      <section v-for="l in page.lists" :key="l.id" class="panel" :data-rate-list="l.id">
+        <h2>{{ l.title }}</h2>
+        <ul
+          v-if="l.rows.length"
+          class="supply-summary"
+          :data-transport-fuel="l.id === 'transport' || undefined"
         >
-        <h2>Protected storage /min</h2>
-        <p>{{ page.storage }}</p>
-        <h2>From production you already run</h2>
-        <p>{{ page.supplied }}</p>
-        <p v-if="page.credited" class="small muted">
+          <li v-for="r in l.rows" :key="r.name">
+            <ItemIcon :name="r.name" aria-hidden="true" /><span
+              ><b>{{ r.name }}</b> {{ r.rate }}</span
+            >
+          </li>
+        </ul>
+        <p v-else>{{ l.empty }}</p>
+        <p v-if="l.id === 'supplied' && page.credited" class="small muted">
           The plan does not build these lines or the chain behind them. Their extraction is assumed
           to be outside the budgets above.
         </p>
       </section>
-      <section class="panel">
+      <section class="panel" data-conversions>
         <h2>Conversion and byproducts</h2>
         <p>
           <template v-if="page.conversions.length"
@@ -177,7 +210,6 @@ const page = computed(() =>
           ><template v-else>No raw-resource conversion required.</template>
         </p>
         <p>Plutonium rods to sink: {{ page.plutonium }}/min.</p>
-        <p>Surplus solids: {{ page.surplus }}</p>
         <p class="small muted">
           Liquid and radioactive material balances are enforced. Do not let storage or overflow
           block recycling.
