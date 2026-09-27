@@ -1,18 +1,21 @@
 // The handlers for the controls several components share: progress checkboxes, links to a
-// factory's dialog, the dialog's ×, and "Create a save". Each component binds
+// factory's dialog, the dialog's ×, "Create a save", opening a profile and signing out. Each
+// component binds
 // them itself (@change, @click, or v-bind with factoryLink()). The data-* attributes stay
 // on the elements: they carry the saved keys these handlers read, and browser-check.ts,
 // the tests and allowSwitch() in api.ts look for them.
 // Progress changes go through save() in api.ts: it queues the write, toasts a failure
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
 // (or put the control back); a success toast never follows a failed write.
-import { allowSwitch, save, toast } from '../api.ts';
+import { allowSwitch, navigate, post, save, toast, writeQueue } from '../api.ts';
+import { boot, loadContext, setAuthMode, setWorkspace } from '../session.ts';
 import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
 import { required } from '../format.ts';
 import { containerMove } from '../views/storage.ts';
 import { whileBusy } from '../busy.ts';
+import type { WorkspaceSummary } from '../../types/index.ts';
 
 // A link to a factory's dialog: a handbook factory or a calculated row.
 export type FactoryLink = { factory: string } | { calcFactory: string };
@@ -78,6 +81,41 @@ export function cancelDetail(e: Event) {
 // "Create a save" on the profiles page, and in the wizard when there is no draft.
 // startWizard checks for unsaved notes itself.
 export const newSave = () => startWizard();
+
+// "Open profile" on the profiles page and a profile in the sidebar's profile switcher (SP-07):
+// after the unsaved-notes check, make it the active profile on the server, load it and show its
+// plan. `busy` is told when the work starts and ends, so the control can say so; a failure is a
+// toast and the open profile stays open.
+export async function openProfile(saveId: string, profileId: string, busy?: (on: boolean) => void) {
+  if (!(await allowSwitch())) return;
+  busy?.(true);
+  try {
+    await writeQueue;
+    setWorkspace(await post<WorkspaceSummary>('/api/select', { saveId, profileId }));
+    await loadContext(saveId, profileId);
+    navigate('plan');
+  } catch (err) {
+    toast((err as Error).message, true);
+  } finally {
+    busy?.(false);
+  }
+}
+
+// "Sign out" on the account page and in the profile switcher: after the unsaved-notes check and
+// any queued saves, sign out; boot() then shows the sign-in screen. A failed request is a toast,
+// and the user stays signed in.
+export async function signOut() {
+  if (!(await allowSwitch())) return;
+  await writeQueue;
+  try {
+    await post('/api/logout', {});
+  } catch (err) {
+    toast((err as Error).message || 'Could not sign out.', true);
+    return;
+  }
+  setAuthMode('login');
+  await boot();
+}
 
 // A storage container dropped on another position (#208, StoragePage.vue): one save that moves
 // it, or swaps it with the container there, its checks and note going along.

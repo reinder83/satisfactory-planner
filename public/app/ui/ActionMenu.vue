@@ -15,6 +15,11 @@
   focus and a press does nothing), and `busyText` ("Copying…") replaces ⋯ meanwhile, since the
   item that would say so is out of sight. The ⋯ is drawn (an inline SVG), since neither
   typeface has the glyph.
+
+  The sidebar's profile switcher (Shell.vue, SP-07) uses the same menu with its own button: the
+  `trigger` slot replaces ⋯ with the button's content (which then names it, so `label` is left
+  out) and `triggerClass` its classes. Its items may also be role="menuitemradio" with
+  aria-checked, for the profile that is open.
 -->
 <script lang="ts">
 // The menu open on the page, to close when another one opens.
@@ -29,10 +34,13 @@ defineOptions({ inheritAttrs: false });
 const props = defineProps<{
   // The menu element's id, unique on the page (the ⋯ button's aria-controls).
   id: string;
-  // The ⋯ button's accessible name ("More actions for <profile>").
-  label: string;
+  // The ⋯ button's accessible name ("More actions for <profile>"); left out when the trigger
+  // slot's text names the button.
+  label?: string;
   busy?: boolean;
   busyText?: string;
+  // The button's classes, for a button that is not a ⋯.
+  triggerClass?: string;
 }>();
 
 const open = ref(false);
@@ -41,7 +49,7 @@ const trigger = ref<HTMLButtonElement>();
 const list = ref<HTMLElement>();
 
 const items = () =>
-  list.value ? [...list.value.querySelectorAll<HTMLElement>('[role="menuitem"]')] : [];
+  list.value ? [...list.value.querySelectorAll<HTMLElement>('[role^="menuitem"]')] : [];
 
 function outside(e: Event) {
   if (!(e.target instanceof Node) || !root.value?.contains(e.target)) hide(false);
@@ -100,7 +108,7 @@ function menuKey(e: KeyboardEvent) {
 
 // Capture: before the item's own handler, which then finds focus on ⋯.
 function chosen(e: Event) {
-  if (e.target instanceof Element && e.target.closest('[role="menuitem"]')) hide(true);
+  if (e.target instanceof Element && e.target.closest('[role^="menuitem"]')) hide(true);
 }
 
 // Focus that leaves the menu for another control (Shift+Tab, a click elsewhere) closes it.
@@ -119,7 +127,7 @@ onBeforeUnmount(() => hide(false));
       :id="id + '-button'"
       ref="trigger"
       type="button"
-      class="btn action-menu-button"
+      :class="triggerClass ?? 'btn action-menu-button'"
       aria-haspopup="menu"
       :aria-expanded="open ? 'true' : 'false'"
       :aria-controls="id"
@@ -129,7 +137,13 @@ onBeforeUnmount(() => hide(false));
       @keydown="triggerKey"
     >
       <template v-if="busyText">{{ busyText }}</template
-      ><svg v-else aria-hidden="true" viewBox="0 0 16 4" width="16" height="4">
+      ><slot v-else-if="$slots.trigger" name="trigger" /><svg
+        v-else
+        aria-hidden="true"
+        viewBox="0 0 16 4"
+        width="16"
+        height="4"
+      >
         <circle cx="2" cy="2" r="1.6" />
         <circle cx="8" cy="2" r="1.6" />
         <circle cx="14" cy="2" r="1.6" />

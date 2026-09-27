@@ -318,6 +318,79 @@ input[type='radio'] {
   color: var(--gold);
 }
 
+/* The sidebar footer is the profile switcher (SP-07, Shell.vue): a menu button showing the open
+   profile's lines, whose menu (ui/ActionMenu.vue) opens upwards across the sidebar's width. */
+.sidebar-foot .action-menu {
+  display: block;
+}
+.profile-switcher {
+  position: relative;
+  display: block;
+  width: calc(100% + 16px);
+  margin: -6px -8px 0;
+  padding: 6px 26px 6px 8px;
+  border: 1px solid transparent;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.profile-switcher:hover,
+.profile-switcher[aria-expanded='true'] {
+  border-color: var(--line);
+  background: var(--panel2);
+  color: var(--ink);
+}
+.profile-switcher-icon {
+  position: absolute;
+  top: 9px;
+  right: 8px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sidebar-foot .action-menu-list {
+  top: auto;
+  bottom: 100%;
+  left: -8px;
+  right: -8px;
+  min-width: 0;
+  margin: 0 0 6px;
+  max-height: 70vh;
+  overflow-y: auto;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+.sidebar-foot .action-menu-list .btn {
+  white-space: normal;
+  text-align: left;
+  padding: 8px 12px;
+}
+.action-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.action-menu-list [aria-checked='true'] {
+  border-color: var(--accent);
+  color: var(--bright);
+}
+/* "Open" beside the open profile; aria-checked says so to a screen reader. */
+.action-menu-mark {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
 /* ── ADA: the assistant panel in the sidebar ───────────── */
 .ada {
   margin: 16px 14px 0;

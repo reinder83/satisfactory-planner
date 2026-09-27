@@ -1,12 +1,13 @@
 <!--
-  #account. On the server: the signed-in user and "Sign out", or the setup form while
+  #account. On the server: the signed-in user and "Sign out" (signOut in ui/actions.ts, which the
+  sidebar's profile switcher uses too), or the setup form while
   accounts are still off. The browser edition has no accounts, so it shows the backup page.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
-import { boot, setAuthMode, workspace } from '../../session.ts';
+import { workspace } from '../../session.ts';
+import { signOut } from '../actions.ts';
 import AuthForm from '../AuthForm.vue';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
@@ -18,21 +19,6 @@ const account = computed(() =>
     username: workspace.user?.username ?? '',
   })),
 );
-
-// "Sign out": after the unsaved-notes check and any queued saves, sign out; boot() then
-// shows the sign-in screen. A failed request is a toast, and the user stays signed in.
-async function signOut() {
-  if (!(await allowSwitch())) return;
-  await writeQueue;
-  try {
-    await post('/api/logout', {});
-  } catch (err) {
-    toast((err as Error).message || 'Could not sign out.', true);
-    return;
-  }
-  setAuthMode('login');
-  await boot();
-}
 </script>
 
 <template>

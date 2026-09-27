@@ -36,7 +36,7 @@ import { refocusAfterRemoval } from '../refocus.ts';
 import ActionMenu from '../ActionMenu.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
-import { newSave } from '../actions.ts';
+import { newSave, openProfile } from '../actions.ts';
 import type { WorkspaceSummary } from '../../../types/index.ts';
 
 const page = computed(() =>
@@ -167,21 +167,11 @@ async function remove(e: Event, s: SaveCard, p: ProfileCard) {
 }
 
 // "Open profile" / "Continue current profile": make it the active profile on the server,
-// load it and show its plan.
-async function openProfile(s: SaveCard, p: ProfileCard) {
+// load it and show its plan (openProfile in ui/actions.ts, which the sidebar's profile switcher
+// uses too).
+function openCard(s: SaveCard, p: ProfileCard) {
   if (busy.value === key('open', s, p)) return;
-  if (!(await allowSwitch())) return;
-  busy.value = key('open', s, p);
-  try {
-    await writeQueue;
-    setWorkspace(await post<WorkspaceSummary>('/api/select', { saveId: s.id, profileId: p.id }));
-    await loadContext(s.id, p.id);
-    navigate('plan');
-  } catch (err) {
-    toast((err as Error).message, true);
-  } finally {
-    busy.value = '';
-  }
+  return openProfile(s.id, p.id, on => (busy.value = on ? key('open', s, p) : ''));
 }
 
 // #rename-form renames the open save or the open profile (its "target" select), then copies
@@ -246,7 +236,7 @@ async function rename(e: Event) {
             :data-open-save="s.id"
             :data-open-profile="p.id"
             :aria-disabled="busy === key('open', s, p) || undefined"
-            @click="openProfile(s, p)"
+            @click="openCard(s, p)"
           >
             {{ p.open ? 'Continue current profile' : 'Open profile' }}
           </button>
