@@ -1,5 +1,5 @@
-// Where focus goes after a confirmed removal (#286, public/app/ui/refocus.ts): the removed
-// row's control goes with it, so focus moves to the same control in the next row, else the
+// Where focus goes after a confirmed removal (#286, public/app/ui/refocus.ts), and after an
+// action without a confirmation whose button goes (#290): the removed row's control goes with it, so focus moves to the same control in the next row, else the
 // previous one, else the list's "Add…" field or tab, never to <body>. Each list is mounted the
 // way the app mounts it; a control is focused before it is pressed, as the keyboard does.
 // The focused element is compared by what identifies it (never two elements with assert.equal,
@@ -15,6 +15,7 @@ import {
   setLayoutEditing,
   setPlanEditing,
   setQuery,
+  setWizard,
   state,
   workspace,
 } from '../../public/app/session.ts';
@@ -24,13 +25,15 @@ import {
   $$,
   answerConfirms,
   applyUpdate,
+  catalog,
+  generated,
   go,
   handbook,
   open,
   page,
   stubFetch,
 } from './setup.ts';
-import type { StorageEdits, WorkspaceSummary } from '../../public/types/index.ts';
+import type { StorageEdits, TaskEdits, WorkspaceSummary } from '../../public/types/index.ts';
 
 const settle = async () => {
   await new Promise(r => setTimeout(r, 20));
@@ -254,4 +257,229 @@ test('Cancel, or a removal that fails, leaves focus on the control that asked', 
   await settle();
   assert.ok($(`[data-remove-step="${id}"]`), 'the step is still there');
   assert.ok(focusedOn(`[data-remove-step="${id}"]`), describeFocus());
+});
+
+// --- Actions without a confirmation whose button goes (#290) ---
+
+test('Restore on a removed step moves focus to the next Restore, else the previous one, else the restored step', async () => {
+  stubFetch({ '/api/update': applyUpdate });
+  const taskEdits: Partial<TaskEdits> = {
+    removed: ['phase-3-survey', 'phase-3-iron', 'phase-3-retire-power'],
+  };
+  open({ state: { taskEdits: taskEdits as TaskEdits } });
+  go('plan');
+  setPlanEditing(true);
+  render();
+  const [first, second, third] = $$('[data-restore-task]').map(b => b.dataset.restoreTask!);
+  press(`[data-restore-task="${second}"]`);
+  await settle();
+  assert.ok(!$(`[data-restore-task="${second}"]`), 'the step is restored');
+  assert.ok(focusedOn(`[data-restore-task="${third}"]`), describeFocus());
+  // The last one: no next Restore, so the one before it.
+  press(`[data-restore-task="${third}"]`);
+  await settle();
+  assert.ok(focusedOn(`[data-restore-task="${first}"]`), describeFocus());
+  // The only one: the list goes, and focus goes to the restored step in the checklist.
+  press(`[data-restore-task="${first}"]`);
+  await settle();
+  assert.equal($('.removed-steps'), null, 'nothing is left to restore');
+  assert.ok(focusedOn(`#main .checklist [data-remove-step="${first}"]`), describeFocus());
+});
+
+test('clearing a container moves focus to the next ✕ in its bay, else the previous one, else the add field', async () => {
+  stubFetch({ '/api/update': applyUpdate });
+  const storageEdits = {
+    bays: [{ id: 'S', name: 'Overflow', floor: 'ground' }],
+    slots: { S01: 'Wire', S02: 'Cable', S03: 'Quickwire' },
+  } as Partial<StorageEdits> as StorageEdits;
+  open({ state: { storageEdits } });
+  go('storage');
+  setLayoutEditing(true);
+  render();
+  press('[data-clear-slot="S02"]');
+  await settle();
+  assert.ok(!$('[data-clear-slot="S02"]'), 'the container is cleared');
+  assert.ok(focusedOn('[data-clear-slot="S03"]'), describeFocus());
+  // The last container of the bay: the previous one, not the next bay's.
+  press('[data-clear-slot="S03"]');
+  await settle();
+  assert.ok(focusedOn('[data-clear-slot="S01"]'), describeFocus());
+  press('[data-clear-slot="S01"]');
+  await settle();
+  assert.ok(focusedOn('#bay-draft-S'), describeFocus());
+});
+
+test('Restore on a hidden bay or floor moves focus to the next Restore, else what came back', async () => {
+  stubFetch({ '/api/update': applyUpdate });
+  const storageEdits = {
+    hiddenBays: ['A', 'B', 'O'],
+    hiddenFloors: ['workshop'],
+  } as Partial<StorageEdits> as StorageEdits;
+  open({ state: { storageEdits } });
+  go('storage');
+  setLayoutEditing(true);
+  render();
+  press('[data-restore-bay="A"]');
+  await settle();
+  assert.ok(!$('[data-restore-bay="A"]'), 'the bay is restored');
+  assert.ok(focusedOn('[data-restore-bay="B"]'), describeFocus());
+  // The hidden floor is the last row: the one before it.
+  press('[data-restore-floor="workshop"]');
+  await settle();
+  assert.ok(!$('[data-restore-floor="workshop"]'), 'the floor is restored');
+  assert.ok(focusedOn('[data-restore-bay="O"]'), describeFocus());
+  press('[data-restore-bay="O"]');
+  await settle();
+  assert.ok(focusedOn('[data-restore-bay="B"]'), describeFocus());
+  // The last one, on this floor: its Hide bay.
+  press('[data-restore-bay="B"]');
+  await settle();
+  assert.equal($('[data-hidden-bays]'), null, 'nothing is left to restore');
+  assert.ok(focusedOn('[data-hide-bay="B"]'), describeFocus());
+});
+
+test('the last hidden bay or floor restored moves focus to its floor tab', async () => {
+  stubFetch({ '/api/update': applyUpdate });
+  // O is an upper-floor bay, restored from the ground floor.
+  open({ state: { storageEdits: { hiddenBays: ['O'] } as Partial<StorageEdits> as StorageEdits } });
+  go('storage');
+  setLayoutEditing(true);
+  render();
+  press('[data-restore-bay="O"]');
+  await settle();
+  assert.ok(focusedOn('#main .tabs [data-floor="upper"]'), describeFocus());
+  open({
+    state: {
+      storageEdits: { hiddenFloors: ['workshop'] } as Partial<StorageEdits> as StorageEdits,
+    },
+  });
+  go('storage');
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  press('[data-restore-floor="workshop"]');
+  await settle();
+  assert.ok(focusedOn('#main .tabs [data-floor="workshop"]'), describeFocus());
+});
+
+test('removing a factory from a group moves focus to its next ✕, else its Add to group', async () => {
+  stubFetch({ '/api/update': applyUpdate });
+  open({
+    state: {
+      factoryGroups: {
+        groups: [
+          { id: 'fg-cable01', name: 'Cable factory' },
+          { id: 'fg-plates1', name: 'Stitched plates' },
+        ],
+        assignments: {
+          wire: [
+            { group: 'fg-cable01', rate: 300 },
+            { group: 'fg-plates1', rate: null },
+          ],
+        },
+      },
+    },
+  });
+  go('factories');
+  setFactoryEditing(true);
+  render();
+  // Wire's card in the cable factory's section goes with its first ✕.
+  const card = $('[data-unassign="wire"][data-group="fg-cable01"]')!.closest('.assign-editor')!;
+  press('[data-unassign="wire"][data-group="fg-cable01"]');
+  await settle();
+  assert.ok(!$('[data-unassign="wire"][data-group="fg-cable01"]'), 'wire left the group');
+  assert.equal(card.isConnected, false, 'that card went with it');
+  assert.ok(focusedOn('[data-unassign="wire"][data-group="fg-plates1"]'), describeFocus());
+  press('[data-unassign="wire"][data-group="fg-plates1"]');
+  await settle();
+  assert.ok(!$('[data-unassign="wire"]'), 'wire is in no group');
+  assert.ok(focusedOn('[data-assign-add="wire"]'), describeFocus());
+});
+
+test('removing a supply row moves focus to the next Remove, else the previous one, else the blank row', async () => {
+  open({ workspace: { catalog: catalog() } });
+  setWizard({
+    step: 1,
+    saveId: null,
+    saveName: 'World',
+    name: '',
+    settings: structuredClone(generated().settings),
+    preview: null,
+    carryFrom: null,
+    carry: {},
+    mode: 'advanced',
+    guidedStep: 1,
+    guidedAsk: null,
+    tutorial: 'doing',
+    supplyRows: [
+      { name: 'Modular Frame', rate: '50' },
+      { name: 'Computer', rate: '20' },
+      { name: 'Wire', rate: '10' },
+    ],
+  });
+  go('wizard');
+  render();
+  const items = () => $$<HTMLInputElement>('input[name=supplyItem]').map(i => i.value);
+  press('[data-supply-remove="1"]');
+  await settle();
+  assert.deepEqual(items(), ['Modular Frame', 'Wire', ''], 'Computer is removed');
+  assert.ok(focusedOn('[data-supply-remove="1"]'), describeFocus());
+  // The last filled row: the blank row takes its place, so the row before it.
+  press('[data-supply-remove="1"]');
+  await settle();
+  assert.deepEqual(items(), ['Modular Frame', '']);
+  assert.ok(focusedOn('[data-supply-remove="0"]'), describeFocus());
+  press('[data-supply-remove="0"]');
+  await settle();
+  assert.deepEqual(items(), ['']);
+  assert.ok(focusedOn('[data-supply-row="0"] input[name=supplyItem]'), describeFocus());
+});
+
+test('Mute and Unmute move focus to the button that takes their place', async () => {
+  render();
+  press('[data-ada-mute="on"]');
+  await settle();
+  assert.ok(focusedOn('[data-ada-mute="off"]'), describeFocus());
+  press('[data-ada-mute="off"]');
+  await settle();
+  assert.ok(focusedOn('[data-ada-mute="on"]'), describeFocus());
+});
+
+test('Fill, Reset and Undo in the node survey move focus to the button that takes their place', async () => {
+  open({ workspace: { catalog: catalog() } });
+  setWizard({
+    step: 4,
+    saveId: null,
+    saveName: 'World',
+    name: '',
+    settings: {
+      ...structuredClone(generated().settings),
+      purity: 'vanilla',
+      distribution: 'original',
+    },
+    preview: null,
+    carryFrom: null,
+    carry: {},
+    mode: 'extraction',
+    extractionStep: 2,
+    extractionReturn: { mode: 'advanced', step: 4, guidedStep: 1 },
+    guidedStep: 1,
+    guidedAsk: null,
+    tutorial: 'doing',
+  });
+  go('wizard');
+  render();
+  press('[data-node-reset]');
+  await settle();
+  assert.ok(focusedOn('[data-node-undo]'), describeFocus());
+  press('[data-node-undo]');
+  await settle();
+  assert.ok(focusedOn('[data-node-reset]'), describeFocus());
+  // Emptied, the survey offers Fill, which gives way to the filled counts and their Undo or Reset.
+  press('[data-node-reset]');
+  await settle();
+  press('[data-node-preset]');
+  await settle();
+  assert.equal($('[data-node-preset]'), null, 'the counts are filled');
+  assert.ok(focusedOn('[data-node-undo], [data-node-reset]'), describeFocus());
 });

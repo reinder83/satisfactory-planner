@@ -4,15 +4,25 @@
 <script setup lang="ts">
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import StepIcon from './StepIcon.vue';
 import type { RemovedStepView } from '../../tasks.ts';
 
 defineProps<{ steps: RemovedStepView[] }>();
 
-async function restore(id: string) {
+// "Restore": the step goes back into the checklist and its Restore leaves this list, so focus goes
+// to the next removed step's Restore, else the previous one's, and once none is left to the
+// restored step's Remove in the checklist, else the personal task field (ui/refocus.ts, #290).
+async function restore(e: Event, id: string) {
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    row: '#main .removed-steps .removed-step',
+    control: '[data-restore-task]',
+    fallback: [`#main .checklist [data-remove-step="${CSS.escape(id)}"]`, '#add-task [name=title]'],
+  });
   try {
     await save({ type: 'taskRestore', id });
     render();
+    await refocus();
   } catch {}
 }
 </script>
@@ -22,7 +32,9 @@ async function restore(id: string) {
     <summary>Removed steps in this phase ({{ steps.length }})</summary>
     <div v-for="s in steps" :key="s.id" class="removed-step">
       <span><StepIcon :icon="s.icon" />{{ s.title }}</span
-      ><button class="btn quiet" :data-restore-task="s.id" @click="restore(s.id)">Restore</button>
+      ><button class="btn quiet" :data-restore-task="s.id" @click="restore($event, s.id)">
+        Restore
+      </button>
     </div>
   </details>
 </template>

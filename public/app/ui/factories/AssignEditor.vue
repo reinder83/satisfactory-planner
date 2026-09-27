@@ -11,6 +11,7 @@ import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
 const props = defineProps<{ factoryKey: string }>();
@@ -29,17 +30,20 @@ const editor = computed(() =>
 );
 
 // Saves this factory's memberships, `change` applied to the current list of { group, rate }.
+// Resolves true once it is saved.
 async function assign(
   el: HTMLInputElement | HTMLSelectElement | HTMLButtonElement,
   change: (memberships: GroupAssignment[]) => GroupAssignment[],
-) {
+): Promise<boolean> {
   const groups = change(
     membershipsOf(props.factoryKey).map(m => ({ group: m.group, rate: m.rate })),
   );
   el.disabled = true;
   try {
     await save({ type: 'factoryAssign', key: props.factoryKey, groups });
+    return true;
   } catch {
+    return false;
   } finally {
     el.disabled = false;
     render();
@@ -65,9 +69,20 @@ function setRate(e: Event, group: string) {
   assign(el, ms => ms.map(m => (m.group === group ? { group, rate } : m)));
 }
 
-// ✕: leave that group, keeping the other groups' rates.
-const unassign = (e: Event, group: string) =>
-  assign(e.currentTarget as HTMLButtonElement, ms => ms.filter(m => m.group !== group));
+// ✕: leave that group, keeping the other groups' rates. The row goes, and the whole card when it
+// was drawn in that group's section, so focus goes to this factory's next ✕, else its previous
+// one, else its "+ Add to group…" (ui/refocus.ts, #290): on this card while it is still there,
+// else on the factory's card elsewhere on the page.
+async function unassign(e: Event, group: string) {
+  const button = e.currentTarget as HTMLButtonElement,
+    key = CSS.escape(props.factoryKey);
+  const refocus = refocusAfterRemoval(button, {
+    scope: button.closest('.assign-editor'),
+    row: `[data-unassign="${key}"]`,
+    fallback: [`[data-assign-add="${key}"]`, `[data-assign-rate="${key}"]`],
+  });
+  if (await assign(button, ms => ms.filter(m => m.group !== group))) await refocus();
+}
 
 // "+ Add to group…": join the chosen group with no rate.
 function add(e: Event) {

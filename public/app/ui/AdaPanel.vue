@@ -16,6 +16,7 @@ import {
   setAdaMuted,
 } from '../ada-panel.ts';
 import { invalidate, legacy } from './bridge.ts';
+import { refocusAfterRemoval } from './refocus.ts';
 
 const ada = computed(() => legacy(adaView));
 
@@ -26,12 +27,17 @@ function next() {
   invalidate();
 }
 
-// "Mute" / "Unmute": remembered in localStorage (adaStore), never in a saved profile.
-function mute(on: boolean) {
+// "Mute" / "Unmute": remembered in localStorage (adaStore), never in a saved profile. The panel is
+// swapped for the other one, so focus goes to its Unmute / Mute (ui/refocus.ts, #290).
+function mute(on: boolean, e: Event) {
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    fallback: [`[data-ada-mute="${on ? 'off' : 'on'}"]`],
+  });
   setAdaMuted(on);
   adaStore();
   adaClearFault();
   invalidate();
+  void refocus();
 }
 
 // The badge is decoration, not a control: it is hidden from assistive software and nothing
@@ -44,7 +50,7 @@ function poke() {
 <template>
   <div v-if="ada?.muted" class="ada is-muted">
     <span class="ada-mark" aria-hidden="true">◈</span><span>ADA muted</span
-    ><button class="btn quiet" type="button" data-ada-mute="off" @click="mute(false)">
+    ><button class="btn quiet" type="button" data-ada-mute="off" @click="mute(false, $event)">
       Unmute
     </button>
   </div>
@@ -62,7 +68,9 @@ function poke() {
     <div class="ada-tools">
       <button class="btn quiet" type="button" id="ada-next" data-ada-next @click="next">
         Another remark</button
-      ><button class="btn quiet" type="button" data-ada-mute="on" @click="mute(true)">Mute</button>
+      ><button class="btn quiet" type="button" data-ada-mute="on" @click="mute(true, $event)">
+        Mute
+      </button>
     </div>
   </section>
 </template>

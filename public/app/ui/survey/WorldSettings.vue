@@ -32,6 +32,7 @@ import {
 import { noteWizardEdit } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
+import { refocusAfterRemoval } from '../refocus.ts';
 import SelectField from '../form/SelectField.vue';
 
 const view = computed(() =>
@@ -69,7 +70,14 @@ const view = computed(() =>
 
 // "Fill in the counts below": every count from the default world at that purity. It also
 // forgets any pending "Undo reset", and keeps the recorded purity in step with the counts.
-function fill() {
+// Fill, Reset and Undo each swap their button for another one, so focus goes to the one that
+// takes its place (ui/refocus.ts, #290): Reset's Undo, Undo's Reset, and after Fill whichever of
+// the two is shown.
+const swapTo = (e: Event, fallback: string[]) =>
+  refocusAfterRemoval(e.currentTarget, { fallback: fallback.map(s => '#main ' + s) });
+
+function fill(e: Event) {
+  const refocus = swapTo(e, ['[data-node-undo]', '[data-node-reset]']);
   const w = draft();
   noteWizardEdit();
   const form = $<HTMLFormElement>('#wizard-form');
@@ -80,6 +88,7 @@ function fill() {
   w.extractionUndo = null;
   w.settings.purity = purity;
   render();
+  void refocus();
   toast(
     'Filled in the default world at ' +
       (nodePresets.find(([v]) => v === purity)?.[1] || 'that purity') +
@@ -87,20 +96,24 @@ function fill() {
   );
 }
 
-function reset() {
+function reset(e: Event) {
+  const refocus = swapTo(e, ['[data-node-undo]']);
   const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
   resetExtraction();
   render();
+  void refocus();
   toast(
     'Cleared. Every count is zero, your miner mark and clock are kept — and Undo reset puts it all back.',
   );
 }
 
-function undo() {
+function undo(e: Event) {
+  const refocus = swapTo(e, ['[data-node-reset]']);
   const kind = view.value?.undo;
   undoExtractionReset();
   render();
+  void refocus();
   toast(
     kind === 'refill'
       ? 'Put back the counts you typed.'
