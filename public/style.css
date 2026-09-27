@@ -3388,10 +3388,36 @@ button.rail-tile:hover {
 
 /* ── Print: revert to paper ────────────────────────────── */
 @media print {
+  /* Paper is white, and printing drops backgrounds by default, so every text colour has to
+     read on white (#330). The tokens turn dark here, keeping their hue so the tones still
+     differ; the rules below name the few screen colours that are literals. */
   :root {
     color-scheme: light;
     color: #1c2328;
     background: white;
+    --bg: #ffffff;
+    --bg2: #ffffff;
+    --panel: #ffffff;
+    --panel2: #ffffff;
+    --raise: #ffffff;
+    --bar: #eeeeee;
+    --line: #999999;
+    --line2: #bbbbbb;
+    --line3: #bbbbbb;
+    --row: #f3f3f3;
+    --ink: #1c2328;
+    --bright: #101417;
+    --muted: #4a545c;
+    --dim: #555f67;
+    --kicker: #4a545c;
+    --accent: #9a4f00;
+    --accent-hi: #8a4700;
+    --green: #17663e;
+    --red: #a52d17;
+    --blue: #2a5a93;
+    --gold: #7a5200;
+    --warm-border: #c9a36b;
+    --drop: none;
   }
   body,
   .workspace,
@@ -3450,16 +3476,95 @@ button.rail-tile:hover {
   .panel > .section-head:first-child {
     background: #eee;
   }
+  .skip {
+    display: none;
+  }
+  /* Notices print dark on light, bold lead and links included; the tone stays in the
+     left border, which takes the darkened token colours above. */
   .notice,
   .notice.info,
   .notice.blue,
   .notice.error {
     background: #f5f5f5;
-    color: #333;
+    color: #1c2328;
+    border-left-width: 4px;
   }
+  .notice b,
+  .notice strong,
+  .notice.info b,
+  .notice.info strong,
+  .notice.blue b,
+  .notice.blue strong,
   .notice.error b,
-  .notice.error strong {
-    color: inherit;
+  .notice.error strong,
+  .notice a {
+    color: #101417;
+  }
+  /* Screen colours written as literals rather than tokens. */
+  .nav a,
+  .tab,
+  .wizard-progress button,
+  .ada-line,
+  .breadcrumbs,
+  .next-card p,
+  .task p,
+  .task:has(input:checked) summary,
+  .goal-card p,
+  .profile-card p,
+  .removed-step,
+  .guided-card p {
+    color: var(--muted);
+  }
+  .delivery label,
+  .completion-item strong {
+    color: var(--ink);
+  }
+  .next-card .step-no {
+    color: var(--accent);
+  }
+  .form-error {
+    color: var(--red);
+  }
+  .bay-letter {
+    background: #ffffff;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .nav a.active,
+  .tab.active,
+  .wizard-progress button.current,
+  .dialog-head .close,
+  .slot-remove,
+  .bay-rename,
+  .delivery input,
+  .notes,
+  .inline-form input,
+  .inline-form select,
+  .field input,
+  .field select,
+  .field input:read-only,
+  .task-edit textarea,
+  .assign-row input,
+  .assign-editor select,
+  .used-input,
+  .setting-help [role='tooltip'],
+  .alt-picker-head input,
+  .rate-picker #rate-filter,
+  .supply-options,
+  .guided-chip,
+  .card-icon,
+  .dialog-icon {
+    background: #ffffff;
+  }
+  .task:has(input:checked),
+  .slot.done,
+  .rail-cell.out,
+  .rail-machine {
+    background: #f3f3f3;
+  }
+  .progress-track,
+  .resource-bar {
+    background: #dddddd;
   }
 }
 

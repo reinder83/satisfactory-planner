@@ -9,24 +9,24 @@ const FLOOR_PX = 10.5;
 const ROOT_PX = 13; // :root font-size, for rem values
 const MIN_CONTRAST = 4.5;
 
-// The stylesheet without comments and without the print block, which reverts to dark text on
-// paper and has its own colours.
-function screenCss(): string {
-  let css = fs
+// The stylesheet without comments, split into the print block (which reverts to dark text on
+// paper and has its own colours) and everything else.
+function splitCss(): { screen: string; print: string } {
+  const css = fs
     .readFileSync(new URL('../public/style.css', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '');
   const start = css.indexOf('@media print');
-  if (start >= 0) {
-    let depth = 0,
-      end = css.indexOf('{', start);
-    for (; end < css.length; end++) {
-      if (css[end] === '{') depth++;
-      else if (css[end] === '}' && --depth === 0) break;
-    }
-    css = css.slice(0, start) + css.slice(end + 1);
+  if (start < 0) return { screen: css, print: '' };
+  let depth = 0,
+    end = css.indexOf('{', start);
+  const open = end;
+  for (; end < css.length; end++) {
+    if (css[end] === '{') depth++;
+    else if (css[end] === '}' && --depth === 0) break;
   }
-  return css;
+  return { screen: css.slice(0, start) + css.slice(end + 1), print: css.slice(open + 1, end) };
 }
+const screenCss = () => splitCss().screen;
 
 // Innermost rules: selector and declarations, with the line they start on.
 function rules(css: string) {
@@ -140,4 +140,101 @@ test(`every text colour in style.css reaches ${MIN_CONTRAST}:1 on its background
     }
   }
   assert.deepEqual(low, []);
+});
+
+// Print (#330). The screen rules still apply on paper, so the print block has to override
+// every screen colour that would be unreadable there: it redefines the colour tokens, and names
+// the selectors whose screen colour is a literal. Printing drops backgrounds by default, so
+// every text colour is checked on white paper as well as on the background it prints with.
+function printView() {
+  const { screen, print } = splitCss();
+  const tok = { ...tokens(screen), ...tokens(print) };
+  const printRules = rules(print);
+  const override = (selector: string, prop: string) => {
+    let found: string | undefined;
+    for (const r of printRules)
+      if (r.selector.split(/\s*,\s*/).includes(selector))
+        found = decls(r.body, prop).at(-1) ?? found;
+    return found;
+  };
+  // Elements the print block hides, and states that never occur on paper.
+  const hidden = printRules
+    .filter(r => decls(r.body, 'display').includes('none'))
+    .flatMap(r => r.selector.split(/\s*,\s*/));
+  const skip = (selector: string) =>
+    /:hover|:focus|:active|::placeholder|::selection|\.task-icon\b/.test(selector) ||
+    hidden.some(h => new RegExp(`${h.replace(/[.#]/g, '\\$&')}(?![\\w-])`).test(selector));
+  return { screen, tok, override, skip, printRules };
+}
+
+test(`printed text reaches ${MIN_CONTRAST}:1 on paper (#330)`, () => {
+  const { screen, tok, override, skip, printRules } = printView();
+  const low: string[] = [];
+  const check = (
+    selector: string,
+    color: string,
+    background: string | undefined,
+    where: string,
+  ) => {
+    const fg = resolve(color, tok);
+    if (!fg) return;
+    const bg = background && resolve(background, tok);
+    for (const paper of bg ? ['#ffffff', bg] : ['#ffffff']) {
+      const ratio = contrast(fg, paper);
+      if (ratio < MIN_CONTRAST)
+        low.push(`${selector} (${where}): ${color} on ${paper} is ${ratio.toFixed(2)}`);
+    }
+  };
+  const background = (body: string) => decls(body, 'background(?:-color)?').at(-1);
+  for (const r of rules(screen))
+    for (const selector of r.selector.split(/\s*,\s*/)) {
+      if (skip(selector)) continue;
+      const color = override(selector, 'color') ?? decls(r.body, 'color').at(-1);
+      if (!color) continue;
+      const bg = override(selector, 'background(?:-color)?') ?? background(r.body);
+      check(selector, color, bg, `line ${r.line}`);
+    }
+  for (const r of printRules)
+    for (const selector of r.selector.split(/\s*,\s*/))
+      for (const color of decls(r.body, 'color'))
+        check(selector, color, background(r.body), 'print');
+  assert.deepEqual(low, []);
+});
+
+// A background the print block leaves dark would sit behind text that is now dark too (a ticked
+// step kept its near-black screen background).
+test('no text sits on a dark background in print (#330)', () => {
+  const { screen, tok, override, skip } = printView();
+  // Fills that carry no text: bars, dots and the progress squares.
+  const fills =
+    /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight)? span$|^\.guided-progress \.\w+ i$/;
+  const dark: string[] = [];
+  for (const r of rules(screen))
+    for (const selector of r.selector.split(/\s*,\s*/)) {
+      if (skip(selector) || fills.test(selector)) continue;
+      const value =
+        override(selector, 'background(?:-color)?') ??
+        decls(r.body, 'background(?:-color)?').at(-1);
+      const bg = value && resolve(value, tok);
+      if (bg && contrast(bg, '#1c2328') < MIN_CONTRAST)
+        dark.push(`${selector} (line ${r.line}): ${value} is ${bg}`);
+    }
+  assert.deepEqual(dark, []);
+});
+
+test('every notice colour has its own print colour, so bold text and links print dark (#330)', () => {
+  const { screen, override } = printView();
+  const missing: string[] = [];
+  for (const r of rules(screen))
+    if (decls(r.body, 'color').length)
+      for (const selector of r.selector.split(/\s*,\s*/))
+        if (
+          /\.notice\b/.test(selector) &&
+          !/:hover|:focus/.test(selector) &&
+          !override(selector, 'color')
+        )
+          missing.push(selector);
+  // Links in a notice take the generic accent colour on screen.
+  if (!override('.notice a', 'color')) missing.push('.notice a');
+  assert.deepEqual(missing, []);
 });
