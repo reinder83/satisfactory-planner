@@ -112,6 +112,29 @@ try {
   await page.locator('#phase-note').waitFor();
   assert.equal(await page.locator('#phase-note').inputValue(), 'Remember my iron site');
   assert.ok(await page.locator(`[data-check="${key}"]`).isChecked());
+  // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
+  // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,
+  // so a point on it hits the <dialog> itself.
+  await page.goto(base + '#factories');
+  await page.locator('[data-calc-factory]').first().click();
+  await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
+  const topOfDialog = await page.locator('#detail').evaluate((d: HTMLDialogElement) => {
+    d.scrollTop = d.scrollHeight;
+    const box = d.getBoundingClientRect();
+    const at = (dy: number) => document.elementFromPoint(box.left + box.width / 2, box.top + dy);
+    return {
+      scrolled: d.scrollTop > 0,
+      stripe: at(3) === d,
+      head: !!at(10)?.closest('.dialog-head'),
+    };
+  });
+  assert.deepEqual(
+    topOfDialog,
+    { scrolled: true, stripe: true, head: true },
+    'the scrolled dialog shows only its stripe and header at the top',
+  );
+  await page.locator('#detail [data-close]').click();
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
   // Calls the page's own API, as the interface does. `T` is the reply's shape.
   const api = async <T = unknown>(route: string, body?: unknown) =>
     page.evaluate(
