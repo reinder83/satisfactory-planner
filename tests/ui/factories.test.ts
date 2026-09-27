@@ -1156,6 +1156,123 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   );
 });
 
+// A nuclear plant makes waste as well as power. Its power is still the headline, and the waste
+// is listed once, below the machines (#371). The rows are shaped as a Phase 5 recycle plan
+// calculates them (planner.ts, generatorsFor), at the fractional counts #370 reports.
+const NUCLEAR = [
+  { id: 'power-uranium', name: 'Uranium power', rod: 'Uranium Fuel Rod', rodPer: 0.2 },
+  { id: 'power-plutonium', name: 'Plutonium power', rod: 'Plutonium Fuel Rod', rodPer: 0.1 },
+];
+function withNuclear() {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const gen = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const shape = [
+    { waste: 'Uranium Waste', per: 10, equivalent: 138.892, machines: 139 },
+    { waste: 'Plutonium Waste', per: 1, equivalent: 69.446, machines: 70 },
+  ];
+  const made = NUCLEAR.map((n, i) => {
+    const s = shape[i]!;
+    return {
+      ...gen,
+      id: n.id,
+      name: n.name,
+      machine: 'Nuclear Power Plant',
+      power: -2500,
+      inputs: { [n.rod]: n.rodPer * s.equivalent, Water: 240 * s.equivalent },
+      outputs: { [s.waste]: s.per * s.equivalent },
+      equivalent: s.equivalent,
+      machines: s.machines,
+      lastClock: (s.equivalent - (s.machines - 1)) * 100,
+      generationMW: 2500 * s.equivalent,
+    };
+  });
+  rows.push(...made);
+  return { p, made };
+}
+
+test('a nuclear plant card leads with its power and lists its waste below it (#371)', () => {
+  const { p, made } = withNuclear();
+  open({ calculated: p });
+  render();
+  noMarkup();
+  for (const r of made) {
+    const [waste, rate] = Object.entries(r.outputs)[0]!;
+    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
+    assert.equal(plain(headline(card)), power(r.generationMW), r.name);
+    assert.equal(card.querySelector('.output span')!.textContent, 'GW');
+    assert.equal(machinesLine(card), machineLine(r.machines, r.machine, r.lastClock));
+    assert.match(machinesLine(card)!, / · last at [\d.,]+%$/);
+    assert.equal(plain(card.querySelector('.recipe')!.textContent!), `${waste}: ${num(rate)}/min`);
+    assert.equal(card.textContent!.split(num(rate)).length - 1, 1, 'the waste rate once');
+  }
+  // The dialog's summary line says the card's headline; its outputs list names the waste.
+  for (const r of made) {
+    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
+    openCalculatedFactory(r.id);
+    assert.equal(summary(), power(r.generationMW));
+    assert.equal(plain(summary()!), plain(headline(card)));
+    assert.ok($$('#detail h3').some(h => h.textContent === 'Outputs per minute'));
+    assert.match(detail(), new RegExp(Object.keys(r.outputs)[0]!));
+    closeDetail();
+  }
+});
+
+test('a nuclear plant’s group share is in MW (#371)', async () => {
+  const { p, made } = withNuclear();
+  const [uranium, plutonium] = made as [(typeof made)[0], (typeof made)[0]];
+  const waste = uranium.outputs['Uranium Waste']!;
+  open({
+    calculated: p,
+    state: {
+      factoryGroups: {
+        groups: GROUPS.groups,
+        assignments: {
+          // A fixed rate keeps the meaning it has always had for this row, the first output's
+          // rate (group-links.ts shares the row out by it too); the card says that share in MW.
+          'power-uranium': [
+            { group: 'fg-cable01', rate: waste / 4 },
+            { group: 'fg-plates1', rate: null },
+          ],
+          'power-plutonium': [
+            { group: 'fg-cable01', rate: null },
+            { group: 'fg-plates1', rate: null },
+          ],
+        },
+      },
+    },
+  });
+  render();
+  await nextTick();
+  const sections = $$('#main .user-group');
+  const text = (i: number, id: string) =>
+    plain(
+      sections[i]!.querySelector(`[data-calc-factory="${id}"]`)!
+        .closest('.factory-card')!
+        .querySelector('.allocation')!.textContent!,
+    );
+  const mw = (q: number) => num(q) + ' MW';
+  assert.ok(
+    text(0, uranium.id).startsWith(
+      `Here: ${mw(uranium.generationMW / 4)} of ${mw(uranium.generationMW)}`,
+    ),
+    text(0, uranium.id),
+  );
+  assert.ok(
+    text(1, uranium.id).startsWith(
+      `Remaining here: ${mw((uranium.generationMW * 3) / 4)} of ${mw(uranium.generationMW)}`,
+    ),
+    text(1, uranium.id),
+  );
+  for (const i of [0, 1])
+    assert.ok(
+      text(i, plutonium.id).startsWith(
+        `Remaining here, split 2 ways: ${mw(plutonium.generationMW / 2)} of ${mw(plutonium.generationMW)}`,
+      ),
+      text(i, plutonium.id),
+    );
+});
+
 test('a calculated card with several outputs names each of them below the headline', () => {
   const p = generated();
   const rows = p.stages['3'].rows!;

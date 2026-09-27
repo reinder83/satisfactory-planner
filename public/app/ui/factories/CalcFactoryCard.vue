@@ -1,12 +1,13 @@
 <!--
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
   key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
-  (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its headline and
-  its group share are measured in MW (GW above 1000 MW). The same structure as FactoryCard.vue
-  (SP-14): the main output with its unit as the headline, machines and the adjustable machine's
-  clock on the line below it, then any other outputs. The chip at the top says whether it runs,
-  or is held back by a missing supplier with the reason above the footer (RunningChip.vue,
-  SP-15); it follows the Running box.
+  (factoryLink() in ui/actions.ts). A power-generation row leads with the power it makes (GW
+  above 1000 MW) and measures its group share in MW; a nuclear plant's waste is listed below
+  like any other output (#371). The same structure as FactoryCard.vue (SP-14): the main output
+  with its unit as the headline, machines and the adjustable machine's clock on the line below
+  it, then any other outputs. The chip at the top says whether it runs, or is held back by a
+  missing supplier with the reason above the footer (RunningChip.vue, SP-15); it follows the
+  Running box.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -35,29 +36,33 @@ const card = computed(() =>
       [main, total = 0] = outputs[0] || [],
       check = 'calc-' + stage() + '-' + r.id,
       setup = machineSetup(r),
-      mw = powerParts(r.generationMW);
+      generator = r.generationMW > 0,
+      // A group's share of the row, as a rate: its power for a generator, else its main output.
+      // The share itself is still worked out on the first output, as group-links.ts does, so a
+      // fixed rate saved for a nuclear plant keeps its meaning.
+      share =
+        generator || !main || !total
+          ? (q: number) => num(total ? (q / total) * r.generationMW : q) + ' MW'
+          : (q: number) => itemRate(main, q);
     return {
       check,
       done: checked(check),
       icon: main,
-      // The main output, or a generator's power when the row makes no items; a fluid in m³/min,
-      // as the dialog's summary line says it (#351).
-      headline: main ? { value: num(total), unit: rateUnit(main) } : mw,
+      // A generator's power, even when it also makes waste (#371), else the main output; a fluid
+      // in m³/min, as the dialog's summary line says it (#351).
+      headline:
+        generator || !main
+          ? powerParts(r.generationMW)
+          : { value: num(total), unit: rateUnit(main) },
       machines: machineLine(r.machines, r.machine, setup.partial ? setup.clock : 100),
       // The outputs by name, unless the headline already says all of it: one output that
-      // gives the row its name.
+      // gives the row its name. A generator's headline is its power, so its waste is listed.
       outputs:
-        outputs.length > 1 || (outputs[0] && outputs[0][0] !== r.name)
+        generator || outputs.length > 1 || (outputs[0] && outputs[0][0] !== r.name)
           ? outputs.map(([n, q]) => `${n}: ${itemRate(n, q)}`)
           : [],
       allocation: props.group
-        ? allocationText(
-            r.id,
-            props.group,
-            total || r.generationMW,
-            r.machines,
-            main && total ? q => itemRate(main, q) : q => num(q) + ' MW',
-          )
+        ? allocationText(r.id, props.group, total || r.generationMW, r.machines, share)
         : '',
       editing: factoryEditing,
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
