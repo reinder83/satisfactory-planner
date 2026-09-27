@@ -1851,11 +1851,16 @@ dialog {
     0 0 0 1px #0b0d0e,
     0 20px 60px rgba(0, 0, 0, 0.6);
 }
+/* The hazard stripe sticks to the top of the dialog's scrollport like the header under it
+   (top: 6px), so while the body scrolls nothing shows above the header (#314). */
 dialog::before {
   content: '';
   display: block;
   height: 6px;
   background: var(--hazard);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 dialog::backdrop {
   background: rgba(6, 8, 9, 0.78);
