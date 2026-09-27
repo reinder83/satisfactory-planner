@@ -3,6 +3,7 @@
 // and group build-order dialogs (public/app/ui/detail/), mounted the way the app mounts them,
 // in happy-dom.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
 import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
@@ -1566,6 +1567,91 @@ test('the flow diagram keeps a fluid rate’s unit beside its number (#364)', ()
   // A solid's unit has no space to break at.
   const bauxite = $$('#detail .rail-tile').find(t => /Bauxite/.test(t.textContent!))!;
   assert.equal(unit(bauxite.querySelector('.rail-rate')), '/min');
+});
+
+// happy-dom lays nothing out, so the column positions were measured in Edge at 1440 and 1100 px
+// (one machines-column x per dialog); this pins what lines them up: every destination row has the
+// four cells the shared grid's columns expect, and the stylesheet makes the rows a subgrid of it.
+test('the flow diagram’s destination rows share one set of columns (#378)', () => {
+  const cells = (where: string) => {
+    const rows = $$('#detail .rail-rows > *');
+    assert.ok(rows.length, `${where}: the flow has destination rows`);
+    for (const row of rows) {
+      assert.ok(row.classList.contains('rail-row'), `${where}: only rows in the grid`);
+      const kids = [...row.children];
+      assert.equal(kids.length, 4, `${where}: ${row.textContent} has four cells`);
+      assert.ok(/\b(item-icon|rail-noicon)\b/.test(kids[0]!.className), `${where}: icon first`);
+      assert.deepEqual(
+        kids.slice(1).map(k => k.className),
+        ['rail-main', 'rail-mach', 'rail-rate'],
+        `${where}: name, machines, rate`,
+      );
+    }
+  };
+  open({ phase: '4' });
+  render();
+  openFactory('alumina-solution');
+  cells('Alumina Solution');
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const made = rows.find(r => Object.keys(r.outputs).length === 1)!;
+  const gen = rows.find(r => r.generationMW > 0)!;
+  assert.ok(made && gen, 'the default plan has a production line and a generator');
+  open({ calculated: p });
+  render();
+  openCalculatedFactory(made.id);
+  cells(made.name);
+  openCalculatedFactory(gen.id);
+  assert.ok(
+    $$('#detail .rail-row').some(r => /Power grid/.test(r.textContent!)),
+    'a generator delivers to the power grid',
+  );
+  cells(gen.name);
+
+  const css = fs
+    .readFileSync('public/style.css', 'utf8')
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // The body of the at-rule starting with `head`.
+  const block = (head: string, from = 0) => {
+    const start = css.indexOf(head, from);
+    assert.ok(start >= 0, `style.css has ${head}`);
+    let depth = 0,
+      i = css.indexOf('{', start);
+    const open = i;
+    for (; i < css.length; i++)
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}' && --depth === 0) break;
+    return css.slice(open + 1, i);
+  };
+  const rule = (text: string, selector: string) => {
+    const m = [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(r => r[1]!.trim() === selector);
+    assert.ok(m.length, `${selector} is styled`);
+    return m.map(r => r[2]!.replace(/\s+/g, ' ')).join(' ');
+  };
+  const grid = block('@supports (grid-template-columns: subgrid)');
+  assert.match(rule(grid, '.rail-rows'), /display: grid;/);
+  assert.match(rule(grid, '.rail-rows'), /grid-template-columns: auto minmax\(0, 1fr\) auto auto;/);
+  assert.match(rule(grid, '.rail-row'), /display: grid;/);
+  assert.match(rule(grid, '.rail-row'), /grid-column: 1 \/ -1;/);
+  assert.match(rule(grid, '.rail-row'), /grid-template-columns: subgrid;/);
+  // Without subgrid the rows keep their own flex layout, and a phone's rows wrap as flex.
+  const outside = css.replace('@supports (grid-template-columns: subgrid) {' + grid + '}', '');
+  const top = outside.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
+  assert.match(rule(top, '.rail-rows'), /display: flex;/);
+  assert.match(rule(top, '.rail-row'), /display: flex;/);
+  let phone = '';
+  for (let at = css.indexOf('@media (max-width: 640px)'); at >= 0; ) {
+    phone += block('@media (max-width: 640px)', at);
+    at = css.indexOf('@media (max-width: 640px)', at + 1);
+  }
+  assert.match(rule(phone, '.rail-rows'), /display: flex;/);
+  assert.match(rule(phone, '.rail-row'), /display: flex;.*flex-wrap: wrap;/);
+  assert.ok(
+    css.indexOf('@supports (grid-template-columns: subgrid)') <
+      css.lastIndexOf('@media (max-width: 640px)'),
+    'the phone layout comes after the grid, so it wins',
+  );
 });
 
 test('a calculated card measures a fluid in m³/min, like its dialog (#351)', () => {

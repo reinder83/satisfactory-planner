@@ -2552,6 +2552,21 @@ button.rail-tile:hover {
   padding: 10px 13px;
   border: 1px solid var(--line);
 }
+/* The rows share one set of columns (icon, name, machines, rate), so a long rate widens the rate
+   column of every row and the machines column stays lined up (#378). A browser without subgrid
+   keeps the flex rows above, each sized on its own. At 640px and below the rows wrap as flex. */
+@supports (grid-template-columns: subgrid) {
+  .rail-rows {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 8px 10px;
+  }
+  .rail-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+}
 .rail-row.store {
   border-left: 2px solid var(--accent);
 }
@@ -2599,7 +2614,7 @@ button.rail-tile:hover {
   color: var(--muted);
 }
 .rail-row .rail-rate {
-  /* At least the column's width; a long fluid rate widens it rather than wrap (#364). */
+  /* At least 90px; a long fluid rate widens every row's rate column rather than wrap (#364). */
   min-width: 90px;
 }
 @media (max-width: 640px) {
@@ -2609,7 +2624,12 @@ button.rail-tile:hover {
   .rail-recipe-arrow {
     transform: rotate(90deg);
   }
+  .rail-rows {
+    display: flex;
+    flex-direction: column;
+  }
   .rail-row {
+    display: flex;
     flex-wrap: wrap;
   }
   .rail-mach {
