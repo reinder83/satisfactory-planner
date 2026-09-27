@@ -21,6 +21,7 @@ import {
 import { render } from '../../shell.ts';
 import { DragDropProvider } from '@dnd-kit/vue';
 import type { DragDropManager, DragEndEvent } from '@dnd-kit/vue';
+import { landsOnTarget } from '../storage/drop-point.ts';
 import {
   floorOrder,
   hiddenStorageBays,
@@ -220,9 +221,14 @@ async function restoreFloor(e: Event, id: string) {
 // patched around nodes dnd-kit had moved, threw, and left the bay half drawn: the moved container
 // missing and a blank position that took no drops, until a reload showed what had been saved
 // (#292). A drop that never settles is saved after two seconds anyway.
+//
+// A drop counts only where it was let go: over the position dnd-kit chose, as it is drawn at the
+// release, and inside the window (ui/storage/drop-point.ts). Released in the aisle, beside a bay
+// or outside the window, the card goes back and nothing is saved; after an auto-scroll dnd-kit
+// could still name a position that had scrolled away from under the pointer (#298).
 async function dropped(event: DragEndEvent, manager: DragDropManager) {
   const { source, target } = event.operation;
-  if (event.canceled || !source || !target) return;
+  if (event.canceled || !source || !target || !landsOnTarget(event.operation)) return;
   for (let waited = 0; !manager.dragOperation.status.idle && waited < 2000; waited += 20)
     await new Promise(resolve => setTimeout(resolve, 20));
   return moveContainer(String(source.id), String(target.id));

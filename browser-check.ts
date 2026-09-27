@@ -237,6 +237,46 @@ try {
     assert.deepEqual(await shown(), { a09: names[0], a10: names[1], left: 0, reserved: 2 });
   };
   await checkDragDrop();
+  // A drop let go away from every position puts the card back and saves nothing (#298): in the
+  // aisle beside the bay, where the dragged card still overlaps a position, and below the window
+  // while the page auto-scrolls, where positions out of sight lie under the pointer.
+  const checkStrayDrop = async () => {
+    await page.locator('[data-toggle-layout]').click();
+    const bayA = page.locator('.bay').filter({ has: page.locator('[data-complete-bay="A"]') });
+    const from = (await bayA.locator('[data-drag-slot]').first().getAttribute('data-drag-slot'))!;
+    const saved = async () => {
+      const s = await api<ProgressState>('/api/state');
+      return JSON.stringify([s.checks, s.notes, s.storageEdits]);
+    };
+    const before = await saved();
+    const strayDrop = async (where: 'aisle' | 'below') => {
+      // In the middle of the window, away from the edges where the page auto-scrolls.
+      await page
+        .locator(`[data-drop="${from}"]`)
+        .evaluate(cell => cell.scrollIntoView({ block: 'center' }));
+      const handle = (await page.locator(`[data-drag-slot="${from}"]`).boundingBox())!;
+      // Bay A's fourth position ends its row; the gap to the next bay or the aisle lies beyond.
+      const last = (await bayA.locator('[data-drop]').nth(3).boundingBox())!;
+      const x = handle.x + handle.width / 2,
+        y = handle.y + handle.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 10, y + 10, { steps: 5 });
+      if (where === 'aisle') await page.mouse.move(last.x + last.width + 12, y, { steps: 20 });
+      else await page.mouse.move(x, page.viewportSize()!.height + 60, { steps: 20 });
+      await page.waitForTimeout(800);
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+      assert.equal(await saved(), before, `a drop ${where} saves nothing`);
+      await page.locator(`[data-drag-slot="${from}"]`).waitFor();
+    };
+    await strayDrop('aisle');
+    await strayDrop('below');
+    await page.reload();
+    await page.locator(`[data-slot="${from}"]`).waitFor();
+    assert.equal(await saved(), before);
+  };
+  await checkStrayDrop();
   // The browser workspace has the save the wizard just created.
   const first = (await api<WorkspaceSummary>('/api/workspace')).saves[0]!;
   await api('/api/profiles', {

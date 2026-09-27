@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useDraggable, useDroppable } from '@dnd-kit/vue';
+import { pointerOnly } from './drop-point.ts';
 
 const props = defineProps<{
   // The address, which is also the drag and drop id. It must stay the same for the cell's
@@ -22,10 +23,14 @@ const props = defineProps<{
 
 const el = ref<HTMLElement | null>(null),
   handle = ref<HTMLElement | null>(null);
+// A position is the drop target only while the pointer is over it (./drop-point.ts, #298). The
+// detector goes in as a getter: @dnd-kit/vue reads every input through Vue's toValue(), which
+// would call the detector itself, with no arguments, and throw.
 const { isDropTarget } = useDroppable({
   id: () => props.id,
   element: el,
   disabled: () => !props.editing,
+  collisionDetector: () => pointerOnly,
 });
 // Only a position that can be picked up is given to dnd-kit as a draggable: with no handle it would
 // make the whole card a focusable role="button" with aria-disabled, and the card's own controls
