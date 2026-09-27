@@ -281,20 +281,23 @@ test('a failed sign-in says why in the form', async () => {
   assert.equal($<HTMLButtonElement>('#auth-form button')!.disabled, false);
 });
 
-test('the handbook backup page keeps the save-wide note exactly and lists the sources', () => {
-  const note = evil + '\n  second line';
-  open({ notes: { global: note } });
+// #243: the save-wide note moved to the Notes page (tests/ui/notes.test.ts); Backup links there.
+for (const kind of ['handbook', 'calculated'] as const)
+  test(`the ${kind} backup page has no notes box and links to the Notes page`, () => {
+    const notes = { global: 'Kept', 'phase-3': 'Kept too' };
+    open({ calculated: kind === 'calculated', notes });
+    go('backup');
+    render();
+    assert.equal($$('#main textarea').length, 0, 'no notes editor on Backup');
+    assert.equal($$('#main [data-save-note]').length, 0);
+    assert.equal($('[data-notes-moved] a')!.getAttribute('href'), '#notes');
+    assert.deepEqual({ ...state.notes }, notes, 'the notes are untouched');
+  });
+
+test('the handbook backup page lists the sources and its transfer controls', () => {
   go('backup');
   render();
   noMarkup();
-  assert.equal(
-    $<HTMLTextAreaElement>('#global-note')!.value,
-    note,
-    'the note keeps its line break and indent',
-  );
-  assert.equal($('[data-save-note="global"]')!.id, 'global-note', 'the notes key is on the box');
-  assert.equal($('#global-note-status')!.getAttribute('aria-live'), 'polite');
-  assert.equal($$('#main .note-save button').length, 0, 'no "Save notes" button');
   assert.equal($('a[download]')!.getAttribute('href'), '/api/export?save=s&profile=original');
   assert.equal($$('.list-links a').length, handbook.sources!.length);
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));
@@ -476,8 +479,8 @@ test('an export over the import limit is refused with a reason, and nothing down
   assert.ok($('#toast')!.classList.contains('error'));
 });
 
-test('a redraw keeps unsaved save-wide notes on the backup page', async () => {
-  go('backup');
+test('a redraw keeps unsaved save-wide notes on the notes page', async () => {
+  go('notes');
   render();
   const note = $<HTMLTextAreaElement>('#global-note')!;
   note.value = 'Unsaved thought';
@@ -514,7 +517,7 @@ for (const kind of ['handbook', 'calculated'] as const)
     go('backup');
     render();
     const [first, second] = [...$('#main')!.children];
-    assert.equal(first!.querySelector('h1')!.textContent, 'Backup & notes');
+    assert.equal(first!.querySelector('h1')!.textContent, 'Backup');
     assert.equal(second!.querySelector('h2')!.textContent, 'Full saves & transfer');
     assert.equal($$('#main h1').length, 1, 'one header');
   });
@@ -558,7 +561,7 @@ test('moving between pages leaves nothing behind', async () => {
   go('backup');
   render();
   assert.equal($$('#main h1').length, 1);
-  assert.equal($('#main h1')!.textContent, 'Backup & notes');
+  assert.equal($('#main h1')!.textContent, 'Backup');
   go('resources');
   render();
   assert.equal($$('#main h1').length, 1);

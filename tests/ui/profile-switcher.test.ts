@@ -196,11 +196,11 @@ test('switching asks about a note that could not be saved, and stays when kept',
     '/api/context': opened('copy', 'Second try'),
   });
   const asked = answerConfirms(false);
-  go('plan');
-  history.replaceState(null, '', '#plan');
+  go('notes');
+  history.replaceState(null, '', '#notes');
   acceptRoute();
   render();
-  const note = $<HTMLTextAreaElement>('#phase-note')!;
+  const note = $<HTMLTextAreaElement>('#phase-note-3')!;
   note.value = 'Not yet saved';
   note.dispatchEvent(new Event('input', { bubbles: true }));
   note.dispatchEvent(new Event('blur'));
@@ -220,7 +220,7 @@ test('switching asks about a note that could not be saved, and stays when kept',
     'kept: nothing is switched',
   );
   assert.equal(currentProfile.id, 'original');
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Not yet saved');
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Not yet saved');
 
   // Leaving anyway switches.
   answerConfirms(true);

@@ -1,7 +1,7 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, summary tiles, the checklist
-  (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with
-  phase notes (`phase-<phase>`), and a side column with the Space Elevator deliveries,
+  (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
+  link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
   "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions, then the
   hard-drive payoff table (ui/plan/PayoffPanel.vue) across the page's width. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
@@ -22,7 +22,6 @@ import {
 import { planTasks } from '../../tasks.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
-import NoteBox from '../NoteBox.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
@@ -41,7 +40,6 @@ const page = computed(() =>
     if (!calculated || !x) return null;
     const ts = planTasks();
     return {
-      phase: phase(),
       title: phaseLabel(phase()),
       profileName: currentProfile.name,
       post: phase() === 'post',
@@ -97,8 +95,7 @@ const page = computed(() =>
         </p>
         <Checklist />
         <AddTaskForm placeholder="Add a task…" />
-        <h2>Phase notes</h2>
-        <NoteBox id="phase-note" :note-key="'phase-' + page.phase" aria-label="Phase notes" />
+        <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
       </section>
       <aside>
         <section class="panel">

@@ -1,9 +1,9 @@
 <!--
   #plan for the original handbook: summary tiles, the phase checklist with its edit toggle,
-  personal tasks and phase notes, and a side column with the next step and the Space
-  Elevator deliveries. Post-game ('post') reads the Phase 5 stage of the handbook: stage()
-  maps it to '5'. A calculated profile gets CalculatedPlanPage.vue instead. The phase notes
-  save themselves as you type (NoteBox.vue).
+  personal tasks and a link to the phase notes (on the Notes page, #243), and a side column
+  with the next step and the Space Elevator deliveries. Post-game ('post') reads the Phase 5
+  stage of the handbook: stage() maps it to '5'. A calculated profile gets
+  CalculatedPlanPage.vue instead.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -12,7 +12,6 @@ import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
 import { planTasks } from '../../tasks.ts';
 import { storageBays } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
-import NoteBox from '../NoteBox.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
@@ -34,7 +33,6 @@ const page = computed(() =>
       .flatMap(b => b.items)
       .filter(x => x.name);
     return {
-      phase: phase(),
       title: phaseLabel(phase()) + ' field plan',
       post: phase() === 'post',
       done,
@@ -88,11 +86,7 @@ const page = computed(() =>
       <div class="progress-track"><span :style="{ width: page.pct + '%' }"></span></div>
       <Checklist />
       <AddTaskForm placeholder="Add a task for this phase…" />
-      <section class="panel">
-        <h2>Phase notes</h2>
-        <p class="small muted">Locations, train routes, things to check on your next session.</p>
-        <NoteBox id="phase-note" :note-key="'phase-' + page.phase" aria-label="Phase notes" />
-      </section>
+      <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
     </section>
     <aside class="side-panels">
       <section class="panel next-card">

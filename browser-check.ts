@@ -97,20 +97,44 @@ try {
     .waitFor({ timeout: 180000 });
   console.log('Saving browser profile');
   await page.getByRole('button', { name: 'Create profile', exact: true }).click();
-  await page.locator('#phase-note').waitFor({ timeout: 180000 });
-  // Notes save themselves after a pause in typing (#237); the status line says so.
-  await page.locator('[data-save-note="phase-1"]').fill('Remember my iron site');
-  await page
-    .locator('#phase-note-status')
-    .getByText(/^Saved · /)
-    .waitFor();
+  // The notes live on their own page (#243): the plan links there, and following the link
+  // puts focus on the Notes heading.
+  await page.locator('[data-phase-notes-link]').waitFor({ timeout: 180000 });
   const check = page.locator('[data-check]').first();
   const key = await check.getAttribute('data-check');
   await check.check();
   await page.waitForTimeout(250);
+  await page.locator('[data-phase-notes-link]').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#phase-note-1').waitFor();
+  assert.equal(
+    await page.evaluate(() => document.activeElement === document.querySelector('#main h1')),
+    true,
+    'the Notes heading takes focus',
+  );
+  // Notes save themselves after a pause in typing (#237); the status line says so.
+  await page.locator('[data-save-note="phase-1"]').fill('Remember my iron site');
+  await page
+    .locator('#phase-note-1-status')
+    .getByText(/^Saved · /)
+    .waitFor();
+  await page.locator('[data-save-note="global"]').fill('Seed and routes');
+  await page
+    .locator('#global-note-status')
+    .getByText(/^Saved · /)
+    .waitFor();
+  // A folded phase opens from the keyboard.
+  const later = page.locator('[data-phase-notes="2"]');
+  assert.equal(await later.evaluate(d => (d as HTMLDetailsElement).open), false);
+  await later.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await later.evaluate(d => (d as HTMLDetailsElement).open), true);
   await page.reload();
-  await page.locator('#phase-note').waitFor();
-  assert.equal(await page.locator('#phase-note').inputValue(), 'Remember my iron site');
+  await page.locator('#phase-note-1').waitFor();
+  assert.equal(await page.locator('#phase-note-1').inputValue(), 'Remember my iron site');
+  assert.equal(await page.locator('#global-note').inputValue(), 'Seed and routes');
+  await page.goto(base + '#plan');
+  await page.locator(`[data-check="${key}"]`).waitFor();
   assert.ok(await page.locator(`[data-check="${key}"]`).isChecked());
   // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
   // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,

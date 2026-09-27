@@ -88,15 +88,15 @@ test('a write refused because the session ended shows the sign-in screen', async
 
 test('with unsaved notes on screen, an ended session keeps the page and says so', async () => {
   const calls = sessionEnded();
-  go('plan');
+  go('notes');
   render();
-  $<HTMLTextAreaElement>('#phase-note')!.value = 'Unsaved thought';
+  $<HTMLTextAreaElement>('#phase-note-3')!.value = 'Unsaved thought';
   // Straight through request(): a tick would redraw the page and clear the note first (#110).
   await assert.rejects(request('/api/update', { method: 'POST', body: '{}' }), /Sign in/);
   await settle();
   assert.deepEqual(calls, ['/api/update']);
   assert.ok($('.layout'), 'still on the page');
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Unsaved thought');
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Unsaved thought');
   assert.match($('#toast')!.textContent, /session has ended/i);
 });
 
@@ -167,15 +167,15 @@ test('typing a phase note saves it once, after the pause, and says when', async 
     await new Promise<void>(r => (release = r));
     return applied(path, options);
   };
-  go('plan');
+  go('notes');
   render();
-  const status = $('#phase-note-status')!;
+  const status = $('#phase-note-3-status')!;
   assert.equal(status.getAttribute('aria-live'), 'polite');
   assert.equal(status.textContent, 'Saves as you type.');
-  typeInto('#phase-note', 'Remember');
-  typeInto('#phase-note', 'Remember the');
+  typeInto('#phase-note-3', 'Remember');
+  typeInto('#phase-note-3', 'Remember the');
   await settle();
-  typeInto('#phase-note', 'Remember the coal');
+  typeInto('#phase-note-3', 'Remember the coal');
   await settle();
   // Nothing is being saved yet, so the status line does not say so.
   assert.equal(status.textContent, 'Saves as you type.');
@@ -189,25 +189,25 @@ test('typing a phase note saves it once, after the pause, and says when', async 
   ]);
   assert.equal(state.notes['phase-3'], 'Remember the coal');
   await nextTick();
-  assert.match($('#phase-note-status')!.textContent, /^Saved · \d{1,2}[:.]\d{2}/);
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Remember the coal');
+  assert.match($('#phase-note-3-status')!.textContent, /^Saved · \d{1,2}[:.]\d{2}/);
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Remember the coal');
   assert.equal($('[data-note-retry]'), null);
   assert.doesNotMatch($('#toast')!.textContent, /changed while you were editing/);
 });
 
 test('leaving a notes box saves it at once, and a later reply does not undo more typing', async () => {
   const calls = applying();
-  go('plan');
+  go('notes');
   render();
-  typeInto('#phase-note', 'First').dispatchEvent(new Event('blur'));
+  typeInto('#phase-note-3', 'First').dispatchEvent(new Event('blur'));
   // Typing goes on while the write is on its way: its reply keeps the newer text.
-  typeInto('#phase-note', 'First and second');
+  typeInto('#phase-note-3', 'First and second');
   await settle();
   assert.deepEqual(noteWrites(calls), [
     ['/api/update', { type: 'note', key: 'phase-3', value: 'First' }],
   ]);
   assert.equal(state.notes['phase-3'], 'First');
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'First and second');
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'First and second');
   assert.doesNotMatch($('#toast')!.textContent, /changed while you were editing/);
   await pause();
   assert.equal(noteWrites(calls).length, 2);
@@ -225,11 +225,11 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
     },
   });
   const asked = answerConfirms(false);
-  go('plan');
+  go('notes');
   render();
-  history.replaceState(null, '', '#plan');
+  history.replaceState(null, '', '#notes');
   acceptRoute();
-  typeInto('#phase-note', '  ').dispatchEvent(new Event('blur'));
+  typeInto('#phase-note-3', '  ').dispatchEvent(new Event('blur'));
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'phase-3', value: '  ' });
   assert.equal(state.notes['phase-3'], undefined);
@@ -327,12 +327,12 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
     });
   };
   const asked = answerConfirms(false);
-  go('plan');
+  go('notes');
   render();
   history.replaceState(null, '', '#plan');
   acceptRoute();
   const seen = state.revision;
-  typeInto('#phase-note', 'Mine').dispatchEvent(new Event('blur'));
+  typeInto('#phase-note-3', 'Mine').dispatchEvent(new Event('blur'));
   await settle();
   await settle();
   assert.equal(headers[0]!['X-Planner-Revision'], String(seen), 'the write names what it saw');
@@ -341,8 +341,8 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   assert.equal(state.revision, seen + 1);
   assert.match($('#toast')!.textContent, /changed in another tab/);
   assert.ok($('#toast')!.classList.contains('error'));
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Mine', 'the typed note survives');
-  assert.equal($('#phase-note-status')!.textContent, 'Not saved —');
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Mine', 'the typed note survives');
+  assert.equal($('#phase-note-3-status')!.textContent, 'Not saved —');
   assert.equal($('[data-note-retry]')!.textContent!.trim(), 'Retry');
 
   // Leaving now would lose it, so the page asks, and stays when the answer is no.
@@ -360,9 +360,9 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   await settle();
   assert.equal(headers.at(-1)!.path, '/api/update');
   // The button goes once the note is saved; focus goes back to the note, not to <body> (#283).
-  assert.equal(focused(), 'textarea#phase-note');
+  assert.equal(focused(), 'textarea#phase-note-3');
   assert.equal(state.notes['phase-3'], 'Mine');
-  assert.match($('#phase-note-status')!.textContent, /^Saved · /);
+  assert.match($('#phase-note-3-status')!.textContent, /^Saved · /);
   assert.equal($('[data-note-retry]'), null);
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), true, 'nothing left to ask about');
@@ -404,11 +404,11 @@ test('a note whose write fails after its page has gone comes back marked unsaved
     await new Promise<void>(r => (release = r));
     return new Response(JSON.stringify({ error: 'The disk is full.' }), { status: 500 });
   };
-  go('plan');
+  go('notes');
   render();
   history.replaceState(null, '', '#plan');
   acceptRoute();
-  typeInto('#phase-note', 'Keep me');
+  typeInto('#phase-note-3', 'Keep me');
   // Leaving sends the note first and asks nothing: the write is on its way.
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), true);
@@ -418,11 +418,11 @@ test('a note whose write fails after its page has gone comes back marked unsaved
   release();
   await settle();
   assert.match($('#toast')!.textContent, /disk is full/);
-  go('plan');
+  go('notes');
   render();
   await nextTick();
-  assert.equal($<HTMLTextAreaElement>('#phase-note')!.value, 'Keep me');
-  assert.equal($('#phase-note-status')!.textContent, 'Not saved —');
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Keep me');
+  assert.equal($('#phase-note-3-status')!.textContent, 'Not saved —');
   assert.ok($('[data-note-retry]'));
 });
 
@@ -433,12 +433,12 @@ test('coming back to a tab picks up changes saved elsewhere, unless something is
   go('factories');
   render();
   // A note with unsaved text holds the refresh back.
-  go('plan');
+  go('notes');
   render();
-  $<HTMLTextAreaElement>('#phase-note')!.value = 'Typing';
+  $<HTMLTextAreaElement>('#phase-note-3')!.value = 'Typing';
   assert.equal(await refreshState(), false);
   assert.equal(state.checks['factory-3-wire'], undefined);
-  $<HTMLTextAreaElement>('#phase-note')!.value = '';
+  $<HTMLTextAreaElement>('#phase-note-3')!.value = '';
   // So does an open wizard, whose typed answers are read only when a step is left.
   const draft = wizard;
   setWizard(draft || ({} as NonNullable<typeof wizard>));

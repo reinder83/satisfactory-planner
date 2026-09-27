@@ -74,6 +74,8 @@ The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs
 
 On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Notes save themselves as you type, everywhere in the planner — the line under each notes box says when it was saved, or offers Retry if a save failed; emptying a note deletes it. Existing container addresses and progress keys are unchanged.
 
+**Notes** keeps the save-wide notes and every phase's notes on one page: the save-wide notes first, then the phase you are working on, open, and the other phases folded underneath. The build plan links there with **Phase notes →**.
+
 ## Make the plan your own
 
 - **Build plan → Edit steps** lets you rearrange steps with the arrow buttons, rewrite a step's title and details, link a step to one of your factories, or remove steps you do not want. Removed steps keep their checkmarks and can be restored from **Removed steps** while editing; clearing an edited field restores the original text. Calculated production steps link to their factory details automatically.
@@ -157,7 +159,7 @@ The previous `APP_USER` / `APP_PASSWORD` Basic Auth gate remains available as an
 
 The Docker `planner-data` volume stores `/data/workspace.json`: accounts, named saves, profiles, calculation snapshots and progress. Updates and container recreation preserve it. **Do not run `docker compose down -v` unless you intend to delete this data.**
 
-- **Backup & notes** exports the current profile’s progress. Restore only to its matching profile; other profiles are untouched.
+- **Backup** exports the current profile’s progress. Restore only to its matching profile; other profiles are untouched.
 - For a complete backup, stop the container and back up its data volume, including `workspace.json`. This contains password hashes and session records; keep the backup private.
 - `workspace.json.bak` retains the previous successful workspace write. Writes are serialized and atomically replaced. Corrupted data causes startup to fail rather than silently reset progress.
 - `progress.json` remains the pre-migration backup and is no longer the live store. Do not run old and new planner versions simultaneously against one volume.

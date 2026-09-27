@@ -191,6 +191,22 @@ test('a link inside the page moves focus to the heading of the page it opens', a
   assert.ok(onHeading(), describeFocus());
 });
 
+test('the plan’s "Phase notes →" opens the Notes page and focuses its heading (#243)', async () => {
+  for (const calculated of [false, generated()]) {
+    open({ calculated, workspace: { catalog: catalog() } });
+    show('plan');
+    const link = $<HTMLAnchorElement>('#main [data-phase-notes-link]')!;
+    assert.equal(link.getAttribute('href'), '#notes');
+    link.focus();
+    location.hash = 'notes';
+    await settle();
+    assert.equal(view, 'notes');
+    assert.equal(heading(), 'Notes');
+    assert.ok(onHeading(), describeFocus());
+    show('plan');
+  }
+});
+
 test('a sidebar link keeps focus after it opens its page', async () => {
   show('plan');
   const link = $<HTMLAnchorElement>('nav a[href="#storage"]')!;
