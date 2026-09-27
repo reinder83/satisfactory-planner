@@ -47,8 +47,13 @@ import type { HandbookFactory } from '../../../types/index.ts';
 const siteOf = (f: HandbookFactory) =>
   ['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : null;
 
+// null for a stage the handbook has no plan for (Phase 1 or 2, which only a calculated profile
+// can be at, or any phase of the browser edition's empty handbook): until render() swaps this
+// page out, it draws nothing rather than throwing (#356).
 const page = computed(() =>
   legacy(() => {
+    const p = plan.plans[stage()];
+    if (!p) return null;
     const running = (f: HandbookFactory) => checked('factory-' + stage() + '-' + f.id);
     // Factories at this stage that match the search text, then those the status chip keeps. The
     // chips count what the search found.
@@ -61,8 +66,6 @@ const page = computed(() =>
     const status = statusFilter(found, factoryFilter, running, [['local', f => !!f.local]]);
     const list = status.list;
     const ungrouped = list.filter(f => !membershipsOf(f.id).length);
-    // The handbook has a stage plan for every phase it covers.
-    const p = plan.plans[stage()]!;
     const site = (kind: 'oil' | 'nuclear', label: string, sub: string) => {
       const members = ungrouped.filter(f => siteOf(f) === kind);
       const key = 'site-' + kind;
@@ -140,93 +143,95 @@ function search(e: Event) {
 </script>
 
 <template>
-  <PageHeader
-    eyebrow="PRODUCTION LIBRARY"
-    title="Factory targets"
-    subtitle="Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history."
-  />
-  <div v-if="page.post" class="notice info">
-    These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage
-    items priority before committing all spare output to sinks.
-  </div>
-  <div class="toolbar">
-    <input
-      id="factory-search"
-      class="search"
-      placeholder="Find a part or recipe…"
-      aria-label="Find a factory"
-      :value="page.query"
-      @input="search"
-    /><FilterChips
-      :chips="page.chips"
-      :active="page.active.value"
-      @pick="v => pickFactoryFilter(v)"
-    /><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
-  </div>
-  <JumpBar :entries="page.jumps" />
-  <GroupEditPanel v-if="page.editing" />
-  <GroupSections :items="page.list" :key-of="f => f.id">
-    <template #card="{ item, group }"><FactoryCard :factory="item" :group="group" /></template>
-  </GroupSections>
-  <section
-    v-for="s in page.sites"
-    :id="'section-' + s.key"
-    :key="s.kind"
-    :class="['site-group', s.collapsed ? 'collapsed' : '']"
-  >
-    <header class="site-head">
-      <div class="site-title">
-        <CollapseToggle :section-key="s.key" :label="'Outputs of ' + s.label" />
-        <div>
-          <span class="eyebrow">SHARED SITE · {{ s.members.length }} OUTPUTS</span>
-          <h2 tabindex="-1" data-section-heading>{{ s.label }}</h2>
+  <template v-if="page">
+    <PageHeader
+      eyebrow="PRODUCTION LIBRARY"
+      title="Factory targets"
+      subtitle="Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history."
+    />
+    <div v-if="page.post" class="notice info">
+      These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage
+      items priority before committing all spare output to sinks.
+    </div>
+    <div class="toolbar">
+      <input
+        id="factory-search"
+        class="search"
+        placeholder="Find a part or recipe…"
+        aria-label="Find a factory"
+        :value="page.query"
+        @input="search"
+      /><FilterChips
+        :chips="page.chips"
+        :active="page.active.value"
+        @pick="v => pickFactoryFilter(v)"
+      /><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
+    </div>
+    <JumpBar :entries="page.jumps" />
+    <GroupEditPanel v-if="page.editing" />
+    <GroupSections :items="page.list" :key-of="f => f.id">
+      <template #card="{ item, group }"><FactoryCard :factory="item" :group="group" /></template>
+    </GroupSections>
+    <section
+      v-for="s in page.sites"
+      :id="'section-' + s.key"
+      :key="s.kind"
+      :class="['site-group', s.collapsed ? 'collapsed' : '']"
+    >
+      <header class="site-head">
+        <div class="site-title">
+          <CollapseToggle :section-key="s.key" :label="'Outputs of ' + s.label" />
+          <div>
+            <span class="eyebrow">SHARED SITE · {{ s.members.length }} OUTPUTS</span>
+            <h2 tabindex="-1" data-section-heading>{{ s.label }}</h2>
+          </div>
         </div>
+        <p class="small muted">{{ s.sub }}</p>
+      </header>
+      <div v-show="!s.collapsed" :id="'cards-' + s.key" class="cards">
+        <FactoryCard v-for="f in s.members" :key="f.id" :factory="f" />
       </div>
-      <p class="small muted">{{ s.sub }}</p>
-    </header>
-    <div v-show="!s.collapsed" :id="'cards-' + s.key" class="cards">
-      <FactoryCard v-for="f in s.members" :key="f.id" :factory="f" />
-    </div>
-  </section>
-  <p v-if="page.label" class="eyebrow">UNGROUPED FACTORIES</p>
-  <div class="cards">
-    <template v-if="page.singles.length"
-      ><FactoryCard v-for="f in page.singles" :key="f.id" :factory="f"
-    /></template>
-    <div v-else-if="!page.list.length" class="empty-state" data-filter-empty>
-      {{ page.empty }}
-      <button
-        v-if="page.active.value !== 'all'"
-        class="btn"
-        data-show-all
-        @click="pickFactoryFilter('all', true)"
-      >
-        Show all factories
-      </button>
-    </div>
-  </div>
-  <section v-if="page.post" style="margin-top: 32px">
-    <h2>Additional completion modules</h2>
-    <div class="notice info">
-      These recipe inputs are additional to the main resource budget. Allocate their supply first.
-      Gathered feedstock and byproducts still need handling.
-    </div>
-    <div class="completion-grid">
-      <article v-for="r in page.completion" :key="r.id" class="completion-item">
-        <label class="check-row"
-          ><input
-            type="checkbox"
-            :data-check="r.check"
-            @change="toggleCheck"
-            :checked="r.done"
-          /><strong>{{ r.name }}</strong></label
+    </section>
+    <p v-if="page.label" class="eyebrow">UNGROUPED FACTORIES</p>
+    <div class="cards">
+      <template v-if="page.singles.length"
+        ><FactoryCard v-for="f in page.singles" :key="f.id" :factory="f"
+      /></template>
+      <div v-else-if="!page.list.length" class="empty-state" data-filter-empty>
+        {{ page.empty }}
+        <button
+          v-if="page.active.value !== 'all'"
+          class="btn"
+          data-show-all
+          @click="pickFactoryFilter('all', true)"
         >
-        <p>{{ r.line }}<br />{{ r.recipe }}</p>
-        <p>
-          <b>Inputs:</b> {{ r.inputText
-          }}<template v-if="r.byproducts"><br /><b>Byproducts:</b> {{ r.byproducts }}</template>
-        </p>
-      </article>
+          Show all factories
+        </button>
+      </div>
     </div>
-  </section>
+    <section v-if="page.post" style="margin-top: 32px">
+      <h2>Additional completion modules</h2>
+      <div class="notice info">
+        These recipe inputs are additional to the main resource budget. Allocate their supply first.
+        Gathered feedstock and byproducts still need handling.
+      </div>
+      <div class="completion-grid">
+        <article v-for="r in page.completion" :key="r.id" class="completion-item">
+          <label class="check-row"
+            ><input
+              type="checkbox"
+              :data-check="r.check"
+              @change="toggleCheck"
+              :checked="r.done"
+            /><strong>{{ r.name }}</strong></label
+          >
+          <p>{{ r.line }}<br />{{ r.recipe }}</p>
+          <p>
+            <b>Inputs:</b> {{ r.inputText
+            }}<template v-if="r.byproducts"><br /><b>Byproducts:</b> {{ r.byproducts }}</template>
+          </p>
+        </article>
+      </div>
+    </section>
+  </template>
 </template>

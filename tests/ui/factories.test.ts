@@ -10,6 +10,7 @@ import { num } from '../../public/app/format.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
+import FactoriesPage from '../../public/app/ui/pages/FactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, test, vi } from 'vitest';
 import {
@@ -21,6 +22,7 @@ import {
   boot,
   calcStage,
   setFactoryEditing,
+  setContext,
   setFactoryFilter,
   setQuery,
   setSectionCollapsed,
@@ -2098,4 +2100,39 @@ test('folded sections survive a page refresh, and anything unreadable opens them
     's/original/site-oil',
   ]);
   localStorage.removeItem('planner-collapsed-sections');
+});
+// #356: the handbook page stays mounted until render() swaps it out, so it can be drawn while
+// the session's stage is one the handbook has no plan for: a phase 1 or 2 calculated profile,
+// or any phase in the browser edition, whose plan.json has no plans or factories. It draws
+// nothing then rather than throwing, groups and group editing included.
+test('the handbook factories page draws nothing for a phase the handbook has no plan for', async () => {
+  const draw = async (what: string) => {
+    const el = document.createElement('div');
+    const errors: unknown[] = [];
+    const app = createApp({ render: () => h(FactoriesPage) });
+    app.config.errorHandler = e => void errors.push(e);
+    app.mount(el);
+    await nextTick();
+    assert.deepEqual(errors, [], what + ' draws without an error');
+    assert.equal(el.querySelector('h1, .toolbar, .cards'), null, what + ' draws nothing');
+    app.unmount();
+  };
+  const p = generated();
+  p.settings.phase = '1';
+  for (const phase of ['1', '2'] as const) {
+    open({ calculated: p, phase, state: { factoryGroups: structuredClone(GROUPS) } });
+    assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
+    setFactoryEditing(true);
+    await draw('phase ' + phase);
+  }
+  // The browser edition's handbook (build.ts): no plans, resources or factories for any phase.
+  open();
+  setContext({
+    save: { id: 's', name: 'World' },
+    profile: { id: 'original', kind: 'original', name: 'World' },
+    state: structuredClone(state),
+    plan: null,
+    handbook: { ...handbook, factories: [], completion: [], plans: {}, resources: {}, power: {} },
+  });
+  await draw('the empty handbook');
 });
