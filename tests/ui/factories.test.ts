@@ -424,6 +424,46 @@ test('focus moves into the new dialog after the unsaved-note question too (#319)
   assert.equal(document.activeElement === opener, true);
 });
 
+// A browser fires a dialog's close event some milliseconds after close(), and a click can come
+// in between: Escape and an immediate click on another card opened that card's dialog, and
+// then the late close event emptied it (#322). happy-dom fires close at once, so the test
+// holds that event back and delivers it after the reopening, as the browser does.
+test('a late close event leaves a dialog opened in the meantime alone (#322)', async () => {
+  render();
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  const first = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
+  const second = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="cable"]')!;
+  first.focus();
+  first.click();
+  assert.equal($('#detail h2')!.textContent, 'Wire');
+  // Escape: the browser closes the dialog, but its close event is still on its way.
+  const hold = (e: Event) => {
+    if (e.target === dialog) e.stopImmediatePropagation();
+  };
+  document.addEventListener('close', hold, true);
+  dialog.close();
+  document.removeEventListener('close', hold, true);
+  assert.equal(dialog.open, false);
+  // The click on another card lands first.
+  second.focus();
+  second.click();
+  assert.ok(dialog.open);
+  assert.equal($('#detail h2')!.textContent, 'Cable');
+  // Then the close event of the dialog already gone arrives.
+  dialog.dispatchEvent(new Event('close'));
+  await settle();
+  assert.ok(dialog.open, 'the new dialog stays open');
+  assert.equal($('#detail h2')?.textContent, 'Cable', 'and keeps its content');
+  assert.ok($('#detail [data-close]'), 'its × is still there');
+  assert.equal(document.activeElement === second, true, 'focus is not moved by the late event');
+  // Closing the new dialog still returns focus to its own opener, not the first card.
+  document.body.focus();
+  dialog.close();
+  assert.equal(dialog.open, false);
+  assert.equal($('#detail h2'), null, 'closing it unmounts it');
+  assert.equal(document.activeElement === second, true, 'focus goes back to the second card');
+});
+
 test('a link inside a calculated factory dialog moves focus into the new one (#319)', async () => {
   open({ calculated: plan });
   render();

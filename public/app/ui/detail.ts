@@ -29,7 +29,12 @@ let opener: HTMLElement | null = null;
 export function showDetail(target: DetailTarget) {
   const d = required<HTMLDialogElement>('#detail');
   if (listening !== d) {
+    // Browsers fire close a few milliseconds after close(), after other tasks and even after
+    // a click that opened another dialog meanwhile (Escape and an immediate click on another
+    // opener, #322). That late event belongs to the dialog already gone: an open dialog is left
+    // alone, or it would unmount the new content and leave an open, empty dialog.
     d.addEventListener('close', () => {
+      if (d.open) return;
       unmountDetail();
       returnFocus(d);
     });
@@ -83,9 +88,8 @@ function focusFirstControl(d: HTMLDialogElement) {
 // replaced the first one in between. Browsers do this themselves for a modal dialog (so this
 // usually finds focus already there and leaves it), but only while the opener is still on the
 // page; one that is gone is left to the page. A dialog opened again before this close event
-// arrived keeps its own opener.
+// arrived keeps its own opener: the close listener ignores that late event.
 function returnFocus(d: HTMLDialogElement) {
-  if (d.open) return;
   const back = opener;
   opener = null;
   const current = document.activeElement;
