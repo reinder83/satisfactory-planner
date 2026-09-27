@@ -243,30 +243,54 @@ export function acceptRoute() {
   return true;
 }
 
-// Notes are saved with an explicit button, not on typing. A notes textarea is unsaved
-// when its text differs from the saved note its paired data-input button writes. A blank
-// note is saved by deleting it (mutate in state.ts), so whitespace compares as empty.
-// `root` narrows the check, to the dialog when only the dialog is closing.
-export function hasUnsavedNotes(root: ParentNode = document) {
-  return [...root.querySelectorAll<HTMLTextAreaElement>('textarea.notes')].some(el => {
-    const button = root.querySelector<HTMLElement>(`[data-input="${el.id}"]`);
-    const text = el.value.trim() ? el.value : '';
-    return button && text !== (state.notes[button.dataset.saveNote || ''] || '');
+// Notes save themselves after a pause in typing (ui/note-draft.ts). Each notes box on screen
+// registers here, so the checks below can see its text and send a waiting one at once. `el`
+// is its textarea while mounted; `flush` sends text still waiting for the pause in typing;
+// `unsaved` is true while the box shows text the saved note does not have yet (being typed,
+// on its way, or refused); `unsent` is true when no write carries that text either (a write
+// failed, or nothing has sent it yet), so leaving would lose it.
+export type NoteBox = {
+  el: () => Element | null | undefined;
+  flush: () => void;
+  unsaved: () => boolean;
+  unsent: () => boolean;
+};
+export const noteBoxes = new Set<NoteBox>();
+const boxesIn = (root: ParentNode) =>
+  [...noteBoxes].filter(b => {
+    const el = b.el();
+    return !!el && root.contains(el);
   });
+
+// Sends every note in `root` that is still waiting for its pause, before the page, profile or
+// dialog showing it goes away. save() queues the write at once with the current save and
+// profile, so it lands there even when the page changes before it finishes.
+export function flushNotes(root: ParentNode = document) {
+  for (const b of boxesIn(root)) b.flush();
 }
 
-// Whether it is fine to leave the current page (or, with `root`, that part of it): true at
-// once when there are no unsaved notes, otherwise the answer of the in-app confirmation
-// (ui/confirm.ts), true when the user agrees to drop them. So a caller that must act in the
-// same event (Escape on the dialog, the hash route) can tell "nothing to ask" apart; the
-// others await it. Checked before switching profile, starting the wizard, signing out,
-// changing the working phase, following the hash route and closing or replacing the detail
-// dialog.
+// Whether a notes box in `root` shows text that is not saved yet. Holds back refreshing the
+// page and closing the tab, and keeps the page when a session ends. `root` narrows the
+// check, to the dialog when only the dialog is closing.
+export function hasUnsavedNotes(root: ParentNode = document) {
+  return boxesIn(root).some(b => b.unsaved());
+}
+
+// Whether it is fine to leave the current page (or, with `root`, that part of it). Notes
+// waiting for their pause are sent first, and a write already on its way finishes by itself,
+// so this asks only when a note would be lost: its write failed (the box says "Not saved"),
+// or no write carries its text. It is true at once when there is nothing to ask, otherwise
+// the answer of the in-app confirmation (ui/confirm.ts), true when the user agrees to drop
+// those notes. So a caller that must act in the same event (Escape on the dialog, the hash
+// route) can tell "nothing to ask" apart; the others await it. Checked before switching
+// profile, starting the wizard, signing out, changing the working phase, following the hash
+// route and closing or replacing the detail dialog.
 export function allowSwitch(root: ParentNode = document): true | Promise<boolean> {
-  if (!hasUnsavedNotes(root)) return true;
+  flushNotes(root);
+  if (!boxesIn(root).some(b => b.unsent())) return true;
   return confirmAction({
     title: 'Leave without saving notes?',
-    body: 'You have notes that have not been saved. Leave without saving those edits?',
+    body: 'You have notes that could not be saved. Leave without saving those edits?',
     confirmLabel: 'Leave without saving',
     danger: true,
   });

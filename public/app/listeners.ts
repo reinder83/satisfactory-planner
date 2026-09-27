@@ -6,7 +6,7 @@
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
 // cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange.
-import { acceptRoute, hasUnsavedNotes, pending, refreshState } from './api.ts';
+import { acceptRoute, flushNotes, hasUnsavedNotes, pending, refreshState } from './api.ts';
 import { required } from './format.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
@@ -47,8 +47,10 @@ required('#detail').addEventListener('click', e => {
 required('#detail').addEventListener('cancel', cancelDetail);
 
 // Ask before closing or reloading the tab while a save is still in flight (pending in
-// api.ts) or a notes box holds unsaved text.
+// api.ts) or a notes box holds unsaved text. A note still waiting for its pause in typing is
+// sent first, so staying on the page lets it finish.
 window.addEventListener('beforeunload', e => {
+  flushNotes();
   if (pending || hasUnsavedNotes()) {
     e.preventDefault();
     e.returnValue = '';

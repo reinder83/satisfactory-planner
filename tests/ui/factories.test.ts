@@ -414,7 +414,7 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
   cancelDetail(escape);
   await settle();
   assert.equal(asked.length, 3);
-  assert.match(asked[0]!, /notes that have not been saved/);
+  assert.match(asked[0]!, /notes that could not be saved/);
   assert.equal(escape.defaultPrevented, true);
   assert.ok(dialog.open, 'kept notes keep the dialog open');
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');

@@ -74,7 +74,10 @@ test('the handbook plan shows the phase checklist, counters, notes and deliverie
     evil + '\n  second line',
     'the note keeps its text',
   );
-  assert.equal($('[data-save-note="phase-3"]')!.dataset.input, 'phase-note');
+  assert.equal($('[data-save-note="phase-3"]')!.id, 'phase-note', 'the notes key is on the box');
+  assert.equal($('#phase-note')!.getAttribute('aria-describedby'), 'phase-note-status');
+  assert.equal($('#phase-note-status')!.getAttribute('aria-live'), 'polite');
+  assert.doesNotMatch($('#main')!.textContent, /Save notes|Saved only when/);
   assert.equal($('.next-card .step-no')!.textContent, 'NEXT UNFINISHED STEP');
   const deliveries = handbookDeliveries('3');
   assert.equal($$('#main [data-delivery]').length, deliveries.length);

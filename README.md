@@ -72,7 +72,7 @@ A profile only offers the phases from the one it was created for onward: if you 
 
 The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs surplus to storage and sinks. Its optional storage template includes 132 addresses, collectables bays Q/R and the workshop underneath. New saves have no pre-completed steps.
 
-On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Successful note saves close the details dialog; saving a blank note deletes the note. Existing container addresses and progress keys are unchanged.
+On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Notes save themselves as you type, everywhere in the planner — the line under each notes box says when it was saved, or offers Retry if a save failed; emptying a note deletes it. Existing container addresses and progress keys are unchanged.
 
 ## Make the plan your own
 

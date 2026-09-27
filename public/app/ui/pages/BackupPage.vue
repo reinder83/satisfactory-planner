@@ -2,8 +2,8 @@
   #backup, in three versions: the browser edition (saves live in this browser, so there is no
   progress download), a calculated profile on the server, and the original handbook on the
   server with its plan assumptions and sources. The save-wide note is stored under the key
-  `global`; its "Save notes" button uses saveNote in ui/actions.ts, as the plan page and
-  the dialogs do.
+  `global` and saves itself as you type (NoteBox.vue), as the plan page's and the dialogs'
+  notes do.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -26,15 +26,13 @@ import {
   currentSave,
   plan,
   setWorkspace,
-  state,
   workspace,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { invalidate, legacy } from '../bridge.ts';
-import { useNoteDraft } from '../note-draft.ts';
+import NoteBox from '../NoteBox.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
-import { saveNote } from '../actions.ts';
 
 const page = computed(() =>
   legacy(() => ({
@@ -42,7 +40,6 @@ const page = computed(() =>
     saveName: currentSave.name,
     profileName: currentProfile.name,
     exportUrl: `/api/export?save=${currentSave.id}&profile=${currentProfile.id}`,
-    note: state.notes.global || '',
     warnings: calculated?.warnings || [],
     sources: plan?.sources || [],
     // For "Choose saves to export": every save of this user with its profile count.
@@ -55,11 +52,6 @@ const page = computed(() =>
       ? 'Last export: ' + new Date(workspace.lastBackup).toLocaleString()
       : 'No full backup has been exported from this browser yet.',
   })),
-);
-// The save-wide notes box: its own text, kept through redraws and saved-note changes (note-draft.ts).
-const note = useNoteDraft(
-  () => currentSave.id,
-  () => page.value.note,
 );
 const exporting = ref(false);
 // The saves ticked under "Choose saves to export" (#160), by id.
@@ -296,10 +288,7 @@ async function persistStorage() {
     </div>
     <section class="panel">
       <h2>Save-wide notes for this profile</h2>
-      <textarea id="global-note" class="notes" maxlength="6000" v-model="note"></textarea>
-      <button class="btn" data-save-note="global" @click="saveNote" data-input="global-note">
-        Save notes
-      </button>
+      <NoteBox id="global-note" note-key="global" aria-label="Save-wide notes" />
     </section>
     <section class="panel">
       <h2>Calculation assumptions</h2>
@@ -348,19 +337,12 @@ async function persistStorage() {
     </div>
     <section class="panel" style="margin-top: 24px">
       <h2>Save-wide notes</h2>
-      <textarea
+      <NoteBox
         id="global-note"
-        class="notes"
-        maxlength="6000"
+        note-key="global"
+        label="Seed, locations, routes and decisions."
         aria-label="Save-wide notes"
-        v-model="note"
-      ></textarea>
-      <div class="note-save">
-        <span class="small muted">Seed, locations, routes and decisions.</span
-        ><button class="btn" data-save-note="global" @click="saveNote" data-input="global-note">
-          Save notes
-        </button>
-      </div>
+      />
     </section>
     <section class="panel">
       <h2>Plan assumptions</h2>
