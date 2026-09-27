@@ -1059,7 +1059,9 @@ p.eyebrow {
   margin-top: auto;
   gap: 10px;
 }
-.factory-card .check-row {
+/* A factory's Running box, on its card and in its dialog's header (#239). */
+.factory-card .check-row,
+.dialog-head .check-row {
   font-family: var(--head);
   font-size: 13px;
   font-weight: 700;
@@ -1067,7 +1069,8 @@ p.eyebrow {
   text-transform: uppercase;
   color: var(--muted);
 }
-.factory-card:has(footer input:checked) .check-row {
+.factory-card:has(footer input:checked) .check-row,
+.dialog-head .check-row:has(input:checked) {
   color: var(--green);
 }
 
@@ -1894,6 +1897,14 @@ dialog::backdrop {
 .dialog-icon .item-icon {
   width: 50px;
   height: 50px;
+}
+/* Controls in the sticky header (DialogFrame's actions slot), then the ×. */
+.dialog-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  min-height: 34px;
 }
 .dialog-head .close {
   background: #1e2225;
@@ -3048,6 +3059,25 @@ button.rail-tile:hover {
   .dialog-body,
   .dialog-head {
     padding: 14px;
+  }
+  /* Too narrow for the title, a header control and the × on one line: the × stays beside the
+     title and the control takes a row of its own under both, still before the × in the tab
+     order (#239). */
+  .dialog-head:has(.dialog-head-actions .check-row) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 14px;
+  }
+  .dialog-head:has(.dialog-head-actions .check-row) .dialog-head-actions {
+    display: contents;
+  }
+  .dialog-head .dialog-head-actions .close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .dialog-head .dialog-head-actions .check-row {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
   .dialog-body .stats {
     grid-template-columns: 1fr;

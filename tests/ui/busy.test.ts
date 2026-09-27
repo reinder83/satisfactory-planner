@@ -18,6 +18,7 @@ import {
   workspace,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { openFactory } from '../../public/app/factory-detail.ts';
 import { $, $$, answerConfirms, applyUpdate, catalog, generated, go, open, page } from './setup.ts';
 import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 
@@ -212,6 +213,28 @@ test('a progress checkbox on the build plan keeps focus while it saves', async (
   assert.equal(net.calls.length, 1);
   await net.release();
   assert.equal(state.checks[key], true);
+  assert.ok(ready(sel));
+  assert.ok(focusedOn(sel), describeFocus());
+});
+
+test('a factory dialog’s Running box in the header keeps focus while it saves (#239)', async () => {
+  const net = heldFetch(updates);
+  go('factories');
+  render();
+  await nextTick();
+  openFactory('wire');
+  await nextTick();
+  const sel = '#detail .dialog-head [data-check="factory-3-wire"]';
+  press(sel);
+  await settle();
+  assert.ok(busy(sel));
+  assert.ok(focusedOn(sel), describeFocus());
+  press(sel);
+  await settle();
+  assert.equal($<HTMLInputElement>(sel)!.checked, true, 'the second press does not untick it');
+  assert.equal(net.calls.length, 1);
+  await net.release();
+  assert.equal(state.checks['factory-3-wire'], true);
   assert.ok(ready(sel));
   assert.ok(focusedOn(sel), describeFocus());
 });

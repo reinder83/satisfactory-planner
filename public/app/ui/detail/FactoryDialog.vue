@@ -1,6 +1,7 @@
 <!--
-  The dialog for one handbook factory (plan.factories id): stats, flow, lane advice,
-  expansion table, the "Running at Phase N target" check and the factory notes. It shows the
+  The dialog for one handbook factory (plan.factories id): the "Running at Phase N target" check
+  in the sticky header (#239), then stats, flow, lane advice, expansion table and the factory
+  notes. It shows the
   current phase, or the factory's first phase when it has no stage in the current one.
   Plastic and Rubber come from the shared oil campus, which replaces the lane advice. The check
   key `factory-<phase>-<id>` and the note key `factory-<id>` (shared by every phase) are saved
@@ -86,6 +87,16 @@ const view = computed(() =>
 
 <template>
   <DialogFrame v-if="view" :title="view.f.name" :subtitle="view.subtitle" :icon="view.f.name">
+    <template #actions
+      ><label class="check-row"
+        ><input
+          type="checkbox"
+          :data-check="view.check"
+          @change="toggleCheck"
+          :checked="view.done"
+        />Running at Phase {{ view.st }} target</label
+      ></template
+    >
     <span class="badge orange">{{ view.r.recipe }}</span>
     <div class="stats">
       <StatTile label="Output" :value="num(view.r.output) + '/min'" caption="Total production" />
@@ -174,16 +185,6 @@ const view = computed(() =>
           : ''
       }}
     </p>
-    <div class="detail-actions">
-      <label class="check-row"
-        ><input
-          type="checkbox"
-          :data-check="view.check"
-          @change="toggleCheck"
-          :checked="view.done"
-        />Running at Phase {{ view.st }} target</label
-      >
-    </div>
     <h3>Factory notes</h3>
     <DetailNote :note-key="'factory-' + view.f.id" label="Location, transport, next expansion." />
   </DialogFrame>
