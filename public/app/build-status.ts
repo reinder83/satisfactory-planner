@@ -116,6 +116,21 @@ function flows(stage: StoredStage, built: Set<string>, share: Map<string, number
   return { produced, demand, delivery, deliveryShare };
 }
 
+// What powers stage `stage` once it is fully built, in MW, as the planner balances it: the
+// generation its own rows build, with the augmenter boost, and the spare part of availableMW
+// that this generation does not account for (the entered spare power, plus what Phase 5's
+// augmenters add). A plan saved without availableMW uses `sparePowerMW`. The stage's
+// additionalHeadroomMW is requiredMW minus both. ADA's power remark (app/ada-panel.ts) states
+// these figures (#334).
+export function stageSupply(
+  stage: StoredStage,
+  sparePowerMW = 0,
+): { generationMW: number; spareMW: number } {
+  const generationMW = (stage.generationMW || 0) * (1 + (stage.boost || 0));
+  const spareMW = stage.availableMW !== undefined ? stage.availableMW - generationMW : sparePowerMW;
+  return { generationMW, spareMW };
+}
+
 // `checks` is the profile's progress checks and `stageKey` the stage's key in the plan ('1'-'5'),
 // as in the build plan's step ids.
 export function buildStatus(
@@ -144,14 +159,10 @@ export function buildStatus(
   });
   // Power, as the planner balances it. peakMW is whole machines at full power x powerFactor, so
   // a row's share of it per machine-equivalent is peakMW / machines; the utility allowance is
-  // the stage's requiredMW / peakMW. The spare part of availableMW is what its new generation
-  // (with the boost) does not account for; a plan saved without availableMW uses sparePowerMW.
+  // the stage's requiredMW / peakMW. The spare part comes from stageSupply.
   const boost = stage.boost || 0;
   const utility = stage.peakMW && stage.requiredMW ? stage.requiredMW / stage.peakMW : 1;
-  const spareMW =
-    stage.availableMW !== undefined
-      ? stage.availableMW - (stage.generationMW || 0) * (1 + boost)
-      : sparePowerMW;
+  const { spareMW } = stageSupply(stage, sparePowerMW);
   let drawMW = 0,
     supplyMW = spareMW;
   for (const r of rows) {

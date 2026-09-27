@@ -58,6 +58,44 @@ test('ADA leads with the thing that is actually wrong', () => {
   assert.match(power.text, /240 MW[^]*800 MW/);
 });
 
+// #334: from Phase 2 on the draw was set against the listed spare power alone, leaving out the
+// generators the plan builds, so the figures did not add up to the headroom.
+test('ADA’s power remark sets the draw against everything the plan counts on', () => {
+  const text = (power: Partial<NonNullable<AdaFacts['power']>>, phaseLabel = 'Phase 3') =>
+    first(
+      facts({
+        phaseLabel,
+        power: { required: '402 MW', spare: '0 MW', headroom: '169,73 MW', tight: true, ...power },
+      }),
+    ).text;
+  assert.equal(
+    text({ generation: '232,27 MW' }, 'Phase 2'),
+    '169,73 MW of whole-building power headroom is still unaccounted for: a 402 MW draw against 232,27 MW of planned generation and the 0 MW you listed as spare. Unpowered machines are simply very expensive furniture. Build generation beyond what the plan lists.',
+  );
+  assert.equal(
+    text({ required: '129,6 MW', spare: '100 MW', headroom: '29,6 MW', biomass: true }, 'Phase 1'),
+    '29,6 MW of whole-building power headroom is still unaccounted for: a 129,6 MW draw against the 100 MW you listed as spare. Unpowered machines are simply very expensive furniture. Phase 1 plans no generators: burn biomass, or bring existing generation.',
+  );
+  // A later stage that builds no generators of its own.
+  assert.match(
+    text({ generation: '' }, 'Phase 4'),
+    /a 402 MW draw against the 0 MW you listed as spare\. .* Build the generation first\.$/,
+  );
+  assert.match(
+    text(
+      {
+        required: '75,57 GW',
+        generation: '56,4 GW',
+        spare: '3 GW',
+        augmented: '6,4 GW',
+        headroom: '12,77 GW',
+      },
+      'Phase 5',
+    ),
+    /a 75,57 GW draw against 56,4 GW of planned generation and the 3 GW you listed as spare \(6,4 GW with the augmenters\)\./,
+  );
+});
+
 test('ADA counts the same progress the pages show', () => {
   assert.match(
     first(facts({ steps: { done: 0, total: 12 } })).text,
