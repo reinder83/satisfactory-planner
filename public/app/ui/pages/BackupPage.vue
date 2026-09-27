@@ -61,7 +61,9 @@ const chosen = ref<string[]>([]);
 // queued saves, download them as one full-save file, then refetch the workspace, which
 // carries lastBackup (when a full export last ran in the browser edition; a selection is not
 // a full backup and does not count).
+// Both buttons are busy meanwhile (bound aria-disabled, app/busy.ts: they keep focus, #299).
 async function exportSaves(selection?: string[]) {
+  if (exporting.value) return;
   exporting.value = true;
   try {
     await writeQueue;
@@ -198,7 +200,12 @@ async function persistStorage() {
       Export all your saves, profile calculations, checkmarks and notes. Account passwords and
       sessions are excluded. Import adds copies without replacing existing saves.
     </p>
-    <button class="btn primary" data-export-saves :disabled="exporting" @click="exportSaves()">
+    <button
+      class="btn primary"
+      data-export-saves
+      :aria-disabled="exporting || undefined"
+      @click="exportSaves()"
+    >
       Export all saves
     </button>
     <label class="btn"
@@ -224,7 +231,8 @@ async function persistStorage() {
       <button
         class="btn"
         data-export-selected
-        :disabled="exporting || !chosen.length"
+        :aria-disabled="exporting || undefined"
+        :disabled="!exporting && !chosen.length"
         @click="exportSaves(chosen.filter(id => page.saves.some(s => s.id === id)))"
       >
         Export selected

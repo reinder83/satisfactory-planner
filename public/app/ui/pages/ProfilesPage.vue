@@ -62,12 +62,15 @@ type SaveCard = (typeof page.value)['saves'][number];
 type ProfileCard = SaveCard['profiles'][number];
 
 // The card action in progress, as "<action>:<save id>:<profile id>", so its button can say so.
+// That button is busy meanwhile (bound aria-disabled, app/busy.ts: it keeps focus, #299) and its
+// handler does nothing more; so is Rename while it saves.
 const busy = ref('');
 const key = (action: string, s: SaveCard, p: ProfileCard) => `${action}:${s.id}:${p.id}`;
 const renaming = ref(false);
 
 // "Duplicate": copy the profile with its progress and open the copy.
 async function duplicate(s: SaveCard, p: ProfileCard) {
+  if (busy.value === key('duplicate', s, p)) return;
   if (!(await allowSwitch())) return;
   busy.value = key('duplicate', s, p);
   try {
@@ -90,6 +93,7 @@ async function duplicate(s: SaveCard, p: ProfileCard) {
 // "Share": download that profile as a full-save file with its progress stripped (share=1),
 // for someone else to import.
 async function share(s: SaveCard, p: ProfileCard) {
+  if (busy.value === key('share', s, p)) return;
   busy.value = key('share', s, p);
   try {
     await writeQueue;
@@ -116,6 +120,7 @@ async function share(s: SaveCard, p: ProfileCard) {
 // profiles keep their progress. Focus then goes to the next profile's Remove, else the previous
 // one's, else "Create a save" (ui/refocus.ts, #286).
 async function remove(e: Event, s: SaveCard, p: ProfileCard) {
+  if (busy.value === key('remove', s, p)) return;
   const refocus = refocusAfterRemoval(e.currentTarget, {
     row: '#main .profile-card',
     control: '[data-remove-profile]',
@@ -155,6 +160,7 @@ async function remove(e: Event, s: SaveCard, p: ProfileCard) {
 // "Open profile" / "Continue current profile": make it the active profile on the server,
 // load it and show its plan.
 async function openProfile(s: SaveCard, p: ProfileCard) {
+  if (busy.value === key('open', s, p)) return;
   if (!(await allowSwitch())) return;
   busy.value = key('open', s, p);
   try {
@@ -172,6 +178,7 @@ async function openProfile(s: SaveCard, p: ProfileCard) {
 // #rename-form renames the open save or the open profile (its "target" select), then copies
 // the new names into the session's currentSave and currentProfile and redraws.
 async function rename(e: Event) {
+  if (renaming.value) return;
   renaming.value = true;
   try {
     setWorkspace(
@@ -228,7 +235,7 @@ async function rename(e: Event) {
           :class="['btn', p.open ? '' : 'primary']"
           :data-open-save="s.id"
           :data-open-profile="p.id"
-          :disabled="busy === key('open', s, p)"
+          :aria-disabled="busy === key('open', s, p) || undefined"
           @click="openProfile(s, p)"
         >
           {{ p.open ? 'Continue current profile' : 'Open profile' }}
@@ -237,7 +244,7 @@ async function rename(e: Event) {
           class="btn"
           :data-duplicate-profile="p.id"
           :data-duplicate-save="s.id"
-          :disabled="busy === key('duplicate', s, p)"
+          :aria-disabled="busy === key('duplicate', s, p) || undefined"
           @click="duplicate(s, p)"
         >
           {{ busy === key('duplicate', s, p) ? 'Copying…' : 'Duplicate' }}
@@ -246,7 +253,7 @@ async function rename(e: Event) {
           class="btn"
           :data-share-profile="p.id"
           :data-share-save="s.id"
-          :disabled="busy === key('share', s, p)"
+          :aria-disabled="busy === key('share', s, p) || undefined"
           @click="share(s, p)"
         >
           Share
@@ -255,7 +262,7 @@ async function rename(e: Event) {
           class="btn"
           :data-remove-profile="p.id"
           :data-remove-save="s.id"
-          :disabled="busy === key('remove', s, p)"
+          :aria-disabled="busy === key('remove', s, p) || undefined"
           @click="remove($event, s, p)"
         >
           Remove profile
@@ -280,7 +287,7 @@ async function rename(e: Event) {
         maxlength="80"
         aria-label="New name"
         placeholder="New name"
-      /><button class="btn" :disabled="renaming">Rename</button>
+      /><button class="btn" :aria-disabled="renaming || undefined">Rename</button>
     </form>
     <p class="small muted">
       Renaming does not change progress. Profiles keep a frozen calculation so later planner updates

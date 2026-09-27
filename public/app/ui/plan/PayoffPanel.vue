@@ -85,8 +85,10 @@ const ariaSort = (column: PayoffColumn) =>
   view.value?.column === column ? (dir.value === 1 ? 'ascending' : 'descending') : 'none';
 
 // Runs the ranking for the phase on screen and shows it, unless another profile was opened
-// meanwhile (the result is stored with the profile it was run for either way).
+// meanwhile (the result is stored with the profile it was run for either way). The button is
+// busy while it runs (bound aria-disabled, app/busy.ts: it keeps focus, #299).
 async function rank() {
+  if (running.value) return;
   const profileId = currentProfile.id;
   running.value = 'Checking alternates…';
   try {
@@ -109,7 +111,12 @@ async function rank() {
   <section v-if="view" class="panel payoff" data-payoff>
     <div class="section-head">
       <h2>Hard-drive payoff</h2>
-      <button class="btn" data-rank-alternates :disabled="!!running" @click="rank">
+      <button
+        class="btn"
+        data-rank-alternates
+        :aria-disabled="!!running || undefined"
+        @click="rank"
+      >
         {{ view.ranking ? 'Re-rank' : 'Rank alternates' }}
       </button>
     </div>

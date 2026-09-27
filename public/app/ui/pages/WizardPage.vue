@@ -24,6 +24,7 @@ import {
   wizardError,
 } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { isBusy, whileBusy } from '../../busy.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 import GoalStep from '../wizard/GoalStep.vue';
@@ -65,15 +66,18 @@ async function submit(e: Event) {
     await moveWizard(w.step + 1);
     return;
   }
-  b.disabled = true;
-  try {
-    await createProfile(form, b);
-  } catch (err) {
-    wizardError(form, err as Error);
-    b.disabled = false;
-    // calcProgress rewrote the button's label, so give it the right one back.
-    b.textContent = submitLabel(w);
-  }
+  // Busy while it calculates (app/busy.ts): it keeps focus (#299), and Enter in a field submits
+  // nothing more meanwhile, since the browser presses the busy button for it.
+  if (isBusy(b)) return;
+  await whileBusy(b, async () => {
+    try {
+      await createProfile(form, b);
+    } catch (err) {
+      wizardError(form, err as Error);
+      // calcProgress rewrote the button's label, so give it the right one back.
+      b.textContent = submitLabel(w);
+    }
+  });
 }
 </script>
 

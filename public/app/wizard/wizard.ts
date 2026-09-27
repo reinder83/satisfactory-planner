@@ -16,6 +16,7 @@ import {
 } from '../../preferences.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
+import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
 import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
 import { render } from '../shell.ts';
@@ -458,15 +459,16 @@ export async function moveWizard(target: number) {
 // same Review with the same settings, so they calculate through one path.
 // Posts the settings to /api/preview (server, or the browser worker in the
 // Pages edition), stores the result as wizard.preview and shows Review. All
-// step and submit buttons are disabled meanwhile; on failure the draft stays
-// where it was and the error is shown in the form.
+// step and submit buttons are busy meanwhile (busy.ts): not disabled, so the
+// pressed one keeps focus (#299), and a click on one does nothing. On failure
+// the draft stays where it was and the error is shown in the form.
 export async function calculateWizard(form: HTMLFormElement | null) {
   const w = draft();
   wizardBusy = true;
   const buttons = document.querySelectorAll<HTMLButtonElement>(
     '[data-wizard-step],[data-guided-advanced],#wizard-form button',
   );
-  buttons.forEach(b => (b.disabled = true));
+  buttons.forEach(b => markBusy(b, true));
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]'),
     label = submit?.textContent ?? '';
   try {
@@ -486,6 +488,6 @@ export async function calculateWizard(form: HTMLFormElement | null) {
     if (submit) submit.textContent = label;
   } finally {
     wizardBusy = false;
-    buttons.forEach(b => (b.disabled = false));
+    buttons.forEach(b => markBusy(b, false));
   }
 }

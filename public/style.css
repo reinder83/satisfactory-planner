@@ -105,7 +105,13 @@ summary {
 button {
   cursor: pointer;
 }
-button:disabled {
+/* A control busy with its save is aria-disabled rather than disabled, so it keeps focus
+   (app/busy.ts, #299); it looks the same as a disabled one. */
+button:disabled,
+button[aria-disabled='true'],
+input[aria-disabled='true'],
+select[aria-disabled='true'],
+textarea[aria-disabled='true'] {
   cursor: wait;
   opacity: 0.6;
 }

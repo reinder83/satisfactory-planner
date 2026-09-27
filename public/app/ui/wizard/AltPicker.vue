@@ -102,7 +102,8 @@ function all(on: boolean) {
   for (const r of view.value!.rows) if (!r.why && shown(r)) tick(r, on);
 }
 
-// Planner's choice: its label shows the calculation's progress meanwhile.
+// Planner's choice: its label shows the calculation's progress meanwhile, busy (bound
+// aria-disabled, app/busy.ts: it keeps focus, #299).
 const busy = ref(false);
 const bestLabel = ref('Planner’s choice');
 async function best() {
@@ -148,7 +149,7 @@ async function best() {
           class="btn quiet"
           data-alt-best
           title="Recalculates with every alternate allowed and ticks only the recipes the optimal plan uses"
-          :disabled="busy"
+          :aria-disabled="busy || undefined"
           @click="best"
         >
           {{ bestLabel }}</button

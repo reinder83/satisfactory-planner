@@ -9,7 +9,7 @@
   on the floor (#191): `order` is every bay on it, in its current order.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { bayCapacity } from '../../../state.ts';
 import { save, toast } from '../../api.ts';
 import { slug } from '../../format.ts';
@@ -17,6 +17,7 @@ import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import SlotCell from './SlotCell.vue';
@@ -66,71 +67,74 @@ const view = computed(() =>
   }),
 );
 
-// Runs one save for a control, disabled meanwhile, then redraws; a failed save leaves the
-// control as it was. Only for controls whose disabled state the template does not bind: the
-// save indicator redraws the bay before this resumes, so resetting a bound one here would
-// undo what the redraw set.
+// Runs one save for a control, busy meanwhile (app/busy.ts: it keeps focus, #299), then redraws;
+// a failed save leaves the control as it was.
 async function saving(el: HTMLButtonElement, op: UpdateOp, done?: () => void) {
-  el.disabled = true;
-  try {
-    await save(op);
-    render();
-    done?.();
-  } catch {
-  } finally {
-    el.disabled = false;
-  }
+  await whileBusy(el, async () => {
+    try {
+      await save(op);
+      render();
+      done?.();
+    } catch {}
+  });
 }
 
 // "Complete room X": tick every check of every named container in the bay in one write. The
-// button stays disabled while saving, and afterwards while every container is done (then
-// marked .unavailable, so it shows no wait cursor, and relabelled).
-const completing = ref(false);
-async function completeRoom() {
-  const bay = storageBays().find(b => b.id === props.bay.id);
-  if (!bay) return;
-  completing.value = true;
-  try {
-    await save({
-      type: 'checks',
-      keys: bay.items.filter(x => x.name).flatMap(x => slotKeys(x.id)),
-      value: true,
-    });
-    render();
-    toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.');
-  } catch {
-  } finally {
-    completing.value = false;
-  }
+// button is busy while saving (app/busy.ts), and disabled afterwards while every container is
+// done (marked .unavailable, so it shows no wait cursor, and relabelled). Focus then goes to the
+// next bay's Complete room that can still be pressed, else the previous one's, else this bay's
+// first container (#299).
+async function completeRoom(e: Event) {
+  const button = e.currentTarget as HTMLButtonElement,
+    bay = storageBays().find(b => b.id === props.bay.id);
+  if (!bay || isBusy(button)) return;
+  const first = bay.items.find(x => x.name)?.id ?? '';
+  const refocus = refocusAfterRemoval(button, {
+    row: '#main .floor-grid .bay',
+    control: '[data-complete-bay]:not(:disabled)',
+    fallback: [`#main [data-slot="${CSS.escape(first)}"]`],
+  });
+  await whileBusy(button, async () => {
+    try {
+      await save({
+        type: 'checks',
+        keys: bay.items.filter(x => x.name).flatMap(x => slotKeys(x.id)),
+        value: true,
+      });
+      render();
+      toast('Room ' + bay.id + ' completed. You can uncheck individual containers if needed.');
+    } catch {}
+  });
+  await nextTick();
+  if (button.disabled) await refocus();
 }
 
-// A container's Done box. A failed write unticks it again.
-async function completeSlot(e: Event, id: string) {
+// A container's Done box, busy while it saves (app/busy.ts). A failed write unticks it again.
+function completeSlot(e: Event, id: string) {
   const el = e.target as HTMLInputElement,
     value = el.checked;
-  el.disabled = true;
-  try {
-    await save({ type: 'checks', keys: slotKeys(id), value });
-    render();
-  } catch {
-    el.checked = !value;
-  } finally {
-    el.disabled = false;
-  }
+  return whileBusy(el, async () => {
+    try {
+      await save({ type: 'checks', keys: slotKeys(id), value });
+      render();
+    } catch {
+      el.checked = !value;
+    }
+  });
 }
 
-// The bay's name field. Redrawn whether or not the save worked, so a failed rename shows the
-// saved name again.
-async function rename(e: Event) {
+// The bay's name field, read-only while it saves (app/busy.ts). Redrawn whether or not the save
+// worked, so a failed rename shows the saved name again.
+function rename(e: Event) {
   const el = e.target as HTMLInputElement;
-  el.disabled = true;
-  try {
-    await save({ type: 'storageBayRename', id: props.bay.id, name: el.value });
-  } catch {
-  } finally {
-    el.disabled = false;
-    render();
-  }
+  return whileBusy(el, async () => {
+    try {
+      await save({ type: 'storageBayRename', id: props.bay.id, name: el.value });
+    } catch {
+    } finally {
+      render();
+    }
+  });
 }
 
 // ✕: clear a container. Its ✕ goes with it, so focus goes to the next container's ✕ in this bay,
@@ -162,6 +166,7 @@ const bayList = {
 async function hideBay(e: Event) {
   // Read before the question: currentTarget is only set while the click is dispatched.
   const button = e.currentTarget as HTMLButtonElement;
+  if (isBusy(button)) return;
   const refocus = refocusAfterRemoval(button, bayList);
   if (
     !(await confirmAction({
@@ -175,34 +180,47 @@ async function hideBay(e: Event) {
 }
 
 // "Move to…": the bay goes to another floor with its letter, so its containers, checkmarks
-// and notes go with it (#190). The menu is reset either way; the bay leaves this floor on success.
-async function moveBay(e: Event) {
+// and notes go with it (#190). The menu is reset either way, and is busy while it saves
+// (app/busy.ts): a key pressed on it meanwhile changes nothing. The bay leaves this floor on
+// success, so focus goes to the next bay's menu, else the previous one's, else the new bay's
+// letter field.
+function moveBay(e: Event) {
   const el = e.target as HTMLSelectElement,
     floor = el.value,
     label = storageFloors().find(f => f.id === floor)?.label;
   el.value = '';
-  if (!floor) return;
-  el.disabled = true;
-  try {
-    await save({ type: 'storageBayMove', id: props.bay.id, floor });
-    render();
-    toast(`Bay ${props.bay.id} moved to ${label}, with its containers and checkmarks.`);
-  } catch {
-  } finally {
-    el.disabled = false;
-  }
+  if (!floor || isBusy(el)) return;
+  const refocus = refocusAfterRemoval(el, { ...bayList, control: '[data-move-bay]' });
+  return whileBusy(el, async () => {
+    try {
+      await save({ type: 'storageBayMove', id: props.bay.id, floor });
+      render();
+      toast(`Bay ${props.bay.id} moved to ${label}, with its containers and checkmarks.`);
+      void refocus();
+    } catch {}
+  });
 }
 
 // "Move left" / "Move right": swap the bay with its neighbour in the floor's order and save the
 // whole order (#191). Its containers and progress are untouched: only its place changes.
-// Both buttons stay disabled while it saves.
+// Both buttons are busy while it saves (a bound flag, app/busy.ts). Focus stays on the pressed
+// button, or goes to the other one once the bay has reached the end of the row (#299); moving the
+// bay's section in the page can take focus off it too.
 const shifting = ref(false);
-async function shiftBay(by: -1 | 1) {
+async function shiftBay(e: Event, by: -1 | 1) {
   const order = [...props.order],
     at = order.indexOf(props.bay.id),
     to = at + by;
-  if (at < 0 || to < 0 || to >= order.length) return;
+  if (shifting.value || at < 0 || to < 0 || to >= order.length) return;
   [order[at], order[to]] = [order[to]!, order[at]!];
+  const id = CSS.escape(props.bay.id),
+    [same, other] = by < 0 ? ['left', 'right'] : ['right', 'left'];
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    fallback: [
+      `#main [data-bay-${same}="${id}"]:not(:disabled)`,
+      `#main [data-bay-${other}="${id}"]`,
+    ],
+  });
   shifting.value = true;
   try {
     await save({ type: 'storageBayOrder', floor: props.bay.floor, order });
@@ -211,11 +229,13 @@ async function shiftBay(by: -1 | 1) {
   } finally {
     shifting.value = false;
   }
+  await refocus();
 }
 
 async function removeBay(e: Event) {
   // Read before the question: currentTarget is only set while the click is dispatched.
   const button = e.currentTarget as HTMLButtonElement;
+  if (isBusy(button)) return;
   const refocus = refocusAfterRemoval(button, bayList);
   if (
     !(await confirmAction({
@@ -291,8 +311,9 @@ async function addContainer(e: Event) {
             :aria-label="'Move bay ' + bay.id + ' left'"
             title="Move left"
             :class="{ unavailable: !shifting }"
-            :disabled="shifting || view.at === 0"
-            @click="shiftBay(-1)"
+            :aria-disabled="shifting || undefined"
+            :disabled="!shifting && view.at === 0"
+            @click="shiftBay($event, -1)"
           >
             ←</button
           ><button
@@ -301,8 +322,9 @@ async function addContainer(e: Event) {
             :aria-label="'Move bay ' + bay.id + ' right'"
             title="Move right"
             :class="{ unavailable: !shifting }"
-            :disabled="shifting || view.at === view.bays - 1"
-            @click="shiftBay(1)"
+            :aria-disabled="shifting || undefined"
+            :disabled="!shifting && view.at === view.bays - 1"
+            @click="shiftBay($event, 1)"
           >
             →
           </button></template
@@ -326,10 +348,9 @@ async function addContainer(e: Event) {
           Hide bay
         </button>
         <button
-          class="btn quiet"
+          class="btn quiet unavailable"
           :data-complete-bay="bay.id"
-          :class="{ unavailable: !completing }"
-          :disabled="completing || !view.named || view.done === view.named"
+          :disabled="!view.named || view.done === view.named"
           @click="completeRoom"
         >
           {{

@@ -12,6 +12,7 @@ import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
 import { required } from '../format.ts';
 import { containerMove } from '../views/storage.ts';
+import { whileBusy } from '../busy.ts';
 
 // A link to a factory's dialog: a handbook factory or a calculated row.
 export type FactoryLink = { factory: string } | { calcFactory: string };
@@ -19,19 +20,19 @@ export type FactoryLink = { factory: string } | { calcFactory: string };
 // @change on any progress checkbox (data-check is its saved key): plan steps, a factory's
 // "Running", calculated rows, storage and commissioning checklists, the power checks, the
 // factory dialog's target check. It saves when ticked; a failed write puts the box back.
-// None of these boxes binds :disabled, so setting it here cannot fight a redraw.
-export async function toggleCheck(e: Event) {
+// The box is busy while it saves (app/busy.ts): it keeps focus, and a second press meanwhile does
+// not tick it (#299).
+export function toggleCheck(e: Event) {
   const el = e.target as HTMLInputElement;
   const value = el.checked;
-  el.disabled = true;
-  try {
-    await save({ type: 'check', key: el.dataset.check || '', value });
-    render();
-  } catch {
-    el.checked = !value;
-  } finally {
-    el.disabled = false;
-  }
+  return whileBusy(el, async () => {
+    try {
+      await save({ type: 'check', key: el.dataset.check || '', value });
+      render();
+    } catch {
+      el.checked = !value;
+    }
+  });
 }
 
 // A link to another factory's dialog, as the flow models, the group chain and the plan's
