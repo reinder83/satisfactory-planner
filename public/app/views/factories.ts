@@ -48,3 +48,14 @@ export function allocationText(
     (machines > 0 && share < 1 ? ` · ≈ ${num(machines * share)} of ${num(machines)} machines` : '')
   );
 }
+// A factory card's second line (SP-14): how many machines, and the last one's clock when it runs
+// below 100%, as "30 × Refinery · last at 62%". A single machine is "1 × Refinery · at 62%". The
+// clock is shown to one decimal and never rounded up to 100%; the dialog has the exact figure.
+export function machineLine(machines: number, machine: string, lastClock = 100): string {
+  const text = `${num(machines)} × ${machine}`;
+  if (!(lastClock < 100 - 1e-7)) return text;
+  const clock = Math.min(Math.round(lastClock * 10) / 10, 99.9).toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+  });
+  return text + (machines > 1 ? ` · last at ${clock}%` : ` · at ${clock}%`);
+}

@@ -657,6 +657,103 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   assert.ok($$('#main .factory-card').length < rows.length);
 });
 
+// Both card kinds lead with what the line makes, its unit beside it, and put the machines and the
+// last one's clock on the line below (SP-14, #249).
+const cardOf = (sel: string) => $(sel)!.closest('.factory-card')!;
+const headline = (card: Element) => card.querySelector('.card-main .output')!.textContent!.trim();
+const machinesLine = (card: Element) => card.querySelector('.card-main .machines')!.textContent;
+
+test('a handbook card shows its output as the headline and machines with the clock below', () => {
+  render();
+  const wire = cardOf('#main button.name[data-factory="wire"]');
+  assert.equal(headline(wire), num(9600) + ' /min');
+  assert.equal(wire.querySelector('.output span')!.textContent, '/min', 'the unit is its own span');
+  assert.equal(machinesLine(wire), num(320) + ' × Constructor', 'all at 100%: no clock');
+  assert.match(wire.querySelector('.recipe')!.textContent!, /^\s*Wire\s+· storage 180\/min\s*$/);
+  const plating = cardOf('#main button.name[data-factory="smart-plating"]');
+  assert.equal(headline(plating), '115 /min');
+  assert.equal(machinesLine(plating), '58 × Assembler · last at 50%');
+  // One machine below 100% has no "last".
+  assert.equal(
+    machinesLine(cardOf('#main button.name[data-factory="versatile-framework"]')),
+    '1 × Assembler',
+  );
+  // The oil campus's outputs have no machines of their own.
+  assert.equal(
+    machinesLine(cardOf('#main button.name[data-factory="plastic"]')),
+    'See shared oil campus',
+  );
+});
+
+test('a calculated card shows its main output, or a generator’s power, as the headline', async () => {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const made = rows.find(
+    r => Object.keys(r.outputs).length === 1 && r.machines > 1 && r.lastClock < 99,
+  )!;
+  const gen = rows.find(r => !Object.keys(r.outputs).length)!;
+  assert.ok(made && gen, 'the default plan has a production line and a power line');
+  gen.name = evil;
+  gen.machines = 5;
+  gen.equivalent = 4.625;
+  gen.generationMW = 406.8;
+  open({ calculated: p });
+  render();
+  noMarkup();
+  const card = cardOf(`#main button.name[data-calc-factory="${made.id}"]`);
+  const [item, rate] = Object.entries(made.outputs)[0]!;
+  assert.equal(headline(card), num(rate) + ' /min');
+  assert.ok(
+    machinesLine(card)!.startsWith(`${made.machines} × ${made.machine} · last at `),
+    'machines, then the adjustable one’s clock',
+  );
+  assert.match(machinesLine(card)!, /· last at [\d.,]+%$/);
+  // A row named after its one output has no line repeating the headline.
+  if (made.name === item) assert.equal(card.querySelector('.recipe'), null);
+  const power = cardOf(`#main button.name[data-calc-factory="${gen.id}"]`);
+  assert.equal(headline(power), num(406.8) + ' MW');
+  assert.equal(power.querySelector('.output span')!.textContent, 'MW');
+  assert.equal(machinesLine(power), `5 × ${gen.machine} · last at ${(62.5).toLocaleString()}%`);
+  assert.equal(power.querySelector('.recipe'), null, 'nothing restates the power');
+  // Above 1000 MW it is GW, with the unit still shown.
+  gen.generationMW = 24882.66;
+  open({ calculated: p });
+  render();
+  await nextTick();
+  assert.equal(
+    headline(cardOf(`#main button.name[data-calc-factory="${gen.id}"]`)),
+    num(24.88266) + ' GW',
+  );
+});
+
+test('a calculated card with several outputs names each of them below the headline', () => {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const multi = rows.find(r => Object.keys(r.outputs).length > 1)!;
+  assert.ok(multi, 'the default plan has a line with a by-product');
+  open({ calculated: p });
+  render();
+  const card = cardOf(`#main button.name[data-calc-factory="${multi.id}"]`);
+  const outputs = Object.entries(multi.outputs);
+  assert.equal(headline(card), num(outputs[0]![1]) + ' /min');
+  assert.deepEqual(
+    card
+      .querySelector('.recipe')!
+      .innerHTML.replace(/<!--.*?-->/g, '')
+      .trim()
+      .split('<br>'),
+    outputs.map(([n, q]) => `${n}: ${num(q)}/min`),
+  );
+});
+
+test('the calculated card is marked done like the handbook card', () => {
+  const p = generated();
+  const r = p.stages['3'].rows![0]!;
+  open({ calculated: p, state: { checks: { ['calc-3-' + r.id]: true } } });
+  render();
+  assert.ok($(`#main [data-check="calc-3-${r.id}"]`)!.closest('.factory-card.done'));
+});
+
 test('a calculated factory dialog shows its flow, setup and expansion', () => {
   open({ calculated: plan });
   render();

@@ -1,16 +1,18 @@
 <!--
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
   key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
-  (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its group
-  share is measured in MW.
+  (factoryLink() in ui/actions.ts). A power-generation row has no outputs, so its headline and
+  its group share are measured in MW (GW above 1000 MW). The same structure as FactoryCard.vue
+  (SP-14): the main output with its unit as the headline, machines and the adjustable machine's
+  clock on the line below it, then any other outputs.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
-import { currentBuildStatus } from '../../views/calculated.ts';
-import { allocationText } from '../../views/factories.ts';
-import { power } from '../../wizard/fields.ts';
+import { currentBuildStatus, machineSetup } from '../../views/calculated.ts';
+import { allocationText, machineLine } from '../../views/factories.ts';
+import { powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import AssignEditor from './AssignEditor.vue';
@@ -25,15 +27,24 @@ const props = withDefaults(defineProps<{ row: CalcRow; group?: string | null }>(
 const card = computed(() =>
   legacy(() => {
     const r = props.row,
-      total = Object.values(r.outputs || {})[0] || 0,
-      check = 'calc-' + stage() + '-' + r.id;
+      outputs = Object.entries(r.outputs || {}),
+      total = outputs[0]?.[1] || 0,
+      check = 'calc-' + stage() + '-' + r.id,
+      setup = machineSetup(r),
+      mw = powerParts(r.generationMW);
     return {
       check,
       done: checked(check),
-      icon: Object.keys(r.outputs)[0],
-      machines: num(r.machines),
-      outputs: Object.entries(r.outputs).map(([n, q]) => `${n}: ${num(q)}/min`),
-      power: power(r.generationMW),
+      icon: outputs[0]?.[0],
+      // The main output, or a generator's power when the row makes no items.
+      headline: outputs.length ? { value: num(total), unit: '/min' } : mw,
+      machines: machineLine(r.machines, r.machine, setup.partial ? setup.clock : 100),
+      // The outputs by name, unless the headline already says all of it: one output that
+      // gives the row its name.
+      outputs:
+        outputs.length > 1 || (outputs[0] && outputs[0][0] !== r.name)
+          ? outputs.map(([n, q]) => `${n}: ${num(q)}/min`)
+          : [],
       allocation: props.group
         ? allocationText(
             r.id,
@@ -57,23 +68,20 @@ const card = computed(() =>
 </script>
 
 <template>
-  <article class="factory-card">
+  <article :class="['factory-card', card.done ? 'done' : '']">
     <div class="card-top">
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
       <div class="card-main">
         <button class="name" v-bind="factoryLink({ calcFactory: row.id })">{{ row.name }}</button>
         <div class="output">
-          {{ card.machines }} <span>{{ row.machine }}</span>
+          {{ card.headline.value }} <span>{{ card.headline.unit }}</span>
         </div>
+        <div class="small machines">{{ card.machines }}</div>
       </div>
     </div>
-    <p>
-      <template v-if="card.outputs.length"
-        ><template v-for="(o, i) in card.outputs" :key="i"
-          ><br v-if="i" />{{ o }}</template
-        ></template
-      ><template v-else>{{ card.power }}</template>
-    </p>
+    <div v-if="card.outputs.length" class="recipe">
+      <template v-for="(o, i) in card.outputs" :key="i"><br v-if="i" />{{ o }}</template>
+    </div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
     <footer>

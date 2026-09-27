@@ -1116,6 +1116,10 @@ p.eyebrow {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   letter-spacing: 0;
 }
+/* The line under the headline: machines and the last one's clock (SP-14). */
+.factory-card .machines {
+  margin-top: 6px;
+}
 .factory-card .recipe {
   font-size: 11px;
   color: var(--muted);
