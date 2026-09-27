@@ -168,6 +168,19 @@ input[type='radio'] {
 .skip:focus {
   top: 0;
 }
+/* Out of sight but still rendered, unlike `hidden`: the file inputs behind the Backup page's
+   "Import saves" and "Choose backup" buttons, which open them with click() (#307). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 /* ── Shell ─────────────────────────────────────────────── */
 .layout {
