@@ -1075,6 +1075,14 @@ p.eyebrow {
 }
 .factory-card.done {
   border-color: #2c4a3a;
+  background: #131a16;
+}
+/* The status chip at the top of a card (SP-15): its glyph and word say the state without colour. */
+.factory-card .status-chip {
+  align-self: flex-start;
+}
+.factory-card .status-chip.held {
+  color: var(--accent-hi);
 }
 .factory-card .card-top {
   display: flex;
@@ -3688,6 +3696,7 @@ button.rail-tile:hover {
   }
   .task:has(input:checked),
   .slot.done,
+  .factory-card.done,
   .rail-cell.out,
   .rail-machine {
     background: #f3f3f3;

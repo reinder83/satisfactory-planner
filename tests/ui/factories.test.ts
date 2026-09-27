@@ -937,6 +937,77 @@ test('the calculated card is marked done like the handbook card', () => {
   assert.ok($(`#main [data-check="calc-3-${r.id}"]`)!.closest('.factory-card.done'));
 });
 
+// Each card opens with a status chip that follows its Running box: glyph and word, so it reads
+// without colour, and hidden from screen readers, which hear the box itself (SP-15, #250).
+const chip = (card: Element) => card.querySelector<HTMLElement>('.status-chip')!;
+const chipSays = (card: Element) => chip(card).textContent!.replace(/\s+/g, ' ').trim();
+
+test('a handbook card’s status chip says Running or Not built and follows the box', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  render();
+  const wire = () => cardOf('#main button.name[data-factory="wire"]');
+  assert.equal(wire().firstElementChild, chip(wire()), 'the chip is at the top of the card');
+  assert.equal(chipSays(wire()), '○ Not built');
+  assert.equal(chip(wire()).dataset.runningStatus, 'idle');
+  assert.equal(chip(wire()).getAttribute('aria-hidden'), 'true', 'the box already says it');
+  assert.equal(chip(wire()).querySelector('button, input'), null, 'a status, not a control');
+  assert.equal(wire().querySelectorAll('[data-check]').length, 1, 'one Running box');
+  assert.ok(!wire().classList.contains('done'));
+  $<HTMLInputElement>('#main [data-check="factory-3-wire"]')!.click();
+  await settle();
+  assert.equal(state.checks['factory-3-wire'], true);
+  assert.equal(chipSays(wire()), '● Running');
+  assert.equal(chip(wire()).dataset.runningStatus, 'running');
+  assert.ok(chip(wire()).classList.contains('green'));
+  assert.ok(wire().classList.contains('done'), 'the running card is tinted');
+  $<HTMLInputElement>('#main [data-check="factory-3-wire"]')!.click();
+  await settle();
+  assert.equal(chipSays(wire()), '○ Not built');
+  assert.equal($('[data-running-status="held"]'), null, 'a handbook card is never held back');
+});
+
+test('a calculated card’s status chip says Running, Not built, or Held back with its reason', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  const rows = plan.stages['3'].rows!;
+  // A row fed by another row, and that supplier: marked running alone, the row is held back.
+  const consumer = rows.find(r =>
+    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  )!;
+  const other = rows.find(r => r.id !== consumer.id && !Object.keys(r.inputs).length) ?? rows[0]!;
+  open({ calculated: plan });
+  render();
+  await nextTick();
+  const card = (id: string) => cardOf(`#main button.name[data-calc-factory="${id}"]`);
+  assert.equal(card(consumer.id).firstElementChild, chip(card(consumer.id)));
+  assert.equal(chipSays(card(consumer.id)), '○ Not built');
+  assert.equal(chip(card(consumer.id)).getAttribute('aria-hidden'), 'true');
+  $<HTMLInputElement>(`#main [data-check="calc-3-${consumer.id}"]`)!.click();
+  await settle();
+  const held = card(consumer.id);
+  assert.equal(chipSays(held), '◐ Held back');
+  assert.equal(chip(held).dataset.runningStatus, 'held');
+  assert.ok(held.classList.contains('done'), 'it is marked running, so it is tinted');
+  assert.match(
+    held.querySelector('[data-build-held]')!.textContent!,
+    /^Running at 0%: short of /,
+    'with its reason',
+  );
+  assert.equal($$('[data-running-status="held"]').length, 1);
+  // Every row marked running: nothing is held back.
+  open({
+    calculated: plan,
+    state: { checks: Object.fromEntries(rows.map(r => ['calc-3-' + r.id, true])) },
+  });
+  render();
+  await nextTick();
+  assert.equal(
+    $$('#main [data-running-status="running"]').length,
+    $$('#main .factory-card').length,
+  );
+  assert.equal(chipSays(card(other.id)), '● Running');
+  assert.equal($('[data-build-held]'), null);
+});
+
 test('a calculated factory dialog shows its flow, setup and expansion', () => {
   open({ calculated: plan });
   render();
