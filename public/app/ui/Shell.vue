@@ -89,7 +89,7 @@ function profileFooter() {
 // unsaved note is asked about first; kept, the select goes back to the saved phase.
 async function pickPhase(e: Event) {
   const el = e.target as HTMLSelectElement;
-  if (!allowSwitch()) {
+  if (!(await allowSwitch())) {
     el.value = phase();
     return;
   }

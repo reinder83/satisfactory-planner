@@ -19,6 +19,7 @@ import {
 } from './session.ts';
 import { render } from './shell.ts';
 import { invalidate } from './ui/bridge.ts';
+import { confirmAction } from './ui/confirm.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
@@ -221,12 +222,20 @@ export function navigate(v: View) {
 }
 
 // The hashchange listener's check (listeners.ts): a sidebar link, a typed address or Back
-// leaves the page, so ask about unsaved notes first. When the user keeps them, the address
-// goes back to the page still on screen (replaceState fires no hashchange) and this returns
-// false, so nothing is redrawn.
+// leaves the page, so ask about unsaved notes first. While the question is open, and when the
+// user keeps the notes, the address goes back to the page still on screen (replaceState fires
+// no hashchange) and this returns false, so nothing is redrawn. Leaving anyway goes to the
+// address asked for, as navigate() would, without asking again.
 export function acceptRoute() {
-  if (!navigating && location.hash !== shownHash && !allowSwitch()) {
+  const asked = navigating || location.hash === shownHash ? true : allowSwitch();
+  if (asked !== true) {
+    const target = location.hash;
     history.replaceState(history.state, '', shownHash || location.pathname + location.search);
+    void asked.then(ok => {
+      if (!ok || location.hash === target) return;
+      navigating = true;
+      location.hash = target;
+    });
     return false;
   }
   navigating = false;
@@ -246,15 +255,21 @@ export function hasUnsavedNotes(root: ParentNode = document) {
   });
 }
 
-// True when it is fine to leave the current page (or, with `root`, that part of it): no
-// unsaved notes, or the user agreed to drop them. Checked before switching profile, starting
-// the wizard, signing out, changing the working phase, following the hash route and closing
-// or replacing the detail dialog.
-export function allowSwitch(root: ParentNode = document) {
-  return (
-    !hasUnsavedNotes(root) ||
-    confirm('You have notes that have not been saved. Leave without saving those edits?')
-  );
+// Whether it is fine to leave the current page (or, with `root`, that part of it): true at
+// once when there are no unsaved notes, otherwise the answer of the in-app confirmation
+// (ui/confirm.ts), true when the user agrees to drop them. So a caller that must act in the
+// same event (Escape on the dialog, the hash route) can tell "nothing to ask" apart; the
+// others await it. Checked before switching profile, starting the wizard, signing out,
+// changing the working phase, following the hash route and closing or replacing the detail
+// dialog.
+export function allowSwitch(root: ParentNode = document): true | Promise<boolean> {
+  if (!hasUnsavedNotes(root)) return true;
+  return confirmAction({
+    title: 'Leave without saving notes?',
+    body: 'You have notes that have not been saved. Leave without saving those edits?',
+    confirmLabel: 'Leave without saving',
+    danger: true,
+  });
 }
 
 // Offers `data` as a .json file download (exports and shared profiles).

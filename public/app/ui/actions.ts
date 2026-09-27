@@ -72,19 +72,28 @@ export const factoryLink = (link: FactoryLink | null | undefined) =>
       : { 'data-factory': link.factory, onClick: () => openFactory(link.factory) };
 
 // Closes the shared #detail dialog (its ×, a backdrop click, a saved note). Closing unmounts
-// the dialog's app (ui/detail.ts), so an unsaved note in the dialog is asked about first and
-// the dialog stays open when the user keeps it. After a saved note there is nothing to ask.
-export function closeDetail() {
+// the dialog's app (ui/detail.ts), so an unsaved note in the dialog is asked about first (the
+// question opens above the dialog) and the dialog stays open when the user keeps it. After a
+// saved note there is nothing to ask, and it closes at once.
+export async function closeDetail() {
   const d = required<HTMLDialogElement>('#detail');
-  if (d.open && !allowSwitch(d)) return;
-  d.close();
+  if (!d.open) return;
+  const asked = allowSwitch(d);
+  if (asked === true || (await asked)) d.close();
 }
 
 // Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
-// cancel event, so an unsaved note is asked about here, as the × does, and kept by cancelling
-// the close. A browser may still close it after repeated presses, whatever the answer.
+// cancel event, so with an unsaved note the close is cancelled here and the note asked about,
+// as the × does; leaving anyway closes it then. A browser may still close it after repeated
+// presses, whatever the answer.
 export function cancelDetail(e: Event) {
-  if (!allowSwitch(required('#detail'))) e.preventDefault();
+  const d = required<HTMLDialogElement>('#detail');
+  const asked = allowSwitch(d);
+  if (asked === true) return;
+  e.preventDefault();
+  void asked.then(ok => {
+    if (ok && d.open) d.close();
+  });
 }
 
 // "Create a save" on the profiles page, and in the wizard when there is no draft.

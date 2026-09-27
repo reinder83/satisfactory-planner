@@ -28,6 +28,7 @@ import {
 import { render } from '../../public/app/shell.ts';
 import { cancelDetail, closeDetail } from '../../public/app/ui/actions.ts';
 import {
+  answerConfirms,
   $,
   $$,
   applyUpdate,
@@ -82,7 +83,7 @@ beforeEach(() => {
   setQuery('');
   setFactoryFilter('all');
   setFactoryEditing(false);
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   go('factories');
 });
 
@@ -265,7 +266,7 @@ test('the group editor saves groups and memberships', async () => {
   $('[data-remove-group="fg-plates1"]')!.click();
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'factoryGroupRemove', id: 'fg-plates1' });
-  globalThis.confirm = () => false;
+  answerConfirms(false);
   const before = calls.length;
   $('[data-remove-group="fg-cable01"]')!.click();
   await settle();
@@ -354,7 +355,9 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   await nextTick();
   assert.equal($<HTMLInputElement>('#detail [data-check="factory-3-wire"]')!.checked, true);
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
+  // Replacing the dialog asks about the note first (answered yes in beforeEach).
   openFactory('wire');
+  await settle();
   assert.equal(
     $<HTMLTextAreaElement>('#detail-note')!.value,
     '',
@@ -394,32 +397,46 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
   assert.match(advice(cap + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
 });
 
-test('closing or replacing a dialog asks before dropping an unsaved note', () => {
+test('closing or replacing a dialog asks before dropping an unsaved note', async () => {
   render();
   openFactory('wire');
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
   const dialog = $<HTMLDialogElement>('#detail')!;
-  // The × and a backdrop click (closeDetail), another factory's link, and Escape.
-  closeDetail();
+  // The × and a backdrop click (closeDetail), another factory's link, and Escape. The
+  // question opens in #confirm, above the dialog.
+  void closeDetail();
+  assert.ok($<HTMLDialogElement>('#confirm')!.open && dialog.open, 'asked above the dialog');
+  await settle();
   openFactory('screws');
+  await settle();
   const escape = new Event('cancel', { cancelable: true });
   cancelDetail(escape);
-  assert.equal(asked, 3);
+  await settle();
+  assert.equal(asked.length, 3);
+  assert.match(asked[0]!, /notes that have not been saved/);
   assert.equal(escape.defaultPrevented, true);
   assert.ok(dialog.open, 'kept notes keep the dialog open');
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
   assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-wire');
-  globalThis.confirm = () => true;
-  closeDetail();
+  // Leaving anyway: the ×, then Escape on a reopened dialog, close it.
+  answerConfirms(true);
+  void closeDetail();
+  await settle();
   assert.equal(dialog.open, false);
-  // Without an edit there is nothing to ask.
-  globalThis.confirm = () => (asked++, false);
   openFactory('wire');
-  closeDetail();
+  $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
+  const escapeAgain = new Event('cancel', { cancelable: true });
+  cancelDetail(escapeAgain);
+  assert.equal(escapeAgain.defaultPrevented, true, 'held open until the answer');
+  await settle();
   assert.equal(dialog.open, false);
-  assert.equal(asked, 3);
+  // Without an edit there is nothing to ask, and it all happens at once.
+  const none = answerConfirms(false);
+  openFactory('wire');
+  void closeDetail();
+  assert.equal(dialog.open, false);
+  assert.equal(none.length, 0);
 });
 
 test('a handbook dialog names an underclocked last building only when there is one', () => {

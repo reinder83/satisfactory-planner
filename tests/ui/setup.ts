@@ -76,8 +76,31 @@ export const $$ = <E extends Element = HTMLElement>(s: string) => [
 
 export function page() {
   unmountShell();
+  confirms?.disconnect();
+  confirms = null;
   document.body.innerHTML =
-    '<div id="app"></div><div id="toast"></div><dialog id="detail"></dialog>';
+    '<div id="app"></div><div id="toast"></div><dialog id="detail"></dialog><dialog id="confirm"></dialog>';
+}
+
+// Answers every in-app confirmation (#confirm, ui/confirm.ts) that opens from now on by
+// pressing its real Cancel or confirm button: `reply` is the answer, or a function of the
+// question's text that returns it. Returns the questions asked, in order. The dialog opens
+// after the click that asks, so a test awaits a tick before counting on the answer. A later
+// call or page() replaces it.
+let confirms: MutationObserver | null = null;
+export function answerConfirms(reply: boolean | ((question: string) => boolean)) {
+  confirms?.disconnect();
+  const asked: string[] = [];
+  const d = document.querySelector<HTMLDialogElement>('#confirm')!;
+  confirms = new MutationObserver(() => {
+    if (!d.open) return;
+    const question = d.querySelector('#confirm-body')?.textContent || '';
+    asked.push(question);
+    const ok = typeof reply === 'function' ? reply(question) : reply;
+    d.querySelector<HTMLElement>(ok ? '[data-confirm-ok]' : '[data-confirm-cancel]')!.click();
+  });
+  confirms.observe(d, { attributes: true, attributeFilter: ['open'] });
+  return asked;
 }
 
 // Opens the handbook profile (calculated: false), a small calculated one (true) or the

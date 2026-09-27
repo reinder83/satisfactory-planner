@@ -10,6 +10,7 @@ import { render } from '../../public/app/shell.ts';
 import { containerMove, openSlot, slotKeys, storageBays } from '../../public/app/views/storage.ts';
 import { moveContainer } from '../../public/app/ui/actions.ts';
 import {
+  answerConfirms,
   $,
   $$,
   applyUpdate,
@@ -54,7 +55,7 @@ beforeEach(() => {
   setQuery('');
   setFloor('ground');
   setLayoutEditing(false);
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   go('storage');
 });
 
@@ -294,7 +295,7 @@ test('the layout editor saves floors, bays, containers and removals', async () =
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'storageFloorRemove', id: 'cf-abcd12' });
   assert.equal(floor, 'ground');
-  globalThis.confirm = () => false;
+  answerConfirms(false);
   const before = calls.length;
   $('[data-floor="ground"]')!.click();
   await nextTick();
@@ -493,12 +494,12 @@ test('an added bay takes the letter typed, and a hidden handbook letter only aft
   // Hide C, then take its letter: asked first; "No" sends nothing, "Yes" replaces it.
   $('[data-hide-bay="C"]')!.click();
   await settle();
-  let asked = '';
-  globalThis.confirm = (m?: string) => ((asked = m || ''), false);
+  const asked = answerConfirms(false);
   await add('C', 'My parts');
-  assert.match(asked, /Bay C still has saved progress/);
+  assert.equal(asked.length, 1);
+  assert.match(asked[0]!, /Bay C still has saved progress/);
   assert.equal(state.storageEdits.bays.length, 0, 'no bay was added');
-  globalThis.confirm = () => true;
+  answerConfirms(true);
   await add('C', 'My parts');
   assert.deepEqual(calls.at(-1)![1], {
     type: 'storageBayAdd',

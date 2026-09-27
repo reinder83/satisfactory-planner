@@ -17,6 +17,7 @@ import { layoutEditing, query } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { openSlot, slotDone, slotKeys, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import { confirmAction } from '../confirm.ts';
 import SlotCell from './SlotCell.vue';
 import type { StorageBayView } from '../../views/storage.ts';
 import type { UpdateOp } from '../../../types/index.ts';
@@ -138,14 +139,18 @@ const clearSlot = (e: Event, id: string) =>
 
 // A handbook bay is hidden rather than removed (#166): everything saved for it stays, and
 // "Hidden bays" on the storage page brings it back.
-function hideBay(e: Event) {
+async function hideBay(e: Event) {
+  // Read before the question: currentTarget is only set while the click is dispatched.
+  const button = e.currentTarget as HTMLButtonElement;
   if (
-    !confirm(
-      `Hide bay ${props.bay.id}? Its containers, checkmarks and notes are kept, and you can restore it under Hidden bays and floors.`,
-    )
+    !(await confirmAction({
+      title: `Hide bay ${props.bay.id}?`,
+      body: `Hide bay ${props.bay.id}? Its containers, checkmarks and notes are kept, and you can restore it under Hidden bays and floors.`,
+      confirmLabel: 'Hide bay',
+    }))
   )
     return;
-  saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayHide', id: props.bay.id });
+  saving(button, { type: 'storageBayHide', id: props.bay.id });
 }
 
 // "Move to…": the bay goes to another floor with its letter, so its containers, checkmarks
@@ -187,10 +192,19 @@ async function shiftBay(by: -1 | 1) {
   }
 }
 
-function removeBay(e: Event) {
-  if (!confirm('Remove this added bay? Its containers, checkmarks and notes are removed with it.'))
+async function removeBay(e: Event) {
+  // Read before the question: currentTarget is only set while the click is dispatched.
+  const button = e.currentTarget as HTMLButtonElement;
+  if (
+    !(await confirmAction({
+      title: `Remove bay ${props.bay.id}?`,
+      body: 'Remove this added bay? Its containers, checkmarks and notes are removed with it.',
+      confirmLabel: 'Remove bay',
+      danger: true,
+    }))
+  )
     return;
-  saving(e.currentTarget as HTMLButtonElement, { type: 'storageBayRemove', id: props.bay.id });
+  saving(button, { type: 'storageBayRemove', id: props.bay.id });
 }
 
 // "+ Add": put an item in this bay, in a free position first; a bay with none gets the next

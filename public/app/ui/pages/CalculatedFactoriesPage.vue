@@ -64,7 +64,7 @@ function search(e: Event) {
 // it. The button shows the calculation's progress meanwhile.
 async function roundUp(e: Event) {
   const b = e.currentTarget as HTMLButtonElement;
-  if (!allowSwitch()) return;
+  if (!(await allowSwitch())) return;
   b.disabled = true;
   try {
     await writeQueue;

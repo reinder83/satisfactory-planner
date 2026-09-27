@@ -9,7 +9,7 @@ import { openFactory } from '../../public/app/factory-detail.ts';
 import { acceptRoute, refreshState, request } from '../../public/app/api.ts';
 import { calcStage, setQuery, setWizard, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, generated, go, open, page, stubFetch } from './setup.ts';
+import { answerConfirms, $, generated, go, open, page, stubFetch } from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
@@ -160,8 +160,7 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
       return { ...state, notes };
     },
   });
-  let asked = 0;
-  globalThis.confirm = () => (asked++, false);
+  const asked = answerConfirms(false);
   go('plan');
   render();
   history.replaceState(null, '', '#plan');
@@ -184,7 +183,7 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'factory-wire', value: '  ' });
   assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'the saved dialog closes');
-  assert.equal(asked, 0);
+  assert.equal(asked.length, 0);
 });
 
 test('a factory link opens its dialog; saving its notes or the × closes it', async () => {

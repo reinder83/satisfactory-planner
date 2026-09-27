@@ -13,6 +13,7 @@ import { setFloor } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/storage.ts';
 import type { StorageFloor } from '../../views/storage.ts';
+import { confirmAction } from '../confirm.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
 // bays: how many bays the floor has; an added floor can only go once it has none.
@@ -37,12 +38,13 @@ const randomId = (prefix: string, bytes: number) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
 
-// Saves `op(name)` from a form's name field, then empties the form and redraws.
-async function submit(e: Event, op: (name: string) => UpdateOp | null) {
+// Saves `op(name)` from a form's name field, then empties the form and redraws. `op` may
+// ask first (a promise); null saves nothing.
+async function submit(e: Event, op: (name: string) => UpdateOp | null | Promise<UpdateOp | null>) {
   const form = e.target as HTMLFormElement,
     name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
-  const change = op(name);
+  const change = await op(name);
   if (!change) return;
   try {
     await save(change);
@@ -54,7 +56,7 @@ async function submit(e: Event, op: (name: string) => UpdateOp | null) {
 // The letter box starts on the next free letter; the user may type any other.
 const suggested = () => nextBayLetter() || '';
 const addBay = (e: Event) =>
-  submit(e, name => {
+  submit(e, async name => {
     const field = new FormData(e.target as HTMLFormElement).get('letter');
     const letter = String(field || '')
       .trim()
@@ -71,9 +73,12 @@ const addBay = (e: Event) =>
     const replace = hiddenStorageBays().some(b => b.id === letter);
     if (
       replace &&
-      !confirm(
-        `Bay ${letter} still has saved progress from the handbook bay. Use ${letter} anyway? Its old checks, notes and names will be removed.`,
-      )
+      !(await confirmAction({
+        title: `Reuse bay letter ${letter}?`,
+        body: `Bay ${letter} still has saved progress from the handbook bay. Use ${letter} anyway? Its old checks, notes and names will be removed.`,
+        confirmLabel: `Use ${letter}`,
+        danger: true,
+      }))
     )
       return null;
     return {
@@ -93,7 +98,13 @@ const renameFloor = (e: Event) =>
 // storage page's Hidden panel brings it back. The page then shows the first visible floor.
 const hiding = ref(false);
 async function hideFloor() {
-  if (!confirm(`Hide ${props.floor.label}? You can bring it back under Hidden bays and floors.`))
+  if (
+    !(await confirmAction({
+      title: `Hide ${props.floor.label}?`,
+      body: `Hide ${props.floor.label}? You can bring it back under Hidden bays and floors.`,
+      confirmLabel: 'Hide floor',
+    }))
+  )
     return;
   hiding.value = true;
   try {
@@ -108,7 +119,15 @@ async function hideFloor() {
 // "Remove this floor", after a confirmation; then back to the ground floor.
 const removing = ref(false);
 async function removeFloor() {
-  if (!confirm('Remove this added floor?')) return;
+  if (
+    !(await confirmAction({
+      title: 'Remove this floor?',
+      body: 'Remove this added floor?',
+      confirmLabel: 'Remove floor',
+      danger: true,
+    }))
+  )
+    return;
   removing.value = true;
   try {
     await save({ type: 'storageFloorRemove', id: props.floor.id });
