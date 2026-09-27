@@ -106,18 +106,23 @@ export function useNoteAutosave(
     );
   }
 
-  // @input: wait for the pause in typing.
+  // @input: wait for the pause in typing. The status line stays as it is until the write
+  // starts, so it says "Saving…" only while something is being saved, and the live region
+  // speaks once per write rather than on every first key press.
   function typed() {
     clearTimeout(timer);
-    status.value = 'saving';
     timer = setTimeout(() => send(), NOTE_SAVE_DELAY);
   }
   // @blur, and allowSwitch() before the box goes away: send a waiting note now.
   function flush() {
     if (timer !== undefined) send();
   }
-  // Retry after a failed write.
-  const retry = () => send();
+  // Retry after a failed write. The button goes as soon as the write starts (v-if in
+  // NoteBox.vue), so focus moves to the note first rather than falling to <body> (#283).
+  function retry() {
+    el.value?.focus();
+    send();
+  }
 
   watch([id, saved], ([k, now], [before, was]) => {
     if (k !== before) {

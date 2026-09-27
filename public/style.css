@@ -1765,6 +1765,22 @@ td:first-child {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+/* A failed note save is likeliest on a phone's connection: give Retry a 44px touch target,
+   drawn around the link as it looks, so its underline stays under the word. */
+@media (max-width: 720px) {
+  .note-save [data-note-retry] {
+    position: relative;
+  }
+  .note-save [data-note-retry]::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
 .empty-state {
   text-align: center;
   padding: 40px 20px;

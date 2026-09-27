@@ -147,11 +147,23 @@ const typeInto = (selector: string, value: string) => {
   return box;
 };
 const pause = () => new Promise(r => setTimeout(r, NOTE_SAVE_DELAY + 100));
+// Which element has focus, as "tag#id", so a failed check prints it rather than the element.
+const focused = () => {
+  const el = document.activeElement;
+  return el ? el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') : 'nothing';
+};
 const noteWrites = (calls: [string, unknown][]) =>
   calls.filter(([path, body]) => path === '/api/update' && (body as UpdateOp).type === 'note');
 
 test('typing a phase note saves it once, after the pause, and says when', async () => {
   const calls = applying();
+  // Each write waits for release(), so "Saving…" can be seen while it is on its way.
+  const applied = globalThis.fetch;
+  let release = () => {};
+  globalThis.fetch = async (path: RequestInfo | URL, options?: RequestInit) => {
+    await new Promise<void>(r => (release = r));
+    return applied(path, options);
+  };
   go('plan');
   render();
   const status = $('#phase-note-status')!;
@@ -161,11 +173,14 @@ test('typing a phase note saves it once, after the pause, and says when', async 
   typeInto('#phase-note', 'Remember the');
   await settle();
   typeInto('#phase-note', 'Remember the coal');
-  await nextTick();
-  assert.equal(status.textContent, 'Saving…');
   await settle();
+  // Nothing is being saved yet, so the status line does not say so.
+  assert.equal(status.textContent, 'Saves as you type.');
   assert.deepEqual(noteWrites(calls), [], 'nothing is written while typing goes on');
   await pause();
+  assert.equal(status.textContent, 'Saving…', 'the write has started');
+  release();
+  await settle();
   assert.deepEqual(noteWrites(calls), [
     ['/api/update', { type: 'note', key: 'phase-3', value: 'Remember the coal' }],
   ]);
@@ -337,9 +352,12 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
 
   // Retry sends the kept text again; it replaces the other tab's version.
   refuse = false;
+  $<HTMLButtonElement>('[data-note-retry]')!.focus();
   $('[data-note-retry]')!.click();
   await settle();
   assert.equal(headers.at(-1)!.path, '/api/update');
+  // The button goes once the note is saved; focus goes back to the note, not to <body> (#283).
+  assert.equal(focused(), 'textarea#phase-note');
   assert.equal(state.notes['phase-3'], 'Mine');
   assert.match($('#phase-note-status')!.textContent, /^Saved · /);
   assert.equal($('[data-note-retry]'), null);
@@ -347,6 +365,34 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   assert.equal(acceptRoute(), true, 'nothing left to ask about');
   await settle();
   assert.equal(asked.length, 1);
+});
+
+test('Retry in a dialog keeps the keyboard in its notes box once the note is saved (#283)', async () => {
+  const calls = applying();
+  const applied = globalThis.fetch;
+  let fail = true;
+  globalThis.fetch = async (path: RequestInfo | URL, options?: RequestInit) =>
+    fail
+      ? new Response(JSON.stringify({ error: 'The disk is full.' }), { status: 500 })
+      : applied(path, options);
+  go('factories');
+  render();
+  openFactory('wire');
+  typeInto('#detail-note', 'Second copper line').dispatchEvent(new Event('blur'));
+  await settle();
+  const retry = $<HTMLButtonElement>('#detail [data-note-retry]')!;
+  retry.focus();
+  assert.equal(focused(), 'button');
+  fail = false;
+  retry.click();
+  await settle();
+  assert.deepEqual(noteWrites(calls), [
+    ['/api/update', { type: 'note', key: 'factory-wire', value: 'Second copper line' }],
+  ]);
+  assert.equal(state.notes['factory-wire'], 'Second copper line');
+  assert.equal($('#detail [data-note-retry]'), null);
+  assert.equal(focused(), 'textarea#detail-note', 'focus stays in the dialog, on the note');
+  assert.equal($<HTMLDialogElement>('#detail')!.open, true);
 });
 
 test('a note whose write fails after its page has gone comes back marked unsaved', async () => {
