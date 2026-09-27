@@ -25,6 +25,8 @@ export interface AdaFacts {
   retireOpen: number;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
+  // The storage search when no container on any floor answers it (#240), else ''.
+  storageMiss: string;
   deliveries: { open: number; total: number };
   hasPhaseNote: boolean;
   customTasks: number;
@@ -244,6 +246,14 @@ const RULES: AdaRule[] = [
     when: f => f.payoff,
     text: f =>
       `Allowing ${f.payoff!.name} would mean ${f.payoff!.gain} in ${f.phaseLabel}. The hard-drive payoff table on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
+  },
+  {
+    id: 'storage-search-miss',
+    on: ['storage'],
+    tone: 'calm',
+    when: f => f.view === 'storage' && f.storageMiss,
+    text: f =>
+      `No container on any floor holds “${f.storageMiss}”. Either it has no address yet or the sign says something else. Edit layout gives it a container.`,
   },
   {
     id: 'storage',

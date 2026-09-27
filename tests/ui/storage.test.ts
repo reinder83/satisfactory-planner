@@ -166,28 +166,111 @@ test('a bay grows past eight containers and keeps offering the next address', as
   assert.equal($('.add-container[data-bay="A"]'), null, 'and then stops offering one');
 });
 
-test('the search narrows the floor to matching bays and marks the matches', async () => {
-  render();
-  $<HTMLInputElement>('#storage-search')!.value = 'A01';
+const search = async (value: string) => {
+  $<HTMLInputElement>('#storage-search')!.value = value;
   $('#storage-search')!.dispatchEvent(new Event('input'));
   await nextTick();
+};
+const results = () =>
+  $$('#main [data-find-slot]').map(b => b.textContent.replace(/\s+/g, ' ').trim());
+
+test('the search narrows the floor to matching bays and marks the matches', async () => {
+  render();
+  await search('A01');
   assert.deepEqual(letters(), ['A']);
   assert.ok($('[data-slot="A01"]')!.closest('.slot')!.classList.contains('match'));
   assert.match($('#main p.small.muted')!.textContent, /Filtered view/);
-  $<HTMLInputElement>('#storage-search')!.value = 'no-such-item';
-  $('#storage-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
-  assert.equal(
-    $('#main .empty-state')!.textContent.trim(),
-    'No matching item on this floor. Try another floor.',
+});
+
+test('the search lists matching containers on every floor, with floor and address (#240)', async () => {
+  render();
+  assert.equal($('[data-search-results]'), null, 'no results list without a query');
+  assert.equal($('[data-search-status]')!.textContent, '', 'the live region is there, and empty');
+  await search('wir');
+  assert.deepEqual(results(), [
+    'Wire · Ground floor · C01',
+    'Quickwire · Ground floor · C04',
+    'Automated Wiring · Upper floor · K03',
+  ]);
+  assert.equal($('[data-search-status]')!.getAttribute('role'), 'status');
+  assert.equal($('[data-search-status]')!.textContent, '3 containers match wir, on 2 floors');
+  assert.ok(
+    $$('#main [data-find-slot]').every(b => b.tagName === 'BUTTON' && b.closest('li')),
+    'each result is a button in a list',
   );
+  assert.ok($('[data-find-slot="K03"] img.item-icon'), 'with the item icon');
+  // Only this floor's bays with a match are drawn.
+  assert.deepEqual(letters(), ['C']);
+});
+
+test('a result switches to its floor, keeps the match marked and focuses the container (#240)', async () => {
+  render();
+  await search('wir');
+  const result = $<HTMLButtonElement>('[data-find-slot="K03"]')!;
+  result.focus();
+  result.click();
+  await settle();
+  assert.equal(floor, 'upper');
+  assert.equal($('.tabs .tab.active')!.dataset.floor, 'upper');
+  assert.equal($<HTMLInputElement>('#storage-search')!.value, 'wir', 'the query stays');
+  assert.equal(document.activeElement, $('#main [data-slot="K03"]'));
+  assert.ok($('[data-slot="K03"]')!.closest('.slot')!.classList.contains('match'));
+  // A result on the floor already shown focuses its container too.
+  $<HTMLButtonElement>('[data-find-slot="K03"]')!.focus();
+  $<HTMLButtonElement>('[data-find-slot="K03"]')!.click();
+  await settle();
+  assert.equal(document.activeElement, $('#main [data-slot="K03"]'));
+  // This floor has nothing else to show for another match: the grid says where to look.
+  $<HTMLButtonElement>('[data-find-slot="C04"]')!.click();
+  await settle();
+  assert.equal(floor, 'ground');
+  assert.equal(document.activeElement, $('#main [data-slot="C04"]'));
+});
+
+test('switching floors keeps the query, and a floor without a match says so (#240)', async () => {
+  render();
+  await search('Quickwire');
   $('[data-floor="upper"]')!.click();
   await nextTick();
+  assert.equal($<HTMLInputElement>('#storage-search')!.value, 'Quickwire');
+  assert.deepEqual(results(), ['Quickwire · Ground floor · C04'], 'the results stay');
+  assert.deepEqual(letters(), []);
   assert.equal(
-    $<HTMLInputElement>('#storage-search')!.value,
-    '',
-    'switching floor clears the search',
+    $('#main .floor-grid .empty-state')!.textContent.trim(),
+    'Nothing on this floor matches. The results above are on other floors.',
   );
+});
+
+test('a search nothing holds shows one empty state (#240)', async () => {
+  render();
+  await search('no-such-item');
+  assert.equal($('[data-search-empty]')!.textContent, 'No container holds no-such-item');
+  assert.equal($('[data-search-status]')!.textContent, 'No container holds no-such-item');
+  assert.equal($$('#main .empty-state').length, 1, 'the grid adds no second message');
+  assert.equal($('#main [data-find-slot]'), null);
+});
+
+test('the search leaves out hidden bays, and lists at most 24 results (#240)', async () => {
+  open({ state: { storageEdits: someEdits({ hiddenBays: ['C'] }) } });
+  render();
+  await search('wir');
+  assert.deepEqual(results(), ['Automated Wiring · Upper floor · K03']);
+  await search('e');
+  assert.equal($$('#main [data-find-slot]').length, 24);
+  assert.match($('[data-search-results] p.small')!.textContent, /Showing the first 24 of \d+\./);
+});
+
+test('a result in an added bay on an added floor is escaped and leads there (#240)', async () => {
+  open({ state: { storageEdits: structuredClone(EDITS) } });
+  render();
+  await search('x-evil');
+  noMarkup();
+  assert.deepEqual(results(), [`${evil} · Basement · S01`]);
+  $<HTMLButtonElement>('[data-find-slot="S01"]')!.click();
+  await settle();
+  noMarkup();
+  assert.equal(floor, 'cf-abcd12');
+  assert.equal(document.activeElement, $('#main [data-slot="S01"]'));
 });
 
 test('Done and "Complete room" write the four checks of each container', async () => {
