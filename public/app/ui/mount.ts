@@ -30,13 +30,17 @@ export function unmountShell() {
   shell = null;
 }
 
-// Shows `component` as the page in `host` (the frame's <main>), unless it already is.
-export function mountPage(host: Element, component: Component) {
-  if (page?.component === component && page.host === host && host.isConnected) return;
+// Shows `component` as the page in `host` (the frame's <main>), unless it already is. Returns
+// true when it took the place of another page in the same frame (#304: render() then puts focus
+// on the new page when it went with the old one), false for none or the first page of a frame.
+export function mountPage(host: Element, component: Component): boolean {
+  if (page?.component === component && page.host === host && host.isConnected) return false;
+  const replaced = page?.host === host && host.isConnected;
   unmountPage();
   const app = createApp(component);
   app.mount(host);
   page = { app, component, host };
+  return replaced;
 }
 
 // When <main> shows no page.

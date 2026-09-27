@@ -44,7 +44,7 @@ import { fuelledModes } from '../../../state.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
-import { refocusAfterRemoval } from '../refocus.ts';
+import { refocusOnOpenedPage } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
 import type {
   ItemRates,
@@ -349,13 +349,13 @@ const fuel = computed(() =>
 // progress the way a new profile does (calc rows that grew are left for review). It opens; this
 // profile stays as it is. The button shows the calculation's progress meanwhile, busy
 // (app/busy.ts) so it keeps focus (#299). The new profile's page has no such button, so focus
-// then goes to the page itself (ui/refocus.ts's last resort, #300).
+// then goes to the page's heading (refocusOnOpenedPage in ui/refocus.ts, #300, #304).
 async function recalculate(e: Event) {
   const b = e.currentTarget as HTMLButtonElement,
     want = fuel.value?.want;
   if (isBusy(b) || !calculated || !want || !(await allowSwitch())) return;
   const settings = { ...calculated.settings, transportFuel: want },
-    refocus = refocusAfterRemoval(b, {});
+    refocus = refocusOnOpenedPage(b);
   await whileBusy(b, async () => {
     try {
       await writeQueue;
