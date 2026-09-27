@@ -101,8 +101,11 @@ const floorTabs = { fallback: ['#main .tabs [data-floor].active'] };
 
 // "Hide this floor" (built-in floors, #168): once none of its bays is showing, the tab goes; the
 // storage page's Hidden panel brings it back. The page then shows the first visible floor.
+// Hide and Remove are busy while they save (bound aria-disabled, app/busy.ts: a failed save
+// leaves focus on them, #299).
 const hiding = ref(false);
 async function hideFloor(e: Event) {
+  if (hiding.value) return;
   const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
   if (
     !(await confirmAction({
@@ -126,6 +129,7 @@ async function hideFloor(e: Event) {
 // "Remove this floor", after a confirmation; then back to the ground floor.
 const removing = ref(false);
 async function removeFloor(e: Event) {
+  if (removing.value) return;
   const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
   if (
     !(await confirmAction({
@@ -197,7 +201,8 @@ async function removeFloor(e: Event) {
         class="btn"
         :data-hide-floor="floor.id"
         :class="{ unavailable: !hiding }"
-        :disabled="hiding || bays > 0 || !!blocked"
+        :aria-disabled="hiding || undefined"
+        :disabled="!hiding && (bays > 0 || !!blocked)"
         @click="hideFloor"
       >
         {{ bays ? 'Hide or remove its bays first' : blocked || 'Hide this floor' }}
@@ -207,7 +212,8 @@ async function removeFloor(e: Event) {
         class="btn danger"
         :data-remove-floor="floor.id"
         :class="{ unavailable: !removing }"
-        :disabled="removing || bays > 0 || !!blocked"
+        :aria-disabled="removing || undefined"
+        :disabled="!removing && (bays > 0 || !!blocked)"
         @click="removeFloor"
       >
         {{ bays ? 'Remove its bays first' : blocked || 'Remove this floor' }}

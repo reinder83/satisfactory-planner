@@ -43,6 +43,8 @@ import { factoryGroupsState } from '../../views/factories.ts';
 import { fuelledModes } from '../../../state.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { isBusy, whileBusy } from '../../busy.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
 import type {
   ItemRates,
@@ -288,14 +290,17 @@ async function setTransport(
             : {}),
           ...(siblings ? { siblings } : {}),
         };
-  el.disabled = true;
-  try {
-    await save(op);
-  } catch {
-  } finally {
-    el.disabled = false;
-    render();
-  }
+  // Busy while it saves (app/busy.ts, #299). A select changed by a key meanwhile saves nothing and
+  // shows the saved choice again.
+  if (isBusy(el)) return render();
+  await whileBusy(el, async () => {
+    try {
+      await save(op);
+    } catch {
+    } finally {
+      render();
+    }
+  });
 }
 function setTrip(e: Event, l: Link) {
   const el = e.target as HTMLInputElement,
@@ -342,48 +347,53 @@ const fuel = computed(() =>
 // "Recalculate with transport fuel": after the unsaved-notes check, a new profile in this save
 // with the fuel as extra demand (planner settings.transportFuel), carrying this profile's
 // progress the way a new profile does (calc rows that grew are left for review). It opens; this
-// profile stays as it is. The button shows the calculation's progress meanwhile.
+// profile stays as it is. The button shows the calculation's progress meanwhile, busy
+// (app/busy.ts) so it keeps focus (#299). The new profile's page has no such button, so focus
+// then goes to the page itself (ui/refocus.ts's last resort, #300).
 async function recalculate(e: Event) {
   const b = e.currentTarget as HTMLButtonElement,
     want = fuel.value?.want;
-  if (!calculated || !want || !(await allowSwitch())) return;
-  b.disabled = true;
-  try {
-    await writeQueue;
-    const r = await post<{
-      workspace: WorkspaceSummary;
-      saveId: string;
-      profileId: string;
-      reviewCount: number;
-    }>(
-      '/api/profiles',
-      {
-        saveId: currentSave.id,
-        name: (currentProfile.name.replace(/ · transport fuel$/, '') + ' · transport fuel').slice(
-          0,
-          80,
-        ),
-        settings: { ...calculated.settings, transportFuel: want },
-        carryFrom: currentProfile.id,
-      },
-      true,
-      calcProgress(b, 'Recalculating…'),
-    );
-    setWorkspace(r.workspace);
-    await loadContext(r.saveId, r.profileId);
-    render();
-    toast(
-      'Created a profile that plans the vehicle fuel. ' +
-        (r.reviewCount
-          ? r.reviewCount +
-            ' completed factory checks need review; the previous profile is unchanged.'
-          : 'The previous profile is unchanged.'),
-    );
-  } catch (err) {
-    toast((err as Error).message, true);
-    b.disabled = false;
-    b.textContent = 'Recalculate with transport fuel';
-  }
+  if (isBusy(b) || !calculated || !want || !(await allowSwitch())) return;
+  const settings = { ...calculated.settings, transportFuel: want },
+    refocus = refocusAfterRemoval(b, {});
+  await whileBusy(b, async () => {
+    try {
+      await writeQueue;
+      const r = await post<{
+        workspace: WorkspaceSummary;
+        saveId: string;
+        profileId: string;
+        reviewCount: number;
+      }>(
+        '/api/profiles',
+        {
+          saveId: currentSave.id,
+          name: (currentProfile.name.replace(/ · transport fuel$/, '') + ' · transport fuel').slice(
+            0,
+            80,
+          ),
+          settings,
+          carryFrom: currentProfile.id,
+        },
+        true,
+        calcProgress(b, 'Recalculating…'),
+      );
+      setWorkspace(r.workspace);
+      await loadContext(r.saveId, r.profileId);
+      render();
+      toast(
+        'Created a profile that plans the vehicle fuel. ' +
+          (r.reviewCount
+            ? r.reviewCount +
+              ' completed factory checks need review; the previous profile is unchanged.'
+            : 'The previous profile is unchanged.'),
+      );
+      void refocus();
+    } catch (err) {
+      toast((err as Error).message, true);
+      b.textContent = 'Recalculate with transport fuel';
+    }
+  });
 }
 </script>
 

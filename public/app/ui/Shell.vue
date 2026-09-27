@@ -23,6 +23,7 @@ import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
 import AdaPanel from './AdaPanel.vue';
 import { legacy } from './bridge.ts';
+import { isBusy, whileBusy } from '../busy.ts';
 
 // The sidebar's navigation: route, icon, label.
 const NAV: [id: string, icon: string, label: string][] = [
@@ -87,23 +88,23 @@ function profileFooter() {
 // The "Working on" select: save the profile's selected phase, clear the search and redraw;
 // on failure it shows the saved phase again. The redraw shows the new phase's notes, so an
 // unsaved note is asked about first; kept, the select goes back to the saved phase.
+// Busy while it saves (app/busy.ts, #299): a key pressed on it meanwhile shows the saved phase again.
 async function pickPhase(e: Event) {
   const el = e.target as HTMLSelectElement;
-  if (!(await allowSwitch())) {
+  if (isBusy(el) || !(await allowSwitch())) {
     el.value = phase();
     return;
   }
-  el.disabled = true;
-  try {
-    // The options are phaseOptions(), so the value is a phase.
-    await save({ type: 'phase', value: el.value as Phase });
-    setQuery('');
-    render();
-  } catch {
-    el.value = phase();
-  } finally {
-    el.disabled = false;
-  }
+  await whileBusy(el, async () => {
+    try {
+      // The options are phaseOptions(), so the value is a phase.
+      await save({ type: 'phase', value: el.value as Phase });
+      setQuery('');
+      render();
+    } catch {
+      el.value = phase();
+    }
+  });
 }
 </script>
 

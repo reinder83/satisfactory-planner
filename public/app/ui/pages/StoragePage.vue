@@ -31,6 +31,7 @@ import {
 import { save, toast } from '../../api.ts';
 import { moveContainer } from '../actions.ts';
 import { legacy } from '../bridge.ts';
+import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
@@ -175,16 +176,17 @@ async function restoreBay(e: Event, id: string) {
     ]),
   );
   let saved = false;
-  button.disabled = true;
-  try {
-    await save({ type: 'storageBayRestore', id });
-    saved = true;
-    toast(`Bay ${id} is back, with its containers, checkmarks and notes.`);
-  } catch {
-  } finally {
-    button.disabled = false;
-    render();
-  }
+  // Busy while it saves (app/busy.ts), so a failed restore leaves focus on it (#299).
+  await whileBusy(button, async () => {
+    try {
+      await save({ type: 'storageBayRestore', id });
+      saved = true;
+      toast(`Bay ${id} is back, with its containers, checkmarks and notes.`);
+    } catch {
+    } finally {
+      render();
+    }
+  });
   if (saved) await refocus();
 }
 
@@ -197,16 +199,16 @@ async function restoreFloor(e: Event, id: string) {
     hiddenList([`#main .tabs [data-floor="${CSS.escape(id)}"]`]),
   );
   let saved = false;
-  button.disabled = true;
-  try {
-    await save({ type: 'storageFloorRestore', id });
-    saved = true;
-    toast('The floor is back.');
-  } catch {
-  } finally {
-    button.disabled = false;
-    render();
-  }
+  await whileBusy(button, async () => {
+    try {
+      await save({ type: 'storageFloorRestore', id });
+      saved = true;
+      toast('The floor is back.');
+    } catch {
+    } finally {
+      render();
+    }
+  });
   if (saved) await refocus();
 }
 

@@ -13,6 +13,7 @@ import { factoryEditing } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 
@@ -34,16 +35,17 @@ const sections = computed(() =>
 );
 const editing = computed(() => legacy(() => factoryEditing));
 
-async function rename(e: Event, id: string) {
+// A group's name field, read-only while it saves (app/busy.ts, #299).
+function rename(e: Event, id: string) {
   const el = e.target as HTMLInputElement;
-  el.disabled = true;
-  try {
-    await save({ type: 'factoryGroupRename', id, name: el.value });
-  } catch {
-  } finally {
-    el.disabled = false;
-    render();
-  }
+  return whileBusy(el, async () => {
+    try {
+      await save({ type: 'factoryGroupRename', id, name: el.value });
+    } catch {
+    } finally {
+      render();
+    }
+  });
 }
 
 // "Remove group", after a confirmation: only the group goes; its factories and their

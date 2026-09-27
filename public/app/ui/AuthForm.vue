@@ -13,7 +13,10 @@ const props = defineProps<{ mode: 'login' | 'register' | 'setup' }>();
 const busy = ref(false);
 const error = ref('');
 
+// The button is busy meanwhile (bound aria-disabled, app/busy.ts): it keeps focus (#299), and a
+// second press or Enter in a field sends nothing more.
 async function submit(e: Event) {
+  if (busy.value) return;
   const form = e.target as HTMLFormElement;
   const data: Record<string, unknown> = Object.fromEntries(new FormData(form));
   data.registration = new FormData(form).has('registration');
@@ -80,7 +83,7 @@ async function submit(e: Event) {
       ><input type="checkbox" name="registration" />Allow other people to register their own
       accounts</label
     >
-    <button class="btn primary" :disabled="busy">
+    <button class="btn primary" :aria-disabled="busy || undefined">
       {{
         props.mode === 'setup'
           ? 'Enable accounts'

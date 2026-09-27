@@ -43,7 +43,9 @@ test('ticking a progress checkbox saves it and redraws the page', async () => {
   const box = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
-  assert.equal(box.disabled, true, 'the box waits for the write');
+  // Busy rather than disabled, so it keeps focus (#299).
+  assert.equal(box.getAttribute('aria-disabled'), 'true', 'the box waits for the write');
+  assert.equal(box.disabled, false);
   await settle();
   assert.deepEqual(calls.at(-1), [
     '/api/update',
@@ -53,6 +55,7 @@ test('ticking a progress checkbox saves it and redraws the page', async () => {
   const after = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
   assert.equal(after.checked, true);
   assert.equal(after.disabled, false);
+  assert.equal(after.getAttribute('aria-disabled'), null);
   assert.ok(after.closest('.factory-card')!.classList.contains('done'));
 });
 

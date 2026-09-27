@@ -21,6 +21,8 @@ import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { isBusy, whileBusy } from '../../busy.ts';
+import { refocusAfterRemoval } from '../refocus.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
@@ -61,32 +63,36 @@ function search(e: Event) {
 }
 
 // "Round up production": after the unsaved-notes check, create the rounded revision and open
-// it. The button shows the calculation's progress meanwhile.
+// it. The button shows the calculation's progress meanwhile, busy (app/busy.ts) so it keeps
+// focus (#299). The rounded profile's page has no such button, so focus then goes to the page
+// itself (ui/refocus.ts's last resort, #300).
 async function roundUp(e: Event) {
   const b = e.currentTarget as HTMLButtonElement;
-  if (!(await allowSwitch())) return;
-  b.disabled = true;
-  try {
-    await writeQueue;
-    const r = await post<{
-      workspace: WorkspaceSummary;
-      saveId: string;
-      profileId: string;
-      reviewCount: number;
-    }>('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
-    setWorkspace(r.workspace);
-    await loadContext(r.saveId, r.profileId);
-    render();
-    toast(
-      'Created rounded profile. ' +
-        r.reviewCount +
-        ' completed factory checks need review; previous progress is preserved.',
-    );
-  } catch (err) {
-    toast((err as Error).message, true);
-    b.disabled = false;
-    b.textContent = 'Round up production';
-  }
+  if (isBusy(b) || !(await allowSwitch())) return;
+  const refocus = refocusAfterRemoval(b, {});
+  await whileBusy(b, async () => {
+    try {
+      await writeQueue;
+      const r = await post<{
+        workspace: WorkspaceSummary;
+        saveId: string;
+        profileId: string;
+        reviewCount: number;
+      }>('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
+      setWorkspace(r.workspace);
+      await loadContext(r.saveId, r.profileId);
+      render();
+      toast(
+        'Created rounded profile. ' +
+          r.reviewCount +
+          ' completed factory checks need review; previous progress is preserved.',
+      );
+      void refocus();
+    } catch (err) {
+      toast((err as Error).message, true);
+      b.textContent = 'Round up production';
+    }
+  });
 }
 </script>
 

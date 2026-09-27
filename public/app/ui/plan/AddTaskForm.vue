@@ -1,5 +1,6 @@
 <!-- "Add task" under the build plan's checklist: a personal task for the current phase with
-     a random custom-… id. The button is disabled while saving; a success empties the form. -->
+     a random custom-… id. The button is busy while saving (bound aria-disabled, app/busy.ts: it
+     keeps focus, #299), and the form sends nothing more meanwhile; a success empties the form. -->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { save } from '../../api.ts';
@@ -13,7 +14,7 @@ const saving = ref(false);
 async function submit(e: Event) {
   const form = e.target as HTMLFormElement;
   const title = String(new FormData(form).get('title') || '').trim();
-  if (!title) return;
+  if (!title || saving.value) return;
   saving.value = true;
   try {
     await save({
@@ -43,6 +44,6 @@ async function submit(e: Event) {
       required
       :placeholder="placeholder"
       aria-label="Personal task"
-    /><button class="btn" type="submit" :disabled="saving">Add task</button>
+    /><button class="btn" type="submit" :aria-disabled="saving || undefined">Add task</button>
   </form>
 </template>

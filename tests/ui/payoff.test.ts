@@ -179,13 +179,15 @@ test('Rank alternates runs the ranking for the phase on screen and shows it', as
   const calls = stubFetch({ '/api/rank-alternates': stored() });
   $('[data-rank-alternates]')!.click();
   await nextTick();
-  assert.equal($<HTMLButtonElement>('[data-rank-alternates]')!.disabled, true);
+  // Busy rather than disabled, so it keeps focus (#299).
+  assert.equal($('[data-rank-alternates]')!.getAttribute('aria-disabled'), 'true');
+  assert.equal($<HTMLButtonElement>('[data-rank-alternates]')!.disabled, false);
   assert.match($('[data-payoff-progress]')!.textContent!, /Checking alternates/);
   await settle();
   assert.deepEqual(calls, [['/api/rank-alternates', { phase: '3' }]]);
   assert.equal(names().length, 6);
   assert.ok(!$('[data-payoff-progress]'));
-  assert.equal($<HTMLButtonElement>('[data-rank-alternates]')!.disabled, false);
+  assert.equal($('[data-rank-alternates]')!.getAttribute('aria-disabled'), null);
 });
 
 test('the panel is left out of a phase without a plan', () => {

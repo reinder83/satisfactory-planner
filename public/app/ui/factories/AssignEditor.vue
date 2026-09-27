@@ -11,6 +11,7 @@ import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
@@ -30,7 +31,8 @@ const editor = computed(() =>
 );
 
 // Saves this factory's memberships, `change` applied to the current list of { group, rate }.
-// Resolves true once it is saved.
+// Resolves true once it is saved. The control is busy meanwhile (app/busy.ts, #299); pressed
+// again while it is, it saves nothing and resolves false.
 async function assign(
   el: HTMLInputElement | HTMLSelectElement | HTMLButtonElement,
   change: (memberships: GroupAssignment[]) => GroupAssignment[],
@@ -38,16 +40,17 @@ async function assign(
   const groups = change(
     membershipsOf(props.factoryKey).map(m => ({ group: m.group, rate: m.rate })),
   );
-  el.disabled = true;
-  try {
-    await save({ type: 'factoryAssign', key: props.factoryKey, groups });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    el.disabled = false;
-    render();
-  }
+  const saved = await whileBusy(el, async () => {
+    try {
+      await save({ type: 'factoryAssign', key: props.factoryKey, groups });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      render();
+    }
+  });
+  return saved ?? false;
 }
 
 // The rate beside a group: empty for the whole output or the remainder, anything else above 0.
@@ -84,12 +87,23 @@ async function unassign(e: Event, group: string) {
   if (await assign(button, ms => ms.filter(m => m.group !== group))) await refocus();
 }
 
-// "+ Add to group…": join the chosen group with no rate.
-function add(e: Event) {
+// "+ Add to group…": join the chosen group with no rate. A factory that joins its first group
+// moves to that group's section with its editor, so focus goes after it: to its "+ Add to
+// group…" there, else to the new group's rate field (#299).
+async function add(e: Event) {
   const el = e.target as HTMLSelectElement,
-    group = el.value;
+    group = el.value,
+    key = CSS.escape(props.factoryKey);
   el.value = '';
-  if (group) assign(el, ms => [...ms, { group, rate: null }]);
+  if (!group) return;
+  const refocus = refocusAfterRemoval(el, {
+    scope: el.closest('.assign-editor'),
+    fallback: [
+      `[data-assign-add="${key}"]`,
+      `[data-assign-rate="${key}"][data-group="${CSS.escape(group)}"]`,
+    ],
+  });
+  if (await assign(el, ms => [...ms, { group, rate: null }])) await refocus();
 }
 </script>
 
