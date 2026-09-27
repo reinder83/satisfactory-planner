@@ -1,7 +1,9 @@
 <!-- The header and body of the shared #detail dialog. `icon` is an item name for the header
      icon. The × closes it (closeDetail in ui/actions.ts). The `actions` slot puts controls in
      the sticky header, between the title and the × (a factory's Running box, #239), so they stay
-     in view while the body scrolls and come between them in the tab order. -->
+     in view while the body scrolls and come between them in the tab order. The h2 names the
+     dialog: #detail in index.html has aria-labelledby="detail-title" (#321), and every #detail
+     dialog renders this frame, so the name follows whichever dialog is shown. -->
 <script setup lang="ts">
 import ItemIcon from '../ItemIcon.vue';
 import { closeDetail } from '../actions.ts';
@@ -18,7 +20,7 @@ withDefaults(defineProps<{ title: string; subtitle?: string; icon?: string }>(),
       <span v-if="icon" class="dialog-icon"><ItemIcon :name="icon" /></span>
       <div>
         <div class="eyebrow">{{ subtitle }}</div>
-        <h2>{{ title }}</h2>
+        <h2 id="detail-title">{{ title }}</h2>
       </div>
     </div>
     <div class="dialog-head-actions">
