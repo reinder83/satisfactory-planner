@@ -42,6 +42,11 @@ function replaceDetail(d: HTMLDialogElement, target: DetailTarget) {
   app = createApp(DetailDialog, { target });
   app.mount(d);
   if (!d.open) d.showModal();
+  // The <dialog> is the scroll container and keeps its offset while closed and while its
+  // content is replaced, so each opening would start where the last dialog was left (#316).
+  // Reset it after showModal(): a closed dialog has no box to scroll. showModal() focuses the
+  // first control, which sits in the sticky header, so the reset never hides the focus.
+  d.scrollTop = 0;
 }
 
 export function unmountDetail() {
