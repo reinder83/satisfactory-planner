@@ -1,5 +1,5 @@
-// A notes box that saves itself (#237): the plan pages' phase notes, the Backup page's
-// save-wide notes and the notes in factory and container dialogs, all drawn by NoteBox.vue.
+// A notes box that saves itself (#237): the Notes page's save-wide and phase notes (#243)
+// and the notes in factory and container dialogs, all drawn by NoteBox.vue.
 // The text is saved through save() in api.ts 800 ms after typing stops, and at once when the
 // box loses focus, so a pause writes once rather than once per keystroke. The notes keys are
 // saved progress and do not change: `phase-<phase>`, `global`, `factory-<id>`, `slot-<address>`.

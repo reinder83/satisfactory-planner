@@ -1,9 +1,9 @@
 <!--
   #backup, in three versions: the browser edition (saves live in this browser, so there is no
   progress download), a calculated profile on the server, and the original handbook on the
-  server with its plan assumptions and sources. The save-wide note is stored under the key
-  `global` and saves itself as you type (NoteBox.vue), as the plan page's and the dialogs'
-  notes do.
+  server with its plan assumptions and sources. The save-wide note (key `global`) moved to
+  the Notes page with the phase notes (NotesPage.vue, #243); the two server versions point
+  there where it used to be.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -30,7 +30,6 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { invalidate, legacy } from '../bridge.ts';
-import NoteBox from '../NoteBox.vue';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
 
@@ -204,7 +203,7 @@ async function persistStorage() {
   <PageHeader
     v-else-if="page.kind === 'calculated'"
     eyebrow="THIS PROFILE"
-    title="Backup & notes"
+    title="Backup"
     :subtitle="
       'Checkmarks, deliveries and notes belong to ' + page.saveName + ' / ' + page.profileName
     "
@@ -212,7 +211,7 @@ async function persistStorage() {
   <PageHeader
     v-else
     eyebrow="YOUR PROGRESS"
-    title="Backup & notes"
+    title="Backup"
     subtitle="Progress is stored on the server, so the same Docker instance works across your devices."
   />
   <!-- Full-save export and import (the satisfactory-planner-saves format), in both editions.
@@ -281,8 +280,8 @@ async function persistStorage() {
       site data.
     </p>
     <p>
-      To move from Docker, update the Docker app and use Backup & notes → Export all saves, then
-      import that file here. A legacy progress-only export is not a full save.
+      To move from Docker, update the Docker app and use Backup → Export all saves, then import that
+      file here. A legacy progress-only export is not a full save.
     </p>
     <h2>Self-hosted edition</h2>
     <p>
@@ -318,10 +317,9 @@ async function persistStorage() {
         />
       </section>
     </div>
-    <section class="panel">
-      <h2>Save-wide notes for this profile</h2>
-      <NoteBox id="global-note" note-key="global" aria-label="Save-wide notes" />
-    </section>
+    <p class="small muted" data-notes-moved>
+      Save-wide and phase notes are on the <a href="#notes">Notes</a> page.
+    </p>
     <section class="panel">
       <h2>Calculation assumptions</h2>
       <p v-for="(w, i) in page.warnings" :key="i">{{ w }}</p>
@@ -366,15 +364,9 @@ async function persistStorage() {
         </p>
       </section>
     </div>
-    <section class="panel" style="margin-top: 24px">
-      <h2>Save-wide notes</h2>
-      <NoteBox
-        id="global-note"
-        note-key="global"
-        label="Seed, locations, routes and decisions."
-        aria-label="Save-wide notes"
-      />
-    </section>
+    <p class="small muted" data-notes-moved>
+      Save-wide and phase notes are on the <a href="#notes">Notes</a> page.
+    </p>
     <section class="panel">
       <h2>Plan assumptions</h2>
       <p class="small">

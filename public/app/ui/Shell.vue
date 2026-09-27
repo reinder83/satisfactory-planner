@@ -46,7 +46,8 @@ const NAV: [id: string, icon: string, label: string][] = [
   ['logistics', '⇄', 'Logistics'],
   ['storage', '▦', 'Storage room'],
   ['resources', '↗', 'Power & resources'],
-  ['backup', '⇅', 'Backup & notes'],
+  ['notes', '✎', 'Notes'],
+  ['backup', '⇅', 'Backup'],
 ];
 
 const frame = computed(() =>

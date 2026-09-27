@@ -29,6 +29,7 @@ export const VIEWS = [
   'logistics',
   'storage',
   'resources',
+  'notes',
   'backup',
   'profiles',
   'wizard',

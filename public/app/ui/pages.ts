@@ -12,6 +12,7 @@ import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import FactoriesPage from './pages/FactoriesPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
+import NotesPage from './pages/NotesPage.vue';
 import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
 import ResourcesPage from './pages/ResourcesPage.vue';
@@ -33,6 +34,7 @@ export function vuePage(
   if (view === 'storage') return StoragePage;
   if (view === 'profiles') return ProfilesPage;
   if (view === 'account') return AccountPage;
+  if (view === 'notes') return NotesPage;
   if (view === 'backup') return BackupPage;
   if (view === 'resources') return calculated ? CalculatedResourcesPage : ResourcesPage;
   if (view === 'wizard') {

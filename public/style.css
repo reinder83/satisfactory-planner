@@ -1351,6 +1351,39 @@ p.eyebrow {
   margin-top: 10px;
 }
 
+/* The Notes page (NotesPage.vue, #243): the save-wide note, then one folding panel per phase,
+   whose summary is drawn as the panel's header bar. */
+.panel + .notes-phases {
+  margin-top: 24px;
+}
+.notes-phases > .section-head {
+  margin-bottom: 4px;
+}
+.notes-phases > p {
+  margin: 0 0 14px;
+}
+.phase-notes summary {
+  margin: -16px;
+  padding: 11px 15px;
+  background: var(--bar);
+  cursor: pointer;
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bright);
+}
+.phase-notes summary .small {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+.phase-notes[open] summary {
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--line);
+}
+
 /* The bay letter box in the storage layout editor (ui/storage/LayoutEditor.vue). */
 .inline-form .new-bay-letter {
   width: 4.5em;

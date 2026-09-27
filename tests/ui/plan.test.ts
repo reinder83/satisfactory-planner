@@ -11,7 +11,6 @@ import {
   setQuery,
   state,
 } from '../../public/app/session.ts';
-import { acceptRoute } from '../../public/app/api.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { headroomAdvice } from '../../public/app/views/calculated.ts';
@@ -60,7 +59,7 @@ beforeEach(() => {
   go('plan');
 });
 
-test('the handbook plan shows the phase checklist, counters, notes and deliveries', () => {
+test('the handbook plan shows the phase checklist, counters, notes link and deliveries', () => {
   open({ notes: { 'phase-3': evil + '\n  second line' } });
   render();
   noMarkup();
@@ -72,15 +71,10 @@ test('the handbook plan shows the phase checklist, counters, notes and deliverie
     'a counter tile keeps its "/ total" markup',
   );
   assert.equal($('#main .head-tools .small')!.textContent, '0% complete');
-  assert.equal(
-    $<HTMLTextAreaElement>('#phase-note')!.value,
-    evil + '\n  second line',
-    'the note keeps its text',
-  );
-  assert.equal($('[data-save-note="phase-3"]')!.id, 'phase-note', 'the notes key is on the box');
-  assert.equal($('#phase-note')!.getAttribute('aria-describedby'), 'phase-note-status');
-  assert.equal($('#phase-note-status')!.getAttribute('aria-live'), 'polite');
-  assert.doesNotMatch($('#main')!.textContent, /Save notes|Saved only when/);
+  // The phase notes moved to the Notes page (#243): the plan keeps a one-line link there.
+  assert.equal($$('#main textarea').length, 0, 'no notes editor on the plan');
+  assert.equal($('[data-phase-notes-link]')!.getAttribute('href'), '#notes');
+  assert.equal($('[data-phase-notes-link]')!.textContent, 'Phase notes →');
   assert.equal($('.next-card .step-no')!.textContent, 'NEXT UNFINISHED STEP');
   const deliveries = handbookDeliveries('3');
   assert.equal($$('#main [data-delivery]').length, deliveries.length);
@@ -316,46 +310,6 @@ test('a delivery count must be a whole number up to the target', async () => {
   assert.deepEqual(calls[0]![1], { type: 'delivery', key: d.id, value: 7 });
 });
 
-test('leaving the page or changing phase asks before dropping an unsaved phase note', async () => {
-  const calls = stubFetch({ '/api/update': () => state });
-  render();
-  // The page on screen is #plan (the hashchange listener in listeners.ts calls acceptRoute).
-  history.replaceState(null, '', '#plan');
-  assert.equal(acceptRoute(), true, 'nothing to ask without an edit');
-  const asked = answerConfirms(false);
-  const note = $<HTMLTextAreaElement>('#phase-note')!;
-  note.value = 'Unsaved thought';
-  // A sidebar link, a typed address or Back: the address goes back while it asks, and stays
-  // back when the notes are kept.
-  history.replaceState(null, '', '#storage');
-  assert.equal(acceptRoute(), false);
-  assert.equal(location.hash, '#plan');
-  await settle();
-  assert.equal(location.hash, '#plan');
-  assert.equal(asked.length, 1);
-  // The working-phase select: kept notes leave the phase as it was, unsaved.
-  const picker = $<HTMLSelectElement>('#phase-picker')!;
-  picker.value = '4';
-  picker.dispatchEvent(new Event('change'));
-  await settle();
-  assert.equal(calls.length, 0);
-  assert.equal(picker.value, '3');
-  assert.equal(note.value, 'Unsaved thought');
-  assert.equal(asked.length, 2);
-  // Agreeing to drop them goes to the address asked for, without asking again when its
-  // hashchange arrives (acceptRoute, as the listener calls it).
-  const agreed = answerConfirms(true);
-  history.replaceState(null, '', '#storage');
-  assert.equal(acceptRoute(), false);
-  await settle();
-  assert.equal(location.hash, '#storage');
-  assert.equal(acceptRoute(), true);
-  assert.equal(agreed.length, 1);
-  note.value = '';
-  history.replaceState(null, '', '#plan');
-  acceptRoute();
-});
-
 test('with completed steps hidden, moving a step passes the neighbour on screen', async () => {
   const calls = stubFetch({ '/api/update': () => state });
   open({ state: { checks: { 'phase-3-iron': true } } });
@@ -436,31 +390,6 @@ test('a cleared step title restores the original, and an automatic link can be r
   assert.deepEqual(calls.at(-1)![1], { type: 'taskEdit', id, title: '', body: '', link: '' });
 });
 
-test('ticking a step keeps an unsaved phase note on both plan pages', async () => {
-  for (const calculated of [false, generated]) {
-    const calls = stubFetch({ '/api/update': () => state });
-    open({ calculated });
-    go('plan');
-    render();
-    await nextTick();
-    const note = () => $<HTMLTextAreaElement>('#phase-note')!;
-    note().value = 'Unsaved thought';
-    note().dispatchEvent(new Event('input'));
-    const box = $<HTMLInputElement>('#main .checklist [data-check]')!;
-    box.checked = true;
-    box.dispatchEvent(new Event('change', { bubbles: true }));
-    await settle();
-    assert.equal(calls.length, 1, 'the tick was saved');
-    assert.equal(note().value, 'Unsaved thought', calculated ? 'calculated' : 'handbook');
-    // Another phase shows that phase's saved note.
-    state.notes['phase-4'] = 'Phase 4 plans';
-    state.settings.phase = '4';
-    render();
-    await nextTick();
-    assert.equal(note().value, 'Phase 4 plans');
-  }
-});
-
 test('reordering keeps a removed step’s place, so restoring it puts it back', async () => {
   // The /api/update stand-in applies the saved order the way the server does.
   stubFetch<UpdateOp>({
@@ -482,37 +411,6 @@ test('reordering keeps a removed step’s place, so restoring it puts it back', 
   const ids = planTasks().map(t => t.id);
   assert.equal(ids.indexOf('phase-3-retire-power'), 1);
   assert.equal(ids.length, before.length + 1);
-});
-
-test('another tab’s saved note never replaces an unsaved draft, but fills an untouched box', async () => {
-  // Every save reply carries a phase note another tab saved meanwhile.
-  stubFetch({
-    '/api/update': () => ({ ...state, notes: { ...state.notes, 'phase-3': 'From the other tab' } }),
-  });
-  const tick = async () => {
-    const box = $<HTMLInputElement>('#main .checklist [data-check]:not(:checked)')!;
-    box.checked = true;
-    box.dispatchEvent(new Event('change', { bubbles: true }));
-    await settle();
-  };
-  const note = () => $<HTMLTextAreaElement>('#phase-note')!;
-  render();
-  await nextTick();
-  note().value = 'My draft';
-  note().dispatchEvent(new Event('input'));
-  await tick();
-  assert.equal(note().value, 'My draft', 'the draft is kept');
-  assert.match($('#toast')!.textContent!, /saved note changed while you were editing/);
-  // An untouched box simply shows the newer saved note.
-  page();
-  open();
-  stubFetch({
-    '/api/update': () => ({ ...state, notes: { ...state.notes, 'phase-3': 'From the other tab' } }),
-  });
-  render();
-  await nextTick();
-  await tick();
-  assert.equal(note().value, 'From the other tab');
 });
 
 test('a reorder keeps the saved order within its 600-id limit', async () => {

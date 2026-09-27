@@ -335,6 +335,35 @@ test('ADA reads the build-so-far status: held-back rows, nothing flowing, the ne
     assert.ok(!ids(f).some(id => id.startsWith('build-')));
 });
 
+test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
+  for (const view of ['plan', 'notes']) {
+    const bare = adaRemarks(facts({ view, hasPhaseNote: false }));
+    const notes = bare.find(r => r.id === 'notes')!;
+    assert.match(notes.text, /No notes saved for Phase 3/);
+    assert.ok(
+      bare.findIndex(r => r.id === 'notes') < bare.findIndex(r => r.id.startsWith('idle-')),
+      'it ranks as a remark for the page on screen',
+    );
+    assert.ok(!ids(facts({ view, hasPhaseNote: true })).includes('notes'));
+  }
+  // Nothing done yet, nothing to write down.
+  assert.ok(
+    !ids(facts({ view: 'notes', hasPhaseNote: false, steps: { done: 0, total: 9 } })).includes(
+      'notes',
+    ),
+  );
+  // With a note, the Notes page has a line of its own.
+  const page = adaRemarks(facts({ view: 'notes' })).find(r => r.id === 'notes-page')!;
+  assert.match(page.text, /Phase 3 has notes on record/);
+  assert.ok(!ids(facts({ view: 'notes', hasPhaseNote: false })).includes('notes-page'));
+  assert.ok(!ids(facts({ view: 'notes', kind: 'none' })).includes('notes-page'));
+  // The assumptions are on the page now called Backup.
+  assert.match(
+    adaRemarks(facts({ assumptions: 2 })).find(r => r.id === 'assumptions')!.text,
+    /listed under Backup\./,
+  );
+});
+
 test('the storage and account pages have a line of their own, and there is more to say (#85)', () => {
   const storage = adaRemarks(facts({ view: 'storage' })).find(r => r.id === 'storage-page')!;
   assert.match(storage.text, /sign and an address/);

@@ -72,6 +72,22 @@ test('the frame shows the open save and profile, escaped, around the page', () =
   assert.ok($('#main .heading-row'), 'the plan page is drawn into <main>');
 });
 
+test('the navigation lists Notes between Power & resources and Backup (#243)', () => {
+  render();
+  assert.deepEqual(
+    [...document.querySelectorAll('.nav a')].map(a => [a.getAttribute('href'), a.textContent]),
+    [
+      ['#plan', '◫Build plan'],
+      ['#factories', '▥Factories'],
+      ['#logistics', '⇄Logistics'],
+      ['#storage', '▦Storage room'],
+      ['#resources', '↗Power & resources'],
+      ['#notes', '✎Notes'],
+      ['#backup', '⇅Backup'],
+    ],
+  );
+});
+
 test('navigation marks the current page', async () => {
   render();
   assert.equal($('.nav a.active')!.getAttribute('href'), '#plan');

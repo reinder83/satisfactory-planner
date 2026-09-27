@@ -296,7 +296,7 @@ const RULES: AdaRule[] = [
   },
   {
     id: 'notes',
-    on: ['plan'],
+    on: ['plan', 'notes'],
     tone: 'calm',
     when: f => f.steps?.done && !f.hasPhaseNote,
     text: f =>
@@ -465,7 +465,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: f => f.assumptions > 0,
     text: f =>
-      `This profile carries ${plural(f.assumptions, 'recorded assumption')}, listed under Backup & notes. Nobody reads the assumptions. That is how assumptions get their reputation.`,
+      `This profile carries ${plural(f.assumptions, 'recorded assumption')}, listed under Backup. Nobody reads the assumptions. That is how assumptions get their reputation.`,
   },
   // Pages that had nothing of their own to say.
   {
@@ -475,6 +475,14 @@ const RULES: AdaRule[] = [
     when: f => f.kind !== 'none',
     text: () =>
       `Every container gets a sign and an address. Pioneers who skip the signs later file reports titled “where is the Quickwire”. I have read all of them.`,
+  },
+  {
+    id: 'notes-page',
+    on: ['notes'],
+    tone: 'calm',
+    when: f => f.kind !== 'none' && f.hasPhaseNote,
+    text: f =>
+      `${f.phaseLabel} has notes on record. Written down, a train route survives the pioneer who planned it. I have seen what happens to the unwritten ones.`,
   },
   {
     id: 'account',

@@ -18,7 +18,7 @@ const UNREADABLE =
   'The saves in this browser could not be read, so the planner cannot open here. Nothing has ' +
   "been changed: reload to try again, and keep this browser's site data. Download the stored " +
   'data below to keep a copy, and restore your last full save export in another browser or ' +
-  'the Docker edition (Backup & notes → Import saves).';
+  'the Docker edition (Backup → Import saves).';
 // Errors about the stored data itself carry storedData, so the start-up error page (boot() in
 // app/session.ts) offers readStoredData's download next to the message.
 const refused = (message: string) => Object.assign(Error(message), { storedData: true });

@@ -1,6 +1,6 @@
 <!--
-  A notes box that saves itself (ui/note-draft.ts): the plan pages' phase notes, the Backup
-  page's save-wide notes and, through detail/DetailNote.vue, the notes in factory and
+  A notes box that saves itself (ui/note-draft.ts): the Notes page's save-wide and phase
+  notes and, through detail/DetailNote.vue, the notes in factory and
   container dialogs. `noteKey` is the saved notes key and goes on the textarea as
   data-save-note, which the tests and browser-check.ts look for. Under it: an optional hint
   and the status line ("Saving…", "Saved · 12:04", "Not saved — Retry"), announced politely.
