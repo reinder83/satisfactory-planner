@@ -1,15 +1,17 @@
 <!--
   The dialog for one row of a calculated plan at the current phase: its Running box in the
   sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
-  step, then the flow diagram, machine setup (machineSetup in views/calculated.ts, drawn as the
-  three MachineCells, SP-20), lane advice, outputs, expansion by phase and the note saved under
-  `factory-<row id>`. The easier rounded setting is left out when the profile already runs
-  whole machines. Opened by openCalculatedFactory in factory-detail.ts.
+  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram,
+  machine setup (machineSetup in views/calculated.ts, drawn as the three MachineCells, SP-20),
+  lane advice, the outputs (only where the headline does not already say them), expansion by
+  phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
+  when the profile already runs whole machines. Opened by openCalculatedFactory in
+  factory-detail.ts.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { calcFlowModel } from '../../flow.ts';
+import { calcFlowModel, FLUIDS } from '../../flow.ts';
 import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
 import { calcExpansion, machineSetup } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
@@ -32,12 +34,20 @@ const view = computed(() =>
     const m = machineSetup(r),
       counts = machineCounts(r.machines, m.partial ? m.clock : 100);
     const check = 'calc-' + stage() + '-' + r.id;
+    // The card's headline (SP-21): the main output, or a generator's power when the row makes no
+    // items. The outputs list below stays only where the card lists them too: more than one, or
+    // one that is not what the row is named after.
+    const outputs = Object.entries(r.outputs || {}),
+      [main, rate] = outputs[0] || [];
     return {
       r,
       check,
       done: checked(check),
       running: `Running at ${phaseLabel(stage())} target`,
       subtitle: phaseLabel(phase()),
+      summary: main
+        ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
+        : power(r.generationMW),
       icon: Object.keys(r.outputs || {})[0] || '',
       flow: calcFlowModel(r),
       setup: m,
@@ -68,7 +78,7 @@ const view = computed(() =>
               extra: inputText(m.easy.extraOutputs) || 'Additional generation',
             }
           : null,
-      outputs: inputText(r.outputs) || power(r.generationMW),
+      outputs: outputs.length > 1 || (main && main !== r.name) ? inputText(r.outputs) : '',
       expansion: calcExpansion(r.id),
     };
   }),
@@ -76,7 +86,13 @@ const view = computed(() =>
 </script>
 
 <template>
-  <DialogFrame v-if="view" :title="view.r.name" :subtitle="view.subtitle" :icon="view.icon">
+  <DialogFrame
+    v-if="view"
+    :title="view.r.name"
+    :subtitle="view.subtitle"
+    :summary="view.summary"
+    :icon="view.icon"
+  >
     <template #actions
       ><label class="check-row"
         ><input
@@ -112,8 +128,10 @@ const view = computed(() =>
       tightly balanced recycling; do not round nuclear or waste-processing lines independently.
     </p>
     <LaneAdvice :model="view.flow" />
-    <h3>Outputs per minute</h3>
-    <p>{{ view.outputs }}</p>
+    <template v-if="view.outputs"
+      ><h3>Outputs per minute</h3>
+      <p>{{ view.outputs }}</p></template
+    >
     <h3>Expansion by phase</h3>
     <table>
       <thead>

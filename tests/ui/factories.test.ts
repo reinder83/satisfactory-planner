@@ -946,6 +946,118 @@ test('a calculated dialog shows the same three cells as its card, with output pe
   assert.equal(machineCells()[1]![2], '');
 });
 
+// SP-21 (#256): the Output, Storage and Machines tiles repeated the card, so they are gone; the
+// output and storage rate are the line under the title, and the flow comes straight after the
+// header (after the recipe badge on a handbook factory). No-break spaces keep a rate whole.
+const summary = () => $('#detail .dialog-head [data-dialog-summary]')?.textContent ?? null;
+const nb = ' ';
+const bodyStart = () =>
+  [...$('#detail .dialog-body')!.children]
+    .slice(0, 2)
+    .map(e => (e.matches('.badge') ? 'badge' : e.tagName === 'H3' ? e.textContent : e.className));
+const noTiles = () => {
+  assert.equal($('#detail .dialog-body > .stats:not(.machine-cells)'), null, 'no summary tiles');
+  assert.doesNotMatch(detail(), /Total production|Protected allowance|Shared oil processes/);
+};
+
+test('a handbook dialog says output and storage under its title instead of in tiles', () => {
+  render();
+  const card = $('#main button.name[data-factory="iron-ingot"]')!.closest('.factory-card')!;
+  openFactory('iron-ingot');
+  noTiles();
+  assert.equal(summary(), `${num(5850)}/min · storage${nb}${num(10)}/min`);
+  assert.match(card.querySelector('.output')!.textContent!, new RegExp(num(5850)));
+  assert.match(card.textContent!, /storage 10\/min/, 'the card says the same');
+  assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Handbook page 54');
+  // The recipe badge stays, and the flow follows it; the handbook note comes after the flow.
+  assert.equal($('#detail .badge.orange')!.textContent, 'Alternate: Pure Iron Ingot');
+  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 3']);
+  const note = $('#detail .dialog-body > .notice.info')!;
+  assert.match(note.textContent!, /Reserve space for 13 halls/);
+  assert.ok(
+    $('#detail .dialog-body > h3')!.compareDocumentPosition(note) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  // The Machines tile's count and machine are the Total cell's.
+  assert.deepEqual(machineCells()[0], ['Total', '90', 'Refinery · peak load ' + power(1350)]);
+  // The dialog is still named by its title alone.
+  assert.equal($('#detail h2#detail-title')!.textContent, 'Iron Ingot');
+  // A local factory's notice now points up at the consumers the flow lists.
+  openFactory('wire');
+  assert.match(detail(), /beside the consumers listed above/);
+});
+
+test('the oil, fluid and nuclear dialogs keep what their tiles said', () => {
+  render();
+  // Oil: no machine cells; the Machines tile's "Campus · Shared oil processes" is the campus
+  // section, which lists its machines per recipe.
+  openFactory('plastic');
+  noTiles();
+  assert.equal(summary(), `${num(1800)}/min · storage${nb}${num(200)}/min`);
+  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 3']);
+  assert.equal($('#detail .badge.orange')!.textContent, 'Plastic');
+  assert.match(detail(), /Shared oil campus · Phase 3/);
+  assert.match(detail(), /shared campus buildings/);
+  assert.equal($('#detail .machine-cells'), null);
+  // A fluid is measured in m³, as its flow is; its protected storage is 0.
+  open({ phase: '4' });
+  render();
+  openFactory('alumina-solution');
+  noTiles();
+  assert.equal(summary(), `${num(10126.666666666666)}${nb}m³/min · storage${nb}0${nb}m³/min`);
+  // Nuclear: the power fleet takes it, and its notices stay.
+  openFactory('uranium-fuel-rod');
+  noTiles();
+  assert.equal(summary(), `${num(10)}/min · storage${nb}0/min`);
+  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 4']);
+  assert.match(detail(), /nuclear power fleet/);
+  assert.match(detail(), /Process buffer at the nuclear site/);
+  assert.deepEqual(
+    machineCells().map(c => c[1]),
+    ['25', '25', '0'],
+  );
+});
+
+test('a calculated dialog says its card’s headline under the title, and outputs only when more', () => {
+  const p = generated();
+  const rows = p.stages['3'].rows!;
+  const named = rows.find(r => {
+    const o = Object.keys(r.outputs);
+    return o.length === 1 && o[0] === r.name;
+  })!;
+  const several = rows.find(r => Object.keys(r.outputs).length > 1)!;
+  const gen = rows.find(r => !Object.keys(r.outputs).length && r.generationMW > 0)!;
+  assert.ok(named && several && gen, 'the default plan has these lines');
+  open({ calculated: p });
+  render();
+  const headline = (id: string) =>
+    $(`#main button.name[data-calc-factory="${id}"]`)!
+      .closest('.factory-card')!
+      .querySelector('.output')!
+      .textContent!.replace(/\s+/g, '');
+  const outputsHeading = () => $$('#detail h3').some(h => h.textContent === 'Outputs per minute');
+  // One output named like the row: the headline says it all, so the list is not repeated.
+  openCalculatedFactory(named.id);
+  const rate = Object.values(named.outputs)[0]!;
+  assert.equal(summary(), num(rate) + '/min');
+  assert.equal(summary()!.replace(/\s+/g, ''), headline(named.id), 'the card’s headline');
+  assert.equal(outputsHeading(), false);
+  assert.equal($('#detail .dialog-body > h3')!.textContent, 'Flow at Phase 3');
+  assert.equal($('#detail .dialog-body')!.firstElementChild!.tagName, 'H3', 'the flow first');
+  // Several outputs: the main one in the header, every one in the list.
+  openCalculatedFactory(several.id);
+  const [main, mainRate] = Object.entries(several.outputs)[0]!;
+  assert.match(summary()!, new RegExp('^' + num(mainRate).replace(/[.,]/g, '\\$&')));
+  assert.equal(outputsHeading(), true);
+  for (const n of Object.keys(several.outputs)) assert.match(detail(), new RegExp(n));
+  assert.ok(main);
+  // A generator makes no items: its power is the headline, and nothing else is listed.
+  openCalculatedFactory(gen.id);
+  assert.equal(summary(), power(gen.generationMW));
+  assert.equal(outputsHeading(), false);
+  assert.match(machineCells()[0]![2]!, /generates/);
+});
+
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
   const p = generated();
   p.stages['3'].feasible = false;
