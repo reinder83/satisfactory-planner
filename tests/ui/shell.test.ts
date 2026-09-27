@@ -59,9 +59,15 @@ test('the frame shows the open save and profile, escaped, around the page', () =
   render();
   assert.equal($('.breadcrumbs a')!.textContent, evil);
   assert.ok($('.breadcrumbs')!.innerHTML.includes('&lt;x-evil'), 'the save name is escaped');
-  assert.ok(!document.body.innerHTML.includes('<x-evil'), 'no user text is inserted as markup');
-  assert.ok($('.sidebar-foot')!.textContent.startsWith(evil), 'the footer names the profile');
-  assert.equal($('.sidebar-foot')!.querySelectorAll('br').length, 3);
+  // (Not innerHTML: an attribute such as the switcher group's aria-label is serialised with its
+  // < as it is.)
+  assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
+  // The footer is the profile switcher (SP-07): its button names the profile.
+  assert.ok(
+    $('.sidebar-foot .profile-switcher')!.textContent.startsWith(evil),
+    'the footer names the profile',
+  );
+  assert.equal($('.sidebar-foot .profile-switcher')!.querySelectorAll('br').length, 3);
   // The page itself is drawn into the frame's <main>.
   assert.ok($('#main .heading-row'), 'the plan page is drawn into <main>');
 });
