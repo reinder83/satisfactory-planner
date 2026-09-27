@@ -25,6 +25,7 @@ import type { DragDropManager, DragEndEvent, DragStartEvent } from '@dnd-kit/vue
 import { followScroll, landsOnTarget } from '../storage/drop-point.ts';
 import {
   floorOrder,
+  floorProgress,
   hiddenStorageBays,
   hiddenStorageFloors,
   slotMatches,
@@ -99,8 +100,16 @@ const page = computed(() =>
           )
           .map(b => b.id);
     const byId = new Map(display.map(b => [b.id, b]));
+    // Each tab's named containers and how many are Done (SP-23, #258): the same count as its
+    // bays' lines, over the bays the room shows. The search does not narrow it.
+    const progress = floorProgress();
     return {
-      floors: floors.map(f => ({ ...f, active: f.id === floor })),
+      floors: floors.map(f => ({
+        ...f,
+        active: f.id === floor,
+        done: progress.get(f.id)?.done ?? 0,
+        named: progress.get(f.id)?.named ?? 0,
+      })),
       current,
       floorBays: floorBays.length,
       // Hidden handbook bays moved onto this floor: not shown, but the floor cannot be hidden
@@ -289,15 +298,20 @@ function toggleLayout() {
     "
   />
   <div class="toolbar">
+    <!-- A tab's count is part of its name as words ("Ground floor, 41 of 64 done", which starts
+         with the label drawn); the figures drawn beside the label are hidden from a screen reader
+         (SP-23, #258). A floor without a container shows none. -->
     <div class="tabs">
       <button
         v-for="f in page.floors"
         :key="f.id"
         :class="['tab', f.active ? 'active' : '']"
         :data-floor="f.id"
+        :aria-label="f.named ? `${f.label}, ${f.done} of ${f.named} done` : undefined"
         @click="showFloor(f.id)"
       >
         {{ f.label }}
+        <span v-if="f.named" class="count" aria-hidden="true">{{ f.done }}/{{ f.named }}</span>
       </button>
     </div>
     <input

@@ -272,6 +272,30 @@ const slotChecks = ['built', 'labelled', 'connected', 'verified'];
 export const slotKeys = (id: string) => slotChecks.map(k => 'slot-' + id + '-' + k);
 export const slotDone = (id: string) => slotKeys(id).every(checked);
 
+// How far a bay is (SP-23, #258): its named containers, and how many of those are Done. A
+// reserved position has nothing to build, so it does not count. The bay's "3/8 containers done",
+// its progress bar and its floor tab's total all read this, so they always agree.
+export interface StorageProgress {
+  done: number;
+  named: number;
+}
+export function bayProgress(b: StorageBayView): StorageProgress {
+  const named = b.items.filter(x => x.name);
+  return { done: named.filter(x => slotDone(x.id)).length, named: named.length };
+}
+
+// The same per floor, over the bays the room shows (storageBays(): hidden bays are left out),
+// keyed by floor id. A floor with no bay is absent.
+export function floorProgress(): Map<string, StorageProgress> {
+  const totals = new Map<string, StorageProgress>();
+  for (const b of storageBays()) {
+    const p = bayProgress(b),
+      t = totals.get(b.floor) ?? { done: 0, named: 0 };
+    totals.set(b.floor, { done: t.done + p.done, named: t.named + p.named });
+  }
+  return totals;
+}
+
 // The four steps of a container, as saved check keys `slot-<address>-<step>` and labels.
 export const SLOT_STEPS: [step: string, label: string][] = [
   ['built', 'Container placed'],
