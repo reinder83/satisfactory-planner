@@ -184,6 +184,50 @@ test('the handbook backup page keeps the save-wide note exactly and lists the so
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));
 });
 
+// #307: "Import saves" and "Choose backup (file)" were labels around a `hidden` file input, so
+// Tab never reached them. Each is now a button in the tab order, named by its text, that opens
+// the file input (which stays rendered but out of sight and out of the tab order).
+for (const [kind, restoreName] of [
+  ['handbook', 'Choose backup file'],
+  ['calculated', 'Choose backup'],
+] as const)
+  test(`the ${kind} backup page's file controls are buttons the keyboard reaches`, () => {
+    open({ calculated: kind === 'calculated' });
+    go('backup');
+    render();
+    // What Tab can reach on the page, by its accessible text.
+    const tabbable = $$<HTMLElement>('#main button, #main a[href], #main input, #main summary')
+      .filter(e => e.tabIndex >= 0 && !e.hidden && !(e as HTMLButtonElement).disabled)
+      .map(e => (e.getAttribute('aria-label') || e.textContent || '').trim());
+    for (const [name, inputId] of [
+      ['Import saves', 'import-saves'],
+      [restoreName, 'import-file'],
+    ] as const) {
+      assert.ok(tabbable.includes(name), `Tab reaches "${name}"`);
+      const button = $$<HTMLButtonElement>('#main button').find(
+        b => b.textContent!.trim() === name,
+      )!;
+      assert.equal(button.type, 'button', 'a plain button, not a form submit');
+      assert.equal(button.closest('label'), null, 'not a label around the input');
+      const input = $<HTMLInputElement>('#' + inputId)!;
+      assert.equal(input.type, 'file');
+      assert.equal(input.hidden, false, 'the input is rendered, so click() opens it everywhere');
+      assert.equal(input.classList.contains('visually-hidden'), true);
+      assert.equal(input.tabIndex, -1, 'the input is not a second tab stop');
+      assert.equal(input.getAttribute('aria-hidden'), 'true', 'nor announced twice');
+      // Pressing the button (Enter and Space press a button) opens that input's file picker.
+      const opened: string[] = [];
+      const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (
+        this: HTMLInputElement,
+      ) {
+        opened.push(this.id);
+      });
+      button.click();
+      click.mockRestore();
+      assert.deepEqual(opened, [inputId]);
+    }
+  });
+
 test('restoring a progress backup shows "Saving…" and counts as a pending write', async () => {
   go('backup');
   render();
