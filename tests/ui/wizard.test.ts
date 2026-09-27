@@ -48,6 +48,7 @@ import {
   page,
   stubFetch,
 } from './setup.ts';
+import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
 import { noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
@@ -375,6 +376,30 @@ test('the alternate picker ticks, forces, filters and shows each recipe', async 
   assert.equal($('#detail h2')!.textContent, 'Stitched Iron Plate');
   assert.ok($('#detail .rail-recipe'), 'the pop-out shows the recipe card');
   assert.match(text('#detail'), /Standard recipe for Reinforced Iron Plate/);
+});
+
+test('an alternate-recipe dialog put in place of another takes focus, and closing returns it (#319)', async () => {
+  const RIP = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
+  wizardAt(2, {}, { recipes: 'custom' });
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  const opener = $<HTMLButtonElement>(`[data-alt-info="${RIP}"]`)!;
+  opener.focus();
+  await click(`[data-alt-info="${RIP}"]`);
+  assert.ok(dialog.open);
+  // Nothing inside an alternate's dialog opens another, so the replacement is made the way a
+  // link inside a dialog makes it: showDetail() while the dialog is open.
+  const close = $<HTMLButtonElement>('#detail [data-close]')!;
+  close.focus();
+  openAltRecipe('Recipe_Alternate_Screw_C');
+  assert.equal($('#detail h2')!.textContent, 'Cast Screws');
+  assert.equal(close.isConnected, false);
+  assert.equal(
+    document.activeElement?.matches('#detail .dialog-head [data-close]'),
+    true,
+    'focus is on its first control, the ×',
+  );
+  dialog.close();
+  assert.equal(document.activeElement === opener, true, 'closing returns focus to recipe ↗');
 });
 
 test('a preference that requires recipes locks them on', async () => {

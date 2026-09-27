@@ -179,6 +179,31 @@ try {
   assert.equal(await detailTop(), 0, 'a factory opened from the dialog starts at the top');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  // By keyboard, a factory link inside the dialog moves focus into the dialog that takes its
+  // place, to its first control as on opening (#319), and Escape returns it to the card.
+  const opener = page.locator('.factory-card [data-calc-factory]').first();
+  const openerId = await opener.getAttribute('data-calc-factory');
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
+  const firstControl = () =>
+    page.evaluate(() => {
+      const a = document.activeElement;
+      return a?.matches('#detail .dialog-head [data-check]') ? 'running' : a?.tagName;
+    });
+  assert.equal(await firstControl(), 'running', 'opening focuses the Running box');
+  const shown = await page.locator('#detail h2').textContent();
+  await page.locator('#detail [data-calc-factory]').last().focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(t => document.querySelector('#detail h2')?.textContent !== t, shown);
+  assert.equal(await firstControl(), 'running', 'the dialog put in its place takes focus');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('data-calc-factory')),
+    openerId,
+    'Escape returns focus to the card that opened the first dialog',
+  );
   const checkStorage = async () => {
     await page.goto(base + '#storage');
     await page.locator('[data-complete-bay="A"]').waitFor();

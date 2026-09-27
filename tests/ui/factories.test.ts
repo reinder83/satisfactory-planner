@@ -351,6 +351,128 @@ test('every dialog opens at the top, not where the last one was left (#316)', as
   assert.equal(dialog.scrollTop, 0, 'replaced by a link inside it');
 });
 
+// Focus when a link inside a dialog puts another one in its place (#319): the focused link
+// goes with the old dialog, and showModal() does not run again. happy-dom's showModal() and
+// close() move no focus, so a fresh open leaves focus on the opener here; in a browser it
+// focuses the same first control.
+const focused = (sel: string) => document.activeElement?.matches(sel) ?? false;
+// Focuses `link` and presses it, as a keyboard user does, and checks that focus lands on the
+// new dialog's first control, the Running box `key` in its sticky header.
+const follow = (link: HTMLElement, key: string) => {
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  const from = $('#detail h2')!.textContent;
+  link.focus();
+  dialog.scrollTop = 300;
+  link.click();
+  assert.notEqual($('#detail h2')!.textContent, from, 'another dialog took its place');
+  assert.ok(dialog.open);
+  assert.equal(link.isConnected, false, 'the link went with the old dialog');
+  assert.equal(focused('body'), false, 'focus is not left on <body>');
+  assert.equal(
+    focused(`#detail .dialog-head [data-check="${key}"]`),
+    true,
+    'focus is on the new dialog’s first control, as on opening',
+  );
+  assert.equal(dialog.scrollTop, 0, 'and the dialog starts at its top');
+};
+
+test('a link inside a handbook factory dialog moves focus into the new one, and closing returns it to the opener (#319)', async () => {
+  render();
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  const opener = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
+  opener.focus();
+  opener.click();
+  assert.equal($('#detail h2')!.textContent, 'Wire');
+  follow($('#detail .rail-link[data-factory="cable"]')!, 'factory-3-cable');
+  // A second hop, from the dialog that replaced the first.
+  const next = $<HTMLElement>('#detail .dialog-body [data-factory]')!;
+  follow(next, 'factory-3-' + next.dataset.factory);
+  // Escape (the browser closes the dialog after the cancel event) goes back to the card's
+  // name, however many dialogs came in between.
+  const escape = new Event('cancel', { cancelable: true });
+  cancelDetail(escape);
+  assert.equal(escape.defaultPrevented, false);
+  dialog.close();
+  assert.equal(dialog.open, false);
+  assert.equal(document.activeElement === opener, true, 'Escape returns focus to the opener');
+  // The × does the same.
+  opener.click();
+  follow($('#detail .rail-link[data-factory="cable"]')!, 'factory-3-cable');
+  $<HTMLButtonElement>('#detail [data-close]')!.focus();
+  void closeDetail();
+  await settle();
+  assert.equal(dialog.open, false);
+  assert.equal(document.activeElement === opener, true, 'the × returns focus to the opener');
+});
+
+test('focus moves into the new dialog after the unsaved-note question too (#319)', async () => {
+  render();
+  const opener = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
+  opener.focus();
+  opener.click();
+  const asked = answerConfirms(true);
+  $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
+  const link = $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!;
+  link.focus();
+  link.click();
+  await settle();
+  assert.equal(asked.length, 1, 'the note was asked about');
+  assert.equal($('#detail h2')!.textContent, 'Cable');
+  assert.equal(focused('#detail .dialog-head [data-check="factory-3-cable"]'), true);
+  void closeDetail();
+  await settle();
+  assert.equal(document.activeElement === opener, true);
+});
+
+test('a link inside a calculated factory dialog moves focus into the new one (#319)', async () => {
+  open({ calculated: plan });
+  render();
+  const x = calcStage()!;
+  const r = x.rows!.find(r =>
+    Object.keys(r.outputs).some(n => x.rows!.some(o => o.id !== r.id && o.inputs[n])),
+  )!;
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  const opener = $<HTMLButtonElement>(`#main .factory-card [data-calc-factory="${r.id}"]`)!;
+  opener.focus();
+  opener.click();
+  assert.equal($('#detail h2')!.textContent, r.name);
+  const link = $<HTMLElement>('#detail .dialog-body [data-calc-factory]')!;
+  follow(link, 'calc-3-' + link.dataset.calcFactory);
+  dialog.close();
+  assert.equal(document.activeElement === opener, true, 'closing returns focus to the opener');
+});
+
+test('a factory in a group’s build order moves focus into its dialog (#319)', async () => {
+  const x = plan.stages['3'];
+  const consumer = x.rows!.find(r =>
+    x.rows!.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
+  )!;
+  const supplier = x.rows!.find(
+    o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
+  )!;
+  open({
+    calculated: plan,
+    state: {
+      factoryGroups: {
+        groups: [{ id: 'fg-test01', name: 'Chain test' }],
+        assignments: {
+          [consumer.id]: [{ group: 'fg-test01', rate: null }],
+          [supplier.id]: [{ group: 'fg-test01', rate: null }],
+        },
+      },
+    },
+  });
+  render();
+  const opener = $<HTMLButtonElement>('[data-group-chain="fg-test01"]')!;
+  opener.focus();
+  opener.click();
+  assert.match($('#detail .eyebrow')!.textContent, /build order/);
+  follow($('#detail .chain-title [data-calc-factory]')!, 'calc-3-' + supplier.id);
+  void closeDetail();
+  await settle();
+  assert.equal(document.activeElement === opener, true, 'the × returns focus to Build order');
+});
+
 test('the oil campus replaces the lane advice for Plastic and Rubber', () => {
   render();
   openFactory('plastic');
