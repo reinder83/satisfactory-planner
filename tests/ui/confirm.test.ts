@@ -57,8 +57,10 @@ test('Escape and a click on the backdrop answer no', async () => {
   assert.equal(await escape, false);
   assert.equal(dialog().open, false);
   const backdrop = ask(true);
-  // A click on the <dialog> itself outside its box is a click on the backdrop.
-  dialog().dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: -5, clientY: -5 }));
+  // A click pressed and released on the <dialog> itself outside its box is a click on the
+  // backdrop (tests/ui/backdrop.test.ts covers the clicks that are not).
+  for (const type of ['mousedown', 'click'])
+    dialog().dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: -5, clientY: -5 }));
   assert.equal(await backdrop, false);
   assert.equal(dialog().open, false);
 });

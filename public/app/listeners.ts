@@ -8,6 +8,7 @@
 // cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange.
 import { acceptRoute, flushNotes, hasUnsavedNotes, pending, refreshState } from './api.ts';
 import { required } from './format.ts';
+import { onBackdropClick } from './backdrop.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
@@ -37,11 +38,9 @@ window.addEventListener('hashchange', () => {
   window.scrollTo(0, 0);
 });
 
-// A click on the dialog's backdrop (the <dialog> element itself, not its content)
-// closes the detail dialog.
-required('#detail').addEventListener('click', e => {
-  if (e.target === required('#detail')) closeDetail();
-});
+// A click on the dialog's backdrop (outside the dialog's box, pressed there too) closes the
+// detail dialog.
+onBackdropClick(required('#detail'), closeDetail);
 
 // Escape closes the dialog natively; cancelDetail asks about an unsaved note first.
 required('#detail').addEventListener('cancel', cancelDetail);
