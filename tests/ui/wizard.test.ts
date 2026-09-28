@@ -727,7 +727,19 @@ test('every guided screen offers All settings at the step that owns its question
     assert.match($('[data-guided-advanced]')!.dataset.guidedAdvanced!, /^[1-4]$/);
     assert.equal($('[data-guided-advanced]')!.dataset.guidedAdvanced, String(flow[step - 1]!.step));
     assert.equal($$('.guided-progress [role=listitem]').length, flow.length);
-    assert.equal($('.guided-progress .current')!.textContent, flow[step - 1]!.short);
+    // SP-35: numbered steps, the current one marked for assistive software, and 'n of total'.
+    const current = $('.guided-progress .current')!;
+    assert.equal(current.getAttribute('aria-current'), 'step');
+    assert.equal($$('.guided-progress [aria-current]').length, 1);
+    assert.equal(current.querySelector('.guided-step-label')!.textContent, flow[step - 1]!.short);
+    assert.equal(current.querySelector('i')!.textContent, String(step));
+    assert.equal(current.querySelector('i')!.getAttribute('aria-hidden'), 'true');
+    assert.deepEqual(
+      $$('.guided-progress i').map(i => i.textContent),
+      flow.map((_, i) => String(i + 1)),
+    );
+    assert.equal($$('.guided-progress .done').length, step - 1, 'the steps before it are done');
+    assert.equal($('[data-guided-count]')!.textContent, step + ' of ' + flow.length);
     assert.equal(
       $('#wizard-form button[type=submit]')!.textContent.trim(),
       step === flow.length ? 'Calculate plan' : 'Continue →',

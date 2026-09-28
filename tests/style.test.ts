@@ -279,3 +279,12 @@ test('a factory card opens from anywhere but its Running box (SP-19)', () => {
   assert.match(above.selector, /\.factory-card \.assign-editor/, 'and so does the group editor');
   assert.match(body('.factory-card:has(.name:focus-visible)'), /outline:/);
 });
+
+test('the guided stepper is legible: 13px numbered steps, the current one in the accent (SP-35)', () => {
+  const css = screenCss();
+  const body = (sel: string) => rules(css).find(r => r.selector === sel)?.body ?? '';
+  assert.match(body('.guided-stepper'), /font-size: 13px/);
+  assert.match(body('.guided-progress .current'), /color: var\(--accent\)/);
+  assert.doesNotMatch(body('.guided-progress'), /var\(--dim\)/);
+  assert.match(body('.guided-progress i'), /width: 22px/);
+});

@@ -40,6 +40,7 @@ const page = computed(() =>
       key: topics ? 'topics' : String(w.guidedStep),
       title: w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
       topics,
+      index,
       progress: flow.map((x, i) => ({
         id: x.id,
         label: x.short || x.title.replace(/\?$/, ''),
@@ -82,14 +83,20 @@ function submit() {
       :title="page.title"
       subtitle="Answer what matters and the planner fills in the rest. Every setting is still there under All settings."
     />
-    <div v-if="!page.topics" class="guided-progress" role="list">
-      <span
-        v-for="p in page.progress"
-        :key="p.id"
-        role="listitem"
-        :class="p.state"
-        :aria-current="p.state === 'current' ? 'step' : undefined"
-        ><i></i>{{ p.label }}</span
+    <div v-if="!page.topics" class="guided-stepper">
+      <div class="guided-progress" role="list">
+        <span
+          v-for="(p, i) in page.progress"
+          :key="p.id"
+          role="listitem"
+          :class="p.state"
+          :aria-current="p.state === 'current' ? 'step' : undefined"
+          ><i aria-hidden="true">{{ i + 1 }}</i
+          ><b class="guided-step-label">{{ p.label }}</b></span
+        >
+      </div>
+      <span class="guided-count" data-guided-count
+        >{{ page.index + 1 }} of {{ page.progress.length }}</span
       >
     </div>
     <form
