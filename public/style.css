@@ -1145,6 +1145,7 @@ p.eyebrow {
   margin: 20px 0 10px;
 }
 .factory-card {
+  position: relative;
   background: var(--raise);
   border: 1px solid var(--line);
   box-shadow:
@@ -1218,6 +1219,27 @@ p.eyebrow {
 }
 .factory-card .name:hover {
   color: var(--accent-hi);
+}
+/* The name opens the card's dialog, and its hit area covers the whole card (SP-19); the Running
+   box and the group editor sit above it and keep working on their own. With the name focused
+   from the keyboard, the card shows the focus ring. */
+.factory-card .name::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+.factory-card .name:focus-visible {
+  outline: none;
+}
+.factory-card:has(.name:focus-visible) {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+.factory-card .check-row,
+.factory-card .assign-editor {
+  position: relative;
+  z-index: 1;
 }
 .factory-card .output {
   font-family: var(--head);

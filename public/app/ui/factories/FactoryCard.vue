@@ -1,7 +1,7 @@
 <!--
   A handbook factory's card at the current stage. Its Running box writes the saved check key
-  `factory-<stage>-<id>` (toggleCheck in ui/actions.ts); its name and "Details ↗" open the
-  factory dialog (factoryLink()). Inside a group it
+  `factory-<stage>-<id>` (toggleCheck in ui/actions.ts); its name opens the factory dialog
+  (factoryLink()), and so does a click anywhere else on the card (SP-19). Inside a group it
   shows that group's share of the output; while editing groups, its group editor.
   The same structure as CalcFactoryCard.vue (SP-14): the output with its unit as the headline,
   machines and the last one's clock on the line below it, then the recipe. The chip at the top
@@ -81,7 +81,7 @@ const card = computed(() =>
           @change="toggleCheck"
           :checked="card.done"
         />Running</label
-      ><button class="btn quiet" v-bind="factoryLink({ factory: factory.id })">Details ↗</button>
+      >
     </footer>
     <AssignEditor v-if="card.editing" :factory-key="factory.id" />
   </article>

@@ -96,12 +96,37 @@ beforeEach(() => {
   go('factories');
 });
 
+// SP-19 (#254): a card has one control for its dialog, the name, and one for the Running box; the
+// name's hit area covering the card is CSS (tests/style.test.ts, and checked in a browser).
+test('each factory card has one dialog button and one Running box (SP-19)', async () => {
+  const tabStops = (card: Element) =>
+    [...card.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea')].map(e =>
+      e.matches('input[type=checkbox]')
+        ? 'checkbox'
+        : e.classList.contains('name')
+          ? 'name'
+          : e.outerHTML,
+    );
+  render();
+  for (const card of $$('#main .factory-card')) {
+    assert.deepEqual(tabStops(card), ['name', 'checkbox']);
+    assert.doesNotMatch(card.textContent!, /Details/);
+  }
+  open({ calculated: generated() });
+  render();
+  await nextTick();
+  const cards = $$('#main .factory-card');
+  assert.ok(cards.length > 0);
+  for (const card of cards) assert.deepEqual(tabStops(card), ['name', 'checkbox']);
+});
+
 test('shared sites group their outputs above the individual factory list', async () => {
   render();
   const sites = $$('#main .site-group');
   assert.equal(sites[0]!.querySelector('h2')!.textContent, 'Oil campus');
   assert.equal(sites[0]!.querySelector('.eyebrow')!.textContent, 'SHARED SITE · 2 OUTPUTS');
-  assert.equal($$('#main [data-factory="plastic"]').length, 2, 'Plastic sits only in the campus');
+  // One card, whose name is its one dialog button (SP-19: no Details ↗ beside it).
+  assert.equal($$('#main [data-factory="plastic"]').length, 1, 'Plastic sits only in the campus');
   assert.ok(!$$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
   assert.equal($('#main > .eyebrow')!.textContent, 'UNGROUPED FACTORIES');
   open({ phase: '5' });

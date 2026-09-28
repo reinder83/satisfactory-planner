@@ -262,3 +262,20 @@ test('the navigation shows its glyphs, the open page in the accent colour (SP-10
   assert.ok(active, 'a rule for the open page');
   assert.match(active.body, /color:\s*var\(--accent\)/);
 });
+
+// SP-19 (#254): a factory card's name covers the card as its hit area, under the Running box and
+// the group editor, and the card shows the name's keyboard focus.
+test('a factory card opens from anywhere but its Running box (SP-19)', () => {
+  const all = rules(screenCss());
+  const body = (sel: string) => all.find(r => r.selector === sel)?.body ?? '';
+  assert.match(body('.factory-card'), /position:\s*relative/);
+  const hit = body('.factory-card .name::after');
+  assert.match(hit, /position:\s*absolute/);
+  assert.match(hit, /inset:\s*0/);
+  const above = all.find(
+    r => r.selector.split(/\s*,\s*/).includes('.factory-card .check-row') && /z-index/.test(r.body),
+  );
+  assert.ok(above, 'the Running box sits above the hit area');
+  assert.match(above.selector, /\.factory-card \.assign-editor/, 'and so does the group editor');
+  assert.match(body('.factory-card:has(.name:focus-visible)'), /outline:/);
+});
