@@ -85,10 +85,10 @@ const page = computed(() =>
         impure: sample('Iron Ore', 'impure'),
         normal: sample('Iron Ore', 'normal'),
         pure: sample('Iron Ore', 'pure'),
-        oil: sample('Crude Oil', 'normal'),
-        well: num(Math.round(wellYield('normal', e))),
+        oil: itemRate('Crude Oil', Math.round(nodeYield('Crude Oil', 'normal', e))),
+        well: itemRate('Crude Oil', Math.round(wellYield('normal', e))),
       },
-      water: num(wizard.settings.limits.Water),
+      water: itemRate('Water', wizard.settings.limits.Water || 0),
       budgets,
       empty: empty.length
         ? {
@@ -181,8 +181,8 @@ function submit() {
         <div class="notice info">
           <b>At these settings</b> one iron node gives {{ page.samples.impure }}/min impure,
           {{ page.samples.normal }}/min normal and {{ page.samples.pure }}/min pure. A crude oil
-          node gives {{ page.samples.oil }}/min normal, and one resource-well satellite
-          {{ page.samples.well }}/min.
+          node gives {{ page.samples.oil }} normal, and one resource-well satellite
+          {{ page.samples.well }}.
         </div>
       </template>
       <template v-else-if="page.step === 2">
@@ -210,8 +210,8 @@ function submit() {
         <div class="notice info">
           <ItemIcon name="Water" /> <b>Water is not counted.</b> Extractors sit on any lake or ocean
           and there is far more coastline than a factory can draw on, so a node count would be a
-          fiction. The planner keeps its standing water allowance of {{ page.water }}/min, which you
-          can still change in All settings if you want to model a genuinely constrained site.
+          fiction. The planner keeps its standing water allowance of {{ page.water }}, which you can
+          still change in All settings if you want to model a genuinely constrained site.
         </div>
       </template>
       <template v-else-if="page.step === 4">
