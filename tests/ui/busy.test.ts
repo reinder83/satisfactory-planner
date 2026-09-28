@@ -214,7 +214,10 @@ test('a progress checkbox on the build plan keeps focus while it saves', async (
   await net.release();
   assert.equal(state.checks[key], true);
   assert.ok(ready(sel));
-  assert.ok(focusedOn(sel), describeFocus());
+  // Once saved, the ticked step folds into "Done (n)" (SP-42), and focus goes on to the step
+  // that now leads the list.
+  assert.ok($(`#main .done-group [data-check="${key}"]`));
+  assert.ok(focusedOn('#main [data-open-steps] > .task.lead input[data-check]'), describeFocus());
 });
 
 test('a factory dialog’s Running box in the header keeps focus while it saves (#239)', async () => {

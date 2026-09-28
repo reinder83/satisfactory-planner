@@ -134,8 +134,19 @@ try {
   assert.equal(await page.locator('#phase-note-1').inputValue(), 'Remember my iron site');
   assert.equal(await page.locator('#global-note').inputValue(), 'Seed and routes');
   await page.goto(base + '#plan');
-  await page.locator(`[data-check="${key}"]`).waitFor();
-  assert.ok(await page.locator(`[data-check="${key}"]`).isChecked());
+  // A ticked step folds into "Done (n)" under the list (SP-42): open it from the keyboard, and
+  // the step is there, still ticked, while the next one leads the list.
+  const done = page.locator('#main .done-group');
+  await done.locator('> summary').focus();
+  await page.keyboard.press('Enter');
+  const ticked = done.locator(`[data-check="${key}"]`);
+  await ticked.waitFor();
+  assert.ok(await ticked.isChecked());
+  assert.notEqual(
+    await page.locator('#main .task.lead [data-check]').getAttribute('data-check'),
+    key,
+    'the next step leads',
+  );
   // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
   // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,
   // so a point on it hits the <dialog> itself.

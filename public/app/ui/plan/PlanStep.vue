@@ -2,9 +2,11 @@
   One step of the build-plan checklist. Its checkbox writes the step's saved checklist key
   (toggleCheck in ui/actions.ts, which the storage page's checklists use too); its
   "Open factory" link is a factoryLink(). In edit mode it adds move, edit and remove tools. `step` is a row from
-  Checklist.vue: the step as the user sees it, with its icon, link and checkmark.
+  Checklist.vue: the step as the user sees it, with its icon, link and checkmark. The lead step
+  (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done.
 -->
 <script setup lang="ts">
+import { nextTick, ref } from 'vue';
 import { save } from '../../api.ts';
 import { phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -15,9 +17,58 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
-const props = withDefaults(defineProps<{ step: PlanStepView; editing?: boolean }>(), {
-  editing: false,
-});
+const props = withDefaults(
+  defineProps<{ step: PlanStepView; editing?: boolean; lead?: boolean }>(),
+  { editing: false, lead: false },
+);
+
+// Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42),
+// so its row is drawn anew and focus would fall to <body>. Ticked, focus goes to the same
+// control in the step that took its place, the next lead's when it led; unticked, to the step
+// itself where it now stands among the unfinished ones.
+const openRows = {
+  row: '#main [data-open-steps] > .task',
+  fallback: ['#main .done-group > summary', '#plan-search'],
+};
+function focusStep(id: string, control: string) {
+  return async () => {
+    await nextTick();
+    const current = document.activeElement;
+    if (current && current !== document.body && current.isConnected) return;
+    [...document.querySelectorAll<HTMLElement>('#main .task')]
+      .find(t => t.querySelector<HTMLElement>(`[data-check]`)?.dataset.check === id)
+      ?.querySelector<HTMLElement>(control)
+      ?.focus();
+  };
+}
+async function check(e: Event) {
+  const el = e.target as HTMLInputElement;
+  const refocus = el.checked
+    ? refocusAfterRemoval(el, { ...openRows, control: 'input[data-check]' })
+    : focusStep(props.step.id, 'input[data-check]');
+  await toggleCheck(e);
+  await refocus();
+}
+
+// "Mark done" on the lead step: the same saved checklist key as its checkbox. Focus goes on to
+// the next lead step's Mark done.
+const marking = ref(false);
+async function markDone(e: Event) {
+  if (marking.value) return;
+  const refocus = refocusAfterRemoval(e.currentTarget, {
+    ...openRows,
+    control: '[data-mark-done]',
+  });
+  marking.value = true;
+  try {
+    await save({ type: 'check', key: props.step.id, value: true });
+    render();
+    await refocus();
+  } catch {
+  } finally {
+    marking.value = false;
+  }
+}
 
 // ↑ / ↓: move the step past its neighbour on screen and save this phase's whole order
 // (taskOrder). Steps hidden by "Hide completed" or the search keep their places, so a step
@@ -104,20 +155,30 @@ async function deletePersonal(e: Event) {
 </script>
 
 <template>
-  <article :class="['task', editing ? 'is-editing' : '']">
+  <article :class="['task', editing ? 'is-editing' : '', lead ? 'lead' : '']">
+    <div v-if="lead" class="step-no">Next step</div>
     <input
       type="checkbox"
       :data-check="step.id"
-      @change="toggleCheck"
+      @change="check"
       :aria-label="'Complete: ' + step.title"
       :checked="step.done"
     /><StepIcon :icon="step.icon" />
-    <details :data-task="step.id">
+    <details :data-task="step.id" :open="lead">
       <summary>{{ step.title }}</summary>
       <p>{{ step.body || 'Your own task for this phase.' }}</p>
       <button
+        v-if="lead"
+        type="button"
+        class="btn primary lead-done-btn"
+        data-mark-done
+        :aria-disabled="marking || undefined"
+        @click="markDone"
+      >
+        Mark done</button
+      ><button
         v-if="step.link"
-        class="btn quiet task-link"
+        :class="['btn', lead ? '' : 'quiet', 'task-link']"
         v-bind="
           factoryLink(step.link.calc ? { calcFactory: step.link.id } : { factory: step.link.id })
         "
