@@ -57,7 +57,7 @@ const page = computed(() =>
 const exporting = ref(false);
 // The saves ticked under "Choose saves to export" (#160), by id.
 const chosen = ref<string[]>([]);
-// "Import saves" and "Choose backup (file)" are real buttons that open a file input kept out of
+// "Import saves…" and "Restore this profile…" are real buttons that open a file input kept out of
 // sight (.visually-hidden) and out of the tab order, so they can be reached with Tab and
 // pressed with Enter or Space (#307): a label around a `hidden` input could only be clicked.
 // The input keeps its id and change handler, so what happens after a file is chosen is
@@ -140,7 +140,7 @@ async function importSaves(e: Event) {
   }
 }
 
-// "Choose backup file": replace this profile's progress with a progress-only backup. Only the
+// "Restore this profile…": replace this profile's progress with a progress-only backup. Only the
 // two server versions of the page bind it (calculated and handbook); the browser edition's page
 // has no progress download or restore, and moves saves with Export/Import saves instead, though
 // browser-api.ts answers /api/import the same way for parity.
@@ -197,7 +197,7 @@ async function persistStorage() {
   <template v-if="page.kind === 'browser'">
     <PageHeader
       eyebrow="SAVED ON THIS DEVICE"
-      title="Backups & transfer"
+      title="Backup"
       subtitle="No account or server is needed. Saves do not sync automatically between browsers."
     />
     <BrowserNotice />
@@ -233,7 +233,7 @@ async function persistStorage() {
       Export all saves
     </button>
     <button type="button" class="btn" data-import-saves @click="importSavesInput?.click()">
-      Import saves</button
+      Import saves…</button
     ><input
       id="import-saves"
       ref="importSavesInput"
@@ -307,8 +307,8 @@ async function persistStorage() {
   <template v-else-if="page.kind === 'calculated'">
     <div class="backup-grid">
       <section class="panel">
-        <h2>Download progress</h2>
-        <a class="btn primary" :href="page.exportUrl" download>Download progress JSON</a>
+        <h2>Download this profile</h2>
+        <a class="btn primary" :href="page.exportUrl" download>Download this profile</a>
         <p class="small muted">
           For all accounts, profiles and calculation snapshots, back up the Docker data volume. This
           download contains only this profile’s progress.
@@ -318,7 +318,7 @@ async function persistStorage() {
         <h2>Restore this profile</h2>
         <p>Restore replaces only this profile’s progress, after confirmation.</p>
         <button type="button" class="btn" data-restore-backup @click="restoreInput?.click()">
-          Choose backup</button
+          Restore this profile…</button
         ><input
           id="import-file"
           ref="restoreInput"
@@ -346,22 +346,22 @@ async function persistStorage() {
   <template v-else>
     <div class="backup-grid">
       <section class="panel">
-        <h2>Download a backup</h2>
+        <h2>Download this profile</h2>
         <p>Save a copy of your checkmarks, delivery counts, personal tasks and notes.</p>
-        <a class="btn primary" :href="page.exportUrl" download>Download progress JSON ↓</a>
+        <a class="btn primary" :href="page.exportUrl" download>Download this profile</a>
         <p class="small muted">
           The Docker volume keeps progress through container updates. This download gives you a
           separate copy.
         </p>
       </section>
       <section class="panel">
-        <h2>Restore a backup</h2>
+        <h2>Restore this profile</h2>
         <p>
           Import a backup from this planner. It replaces current progress after confirmation;
           factory-plan data stays unchanged.
         </p>
         <button type="button" class="btn" data-restore-backup @click="restoreInput?.click()">
-          Choose backup file</button
+          Restore this profile…</button
         ><input
           id="import-file"
           ref="restoreInput"

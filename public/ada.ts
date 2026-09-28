@@ -320,7 +320,7 @@ const RULES: AdaRule[] = [
     tone: 'warn',
     when: f => f.browserMode && f.backupDays === null,
     text: () =>
-      `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backups & transfer → Export all saves.`,
+      `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
   },
   {
     id: 'backup-old',
