@@ -3771,8 +3771,11 @@ button.rail-tile:hover {
     clip-path: inset(50%);
     white-space: nowrap;
   }
+  /* A thinner hazard stripe on a phone (SP-39): 4px rather than 7px. */
   .topbar {
     padding: 11px 16px;
+    border-bottom-width: 4px;
+    border-image: var(--hazard) 4;
   }
   .topbar-lead {
     display: flex;

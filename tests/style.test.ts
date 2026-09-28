@@ -288,3 +288,16 @@ test('the guided stepper is legible: 13px numbered steps, the current one in the
   assert.doesNotMatch(body('.guided-progress'), /var\(--dim\)/);
   assert.match(body('.guided-progress i'), /width: 22px/);
 });
+
+test('the top bar’s hazard stripe is 7px, and 4px on a phone (SP-39)', () => {
+  const css = screenCss().replace(/\r/g, '');
+  const top = rules(css).find(r => r.selector === '.topbar')!.body;
+  assert.match(top, /border-bottom: 7px solid/);
+  assert.match(top, /border-image: var\(--hazard\) 7/);
+  // The phone drawer's block (SP-37) holds the phone top bar.
+  const start = css.lastIndexOf('@media (max-width: 720px)', css.indexOf('.menu-open .sidebar'));
+  const at = css.indexOf('\n  .topbar {', start);
+  const body = css.slice(at, css.indexOf('}', at));
+  assert.match(body, /border-bottom-width: 4px/);
+  assert.match(body, /border-image: var\(--hazard\) 4/);
+});
