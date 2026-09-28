@@ -246,3 +246,19 @@ test('an empty wizard error notice takes no space (SP-34)', () => {
   assert.ok(hidden, 'a rule for the empty error notice');
   assert.match(hidden.body, /display:\s*none/);
 });
+
+// SP-10 (#245): the navigation shows each page's glyph, not a 01–07 count, and the open page's
+// glyph in the accent colour.
+test('the navigation shows its glyphs, the open page in the accent colour (SP-10)', () => {
+  const css = screenCss();
+  const all = rules(css);
+  assert.doesNotMatch(css, /counter\(navstep\)|counter-(reset|increment):\s*navstep/);
+  const icon = all.find(r => r.selector === '.navicon');
+  assert.ok(icon, 'a .navicon rule');
+  assert.doesNotMatch(icon.body, /font-size:\s*0\b/, 'the glyph is not hidden');
+  assert.match(icon.body, /font-size:\s*14px/);
+  assert.match(icon.body, /color:\s*var\(--dim\)/);
+  const active = all.find(r => r.selector === '.nav a.active .navicon');
+  assert.ok(active, 'a rule for the open page');
+  assert.match(active.body, /color:\s*var\(--accent\)/);
+});

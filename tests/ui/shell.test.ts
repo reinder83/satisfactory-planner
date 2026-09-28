@@ -88,6 +88,10 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
       ['#backup', '⇅Backup'],
     ],
   );
+  // Each glyph is shown now (SP-10), and stays out of the link's name.
+  const icons = [...document.querySelectorAll('.nav a .navicon')];
+  assert.equal(icons.length, 7, 'every page has a glyph, Notes included');
+  for (const i of icons) assert.equal(i.getAttribute('aria-hidden'), 'true');
 });
 
 test('navigation marks the current page', async () => {
