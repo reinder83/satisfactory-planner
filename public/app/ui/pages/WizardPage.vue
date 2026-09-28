@@ -100,7 +100,7 @@ async function submit(e: Event) {
   </template>
   <template v-else>
     <BrowserNotice v-if="browserMode" />
-    <PageHeader eyebrow="SAVE → SETTINGS → GOALS → PLAN" :title="page.title" />
+    <PageHeader eyebrow="NEW PROFILE" :title="page.title" />
     <div class="wizard-progress">
       <button
         v-for="(n, i) in STEPS"
