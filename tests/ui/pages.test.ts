@@ -8,6 +8,7 @@ import { boot, currentSave, state, workspace } from '../../public/app/session.ts
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { num } from '../../public/app/format.ts';
+import { power } from '../../public/app/wizard/fields.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
@@ -635,13 +636,14 @@ test('the calculated resources page shows every budget with its icon and what is
   assert.ok(rows[0]!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over budget');
   for (const row of rows.slice(1))
     assert.ok(!row.querySelectorAll('td')[3]!.classList.contains('warn'), 'the others fit');
-  // The four power tiles; somersloops and augmenters only when the plan uses them.
+  // One power headroom bar instead of the tiles (SP-29); augmenters only when the plan has them.
+  assert.equal($$('#main .stat').length, 0);
   assert.deepEqual(
-    $$('#main .stat .eyebrow').map(e => e.textContent),
-    ['New generation', 'Whole-machine peak', 'With utility allowance', 'Existing spare power'],
+    $$('#main [data-power-part] .eyebrow').map(e => e.textContent),
+    ['Whole-machine peak', 'Utility allowance', 'New generation', 'Existing spare power'],
   );
   assert.equal(
-    $$('#main .stat small')[2]!.textContent,
+    $('#main [data-power-part="utility"] small')!.textContent,
     '20% for transport and utilities; verify actual load',
   );
   assert.match($('#main .backup-grid')!.textContent, /No raw-resource conversion required\./);
@@ -843,12 +845,19 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
   });
   openCalculatedResources(p);
   noMarkup();
-  const tiles = $$('#main .stat');
-  assert.equal(tiles.length, 6);
-  assert.equal(tiles[4]!.querySelector('strong')!.textContent, '12');
-  assert.equal(tiles[5]!.querySelector('strong')!.textContent, '5 GW');
+  // The somersloop and augmenter counts are legend captions of the power bar (SP-29).
+  assert.match(
+    $('#main [data-power-part="peak"] small')!.textContent,
+    /· 12 somersloops in production: amplified machines give double output at four times the power$/,
+  );
+  const spare = p.settings.availablePowerGW * 1000;
   assert.equal(
-    tiles[5]!.querySelector('small')!.textContent,
+    $('#main [data-power-part="boost"] b')!.textContent,
+    power(5000 - (x.generationMW ?? 0) - spare),
+    'what the augmenters add to the available power',
+  );
+  assert.equal(
+    $('#main [data-power-part="boost"] small')!.textContent,
     '2 augmenters · 100 MW plus 20% of base production',
   );
   assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
@@ -861,6 +870,60 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
     $('#main [data-rate-list="supplied"] .small.muted')!.textContent,
     /does not build these lines/,
   );
+});
+
+// SP-29 (#264): one bar of what the phase needs (peak + utility allowance) against what it has
+// (new generation + spare), on one scale, with a headline, a legend and a text alternative;
+// MW below 1,000 and GW above; a shortfall says so in red.
+test('the calculated resources page draws one power headroom bar (SP-29)', () => {
+  const plain = (s: string) => s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  const p = generated();
+  const x = p.stages['3'];
+  Object.assign(x, { peakMW: 2000, requiredMW: 2400, generationMW: 3000, augmenters: 0 });
+  p.settings.availablePowerGW = 0.2;
+  openCalculatedResources(p);
+  const bar = $('#main [data-power-headroom]')!;
+  const headline = plain(bar.querySelector('[data-power-headline]')!.textContent!);
+  // 3,2 GW available, 2,4 GW needed: 0,8 GW, a quarter, left over.
+  assert.equal(headline, `25% headroom ${power(2400)} needed of ${power(3200)} available`);
+  assert.ok(!bar.querySelector('.power-headline.short'));
+  const values = Object.fromEntries(
+    $$('#main [data-power-part]').map(li => [
+      li.dataset.powerPart,
+      li.querySelector('b')!.textContent,
+    ]),
+  );
+  assert.deepEqual(values, {
+    peak: `${num(2)} GW`,
+    utility: '400 MW',
+    generation: `${num(3)} GW`,
+    spare: '200 MW',
+  });
+  // Both bars share one scale, the larger of the two sides.
+  const widths = (side: string) =>
+    [...bar.querySelectorAll<HTMLElement>(`[data-power-bar="${side}"] span`)].map(
+      s => s.style.width,
+    );
+  assert.deepEqual(widths('demand'), ['62.5%', '12.5%']);
+  assert.deepEqual(widths('supply'), ['93.75%', '6.25%']);
+  // The bars are one image with every figure as text.
+  const img = bar.querySelector('[role="img"]')!;
+  assert.equal(
+    img.getAttribute('aria-label'),
+    `25% headroom. Needed: ${power(2400)} (${power(2000)} whole-machine peak + 400 MW utility allowance). Available: ${power(3200)} (${power(3000)} new generation + 200 MW existing spare power).`,
+  );
+  // Short: the headline says by how much, in red, and the supply bar shows the gap.
+  x.generationMW = 1000;
+  page();
+  openCalculatedResources(structuredClone(p));
+  const short = $('#main .power-headline.short')!;
+  assert.ok(short, 'the shortfall is marked');
+  assert.match(
+    plain(short.textContent!),
+    new RegExp(`^⚠ Short by ${power(1200).replace(/\./g, '\\.')}`),
+  );
+  assert.ok($('#main [data-power-bar="supply"] .seg-short'), 'the gap is drawn');
+  assert.match($('#main [role="img"]')!.getAttribute('aria-label')!, /^Short by /);
 });
 
 // Exactly what a profile calculated by an earlier release looks like: no existingSupply in
