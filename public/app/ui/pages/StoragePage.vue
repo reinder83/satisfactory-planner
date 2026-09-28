@@ -183,7 +183,8 @@ function showFloor(id: string) {
 
 // A search result (#240): switch to its floor, where it is marked as a match, and focus the
 // container's button (the target its dialog and Complete room use too). Focus moves without the
-// browser's own scroll, then the container is scrolled just into view.
+// browser's own scroll, then the whole container card (its address, item and Done box) is
+// scrolled just into view, not only the button, which ends above the Done box (#327).
 async function showMatch(m: StorageMatch) {
   if (m.floor !== floor) {
     setFloor(m.floor);
@@ -193,7 +194,10 @@ async function showMatch(m: StorageMatch) {
   const target = document.querySelector<HTMLElement>(`#main [data-slot="${CSS.escape(m.id)}"]`);
   if (!target) return;
   target.focus({ preventScroll: true });
-  target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  (target.closest<HTMLElement>('.slot') ?? target).scrollIntoView({
+    block: 'nearest',
+    inline: 'nearest',
+  });
 }
 
 function search(e: Event) {

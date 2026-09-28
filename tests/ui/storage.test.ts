@@ -348,6 +348,28 @@ test('a result switches to its floor, keeps the match marked and focuses the con
   assert.equal(document.activeElement, $('#main [data-slot="C04"]'));
 });
 
+// #327: the button ends above the card's Done box, so scrolling the button just into view left
+// the container half below the fold. The whole card is scrolled in; focus stays on the button.
+test('a result scrolls its whole container card into view, not only the button (#327)', async () => {
+  const scrolled: Element[] = [];
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolled.push(this);
+  };
+  try {
+    render();
+    await search('wir');
+    $<HTMLButtonElement>('[data-find-slot="K03"]')!.click();
+    await settle();
+    const card = $('#main [data-slot="K03"]')!.closest('.slot')!;
+    assert.deepEqual(scrolled, [card], 'the card, once');
+    assert.ok(card.querySelector('input[type=checkbox]'), 'the card holds the Done box');
+    assert.equal(document.activeElement, $('#main [data-slot="K03"]'), 'focus on the button');
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});
+
 test('switching floors keeps the query, and a floor without a match says so (#240)', async () => {
   render();
   await search('Quickwire');
