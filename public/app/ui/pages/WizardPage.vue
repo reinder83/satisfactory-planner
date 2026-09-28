@@ -128,6 +128,13 @@ async function submit(e: Event) {
         <GoalStep v-else-if="page.step === 3" />
         <ResourcesStep v-else-if="page.step === 4" />
         <ReviewStep v-else-if="page.step === 5" />
+        <p
+          id="wizard-error"
+          class="form-error notice error"
+          role="alert"
+          tabindex="-1"
+          data-wizard-error
+        ></p>
         <div class="wizard-actions">
           <button
             v-if="page.step === 1"
@@ -157,7 +164,6 @@ async function submit(e: Event) {
             ><button class="btn primary" type="submit">{{ page.submit }}</button></span
           >
         </div>
-        <p id="wizard-error" class="form-error" role="alert"></p>
       </form>
       <EstimatePanel v-if="estimating" />
     </div>

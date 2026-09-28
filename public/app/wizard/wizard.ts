@@ -378,15 +378,18 @@ const TIMEOUT_ADVICE = [
 ].join('');
 
 // Show a failed calculation or create in the form's error line (a toast when
-// there is none). A timeout gets suggestions; the message itself is escaped.
+// there is none). A timeout gets suggestions; the message itself is escaped. The line sits
+// above the step's buttons as an error notice (SP-34) and takes focus, which scrolls it into
+// view on a long step and has a screen reader read it out.
 export function wizardError(form: HTMLFormElement | null, err: Error) {
-  const el = form?.querySelector('.form-error');
+  const el = form?.querySelector<HTMLElement>('.form-error');
   if (!el) {
     toast(err.message, true);
     return;
   }
   if (/timed out/i.test(err.message)) el.innerHTML = esc(err.message) + TIMEOUT_ADVICE;
   else el.textContent = err.message;
+  el.focus();
 }
 
 // Review, "Create profile": create the profile (in a new save when saveId is empty) and open

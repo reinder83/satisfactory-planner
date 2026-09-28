@@ -356,7 +356,15 @@ test('the wizard shows calculation progress and options when the calculation tim
     `wizard={step:4,saveName:'W',name:'P',settings:structuredClone(generated.settings),preview:null};render=()=>{};`,
     c,
   );
-  const errorNode = { textContent: '', innerHTML: '' };
+  // The error line takes focus once set (SP-34).
+  const errorNode = {
+    textContent: '',
+    innerHTML: '',
+    focused: false,
+    focus() {
+      this.focused = true;
+    },
+  };
   const submitNode = { textContent: 'Calculate plan' };
   const form = {
     reportValidity: () => true,
@@ -394,6 +402,7 @@ test('the wizard shows calculation progress and options when the calculation tim
     'the button label is restored after a failure',
   );
   assert.match(errorNode.innerHTML, /timed out/, 'the timeout message is shown');
+  assert.equal(errorNode.focused, true, 'and takes focus');
   assert.match(
     errorNode.innerHTML,
     /Planner’s choice/,

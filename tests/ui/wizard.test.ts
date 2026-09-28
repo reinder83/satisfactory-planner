@@ -313,6 +313,13 @@ test('a failed calculation says why in the form and gives the button back', asyn
   assert.match(text('#wizard-error'), /timed out/);
   assert.match(text('#wizard-error'), /Planner’s choice/, 'with ways to get a plan');
   assert.match(text('#wizard-error'), /whole-machine production/);
+  // SP-34: the error is a notice above the buttons, and takes focus, so it is on screen and read
+  // out after a failed Continue on a long step.
+  const error = $('#wizard-error')!;
+  assert.ok(error.classList.contains('notice') && error.classList.contains('error'));
+  assert.equal(error.getAttribute('role'), 'alert');
+  assert.equal(error.nextElementSibling, $('#wizard-form .wizard-actions'), 'above the buttons');
+  assert.equal(document.activeElement, error, 'the error takes focus');
   const b = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
   assert.equal(b.textContent, 'Calculate plan');
   assert.equal(b.disabled, false);
@@ -831,6 +838,10 @@ test('a failed calculation with no topics ticked stays on the "what is different
   assert.equal(vuePage('wizard', null, wizard), GuidedPage);
   assert.ok($('.guided-topics'), 'the topic picker is still on screen');
   assert.match(text('#wizard-form .form-error'), /unexpected \/api\/preview/);
+  // SP-34: the guided start's error is the same notice above its buttons, and takes focus.
+  const error = $('#wizard-error.notice.error')!;
+  assert.equal(error.nextElementSibling, $('#wizard-form .wizard-actions'), 'above the buttons');
+  assert.equal(document.activeElement, error);
   assert.equal(wizard!.mode, 'guided');
   // Trying again once it can be calculated goes on to Review.
   stubFetch({ '/api/preview': generated() });

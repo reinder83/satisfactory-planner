@@ -239,3 +239,10 @@ test('every notice colour has its own print colour, so bold text and links print
   if (!override('.notice a', 'color')) missing.push('.notice a');
   assert.deepEqual(missing, []);
 });
+
+// SP-34: the wizard's error line is a notice, and an empty one takes no space.
+test('an empty wizard error notice takes no space (SP-34)', () => {
+  const hidden = rules(screenCss()).find(r => r.selector === '.notice.form-error:empty');
+  assert.ok(hidden, 'a rule for the empty error notice');
+  assert.match(hidden.body, /display:\s*none/);
+});

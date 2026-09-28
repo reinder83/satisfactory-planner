@@ -131,6 +131,13 @@ function submit() {
         </div>
         <GuidedTopup v-if="page.question.id === 'stock'" />
       </template>
+      <p
+        id="wizard-error"
+        class="form-error notice error"
+        role="alert"
+        tabindex="-1"
+        data-wizard-error
+      ></p>
       <div class="wizard-actions">
         <button
           v-if="page.first"
@@ -164,7 +171,6 @@ function submit() {
           </button></span
         >
       </div>
-      <p id="wizard-error" class="form-error" role="alert"></p>
     </form>
   </template>
 </template>

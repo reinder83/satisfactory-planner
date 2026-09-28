@@ -3280,6 +3280,15 @@ button.rail-tile:hover {
 .form-error:empty {
   margin: 0;
 }
+/* The wizard's error line (SP-34): an error notice above the step's buttons that takes focus
+   when set (wizardError), and takes no space while empty. */
+.notice.form-error:empty {
+  display: none;
+}
+.notice.form-error:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
 .form-error .error-options {
   display: block;
   margin-top: 8px;
