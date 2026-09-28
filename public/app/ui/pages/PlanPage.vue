@@ -18,6 +18,7 @@ import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import PlanEditBar from '../plan/PlanEditBar.vue';
 
 const page = computed(() =>
   legacy(() => {
@@ -61,6 +62,7 @@ const page = computed(() =>
     "
     badge="YOUR SAVE · YOUR PACE"
   />
+  <PlanEditBar />
   <div class="stats">
     <StatTile label="Phase checklist" caption="Steps completed"
       >{{ page.done }} <span class="fraction">/ {{ page.total }}</span></StatTile

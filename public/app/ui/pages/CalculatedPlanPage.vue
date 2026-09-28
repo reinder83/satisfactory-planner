@@ -30,6 +30,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import PlanEditBar from '../plan/PlanEditBar.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
@@ -66,6 +67,7 @@ const page = computed(() =>
       :title="page.title"
       :subtitle="page.profileName"
     />
+    <PlanEditBar />
     <CalcWarnings />
     <div class="stats">
       <StatTile label="Progress" :value="page.progress" caption="Checklist steps" />

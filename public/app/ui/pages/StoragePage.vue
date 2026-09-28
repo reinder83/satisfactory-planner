@@ -42,6 +42,7 @@ import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
+import EditBar from '../EditBar.vue';
 import PageHeader from '../PageHeader.vue';
 import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';
@@ -328,6 +329,12 @@ function toggleLayout() {
         ? 'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.'
         : 'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.'
     "
+  />
+  <EditBar
+    v-if="page.editing"
+    label="Editing the layout"
+    toggle="[data-toggle-layout]"
+    :done="toggleLayout"
   />
   <div class="toolbar">
     <!-- A tab's count is part of its name as words ("Ground floor, 41 of 64 done", which starts

@@ -3662,6 +3662,40 @@ button.rail-tile:hover {
 }
 
 /* ── Plan step editing ─────────────────────────────────── */
+/* The bar an edit mode shows while it is on (SP-13, ui/EditBar.vue): sticky at the top of the
+   page as it scrolls, with a 4px hazard strip over a warm edge. */
+.edit-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 16px;
+  padding: 14px 14px 10px;
+  background: var(--panel);
+  border: 1px solid var(--warm-border);
+  box-shadow: var(--drop);
+}
+.edit-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--hazard);
+}
+.edit-bar-label {
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bright);
+}
 .head-tools {
   display: flex;
   align-items: center;

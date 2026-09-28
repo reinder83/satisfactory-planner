@@ -35,6 +35,7 @@ import { inputText } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import CollapseToggle from '../factories/CollapseToggle.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
+import GroupEditBar from '../factories/GroupEditBar.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
@@ -150,6 +151,7 @@ function search(e: Event) {
       title="Factory targets"
       subtitle="Outputs include downstream supply, protected storage and elevator exports. Click a factory for its inputs and expansion history."
     />
+    <GroupEditBar />
     <div v-if="page.post" class="notice info">
       These are retained Phase 5 capacities, not mandatory post-game output rates. Give new storage
       items priority before committing all spare output to sinks.
