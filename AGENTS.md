@@ -31,6 +31,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `build.ts` | Release build: minified Docker frontend (`dist/web`) and allowlisted Pages edition (`dist/satisfactory-planner`); adapts the calculator for browser execution |
 | `tests/`, `browser-check.ts` | Server, calculator, interface and real-browser checks |
 | `.github/workflows/docker.yml` | Tests, Docker publishing, public-site publishing |
+| `ci/nas-runner/` | Self-hosted runner on the Synology NAS for the `test` job (switched by the `TEST_RUNNER` variable) |
 
 `dist/` is generated. Change source files, then rebuild. `data/` is live local user data, not test data. Do not read credentials, print its contents, delete it, overwrite it, or include it in commits/build artifacts. Use temporary data directories for tests. Keep `.env` and account/session secrets private.
 
@@ -159,7 +160,7 @@ The backlog (bugs, feature requests, cleanup) lives in GitHub Issues on `reinder
 - Public URL: `https://reinder83.github.io/satisfactory-planner/`.
 - Docker image: `ghcr.io/reinder83/satisfactory-planner:latest` (AMD64 and ARM64).
 
-Pushes to source `main` run checks and publish both editions. Pull requests run checks without deployment. The source workflow uses the repository-scoped `PAGES_DEPLOY_KEY` secret to push only built website files to the public repository; its own Pages workflow deploys them. Do not replace this with a broad personal token or make the private source public. No live data, private handbook targets, account records or workspace files belong in the public build.
+Pushes to source `main` run checks and publish both editions. Pull requests run checks without deployment. The `test` job runs on a self-hosted runner on the owner's NAS when the `TEST_RUNNER` repository variable is set, to save Actions minutes, and on `ubuntu-latest` otherwise (see `ci/nas-runner/README.md`); keep it working on both. The source workflow uses the repository-scoped `PAGES_DEPLOY_KEY` secret to push only built website files to the public repository; its own Pages workflow deploys them. Do not replace this with a broad personal token or make the private source public. No live data, private handbook targets, account records or workspace files belong in the public build.
 
 Frontend assets added during a redesign need entries in the Pages allowlist in `build.ts` and must be available in Docker too; a new script at the root of `public/` must be listed as shared or bundled there, or the build fails. Preserve subpath-safe URLs and worker/WASM loading. Do not add a backend dependency to the public edition. Preserve PUID/PGID/TZ, privilege dropping and data-volume compatibility in Docker.
 
