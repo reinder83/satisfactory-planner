@@ -34,6 +34,7 @@ import {
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
+import { confirmAction } from '../confirm.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import { pickFactoryFilter } from '../actions.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
@@ -90,9 +91,17 @@ function search(e: Event) {
 // it. The button shows the calculation's progress meanwhile, busy (app/busy.ts) so it keeps
 // focus (#299). The rounded profile's page has no such button, so focus then goes to its
 // heading (refocusOnOpenedPage in ui/refocus.ts, #300, #304).
+// "Round up production…" (SP-18): a one-line offer whose explanation is in the confirm dialog
+// (ui/confirm.ts, SP-06); confirmed, the flow is as before.
 async function roundUp(e: Event) {
   const b = e.currentTarget as HTMLButtonElement;
-  if (isBusy(b) || !(await allowSwitch())) return;
+  if (isBusy(b)) return;
+  const confirmed = await confirmAction({
+    title: 'Round up production?',
+    body: 'Creates a recalculated profile revision that prefers extra production over underclocking. Your previous profile stays available; increased factory requirements are marked for review.',
+    confirmLabel: 'Round up production',
+  });
+  if (!confirmed || !(await allowSwitch())) return;
   const refocus = refocusOnOpenedPage(b);
   await whileBusy(b, async () => {
     try {
@@ -114,7 +123,7 @@ async function roundUp(e: Event) {
       void refocus();
     } catch (err) {
       toast((err as Error).message, true);
-      b.textContent = 'Round up production';
+      b.textContent = 'Round up production…';
     }
   });
 }
@@ -127,13 +136,9 @@ async function roundUp(e: Event) {
       title="Factory targets"
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
-    <div v-if="!page.whole" class="notice info">
+    <div v-if="!page.whole" class="notice info round-up-offer">
       Prefer extra production over underclocking?
-      <button class="btn primary" data-round-up @click="roundUp">Round up production</button>
-      <p>
-        Creates a recalculated profile revision. Your previous profile stays available; increased
-        factory requirements are marked for review.
-      </p>
+      <button class="btn quiet" data-round-up @click="roundUp">Round up production…</button>
     </div>
     <div v-else class="notice info">
       Whole-machine production: protect downstream supply first, refill storage, then sink surplus
