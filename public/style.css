@@ -1682,6 +1682,24 @@ td.warn {
   color: var(--red);
   font-weight: 600;
 }
+/* The phase being worked on in a factory dialog's expansion table (SP-22): an accent left edge
+   and a "current" tag, so it is not marked by colour alone. */
+tr.current-phase td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--bright);
+}
+tr.current-phase td {
+  color: var(--bright);
+}
+.phase-tag {
+  display: block;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--accent);
+}
 td:first-child {
   font-family: var(--head);
   font-size: 15px;

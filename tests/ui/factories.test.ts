@@ -1941,6 +1941,53 @@ test('a calculated factory dialog shows its flow, setup and expansion', () => {
   assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + r.id);
 });
 
+// SP-22 (#257): both dialogs' expansion tables name each phase and mark the one being worked on
+// with an accent edge and a "current" tag; Post Phase 5 works on Phase 5's row, and says so.
+test('the expansion tables label their phases and mark the current one (SP-22)', () => {
+  const rows = () => $$('#detail table').at(-1)!.querySelectorAll('tbody tr');
+  const summary = () =>
+    [...rows()].map(tr => [
+      tr.querySelector('td')!.textContent!.replace(/\s+/g, ' ').trim(),
+      tr.classList.contains('current-phase'),
+      tr.getAttribute('aria-current'),
+    ]);
+  // A calculated factory at Phase 4.
+  open({ calculated: plan, phase: '4' });
+  render();
+  const r = calcStage()!.rows![0]!;
+  openCalculatedFactory(r.id);
+  const calc = summary();
+  assert.ok(
+    calc.every(([label]) => /^Phase \d/.test(label as string)),
+    JSON.stringify(calc),
+  );
+  assert.deepEqual(
+    calc.filter(([, current]) => current),
+    [['Phase 4current', true, 'true']],
+  );
+  // At Post Phase 5 the Phase 5 row is current.
+  open({ calculated: plan, phase: 'post' });
+  render();
+  openCalculatedFactory(calcStage()!.rows![0]!.id);
+  assert.deepEqual(
+    summary().filter(([, current]) => current),
+    [['Phase 5current: Post Phase 5', true, 'true']],
+  );
+  // The handbook dialog does the same.
+  open({ phase: '4' });
+  render();
+  openFactory('wire');
+  const hb = summary();
+  assert.deepEqual(
+    hb.map(([label]) => (label as string).replace('current', '')),
+    ['Phase 3', 'Phase 4', 'Phase 5'],
+  );
+  assert.deepEqual(
+    hb.filter(([, current]) => current),
+    [['Phase 4current', true, 'true']],
+  );
+});
+
 // The Running box sits in the dialog's sticky header, between the title and the ×, and writes
 // the same key as the factory's card (#239).
 const headerRunning = async (key: string, label: RegExp, openIt: () => void) => {

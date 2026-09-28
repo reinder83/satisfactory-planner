@@ -215,8 +215,25 @@ export function calcExpansion(id: string) {
     const required = p.rows?.find(x => x.id === id)?.machines || 0;
     const add = Math.max(0, required - installed);
     installed = Math.max(installed, required);
-    return { phase: ph, required: required || '—', add: add ? '+' + add : '—' };
+    return {
+      phase: ph,
+      ...expansionPhase(ph),
+      required: required || '—',
+      add: add ? '+' + add : '—',
+    };
   });
+}
+
+// An expansion table row's phase (SP-22): its label, and whether it is the phase being worked
+// on, which the dialogs mark with an accent edge and a "current" tag. Post Phase 5 works on
+// Phase 5's targets, so that row is the current one then, and its tag says so.
+export function expansionPhase(ph: string) {
+  const current = ph === stage();
+  return {
+    label: phaseLabel(ph),
+    current,
+    tag: current ? (phase() === 'post' ? 'current: Post Phase 5' : 'current') : '',
+  };
 }
 
 // The open calculated stage's build-so-far status (build-status.ts, #66): what the factory rows

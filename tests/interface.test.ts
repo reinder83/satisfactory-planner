@@ -615,7 +615,16 @@ test('a profile only offers the phases it was created for', () => {
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
   assert.deepEqual(
     rows[0],
-    { phase: '3', required: 4, add: '+4' },
+    { phase: '3', label: 'Phase 3', current: true, tag: 'current', required: 4, add: '+4' },
     'the starting phase builds its own machines from scratch',
+  );
+  // Each row is labelled; only the phase worked on is current (SP-22).
+  assert.deepEqual(
+    rows.map(r => [r.label, r.current]),
+    [
+      ['Phase 3', true],
+      ['Phase 4', false],
+      ['Phase 5', false],
+    ],
   );
 });
