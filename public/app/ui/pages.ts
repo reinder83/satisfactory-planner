@@ -12,6 +12,7 @@ import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
 import FactoriesPage from './pages/FactoriesPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
+import NoSavePage from './pages/NoSavePage.vue';
 import NotesPage from './pages/NotesPage.vue';
 import PlanPage from './pages/PlanPage.vue';
 import ProfilesPage from './pages/ProfilesPage.vue';
@@ -20,6 +21,10 @@ import StoragePage from './pages/StoragePage.vue';
 import SurveyPage from './pages/SurveyPage.vue';
 import WizardPage from './pages/WizardPage.vue';
 
+// The pages that show the open save's plan: with no save open (an empty workspace, #281) they
+// give way to NoSavePage, which offers to create one.
+const NEEDS_SAVE: View[] = ['plan', 'factories', 'logistics', 'storage', 'resources', 'notes'];
+
 // The component for `view`, or null for an unknown one. #wizard depends on the draft
 // (`draft`, the wizard object): the node survey, the guided questions until they are
 // answered, and otherwise the five steps, whose Review also ends the guided start.
@@ -27,7 +32,9 @@ export function vuePage(
   view: View,
   calculated: StoredCalculatedPlan | null,
   draft: WizardDraft | null,
+  hasSave = true,
 ): Component | null {
+  if (!hasSave && NEEDS_SAVE.includes(view)) return NoSavePage;
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
   if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
   if (view === 'logistics') return LogisticsPage;
