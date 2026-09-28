@@ -111,7 +111,13 @@ test('the handbook profile draws each notice in its tone', () => {
   setFloor('ground');
   assert.equal(toneOf(all, /Ground floor is built/), 'info', 'ground-floor moves');
   assert.equal(toneOf(all, /Q sits behind O/), 'info');
-  assert.equal(toneOf(all, /nitrogen wells can supply/), 'warn');
+  // Phase 3 needs no nitrogen, so its caveat is guidance (#368); Phase 4's asks for a check.
+  assert.equal(toneOf(all, /all-pure resource limits/), 'info');
+  page();
+  open({ phase: '4' });
+  go('resources');
+  render();
+  assert.equal(toneOf(tones(), /nitrogen wells can supply/), 'warn');
   assert.equal(toneOf(all, /preliminary requirement/), 'info');
   assert.equal(toneOf(all, /has no calculated plan/), 'info');
 });

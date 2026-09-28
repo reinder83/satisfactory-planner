@@ -1003,6 +1003,19 @@ test('the handbook resources page asks for the nitrogen rate in m³/min (#363)',
   );
 });
 
+// Phase 3 of the handbook needs no nitrogen, so there is nothing to verify: the caveat stays,
+// as guidance, without the nitrogen sentence (#368).
+test('the handbook resources page asks for no nitrogen check at a phase that needs none (#368)', () => {
+  assert.equal(handbook.resources['3']!['Nitrogen Gas'] || 0, 0, 'Phase 3 needs no nitrogen');
+  open({ phase: '3' });
+  go('resources');
+  render();
+  const caveat = $$('#main .notice').find(n => /all-pure resource limits/.test(n.textContent))!;
+  assert.ok(caveat, 'the caveat is still shown');
+  assert.doesNotMatch(caveat.textContent, /nitrogen/i);
+  assert.ok(caveat.classList.contains('info'), 'nothing to act on, so not a warning');
+});
+
 // Option 1 on #363: the resource tables mix fluids and ores, so the headers drop "/min" and each
 // rate carries its own unit, m³/min for a fluid and /min for an ore, with a no-break space
 // keeping a fluid's unit on the number's line. "Over by" follows its row; Use stays a percentage.
