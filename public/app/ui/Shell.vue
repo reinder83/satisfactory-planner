@@ -10,11 +10,17 @@
   profiles page's Open, so it asks about unsaved notes first; signing out is the account page's
   signOut. The pages go through the address, as a sidebar link does, so the hash route asks too.
   Focus stays on the switcher after its choice, as it does on a followed sidebar link (the frame
-  stays). The phone layout hides the footer, as before; there the save name in the top bar
-  still leads to Saves & profiles.
+  stays).
+
+  At 720px and below (SP-37, #272) the sidebar is a drawer: a compact top bar holds ☰, the brand
+  mark, the breadcrumb, the phase picker and the save status, and ☰ opens the sidebar full
+  height over the page, with its navigation (the open page marked), ADA and the profile
+  switcher. The open drawer is a modal dialog: Tab stays inside it, and Esc, its × or the
+  backdrop close it and return focus to ☰. A followed link closes it and lets the opened page
+  take focus. Wider, the button is hidden and the sidebar is as before.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import { purities } from '../../preferences.ts';
 import { allowSwitch, pending, save } from '../api.ts';
@@ -85,10 +91,76 @@ const frame = computed(() =>
 const switching = ref(false);
 function switchTo(id: string, open: boolean) {
   if (open || switching.value) return;
+  closeMenu(false);
   return openProfile(currentSave.id, id, on => (switching.value = on));
 }
 // A page of the switcher's menu, through the address as a sidebar link would.
-const go = (v: View) => (location.hash = v);
+const go = (v: View) => {
+  closeMenu(false);
+  location.hash = v;
+};
+
+// The phone drawer (SP-37): open or closed, the ☰ button that opens it, and the drawer itself.
+const menuOpen = ref(false);
+const toggle = ref<HTMLButtonElement | null>(null),
+  drawer = ref<HTMLElement | null>(null);
+const focusable = () =>
+  [
+    ...(drawer.value?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex="0"]',
+    ) ?? []),
+  ].filter(el => el.getClientRects().length > 0);
+async function openMenu() {
+  menuOpen.value = true;
+  await nextTick();
+  focusable()[0]?.focus();
+}
+// `refocus` returns focus to ☰; a followed link leaves it to the page that opens.
+function closeMenu(refocus = true) {
+  if (!menuOpen.value) return;
+  menuOpen.value = false;
+  if (refocus) void nextTick(() => toggle.value?.focus());
+}
+// Inside the open drawer: Tab and Shift+Tab wrap around it, Esc closes it.
+function drawerKey(e: KeyboardEvent) {
+  if (!menuOpen.value) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeMenu();
+  } else if (e.key === 'Tab') {
+    const all = focusable();
+    if (!all.length) return;
+    const first = all[0]!,
+      last = all.at(-1)!;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+// A navigation link followed from the drawer: close it. The link is then hidden, so it lets go
+// of focus and the page it opens takes it (focusOpenedPage in ui/refocus.ts); the page already
+// shown opens nothing, so focus goes back to ☰ instead.
+function navFollowed(e: Event) {
+  if (!menuOpen.value) return;
+  const link = e.currentTarget as HTMLAnchorElement;
+  const same = link.getAttribute('href') === location.hash;
+  closeMenu(same);
+  if (!same) link.blur();
+}
+// Widening past the phone layout shows the sidebar again, so the drawer closes.
+let wide: MediaQueryList | undefined;
+const widened = (e: MediaQueryListEvent) => {
+  if (e.matches) closeMenu(false);
+};
+onMounted(() => {
+  wide = globalThis.matchMedia?.('(min-width: 721px)');
+  wide?.addEventListener?.('change', widened);
+});
+onBeforeUnmount(() => wide?.removeEventListener?.('change', widened));
 
 // The top bar's short save status (shown at phone width, where the sidebar's is hidden)
 // reserves the width of its longest label in this edition, so it never shifts the bar.
@@ -151,14 +223,32 @@ async function pickPhase(e: Event) {
 </script>
 
 <template>
-  <div class="layout">
-    <aside class="sidebar">
+  <div :class="['layout', menuOpen ? 'menu-open' : '']">
+    <div v-if="menuOpen" class="drawer-backdrop" aria-hidden="true" @click="closeMenu()"></div>
+    <aside
+      id="sidebar"
+      ref="drawer"
+      class="sidebar"
+      :role="menuOpen ? 'dialog' : undefined"
+      :aria-modal="menuOpen ? 'true' : undefined"
+      :aria-label="menuOpen ? 'Menu' : undefined"
+      @keydown="drawerKey"
+    >
       <div class="brand">
         <img src="./favicon.svg" alt="" />
         <div>
           Project Assembly
           <div class="eyebrow">FICSIT compliance terminal</div>
         </div>
+        <button
+          type="button"
+          class="btn drawer-close"
+          aria-label="Close menu"
+          data-menu-close
+          @click="closeMenu()"
+        >
+          ×
+        </button>
       </div>
       <nav class="nav" aria-label="Main navigation">
         <a
@@ -167,6 +257,7 @@ async function pickPhase(e: Event) {
           :href="'#' + id"
           :class="[frame.view === id ? 'active' : '', frame.needs[id] ? 'dim' : '']"
           :aria-current="frame.view === id ? 'page' : undefined"
+          @click="navFollowed"
           :aria-describedby="frame.needs[id] ? `nav-${id}-needs` : undefined"
           ><span class="navicon" aria-hidden="true">{{ icon }}</span
           ><span class="nav-label"
@@ -277,6 +368,20 @@ async function pickPhase(e: Event) {
     </aside>
     <div>
       <header class="topbar">
+        <div class="topbar-lead">
+          <button
+            ref="toggle"
+            type="button"
+            class="btn menu-toggle"
+            aria-label="Menu"
+            aria-controls="sidebar"
+            :aria-expanded="menuOpen ? 'true' : 'false'"
+            data-menu-toggle
+            @click="menuOpen ? closeMenu() : openMenu()"
+          >
+            <span aria-hidden="true">☰</span></button
+          ><img class="topbar-mark" src="./favicon.svg" alt="" />
+        </div>
         <div class="breadcrumbs">
           <a href="#profiles">{{ frame.saveName }}</a> <span aria-hidden="true"> / </span>
           {{ phaseLabel(frame.phase) }}
