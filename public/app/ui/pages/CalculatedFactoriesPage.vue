@@ -39,6 +39,7 @@ import { refocusOnOpenedPage } from '../refocus.ts';
 import { pickFactoryFilter } from '../actions.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
+import GroupEditBar from '../factories/GroupEditBar.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
@@ -136,6 +137,7 @@ async function roundUp(e: Event) {
       title="Factory targets"
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
+    <GroupEditBar />
     <div v-if="!page.whole" class="notice info round-up-offer">
       Prefer extra production over underclocking?
       <button class="btn quiet" data-round-up @click="roundUp">Round up production…</button>

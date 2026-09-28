@@ -368,3 +368,23 @@ test('a whole-value write from a tab that missed a change is refused, small ones
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+// SP-33: the wizard's live estimates count against their own allowance (120 a minute), so
+// estimating while editing never uses up the 20 calculations Calculate plan needs, and the
+// other way round.
+test('live estimates and full calculations are throttled separately', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const app = await start(dir);
+  const settings = { phase: '5', wholeMachines: false };
+  const preview = (estimate: boolean) =>
+    post(app.url, '/api/preview', estimate ? { settings, estimate } : { settings });
+  try {
+    for (let i = 0; i < 21; i++) assert.equal((await preview(true)).status, 200, 'estimate ' + i);
+    for (let i = 0; i < 20; i++) assert.equal((await preview(false)).status, 200, 'preview ' + i);
+    assert.equal((await preview(false)).status, 429, 'the 21st full calculation waits');
+    assert.equal((await preview(true)).status, 200, 'estimates carry on');
+  } finally {
+    await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

@@ -32,7 +32,15 @@ import { vuePage } from '../../public/app/ui/pages.ts';
 import GuidedPage from '../../public/app/ui/pages/GuidedPage.vue';
 import SurveyPage from '../../public/app/ui/pages/SurveyPage.vue';
 import WizardPage from '../../public/app/ui/pages/WizardPage.vue';
+import {
+  cancelEstimate,
+  estimate,
+  ESTIMATE_DELAY,
+  setEstimatePaused,
+} from '../../public/app/wizard/estimate.ts';
 import { extractionOf } from '../../public/app/wizard/extraction.ts';
+import { power } from '../../public/app/wizard/fields.ts';
+import { num } from '../../public/app/format.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { presetSurvey } from '../../public/preferences.ts';
 import {
@@ -1068,4 +1076,210 @@ test('Cancel asks only once something was entered since the wizard started', asy
   await click('[data-cancel-wizard]');
   assert.equal(wizard, null);
   assert.equal(view, 'profiles');
+});
+
+// SP-33 (#268): Goals and Resources show a live estimate from a background /api/preview marked
+// `estimate`, debounced so it starts ESTIMATE_DELAY after the last edit (under a second with the
+// solve), one at a time, and cancelled when the step is left or the estimate is paused.
+const pause = (ms: number) => new Promise(r => setTimeout(r, ms)).then(() => nextTick());
+function freshEstimate() {
+  cancelEstimate(true);
+  setEstimatePaused(false, null);
+}
+// The generated plan with Iron Ore at `share` of its budget in Phase 5, and enough power there
+// (the fixture's Phase 5 asks for more than it has, which the estimate warns about too).
+function estimated(share: number) {
+  const p = structuredClone(generated());
+  const last = p.stages['5'];
+  last.raw!['Iron Ore'] = p.settings.limits['Iron Ore']! * share;
+  last.availableMW = (last.requiredMW ?? 0) + 100;
+  return p;
+}
+const previews = <B>(calls: [string, B][]) => calls.filter(([path]) => path === '/api/preview');
+
+test('Goals and Resources show a live estimate beside the form, the other steps none (SP-33)', async () => {
+  freshEstimate();
+  const calls = stubFetch({ '/api/preview': estimated(0.5) });
+  for (const step of [1, 2, 5]) {
+    wizardAt(step);
+    assert.equal($('[data-estimate]'), null, 'no estimate on step ' + step);
+  }
+  wizardAt(4);
+  assert.ok($('.wizard-body.with-estimate [data-estimate]'), 'beside the form');
+  // Arriving estimates the draft's settings straight away.
+  await pause(30);
+  assert.equal(previews(calls).length, 1);
+  assert.equal((calls[0]![1] as { estimate: boolean }).estimate, true, 'marked as an estimate');
+  const p = estimated(0.5),
+    last = p.stages['5'];
+  assert.equal(
+    text('[data-estimate-buildings]').trim(),
+    num(last.rows!.reduce((a, r) => a + r.machines, 0)),
+  );
+  assert.equal(
+    text('[data-estimate-power]').trim(),
+    `${power(last.requiredMW)} of ${power(last.availableMW)}`,
+  );
+  assert.ok(text('[data-estimate-tightest]').length > 0, 'the tightest resource is named');
+  assert.equal($('[data-estimate-status]')!.getAttribute('aria-live'), 'polite');
+  assert.equal($('[data-estimate-warning]'), null, 'nothing over budget');
+});
+
+test('a budget over 100% shows a warning in the estimate (SP-33)', async () => {
+  freshEstimate();
+  stubFetch({ '/api/preview': estimated(1.25) });
+  wizardAt(4);
+  await pause(30);
+  assert.match(text('[data-estimate-tightest]'), /^ ?Iron Ore 125% Phase 5/);
+  assert.ok($('[data-estimate-tightest]')!.classList.contains('warn'));
+  assert.match(text('[data-estimate-warning]'), /Iron Ore is over its budget: 125% in Phase 5\./);
+  // Too little power at the last phase warns as well, as the plan's headroom notice would.
+  freshEstimate();
+  const p = generated(),
+    last = p.stages['5'];
+  stubFetch({ '/api/preview': p });
+  wizardAt(3);
+  await pause(30);
+  assert.ok($('[data-estimate-power]')!.classList.contains('warn'));
+  assert.ok(
+    text('[data-estimate-warning]').includes(
+      `Phase 5 needs ${power(last.requiredMW)} of power; ${power(last.availableMW)} is available.`,
+    ),
+  );
+  // A phase that does not fit says so.
+  freshEstimate();
+  const draft = structuredClone(p);
+  draft.stages['4'] = { ...draft.stages['4'], feasible: false, reason: 'Needs more coal.' };
+  stubFetch({ '/api/preview': draft });
+  wizardAt(3);
+  await pause(30);
+  assert.match(text('[data-estimate-warning]'), /Phase 4 does not fit these settings\./);
+});
+
+test('edits are debounced into one estimate of the latest settings, within a second (SP-33)', async () => {
+  freshEstimate();
+  const calls = stubFetch<{ settings: WizardSettings; estimate?: boolean }>({
+    '/api/preview': estimated(0.5),
+  });
+  wizardAt(4);
+  await pause(30);
+  const before = previews(calls).length;
+  const box = $<HTMLInputElement>('input[name="limit:Iron Ore"]')!;
+  for (const v of ['1', '12', '123']) {
+    box.value = v;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await pause(50);
+  }
+  assert.equal(previews(calls).length, before, 'nothing while typing');
+  assert.match(
+    text('[data-estimate-status]'),
+    /Estimating…/,
+    'marked out of date from the edit on',
+  );
+  assert.ok($('.estimate-figures.stale'), 'the old figures are dimmed');
+  await pause(ESTIMATE_DELAY);
+  const sent = previews(calls).slice(before);
+  assert.equal(sent.length, 1, 'one estimate after the pause');
+  assert.equal(sent[0]![1].settings.limits['Iron Ore'], 123, 'of the latest value');
+  assert.ok(ESTIMATE_DELAY < 1000);
+});
+
+test('leaving the step or pausing cancels the estimate, and a late answer is ignored (SP-33)', async () => {
+  freshEstimate();
+  let answer: (v: Response) => void = () => {};
+  const bodies: unknown[] = [];
+  globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
+    bodies.push(JSON.parse(String(options.body)));
+    return new Promise<Response>(r => (answer = r));
+  }) as typeof fetch;
+  wizardAt(3);
+  await pause(30);
+  assert.equal(bodies.length, 1, 'estimating');
+  assert.match(text('[data-estimate-status]'), /Estimating…/);
+  // The page never waits on it: the form still moves between steps.
+  await click('[data-wizard-back]');
+  assert.equal(wizard!.step, 2);
+  assert.equal($('[data-estimate]'), null);
+  answer(new Response(JSON.stringify(estimated(2)), { status: 200 }));
+  await pause(30);
+  assert.equal(estimate.plan, null, 'the late answer is dropped');
+  // Pausing: no estimate while paused, one of the settings then on resuming.
+  stubFetch({ '/api/preview': estimated(0.5) });
+  wizardAt(3);
+  await pause(30);
+  const pauseButton = $<HTMLButtonElement>('[data-estimate-pause]')!;
+  pauseButton.click();
+  await nextTick();
+  assert.equal(pauseButton.getAttribute('aria-pressed'), 'true');
+  assert.match(pauseButton.textContent, /Resume live estimate/);
+  const calls = stubFetch({ '/api/preview': estimated(0.5) });
+  const hours = $<HTMLInputElement>('input[name=hours]')!;
+  hours.value = '9';
+  hours.dispatchEvent(new Event('input', { bubbles: true }));
+  await pause(ESTIMATE_DELAY + 50);
+  assert.equal(calls.length, 0, 'paused');
+  pauseButton.click();
+  await pause(30);
+  assert.equal(previews(calls).length, 1, 'resumed');
+  assert.equal($('[data-estimate-pause]')!.getAttribute('aria-pressed'), 'false');
+});
+
+// With whole machines on, the estimate is solved twice: first with exact ratios, which is quick
+// even for a heavy plan and is shown as a quick estimate, then as the settings stand, which
+// replaces it. An edit made during the quick pass skips the whole-machine pass of the old
+// settings and estimates the new ones (SP-33, the under-a-second criterion).
+test('with whole machines, a quick exact-ratio estimate shows first and the full one replaces it (SP-33)', async () => {
+  freshEstimate();
+  const sent: { settings: WizardSettings; estimate: boolean }[] = [];
+  const answers: ((plan: unknown) => void)[] = [];
+  globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
+    sent.push(JSON.parse(String(options.body)));
+    return new Promise<Response>(r =>
+      answers.push(plan => r(new Response(JSON.stringify(plan), { status: 200 }))),
+    );
+  }) as typeof fetch;
+  wizardAt(4, {}, { wholeMachines: true });
+  await pause(30);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.settings.wholeMachines, false, 'the quick pass uses exact ratios');
+  assert.equal(sent[0]!.estimate, true);
+  answers[0]!(estimated(0.5));
+  await pause(30);
+  assert.match(text('[data-estimate-status]'), /Quick estimate with exact ratios/);
+  assert.equal($('.estimate-figures.stale'), null, 'the quick figures are not dimmed');
+  assert.equal(sent.length, 2, 'then the whole-machine pass');
+  assert.equal(sent[1]!.settings.wholeMachines, true);
+  answers[1]!(estimated(1.25));
+  await pause(30);
+  assert.match(text('[data-estimate-status]'), /Estimate for the settings on screen\./);
+  assert.match(text('[data-estimate-warning]'), /Iron Ore is over its budget: 125%/);
+  // An edit during the quick pass: its answer and the old whole-machine pass are skipped.
+  const box = $<HTMLInputElement>('input[name="limit:Iron Ore"]')!;
+  box.value = '5';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await pause(ESTIMATE_DELAY + 30);
+  assert.equal(sent.length, 3, 'a quick pass for the edit');
+  box.value = '7';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await pause(ESTIMATE_DELAY + 30);
+  assert.equal(sent.length, 3, 'waits for the pass under way');
+  answers[2]!(estimated(3));
+  await pause(30);
+  assert.equal(sent.length, 4, 'no whole-machine pass for the old settings');
+  assert.equal(sent[3]!.settings.wholeMachines, false, 'a quick pass for the latest ones');
+  assert.equal(sent[3]!.settings.limits['Iron Ore'], 7);
+  assert.doesNotMatch(text('[data-estimate-tightest]'), /300%/, 'the skipped answer is not shown');
+  // Without whole machines there is one pass only. (The pass still under way is answered first:
+  // this stub ignores the abort, which on the server settles the request at once.)
+  freshEstimate();
+  answers[3]!(estimated(0.5));
+  await pause(30);
+  sent.length = 0;
+  answers.length = 0;
+  wizardAt(4, {}, { wholeMachines: false });
+  await pause(30);
+  answers[0]!(estimated(0.5));
+  await pause(30);
+  assert.equal(sent.length, 1);
+  assert.match(text('[data-estimate-status]'), /Estimate for the settings on screen\./);
 });
