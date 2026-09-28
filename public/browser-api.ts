@@ -25,6 +25,7 @@ import {
   newProfileState,
   checkBase,
   currentPayoff,
+  phaseProgress,
 } from './state.ts';
 import {
   validateTransfer,
@@ -108,6 +109,7 @@ export function createBrowserApi(
         settings: p.plan?.settings,
         completed: Object.values(p.state.checks).filter(Boolean).length,
         phase: p.state.settings.phase,
+        phases: phaseProgress(p.plan, p.state.checks),
       })),
     })),
   });

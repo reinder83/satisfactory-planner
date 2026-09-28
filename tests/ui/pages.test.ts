@@ -12,6 +12,7 @@ import { power } from '../../public/app/wizard/fields.ts';
 import { invalidate } from '../../public/app/ui/bridge.ts';
 import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
+import { phaseProgress } from '../../public/state.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
 import ResourcesPage from '../../public/app/ui/pages/ResourcesPage.vue';
 import { resourceUse, tightestFirst } from '../../public/app/views/resources.ts';
@@ -27,7 +28,7 @@ import {
   page,
   stubFetch,
 } from './setup.ts';
-import type { Catalog, StoredCalculatedPlan } from '../../public/types/index.ts';
+import type { Catalog, StoredCalculatedPlan, WorkspaceSummary } from '../../public/types/index.ts';
 
 // User text inserted as markup would create an <x-evil> element. (innerHTML cannot tell:
 // a textarea's contents are serialised unescaped.)
@@ -37,6 +38,82 @@ const noMarkup = () =>
 beforeEach(() => {
   page();
   open();
+});
+
+// SP-32 (#267): the workspace summary's per-phase counts (both editions use phaseProgress) and
+// the segmented bar on a calculated profile's card, with its reading in words.
+test('phaseProgress counts each planned phase’s lines ticked Running, from the start phase', () => {
+  const p = generated();
+  const from = Number(p.settings.phase);
+  const rows = p.stages[String(from) as '3'].rows!;
+  const checks = { [`calc-${from}-${rows[0]!.id}`]: true, [`calc-${from}-${rows[1]!.id}`]: true };
+  const got = phaseProgress(p, checks)!;
+  assert.deepEqual(
+    got.map(x => x.phase),
+    ['1', '2', '3', '4', '5'].filter(ph => Number(ph) >= from),
+  );
+  assert.deepEqual(got[0], { phase: String(from), done: 2, total: rows.length });
+  assert.equal(got[1]!.done, 0);
+  assert.equal(phaseProgress(null, checks), undefined, 'none without a calculated plan');
+});
+
+test('a calculated profile card shows a segmented phase bar that reads in words (SP-32)', () => {
+  const workspace = {
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'original',
+        profiles: [
+          { id: 'original', kind: 'original', name: 'Handbook', completed: 2, phase: '3' },
+          {
+            id: 'p',
+            kind: 'calculated',
+            name: 'Plan',
+            completed: 5,
+            phase: '4',
+            phases: [
+              { phase: '3', done: 10, total: 10 },
+              { phase: '4', done: 2, total: 9 },
+              { phase: '5', done: 0, total: 12 },
+            ],
+          },
+          {
+            id: 'q',
+            kind: 'calculated',
+            name: 'Late',
+            completed: 9,
+            phase: 'post',
+            phases: [
+              { phase: '4', done: 5, total: 5 },
+              { phase: '5', done: 3, total: 4 },
+            ],
+          },
+        ],
+      },
+    ],
+  } as unknown as Partial<WorkspaceSummary>;
+  open({ workspace });
+  go('profiles');
+  render();
+  assert.equal($('[data-phase-bar="original"]'), null, 'no bar without per-phase counts');
+  const bar = $('[data-phase-bar="p"]')!;
+  assert.equal(bar.getAttribute('role'), 'img');
+  assert.equal(bar.getAttribute('aria-label'), 'Phase 4 of 5, 22%');
+  assert.deepEqual(
+    [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(s => [
+      s.dataset.phaseSeg,
+      s.classList.contains('done') ? 'done' : s.classList.contains('current') ? 'current' : 'later',
+      (s.firstElementChild as HTMLElement).style.width,
+    ]),
+    [
+      ['3', 'done', '100%'],
+      ['4', 'current', '22%'],
+      ['5', 'later', '0%'],
+    ],
+  );
+  // Post Phase 5 works on Phase 5's lines.
+  assert.equal($('[data-phase-bar="q"]')!.getAttribute('aria-label'), 'Post Phase 5, 75%');
 });
 
 test('Saves & profiles lists every profile, escaped, with its actions', () => {

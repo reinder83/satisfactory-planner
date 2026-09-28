@@ -1,5 +1,11 @@
 import { validateTransfer, transferFormat } from './public/transfer.ts';
-import { shareState, newProfileState, checkBase, currentPayoff } from './public/state.ts';
+import {
+  shareState,
+  newProfileState,
+  checkBase,
+  currentPayoff,
+  phaseProgress,
+} from './public/state.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
@@ -271,6 +277,7 @@ export async function openWorkspace({
           settings: p.plan?.settings,
           completed: Object.values(p.state.checks).filter(Boolean).length,
           phase: p.state.settings.phase,
+          phases: phaseProgress(p.plan, p.state.checks),
         })),
       })),
   });
