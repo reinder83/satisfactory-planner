@@ -13,6 +13,7 @@ import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { FLUIDS, handbookFlowModel, itemRate } from '../../flow.ts';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
+import { expansionPhase } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -55,6 +56,7 @@ const view = computed(() =>
         installed[label] = Math.max(old, machines);
         return {
           phase: ph,
+          ...expansionPhase(ph),
           output: num(x.output),
           storage: num(x.storage),
           required: `${num(machines)} ${label}`,
@@ -187,8 +189,15 @@ const view = computed(() =>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="h in view.history" :key="h.phase">
-            <td>{{ h.phase }}</td>
+          <tr
+            v-for="h in view.history"
+            :key="h.phase"
+            :class="h.current ? 'current-phase' : undefined"
+            :aria-current="h.current ? 'true' : undefined"
+          >
+            <td>
+              {{ h.label }}<small v-if="h.tag" class="phase-tag">{{ h.tag }}</small>
+            </td>
             <td>{{ h.output }}</td>
             <td>{{ h.storage }}</td>
             <td>{{ h.required }}</td>

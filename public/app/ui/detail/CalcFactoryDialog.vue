@@ -147,8 +147,15 @@ const view = computed(() =>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="e in view.expansion" :key="e.phase">
-          <td>{{ e.phase }}</td>
+        <tr
+          v-for="e in view.expansion"
+          :key="e.phase"
+          :class="e.current ? 'current-phase' : undefined"
+          :aria-current="e.current ? 'true' : undefined"
+        >
+          <td>
+            {{ e.label }}<small v-if="e.tag" class="phase-tag">{{ e.tag }}</small>
+          </td>
           <td>{{ e.required }}</td>
           <td>{{ e.add }}</td>
         </tr>
