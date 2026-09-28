@@ -377,12 +377,52 @@ test('live estimates and full calculations are throttled separately', async () =
   const app = await start(dir);
   const settings = { phase: '5', wholeMachines: false };
   const preview = (estimate: boolean) =>
-    post(app.url, '/api/preview', estimate ? { settings, estimate } : { settings });
+    post(app.url, estimate ? '/api/preview?estimate=1' : '/api/preview', { settings });
   try {
     for (let i = 0; i < 21; i++) assert.equal((await preview(true)).status, 200, 'estimate ' + i);
     for (let i = 0; i < 20; i++) assert.equal((await preview(false)).status, 200, 'preview ' + i);
     assert.equal((await preview(false)).status, 429, 'the 21st full calculation waits');
     assert.equal((await preview(true)).status, 200, 'estimates carry on');
+  } finally {
+    await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// #413: marking a preview as an estimate cannot buy more solving than the estimate budget, and
+// an over-limit request is refused before its body is read. The old body flag is not an estimate.
+test('live estimates stop at their solving-time budget, and the limit runs before the body', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const app = await start(dir, { estimateBudgetMs: 1 });
+  const settings = { phase: '5', wholeMachines: false };
+  try {
+    const first = await post(app.url, '/api/preview?estimate=1', { settings });
+    assert.equal(first.status, 200, 'the budget is not used up yet');
+    const second = await post(app.url, '/api/preview?estimate=1', { settings });
+    assert.equal(second.status, 429, 'the first solve used the 1 ms budget');
+    assert.match((await second.json()).error, /Live estimates are paused for a minute/);
+    // Calculate plan is unaffected.
+    assert.equal((await post(app.url, '/api/preview', { settings })).status, 200);
+    // A body flag no longer marks an estimate: it counts as a full calculation.
+    for (let i = 0; i < 19; i++)
+      assert.equal(
+        (await post(app.url, '/api/preview', { settings, estimate: true })).status,
+        200,
+        'full ' + i,
+      );
+    // Over the limit, even a malformed body is refused for the limit, so it was never read.
+    const over = await fetch(app.url + '/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
+      body: '{not json',
+    });
+    assert.equal(over.status, 429);
+    const estimateOver = await fetch(app.url + '/api/preview?estimate=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
+      body: '{not json',
+    });
+    assert.equal(estimateOver.status, 429, 'nor for an estimate over its budget');
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });

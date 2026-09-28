@@ -50,6 +50,8 @@ export async function createApp({
   dev = false,
   // Time limit of one hard-drive payoff ranking (see openWorkspace); tests pass a small one.
   rankBudgetMs = undefined as number | undefined,
+  // Solving time an address's live estimates may use a minute (see openWorkspace); tests pass one.
+  estimateBudgetMs = undefined as number | undefined,
 } = {}) {
   await fs.mkdir(dataDir, { recursive: true });
   const workspace = await openWorkspace({
@@ -58,6 +60,7 @@ export async function createApp({
     validateState,
     mutate,
     rankBudgetMs,
+    estimateBudgetMs,
   });
   const hash = (s: string) => createHash('sha256').update(s).digest();
   // JSON replies are never cached, so a browser never shows stale progress.

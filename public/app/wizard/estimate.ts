@@ -3,7 +3,7 @@
 // a budget that does not fit shows before Calculate plan. ui/wizard/EstimatePanel.vue draws it.
 //
 // Each edit reads the form into the draft (readWizard, as moving between steps does) and
-// restarts a short timer; when it runs out the settings go to /api/preview marked `estimate`,
+// restarts a short timer; when it runs out the settings go to /api/preview?estimate=1,
 // the same calculation Review uses (the server, or the browser edition's worker), so input is
 // never blocked. With whole machines on (the default), it runs in two passes: first with exact
 // ratios, a quick solve (under half a second even for a heavy plan) shown as a quick estimate,
@@ -64,7 +64,8 @@ async function runEstimate() {
   estimate.status = 'running';
   invalidate();
   const solve = (settings: object) =>
-    post<StoredCalculatedPlan>('/api/preview', { settings, estimate: true }, true, {
+    // Marked in the address, which the server's estimate allowance reads before the body (#413).
+    post<StoredCalculatedPlan>('/api/preview?estimate=1', { settings }, true, {
       signal: abort.signal,
     });
   try {
