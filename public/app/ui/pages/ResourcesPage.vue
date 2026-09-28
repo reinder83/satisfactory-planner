@@ -131,7 +131,7 @@ const page = computed(() =>
     </div>
     <p class="small muted">
       Crude availability counts 30 ordinary pure nodes; oil wells are additional. Water includes a
-      2,000/min reserve for retained turbofuel and resin processing.
+      2,000&nbsp;m³/min reserve for retained turbofuel and resin processing.
     </p>
     <div class="backup-grid" style="margin-top: 24px">
       <section class="panel">
@@ -146,7 +146,10 @@ const page = computed(() =>
       </section>
       <section class="panel">
         <h2>One 72 GW rocket-fuel block</h2>
-        <p><b>Inputs/min:</b> 300 Crude, 800 Sulfur, 400 Coal, 600 Nitrogen and 1,000 Water.</p>
+        <p>
+          <b>Inputs/min:</b> 300&nbsp;m³ Crude, 800 Sulfur, 400 Coal, 600&nbsp;m³ Nitrogen and
+          1,000&nbsp;m³ Water.
+        </p>
         <p>
           10 Heavy Oil Residue refineries → 8 Diluted Fuel blenders → 8 Nitro Rocket Fuel blenders.
           Add 5 Residual Rubber refineries and 288 Fuel Generators at 100%.
@@ -174,9 +177,9 @@ const page = computed(() =>
         reactors.
       </p>
       <p class="small muted">
-        Build downstream processing and burning capacity first. Final reactor cooling needs 42,000
-        Water/min, already included in the resource table. Keep radioactive buffers at the nuclear
-        site.
+        Build downstream processing and burning capacity first. Final reactor cooling needs
+        42,000&nbsp;m³ Water/min, already included in the resource table. Keep radioactive buffers
+        at the nuclear site.
       </p>
     </section>
   </template>

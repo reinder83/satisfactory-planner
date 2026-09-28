@@ -552,6 +552,31 @@ test('the goals step and what Review says about each phase', () => {
   assert.match(main(), /Raise the short budget/, 'with its options');
 });
 
+// A short fluid budget is named in m³/min, a short ore budget in /min (#367).
+test('Review names a short fluid budget in m³/min and a short ore in /min (#367)', () => {
+  const p = generated();
+  wizardAt(5, {
+    preview: {
+      ...p,
+      settings: { ...p.settings, phase: '5' },
+      stages: {
+        ...p.stages,
+        5: {
+          feasible: false,
+          reason: 'Short',
+          shortfalls: [
+            { name: 'Crude Oil', needed: 300, budget: 120 },
+            { name: 'Coal', needed: 10, budget: 5 },
+          ],
+        },
+      },
+    },
+  });
+  const t = main().replace(/ /g, ' ');
+  assert.match(t, /Crude Oil to about 300 m³\/min \(entered: 120 m³\/min\)/);
+  assert.match(t, /Coal to about 10\/min \(entered: 5\/min\)/);
+});
+
 test('Review credits production you already run, and says nothing for an older plan', () => {
   const p = generated();
   wizardAt(5);

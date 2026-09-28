@@ -440,6 +440,24 @@ test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)
   assert.match(iron[1]!, /^[\d.,]+\/min$/, 'an ore keeps /min');
 });
 
+// The sample yields and the water allowance name a fluid's rate in m³/min too; the iron
+// samples keep /min (#367).
+test('the survey writes its oil, well and water rates in m³/min (#367)', async () => {
+  survey(1);
+  const notice = () =>
+    $$('#main .notice.info')
+      .map(n => n.textContent)
+      .join(' ')
+      .replace(/ /g, ' ')
+      .replace(/\s+/g, ' ');
+  assert.match(notice(), /iron node gives [\d.,]+\/min impure/, 'an ore keeps /min');
+  assert.match(notice(), /crude oil node gives [\d.,]+ m³\/min normal/);
+  assert.match(notice(), /satellite [\d.,]+ m³\/min\./);
+  wizard!.extractionStep = 3;
+  await redraw();
+  assert.match(notice(), /water allowance of [\d.,]+ m³\/min, which/);
+});
+
 // Edge and Chrome fire the change event of a focused field that holds a value typed since its
 // last one when the field is taken off the page, which happens while Vue unmounts the survey
 // (#366). happy-dom does not, so this stand-in does it for `el`, once, as its form is removed.

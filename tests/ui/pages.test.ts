@@ -1003,6 +1003,18 @@ test('the handbook resources page asks for the nitrogen rate in m³/min (#363)',
   );
 });
 
+// The handbook's fixed copy measures water, crude and nitrogen in m³ as well (#367).
+test('the handbook resources page writes its fluid amounts in m³ (#367)', () => {
+  open({ phase: '5' });
+  go('resources');
+  render();
+  const t = $('#main')!.textContent.replace(/ /g, ' ').replace(/\s+/g, ' ');
+  assert.match(t, /Water includes a 2,000 m³\/min reserve/);
+  assert.match(t, /300 m³ Crude, 800 Sulfur, 400 Coal, 600 m³ Nitrogen and 1,000 m³ Water\./);
+  assert.match(t, /cooling needs 42,000 m³ Water\/min/);
+  assert.doesNotMatch(t, /\d Water\/min|\d\/min reserve/);
+});
+
 // Option 1 on #363: the resource tables mix fluids and ores, so the headers drop "/min" and each
 // rate carries its own unit, m³/min for a fluid and /min for an ore, with a no-break space
 // keeping a fluid's unit on the number's line. "Over by" follows its row; Use stays a percentage.

@@ -113,7 +113,7 @@ export function draftFixes(x: StoredStage, s: Partial<CurrentSettings> | undefin
   const fixes: string[] = [];
   if (x.shortfalls?.length)
     fixes.push(
-      `Raise the short budget${x.shortfalls.length > 1 ? 's' : ''} (Resources): ${x.shortfalls.map(f => `${f.name} to about ${num(f.needed)}/min (entered: ${num(f.budget)}/min)`).join('; ')}.`,
+      `Raise the short budget${x.shortfalls.length > 1 ? 's' : ''} (Resources): ${x.shortfalls.map(f => `${f.name} to about ${itemRate(f.name, f.needed)} (entered: ${itemRate(f.name, f.budget)})`).join('; ')}.`,
     );
   if (x.wholeMachinesOnly)
     fixes.push(
