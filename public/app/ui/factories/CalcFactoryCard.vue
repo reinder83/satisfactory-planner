@@ -1,7 +1,8 @@
 <!--
   A calculated production row's card. Its Running box writes `calc-<stage>-<row id>`, the same
-  key as the row's build-plan step; its name and "Details ↗" open the calculated factory dialog
-  (factoryLink() in ui/actions.ts). A power-generation row leads with the power it makes (GW
+  key as the row's build-plan step; its name opens the calculated factory dialog (factoryLink()
+  in ui/actions.ts), and so does a click anywhere else on the card (SP-19: the name's hit area
+  covers it, under the Running box and the group editor). A power-generation row leads with the power it makes (GW
   above 1000 MW), says in words that it feeds the grid, with an accent edge (#374), and
   measures its group share in MW; a nuclear plant's waste is listed below like any other
   output (#371), and its group share is that waste with the power it stands for (#374). The
@@ -118,7 +119,7 @@ const card = computed(() =>
           @change="toggleCheck"
           :checked="card.done"
         />Running</label
-      ><button class="btn quiet" v-bind="factoryLink({ calcFactory: row.id })">Details ↗</button>
+      >
     </footer>
     <AssignEditor v-if="card.editing" :factory-key="row.id" :unit="card.rateUnit" />
   </article>
