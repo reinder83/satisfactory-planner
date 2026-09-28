@@ -1095,7 +1095,8 @@ function estimated(share: number) {
   last.availableMW = (last.requiredMW ?? 0) + 100;
   return p;
 }
-const previews = <B>(calls: [string, B][]) => calls.filter(([path]) => path === '/api/preview');
+const previews = <B>(calls: [string, B][]) =>
+  calls.filter(([path]) => path.startsWith('/api/preview'));
 
 test('Goals and Resources show a live estimate beside the form, the other steps none (SP-33)', async () => {
   freshEstimate();
@@ -1109,7 +1110,8 @@ test('Goals and Resources show a live estimate beside the form, the other steps 
   // Arriving estimates the draft's settings straight away.
   await pause(30);
   assert.equal(previews(calls).length, 1);
-  assert.equal((calls[0]![1] as { estimate: boolean }).estimate, true, 'marked as an estimate');
+  // Marked in the address, which the server reads before the body (#413).
+  assert.equal(calls[0]![0], '/api/preview?estimate=1', 'marked as an estimate');
   const p = estimated(0.5),
     last = p.stages['5'];
   assert.equal(
@@ -1232,8 +1234,11 @@ test('with whole machines, a quick exact-ratio estimate shows first and the full
   freshEstimate();
   const sent: { settings: WizardSettings; estimate: boolean }[] = [];
   const answers: ((plan: unknown) => void)[] = [];
-  globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
-    sent.push(JSON.parse(String(options.body)));
+  globalThis.fetch = (async (path: RequestInfo | URL, options: RequestInit = {}) => {
+    sent.push({
+      ...JSON.parse(String(options.body)),
+      estimate: String(path).endsWith('?estimate=1'),
+    });
     return new Promise<Response>(r =>
       answers.push(plan => r(new Response(JSON.stringify(plan), { status: 200 }))),
     );

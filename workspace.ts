@@ -91,6 +91,7 @@ export async function openWorkspace({
   validateState,
   mutate,
   rankBudgetMs = 20000,
+  estimateBudgetMs = 20000,
 }: {
   dataDir: string;
   initialState: () => ProgressState;
@@ -99,6 +100,8 @@ export async function openWorkspace({
   // A ranking recalculates the plan once per candidate recipe on the request, holding up every
   // other request meanwhile, so it stops after this long and reports `stopped`.
   rankBudgetMs?: number | undefined;
+  // Solving time one address's live estimates may use a minute (#413).
+  estimateBudgetMs?: number | undefined;
 }): Promise<Route> {
   const file = path.join(dataDir, 'workspace.json');
   let db: Workspace;
@@ -288,11 +291,30 @@ export async function openWorkspace({
   // At most 20 sign-in attempts or calculations per client address per minute, held in
   // memory only. The map is pruned of expired entries once it passes 2000 addresses. A
   // payoff ranking counts as `cost` of them, since it runs a calculation per candidate.
-  // The wizard's live estimates (SP-33) have their own allowance of 120 a minute, so estimating
-  // while editing never uses up the calculations Calculate plan and Create profile need.
+  // The wizard's live estimates (SP-33) have their own allowance, so estimating while editing
+  // never uses up the calculations Calculate plan and Create profile need: 120 a minute, and
+  // at most estimateBudgetMs of solving a minute (#413; 20 s by default). Any client can mark a preview as an
+  // estimate, so it is the solving time that bounds what they cost the server: a third of it
+  // per address, however heavy the plan. Typing with the debounced estimates stays well inside.
   type Throttles = Map<string | undefined, { count: number; until: number }>;
   const throttles: Throttles = new Map(),
-    estimates: Throttles = new Map();
+    estimates: Throttles = new Map(),
+    estimateTime: Throttles = new Map();
+  // The address's estimate-time entry for this minute, refused once it is used up.
+  function estimateBudget(req: IncomingMessage) {
+    const key = req.socket.remoteAddress,
+      now = Date.now();
+    let v = estimateTime.get(key);
+    if (!v || v.until < now) {
+      v = { count: 0, until: now + 60000 };
+      estimateTime.set(key, v);
+    }
+    if (v.count >= estimateBudgetMs)
+      fail('Live estimates are paused for a minute. Calculate plan still works.', 429);
+    if (estimateTime.size > 2000)
+      for (const [k, e] of estimateTime) if (e.until < now) estimateTime.delete(k);
+    return v;
+  }
   function throttle(req: IncomingMessage, cost = 1, bucket = throttles, limit = 20) {
     const key = req.socket.remoteAddress,
       now = Date.now();
@@ -519,12 +541,19 @@ export async function openWorkspace({
       return response(summary(db.users.find(x => x.id === u.id)));
     }
     // Runs the calculator for the wizard without storing anything; throttled because a
-    // solve is expensive. A live estimate (`estimate: true`) counts against its own allowance.
+    // solve is expensive. A live estimate (`?estimate=1`) counts against its own allowance and
+    // solving-time budget (above). Both checks run before the body is read.
     if (endpoint === '/api/preview' && req.method === 'POST') {
-      const b = await body(req);
-      if (b.estimate === true) throttle(req, 1, estimates, 120);
+      const budget = url.searchParams.get('estimate') === '1' ? estimateBudget(req) : null;
+      if (budget) throttle(req, 1, estimates, 120);
       else throttle(req);
-      return response(calculate(b.settings));
+      const b = await body(req);
+      const start = performance.now();
+      try {
+        return response(calculate(b.settings));
+      } finally {
+        if (budget) budget.count += performance.now() - start;
+      }
     }
     // Creates a profile in one of the user's saves (saveId) or in a new save (saveName).
     // kind 'original' uses the preserved handbook; anything else is calculated now and the
