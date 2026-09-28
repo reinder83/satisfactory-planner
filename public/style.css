@@ -3060,6 +3060,48 @@ button.rail-tile:hover {
   letter-spacing: 0.05em;
   text-transform: none;
 }
+/* A save or profile name renamed in place (SP-31, ui/InlineName.vue): the heading with its ✎
+   button, or the input with Save and Cancel. A long name wraps rather than overflowing. */
+.inline-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.inline-name > h2,
+.inline-name > h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.btn.inline-name-edit {
+  flex: none;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px 8px;
+  letter-spacing: 0;
+  font-size: 15px;
+}
+.inline-name .inline-form {
+  flex: 1;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.inline-name .inline-form input {
+  flex: 1 1 180px;
+}
+.profile-card .inline-name {
+  margin: 8px 0 10px;
+}
+.profile-card .inline-name > h3 {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .btn.inline-name-edit {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 /* One visible action, the others in the ⋯ menu at the card's right edge (#238). */
 .profile-actions {
   display: flex;

@@ -64,7 +64,16 @@ test('Saves & profiles lists every profile, escaped, with its actions', () => {
       'p',
     );
   assert.equal($('.toolbar a')!.textContent, 'Set up user accounts');
-  assert.ok($('#rename-form select[name=target]'));
+  // Every save and profile is renamed in place (SP-31); the old rename panel is gone.
+  assert.equal($('#rename-form'), null);
+  assert.equal(
+    $('button[data-rename-save="s"]')!.getAttribute('aria-label'),
+    'Rename save ' + evil,
+  );
+  assert.deepEqual(
+    $$('button[data-rename-profile]').map(b => b.dataset.renameProfile),
+    ['original', 'p'],
+  );
 });
 
 // A key pressed on the focused element, as a browser sends it.
@@ -183,28 +192,111 @@ test('Duplicate says "Copying…" on ⋯ while it runs, and ⋯ stays focused an
   assert.equal(document.activeElement, trigger);
 });
 
-test('renaming the open save updates the page and the frame', async () => {
-  const calls = stubFetch({
-    '/api/rename': (body: { name: string }) => ({
-      saves: [
+// SP-31 (#266): ✎ swaps a name for an input; Enter saves, Esc cancels, and focus goes back to ✎.
+// Any save or profile can be renamed, not only the open one: the request names it in its scope
+// headers. The open save's new name reaches the breadcrumb and the open profile's the sidebar.
+const settle = async () => {
+  await new Promise(r => setTimeout(r, 20));
+  await nextTick();
+};
+const renameReply = (names: { save?: string; original?: string; p?: string }) => ({
+  saves: [
+    {
+      id: 's',
+      name: names.save ?? evil,
+      activeProfile: 'original',
+      profiles: [
         {
-          id: 's',
-          name: body.name,
-          profiles: [{ id: 'original', kind: 'original', name: evil, completed: 2, phase: '3' }],
+          id: 'original',
+          kind: 'original',
+          name: names.original ?? evil,
+          completed: 2,
+          phase: '3',
         },
+        { id: 'p', kind: 'calculated', name: names.p ?? evil, completed: 5, phase: '4' },
       ],
-    }),
+    },
+  ],
+});
+async function renameInPlace(button: string, name: string, commit: 'Enter' | 'Escape' = 'Enter') {
+  $<HTMLButtonElement>(button)!.click();
+  await nextTick();
+  const input = document.activeElement as HTMLInputElement;
+  assert.equal(input.tagName, 'INPUT', 'the input takes focus');
+  input.value = name;
+  input.dispatchEvent(new Event('input'));
+  if (commit === 'Escape')
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  else input.form!.requestSubmit();
+  await settle();
+}
+
+test('renaming the open save in place updates the page and the frame (SP-31)', async () => {
+  const calls = stubFetch({
+    '/api/rename': (body: { name: string }) => renameReply({ save: body.name }),
   });
   go('profiles');
   render();
-  $<HTMLInputElement>('#rename-form input[name=name]')!.value = 'Renamed & safe';
-  $('#rename-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
-  await new Promise(r => setTimeout(r, 20));
-  await nextTick();
+  await renameInPlace('button[data-rename-save="s"]', 'Renamed & safe');
   assert.deepEqual(calls[0], ['/api/rename', { target: 'save', name: 'Renamed & safe' }]);
+  assert.equal(calls.headers[0]!['X-Save-Id'], 's');
   assert.equal(currentSave.name, 'Renamed & safe');
   assert.equal($('.save-panel h2')!.textContent, 'Renamed & safe');
   assert.equal($('.breadcrumbs a')!.textContent, 'Renamed & safe');
+  assert.equal(
+    (document.activeElement as HTMLElement).dataset.renameSave,
+    's',
+    'focus is back on ✎',
+  );
+});
+
+test('a profile that is not open is renamed in place, scoped to it (SP-31)', async () => {
+  const calls = stubFetch({
+    '/api/rename': (body: { name: string }) => renameReply({ p: body.name }),
+  });
+  go('profiles');
+  render();
+  await renameInPlace('button[data-rename-profile="p"]', '  Second plan  ');
+  assert.deepEqual(calls[0], ['/api/rename', { target: 'profile', name: 'Second plan' }]);
+  assert.deepEqual(
+    [calls.headers[0]!['X-Save-Id'], calls.headers[0]!['X-Profile-Id']],
+    ['s', 'p'],
+    'the request names the profile, not the open one',
+  );
+  const titles = $$('.profile-card h3').map(h => h.textContent);
+  assert.deepEqual(titles, [evil, 'Second plan']);
+  // The open profile keeps its name in the sidebar.
+  assert.ok($('[data-profile-switcher]')!.textContent.includes(evil));
+});
+
+test('renaming the open profile updates the sidebar footer (SP-31)', async () => {
+  stubFetch({
+    '/api/rename': (body: { name: string }) => renameReply({ original: body.name }),
+  });
+  go('profiles');
+  render();
+  await renameInPlace('button[data-rename-profile="original"]', 'Main plan');
+  assert.ok($('[data-profile-switcher]')!.textContent.includes('Main plan'));
+});
+
+test('Esc cancels a rename, an unchanged name saves nothing, and a failure keeps the input (SP-31)', async () => {
+  const calls = stubFetch({});
+  go('profiles');
+  render();
+  await renameInPlace('button[data-rename-profile="p"]', 'Never saved', 'Escape');
+  assert.equal(calls.length, 0, 'Esc sends nothing');
+  assert.equal((document.activeElement as HTMLElement).dataset.renameProfile, 'p');
+  assert.deepEqual(
+    $$('.profile-card h3').map(h => h.textContent),
+    [evil, evil],
+  );
+  await renameInPlace('button[data-rename-profile="p"]', evil);
+  assert.equal(calls.length, 0, 'an unchanged name is not sent');
+  // The stub refuses anything else: the input stays open with focus, and the toast says why.
+  await renameInPlace('button[data-rename-profile="p"]', 'Refused');
+  assert.equal(calls.length, 1);
+  assert.equal((document.activeElement as HTMLInputElement).value, 'Refused');
+  assert.match($('#toast')!.textContent, /unexpected \/api\/rename/);
 });
 
 test('the account page offers setup until accounts are on, then the signed-in user', async () => {
