@@ -39,6 +39,7 @@ import {
 import type { View } from '../session.ts';
 import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
+import { factoryGroupsState } from '../views/factories.ts';
 import AdaPanel from './AdaPanel.vue';
 import { legacy } from './bridge.ts';
 import { isBusy, whileBusy } from '../busy.ts';
@@ -59,6 +60,15 @@ const NAV: [id: string, icon: string, label: string][] = [
 const frame = computed(() =>
   legacy(() => ({
     view,
+    // What Logistics still needs before it shows anything (SP-09): its link is dimmed with the
+    // reason on a second line, and the page itself explains the same.
+    needs: {
+      logistics: !calculated
+        ? 'needs a calculated plan'
+        : !factoryGroupsState().groups.length
+          ? 'needs factory groups'
+          : '',
+    } as Record<string, string>,
     saveName: currentSave.name,
     canPickPhase: !!currentSave.id,
     phase: phase(),
@@ -245,11 +255,21 @@ async function pickPhase(e: Event) {
           v-for="[id, icon, label] in NAV"
           :key="id"
           :href="'#' + id"
-          :class="frame.view === id ? 'active' : ''"
+          :class="[frame.view === id ? 'active' : '', frame.needs[id] ? 'dim' : '']"
           :aria-current="frame.view === id ? 'page' : undefined"
           @click="navFollowed"
+          :aria-describedby="frame.needs[id] ? `nav-${id}-needs` : undefined"
           ><span class="navicon" aria-hidden="true">{{ icon }}</span
-          >{{ label }}</a
+          ><span class="nav-label"
+            >{{ label
+            }}<small
+              v-if="frame.needs[id]"
+              :id="`nav-${id}-needs`"
+              class="nav-needs"
+              aria-hidden="true"
+              >{{ frame.needs[id] }}</small
+            ></span
+          ></a
         >
       </nav>
       <AdaPanel />

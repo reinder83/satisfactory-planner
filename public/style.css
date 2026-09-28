@@ -272,6 +272,25 @@ input[type='radio'] {
   background: #14181b;
   color: var(--bright);
 }
+/* A page with nothing to show yet (SP-09, Shell.vue): still a link, dimmed, with the reason as
+   a visible second line rather than a tooltip. */
+.nav-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nav a.dim:not(.active) {
+  color: var(--dim);
+}
+.nav-needs {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--dim);
+}
 .navicon {
   width: 20px;
   text-align: left;
@@ -3227,6 +3246,15 @@ button.rail-tile:hover {
 }
 .form-error:empty {
   margin: 0;
+}
+/* The wizard's error line (SP-34): an error notice above the step's buttons that takes focus
+   when set (wizardError), and takes no space while empty. */
+.notice.form-error:empty {
+  display: none;
+}
+.notice.form-error:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
 }
 .form-error .error-options {
   display: block;

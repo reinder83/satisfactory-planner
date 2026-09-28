@@ -270,6 +270,13 @@ function submit() {
           again.
         </p>
       </template>
+      <p
+        id="wizard-error"
+        class="form-error notice error"
+        role="alert"
+        tabindex="-1"
+        data-wizard-error
+      ></p>
       <div class="wizard-actions">
         <button type="button" class="btn" data-extraction-back @click="go(page.step - 1)">
           {{ page.step <= 1 ? 'Cancel' : 'Back' }}
@@ -289,7 +296,6 @@ function submit() {
           </button></span
         >
       </div>
-      <p id="wizard-error" class="form-error" role="alert"></p>
     </form>
   </template>
 </template>

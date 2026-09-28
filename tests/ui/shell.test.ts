@@ -8,6 +8,7 @@ import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-pa
 import { setContext, setView, setWorkspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { showSignedOut, unmountShell } from '../../public/app/ui/mount.ts';
+import { generated, open as openProfile } from './setup.ts';
 import type {
   Handbook,
   Phase,
@@ -79,7 +80,8 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
     [
       ['#plan', '◫Build plan'],
       ['#factories', '▥Factories'],
-      ['#logistics', '⇄Logistics'],
+      // The handbook profile has no calculated plan, so Logistics says what it needs (SP-09).
+      ['#logistics', '⇄Logisticsneeds a calculated plan'],
       ['#storage', '▦Storage room'],
       ['#resources', '↗Power & resources'],
       ['#notes', '✎Notes'],
@@ -285,4 +287,43 @@ test('a link followed from the drawer closes it (SP-37)', async () => {
   await nextTick();
   await nextTick();
   assert.equal(document.activeElement, toggle);
+});
+
+// SP-09 (#244): the Logistics link is dimmed, with the reason as a visible second line that is
+// its description, while there is nothing to show there; it stays a link either way.
+test('Logistics is dimmed with its reason until there is something to show (SP-09)', async () => {
+  const link = () => $<HTMLAnchorElement>('.nav a[href="#logistics"]')!;
+  const reason = () => {
+    const id = link().getAttribute('aria-describedby');
+    return id ? document.getElementById(id)!.textContent : null;
+  };
+  // The handbook profile: no calculated plan.
+  render();
+  assert.ok(link().classList.contains('dim'));
+  assert.equal(reason(), 'needs a calculated plan');
+  assert.equal(link().querySelector('.nav-needs')!.getAttribute('aria-hidden'), 'true');
+  // A calculated profile without groups.
+  openProfile({ calculated: generated(), name: 'Plan' });
+  render();
+  await nextTick();
+  assert.ok(link().classList.contains('dim'));
+  assert.equal(reason(), 'needs factory groups');
+  // With groups: a normal link, no reason.
+  openProfile({
+    calculated: generated(),
+    name: 'Plan',
+    state: { factoryGroups: { groups: [{ id: 'fg-a', name: 'A' }], assignments: {} } },
+  });
+  render();
+  await nextTick();
+  assert.ok(!link().classList.contains('dim'));
+  assert.equal(link().getAttribute('aria-describedby'), null);
+  assert.equal(link().querySelector('.nav-needs'), null);
+  // Dimmed, it is still followed, and the page shows its notice.
+  openProfile({ calculated: generated(), name: 'Plan' });
+  setView('logistics');
+  render();
+  await nextTick();
+  assert.equal(link().getAttribute('aria-current'), 'page');
+  assert.ok($('#main [data-logistics-empty="groups"]'), 'the existing notice');
 });
