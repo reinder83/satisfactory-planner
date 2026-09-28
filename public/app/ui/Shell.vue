@@ -39,6 +39,7 @@ import {
 import type { View } from '../session.ts';
 import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
+import { backupAge } from '../views/backup.ts';
 import { factoryGroupsState } from '../views/factories.ts';
 import AdaPanel from './AdaPanel.vue';
 import { legacy } from './bridge.ts';
@@ -75,6 +76,9 @@ const frame = computed(() =>
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
     saved: pending ? 'Saving…' : browserMode ? 'Saved in this browser' : 'Saved on server',
     savedShort: pending ? 'Saving…' : browserMode ? 'Saved in browser' : 'Saved',
+    // The browser edition's backup age under the save indicator (SP-40), worked out on every
+    // render; the Backup page shows it in full. The Docker edition keeps its saves on the server.
+    backup: browserMode && currentSave.id ? backupAge(workspace.lastBackup) : null,
     footer: profileFooter(),
     // The open save's profiles, for the switcher. A signed-out workspace has no saves, and the
     // frame may redraw once more before the sign-in screen replaces it.
@@ -277,6 +281,14 @@ async function pickPhase(e: Event) {
         <span class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
       </div>
+      <a
+        v-if="frame.backup"
+        href="#backup"
+        :class="['backup-age', frame.backup.stale ? 'is-stale' : '']"
+        data-backup-age
+        @click="navFollowed"
+        >{{ frame.backup.short }}</a
+      >
       <div class="sidebar-foot">
         <ActionMenu
           id="profile-switcher"

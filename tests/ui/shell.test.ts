@@ -73,6 +73,12 @@ test('the frame shows the open save and profile, escaped, around the page', () =
   assert.ok($('#main .heading-row'), 'the plan page is drawn into <main>');
 });
 
+test('the Docker edition shows no backup age: its saves are on the server (SP-40)', () => {
+  open();
+  render();
+  assert.equal($('[data-backup-age]'), null);
+});
+
 test('the navigation lists Notes between Power & resources and Backup (#243)', () => {
   render();
   assert.deepEqual(
