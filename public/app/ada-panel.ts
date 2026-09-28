@@ -33,6 +33,7 @@ import {
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
 import { planTasks, taskEditsState } from './tasks.ts';
+import { backupDays } from './views/backup.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { groundMovesPending, storageBays, storageMatches } from './views/storage.ts';
@@ -205,9 +206,7 @@ function adaFacts(): AdaFacts {
         : null,
     hours: calculated && x.hours ? num(x.hours) + ' h' : '',
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
-    backupDays: workspace.lastBackup
-      ? Math.max(0, Math.floor((Date.now() - new Date(workspace.lastBackup).getTime()) / 86400000))
-      : null,
+    backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',
     startPhase: startPhase(),
     assumptions: calculated ? (calculated.warnings || []).length : 0,

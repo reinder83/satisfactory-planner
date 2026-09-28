@@ -29,6 +29,7 @@ import {
   workspace,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { backupAge } from '../../views/backup.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
@@ -47,9 +48,10 @@ const page = computed(() =>
       name: s.name,
       profiles: s.profiles.length,
     })),
-    lastBackup: workspace.lastBackup
-      ? 'Last export: ' + new Date(workspace.lastBackup).toLocaleString()
-      : 'No full backup has been exported from this browser yet.',
+    // The browser edition's backup status (SP-40): its age, worked out on every render, and
+    // when it was. Warn-toned after a week, or when there has been no full backup.
+    backup: backupAge(workspace.lastBackup),
+    backupAt: workspace.lastBackup ? new Date(workspace.lastBackup).toLocaleString() : '',
   })),
 );
 const exporting = ref(false);
@@ -268,9 +270,21 @@ async function persistStorage() {
 
   <section v-if="page.kind === 'browser'" class="panel">
     <h2>Keep a backup</h2>
+    <div
+      class="notice backup-status"
+      :class="page.backup.stale ? 'warn' : 'info'"
+      data-backup-status
+    >
+      <b>{{ page.backup.text }}</b
+      ><span v-if="page.backupAt" class="small"> · Last full export {{ page.backupAt }}</span>
+    </div>
     <p>
-      {{ page.lastBackup }}
-      Export after major changes and before clearing browser data.
+      {{
+        page.backup.days === null
+          ? 'No full backup has been exported from this browser yet.'
+          : 'Export all saves again after major changes.'
+      }}
+      Export before clearing browser data.
     </p>
     <button class="btn" data-persist-storage @click="persistStorage">
       Request persistent browser storage
