@@ -7,7 +7,9 @@
   steps reads the one being left. The form is keyed by step, so every step starts from the
   draft and a new step clears the error line. Enter or the primary button moves on until
   Review, which calculates, and on Review creates the profile. The submit stops here, since
-  nothing else handles the wizard form.
+  nothing else handles the wizard form. Beside Goals and Resources is the live estimate
+  (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
+  sits under the form.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -23,9 +25,11 @@ import {
   submitLabel,
   wizardError,
 } from '../../wizard/wizard.ts';
+import { scheduleEstimate } from '../../wizard/estimate.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import BrowserNotice from '../BrowserNotice.vue';
+import EstimatePanel from '../wizard/EstimatePanel.vue';
 import PageHeader from '../PageHeader.vue';
 import GoalStep from '../wizard/GoalStep.vue';
 import PreferencesStep from '../wizard/PreferencesStep.vue';
@@ -55,6 +59,13 @@ function changed(e: Event) {
     readWizard(e.currentTarget as HTMLFormElement);
     render();
   }
+  edited(e);
+}
+
+// Goals and Resources estimate as they are edited (SP-33, wizard/estimate.ts).
+const estimating = computed(() => page.value.draft && [3, 4].includes(page.value.step));
+function edited(e: Event) {
+  if (estimating.value) scheduleEstimate(e.currentTarget as HTMLFormElement);
 }
 
 async function submit(e: Event) {
@@ -103,48 +114,52 @@ async function submit(e: Event) {
         {{ i + 1 }}. {{ n }}
       </button>
     </div>
-    <form
-      id="wizard-form"
-      :key="page.step"
-      class="panel wizard-panel"
-      @change="changed"
-      @submit.prevent.stop="submit"
-    >
-      <SettingsStep v-if="page.step === 1" />
-      <PreferencesStep v-else-if="page.step === 2" />
-      <GoalStep v-else-if="page.step === 3" />
-      <ResourcesStep v-else-if="page.step === 4" />
-      <ReviewStep v-else-if="page.step === 5" />
-      <div class="wizard-actions">
-        <button
-          v-if="page.step === 1"
-          type="button"
-          class="btn"
-          data-cancel-wizard
-          @click="cancelWizard"
-        >
-          Cancel</button
-        ><button
-          v-else
-          type="button"
-          class="btn"
-          data-wizard-back
-          @click="moveWizard(page.step - 1)"
-        >
-          Back</button
-        ><span class="guided-escape"
-          ><button
-            v-if="page.step < 5"
+    <div :class="['wizard-body', estimating ? 'with-estimate' : '']">
+      <form
+        id="wizard-form"
+        :key="page.step"
+        class="panel wizard-panel"
+        @change="changed"
+        @input="edited"
+        @submit.prevent.stop="submit"
+      >
+        <SettingsStep v-if="page.step === 1" />
+        <PreferencesStep v-else-if="page.step === 2" />
+        <GoalStep v-else-if="page.step === 3" />
+        <ResourcesStep v-else-if="page.step === 4" />
+        <ReviewStep v-else-if="page.step === 5" />
+        <div class="wizard-actions">
+          <button
+            v-if="page.step === 1"
             type="button"
-            class="btn quiet"
-            data-guided-start
-            @click="toGuided()"
+            class="btn"
+            data-cancel-wizard
+            @click="cancelWizard"
           >
-            ← Guided start</button
-          ><button class="btn primary" type="submit">{{ page.submit }}</button></span
-        >
-      </div>
-      <p id="wizard-error" class="form-error" role="alert"></p>
-    </form>
+            Cancel</button
+          ><button
+            v-else
+            type="button"
+            class="btn"
+            data-wizard-back
+            @click="moveWizard(page.step - 1)"
+          >
+            Back</button
+          ><span class="guided-escape"
+            ><button
+              v-if="page.step < 5"
+              type="button"
+              class="btn quiet"
+              data-guided-start
+              @click="toGuided()"
+            >
+              ← Guided start</button
+            ><button class="btn primary" type="submit">{{ page.submit }}</button></span
+          >
+        </div>
+        <p id="wizard-error" class="form-error" role="alert"></p>
+      </form>
+      <EstimatePanel v-if="estimating" />
+    </div>
   </template>
 </template>

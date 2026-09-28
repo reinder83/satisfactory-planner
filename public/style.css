@@ -3063,6 +3063,68 @@ button.rail-tile:hover {
 .wizard-panel {
   max-width: 1000px;
 }
+/* Goals and Resources with the live estimate beside them (SP-33, ui/wizard/EstimatePanel.vue);
+   at 720px and below it sits under the form. */
+.wizard-body.with-estimate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  align-items: start;
+  max-width: 1296px;
+}
+.wizard-body.with-estimate .wizard-panel {
+  max-width: none;
+}
+.wizard-estimate {
+  position: sticky;
+  top: 16px;
+}
+.wizard-body .panel + .panel {
+  margin-top: 0;
+}
+.estimate-figures {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 14px;
+}
+.estimate-figures.stale {
+  color: var(--muted);
+}
+.estimate-figures dd {
+  margin: 2px 0 0;
+  font-family: var(--head);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--bright);
+  overflow-wrap: anywhere;
+}
+.estimate-figures.stale dd {
+  color: var(--muted);
+}
+.estimate-figures dd.warn {
+  color: var(--red);
+}
+.estimate-figures dd small {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dim);
+  margin-left: 6px;
+}
+.estimate-figures .resource-bar {
+  width: 100%;
+}
+.wizard-estimate .btn {
+  width: 100%;
+}
+@media (max-width: 720px) {
+  .wizard-body.with-estimate {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wizard-estimate {
+    position: static;
+  }
+}
 .wizard-progress {
   display: flex;
   flex-wrap: wrap;
