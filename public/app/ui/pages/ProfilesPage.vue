@@ -40,7 +40,7 @@ import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave, openProfile } from '../actions.ts';
-import type { WorkspaceSummary } from '../../../types/index.ts';
+import type { ProfileSummary, WorkspaceSummary } from '../../../types/index.ts';
 
 onMounted(async () => {
   try {
@@ -67,10 +67,33 @@ const page = computed(() =>
           ? `${p.settings.purity} purity · ${num(p.settings.multiplier)}× elevator · ${num(p.settings.powerFactor)}× power`
           : '50× elevator · pure ingots · nuclear recycling',
         progress: `${p.completed} checks complete · ${phaseLabel(p.phase)}`,
+        bar: phaseBar(p),
       })),
     })),
   })),
 );
+// A calculated profile's progress bar (SP-32): a segment per phase it plans. Phases before the
+// one worked on read as done, that one fills with its share of production lines ticked Running,
+// later ones are empty; Post Phase 5 works on Phase 5's lines. The label says it without colour:
+// "Phase 3 of 5, 22%". None without per-phase counts (a handbook profile).
+function phaseBar(p: ProfileSummary) {
+  if (!p.phases?.length) return null;
+  const at = p.phase === 'post' ? 5 : Number(p.phase);
+  const current = p.phases.find(x => Number(x.phase) === at);
+  const pct = current?.total ? Math.round((current.done / current.total) * 100) : 0;
+  return {
+    label: `${p.phase === 'post' ? phaseLabel('post') : `Phase ${at} of 5`}, ${pct}%`,
+    segments: p.phases.map(x => {
+      const n = Number(x.phase);
+      const state = n < at ? 'done' : n === at ? 'current' : 'later';
+      return {
+        phase: x.phase,
+        state,
+        fill: state === 'done' ? 100 : state === 'current' ? pct : 0,
+      };
+    }),
+  };
+}
 // A save card and a profile card of the page.
 type SaveCard = (typeof page.value)['saves'][number];
 type ProfileCard = SaveCard['profiles'][number];
@@ -252,6 +275,21 @@ async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }
         />
         <p>{{ p.summary }}</p>
         <p class="small">{{ p.progress }}</p>
+        <div
+          v-if="p.bar"
+          class="phase-bar"
+          role="img"
+          :aria-label="p.bar.label"
+          :data-phase-bar="p.id"
+        >
+          <span
+            v-for="seg in p.bar.segments"
+            :key="seg.phase"
+            :class="['phase-seg', seg.state]"
+            :data-phase-seg="seg.phase"
+            ><span :style="{ width: seg.fill + '%' }"></span
+          ></span>
+        </div>
         <div class="profile-actions">
           <button
             :class="['btn', p.open ? '' : 'primary']"

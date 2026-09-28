@@ -1,7 +1,7 @@
 // The Docker edition's workspace file, the replies the interface reads, the item catalog and
 // the two export formats. The browser edition (browser-api.ts) answers the same /api/ paths
 // with the same shapes from IndexedDB.
-import type { Choice, ItemRates, Phase } from './common.ts';
+import type { Choice, ItemRates, Phase, StageKey } from './common.ts';
 import type { AlternateRanking, StoredCalculatedPlan, StoredSettings } from './calculated.ts';
 import type { Handbook } from './handbook.ts';
 import type { ProgressState, SavedState } from './state.ts';
@@ -123,6 +123,15 @@ export interface ProfileSummary {
   settings?: StoredSettings;
   completed: number;
   phase: Phase;
+  // A calculated profile's progress per phase it plans, from its start phase (SP-32): the
+  // production lines ticked Running over the phase's lines. Absent without a calculated plan.
+  phases?: PhaseProgress[];
+}
+
+export interface PhaseProgress {
+  phase: StageKey;
+  done: number;
+  total: number;
 }
 
 export interface SaveSummary {
