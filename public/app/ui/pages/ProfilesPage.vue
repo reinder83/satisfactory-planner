@@ -35,6 +35,7 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import ActionMenu from '../ActionMenu.vue';
 import BrowserNotice from '../BrowserNotice.vue';
+import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave, openProfile } from '../actions.ts';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -64,10 +65,9 @@ type ProfileCard = SaveCard['profiles'][number];
 
 // The card action in progress, as "<action>:<save id>:<profile id>", so its button can say so.
 // That button is busy meanwhile (bound aria-disabled, app/busy.ts: it keeps focus, #299) and its
-// handler does nothing more; so is Rename while it saves.
+// handler does nothing more.
 const busy = ref('');
 const key = (action: string, s: SaveCard, p: ProfileCard) => `${action}:${s.id}:${p.id}`;
-const renaming = ref(false);
 // A card's ⋯ menu (ui/ActionMenu.vue) holds Duplicate, Share and Remove (#238). It is busy while
 // one of them runs, and says "Copying…" for Duplicate, since the menu has closed by then.
 const menuId = (s: SaveCard, p: ProfileCard) => `profile-menu-${s.id}-${p.id}`;
@@ -174,27 +174,25 @@ function openCard(s: SaveCard, p: ProfileCard) {
   return openProfile(s.id, p.id, on => (busy.value = on ? key('open', s, p) : ''));
 }
 
-// #rename-form renames the open save or the open profile (its "target" select), then copies
-// the new names into the session's currentSave and currentProfile and redraws.
-async function rename(e: Event) {
-  if (renaming.value) return;
-  renaming.value = true;
+// Renames any save or profile in place (SP-31, ui/InlineName.vue), naming it in the request's
+// scope headers; a save is scoped with any one of its profiles. The new names are copied into
+// the session's currentSave and currentProfile, so the sidebar footer and the breadcrumb follow.
+// A failure is toasted and rethrown, so the input stays open.
+async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }, name: string) {
   try {
     setWorkspace(
-      await post<WorkspaceSummary>(
-        '/api/rename',
-        Object.fromEntries(new FormData(e.target as HTMLFormElement)),
-      ),
+      await post<WorkspaceSummary>('/api/rename', { target, name }, { save: s.id, profile: p.id }),
     );
-    // The open save and profile are in the reply.
-    const s = workspace.saves.find(s => s.id === currentSave.id)!;
-    currentSave.name = s.name;
-    currentProfile.name = s.profiles.find(p => p.id === currentProfile.id)!.name;
+    const open = workspace.saves.find(x => x.id === currentSave.id);
+    if (open) {
+      currentSave.name = open.name;
+      currentProfile.name =
+        open.profiles.find(x => x.id === currentProfile.id)?.name ?? currentProfile.name;
+    }
     render();
   } catch (err) {
     toast((err as Error).message, true);
-  } finally {
-    renaming.value = false;
+    throw err;
   }
 }
 </script>
@@ -215,7 +213,13 @@ async function rename(e: Event) {
   </div>
   <section v-for="s in page.saves" :key="s.id" class="panel save-panel">
     <div class="section-head">
-      <h2>{{ s.name }}</h2>
+      <InlineName
+        :name="s.name"
+        what="save"
+        tag="h2"
+        :hook="{ 'data-rename-save': s.id }"
+        :save="n => rename('save', s, s.profiles[0]!, n)"
+      />
       <button class="btn" :data-new-profile="s.id" @click="startWizard(s.id)">
         Try another profile
       </button>
@@ -227,7 +231,13 @@ async function rename(e: Event) {
         :class="['profile-card', p.open ? 'selected' : '']"
       >
         <div class="eyebrow">{{ p.kind }}</div>
-        <h3>{{ p.name }}</h3>
+        <InlineName
+          :name="p.name"
+          what="profile"
+          tag="h3"
+          :hook="{ 'data-rename-profile': p.id, 'data-rename-profile-save': s.id }"
+          :save="n => rename('profile', s, p, n)"
+        />
         <p>{{ p.summary }}</p>
         <p class="small">{{ p.progress }}</p>
         <div class="profile-actions">
@@ -292,25 +302,8 @@ async function rename(e: Event) {
   <p class="small muted">
     Duplicate copies a profile with its progress so you can try changes without touching the
     original. Share downloads a file with the plan, storage layout, factory groups and step edits —
-    without your checkmarks or notes — that anyone can import under Backup → Import saves.
+    without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
+    save or profile with ✎ beside its name; renaming does not change progress. Profiles keep a
+    frozen calculation so later planner updates cannot silently change your targets.
   </p>
-  <section class="panel">
-    <h2>Rename the current save or profile</h2>
-    <form id="rename-form" class="inline-form" @submit.prevent="rename">
-      <select name="target" aria-label="What to rename">
-        <option value="save">Save</option>
-        <option value="profile">Profile</option></select
-      ><input
-        name="name"
-        required
-        maxlength="80"
-        aria-label="New name"
-        placeholder="New name"
-      /><button class="btn" :aria-disabled="renaming || undefined">Rename</button>
-    </form>
-    <p class="small muted">
-      Renaming does not change progress. Profiles keep a frozen calculation so later planner updates
-      cannot silently change your targets.
-    </p>
-  </section>
 </template>

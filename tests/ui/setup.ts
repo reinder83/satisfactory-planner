@@ -206,13 +206,17 @@ export function go(view: View) {
 export const applyUpdate = (op: UpdateOp) => mutate(structuredClone(state), op);
 
 // Replies to fetch() calls from a table of path -> reply (a value, or a function of the
-// parsed body), recording each call as [path, body]. `B` is the request body's shape, for a
-// test that reads fields of it.
+// parsed body), recording each call as [path, body] and its headers in `calls.headers`. `B` is
+// the request body's shape, for a test that reads fields of it.
 export function stubFetch<B = unknown>(replies: Record<string, unknown>) {
-  const calls: [path: string, body: B][] = [];
+  // Not enumerable, so a test that compares the calls themselves sees only [path, body] pairs.
+  const calls = Object.defineProperty([] as [path: string, body: B][], 'headers', {
+    value: [],
+  }) as [path: string, body: B][] & { headers: Record<string, string>[] };
   globalThis.fetch = async (path: RequestInfo | URL, options: RequestInit = {}) => {
     const body: B = options.body ? JSON.parse(String(options.body)) : undefined;
     calls.push([String(path), body]);
+    calls.headers.push({ ...(options.headers as Record<string, string> | undefined) });
     const key = Object.keys(replies).find(k => String(path).startsWith(k));
     if (!key) return new Response(JSON.stringify({ error: 'unexpected ' + path }), { status: 500 });
     const entry = replies[key];

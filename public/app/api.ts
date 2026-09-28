@@ -182,13 +182,14 @@ export function scopeHeaders(): { 'X-Save-Id': string; 'X-Profile-Id': string } 
 }
 
 // JSON POST outside the save queue (profiles, rename, import, account, preview...).
-// Pass scope=false for workspace-wide calls; `extra` adds request options (such as the
-// onProgress callback from calcProgress() that the browser calculator reports to). The server
-// refuses a POST without X-Planner-Request and a JSON content type (a CSRF guard).
+// Pass scope=false for workspace-wide calls, or a save and profile to act on one other than the
+// open one (renaming any save or profile in place, SP-31); `extra` adds request options (such as
+// the onProgress callback from calcProgress() that the browser calculator reports to). The
+// server refuses a POST without X-Planner-Request and a JSON content type (a CSRF guard).
 export async function post<T = unknown>(
   endpoint: string,
   data: unknown,
-  scope = true,
+  scope: boolean | { save: string; profile: string } = true,
   extra: RequestOptions = {},
 ): Promise<T> {
   return request<T>(endpoint, {
@@ -196,7 +197,11 @@ export async function post<T = unknown>(
     headers: {
       'Content-Type': 'application/json',
       'X-Planner-Request': '1',
-      ...(scope ? scopeHeaders() : {}),
+      ...(scope === true
+        ? scopeHeaders()
+        : scope
+          ? { 'X-Save-Id': scope.save, 'X-Profile-Id': scope.profile }
+          : {}),
     },
     body: JSON.stringify(data),
     ...extra,
