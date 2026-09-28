@@ -16,6 +16,7 @@ import { planTasks } from '../../public/app/tasks.ts';
 import { headroomAdvice } from '../../public/app/views/calculated.ts';
 import {
   answerConfirms,
+  applyUpdate,
   $,
   $$,
   evil,
@@ -75,7 +76,9 @@ test('the handbook plan shows the phase checklist, counters, notes link and deli
   assert.equal($$('#main textarea').length, 0, 'no notes editor on the plan');
   assert.equal($('[data-phase-notes-link]')!.getAttribute('href'), '#notes');
   assert.equal($('[data-phase-notes-link]')!.textContent, 'Phase notes →');
-  assert.equal($('.next-card .step-no')!.textContent, 'NEXT UNFINISHED STEP');
+  // SP-42: the next step leads the checklist; the side column no longer repeats it.
+  assert.equal($('#main .task.lead .step-no')!.textContent, 'Next step');
+  assert.equal($('.next-card'), null);
   const deliveries = handbookDeliveries('3');
   assert.equal($$('#main [data-delivery]').length, deliveries.length);
   assert.equal(
@@ -129,8 +132,9 @@ test('the checklist can be searched and can hide completed steps', async () => {
   for (const t of planTasks()) state.checks[t.id] = true;
   render();
   await nextTick();
-  assert.match($('#main .empty-state')!.textContent, /Every step of this phase is completed/);
-  assert.equal($('.next-card .step-no')!.textContent, 'PHASE CHECKLIST COMPLETE');
+  assert.match($('[data-phase-complete]')!.textContent, /Phase checklist complete/);
+  assert.match($('[data-phase-complete]')!.textContent, /Untick “Hide completed”/);
+  assert.equal($('#main .done-group'), null, 'hidden completed steps have no Done group');
   // The toggle is view state and stays on for the calculated plan.
   open({ calculated: generated });
   render();
@@ -139,6 +143,109 @@ test('the checklist can be searched and can hide completed steps', async () => {
   // It is remembered in this browser, never in the profile.
   assert.equal(localStorage.getItem('planner-hide-done'), 'on');
   assert.equal('hideDone' in state.settings, false);
+});
+
+// SP-42 (#277): the first unfinished step leads the list, unfolded, with Mark done and its
+// factory; the other unfinished steps follow, and completed ones fold into "Done (n)".
+const leadId = () => $('#main [data-open-steps] > .task.lead [data-check]')?.dataset.check;
+const doneIds = () => $$('#main .done-group [data-check]').map(e => e.dataset.check);
+const tick = async (box: HTMLInputElement, on: boolean) => {
+  box.focus();
+  box.checked = on;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+};
+
+test('the first unfinished step leads the checklist, and ticking it promotes the next (SP-42)', async () => {
+  stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  const ids = planTasks().map(t => t.id);
+  state.checks[ids[0]!] = true;
+  render();
+  await nextTick();
+  assert.equal(leadId(), ids[1], 'the first step not ticked leads');
+  assert.equal($$('#main .task.lead').length, 1);
+  assert.equal($<HTMLDetailsElement>('#main .task.lead details')!.open, true, 'unfolded');
+  assert.equal(
+    $$<HTMLDetailsElement>('#main [data-open-steps] > .task:not(.lead) details').filter(d => d.open)
+      .length,
+    0,
+    'the other steps stay folded',
+  );
+  assert.deepEqual(doneIds(), [ids[0]]);
+  assert.equal($('#main .done-group > summary')!.textContent, 'Done (1)');
+  assert.equal($<HTMLDetailsElement>('#main .done-group')!.open, false, 'Done starts folded');
+  assert.deepEqual(
+    $$('#main [data-open-steps] [data-check]').map(e => e.dataset.check),
+    ids.slice(1),
+    'the unfinished steps keep the plan order',
+  );
+  // Mark done ticks the lead's saved key; the next step leads, and focus goes to its Mark done.
+  const mark = $('#main .task.lead [data-mark-done]')!;
+  assert.equal(mark.tagName, 'BUTTON');
+  mark.focus();
+  mark.click();
+  await settle();
+  assert.equal(state.checks[ids[1]!], true);
+  assert.equal(leadId(), ids[2]);
+  assert.deepEqual(doneIds(), [ids[0], ids[1]]);
+  assert.equal($('#main .done-group > summary')!.textContent, 'Done (2)');
+  assert.equal(document.activeElement, $('#main .task.lead [data-mark-done]'));
+  // Its checkbox does the same, and focus goes to the next lead's checkbox.
+  await tick($<HTMLInputElement>('#main .task.lead [data-check]')!, true);
+  assert.equal(leadId(), ids[3]);
+  assert.equal(document.activeElement, $('#main .task.lead [data-check]'));
+  // Unticked under Done, a step goes back among the unfinished ones in its place, keeping focus.
+  $<HTMLDetailsElement>('#main .done-group')!.open = true;
+  await tick($<HTMLInputElement>(`#main .done-group [data-check="${ids[0]}"]`)!, false);
+  assert.equal(leadId(), ids[0], 'the earliest unfinished step leads again');
+  assert.deepEqual(doneIds(), [ids[1], ids[2]]);
+  assert.equal(document.activeElement, $(`#main [data-open-steps] [data-check="${ids[0]}"]`));
+});
+
+test('the lead step offers its factory; search, Hide completed and editing still work (SP-42)', async () => {
+  open({ calculated: generated });
+  render();
+  await nextTick();
+  const ts = planTasks(),
+    ids = ts.map(t => t.id);
+  const linked = ts.findIndex(t => $(`#main [data-task="${t.id}"] .task-link`));
+  assert.ok(linked > 0, 'a later step links a factory');
+  for (const id of ids.slice(0, linked)) state.checks[id] = true;
+  render();
+  await nextTick();
+  assert.equal(leadId(), ids[linked]);
+  const link = $('#main .task.lead .task-link')!;
+  assert.match(link.textContent, /^\s*Open factory: /);
+  assert.ok(!link.classList.contains('quiet'), 'a full button on the lead step');
+  assert.ok($('#main .task.lead [data-mark-done]'));
+  // The search looks in both groups; a completed match shows under Done.
+  $<HTMLInputElement>('#plan-search')!.value = ts[0]!.title;
+  $('#plan-search')!.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.ok(doneIds().includes(ids[0]));
+  $<HTMLInputElement>('#plan-search')!.value = '';
+  $('#plan-search')!.dispatchEvent(new Event('input'));
+  // Hide completed drops the Done group and keeps the lead.
+  $<HTMLInputElement>('#hide-done')!.checked = true;
+  $('#hide-done')!.dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal($('#main .done-group'), null);
+  assert.equal(leadId(), ids[linked]);
+  $<HTMLInputElement>('#hide-done')!.checked = false;
+  $('#hide-done')!.dispatchEvent(new Event('change'));
+  // While editing, the list is flat in the plan's order, with no lead and no Done group.
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
+  assert.ok($('#main .task.is-editing'));
+  assert.equal($('#main .task.lead'), null);
+  assert.equal($('#main .done-group'), null);
+  // (The calculated plan's startup steps depend on what is ticked, so the list is read again.)
+  assert.deepEqual(
+    steps(),
+    planTasks().map(t => t.id),
+  );
+  $('[data-toggle-plan-edit]')!.click();
+  await nextTick();
 });
 
 test('"Hide completed" survives a page refresh', async () => {

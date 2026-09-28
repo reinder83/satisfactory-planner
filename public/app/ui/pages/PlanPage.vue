@@ -1,7 +1,7 @@
 <!--
   #plan for the original handbook: summary tiles, the phase checklist with its edit toggle,
   personal tasks and a link to the phase notes (on the Notes page, #243), and a side column
-  with the next step and the Space Elevator deliveries. Post-game ('post') reads the Phase 5
+  with the Space Elevator deliveries. The next step leads the checklist itself (SP-42). Post-game ('post') reads the Phase 5
   stage of the handbook: stage() maps it to '5'. A calculated profile gets
   CalculatedPlanPage.vue instead.
 -->
@@ -24,8 +24,7 @@ const page = computed(() =>
   legacy(() => {
     // Checklist progress: planTasks() already applies this profile's step edits.
     const ts = planTasks(),
-      done = ts.filter(t => checked(t.id)).length,
-      next = ts.find(t => !checked(t.id));
+      done = ts.filter(t => checked(t.id)).length;
     // Factory and storage counters. The check keys are saved progress and must not change:
     // `factory-<stage>-<id>` is a factory's Running box, `slot-<address>-verified` the last
     // of a container's four checks (see slotKeys in views/storage.ts).
@@ -44,7 +43,6 @@ const page = computed(() =>
       ready: slots.filter(x => checked('slot-' + x.id + '-verified')).length,
       slots: slots.length,
       power: num(plan.power[stage()]),
-      next: next && { title: next.title, body: next.body },
       deliveries: plan.deliveries.filter(d => d.phase === phase()),
     };
   }),
@@ -91,19 +89,6 @@ const page = computed(() =>
       <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
     </section>
     <aside class="side-panels">
-      <section class="panel next-card">
-        <div class="step-no">
-          {{ page.next ? 'NEXT UNFINISHED STEP' : 'PHASE CHECKLIST COMPLETE' }}
-        </div>
-        <h2>{{ page.next?.title || 'Ready for the next phase' }}</h2>
-        <p>
-          {{
-            page.next?.body ||
-            'Verify the delivery, then choose your next phase using the selector above.'
-          }}
-        </p>
-        <a class="btn primary full" href="#factories">Open factory targets →</a>
-      </section>
       <section class="panel">
         <h2>{{ page.post ? 'Post-game priority' : 'Elevator delivery' }}</h2>
         <template v-if="page.post"
