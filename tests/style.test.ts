@@ -319,3 +319,19 @@ test('on a phone the dialog’s sticky header keeps to one line per part (#318)'
   const phone = css.slice(media, css.indexOf('\n}\n', media));
   assert.match(phone, /\n  \.dialog-icon \{\n    width: 36px;\n    height: 36px;/);
 });
+
+test('the dialog’s × has a 44px touch target on a phone, and looks the same (#289)', () => {
+  const css = screenCss().replace(/\r/g, '');
+  const wide = rules(css).find(r => r.selector === '.dialog-head .close')!.body;
+  assert.match(wide, /width: 34px/);
+  assert.match(wide, /height: 34px/);
+  const at = css.indexOf('\n  .dialog-head .close::after {');
+  assert.ok(at > 0, 'a hit area at phone width');
+  const media = css.lastIndexOf('@media', at);
+  assert.match(css.slice(media, css.indexOf('{', media)), /max-width: 720px/);
+  const body = css.slice(at, css.indexOf('}', at));
+  assert.match(body, /width: 44px/);
+  assert.match(body, /height: 44px/);
+  assert.match(body, /translate\(-50%, -50%\)/, 'centred on the button');
+  assert.doesNotMatch(body, /background|border/, 'nothing drawn');
+});

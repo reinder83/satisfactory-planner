@@ -71,7 +71,9 @@ try {
   });
   await page.goto(base);
   await page.locator('#wizard-form').waitFor();
-  assert.ok(await page.getByText('Saved in this browser', { exact: true }).count());
+  // Nothing is saved yet, and the status says so rather than claiming a save (#281).
+  assert.ok(await page.getByText('Nothing saved yet', { exact: true }).count());
+  assert.equal(await page.getByText('Saved in this browser', { exact: true }).count(), 0);
   // A brand new browser workspace opens on the guided start. Answer its first
   // question, then take the escape hatch: All settings must arrive at the step
   // that owns the same question with the answer already carried across.
@@ -100,6 +102,7 @@ try {
   // The notes live on their own page (#243): the plan links there, and following the link
   // puts focus on the Notes heading.
   await page.locator('[data-phase-notes-link]').waitFor({ timeout: 180000 });
+  assert.ok(await page.getByText('Saved in this browser', { exact: true }).count());
   const check = page.locator('[data-check]').first();
   const key = await check.getAttribute('data-check');
   await check.check();

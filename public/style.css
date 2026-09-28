@@ -4028,6 +4028,20 @@ button.rail-tile:hover {
     grid-column: 2;
     grid-row: 1;
   }
+  /* The dialog's × is the way out on a phone, where the backdrop is a thin edge (#289): a 44px
+     touch target centred on the 34px button, which looks as it does wider. */
+  .dialog-head .close {
+    position: relative;
+  }
+  .dialog-head .close::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
   .dialog-head .dialog-head-actions .check-row {
     grid-column: 1 / -1;
     grid-row: 2;

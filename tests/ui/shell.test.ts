@@ -201,7 +201,8 @@ test('the top bar carries a short save status for phone widths, announced polite
     assert.equal(dot.getAttribute('aria-hidden'), 'true', 'the dot is decorative');
   // The widest label sits hidden in the same cell, so the width never changes.
   const sizer = $('.topbar .save-label [aria-hidden="true"]')!;
-  assert.equal(sizer.textContent, 'Saving…');
+  // The Docker edition's widest is the empty workspace's (#281).
+  assert.equal(sizer.textContent, 'No save yet');
   assert.equal($('.topbar-tools #phase-picker')!.id, 'phase-picker');
 });
 

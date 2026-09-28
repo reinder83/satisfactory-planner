@@ -76,13 +76,29 @@ const frame = computed(() =>
           ? 'needs factory groups'
           : '',
     } as Record<string, string>,
-    saveName: currentSave.name,
+    // The empty workspace's placeholder save has no id; the breadcrumb says so as the status does.
+    saveName: currentSave.id ? currentSave.name : 'No save yet',
     canPickPhase: !!currentSave.id,
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
     track: phaseTrack(),
-    saved: pending ? 'Saving…' : browserMode ? 'Saved in this browser' : 'Saved on server',
-    savedShort: pending ? 'Saving…' : browserMode ? 'Saved in browser' : 'Saved',
+    // With no save open (an empty workspace, #281) nothing has been saved, so the status never
+    // claims it, and its dot, which marks a save, is left out.
+    hasSave: !!currentSave.id,
+    saved: pending
+      ? 'Saving…'
+      : !currentSave.id
+        ? 'Nothing saved yet'
+        : browserMode
+          ? 'Saved in this browser'
+          : 'Saved on server',
+    savedShort: pending
+      ? 'Saving…'
+      : !currentSave.id
+        ? 'No save yet'
+        : browserMode
+          ? 'Saved in browser'
+          : 'Saved',
     // The browser edition's backup age under the save indicator (SP-40), worked out on every
     // render; the Backup page shows it in full. The Docker edition keeps its saves on the server.
     backup: browserMode && currentSave.id ? backupAge(workspace.lastBackup) : null,
@@ -175,7 +191,7 @@ onBeforeUnmount(() => wide?.removeEventListener?.('change', widened));
 
 // The top bar's short save status (shown at phone width, where the sidebar's is hidden)
 // reserves the width of its longest label in this edition, so it never shifts the bar.
-const savedShortWidest = browserMode ? 'Saved in browser' : 'Saving…';
+const savedShortWidest = browserMode ? 'Saved in browser' : 'No save yet';
 
 // The sidebar footer: the open profile's name and the game settings it was planned for, as
 // lines. The original handbook's settings are fixed, so they are written out.
@@ -311,7 +327,7 @@ async function pickTrack(e: Event) {
       </nav>
       <AdaPanel />
       <div class="save-status">
-        <span class="dot" aria-hidden="true"></span
+        <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
       </div>
       <a
@@ -468,7 +484,7 @@ async function pickTrack(e: Event) {
             </select></label
           >
           <div class="save-status">
-            <span class="dot" aria-hidden="true"></span
+            <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
             ><span class="save-label"
               ><span id="saved-short" role="status" aria-live="polite">{{ frame.savedShort }}</span
               ><span aria-hidden="true">{{ savedShortWidest }}</span></span

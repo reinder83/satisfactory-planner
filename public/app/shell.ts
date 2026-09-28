@@ -1,6 +1,6 @@
 // The router that renders the current view into the page frame (ui/Shell.vue).
 import { required } from './format.ts';
-import { calculated, view, wizard } from './session.ts';
+import { calculated, currentSave, view, wizard } from './session.ts';
 import { invalidate } from './ui/bridge.ts';
 import { mountPage, mountShell, pageUnmounting, unmountPage } from './ui/mount.ts';
 import { vuePage } from './ui/pages.ts';
@@ -33,7 +33,7 @@ export function render() {
 function drawPage() {
   mountShell(required('#app'));
   invalidate();
-  const component = vuePage(view, calculated, wizard);
+  const component = vuePage(view, calculated, wizard, !!currentSave.id);
   if (component) {
     if (mountPage(required('#main'), component)) focusOpenedPage();
   } else {
