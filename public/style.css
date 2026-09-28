@@ -608,6 +608,71 @@ input[type='radio'] {
   justify-content: flex-end;
   gap: 8px 12px;
 }
+/* The phase track (SP-44, Shell.vue): a segment per phase with its checklist's progress, the
+   working phase in the accent. Each segment is a label over its radio button, which stays in
+   the tab order and takes the arrow keys. At 720px and below the select takes its place. */
+.phase-track {
+  display: flex;
+  gap: 4px;
+}
+.topbar .phase-track-seg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 78px;
+  padding: 7px 10px 8px;
+  border: 1px solid #343b41;
+  background: #171a1d;
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  cursor: pointer;
+}
+.phase-track-seg input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.topbar .phase-track-seg:hover {
+  color: var(--bright);
+}
+.topbar .phase-track-seg.current {
+  border-color: var(--accent);
+  background: #1e1710;
+  color: var(--accent);
+}
+.phase-track-seg:has(input:focus-visible) {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+.topbar .phase-track-seg:has(input:disabled) {
+  cursor: default;
+  color: var(--dim);
+}
+.topbar .phase-track-bar {
+  display: block;
+  height: 3px;
+  background: #0b0d0e;
+}
+.topbar .phase-track-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.topbar .phase-track-seg.current .phase-track-bar > span {
+  background: var(--accent);
+}
+.topbar .phase-select {
+  display: none;
+}
 /* The save status is the sidebar's; the top bar carries a short copy for phone widths,
    where the sidebar's is hidden. Its labels share one grid cell, so the widest one sets
    the width whichever is showing. */
@@ -4008,6 +4073,13 @@ button.rail-tile:hover {
   .topbar .save-status {
     display: flex;
   }
+  /* The phase track collapses to the select here (SP-44). */
+  .phase-track {
+    display: none;
+  }
+  .topbar .phase-select {
+    display: flex;
+  }
   .topbar .breadcrumbs {
     max-width: 100%;
     overflow-wrap: anywhere;
@@ -4312,6 +4384,7 @@ button.rail-tile:hover {
   .checklist-tools,
   .btn,
   #toast,
+  .phase-track,
   .ada-ticker,
   .ada {
     display: none;
