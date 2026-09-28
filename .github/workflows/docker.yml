@@ -17,7 +17,9 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # The TEST_RUNNER repository variable moves this job to the self-hosted runner on the NAS
+    # (see ci/nas-runner/), which costs no Actions minutes; unset, it runs on GitHub's runners.
+    runs-on: ${{ fromJSON(vars.TEST_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -86,6 +88,7 @@ jobs:
           docker rm -f planner-nas || true
           docker rm -f planner-smoke || true
           docker volume rm planner-smoke-data || true
+          docker rmi planner-smoke || true
 
   publish-pages:
     needs: test
