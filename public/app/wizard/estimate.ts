@@ -5,8 +5,11 @@
 // Each edit reads the form into the draft (readWizard, as moving between steps does) and
 // restarts a short timer; when it runs out the settings go to /api/preview marked `estimate`,
 // the same calculation Review uses (the server, or the browser edition's worker), so input is
-// never blocked. One estimate runs at a time: an edit made meanwhile waits for it and then
-// estimates the latest settings. Cancelling (leaving the step, pausing, or a newer edit taking
+// never blocked. With whole machines on (the default), it runs in two passes: first with exact
+// ratios, a quick solve (under half a second even for a heavy plan) shown as a quick estimate,
+// then as the settings stand, which replaces it, since rounding to whole machines can decide
+// whether a phase fits. One estimate runs at a time: an edit made meanwhile waits for the pass
+// under way, skips any pass still to come, and then estimates the latest settings. Cancelling (leaving the step, pausing, or a newer edit taking
 // over) drops the running one's result; on the server edition its request is aborted too, while
 // the browser's worker finishes its solve (a few hundred milliseconds) and the answer is ignored.
 import { post } from '../api.ts';
@@ -15,17 +18,20 @@ import { invalidate } from '../ui/bridge.ts';
 import { readWizard } from './wizard.ts';
 import type { StoredCalculatedPlan } from '../../types/index.ts';
 
-// The pause after the last edit before estimating. With the solve it stays under a second for
-// most settings; a heavy plan (every alternate recipe at a 50× goal) takes about a second to
-// solve on its own. The panel says "Estimating…" from the edit on, so it is never shown stale.
+// The pause after the last edit before estimating. With the quick pass the first figures show
+// within a second of the last edit, even for a heavy plan (every alternate recipe at a 50× goal),
+// whose whole-machine solve alone takes about a second. The panel says "Estimating…" from the
+// edit on, so it is never shown stale.
 export const ESTIMATE_DELAY = 300;
 
 export const estimate: {
   status: 'idle' | 'running' | 'done' | 'error';
   plan: StoredCalculatedPlan | null;
+  // The plan shown is the exact-ratio pass; the whole-machine one is still being solved.
+  quick: boolean;
   error: string;
   paused: boolean;
-} = { status: 'idle', plan: null, error: '', paused: false };
+} = { status: 'idle', plan: null, quick: false, error: '', paused: false };
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 // Which estimate is current: a result from an older serial is dropped.
@@ -40,8 +46,9 @@ export function scheduleEstimate(form: HTMLFormElement, delay = ESTIMATE_DELAY) 
   readWizard(form);
   clearTimeout(timer);
   timer = setTimeout(runEstimate, delay);
-  if (estimate.status !== 'running') {
-    estimate.status = 'running';
+  // The figures on screen are now of older settings, quick pass or not.
+  if (estimate.status !== 'running' || estimate.quick) {
+    Object.assign(estimate, { status: 'running', quick: false });
     invalidate();
   }
 }
@@ -56,16 +63,24 @@ async function runEstimate() {
   const abort = (controller = new AbortController());
   estimate.status = 'running';
   invalidate();
+  const solve = (settings: object) =>
+    post<StoredCalculatedPlan>('/api/preview', { settings, estimate: true }, true, {
+      signal: abort.signal,
+    });
   try {
-    const plan = await post<StoredCalculatedPlan>(
-      '/api/preview',
-      { settings: draft().settings, estimate: true },
-      true,
-      { signal: abort.signal },
-    );
-    if (id === serial) Object.assign(estimate, { plan, error: '', status: 'done' });
+    const settings = draft().settings;
+    if (settings.wholeMachines !== false) {
+      const plan = await solve({ ...settings, wholeMachines: false });
+      if (id !== serial || again) return;
+      Object.assign(estimate, { plan, quick: true, error: '' });
+      invalidate();
+    }
+    const plan = await solve(settings);
+    if (id === serial && !again)
+      Object.assign(estimate, { plan, quick: false, error: '', status: 'done' });
   } catch (err) {
-    if (id === serial) Object.assign(estimate, { error: (err as Error).message, status: 'error' });
+    if (id === serial && !again)
+      Object.assign(estimate, { error: (err as Error).message, quick: false, status: 'error' });
   } finally {
     running = false;
     controller = null;
@@ -86,7 +101,7 @@ export function cancelEstimate(reset = false) {
   serial++;
   controller?.abort();
   if (estimate.status === 'running') estimate.status = estimate.plan ? 'done' : 'idle';
-  if (reset) Object.assign(estimate, { status: 'idle', plan: null, error: '' });
+  if (reset) Object.assign(estimate, { status: 'idle', plan: null, quick: false, error: '' });
   invalidate();
 }
 

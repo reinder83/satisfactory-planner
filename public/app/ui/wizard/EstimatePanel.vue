@@ -24,15 +24,20 @@ const form = () => document.querySelector<HTMLFormElement>('#wizard-form');
 const view = computed(() =>
   legacy(() => {
     const p = estimate.plan;
+    // The quick pass (exact ratios, wizard/estimate.ts) is shown while the whole-machine one
+    // runs; a phase it says fits may still not fit once rounded.
+    const quick = estimate.status === 'running' && estimate.quick;
     const status = estimate.paused
       ? 'Paused. Resume to estimate these settings.'
-      : estimate.status === 'running'
-        ? 'Estimating…'
-        : estimate.status === 'error'
-          ? estimate.error
-          : p
-            ? 'Estimate for the settings on screen.'
-            : 'An estimate appears as you change these settings.';
+      : quick
+        ? 'Quick estimate with exact ratios; checking whole machines…'
+        : estimate.status === 'running'
+          ? 'Estimating…'
+          : estimate.status === 'error'
+            ? estimate.error
+            : p
+              ? 'Estimate for the settings on screen.'
+              : 'An estimate appears as you change these settings.';
     if (!p)
       return { status, error: estimate.status === 'error', paused: estimate.paused, figures: null };
     const from = Number(p.settings.phase || 1);
@@ -68,7 +73,7 @@ const view = computed(() =>
       status,
       error: estimate.status === 'error',
       paused: estimate.paused,
-      stale: estimate.status === 'running',
+      stale: estimate.status === 'running' && !quick,
       figures: {
         phase: lastPhase,
         buildings: last.rows ? num(last.rows.reduce((a, r) => a + r.machines, 0)) : '—',

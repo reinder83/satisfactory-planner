@@ -1223,3 +1223,63 @@ test('leaving the step or pausing cancels the estimate, and a late answer is ign
   assert.equal(previews(calls).length, 1, 'resumed');
   assert.equal($('[data-estimate-pause]')!.getAttribute('aria-pressed'), 'false');
 });
+
+// With whole machines on, the estimate is solved twice: first with exact ratios, which is quick
+// even for a heavy plan and is shown as a quick estimate, then as the settings stand, which
+// replaces it. An edit made during the quick pass skips the whole-machine pass of the old
+// settings and estimates the new ones (SP-33, the under-a-second criterion).
+test('with whole machines, a quick exact-ratio estimate shows first and the full one replaces it (SP-33)', async () => {
+  freshEstimate();
+  const sent: { settings: WizardSettings; estimate: boolean }[] = [];
+  const answers: ((plan: unknown) => void)[] = [];
+  globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
+    sent.push(JSON.parse(String(options.body)));
+    return new Promise<Response>(r =>
+      answers.push(plan => r(new Response(JSON.stringify(plan), { status: 200 }))),
+    );
+  }) as typeof fetch;
+  wizardAt(4, {}, { wholeMachines: true });
+  await pause(30);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.settings.wholeMachines, false, 'the quick pass uses exact ratios');
+  assert.equal(sent[0]!.estimate, true);
+  answers[0]!(estimated(0.5));
+  await pause(30);
+  assert.match(text('[data-estimate-status]'), /Quick estimate with exact ratios/);
+  assert.equal($('.estimate-figures.stale'), null, 'the quick figures are not dimmed');
+  assert.equal(sent.length, 2, 'then the whole-machine pass');
+  assert.equal(sent[1]!.settings.wholeMachines, true);
+  answers[1]!(estimated(1.25));
+  await pause(30);
+  assert.match(text('[data-estimate-status]'), /Estimate for the settings on screen\./);
+  assert.match(text('[data-estimate-warning]'), /Iron Ore is over its budget: 125%/);
+  // An edit during the quick pass: its answer and the old whole-machine pass are skipped.
+  const box = $<HTMLInputElement>('input[name="limit:Iron Ore"]')!;
+  box.value = '5';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await pause(ESTIMATE_DELAY + 30);
+  assert.equal(sent.length, 3, 'a quick pass for the edit');
+  box.value = '7';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await pause(ESTIMATE_DELAY + 30);
+  assert.equal(sent.length, 3, 'waits for the pass under way');
+  answers[2]!(estimated(3));
+  await pause(30);
+  assert.equal(sent.length, 4, 'no whole-machine pass for the old settings');
+  assert.equal(sent[3]!.settings.wholeMachines, false, 'a quick pass for the latest ones');
+  assert.equal(sent[3]!.settings.limits['Iron Ore'], 7);
+  assert.doesNotMatch(text('[data-estimate-tightest]'), /300%/, 'the skipped answer is not shown');
+  // Without whole machines there is one pass only. (The pass still under way is answered first:
+  // this stub ignores the abort, which on the server settles the request at once.)
+  freshEstimate();
+  answers[3]!(estimated(0.5));
+  await pause(30);
+  sent.length = 0;
+  answers.length = 0;
+  wizardAt(4, {}, { wholeMachines: false });
+  await pause(30);
+  answers[0]!(estimated(0.5));
+  await pause(30);
+  assert.equal(sent.length, 1);
+  assert.match(text('[data-estimate-status]'), /Estimate for the settings on screen\./);
+});
