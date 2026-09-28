@@ -301,3 +301,19 @@ test('the top bar’s hazard stripe is 7px, and 4px on a phone (SP-39)', () => {
   assert.match(body, /border-bottom-width: 4px/);
   assert.match(body, /border-image: var\(--hazard\) 4/);
 });
+
+test('the dialog’s × has a 44px touch target on a phone, and looks the same (#289)', () => {
+  const css = screenCss().replace(/\r/g, '');
+  const wide = rules(css).find(r => r.selector === '.dialog-head .close')!.body;
+  assert.match(wide, /width: 34px/);
+  assert.match(wide, /height: 34px/);
+  const at = css.indexOf('\n  .dialog-head .close::after {');
+  assert.ok(at > 0, 'a hit area at phone width');
+  const media = css.lastIndexOf('@media', at);
+  assert.match(css.slice(media, css.indexOf('{', media)), /max-width: 720px/);
+  const body = css.slice(at, css.indexOf('}', at));
+  assert.match(body, /width: 44px/);
+  assert.match(body, /height: 44px/);
+  assert.match(body, /translate\(-50%, -50%\)/, 'centred on the button');
+  assert.doesNotMatch(body, /background|border/, 'nothing drawn');
+});
