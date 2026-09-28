@@ -43,6 +43,10 @@ export default {
     root: fileURLToPath(new URL('.', import.meta.url)),
     include: ['tests/ui/**/*.test.ts'],
     environment: 'happy-dom',
+    // A test that renders many pages (the headroom notice on every phase: 18 pages, ~1.6 s here)
+    // takes over 5 s on the NAS runner's CPU (#400), vitest's default. The limit only matters
+    // for a test that hangs, so it is generous.
+    testTimeout: 30000,
     // node:assert/strict with identity checks that print a page element by a short name
     // when they fail, rather than hanging on the whole document (#287); see the file.
     alias: [

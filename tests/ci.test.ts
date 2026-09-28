@@ -25,3 +25,12 @@ test('every named volume the job uses is removed when it ends (#399)', () => {
   for (const volume of new Set(mounts.map(m => m.split(':')[0]!)))
     assert.ok(cleanup.includes(`docker volume rm ${volume}`), volume + ' is removed');
 });
+
+// The `test` job's vitest run may be on the NAS runner, whose CPU is several times slower than a
+// desktop's: a test that renders many pages crossed vitest's default 5 s there (#400).
+test('vitest gives each test at least 20 s, for the NAS runner (#400)', () => {
+  const config = fs.readFileSync('vite.config.ts', 'utf8');
+  const limit = /\btestTimeout:\s*(\d+)/.exec(config);
+  assert.ok(limit, 'vite.config.ts sets test.testTimeout');
+  assert.ok(Number(limit[1]) >= 20000, `testTimeout is ${limit[1]} ms`);
+});
