@@ -76,7 +76,8 @@ export function calcTasks(): PlanStepData[] {
     ...(p?.rows || []).map(r => ({
       id: 'calc-' + stage() + '-' + r.id,
       title: r.name,
-      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '. Open factory details for an easier rounded option.' : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${outputList(r)}.`,
+      // The pointer to an easier rounded option only where the dialog shows one (#379).
+      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '.' + (easierSetup(machineSetup(r)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${outputList(r)}.`,
     })),
     {
       id: 'calc-' + stage() + '-storage',
@@ -197,6 +198,12 @@ export function machineSetup(r: CalcRow) {
   }
   return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
 }
+
+// The easier rounded setting the factory dialog offers (ui/detail/CalcFactoryDialog.vue), and
+// the build-plan step points to (calcTasks): none for a nuclear or waste line, or when the
+// profile runs whole machines (#379).
+export const easierSetup = (m: ReturnType<typeof machineSetup>): EasySetup | null =>
+  calculated?.settings.wholeMachines ? null : m.easy;
 
 // Phases where a line is not built yet, or needs no more machines, have nothing
 // to add: say so with a dash rather than claiming capacity is being kept.

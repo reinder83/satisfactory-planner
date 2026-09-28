@@ -12,8 +12,8 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel, FLUIDS } from '../../flow.ts';
-import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
-import { calcExpansion, machineSetup, rowIcon } from '../../views/calculated.ts';
+import { calcStage, checked, phase, phaseLabel, stage } from '../../session.ts';
+import { calcExpansion, easierSetup, machineSetup, rowIcon } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -32,7 +32,8 @@ const view = computed(() =>
     const r = calcStage()?.rows?.find(r => r.id === props.id);
     if (!r) return null;
     const m = machineSetup(r),
-      counts = machineCounts(r.machines, m.partial ? m.clock : 100);
+      counts = machineCounts(r.machines, m.partial ? m.clock : 100),
+      easy = easierSetup(m);
     const check = 'calc-' + stage() + '-' + r.id;
     // The card's headline (SP-21): a generator's power, even when it also makes waste (#371),
     // else the main output. The outputs list below stays only where the card lists them too: a
@@ -69,17 +70,16 @@ const view = computed(() =>
           ? '≈ ' + num(m.clock) + '% → ≈ ' + m.lastOutput
           : 'No underclock needed',
       },
-      easy:
-        m.easy && !calculated?.settings.wholeMachines
-          ? {
-              clock: m.easy.clock,
-              output:
-                inputText(m.easy.output) ||
-                num(((r.generationMW / (r.equivalent || 1)) * m.easy.clock) / 100) + ' MW',
-              inputs: inputText(m.easy.inputs),
-              extra: inputText(m.easy.extraOutputs) || 'Additional generation',
-            }
-          : null,
+      easy: easy
+        ? {
+            clock: easy.clock,
+            output:
+              inputText(easy.output) ||
+              num(((r.generationMW / (r.equivalent || 1)) * easy.clock) / 100) + ' MW',
+            inputs: inputText(easy.inputs),
+            extra: inputText(easy.extraOutputs) || 'Additional generation',
+          }
+        : null,
       outputs:
         (generator && main) || outputs.length > 1 || (main && main !== r.name)
           ? inputText(r.outputs)

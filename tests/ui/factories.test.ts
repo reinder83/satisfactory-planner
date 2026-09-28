@@ -1475,6 +1475,32 @@ test('a coal plant’s flow, cells and step still give MW alone (#373)', () => {
   assert.match(step.body, new RegExp(escaped(`Outputs: ${power(406.8)}.`) + '$'));
 });
 
+// A build-plan step points to an easier rounded option only where the factory dialog offers
+// one: not for a nuclear or waste line, nor when the profile runs whole machines (#379).
+test('a build-plan step offers the easier rounded option only when the dialog shows it (#379)', () => {
+  const HINT = 'Open factory details for an easier rounded option.';
+  const offered = (id: string) => {
+    const step = calcTasks().find(t => t.id === 'calc-3-' + id)!;
+    openCalculatedFactory(id);
+    const dialog = $$('#detail .notice').some(n => /Easier optional setting/.test(n.textContent));
+    closeDetail();
+    return [step.body.includes(HINT), dialog];
+  };
+  const { p, uranium } = withNuclearFlow();
+  const line = p.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
+  Object.assign(line, { machines: 5, equivalent: 4.625, lastClock: 62.5 });
+  p.settings.wholeMachines = false;
+  open({ calculated: p });
+  render();
+  assert.deepEqual(offered(line.id), [true, true], 'a production line under exact ratios');
+  assert.ok(uranium.equivalent % 1 > 0, 'the uranium plant runs one machine below 100%');
+  assert.deepEqual(offered(uranium.id), [false, false], 'a nuclear line');
+  p.settings.wholeMachines = true;
+  open({ calculated: p });
+  render();
+  assert.deepEqual(offered(line.id), [false, false], 'a profile that runs whole machines');
+});
+
 // A card for a row that generates power says so in words, with a glyph and an accent edge that
 // are not the Running chip's (#374); a production line has neither.
 test('a power plant’s card is marked as generating power, in text (#374)', async () => {
