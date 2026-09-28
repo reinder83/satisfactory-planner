@@ -1301,6 +1301,40 @@ test('a nuclear plant’s group share says its waste and its power (#371, #374)'
     );
 });
 
+// A generator without outputs (coal, fuel) gives its group share in GW above 1,000 MW, like its
+// card's headline (#380).
+test('a coal plant’s group share is in GW above 1,000 MW, like its headline (#380)', async () => {
+  const p = generated();
+  const coal = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  coal.generationMW = 4412.6;
+  open({
+    calculated: p,
+    state: {
+      factoryGroups: {
+        groups: GROUPS.groups,
+        assignments: {
+          [coal.id]: [
+            { group: 'fg-cable01', rate: null },
+            { group: 'fg-plates1', rate: null },
+          ],
+        },
+      },
+    },
+  });
+  render();
+  await nextTick();
+  const card = $$('#main .user-group')[0]!
+    .querySelector(`[data-calc-factory="${coal.id}"]`)!
+    .closest('.factory-card')!;
+  assert.equal(power(4412.6), `${num(4.4126)} GW`, 'the share below is in GW');
+  assert.ok(
+    plain(card.querySelector('.allocation')!.textContent!).startsWith(
+      `Remaining here, split 2 ways: ${power(4412.6 / 2)} of ${power(4412.6)}`,
+    ),
+    plain(card.querySelector('.allocation')!.textContent!),
+  );
+});
+
 // The group editor names the unit a fixed rate is saved in (#374): a nuclear plant's rate is its
 // waste per minute, as it always was, with the power that stands for beside it while typing; an
 // output-less generator's rate is in MW. A production line keeps "Production per minute".

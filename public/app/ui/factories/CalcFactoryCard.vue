@@ -38,12 +38,13 @@ const card = computed(() =>
       check = 'calc-' + stage() + '-' + r.id,
       setup = machineSetup(r),
       generator = r.generationMW > 0,
-      // A group's share of the row, as a rate: its main output, or a generator's MW. The share
+      // A group's share of the row, as a rate: its main output, or a generator's power, in GW
+      // above 1,000 MW like the headline (#380). The share
       // is worked out on the first output, as group-links.ts does, so a fixed rate saved for a
       // nuclear plant keeps its meaning: its waste, with the power that stands for (#374).
       share =
         !main || !total
-          ? (q: number) => num(q) + ' MW'
+          ? (q: number) => power(q)
           : generator
             ? (q: number) => `${rateOfItem(main, q)} (${power((q / total) * r.generationMW)})`
             : (q: number) => itemRate(main, q);
