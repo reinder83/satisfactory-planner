@@ -7,7 +7,7 @@
   pages.ts picks it in their place; Saves & profiles and Backup work without a save.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, watch } from 'vue';
 import { view } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import { newSave } from '../actions.ts';
@@ -22,6 +22,20 @@ const TITLES: Record<string, string> = {
   notes: 'Notes',
 };
 const title = computed(() => legacy(() => TITLES[view] || 'No save yet'));
+
+// One component serves all six pages, so moving between them (Back, Forward, a typed address)
+// keeps it mounted and focusOpenedPage() in ui/refocus.ts, which runs when a page replaces
+// another, does not. This does the same: the heading takes focus when focus was on the page
+// being left (its Create a save) or nowhere. A followed sidebar link keeps focus, as it does
+// between any two pages.
+watch(title, async () => {
+  await nextTick();
+  const main = document.querySelector<HTMLElement>('#main');
+  const current = document.activeElement;
+  if (current && current !== document.body && !main?.contains(current)) return;
+  document.querySelector<HTMLElement>('#main h1')?.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+});
 </script>
 
 <template>

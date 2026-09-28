@@ -56,6 +56,32 @@ for (const view of NEEDS_SAVE)
     assert.equal($('#main a[href="#backup"]')!.textContent, 'Import saves on the Backup page');
   });
 
+test('moving between two such pages puts focus on the new heading, as a page change does', async () => {
+  go('plan');
+  render();
+  $('#main [data-new-save]')!.focus();
+  go('resources');
+  render();
+  await nextTick();
+  await nextTick();
+  assert.equal($('#main h1')!.textContent, 'Power & resources');
+  assert.equal(document.activeElement, $('#main h1'));
+  // A followed sidebar link keeps focus, as between any two pages.
+  const link = $<HTMLElement>('.nav a[href="#notes"]')!;
+  link.focus();
+  go('notes');
+  render();
+  await nextTick();
+  await nextTick();
+  assert.equal(document.activeElement, link);
+});
+
+test('the breadcrumb says no save is open', () => {
+  go('plan');
+  render();
+  assert.equal($('.breadcrumbs a')!.textContent, 'No save yet');
+});
+
 test('"Create a save" opens the guided start', async () => {
   go('plan');
   render();

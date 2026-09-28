@@ -76,7 +76,8 @@ const frame = computed(() =>
           ? 'needs factory groups'
           : '',
     } as Record<string, string>,
-    saveName: currentSave.name,
+    // The empty workspace's placeholder save has no id; the breadcrumb says so as the status does.
+    saveName: currentSave.id ? currentSave.name : 'No save yet',
     canPickPhase: !!currentSave.id,
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
