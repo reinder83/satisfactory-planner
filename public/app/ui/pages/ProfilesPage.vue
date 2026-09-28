@@ -4,10 +4,12 @@
   calculated ones have `settings` to summarise. The browser edition links to backups
   instead of accounts. Actions that leave the open profile call allowSwitch() first, which
   asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
-  use newSave in ui/actions.ts.
+  use newSave in ui/actions.ts. Opening the page asks for the workspace summary again (#418), once
+  the queued writes have landed, so each card's tick count, phase and phase bar are current,
+  including changes made in another tab; until the reply the last summary is shown.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   allowSwitch,
@@ -30,7 +32,7 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { startWizard } from '../../wizard/wizard.ts';
-import { legacy } from '../bridge.ts';
+import { invalidate, legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import ActionMenu from '../ActionMenu.vue';
@@ -39,6 +41,16 @@ import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave, openProfile } from '../actions.ts';
 import type { WorkspaceSummary } from '../../../types/index.ts';
+
+onMounted(async () => {
+  try {
+    await writeQueue;
+    setWorkspace(await request<WorkspaceSummary>('/api/workspace'));
+    invalidate();
+  } catch {
+    // The summary on screen stays; a failed request says nothing more here.
+  }
+});
 
 const page = computed(() =>
   legacy(() => ({

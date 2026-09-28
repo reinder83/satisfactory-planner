@@ -205,6 +205,12 @@ export function go(view: View) {
 // and leaves the page's state alone; mutate on the live state would change it before refusing.
 export const applyUpdate = (op: UpdateOp) => mutate(structuredClone(state), op);
 
+// Until a test stubs fetch, a request answers 503 at once rather than reaching happy-dom's
+// network, which has no server to talk to: Saves & profiles asks for the workspace summary as it
+// opens (#418), and a test that only draws the page need not stub that.
+globalThis.fetch = async () =>
+  new Response(JSON.stringify({ error: 'No fetch stubbed in this test.' }), { status: 503 });
+
 // Replies to fetch() calls from a table of path -> reply (a value, or a function of the
 // parsed body), recording each call as [path, body] and its headers in `calls.headers`. `B` is
 // the request body's shape, for a test that reads fields of it.

@@ -217,10 +217,13 @@ test('removing a profile moves focus to the next profile’s ⋯ menu', async ()
     profiles: ps,
   });
   open({ workspace: { saves: [save(profiles)] } as Partial<WorkspaceSummary> });
-  const after = { ...workspace, saves: [save(profiles.filter(p => p.id !== 'second'))] };
+  const before = { ...workspace },
+    after = { ...workspace, saves: [save(profiles.filter(p => p.id !== 'second'))] };
+  // The page asks for the summary when it opens (#418): the removal's result only after it.
+  let removed = false;
   stubFetch({
-    '/api/remove-profile': {},
-    '/api/workspace': after,
+    '/api/remove-profile': () => ((removed = true), {}),
+    '/api/workspace': () => (removed ? after : before),
     '/plan.json': handbook,
     '/progression.json': JSON.parse(fs.readFileSync('public/progression.json', 'utf8')),
     '/api/context': () => ({

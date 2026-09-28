@@ -39,6 +39,37 @@ beforeEach(() => {
   open();
 });
 
+// #418: the page's tick counts and phases came from the summary loaded at start. Opening it now
+// asks for the summary again, after any write still queued, and shows that.
+test('Saves & profiles asks for a fresh summary when it opens, after pending writes', async () => {
+  let written = false;
+  const calls = stubFetch({
+    '/api/update': () => ((written = true), { ...state, checks: { a: true } }),
+    '/api/workspace': () => ({
+      ...workspace,
+      saves: workspace.saves.map(s => ({
+        ...s,
+        profiles: s.profiles.map(p =>
+          p.id === 'p' ? { ...p, completed: written ? 6 : 5, phase: '5' } : p,
+        ),
+      })),
+    }),
+  });
+  void save({ type: 'check', key: 'a', value: true });
+  go('profiles');
+  render();
+  // Until the reply, the summary it had.
+  assert.match($$('.profile-card')[1]!.textContent!, /5 checks complete · Phase 4/);
+  await vi.waitFor(() =>
+    assert.match($$('.profile-card')[1]!.textContent!, /6 checks complete · Phase 5/),
+  );
+  assert.deepEqual(
+    calls.map(([path]) => path),
+    ['/api/update', '/api/workspace'],
+    'the summary is asked for once the queued write has landed',
+  );
+});
+
 test('Saves & profiles lists every profile, escaped, with its actions', () => {
   go('profiles');
   render();
@@ -233,11 +264,12 @@ async function renameInPlace(button: string, name: string, commit: 'Enter' | 'Es
 }
 
 test('renaming the open save in place updates the page and the frame (SP-31)', async () => {
+  go('profiles');
+  render();
+  await settle();
   const calls = stubFetch({
     '/api/rename': (body: { name: string }) => renameReply({ save: body.name }),
   });
-  go('profiles');
-  render();
   await renameInPlace('button[data-rename-save="s"]', 'Renamed & safe');
   assert.deepEqual(calls[0], ['/api/rename', { target: 'save', name: 'Renamed & safe' }]);
   assert.equal(calls.headers[0]!['X-Save-Id'], 's');
@@ -252,11 +284,12 @@ test('renaming the open save in place updates the page and the frame (SP-31)', a
 });
 
 test('a profile that is not open is renamed in place, scoped to it (SP-31)', async () => {
+  go('profiles');
+  render();
+  await settle();
   const calls = stubFetch({
     '/api/rename': (body: { name: string }) => renameReply({ p: body.name }),
   });
-  go('profiles');
-  render();
   await renameInPlace('button[data-rename-profile="p"]', '  Second plan  ');
   assert.deepEqual(calls[0], ['/api/rename', { target: 'profile', name: 'Second plan' }]);
   assert.deepEqual(
@@ -271,19 +304,21 @@ test('a profile that is not open is renamed in place, scoped to it (SP-31)', asy
 });
 
 test('renaming the open profile updates the sidebar footer (SP-31)', async () => {
+  go('profiles');
+  render();
+  await settle();
   stubFetch({
     '/api/rename': (body: { name: string }) => renameReply({ original: body.name }),
   });
-  go('profiles');
-  render();
   await renameInPlace('button[data-rename-profile="original"]', 'Main plan');
   assert.ok($('[data-profile-switcher]')!.textContent.includes('Main plan'));
 });
 
 test('Esc cancels a rename, an unchanged name saves nothing, and a failure keeps the input (SP-31)', async () => {
-  const calls = stubFetch({});
   go('profiles');
   render();
+  await settle();
+  const calls = stubFetch({});
   await renameInPlace('button[data-rename-profile="p"]', 'Never saved', 'Escape');
   assert.equal(calls.length, 0, 'Esc sends nothing');
   assert.equal((document.activeElement as HTMLElement).dataset.renameProfile, 'p');
