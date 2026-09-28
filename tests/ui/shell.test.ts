@@ -193,3 +193,96 @@ test('the sign-in screen replaces the frame, and the next render brings it back'
   assert.ok($('.layout'), 'the frame is mounted again');
   assert.ok($('#main .heading-row'));
 });
+
+// SP-37 (#272): at phone width the sidebar is a drawer behind ☰. The drawer's visibility is
+// CSS (the max-width: 720px block), so happy-dom draws it at any width; these check what the
+// frame does with it: aria-expanded, a modal dialog that keeps Tab inside, Esc and × close it and
+// return focus to ☰, a followed link closes it, and the open page is marked.
+const key = (k: string, shift = false) =>
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent('keydown', { key: k, shiftKey: shift, bubbles: true, cancelable: true }),
+  );
+const drawerLinks = () => [
+  ...document.querySelectorAll<HTMLElement>(
+    '#sidebar a[href], #sidebar button:not([disabled]), #sidebar select, #sidebar input',
+  ),
+];
+
+test('☰ opens the navigation drawer as a modal dialog, with its state on the button (SP-37)', async () => {
+  render();
+  const toggle = $<HTMLButtonElement>('[data-menu-toggle]')!;
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle.getAttribute('aria-controls'), 'sidebar');
+  assert.equal(toggle.getAttribute('aria-label'), 'Menu');
+  assert.equal($('#sidebar')!.getAttribute('role'), null, 'a plain sidebar while closed');
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  const drawer = $('#sidebar')!;
+  assert.equal(drawer.getAttribute('role'), 'dialog');
+  assert.equal(drawer.getAttribute('aria-modal'), 'true');
+  assert.ok($('.layout.menu-open'));
+  assert.ok($('.drawer-backdrop'));
+  assert.equal(document.activeElement, $('[data-menu-close]'), 'focus moves into the drawer');
+  // The active page is marked in it; the profile switcher is in it too.
+  assert.equal($('#sidebar .nav a[aria-current="page"]')!.getAttribute('href'), '#plan');
+  assert.ok($('#sidebar [data-profile-switcher]'));
+});
+
+test('the drawer keeps Tab inside it, and Esc or × closes it back to ☰ (SP-37)', async () => {
+  render();
+  const toggle = $<HTMLButtonElement>('[data-menu-toggle]')!;
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  const all = drawerLinks();
+  // Shift+Tab on the first wraps to the last, Tab on the last to the first.
+  all[0]!.focus();
+  key('Tab', true);
+  assert.equal(document.activeElement, all.at(-1), 'Shift+Tab wraps to the end');
+  key('Tab');
+  assert.equal(document.activeElement, all[0], 'Tab wraps to the start');
+  key('Escape');
+  await nextTick();
+  await nextTick();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal($('.layout.menu-open'), null);
+  assert.equal(document.activeElement, toggle, 'Esc returns focus to ☰');
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  $<HTMLButtonElement>('[data-menu-close]')!.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(document.activeElement, toggle, '× returns focus to ☰');
+  toggle.click();
+  await nextTick();
+  $<HTMLElement>('.drawer-backdrop')!.click();
+  await nextTick();
+  assert.equal($('.layout.menu-open'), null, 'the backdrop closes it');
+});
+
+test('a link followed from the drawer closes it (SP-37)', async () => {
+  location.hash = 'plan';
+  render();
+  const toggle = $<HTMLButtonElement>('[data-menu-toggle]')!;
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  const storage = $<HTMLAnchorElement>('#sidebar .nav a[href="#storage"]')!;
+  storage.focus();
+  storage.click();
+  await nextTick();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.notEqual(document.activeElement, storage, 'the hidden link lets go of focus');
+  // The page already shown opens nothing, so focus goes back to ☰.
+  location.hash = 'plan';
+  toggle.click();
+  await nextTick();
+  await nextTick();
+  $<HTMLAnchorElement>('#sidebar .nav a[href="#plan"]')!.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(document.activeElement, toggle);
+});

@@ -504,6 +504,16 @@ input[type='radio'] {
   .ada-mark {
     animation: none;
   }
+  .sidebar {
+    transition: none !important;
+  }
+}
+/* ☰, the brand mark in the top bar, the drawer's × and its backdrop are for the phone layout
+   only (SP-37; shown in the max-width: 720px block). */
+.topbar-lead,
+.btn.drawer-close,
+.drawer-backdrop {
+  display: none;
 }
 .topbar {
   padding: 13px clamp(14px, 2.4vw, 30px);
@@ -3424,45 +3434,82 @@ button.rail-tile:hover {
   .layout {
     display: block;
   }
+  /* The sidebar is a drawer (SP-37, Shell.vue): off-screen until ☰ opens it, then full height
+     over the page with its navigation, ADA and the profile switcher. The top bar keeps the
+     save status, so the drawer's copy stays hidden. */
   .sidebar {
-    position: relative;
-    height: auto;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(320px, 86vw);
+    height: 100vh;
+    height: 100dvh;
     padding: 14px 0 12px;
-    overflow: visible;
+    border-right: 1px solid var(--line);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.18s ease-out,
+      visibility 0s linear 0.18s;
+  }
+  .menu-open .sidebar {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.18s ease-out;
+  }
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    background: var(--bg2);
+    opacity: 0.75;
   }
   .brand {
     font-size: 17px;
-    padding-bottom: 12px;
+    padding: 0 14px 12px 18px;
   }
   .brand img {
     width: 28px;
   }
-  .nav {
-    display: flex;
-    overflow: auto;
-    margin-top: 10px;
-    gap: 1px;
+  .btn.drawer-close {
+    display: inline-flex;
+    margin-left: auto;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 20px;
+    letter-spacing: 0;
   }
-  .nav a {
-    padding: 9px 12px;
-    font-size: 13.5px;
-    white-space: nowrap;
-    border-left: 0;
-    border-bottom: 3px solid transparent;
-  }
-  .nav a.active {
-    border-bottom-color: var(--accent);
-  }
-  .navicon,
-  .sidebar-foot,
   .sidebar .save-status {
     display: none;
+  }
+  .sidebar-foot {
+    margin-top: auto;
   }
   .ada {
     margin: 12px 16px 0;
   }
   .topbar {
     padding: 11px 16px;
+  }
+  .topbar-lead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn.menu-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 20px;
+    letter-spacing: 0;
+  }
+  .topbar-mark {
+    width: 26px;
+    height: 26px;
   }
   .workspace {
     padding: 20px 16px 60px;
