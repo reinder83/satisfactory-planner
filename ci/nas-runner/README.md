@@ -17,7 +17,7 @@ The next pull request's `test` job runs on the NAS. To go back to GitHub's runne
 ## Notes
 
 - **Docker access.** The runner uses the NAS's own Docker daemon through `/var/run/docker.sock`, which makes it root-equivalent on the NAS. That is acceptable only because the repository is private and only its owner can push branches or open pull requests. Do not keep this runner if that changes.
-- **Paths and network.** The smoke tests bind-mount `$RUNNER_TEMP` into containers and curl them on `127.0.0.1`. Hence `network_mode: host` and a work directory with the same path inside and outside the runner container. Ports 18080 and 18081 must be free on the NAS.
+- **Paths and network.** The smoke tests curl their containers on `127.0.0.1`, hence `network_mode: host`. Ports 18080 and 18081 must be free on the NAS. The containers' data lives in named Docker volumes, never in a bind mount of a runner path: the NAS's Docker daemon resolves a host path on the NAS, not in the runner container (#399). `tests/ci.test.ts` keeps it that way. The work directory still has the same path on both sides, so a future step that does bind-mount one works too.
 - **One job at a time.** A single runner runs jobs one after another; a busy queue waits rather than failing.
 - **Memory.** The DS423+ ships with 2 GB. The job runs the test suites, Chromium and a Docker build on it; if jobs get killed or the NAS becomes sluggish while they run, add memory (it takes up to 6 GB) or delete the variable.
 - **Disk.** The smoke-test image is removed after each run. Docker's build cache is kept to speed up later builds; reclaim it with `docker builder prune` if space runs low.
