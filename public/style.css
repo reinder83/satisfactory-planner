@@ -1314,6 +1314,17 @@ p.eyebrow {
 .notice .btn {
   margin: 6px 0;
 }
+/* The calculated factories page's round-up offer (SP-18): one line, its explanation in the
+   confirm dialog. */
+.notice.round-up-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.notice.round-up-offer .btn {
+  margin: 0;
+}
 .notice p {
   margin: 8px 0 2px;
 }

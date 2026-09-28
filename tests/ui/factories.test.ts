@@ -1084,6 +1084,31 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   assert.ok($$('#main .factory-card').length < rows.length);
 });
 
+// SP-18 (#253): the round-up offer is one info line with a quiet button; the explanation is in
+// the confirm dialog, and Cancel sends nothing.
+test('Round up production… is a one-line offer that asks first (SP-18)', async () => {
+  open({ calculated: generated() });
+  render();
+  const offer = $('#main .notice.round-up-offer')!;
+  assert.ok(offer.classList.contains('info'));
+  assert.equal(offer.querySelector('p'), null, 'no paragraph of explanation on the page');
+  const b = offer.querySelector<HTMLButtonElement>('[data-round-up]')!;
+  assert.ok(b.classList.contains('quiet') && !b.classList.contains('primary'));
+  assert.equal(b.textContent!.trim(), 'Round up production…');
+  const calls = stubFetch({});
+  const asked = answerConfirms(false);
+  // As a real press does, the button has focus when it is clicked.
+  b.focus();
+  b.click();
+  await nextTick();
+  await nextTick();
+  assert.equal(asked.length, 1, 'it asks');
+  assert.match(asked[0]!, /recalculated profile revision/);
+  assert.match(asked[0]!, /previous profile stays available/);
+  assert.equal(calls.length, 0, 'Cancel sends nothing');
+  assert.equal(document.activeElement, b, 'focus is back on the button');
+});
+
 // Both card kinds lead with what the line makes, its unit beside it, and put the machines and the
 // last one's clock on the line below (SP-14, #249).
 const cardOf = (sel: string) => $(sel)!.closest('.factory-card')!;

@@ -454,8 +454,11 @@ test('Round up production keeps focus while it calculates, then focus goes to th
       };
     throw Error('unexpected ' + path);
   });
+  // It asks first (SP-18); confirmed, focus is back on the button while it calculates.
+  const asked = answerConfirms(true);
   press('[data-round-up]');
   await settle();
+  assert.equal(asked.length, 1);
   assert.ok(busy('[data-round-up]'));
   assert.ok(focusedOn('[data-round-up]'), describeFocus());
   press('[data-round-up]');
