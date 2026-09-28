@@ -1,7 +1,12 @@
 <!--
   The page frame: sidebar navigation, ADA, save status, the profile switcher, and the top bar
-  with breadcrumbs and the phase picker. The current page is drawn into the empty <main> by
-  render() in shell.ts.
+  with the breadcrumb (the save) and the phase picker. The current page is drawn into the empty
+  <main> by render() in shell.ts.
+
+  The phase picker is a phase track (SP-44, #279): one segment per phase, each with its
+  checklist's progress (views/phase-track.ts), as a group of radio buttons named "Working
+  phase", so the arrow keys move between phases and a click switches, saved and guarded as the
+  select is. At 720px and below the track gives way to the select, which is always there.
 
   The profile switcher (SP-07, #242) is the sidebar footer as a menu button (ui/ActionMenu.vue):
   the open profile's name and settings lines on the button, and in its menu the open save's
@@ -41,6 +46,7 @@ import type { Phase } from '../../types/index.ts';
 import { render } from '../shell.ts';
 import { backupAge } from '../views/backup.ts';
 import { factoryGroupsState } from '../views/factories.ts';
+import { phaseTrack } from '../views/phase-track.ts';
 import AdaPanel from './AdaPanel.vue';
 import { legacy } from './bridge.ts';
 import { isBusy, whileBusy } from '../busy.ts';
@@ -74,6 +80,7 @@ const frame = computed(() =>
     canPickPhase: !!currentSave.id,
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
+    track: phaseTrack(),
     // With no save open (an empty workspace, #281) nothing has been saved, so the status never
     // claims it, and its dot, which marks a save, is left out.
     hasSave: !!currentSave.id,
@@ -224,7 +231,7 @@ function profileFooter() {
 // Busy while it saves (app/busy.ts, #299): a key pressed on it meanwhile shows the saved phase again.
 async function pickPhase(e: Event) {
   const el = e.target as HTMLSelectElement;
-  if (isBusy(el) || !(await allowSwitch())) {
+  if (isBusy(el) || trackBusy.value || !(await allowSwitch())) {
     el.value = phase();
     return;
   }
@@ -238,6 +245,32 @@ async function pickPhase(e: Event) {
       el.value = phase();
     }
   });
+}
+
+// The phase track's radio buttons (SP-44): the same save, guard and redraw as the select. The
+// arrow keys check the next radio at once, so while one switch saves, another is refused and
+// the saved phase is checked again (the track is aria-busy meanwhile, like a busy select).
+const trackBusy = ref(false);
+function checkSavedPhase() {
+  const saved = document.querySelector<HTMLInputElement>(
+    `[data-phase-track] input[value="${phase()}"]`,
+  );
+  if (saved) saved.checked = true;
+}
+async function pickTrack(e: Event) {
+  const el = e.target as HTMLInputElement;
+  if (trackBusy.value || isBusy(document.querySelector('#phase-picker'))) return checkSavedPhase();
+  trackBusy.value = true;
+  try {
+    if (!(await allowSwitch())) return checkSavedPhase();
+    await save({ type: 'phase', value: el.value as Phase });
+    setQuery('');
+    render();
+  } catch {
+    checkSavedPhase();
+  } finally {
+    trackBusy.value = false;
+  }
 }
 </script>
 
@@ -410,11 +443,34 @@ async function pickPhase(e: Event) {
           ><img class="topbar-mark" src="./favicon.svg" alt="" />
         </div>
         <div class="breadcrumbs">
-          <a href="#profiles">{{ frame.saveName }}</a> <span aria-hidden="true"> / </span>
-          {{ phaseLabel(frame.phase) }}
+          <a href="#profiles">{{ frame.saveName }}</a>
         </div>
         <div class="topbar-tools">
-          <label class="small"
+          <div
+            class="phase-track"
+            role="radiogroup"
+            aria-label="Working phase"
+            :aria-busy="trackBusy || undefined"
+            data-phase-track
+          >
+            <label
+              v-for="s in frame.track"
+              :key="s.phase"
+              :class="['phase-track-seg', s.phase === frame.phase ? 'current' : '']"
+              :data-phase-seg="s.phase"
+              ><input
+                type="radio"
+                name="phase-track"
+                :value="s.phase"
+                :checked="s.phase === frame.phase"
+                :disabled="!frame.canPickPhase"
+                @change="pickTrack" /><span class="phase-track-name">{{ s.label }}</span
+              ><span v-if="s.pct !== null" class="visually-hidden">, {{ s.pct }}% done</span
+              ><span v-if="s.pct !== null" class="phase-track-bar" aria-hidden="true"
+                ><span :style="{ width: s.pct + '%' }"></span></span
+            ></label>
+          </div>
+          <label class="small phase-select"
             >Working on
             <select
               id="phase-picker"

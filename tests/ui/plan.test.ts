@@ -66,12 +66,9 @@ test('the handbook plan shows the phase checklist, counters, notes link and deli
   noMarkup();
   assert.equal($('#main h1')!.textContent, 'Phase 3 field plan');
   assert.equal($$('#main .checklist .task').length, 9);
-  assert.equal(
-    $('#main .stat strong')!.innerHTML,
-    '0 <span class="fraction">/ 9</span>',
-    'a counter tile keeps its "/ total" markup',
-  );
-  assert.equal($('#main .head-tools .small')!.textContent, '0% complete');
+  // SP-43: one progress indicator, the bar with "n of total done"; the tiles are one line.
+  assert.equal($('[data-plan-progress]')!.textContent, '0 of 9 done');
+  assert.equal($('#main .stat'), null, 'no summary tiles');
   // The phase notes moved to the Notes page (#243): the plan keeps a one-line link there.
   assert.equal($$('#main textarea').length, 0, 'no notes editor on the plan');
   assert.equal($('[data-phase-notes-link]')!.getAttribute('href'), '#notes');
@@ -86,6 +83,58 @@ test('the handbook plan shows the phase checklist, counters, notes link and deli
     String(deliveries[0]!.initial),
     'the original profile starts from the handbook counts',
   );
+});
+
+// SP-43 (#278): progress shows once, as the bar with "n of total done"; the four tiles became
+// one summary line whose parts link to their pages.
+test('the plan shows one progress bar and a summary line linking to each page (SP-43)', () => {
+  const summary = () =>
+    $$('#main [data-plan-summary] li').map(li => [
+      li.dataset.summary,
+      li.querySelector('a')?.getAttribute('href') ?? null,
+      li.textContent!.trim(),
+    ]);
+  state.checks['phase-3-survey'] = true;
+  state.checks['factory-3-wire'] = true;
+  render();
+  const bar = $('#main .plan-progress [role=progressbar]')!;
+  assert.equal(bar.getAttribute('aria-valuenow'), '1');
+  assert.equal(bar.getAttribute('aria-valuemax'), '9');
+  assert.equal(bar.getAttribute('aria-valuetext'), '1 of 9 steps done');
+  assert.equal(bar.querySelector('span')!.style.width, '11%');
+  // (The side column's delivery counters keep their own bars.)
+  assert.equal($$('#main .split > section .progress-track').length, 1, 'one checklist bar');
+  assert.ok(!$('#main')!.textContent!.includes('% complete'), 'no percentage beside it');
+  const s = summary();
+  assert.deepEqual(
+    s.map(([key, href]) => [key, href]),
+    [
+      ['factories', '#factories'],
+      ['storage', '#storage'],
+      ['power', '#resources'],
+    ],
+  );
+  assert.match(s[0]![2]!, /^1 of \d+ factories running$/);
+  assert.match(s[1]![2]!, /^0 of \d+ storage positions verified$/);
+  assert.match(s[2]![2]!, / GW planned power$/);
+  // The calculated plan: the same bar, its lines and buildings, storage, new power and the
+  // delivery time, which has no page of its own.
+  open({ calculated: generated });
+  render();
+  assert.ok($('#main .plan-progress [role=progressbar]'));
+  assert.equal($('#main .stat'), null);
+  const c = summary();
+  assert.deepEqual(
+    c.map(([key, href]) => [key, href]),
+    [
+      ['factories', '#factories'],
+      ['storage', '#storage'],
+      ['power', '#resources'],
+      ['hours', null],
+    ],
+  );
+  assert.match(c[0]![2]!, /^0 of \d+ production lines running, [\d,.]+ buildings$/);
+  assert.match(c[3]![2]!, /^Delivery in [\d,.]+ h at steady state$/);
 });
 
 test('a duplicated or imported original profile also starts from the handbook counts', () => {
@@ -124,11 +173,7 @@ test('the checklist can be searched and can hide completed steps', async () => {
   assert.ok(!steps().includes('phase-3-survey'), 'completed steps are hidden');
   assert.ok(steps().includes('phase-3-iron'), 'unfinished steps stay visible');
   assert.equal($('.checklist-tools .muted')!.textContent, '8 of 9 steps');
-  assert.equal(
-    $('#main .stat strong')!.innerHTML,
-    '1 <span class="fraction">/ 9</span>',
-    'the counters keep counting every step',
-  );
+  assert.equal($('[data-plan-progress]')!.textContent, '1 of 9 done', 'progress counts every step');
   for (const t of planTasks()) state.checks[t.id] = true;
   render();
   await nextTick();
@@ -552,7 +597,7 @@ test('the calculated plan shows its snapshot, warnings, deliveries and assumptio
   assert.equal($('#main .subtitle')!.textContent, evil);
   assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
   assert.match($('#main .notice.warn')!.textContent, /at least 12 hours per phase/);
-  assert.equal($$('#main .stat strong')[0]!.textContent, '1/' + planTasks().length);
+  assert.equal($('[data-plan-progress]')!.textContent, '1 of ' + planTasks().length + ' done');
   assert.equal($<HTMLInputElement>(`[data-check="calc-3-${row.id}"]`)!.checked, true);
   assert.equal(
     $$('#main .task-link[data-calc-factory]').length > 0,

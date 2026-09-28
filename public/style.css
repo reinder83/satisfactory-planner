@@ -608,6 +608,71 @@ input[type='radio'] {
   justify-content: flex-end;
   gap: 8px 12px;
 }
+/* The phase track (SP-44, Shell.vue): a segment per phase with its checklist's progress, the
+   working phase in the accent. Each segment is a label over its radio button, which stays in
+   the tab order and takes the arrow keys. At 720px and below the select takes its place. */
+.phase-track {
+  display: flex;
+  gap: 4px;
+}
+.topbar .phase-track-seg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 78px;
+  padding: 7px 10px 8px;
+  border: 1px solid #343b41;
+  background: #171a1d;
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  cursor: pointer;
+}
+.phase-track-seg input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.topbar .phase-track-seg:hover {
+  color: var(--bright);
+}
+.topbar .phase-track-seg.current {
+  border-color: var(--accent);
+  background: #1e1710;
+  color: var(--accent);
+}
+.phase-track-seg:has(input:focus-visible) {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+.topbar .phase-track-seg:has(input:disabled) {
+  cursor: default;
+  color: var(--dim);
+}
+.topbar .phase-track-bar {
+  display: block;
+  height: 3px;
+  background: #0b0d0e;
+}
+.topbar .phase-track-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.topbar .phase-track-seg.current .phase-track-bar > span {
+  background: var(--accent);
+}
+.topbar .phase-select {
+  display: none;
+}
 /* The save status is the sidebar's; the top bar carries a short copy for phone widths,
    where the sidebar's is hidden. Its labels share one grid cell, so the widest one sets
    the width whichever is showing. */
@@ -1039,6 +1104,38 @@ p {
   display: block;
   background: var(--accent);
   transition: width 0.2s;
+}
+/* The build plan's one progress indicator and its summary line (SP-43, ui/plan/PlanProgress.vue
+   and PlanSummary.vue): the checklist's bar with "2 of 9 done" beside it, and in place of the
+   tiles one line of what else the phase holds, each part a link to its page. */
+.plan-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+.plan-progress .progress-track {
+  flex: 1;
+  margin: 0;
+}
+.plan-progress .small {
+  flex: none;
+  white-space: nowrap;
+}
+.plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  margin: 22px 0 24px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.plan-summary li + li::before {
+  content: '·';
+  margin: 0 12px;
+  color: var(--dim);
 }
 
 /* ── Toolbars, tabs, search ────────────────────────────── */
@@ -3759,6 +3856,14 @@ button.rail-tile:hover {
   .sidebar .save-status {
     display: none;
   }
+  /* One part of the plan summary per line (SP-43): a wrapped line would start with its dot. */
+  .plan-summary {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .plan-summary li + li::before {
+    content: none;
+  }
   /* The save status is in the top bar here; the backup age stays in the drawer (SP-40). */
   .backup-age {
     margin: 12px 16px 0;
@@ -3966,6 +4071,13 @@ button.rail-tile:hover {
     justify-content: space-between;
   }
   .topbar .save-status {
+    display: flex;
+  }
+  /* The phase track collapses to the select here (SP-44). */
+  .phase-track {
+    display: none;
+  }
+  .topbar .phase-select {
     display: flex;
   }
   .topbar .breadcrumbs {
@@ -4272,6 +4384,7 @@ button.rail-tile:hover {
   .checklist-tools,
   .btn,
   #toast,
+  .phase-track,
   .ada-ticker,
   .ada {
     display: none;
