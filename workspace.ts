@@ -288,18 +288,21 @@ export async function openWorkspace({
   // At most 20 sign-in attempts or calculations per client address per minute, held in
   // memory only. The map is pruned of expired entries once it passes 2000 addresses. A
   // payoff ranking counts as `cost` of them, since it runs a calculation per candidate.
-  const throttles = new Map<string | undefined, { count: number; until: number }>();
-  function throttle(req: IncomingMessage, cost = 1) {
+  // The wizard's live estimates (SP-33) have their own allowance of 120 a minute, so estimating
+  // while editing never uses up the calculations Calculate plan and Create profile need.
+  type Throttles = Map<string | undefined, { count: number; until: number }>;
+  const throttles: Throttles = new Map(),
+    estimates: Throttles = new Map();
+  function throttle(req: IncomingMessage, cost = 1, bucket = throttles, limit = 20) {
     const key = req.socket.remoteAddress,
       now = Date.now();
-    let v = throttles.get(key);
+    let v = bucket.get(key);
     if (!v || v.until < now) {
       v = { count: 0, until: now + 60000 };
-      throttles.set(key, v);
+      bucket.set(key, v);
     }
-    if ((v.count += cost) > 20) fail('Too many attempts. Wait a minute and try again.', 429);
-    if (throttles.size > 2000)
-      for (const [k, v] of throttles) if (v.until < now) throttles.delete(k);
+    if ((v.count += cost) > limit) fail('Too many attempts. Wait a minute and try again.', 429);
+    if (bucket.size > 2000) for (const [k, v] of bucket) if (v.until < now) bucket.delete(k);
   }
   // Validates sign-in input and returns the lower-cased username.
   const authValues = (b: Body) => {
@@ -516,10 +519,11 @@ export async function openWorkspace({
       return response(summary(db.users.find(x => x.id === u.id)));
     }
     // Runs the calculator for the wizard without storing anything; throttled because a
-    // solve is expensive.
+    // solve is expensive. A live estimate (`estimate: true`) counts against its own allowance.
     if (endpoint === '/api/preview' && req.method === 'POST') {
-      throttle(req);
       const b = await body(req);
+      if (b.estimate === true) throttle(req, 1, estimates, 120);
+      else throttle(req);
       return response(calculate(b.settings));
     }
     // Creates a profile in one of the user's saves (saveId) or in a new save (saveName).
