@@ -4262,6 +4262,11 @@ button.rail-tile:hover {
   .phase-seg {
     background: #dddddd;
   }
+  /* The guided stepper's current number prints outlined, in the accent. */
+  .guided-progress .current i {
+    background: none;
+    color: var(--accent);
+  }
 }
 
 /* --- The guided start ---------------------------------------------------- */
@@ -4275,35 +4280,49 @@ button.rail-tile:hover {
   max-width: 420px;
   margin: 0 0 22px;
 }
+/* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
+   accent, and "3 of 6" beside them. */
+.guided-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  margin: 20px 0 4px;
+  font-family: var(--head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 .guided-progress {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 18px;
-  margin: 20px 0 4px;
-  font-family: var(--head);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-.guided-progress span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.guided-progress i {
-  width: 8px;
-  height: 8px;
-  border: 1px solid #3c4449;
-  display: block;
-}
-.guided-progress .done {
+  gap: 8px 20px;
   color: var(--muted);
 }
+.guided-progress > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guided-progress i {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid #3c4449;
+  font-style: normal;
+  letter-spacing: 0;
+}
+.guided-progress b {
+  font-weight: inherit;
+}
+.guided-progress .done {
+  color: var(--ink);
+}
 .guided-progress .done i {
-  background: #3c4449;
-  border-color: #3c4449;
+  border-color: var(--muted);
 }
 .guided-progress .current {
   color: var(--accent);
@@ -4311,6 +4330,12 @@ button.rail-tile:hover {
 .guided-progress .current i {
   background: var(--accent);
   border-color: var(--accent);
+  color: #0b0d0e;
+}
+.guided-count {
+  margin-left: auto;
+  color: var(--muted);
+  letter-spacing: 0.08em;
 }
 .guided-grid {
   display: grid;
@@ -4625,10 +4650,22 @@ button.rail-tile:hover {
   .guided-grid {
     grid-template-columns: 1fr;
   }
+  /* On a phone the steps are numbers only, with the current step's name beside its number;
+     the other names stay for screen readers, out of sight. */
   .guided-progress {
-    gap: 0 12px;
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
+    gap: 8px;
+  }
+  .guided-progress > span:not(.current) {
+    gap: 0;
+  }
+  .guided-progress > span:not(.current) b {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .guided-escape {
     width: 100%;
