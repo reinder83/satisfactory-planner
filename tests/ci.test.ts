@@ -1,7 +1,7 @@
-// The CI workflow (.github/workflows/docker.yml). Its `test` job may run on the NAS runner
-// (ci/nas-runner/), whose jobs start containers through the NAS's Docker daemon; that daemon
-// resolves a bind-mount path on the NAS, not in the runner container. So the containers the job
-// starts keep their data in named volumes, and a volume the job uses is removed at its end.
+// The CI workflow (.github/workflows/docker.yml). The containers its `test` job starts keep their
+// data in named volumes rather than bind-mounted runner paths, which the Docker daemon of a
+// self-hosted runner resolves on its host instead of in the job, and a volume the job uses is
+// removed at its end.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
