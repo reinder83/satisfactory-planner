@@ -1,6 +1,7 @@
 <!--
   #resources on a calculated profile, for the current phase: the draft and headroom notices,
-  power tiles (somersloop and augmenter tiles only when the plan uses them), raw resources
+  one power headroom bar (SP-29: needed against available, with the somersloop and augmenter
+  counts in its legend when the plan uses them), raw resources
   against the entered budgets (settings.limits), then a panel of icon rows each for drone fuel,
   vehicle fuel (when the plan has any), protected storage, credited existing production and
   surplus (SP-28), and one for conversions. Everything reads the profile's frozen
@@ -18,7 +19,99 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
-import StatTile from '../StatTile.vue';
+import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
+
+interface Part {
+  key: string;
+  label: string;
+  mw: number;
+  caption: string;
+}
+
+// One power headroom bar (SP-29): what the phase needs, its whole-machine peak plus the utility
+// allowance, against what it has, new generation (with any augmenter boost) plus the existing
+// spare figure, as planner.ts sums them into requiredMW and availableMW. The headline is the
+// share of that available power left over, or the shortfall. The somersloop and augmenter
+// counts are legend captions.
+function headroom(x: StoredStage, s: StoredCalculatedPlan['settings']) {
+  const peak = x.peakMW || 0,
+    utility = Math.max(0, (x.requiredMW ?? peak) - peak),
+    generation = x.generationMW || 0,
+    spare = s.availablePowerGW * 1000,
+    // What the augmenters add: their 500 MW each and the boost on new and installed
+    // generation, which planner.ts counts into availableMW.
+    boost = (x.augmenters ?? 0) > 0 ? Math.max(0, (x.availableMW ?? 0) - generation - spare) : 0,
+    required = peak + utility,
+    available = generation + boost + spare,
+    short = required - available > 0.01 ? required - available : 0;
+  const sloops = x.sloopsUsed ?? 0,
+    augmenters = x.augmenters ?? 0;
+  const demand: Part[] = [
+    {
+      key: 'peak',
+      label: 'Whole-machine peak',
+      mw: peak,
+      caption:
+        'At selected consumption multiplier' +
+        (sloops > 0
+          ? ` · ${num(sloops)} somersloop${sloops > 1 ? 's' : ''} in production: amplified machines give double output at four times the power`
+          : ''),
+    },
+    {
+      key: 'utility',
+      label: 'Utility allowance',
+      mw: utility,
+      caption: (s.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
+    },
+  ];
+  const supply: Part[] = [
+    {
+      key: 'generation',
+      label: 'New generation',
+      mw: generation,
+      caption: 'Fuel and recycling included',
+    },
+    ...(augmenters > 0
+      ? [
+          {
+            key: 'boost',
+            label: 'Augmenter boost',
+            mw: boost,
+            caption: `${num(augmenters)} augmenter${augmenters > 1 ? 's' : ''} · ${num(x.augmenterMW)} MW plus ${Math.round((x.boost || 0) * 100)}% of base production`,
+          },
+        ]
+      : []),
+    {
+      key: 'spare',
+      label: 'Existing spare power',
+      mw: spare,
+      caption: 'Not total installed generation',
+    },
+  ];
+  const scale = Math.max(required, available) || 1,
+    width = (mw: number) => (mw / scale) * 100 + '%';
+  const headline = short
+    ? 'Short by ' + power(short)
+    : available > 0
+      ? Math.floor(((available - required) / available) * 100) + '% headroom'
+      : 'No power needed';
+  const list = (parts: Part[]) =>
+    parts
+      .filter(p => p.mw > 0)
+      .map(p => `${power(p.mw)} ${p.label.toLowerCase()}`)
+      .join(' + ') || '0 MW';
+  return {
+    headline,
+    short: short > 0,
+    required: power(required),
+    available: power(available),
+    demand: demand.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
+    supply: supply.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
+    shortWidth: width(short),
+    // The bars' text alternative: every figure they draw, in one sentence.
+    label: `${headline}. Needed: ${power(required)} (${list(demand)}). Available: ${power(available)} (${list(supply)}).`,
+  };
+}
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
@@ -28,25 +121,7 @@ const page = computed(() =>
     if (!calculated || !x) return null;
     const s = calculated.settings;
     return {
-      generation: power(x.generationMW),
-      peak: power(x.peakMW),
-      required: power(x.requiredMW),
-      utility: (s.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
-      spare: power(s.availablePowerGW * 1000),
-      sloops: (x.sloopsUsed ?? 0) > 0 ? num(x.sloopsUsed) : '',
-      augmented: (x.augmenters ?? 0) > 0 && {
-        value: power(x.availableMW),
-        caption:
-          num(x.augmenters) +
-          ' augmenter' +
-          ((x.augmenters ?? 0) > 1 ? 's' : '') +
-          ' · ' +
-          num(x.augmenterMW) +
-          ' MW plus ' +
-          // Plans with augmenters have their boost too.
-          Math.round(x.boost! * 100) +
-          '% of base production',
-      },
+      power: headroom(x, s),
       // Tightest first (SP-27): over budget, then by use, and resources this phase does not
       // draw on last; the catalogue order breaks ties.
       rows: (workspace.catalog.raw || [])
@@ -116,36 +191,53 @@ const page = computed(() =>
       subtitle="New production and new generator fuel are included. Existing fuel consumption must already be deducted from your entered budgets."
     />
     <CalcWarnings />
-    <div class="stats">
-      <StatTile
-        label="New generation"
-        :value="page.generation"
-        caption="Fuel and recycling included"
-      />
-      <StatTile
-        label="Whole-machine peak"
-        :value="page.peak"
-        caption="At selected consumption multiplier"
-      />
-      <StatTile label="With utility allowance" :value="page.required" :caption="page.utility" />
-      <StatTile
-        label="Existing spare power"
-        :value="page.spare"
-        caption="Not total installed generation"
-      />
-      <StatTile
-        v-if="page.sloops"
-        label="Somersloops in production"
-        :value="page.sloops"
-        caption="Amplified machines: double output, four times the power"
-      />
-      <StatTile
-        v-if="page.augmented"
-        label="With augmenter boost"
-        :value="page.augmented.value"
-        :caption="page.augmented.caption"
-      />
-    </div>
+    <section class="panel power-headroom" data-power-headroom>
+      <h2>Power headroom</h2>
+      <p :class="['power-headline', page.power.short ? 'short' : '']" data-power-headline>
+        <strong
+          ><span v-if="page.power.short" aria-hidden="true">⚠ </span
+          >{{ page.power.headline }}</strong
+        >
+        <span>{{ page.power.required }} needed of {{ page.power.available }} available</span>
+      </p>
+      <div class="power-bars" role="img" :aria-label="page.power.label">
+        <span class="eyebrow" aria-hidden="true">Needed</span>
+        <div class="power-bar" data-power-bar="demand">
+          <span
+            v-for="p in page.power.demand"
+            :key="p.key"
+            :class="'seg-' + p.key"
+            :style="{ width: p.width }"
+          ></span>
+        </div>
+        <span class="eyebrow" aria-hidden="true">Available</span>
+        <div class="power-bar" data-power-bar="supply">
+          <span
+            v-for="p in page.power.supply"
+            :key="p.key"
+            :class="'seg-' + p.key"
+            :style="{ width: p.width }"
+          ></span>
+          <span
+            v-if="page.power.short"
+            class="seg-short"
+            :style="{ width: page.power.shortWidth }"
+          ></span>
+        </div>
+      </div>
+      <ul class="power-legend">
+        <li
+          v-for="p in [...page.power.demand, ...page.power.supply]"
+          :key="p.key"
+          :data-power-part="p.key"
+        >
+          <i :class="'seg-' + p.key" aria-hidden="true"></i
+          ><span class="eyebrow">{{ p.label }}</span
+          ><b>{{ p.value }}</b
+          ><small>{{ p.caption }}</small>
+        </li>
+      </ul>
+    </section>
     <div class="table-wrap">
       <table>
         <thead>
