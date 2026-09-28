@@ -245,10 +245,8 @@ input[type='radio'] {
   display: grid;
   gap: 1px;
   margin-top: 10px;
-  counter-reset: navstep;
 }
 .nav a {
-  counter-increment: navstep;
   text-decoration: none;
   display: flex;
   gap: 12px;
@@ -291,18 +289,21 @@ input[type='radio'] {
   text-transform: none;
   color: var(--dim);
 }
+/* Each page's glyph (Shell.vue NAV, aria-hidden), not a 01–07 count that reads as a sequence
+   (SP-10); the open page's in the accent colour. */
 .navicon {
   width: 20px;
-  text-align: left;
-  font-size: 0;
+  text-align: center;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--dim);
   flex: none;
 }
-.navicon::before {
-  content: '0' counter(navstep);
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  color: var(--dim);
+.nav a.active .navicon {
+  color: var(--accent);
 }
 .save-status {
   margin-top: auto;
