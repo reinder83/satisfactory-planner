@@ -1,5 +1,6 @@
 <!--
-  #plan for the original handbook: summary tiles, the phase checklist with its edit toggle,
+  #plan for the original handbook: a summary line (factories, storage, power, each linking to its
+  page; SP-43), the phase checklist with its progress bar and edit toggle,
   personal tasks and a link to the phase notes (on the Notes page, #243), and a side column
   with the Space Elevator deliveries. The next step leads the checklist itself (SP-42). Post-game ('post') reads the Phase 5
   stage of the handbook: stage() maps it to '5'. A calculated profile gets
@@ -9,22 +10,19 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { checked, phase, phaseLabel, plan, stage } from '../../session.ts';
-import { planTasks } from '../../tasks.ts';
 import { storageBays } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import PageHeader from '../PageHeader.vue';
-import StatTile from '../StatTile.vue';
 import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
+import PlanProgress from '../plan/PlanProgress.vue';
+import PlanSummary from '../plan/PlanSummary.vue';
 
 const page = computed(() =>
   legacy(() => {
-    // Checklist progress: planTasks() already applies this profile's step edits.
-    const ts = planTasks(),
-      done = ts.filter(t => checked(t.id)).length;
     // Factory and storage counters. The check keys are saved progress and must not change:
     // `factory-<stage>-<id>` is a factory's Running box, `slot-<address>-verified` the last
     // of a container's four checks (see slotKeys in views/storage.ts).
@@ -32,17 +30,24 @@ const page = computed(() =>
     const slots = storageBays()
       .flatMap(b => b.items)
       .filter(x => x.name);
+    const built = fs.filter(f => checked('factory-' + stage() + '-' + f.id)).length,
+      ready = slots.filter(x => checked('slot-' + x.id + '-verified')).length;
     return {
       title: phaseLabel(phase()) + ' field plan',
       post: phase() === 'post',
-      done,
-      total: ts.length,
-      pct: ts.length ? Math.round((done / ts.length) * 100) : 100,
-      built: fs.filter(f => checked('factory-' + stage() + '-' + f.id)).length,
-      factories: fs.length,
-      ready: slots.filter(x => checked('slot-' + x.id + '-verified')).length,
-      slots: slots.length,
-      power: num(plan.power[stage()]),
+      summary: [
+        {
+          key: 'factories',
+          href: '#factories',
+          text: `${built} of ${fs.length} factories running`,
+        },
+        {
+          key: 'storage',
+          href: '#storage',
+          text: `${ready} of ${slots.length} storage positions verified`,
+        },
+        { key: 'power', href: '#resources', text: `${num(plan.power[stage()])} GW planned power` },
+      ],
       deliveries: plan.deliveries.filter(d => d.phase === phase()),
     };
   }),
@@ -61,29 +66,14 @@ const page = computed(() =>
     badge="YOUR SAVE · YOUR PACE"
   />
   <PlanEditBar />
-  <div class="stats">
-    <StatTile label="Phase checklist" caption="Steps completed"
-      >{{ page.done }} <span class="fraction">/ {{ page.total }}</span></StatTile
-    >
-    <StatTile label="Factory targets" caption="Marked running at this phase"
-      >{{ page.built }} <span class="fraction">/ {{ page.factories }}</span></StatTile
-    >
-    <StatTile label="Storage ready" caption="Item positions verified"
-      >{{ page.ready }} <span class="fraction">/ {{ page.slots }}</span></StatTile
-    >
-    <StatTile label="Planned power" caption="Gross capacity at this stage"
-      >{{ page.power }} <span class="fraction">GW</span></StatTile
-    >
-  </div>
+  <PlanSummary :items="page.summary" />
   <div class="split">
     <section>
       <div class="section-head">
         <h2>Build sequence</h2>
-        <span class="head-tools"
-          ><span class="small muted">{{ page.pct }}% complete</span> <EditStepsToggle
-        /></span>
+        <EditStepsToggle />
       </div>
-      <div class="progress-track"><span :style="{ width: page.pct + '%' }"></span></div>
+      <PlanProgress />
       <Checklist />
       <AddTaskForm placeholder="Add a task for this phase…" />
       <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
