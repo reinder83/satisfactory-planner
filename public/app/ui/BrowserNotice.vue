@@ -4,6 +4,6 @@
   <div class="notice info">
     Your saves stay in this browser on this device. Clearing site data or using private browsing can
     remove them. Export a full backup before switching devices or website addresses.
-    <a href="#backup">Backups & transfer</a>
+    <a href="#backup">Backup</a>
   </div>
 </template>

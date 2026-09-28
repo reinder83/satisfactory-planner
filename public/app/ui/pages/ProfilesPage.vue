@@ -241,7 +241,7 @@ async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }
   />
   <div class="toolbar">
     <button class="btn primary" data-new-save @click="newSave">Create a save</button>
-    <a v-if="browserMode" class="btn" href="#backup">Backups & transfer</a>
+    <a v-if="browserMode" class="btn" href="#backup">Backup</a>
     <a v-else class="btn" href="#account">{{
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'
     }}</a>

@@ -338,7 +338,7 @@ async function pickPhase(e: Event) {
             data-switch-page="backup"
             @click="go('backup')"
           >
-            Backups & transfer
+            Backup
           </button>
           <template v-else>
             <button

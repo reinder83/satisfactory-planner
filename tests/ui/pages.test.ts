@@ -1,6 +1,7 @@
 // The pages that are Vue components (public/app/ui/pages/), mounted through render() the way
 // the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
@@ -511,12 +512,41 @@ test('the handbook backup page lists the sources and its transfer controls', () 
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));
 });
 
+// SP-41 (#276): the page is "Backup" everywhere, with the same four actions on both profile
+// kinds. The browser edition's page and its links (the notice, the profiles page, the switcher
+// menu, ADA) are checked as source, since browserMode is fixed when browser-api.ts loads.
+test('the Backup page and its links say "Backup", with plainly named actions (SP-41)', () => {
+  for (const calculated of [false, true]) {
+    open({ calculated });
+    go('backup');
+    render();
+    assert.equal($('#main h1')!.textContent, 'Backup');
+    const actions = $$('#main .btn').map(b => b.textContent!.trim());
+    for (const name of [
+      'Download this profile',
+      'Restore this profile…',
+      'Export all saves',
+      'Import saves…',
+    ])
+      assert.ok(actions.includes(name), `${calculated ? 'calculated' : 'handbook'}: "${name}"`);
+  }
+  const sources = [
+    'public/ada.ts',
+    'public/app/ui/BrowserNotice.vue',
+    'public/app/ui/Shell.vue',
+    'public/app/ui/pages/BackupPage.vue',
+    'public/app/ui/pages/ProfilesPage.vue',
+  ].map(f => fs.readFileSync(f, 'utf8'));
+  for (const old of ['Backups & transfer', 'Backup & notes', 'progress JSON', 'Choose backup'])
+    assert.ok(!sources.some(s => s.includes(old)), `no "${old}" left`);
+});
+
 // #307: "Import saves" and "Choose backup (file)" were labels around a `hidden` file input, so
 // Tab never reached them. Each is now a button in the tab order, named by its text, that opens
 // the file input (which stays rendered but out of sight and out of the tab order).
 for (const [kind, restoreName] of [
-  ['handbook', 'Choose backup file'],
-  ['calculated', 'Choose backup'],
+  ['handbook', 'Restore this profile…'],
+  ['calculated', 'Restore this profile…'],
 ] as const)
   test(`the ${kind} backup page's file controls are buttons the keyboard reaches`, () => {
     open({ calculated: kind === 'calculated' });
@@ -527,7 +557,7 @@ for (const [kind, restoreName] of [
       .filter(e => e.tabIndex >= 0 && !e.hidden && !(e as HTMLButtonElement).disabled)
       .map(e => (e.getAttribute('aria-label') || e.textContent || '').trim());
     for (const [name, inputId] of [
-      ['Import saves', 'import-saves'],
+      ['Import saves…', 'import-saves'],
       [restoreName, 'import-file'],
     ] as const) {
       assert.ok(tabbable.includes(name), `Tab reaches "${name}"`);

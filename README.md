@@ -228,7 +228,7 @@ If resource limits or solver limits prevent a rounded plan, affected phases are 
 
 Use [Satisfactory Planner](https://reinder83.github.io/satisfactory-planner/) without installing a server. The calculator runs in a browser worker and saves profiles, checkmarks, notes and delivery counts in IndexedDB on that browser. No account is required and save contents are not uploaded to GitHub. GitHub serves the site and can receive ordinary web access information.
 
-Browser data is specific to the browser, device and site address. Clearing site data deletes saves; private browsing may discard them when closed. Use **Backups & transfer → Export all saves** regularly. Import adds separate copies rather than overwriting existing saves. The **Keep browser storage** button requests protection from automatic eviction where supported; it is not a backup.
+Browser data is specific to the browser, device and site address. Clearing site data deletes saves; private browsing may discard them when closed. Use **Backup → Export all saves** regularly. Import adds separate copies rather than overwriting existing saves. The **Keep browser storage** button requests protection from automatic eviction where supported; it is not a backup.
 
 To move an existing Docker plan, update the Docker image, open **Backups → Export all saves**, then import that file on the public site. The transfer includes original handbooks, calculated profiles and progress, but excludes accounts, passwords and sessions. The same full export can be imported into Docker. There is no automatic synchronization between installations.
 

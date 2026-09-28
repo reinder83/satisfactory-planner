@@ -2,7 +2,7 @@
 // open profile, whose menu (ui/ActionMenu.vue) lists the open save's profiles, "All saves &
 // profiles", and Account / Sign out on the server. A profile opens through openProfile in
 // ui/actions.ts, as the profiles page's Open does, so unsaved notes are asked about first.
-// The browser edition's "Backups & transfer" in place of the account items is checked in a real
+// The browser edition's "Backup" in place of the account items is checked in a real
 // browser (browserMode is fixed when browser-api.ts loads).
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
