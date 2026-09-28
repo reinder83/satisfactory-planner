@@ -150,6 +150,64 @@ test('ADA speaks, cycles, mutes and unmutes', async () => {
   assert.ok($('[data-ada-next]'));
 });
 
+test('at phone width ADA is a one-line ticker that unfolds the panel in place (SP-38)', async () => {
+  render();
+  const ticker = $('[data-ada-ticker]')!;
+  assert.equal(ticker.tagName, 'BUTTON');
+  assert.equal(ticker.getAttribute('type'), 'button');
+  assert.equal(ticker.getAttribute('aria-expanded'), 'false');
+  assert.equal(ticker.getAttribute('aria-controls'), 'ada-body');
+  assert.ok($('#ada-body')!.contains($('.ada-tools')), 'the tools are in the part it unfolds');
+  assert.equal(ticker.querySelector('.ada-mark')!.getAttribute('aria-hidden'), 'true');
+  const line = $('#ada-line')!;
+  assert.equal(ticker.querySelector('.ada-ticker-text')!.textContent, line.textContent);
+  assert.ok(!$('.ada')!.classList.contains('is-open'));
+  // Folded, the remark is still the page's live region, so the next one is announced.
+  assert.equal(line.getAttribute('aria-live'), 'polite');
+  $('[data-ada-next]')!.click();
+  await nextTick();
+  assert.equal(ticker.querySelector('.ada-ticker-text')!.textContent, $('#ada-line')!.textContent);
+  ticker.click();
+  await nextTick();
+  assert.equal(ticker.getAttribute('aria-expanded'), 'true');
+  assert.ok($('.ada')!.classList.contains('is-open'));
+  assert.equal(ticker.querySelector('.ada-ticker-text')!.textContent, 'ADA');
+  ticker.click();
+  await nextTick();
+  assert.equal(ticker.getAttribute('aria-expanded'), 'false');
+  // Muted is unchanged: one line with Unmute, and no ticker.
+  $('[data-ada-mute="on"]')!.click();
+  await nextTick();
+  assert.equal($('[data-ada-ticker]'), null);
+  assert.match($('.ada')!.textContent, /ADA muted/);
+  // Unmuting unfolds it, so the Mute that takes focus is on screen.
+  $('[data-ada-mute="off"]')!.click();
+  await nextTick();
+  assert.equal($('[data-ada-ticker]')!.getAttribute('aria-expanded'), 'true');
+});
+
+test('the phone ticker keeps the remark announced while folded (style.css, SP-38)', () => {
+  const css = fs.readFileSync('public/style.css', 'utf8').replace(/\r/g, '');
+  const phone = css.slice(css.indexOf('@media (max-width: 720px)'));
+  const rule = (sel: string) => {
+    const at = phone.indexOf(`\n  ${sel} {`);
+    assert.ok(at > 0, `${sel} at ≤720px`);
+    return phone.slice(at, phone.indexOf('}', at));
+  };
+  assert.match(rule('.ada-ticker'), /display: flex/);
+  assert.match(rule('.ada-ticker'), /min-height: 44px/);
+  assert.match(rule('.ada-ticker-text'), /text-overflow: ellipsis/);
+  // Out of sight but rendered: display: none or visibility: hidden would silence it.
+  const folded = rule('.ada:not(.is-open) .ada-line');
+  assert.match(folded, /clip-path: inset\(50%\)/);
+  assert.doesNotMatch(folded, /display: none|visibility: hidden/);
+  // Wider screens never show the ticker.
+  assert.match(
+    css.slice(0, css.indexOf('@media (max-width: 720px)')),
+    /\n\.ada-ticker \{\n  display: none;/,
+  );
+});
+
 test('ADA repeats a renamed step escaped', async () => {
   open();
   render();
@@ -178,7 +236,7 @@ test('ADA repeats a renamed step escaped', async () => {
 
 test('five pokes at the badge stage a transmission fault; the next remark ends it', async () => {
   render();
-  for (let i = 0; i < 5; i++) $('.ada-mark')!.click();
+  for (let i = 0; i < 5; i++) $('.ada-head .ada-mark')!.click();
   await nextTick();
   assert.equal($('.ada')!.dataset.tone, 'fault');
   assert.equal($('.ada b')!.textContent, '???');
