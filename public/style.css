@@ -3296,6 +3296,36 @@ button.rail-tile:hover {
   letter-spacing: 0.05em;
   text-transform: none;
 }
+/* A calculated profile's progress, one segment per phase (SP-32, ProfilesPage.vue): earlier
+   phases done, the current one filled to its share of lines running, later ones empty. Drawn
+   like .progress-track; the aria-label says it in words. */
+.phase-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  margin: -4px 0 14px;
+}
+.phase-seg {
+  height: 7px;
+  background: #0b0d0e;
+  border: 1px solid var(--line3);
+  padding: 1px;
+  overflow: hidden;
+}
+.phase-seg > span {
+  display: block;
+  height: 100%;
+}
+.phase-seg.done > span {
+  background: var(--green);
+}
+.phase-seg.current {
+  border-color: var(--accent);
+}
+.phase-seg.current > span {
+  background: var(--accent);
+}
 /* A save or profile name renamed in place (SP-31, ui/InlineName.vue): the heading with its ✎
    button, or the input with Save and Cancel. A long name wraps rather than overflowing. */
 .inline-name {
@@ -4228,7 +4258,8 @@ button.rail-tile:hover {
   }
   .progress-track,
   .resource-bar,
-  .power-bar {
+  .power-bar,
+  .phase-seg {
     background: #dddddd;
   }
 }
