@@ -159,6 +159,8 @@ test('the five steps keep every setting, and escape the save name once', async (
   wizardAt(1, { saveName: evil });
   noMarkup();
   assert.equal($('#main h1')!.textContent, 'Create your factory plan');
+  // SP-36: the eyebrow names what is being made, not a four-part path the five tabs don't match.
+  assert.equal($('#main .heading-row .eyebrow')?.textContent, 'NEW PROFILE');
   assert.equal($<HTMLInputElement>('input[name=saveName]')!.value, evil);
   assert.equal($<HTMLInputElement>('input[name=saveName]')!.readOnly, false);
   for (let step = 1; step <= 5; step++) {
