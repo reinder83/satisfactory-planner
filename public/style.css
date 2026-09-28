@@ -4032,6 +4032,49 @@ button.rail-tile:hover {
     grid-column: 1 / -1;
     grid-row: 2;
   }
+  /* The sticky header stays in view while the body scrolls, so on a phone it keeps to what
+     must stay there (#318): the title, Running and the ×. The icon is smaller, and the eyebrow,
+     title and summary are one line each, cut short with an ellipsis; the h2 keeps the full name
+     for assistive software, and the dialog's body names the factory again. */
+  .dialog-head {
+    padding: 10px 12px;
+  }
+  .dialog-head:has(.dialog-head-actions .check-row) {
+    gap: 8px 12px;
+  }
+  .dialog-title {
+    gap: 10px;
+  }
+  .dialog-title > div {
+    min-width: 0;
+  }
+  .dialog-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .dialog-icon .item-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .dialog-head .eyebrow,
+  .dialog-head h2,
+  .dialog-head .subtitle {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .dialog-head .eyebrow {
+    line-height: 1.3;
+  }
+  .dialog-head h2 {
+    margin-top: 2px;
+    font-size: 19px;
+    line-height: 1.2;
+  }
+  .dialog-head .subtitle {
+    margin-top: 2px;
+    line-height: 1.35;
+  }
   .check-columns {
     grid-template-columns: 1fr;
   }

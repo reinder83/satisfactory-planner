@@ -301,3 +301,21 @@ test('the top bar’s hazard stripe is 7px, and 4px on a phone (SP-39)', () => {
   assert.match(body, /border-bottom-width: 4px/);
   assert.match(body, /border-image: var\(--hazard\) 4/);
 });
+
+test('on a phone the dialog’s sticky header keeps to one line per part (#318)', () => {
+  const css = screenCss().replace(/\r/g, '');
+  // The wide header is unchanged.
+  assert.match(rules(css).find(r => r.selector === '.dialog-icon')!.body, /width: 62px/);
+  assert.match(rules(css).find(r => r.selector === '.dialog-head h2')!.body, /font-size: 24px/);
+  const at = css.indexOf(
+    '\n  .dialog-head .eyebrow,\n  .dialog-head h2,\n  .dialog-head .subtitle {',
+  );
+  assert.ok(at > 0, 'one line each for the eyebrow, title and summary');
+  const media = css.lastIndexOf('@media', at);
+  assert.match(css.slice(media, css.indexOf('{', media)), /max-width: 720px/);
+  const block = css.slice(at, css.indexOf('}', at));
+  assert.match(block, /white-space: nowrap/);
+  assert.match(block, /text-overflow: ellipsis/);
+  const phone = css.slice(media, css.indexOf('\n}\n', media));
+  assert.match(phone, /\n  \.dialog-icon \{\n    width: 36px;\n    height: 36px;/);
+});
