@@ -1,7 +1,7 @@
 <!-- An item's bundled icon from icons/. A trailing "(...)" qualifier is dropped first. A name with
-     no bundled icon (icons.ts), such as the equipment a container can hold or a container's own
-     name, gets a neutral crate glyph of the same size instead, so a row of items keeps its icons
-     in line (#448). An icon that is listed but fails to load is hidden by the error listener in
+     no bundled icon (icons.ts), such as a container named after no item, gets a neutral crate
+     glyph of the same size instead, so a row of items keeps its icons in line (#448). Every item
+     a container can hold has its icon (#455). An icon that is listed but fails to load is hidden by the error listener in
      listeners.ts. -->
 <script setup lang="ts">
 import { computed } from 'vue';

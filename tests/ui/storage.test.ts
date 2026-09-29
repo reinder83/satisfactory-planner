@@ -1487,17 +1487,18 @@ const editWithCatalog = (slots: Record<string, string> = {}) => {
   render();
 };
 
-// An item with no bundled icon, the equipment and the coupon, gets the placeholder glyph in the
-// suggestions and in its bay, where a gap used to be (#448).
-test('an item without a bundled icon shows the placeholder, in the suggestions and in its bay', async () => {
+// The equipment and the coupon have their bundled icons (#455), in the suggestions and in their
+// bay; a container named after no item, saved before #295, gets the placeholder glyph (#448).
+test('equipment shows its icon; a container named after no item shows the placeholder', async () => {
   stubFetch({ '/api/update': () => state });
-  editWithCatalog({ A02: 'Jetpack' });
-  const slot = $('[data-slot="A02"]')!.closest('.slot')!;
-  assert.ok(
-    slot.querySelector('svg.item-icon[data-icon-missing]'),
-    'the bay shows the placeholder',
+  editWithCatalog({ A02: 'Jetpack', A03: 'Odds and ends' });
+  const slot = (id: string) => $(`[data-slot="${id}"]`)!.closest('.slot')!;
+  assert.equal(
+    slot('A02').querySelector('img.item-icon')!.getAttribute('src'),
+    './icons/jetpack.png',
   );
-  assert.equal(slot.querySelector('img.item-icon'), null);
+  assert.ok(slot('A03').querySelector('svg.item-icon[data-icon-missing]'), 'the placeholder');
+  assert.equal(slot('A03').querySelector('img.item-icon'), null);
   for (const [text, name] of [
     ['jet', 'Jetpack'],
     ['hazmat', 'Hazmat Suit'],
@@ -1507,13 +1508,9 @@ test('an item without a bundled icon shows the placeholder, in the suggestions a
     const option = suggestions().find(o => o.textContent.trim() === name)!;
     assert.ok(option, name + ' is offered');
     const icon = option.firstElementChild!;
-    assert.equal(icon.tagName.toLowerCase(), 'svg', name + ': the placeholder comes first');
-    assert.ok(icon.hasAttribute('data-icon-missing'));
-    assert.equal(icon.getAttribute('aria-hidden'), 'true', 'the name beside it says what it is');
+    assert.equal(icon.tagName, 'IMG', name + ': its icon comes first');
+    assert.equal(icon.getAttribute('src'), `./icons/${slug(name)}.png`);
   }
-  // An item with artwork keeps its image.
-  await typeAdd('iron pl');
-  assert.equal(suggestions()[0]!.firstElementChild!.tagName, 'IMG');
 });
 
 test('the add-container field suggests item names, each with its icon, as you type', async () => {
