@@ -12,9 +12,12 @@ import path from 'node:path';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { calculate, catalog, rankAlternates } from './planner.ts';
+import { migrateOriginalProfile } from './public/handbook-migration.ts';
 import type { IncomingMessage } from 'node:http';
 import type {
+  Handbook,
   ProgressState,
+  Recipe,
   StoredPayoff,
   StoredProfile,
   StoredSave,
@@ -70,6 +73,23 @@ const publicUser = (u: StoredUser | null | undefined) =>
 // (behind HTTPS), because browsers never send a Secure cookie back over plain http.
 const authCookie = (token: string) =>
   `planner_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 2592000 : 0}${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
+// Retiring the handbook profile type (#387, #495): every original profile becomes a calculated
+// one with its progress re-keyed (migrateOriginalProfile). One that carries no handbook of its
+// own was made with this handbook: a frozen, server-only copy of plan.json as it was released,
+// so the migration never depends on the plan.json the release happens to ship. The Docker
+// image copies migrations/; the Pages build never includes it. Read only when there is
+// something to migrate.
+const migrateOriginals = async (saves: Save[]) => {
+  const read = async (file: string) =>
+    JSON.parse(await fs.readFile(new URL(file, import.meta.url), 'utf8'));
+  const handbook = (await read('./migrations/handbook-2026-09-13.json')) as Handbook;
+  const { recipes } = (await read('./recipes.json')) as { recipes: Recipe[] };
+  const { pureLimits } = catalog();
+  for (const save of saves)
+    save.profiles = save.profiles.map(p =>
+      migrateOriginalProfile(p, handbook, recipes, pureLimits),
+    );
+};
 // Opens (or creates) the Docker edition's workspace in dataDir and returns route(req, url,
 // body), which server.ts calls for every /api/ request. The whole workspace lives in
 // memory and in DATA_DIR/workspace.json:
@@ -132,8 +152,11 @@ export async function openWorkspace({
       ),
       { newer: true },
     );
+  // workspace.json exactly as it was read, kept as the pre-migration copy below.
+  let raw: string | null = null;
   try {
-    db = JSON.parse(await fs.readFile(file, 'utf8'));
+    raw = await fs.readFile(file, 'utf8');
+    db = JSON.parse(raw);
     if (typeof db.version === 'number' && db.version > 2) throw newer();
     if (
       db.version !== 2 ||
@@ -185,11 +208,13 @@ export async function openWorkspace({
     // stays as the pre-migration copy; a corrupt one stops start-up. The 'wx' flag refuses
     // to overwrite a workspace.json that appeared in the meantime.
     let legacy: ProgressState;
+    let found = true;
     try {
       legacy = validateState(
         JSON.parse(await fs.readFile(path.join(dataDir, 'progress.json'), 'utf8')),
       );
     } catch (e) {
+      found = false;
       if (code(e) === 'ENOENT') legacy = initialState();
       else throw new Error('Progress could not be read; existing data has not been overwritten.');
     }
@@ -210,7 +235,27 @@ export async function openWorkspace({
       ],
       sessions: [],
     };
+    // Progress from progress.json is handbook progress: it migrates before it is first written
+    // (#495), and progress.json itself is its pre-migration copy.
+    if (found) await migrateOriginals(db.saves);
     await fs.writeFile(file, JSON.stringify(db), { flag: 'wx', mode: 0o600 });
+  }
+  // A workspace.json with original profiles (#495): first keep it as it was read in
+  // workspace.json.pre-handbook, written once and never replaced, so a later start cannot
+  // overwrite the copy with a partly migrated file. Then every original profile migrates in one
+  // write, through .tmp and a rename like commit's, so a crash leaves the unmigrated file and the
+  // next start finishes. A workspace without any is left as it is, so starting again changes
+  // nothing.
+  if (raw !== null && db.saves.some(s => s.profiles.some(p => p.kind === 'original'))) {
+    await fs.writeFile(file + '.pre-handbook', raw, { flag: 'wx', mode: 0o600 }).catch(e => {
+      if (code(e) !== 'EEXIST') throw e;
+    });
+    const next = structuredClone(db);
+    await migrateOriginals(next.saves);
+    next.revision = db.revision + 1;
+    await fs.writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
+    await fs.rename(file + '.tmp', file);
+    db = next;
   }
   // The one-time token /api/setup asks for before it enables accounts, so only someone with
   // access to the data folder can claim the owner account. Created once and kept.

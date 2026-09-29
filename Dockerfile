@@ -14,6 +14,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --chown=node:node server.ts workspace.ts planner.ts optimizer.ts docker-start.ts recipes.json ./
+# The frozen handbook the original-profile migration falls back on (#495), next to
+# workspace.ts and outside the public/ the server serves.
+COPY --chown=node:node migrations ./migrations
 COPY --from=build --chown=node:node /src/dist/web ./public
 # The server imports the shared scripts' TypeScript sources (state.ts, transfer.ts,
 # preferences.ts, ...), which Node runs as they are; the browser gets the built .js files.
