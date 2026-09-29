@@ -167,7 +167,8 @@ const view = computed(() =>
           rate,
           fluid,
           pack: pack || '',
-          text: `${num(rate)}${fluid ? ' m³' : ''}`,
+          // With its unit, as the part header above has it: 213,27/min, 139,36 m³/min (#462).
+          text: `${num(rate)}${fluid ? ' m³' : ''}/min`,
           title: `${item}: ${num(rate)}${fluid ? ' m³' : ''}/min${pack ? `, as ${pack}` : ''}`,
         };
       });

@@ -2225,7 +2225,18 @@ test('between groups: a card per group with what comes in and goes out, names es
   assert.ok(ends('out').includes('→ to Space Elevator'));
   // The items with their rates, named for screen readers; the belts totalled per mark.
   const item = out.querySelector('.flow-items li')!;
-  assert.match(text(item), /^[A-Z][\w ]+: [\d.,]+( m³)?$/);
+  assert.match(text(item), /^[A-Z][\w ]+: [\d.,]+( m³)?\/min$/);
+  // Every item line carries its unit, a solid's /min and a fluid's m³/min (#462).
+  const lines = $$('[data-link-out] .flow-items li').map(text);
+  assert.ok(lines.length && lines.every(l => /\d( m³)?\/min$/.test(l)), JSON.stringify(lines));
+  assert.ok(
+    lines.some(l => /^Iron Ore: [\d.,]+\/min$/.test(l)),
+    'a solid reads /min',
+  );
+  assert.ok(
+    lines.some(l => /^Crude Oil: [\d.,]+ m³\/min$/.test(l)),
+    'a fluid reads m³/min',
+  );
   assert.match(item.getAttribute('title')!, /^[A-Z][\w ]+: [\d.,]+( m³)?\/min$/);
   for (const b of $$('[data-link-badge]'))
     assert.match(text(b), /^\d+ × Mk\.\d (belt|pipe)s?( · \d+ × Mk\.\d (belt|pipe)s?)*$/);
