@@ -5,9 +5,15 @@
   fit or too little power shows a warning. The status line is a polite live region, so a screen
   reader hears when an estimate is ready without every figure being read out. Leaving the step
   cancels the estimate and forgets it; arriving estimates the draft's settings straight away.
+  At 720px and below the panel sits under the form, off screen while a budget near the top is
+  edited (#412), so a one-line bar at the foot of the screen carries the tightest resource and a
+  ⚠ when there is a warning; tapping it brings the panel into view. It hides while the panel is
+  on screen, which an IntersectionObserver reports; the stylesheet hides it on wider screens.
+  It is a touch shortcut: it comes after the panel and hides once the panel is on screen, so the
+  keyboard reaches the panel itself. The stylesheet keeps a focused control clear of it.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { num } from '../../format.ts';
 import {
   cancelEstimate,
@@ -86,16 +92,52 @@ const view = computed(() =>
   }),
 );
 
+// The phone bar's one line: the tightest resource once there is one, else the status.
+const peek = computed(() => {
+  const t = view.value.figures?.tightest;
+  return {
+    label: t ? 'Tightest' : 'Live estimate',
+    text: t ? `${t.name} ${t.use.use}` : view.value.status,
+    warn: !!(view.value.figures && view.value.warnings?.length),
+  };
+});
+
+// Whether the panel is on screen, where the bar would only repeat it.
+const panel = ref<HTMLElement | null>(null);
+const heading = ref<HTMLElement | null>(null);
+const panelShown = ref(false);
+let seen: IntersectionObserver | null = null;
+
+// The bar's tap: the panel comes into view and its heading takes focus, so a screen reader
+// continues from the estimate.
+async function showPanel() {
+  panel.value?.scrollIntoView({ block: 'start' });
+  await nextTick();
+  heading.value?.focus({ preventScroll: true });
+}
+
 onMounted(() => {
   const f = form();
   if (f) scheduleEstimate(f, 0);
+  if (typeof IntersectionObserver === 'function' && panel.value) {
+    seen = new IntersectionObserver(([e]) => (panelShown.value = !!e?.isIntersecting));
+    seen.observe(panel.value);
+  }
 });
-onBeforeUnmount(() => cancelEstimate(true));
+onBeforeUnmount(() => {
+  seen?.disconnect();
+  cancelEstimate(true);
+});
 </script>
 
 <template>
-  <aside class="panel wizard-estimate" aria-labelledby="wizard-estimate-title" data-estimate>
-    <h2 id="wizard-estimate-title">Live estimate</h2>
+  <aside
+    ref="panel"
+    class="panel wizard-estimate"
+    aria-labelledby="wizard-estimate-title"
+    data-estimate
+  >
+    <h2 id="wizard-estimate-title" ref="heading" tabindex="-1">Live estimate</h2>
     <p
       :class="['small', view.error ? 'form-error' : 'muted']"
       role="status"
@@ -152,4 +194,19 @@ onBeforeUnmount(() => cancelEstimate(true));
       Calculated from the settings on screen, as Review will be. Review has every phase.
     </p>
   </aside>
+  <button
+    v-if="!panelShown"
+    type="button"
+    :class="['estimate-peek', peek.warn ? 'warn' : '']"
+    data-estimate-peek
+    @click="showPanel"
+  >
+    <span v-if="peek.label !== 'Live estimate'" class="visually-hidden">Live estimate: </span
+    ><span class="eyebrow">{{ peek.label }}</span
+    ><span class="estimate-peek-text" data-estimate-peek-text>{{ peek.text }}</span
+    ><template v-if="peek.warn"
+      ><span class="estimate-peek-warn" aria-hidden="true">⚠</span
+      ><span class="visually-hidden">, with a warning</span></template
+    ><span aria-hidden="true">↓</span>
+  </button>
 </template>
