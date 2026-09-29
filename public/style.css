@@ -1346,13 +1346,13 @@ p.eyebrow {
 .item-icon {
   object-fit: contain;
 }
-/* An item with no bundled icon (#448, ItemIcon.vue): a crate outline in the muted ink, drawn at
-   the size its context gives an icon. */
+/* An item with no bundled icon (#448, ItemIcon.vue): an empty dashed square in the line colour,
+   the size its context gives an icon (#463). */
 .item-icon-missing {
   fill: none;
-  stroke: var(--dim);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
+  stroke: var(--line);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
 }
 .card-icon {
   width: 52px;

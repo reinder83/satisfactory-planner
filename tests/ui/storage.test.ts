@@ -1542,7 +1542,11 @@ test('equipment shows its icon; a container named after no item shows the placeh
     slot('A02').querySelector('img.item-icon')!.getAttribute('src'),
     './icons/jetpack.png',
   );
-  assert.ok(slot('A03').querySelector('svg.item-icon[data-icon-missing]'), 'the placeholder');
+  const tile = slot('A03').querySelector('svg.item-icon[data-icon-missing]')!;
+  assert.ok(tile, 'the placeholder');
+  // An empty dashed square, no glyph (#463).
+  assert.equal(tile.querySelectorAll('rect').length, 1);
+  assert.equal(tile.querySelector('path'), null);
   assert.equal(slot('A03').querySelector('img.item-icon'), null);
   for (const [text, name] of [
     ['jet', 'Jetpack'],
