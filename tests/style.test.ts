@@ -389,3 +389,23 @@ test('a Build order title wraps on a phone, other dialog titles stay one line (#
   assert.deepEqual(decls(eyebrow.body, 'white-space'), ['normal']);
   assert.ok(eyebrow.line > one.line);
 });
+
+// Saves & profiles on a phone (#452): the save's name takes the section head's first row, so it
+// is not squeezed beside Try another profile, and wraps between words; the button keeps a 44px
+// touch target.
+test('a save name wraps between words on a phone, above its button (#452)', () => {
+  const css = screenCss();
+  // Only the save's heading, on its own row; a profile card's keeps anywhere, so a long
+  // unbroken profile name wraps inside its card instead of pushing the page sideways (#456).
+  const names = rules(css).find(r => r.selector === '.inline-name > h2, .inline-name > h3')!;
+  assert.deepEqual(decls(names.body, 'overflow-wrap'), ['anywhere']);
+  const name = rules(css).find(
+    r => r.selector === '.save-panel .section-head > .inline-name > h2',
+  )!;
+  assert.deepEqual(decls(name.body, 'overflow-wrap'), ['break-word']);
+  assert.ok(name.line > names.line, 'it comes after the general rule');
+  const row = rules(css).find(r => r.selector === '.save-panel .section-head > .inline-name')!;
+  assert.deepEqual(decls(row.body, 'flex-basis'), ['100%']);
+  const button = rules(css).find(r => r.selector === '.save-panel .section-head > .btn')!;
+  assert.deepEqual(decls(button.body, 'min-height'), ['44px']);
+});

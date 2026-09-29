@@ -3596,6 +3596,20 @@ button.rail-tile:hover {
     min-width: 44px;
     min-height: 44px;
   }
+  /* On a phone the save's name and ✎ take the section head's first row, and Try another
+     profile the row under it, so the name is not squeezed beside the button (#452). */
+  .save-panel .section-head > .inline-name {
+    flex-basis: 100%;
+  }
+  /* With that row to itself the save's name wraps between words: break-word breaks inside a word
+     only when the word is wider than the line. Profile names keep anywhere, since in a card
+     break-word would hold a long unbroken name at its full width and push the page sideways. */
+  .save-panel .section-head > .inline-name > h2 {
+    overflow-wrap: break-word;
+  }
+  .save-panel .section-head > .btn {
+    min-height: 44px;
+  }
 }
 /* One visible action, the others in the ⋯ menu at the card's right edge (#238). */
 .profile-actions {
