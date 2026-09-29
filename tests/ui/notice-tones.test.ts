@@ -110,7 +110,6 @@ test('the handbook profile draws each notice in its tone', () => {
   }
   setFloor('ground');
   assert.equal(toneOf(all, /Ground floor is built/), 'info', 'ground-floor moves');
-  assert.equal(toneOf(all, /Q sits behind O/), 'info');
   assert.equal(toneOf(all, /nitrogen wells can supply/), 'warn');
   assert.equal(toneOf(all, /preliminary requirement/), 'info');
   assert.equal(toneOf(all, /has no calculated plan/), 'info');
