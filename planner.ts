@@ -70,6 +70,7 @@ interface RunOptions {
   recipeIds?: Set<string> | null;
   caps?: Record<string, number> | null;
   baseline?: Record<string, number> | null;
+  fractionalNuclear?: boolean;
 }
 const isRecord = (x: unknown): x is Raw => !!x && typeof x === 'object' && !Array.isArray(x);
 // Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
@@ -527,6 +528,82 @@ const amplified = (r: PoolRecipe): PoolRecipe => ({
   slots: AMPLIFY_SLOTS[r.machine],
   outputs: Object.fromEntries(Object.entries(r.outputs).map(([n, q]) => [n, q * 2])),
 });
+// The largest period nuclearPeriod accepts. A longer one would force a plan to many more uranium
+// plants than it needs, so such a chain gets whole uranium plants only (#370).
+const NUCLEAR_PERIOD_MAX = 100;
+// The recycle chain's period (#370): the smallest number of uranium plants for which every line
+// downstream of their waste, up to the plutonium and ficsonium plants, runs whole machines at
+// 100%. Radioactive items balance exactly, so with one recipe per chain item the chain is linear
+// in the uranium plant count. Solve it for one uranium plant, write each line's machines as a
+// fraction and take the least common multiple of the denominators: 20 with the default recipes
+// (Ficsonium is 0.05 machines per plant).
+//
+// `pool` is the recipe network being fitted, `demand` its per-minute demands. Returns 1 when
+// there is no such period: no uranium plant, a chain item some demand also draws (plutonium drone
+// fuel, which makes the chain affine rather than linear), two recipes competing for one chain
+// item (mixed alternates or an amplified twin), or a period above NUCLEAR_PERIOD_MAX.
+type ChainRecipe = Pick<PoolRecipe, 'id' | 'inputs' | 'outputs'>;
+export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): number {
+  const uranium = pool.find(r => r.id === 'power-uranium');
+  if (!uranium) return 1;
+  // The chain: every recipe that makes or uses a radioactive item the chain carries, starting
+  // from the uranium plants' waste. The fuel feed (cells and rods) is upstream, so it stays out.
+  const radioactive = (n: string) => !!DATA.items[n]?.radioactive;
+  const items = new Set(Object.keys(uranium.outputs).filter(radioactive));
+  const chain: ChainRecipe[] = [];
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const r of pool)
+      if (
+        r !== uranium &&
+        !chain.includes(r) &&
+        [...Object.keys(r.inputs), ...Object.keys(r.outputs)].some(n => items.has(n))
+      ) {
+        chain.push(r);
+        Object.keys(r.outputs)
+          .filter(radioactive)
+          .forEach(n => items.add(n));
+        grew = true;
+      }
+  }
+  const names = [...items];
+  if (!chain.length || names.length !== chain.length || names.some(n => (demand[n] || 0) > 0))
+    return 1;
+  // One balance per chain item: the chain's net output plus the uranium plant's is zero.
+  const net = (r: ChainRecipe, n: string) => (r.outputs[n] || 0) - (r.inputs[n] || 0);
+  const m = names.map(n => [...chain.map(r => net(r, n)), -net(uranium, n)]);
+  // Gauss-Jordan elimination with partial pivoting. A singular system has no unique chain.
+  const size = chain.length;
+  for (let c = 0; c < size; c++) {
+    let p = c;
+    for (let r = c + 1; r < size; r++) if (Math.abs(m[r]![c]!) > Math.abs(m[p]![c]!)) p = r;
+    if (Math.abs(m[p]![c]!) < 1e-9) return 1;
+    [m[c], m[p]] = [m[p]!, m[c]!];
+    const pivot = m[c]!;
+    for (let r = 0; r < size; r++) {
+      const row = m[r]!;
+      if (r === c || row[c] === 0) continue;
+      const f = row[c]! / pivot[c]!;
+      for (let k = c; k <= size; k++) row[k]! -= f * pivot[k]!;
+    }
+  }
+  const perPlant = m.map((row, c) => row[size]! / row[c]!);
+  // The smallest denominator that makes each line's machines per plant whole.
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+  let period = 1;
+  for (const x of perPlant) {
+    if (x < -1e-9) return 1;
+    let d = 1;
+    while (
+      d <= NUCLEAR_PERIOD_MAX &&
+      Math.abs(x * d - Math.round(x * d)) > 1e-7 * Math.max(1, x * d)
+    )
+      d++;
+    period = (period * d) / gcd(period, d);
+    if (period > NUCLEAR_PERIOD_MAX) return 1;
+  }
+  return period;
+}
 // Power plants modelled as recipes, so the LP sizes generation and fuel chains with everything
 // else. `power` is negative (MW generated per plant at 100%); inputs are fuel and water per
 // minute. Coal from Phase 2, fuel generators from Phase 3 (rocket fuel from 4), nuclear from 4
@@ -618,6 +695,8 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
 //                 it also marks the inner solve of the two-step fit below
 //   caps          { recipeId: max machine-equivalents }; a recipe missing from it is capped at 0
 //   baseline      { recipeId: equivalent } from the exact solve: which lines get amplified twins
+//   fractionalNuclear  leave the uranium plants fractional in a whole-machine fit (the fallback
+//                 when whole nuclear plants do not fit, #370)
 //
 // Returns { feasible: false, solverStatus? } or a stage:
 //   rows        one per recipe in use, in build order (suppliers before consumers): the recipe
@@ -632,8 +711,10 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
 //   power       peakMW, generationMW, requiredMW (peak with utility allowance), availableMW (new
 //               generation with augmenter boost plus spare), additionalHeadroomMW (shortfall)
 //   hours       time to finish the phase's deliveries at these rates
-//   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names)
-// calculate() may add aheadOf, fuelVerdict, supplyDropped/amplificationDropped, or turn a failed
+//   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
+//   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
+// The two-step fit may add nuclearFractional, supplyDropped or amplificationDropped.
+// calculate() may add aheadOf, fuelVerdict, or turn a failed
 // phase into a draft with reason/shortfalls/minHours. The interface reads these fields in
 // public/app/views/calculated.ts, public/app/flow.ts and public/app/wizard/. Only calculate()
 // calls run, directly and through the two-step fit below.
@@ -647,6 +728,7 @@ export function run(
     recipeIds = null,
     caps = null,
     baseline = null,
+    fractionalNuclear = false,
   }: RunOptions = {},
 ): RunResult {
   // Two-step fit for whole machines and amplification. First the exact LP (fractional machines,
@@ -673,7 +755,16 @@ export function run(
     if (!base.feasible) return base;
     const ids = new Set(base.rows.map(r => r.id));
     const baseline = twins(base);
-    let fit = run(s, phase, { ...opts, recipeIds: ids, baseline });
+    // An integer fit. Whole nuclear plants (see the model below) can need more uranium, water or
+    // waste-chain inputs than the budgets allow; then fall back to fractional uranium plants,
+    // exactly the fit earlier releases made, and mark the stage `nuclearFractional` (#370).
+    const fitted = (t: CurrentSettings, o: RunOptions): RunResult => {
+      const r = run(t, phase, o);
+      if (r.feasible || !t.wholeMachines || !o.recipeIds?.has('power-uranium')) return r;
+      const f = run(t, phase, { ...o, fractionalNuclear: true });
+      return f.feasible ? { ...f, nuclearFractional: true } : r;
+    };
+    let fit = fitted(s, { ...opts, recipeIds: ids, baseline });
     // Crediting production you already run narrows the recipe network the exact solve picks, and a
     // narrower network has less room to round up to whole machines. Widen it with the recipes this
     // phase would have used without the credit before concluding anything — the supplied plan is
@@ -684,18 +775,21 @@ export function run(
       const plainBase = exact({ ...s, existingSupply: {} });
       if (plainBase.feasible) {
         const plainIds = new Set(plainBase.rows.map(r => r.id));
-        const widened = run(s, phase, {
+        const widened = fitted(s, {
           ...opts,
           recipeIds: new Set([...ids, ...plainIds]),
           baseline,
         });
         if (widened.feasible) fit = widened;
         else {
-          const without = run({ ...s, existingSupply: {} }, phase, {
-            ...opts,
-            recipeIds: plainIds,
-            baseline: twins(plainBase),
-          });
+          const without = fitted(
+            { ...s, existingSupply: {} },
+            {
+              ...opts,
+              recipeIds: plainIds,
+              baseline: twins(plainBase),
+            },
+          );
           if (without.feasible) return { ...without, supplyDropped: true };
         }
       }
@@ -704,7 +798,7 @@ export function run(
     // So a failure here is the integer search running out of time, never a real shortage — never let
     // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
     if (!fit.feasible && s.amplifySloops > 0) {
-      const plain = run({ ...s, amplifySloops: 0 }, phase, { ...opts, recipeIds: ids });
+      const plain = fitted({ ...s, amplifySloops: 0 }, { ...opts, recipeIds: ids });
       if (plain.feasible) return { ...plain, amplificationDropped: true };
     }
     return fit;
@@ -845,7 +939,7 @@ export function run(
     for (const [n, q] of Object.entries(r.outputs)) v['item:' + n] = (v['item:' + n] || 0) + q;
     for (const [n, q] of Object.entries(r.inputs)) v['item:' + n] = (v['item:' + n] || 0) - q;
     // At least the requested number of uranium plants (settings.uraniumReactors) when nuclear
-    // power is in the pool. Nuclear rows are never integer (see the whole-machine rule below).
+    // power is in the pool. Whole machines round them after this loop.
     if (r.id === 'power-uranium') {
       v.nuclear = 1;
       model.constraints.nuclear = { min: s.uraniumReactors };
@@ -869,7 +963,8 @@ export function run(
     // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
     // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
     // generators and anything nuclear keep fractional clocks, because their balances are exact.
-    // (Generators have no outputs, and power-uranium outputs waste.)
+    // (Generators have no outputs, and power-uranium outputs waste.) The uranium plants are
+    // rounded separately, after this loop.
     if (
       s.wholeMachines &&
       Object.keys(r.outputs).some(
@@ -926,6 +1021,27 @@ export function run(
     for (const [n, d] of Object.entries(delivery)) v['item:' + n] = -d.target / 1000;
     model.variables.goal = v;
   }
+  // Whole nuclear plants (#370). Every line downstream of the uranium plants is linear in their
+  // count, so rounding that count is enough. In Phase 5 under 'recycle' the count is a whole
+  // multiple of the chain's period (nuclearPeriod), which makes the whole waste chain, plutonium
+  // and ficsonium plants included, whole machines at 100%: 'nuclear-block' is the number of
+  // periods. Elsewhere ('sink', and Phase 4 under 'recycle', whose chain ends in the sink) the
+  // uranium plants are simply whole. Extra plants only add generation, which the power constraint
+  // allows. The fuel feed stays fractional: its items are radioactive and balance exactly.
+  // `fractionalNuclear` is the two-step fit's fallback when this does not fit the budgets.
+  const uraniumPlants = model.variables['power-uranium'];
+  const period =
+    s.wholeMachines && !fractionalNuclear && uraniumPlants
+      ? s.nuclear === 'recycle' && phase === 5
+        ? nuclearPeriod(pool, demand)
+        : 1
+      : 0;
+  if (period > 1 && uraniumPlants) {
+    uraniumPlants.nuclearBlock = 1;
+    model.variables['nuclear-block'] = { nuclearBlock: -period };
+    model.constraints.nuclearBlock = { equal: 0 };
+    (model.ints ??= {})['nuclear-block'] = 1;
+  } else if (period === 1) (model.ints ??= {})['power-uranium'] = 1;
   // Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
   // numerical slack) and minimises machines, so the fastest plan is also the leanest one.
   let solved = solve(model);
@@ -1046,6 +1162,7 @@ export function run(
     delivery,
     surplus,
     plutoniumSink: solved.values['sink-plutonium'] || 0,
+    ...(period > 1 ? { nuclearPeriod: period } : {}),
     peakMW,
     generationMW,
     sloopsUsed: rows.reduce((a, r) => a + (r.sloops || 0), 0),
@@ -1155,7 +1272,13 @@ export function calculate(
             ? run(
                 { ...plain, limits: Object.fromEntries(RAW.map(n => [n, s.limits[n]! * 2 + 600])) },
                 phase,
-                { conversion, recipeIds: new Set(network.rows.map(r => r.id)) },
+                // Fractional nuclear plants, as the plan itself falls back to: the shortfall
+                // is about the solid-part lines.
+                {
+                  conversion,
+                  recipeIds: new Set(network.rows.map(r => r.id)),
+                  fractionalNuclear: true,
+                },
               )
             : { feasible: false };
           if (rounded.feasible)
@@ -1382,10 +1505,26 @@ export function calculate(
   warnings.push(
     `Power includes new generators and their fuel chains, with a ${s.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
   );
-  if (s.wholeMachines)
+  // Whole machines, and how the nuclear plants were rounded (#370).
+  if (s.wholeMachines) {
+    const period = stages[5]?.nuclearPeriod;
     warnings.push(
-      'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid, power and nuclear balancing can retain fractional clocks.',
+      'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.' +
+        (s.nuclear === 'none'
+          ? ''
+          : ' Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
+            (period
+              ? `. In Phase 5, which recycles the waste, they come in multiples of ${period}, so every line of the waste chain there, the plutonium and ficsonium plants included, also runs whole at 100%; the extra plants only add generation. Other nuclear fuel and waste lines balance exactly and can retain fractional clocks.`
+              : '. Their fuel and waste lines balance exactly and can retain fractional clocks.')),
     );
+    const fractional = Object.entries(stages)
+      .filter(([, x]) => x.nuclearFractional)
+      .map(([p]) => p);
+    if (fractional.length)
+      warnings.push(
+        `Phase ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
+      );
+  }
   warnings.push(
     'Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum.',
   );

@@ -247,6 +247,10 @@ export interface StageResult {
   fuelVerdict?: FuelVerdict;
   supplyDropped?: boolean;
   amplificationDropped?: boolean;
+  // Whole machines (#370): the recycle chain's period when the uranium plants came in multiples
+  // of it, and whether whole nuclear plants did not fit and the phase kept them fractional.
+  nuclearPeriod?: number;
+  nuclearFractional?: boolean;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;
