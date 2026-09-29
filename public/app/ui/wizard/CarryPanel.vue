@@ -12,6 +12,7 @@ import { carryOptions, pickedRecipeUnlocks } from '../../../state.ts';
 import { num } from '../../format.ts';
 import { wizard, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
+import { RESOLVE_WARNING } from '../../../handbook-migration.ts';
 
 const view = computed(() =>
   legacy(() => {
@@ -25,6 +26,8 @@ const view = computed(() =>
     return {
       profiles: save.profiles.map(p => ({ id: p.id, name: p.name })),
       source: source.id,
+      // The source is a transcribed handbook, which the new plan solves afresh (#480).
+      transcribed: !!source.transcribed,
       options: carryOptions
         .filter(([key]) => key !== 'picked' || picked > 0)
         .map(([key, label, detail]) => ({
@@ -52,6 +55,7 @@ const view = computed(() =>
         <option v-for="p in view.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
       </select></label
     >
+    <p v-if="view.transcribed" class="notice warn" data-resolve-warning>{{ RESOLVE_WARNING }}</p>
     <div class="carry-list">
       <label v-for="o in view.options" :key="o.key" class="check-row"
         ><input type="checkbox" name="carry" :value="o.key" :checked="o.on" /><span

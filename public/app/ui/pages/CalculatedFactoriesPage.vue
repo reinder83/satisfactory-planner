@@ -25,6 +25,7 @@ import {
   stage,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { heldBack } from '../../views/calculated.ts';
 import {
   completionView,
@@ -144,7 +145,10 @@ async function roundUp(e: Event) {
   if (isBusy(b)) return;
   const confirmed = await confirmAction({
     title: 'Round up production?',
-    body: 'Creates a recalculated profile revision that prefers extra production over underclocking. Your previous profile stays available; increased factory requirements are marked for review.',
+    body:
+      'Creates a recalculated profile revision that prefers extra production over underclocking. Your previous profile stays available; increased factory requirements are marked for review.' +
+      // A transcribed handbook says so first (#480).
+      (isTranscribed(calculated) ? ' ' + RESOLVE_WARNING : ''),
     confirmLabel: 'Round up production',
   });
   if (!confirmed || !(await allowSwitch())) return;

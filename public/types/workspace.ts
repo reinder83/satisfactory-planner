@@ -123,6 +123,8 @@ export interface ProfileSummary {
   name: string;
   kind: ProfileKind;
   settings?: StoredSettings;
+  // The plan is a transcribed handbook (#486), so re-solving it warns first (#480).
+  transcribed?: true;
   completed: number;
   phase: Phase;
   // A calculated profile's progress per phase it plans, from its start phase (SP-32): the

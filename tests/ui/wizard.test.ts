@@ -3,6 +3,7 @@
 // The readers and moves behind them (wizard/*.js) are tested in tests/guided.test.ts and
 // tests/interface.test.ts; the node survey in tests/ui/survey.test.ts.
 import assert from 'node:assert/strict';
+import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { carryOptions } from '../../public/state.ts';
@@ -1390,4 +1391,16 @@ test('with whole machines, a quick exact-ratio estimate shows first and the full
   await pause(30);
   assert.equal(sent.length, 1);
   assert.match(text('[data-estimate-status]'), /Estimate for the settings on screen\./);
+});
+
+// A new profile carrying progress from a transcribed handbook solves that plan afresh, so the
+// carry panel says so while that profile is the source (#480).
+test('the carry panel warns when the source profile is a transcribed plan (#480)', async () => {
+  wizardAt(5, { saveId: 's', carryFrom: 'p' });
+  assert.equal($('.carry-panel [data-resolve-warning]'), null, 'an ordinary source says nothing');
+  const save = workspace.saves.find(s => s.id === 's')!;
+  save.profiles.find(p => p.id === 'p')!.transcribed = true;
+  render();
+  await nextTick();
+  assert.equal($('.carry-panel [data-resolve-warning]')!.textContent, RESOLVE_WARNING);
 });

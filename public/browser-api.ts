@@ -18,6 +18,7 @@
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
+import { isTranscribed } from './handbook-migration.ts';
 import {
   validateState,
   mutate,
@@ -108,6 +109,7 @@ export function createBrowserApi(
         name: p.name,
         kind: p.kind,
         settings: p.plan?.settings,
+        ...(isTranscribed(p.plan) ? { transcribed: true as const } : {}),
         completed: Object.values(p.state.checks).filter(Boolean).length,
         phase: p.state.settings.phase,
         phases: phaseProgress(p.plan, p.state.checks),

@@ -3,6 +3,7 @@
 // and group build-order dialogs (public/app/ui/detail/), mounted the way the app mounts them,
 // in happy-dom.
 import assert from 'node:assert/strict';
+import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
 import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
@@ -3026,4 +3027,57 @@ test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', a
   assert.equal($('#detail [data-guide-nuclear]'), null);
   void closeDetail();
   await settle();
+});
+
+// A transcribed handbook (engine 'handbook-…', #486) warns before round-up and Recalculate with
+// transport fuel solve it afresh (decision 7B on #387, #480); any other plan does not.
+test('round-up and Recalculate with transport fuel warn first on a transcribed plan (#480)', async () => {
+  for (const engine of ['handbook-2026-09-13', plan.engine]) {
+    const p = { ...structuredClone(plan), engine };
+    p.settings.wholeMachines = false;
+    open({ calculated: p });
+    go('factories');
+    render();
+    await nextTick();
+    const asked = answerConfirms(false);
+    $<HTMLButtonElement>('[data-round-up]')!.click();
+    await nextTick();
+    await nextTick();
+    assert.equal(asked.length, 1, engine);
+    assert.equal(asked[0]!.includes(RESOLVE_WARNING), engine.startsWith('handbook-'), engine);
+    // Recalculate with transport fuel says it beside its button.
+    const rows = p.stages['3'].rows!;
+    open({
+      calculated: p,
+      workspace: { catalog: catalog() },
+      state: {
+        version: 7,
+        factoryGroups: {
+          groups: [
+            { id: 'fg-smelt1', name: 'Smelting' },
+            { id: 'fg-parts1', name: 'Parts' },
+          ],
+          assignments: Object.fromEntries(
+            rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
+          ),
+          links: {
+            'fg-smelt1:fg-parts1': {
+              mode: 'truck' as const,
+              roundTripMin: 6,
+              fuel: 'Packaged Fuel',
+            },
+          },
+        },
+      },
+    });
+    go('logistics');
+    render();
+    await nextTick();
+    assert.ok($('[data-recalc-transport]'), engine);
+    assert.equal(
+      $('[data-transport-fuel-note] [data-resolve-warning]')?.textContent ?? null,
+      engine.startsWith('handbook-') ? RESOLVE_WARNING : null,
+      engine,
+    );
+  }
 });
