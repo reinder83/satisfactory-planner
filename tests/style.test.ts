@@ -368,4 +368,8 @@ test('a Build order title wraps on a phone, other dialog titles stay one line (#
   const wrap = rules(phone).find(r => r.selector === '.dialog-head.wrap-title h2')!;
   assert.deepEqual(decls(wrap.body, 'white-space'), ['normal']);
   assert.ok(wrap.line > one.line, 'the wrapping rule comes after the one-line rule');
+  // Its eyebrow wraps as well, so the phase at the end of it stays readable (#454).
+  const eyebrow = rules(phone).find(r => r.selector === '.dialog-head.wrap-title .eyebrow')!;
+  assert.deepEqual(decls(eyebrow.body, 'white-space'), ['normal']);
+  assert.ok(eyebrow.line > one.line);
 });
