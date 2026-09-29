@@ -12,7 +12,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel, FLUIDS } from '../../flow.ts';
-import { calcStage, checked, phase, phaseLabel, stage } from '../../session.ts';
+import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
 import { calcExpansion, easierSetup, machineSetup, rowIcon } from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
@@ -38,6 +38,7 @@ const view = computed(() =>
     // The card's headline (SP-21): a generator's power, even when it also makes waste (#371),
     // else the main output. The outputs list below stays only where the card lists them too: a
     // generator's waste, more than one, or one that is not what the row is named after.
+    const guide = calculated?.guide?.factories?.[r.id];
     const outputs = Object.entries(r.outputs || {}),
       [main, rate] = outputs[0] || [],
       generator = r.generationMW > 0;
@@ -46,7 +47,10 @@ const view = computed(() =>
       check,
       done: checked(check),
       running: `Running at ${phaseLabel(stage())} target`,
-      subtitle: phaseLabel(phase()),
+      // A plan guide's printed page and note for the row (#468).
+      subtitle:
+        phaseLabel(phase()) + (guide?.page !== undefined ? ` · Printed page ${guide.page}` : ''),
+      note: guide?.note ?? '',
       summary:
         main && !generator
           ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
@@ -108,6 +112,7 @@ const view = computed(() =>
         />{{ view.running }}</label
       ></template
     >
+    <div v-if="view.note" class="notice info" data-guide-note>{{ view.note }}</div>
     <FlowDiagram :model="view.flow" />
     <h3>Machine setup</h3>
     <MachineCells

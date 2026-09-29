@@ -2892,3 +2892,84 @@ test('the handbook factories page draws nothing for a phase the handbook has no 
   });
   await draw('the empty handbook');
 });
+
+// A plan with a guide (#393, #468; a migrated handbook profile) draws the rows it places at a
+// shared site together, as the handbook drew its oil campus and nuclear site, marks a local row,
+// shows a row's printed page and note in its dialog, and in Post Phase 5 adds its completion
+// modules ticking completion-<id>. Names and notes are text.
+test("a guided plan's sites, local badges, notes and completion modules on the factories page", async () => {
+  const rows = plan.stages['3'].rows!;
+  const [oil1, oil2, local] = [rows[0]!, rows[1]!, rows[2]!];
+  const guided = {
+    ...structuredClone(plan),
+    guide: {
+      phases: {},
+      factories: {
+        [oil1.id]: { site: 'oil' as const },
+        [oil2.id]: { site: 'oil' as const },
+        [local.id]: { local: true, page: 54, note: evil },
+      },
+      completion: [
+        {
+          id: 'thermal',
+          name: evil,
+          recipe: 'Thermal Propulsion Rocket',
+          output: 2,
+          machines: 4,
+          machine: 'Manufacturer',
+          lastClock: 50,
+          inputs: { 'Modular Engine': 5 },
+          byproducts: {},
+        },
+      ],
+    },
+  };
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ calculated: guided, phase: '3' });
+  go('factories');
+  render();
+  await nextTick();
+  noMarkup();
+  const site = $('#main #section-site-oil')!;
+  assert.ok(site, 'the oil campus');
+  assert.equal(site.querySelector('h2')!.textContent, 'Oil campus');
+  assert.match(site.querySelector('.eyebrow')!.textContent!, /SHARED SITE · 2 OUTPUTS/);
+  assert.deepEqual(
+    [...site.querySelectorAll<HTMLElement>('.factory-card button.name')].map(
+      b => b.dataset.calcFactory,
+    ),
+    [oil1.id, oil2.id],
+  );
+  assert.equal($('#main #section-site-nuclear'), null, 'no site the guide leaves empty');
+  assert.ok($('#main .jump-bar [data-jump="site-oil"]'), 'the jump bar lists the site');
+  const card = $(`#main button.name[data-calc-factory="${local.id}"]`)!.closest('.factory-card')!;
+  assert.equal(card.querySelector('[data-local]')!.textContent, 'Local');
+  assert.equal($$('#main [data-local]').length, 1, 'only the local row is marked');
+  openCalculatedFactory(local.id);
+  await nextTick();
+  assert.match($('#detail .dialog-head .eyebrow')!.textContent!, /^Phase 3 · Printed page 54$/);
+  assert.equal($('#detail [data-guide-note]')!.textContent, evil);
+  noMarkup();
+  void closeDetail();
+  await settle();
+  // Post Phase 5: the completion modules, ticking their own ids.
+  open({ calculated: guided, phase: 'post' });
+  go('factories');
+  render();
+  await nextTick();
+  noMarkup();
+  const box = $<HTMLInputElement>('#main [data-check="completion-thermal"]')!;
+  assert.ok(box.closest('.completion-item')!.textContent!.includes(evil));
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'completion-thermal', value: true });
+  // Without a guide nothing of it shows.
+  open({ calculated: plan, phase: 'post' });
+  go('factories');
+  render();
+  await nextTick();
+  assert.equal($('#main .site-group'), null);
+  assert.equal($('#main .completion-grid'), null);
+  assert.equal($('#main [data-local]'), null);
+});

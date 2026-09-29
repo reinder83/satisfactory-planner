@@ -1,10 +1,12 @@
 // Factory groups: the profile's named groups and which factories belong to them, shared by
 // both factories pages (ui/pages/FactoriesPage.vue and CalculatedFactoriesPage.vue, with their
 // parts in ui/factories/), the group build-order dialog (factory-detail.ts) and ADA.
+import { itemRate } from '../flow.ts';
 import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';
-import { state } from '../session.ts';
-import type { FactoryGroups, GroupAssignment } from '../../types/index.ts';
+import { checked, sectionCollapsed, state } from '../session.ts';
+import { inputText } from './storage.ts';
+import type { CompletionLine, FactoryGroups, GroupAssignment } from '../../types/index.ts';
 
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key
 // (a handbook factory id, or a calculated row id) to a list of { group, rate } memberships;
@@ -131,6 +133,69 @@ export function statusFilter<T>(
 // group would always read 5/5, under Not running 0/3. `key` is the section's id (a group id, or
 // 'site-oil'), which names its element (`section-<key>`) and its folded state.
 export type JumpEntry = { key: string; label: string; running: number; total: number };
+
+// A shared site on a factories page (ui/factories/SiteSection.vue, #468): the oil campus or the
+// nuclear site with the ungrouped factories built there, and its jump-bar entry, which counts
+// what the search found at the site whatever the chip keeps. null when nothing shown is there.
+export interface SiteEntry {
+  kind: 'oil' | 'nuclear';
+  key: string;
+  label: string;
+  sub: string;
+  count: number;
+  collapsed: boolean;
+  jump: JumpEntry;
+}
+export const SITE_LABELS: Record<SiteEntry['kind'], string> = {
+  oil: 'Oil campus',
+  nuclear: 'Nuclear site',
+};
+export function siteEntry<T>(
+  kind: SiteEntry['kind'],
+  sub: string,
+  members: T[],
+  atSite: T[],
+  running: (x: T) => boolean,
+): (SiteEntry & { members: T[] }) | null {
+  const key = 'site-' + kind,
+    label = SITE_LABELS[kind];
+  return members.length
+    ? {
+        kind,
+        key,
+        label,
+        sub,
+        members,
+        count: members.length,
+        collapsed: sectionCollapsed(key),
+        jump: jumpEntry(key, label, atSite, running),
+      }
+    : null;
+}
+
+// Post Phase 5's additional completion modules as their cards show them
+// (ui/factories/CompletionModules.vue, #468), matching the search text.
+export interface CompletionView extends CompletionLine {
+  check: string;
+  done: boolean;
+  line: string;
+  inputText: string;
+  byproductText: string;
+}
+export const completionView = (lines: CompletionLine[], query: string): CompletionView[] =>
+  lines
+    .filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
+    .map(r => ({
+      ...r,
+      check: 'completion-' + r.id,
+      done: checked('completion-' + r.id),
+      // The last machine is only named when it runs below 100%.
+      line:
+        `${itemRate(r.name, r.output)} · ${num(r.machines)} ${r.machine}` +
+        ((r.lastClock ?? 100) < 100 ? ` · last at ${num(r.lastClock)}%` : ''),
+      inputText: inputText(r.inputs),
+      byproductText: Object.keys(r.byproducts).length ? inputText(r.byproducts) : '',
+    }));
 export const jumpEntry = <T>(
   key: string,
   label: string,
