@@ -20,6 +20,7 @@ import {
   setQuery,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { STORAGE_ROOM } from '../../../storage-room.ts';
 import { DragDropProvider } from '@dnd-kit/vue';
 import type { DragDropManager, DragEndEvent, DragStartEvent } from '@dnd-kit/vue';
 import { followScroll, landsOnTarget } from '../storage/drop-point.ts';
@@ -133,7 +134,7 @@ const page = computed(() =>
           b =>
             !b.custom &&
             b.floor !== 'ground' &&
-            plan.storage.find(x => x.id === b.id)?.floor === 'ground',
+            STORAGE_ROOM.find(x => x.id === b.id)?.floor === 'ground',
         )
         .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
       query,
