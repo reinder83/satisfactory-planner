@@ -2,6 +2,7 @@
 // this folder has no run-time code, and build.ts leaves it out of both editions.
 //   state.ts       a profile's saved progress, and the /api/update operations
 //   handbook.ts    the owner's handbook (plan.json)
+//   storage-room.ts the printed storage room (public/storage-room.ts)
 //   calculated.ts  a calculated profile's frozen plan and its settings
 //   workspace.ts   workspace.json, the /api/ replies, the catalog and the export formats
 //   progression.ts the game's milestones and research (progression.json)
@@ -11,6 +12,7 @@
 export type * from './common.ts';
 export type * from './state.ts';
 export type * from './handbook.ts';
+export type * from './storage-room.ts';
 export type * from './calculated.ts';
 export type * from './workspace.ts';
 export type * from './progression.ts';

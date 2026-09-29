@@ -9,7 +9,7 @@ import {
   handbookFloor,
   checkBase,
 } from '../public/state.ts';
-import plan from '../public/plan.json' with { type: 'json' };
+import { STORAGE_ROOM } from '../public/storage-room.ts';
 import type { SavedState, UpdateOp } from '../public/types/index.ts';
 
 test('legacy version-1 states validate unchanged, gain empty layout edits and stay version 1', () => {
@@ -182,8 +182,8 @@ test('a bay that reuses the letter of a removed bay starts without its checks an
 test('an added bay cannot take a handbook letter, and removing an old one keeps that bay', () => {
   assert.deepEqual(
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(handbookBay),
-    plan.storage.map(b => b.id),
-    'handbookBay matches the handbook',
+    STORAGE_ROOM.map(b => b.id),
+    'handbookBay matches the printed room',
   );
   let s = initialState();
   assert.throws(
@@ -466,8 +466,8 @@ test('a bay move to a missing or hidden floor, or of an unknown bay, is refused'
   assert.equal(s.storageEdits.bayFloors, undefined);
 });
 
-test("handbookFloor matches every handbook bay's floor in plan.json", () => {
-  for (const b of plan.storage) assert.equal(handbookFloor(b.id), b.floor, b.id);
+test("handbookFloor matches every printed bay's floor (storage-room.ts, #388)", () => {
+  for (const b of STORAGE_ROOM) assert.equal(handbookFloor(b.id), b.floor, b.id);
 });
 
 test('the bays on a floor can be put in order, as version 10, without touching any record (#191)', () => {

@@ -4,8 +4,9 @@
 // profile shows the same addresses with only the items it selected for storage.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
+import { STORAGE_ROOM } from '../../storage-room.ts';
 import { itemRate } from '../flow.ts';
-import { calculated, checked, currentProfile, plan, state } from '../session.ts';
+import { calculated, checked, currentProfile, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
 
@@ -134,7 +135,7 @@ export function floorOrder(floor: string, ids: string[]): string[] | null {
 // starting after the handbook's A–R (W is tried last), then two-letter ids. null when
 // every id is taken. The id becomes part of each container address, so it never changes.
 export function nextBayLetter(): string | null {
-  const used = new Set([...plan.storage.map(b => b.id), ...storageEdits().bays.map(b => b.id)]);
+  const used = new Set([...STORAGE_ROOM.map(b => b.id), ...storageEdits().bays.map(b => b.id)]);
   for (const l of 'STUVXYZABCDEFGHIJKLMNOPQRW') if (!used.has(l)) return l;
   for (const a of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     for (const b of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(a + b)) return a + b;
@@ -248,9 +249,9 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
       const at = id + String(from + i + 1).padStart(2, '0');
       return { id: at, name: merge(null, at) };
     });
-  // Handbook bays. A calculated profile keeps only its selected items, plus the
+  // The printed bays (storage-room.ts, #388). A calculated profile keeps only its selected items, plus the
   // collectables bays Q and R when its settings keep collectables.
-  const base: StorageBayView[] = plan.storage.map(b => ({
+  const base: StorageBayView[] = STORAGE_ROOM.map(b => ({
     ...b,
     // A handbook bay moved to another floor (#190) keeps everything else.
     floor: e.bayFloors?.[b.id] ?? b.floor,

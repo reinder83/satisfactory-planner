@@ -1,0 +1,2107 @@
+{
+ "original": {
+  "bays": [
+   {
+    "id": "A",
+    "name": "Building basics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "A01",
+      "name": "Concrete"
+     },
+     {
+      "id": "A02",
+      "name": "Iron Plate"
+     },
+     {
+      "id": "A03",
+      "name": "Iron Rod"
+     },
+     {
+      "id": "A04",
+      "name": "Screws"
+     },
+     {
+      "id": "A05",
+      "name": "Reinforced Iron Plate"
+     },
+     {
+      "id": "A06",
+      "name": "Steel Beam"
+     },
+     {
+      "id": "A07",
+      "name": "Steel Pipe"
+     },
+     {
+      "id": "A08",
+      "name": "Encased Industrial Beam"
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "name": "Frames and machinery",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "B01",
+      "name": "Modular Frame"
+     },
+     {
+      "id": "B02",
+      "name": "Heavy Modular Frame"
+     },
+     {
+      "id": "B03",
+      "name": "Fused Modular Frame"
+     },
+     {
+      "id": "B04",
+      "name": "Pressure Conversion Cube"
+     },
+     {
+      "id": "B05",
+      "name": "Rotor"
+     },
+     {
+      "id": "B06",
+      "name": "Stator"
+     },
+     {
+      "id": "B07",
+      "name": "Motor"
+     },
+     {
+      "id": "B08",
+      "name": "Turbo Motor"
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "name": "Electrical and electronics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "C01",
+      "name": "Wire"
+     },
+     {
+      "id": "C02",
+      "name": "Cable"
+     },
+     {
+      "id": "C03",
+      "name": "Copper Sheet"
+     },
+     {
+      "id": "C04",
+      "name": "Quickwire"
+     },
+     {
+      "id": "C05",
+      "name": "Circuit Board"
+     },
+     {
+      "id": "C06",
+      "name": "AI Limiter"
+     },
+     {
+      "id": "C07",
+      "name": "High-Speed Connector"
+     },
+     {
+      "id": "C08",
+      "name": "Computer"
+     }
+    ]
+   },
+   {
+    "id": "D",
+    "name": "Control and cooling",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "D01",
+      "name": "Supercomputer"
+     },
+     {
+      "id": "D02",
+      "name": "Electromagnetic Control Rod"
+     },
+     {
+      "id": "D03",
+      "name": "Crystal Oscillator"
+     },
+     {
+      "id": "D04",
+      "name": "Radio Control Unit"
+     },
+     {
+      "id": "D05",
+      "name": "Heat Sink"
+     },
+     {
+      "id": "D06",
+      "name": "Cooling System"
+     },
+     {
+      "id": "D07",
+      "name": "Battery"
+     },
+     {
+      "id": "D08",
+      "name": "Power Shard"
+     }
+    ]
+   },
+   {
+    "id": "E",
+    "name": "Materials and construction",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "E01",
+      "name": "Plastic"
+     },
+     {
+      "id": "E02",
+      "name": "Rubber"
+     },
+     {
+      "id": "E03",
+      "name": "Fabric"
+     },
+     {
+      "id": "E04",
+      "name": "Quartz Crystal"
+     },
+     {
+      "id": "E05",
+      "name": "Silica"
+     },
+     {
+      "id": "E06",
+      "name": "Alclad Aluminum Sheet"
+     },
+     {
+      "id": "E07",
+      "name": "Aluminum Casing"
+     },
+     {
+      "id": "E08",
+      "name": "Portable Miner"
+     }
+    ]
+   },
+   {
+    "id": "F",
+    "name": "Metals and intermediates",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "F01",
+      "name": "Iron Ingot"
+     },
+     {
+      "id": "F02",
+      "name": "Copper Ingot"
+     },
+     {
+      "id": "F03",
+      "name": "Steel Ingot"
+     },
+     {
+      "id": "F04",
+      "name": "Caterium Ingot"
+     },
+     {
+      "id": "F05",
+      "name": "Aluminum Ingot"
+     },
+     {
+      "id": "F06",
+      "name": "Aluminum Scrap"
+     },
+     {
+      "id": "F07",
+      "name": "Copper Powder"
+     },
+     {
+      "id": "F08",
+      "name": "Ficsite Ingot"
+     }
+    ]
+   },
+   {
+    "id": "G",
+    "name": "Ammunition and first aid",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "G01",
+      "name": "Iron Rebar"
+     },
+     {
+      "id": "G02",
+      "name": "Stun Rebar"
+     },
+     {
+      "id": "G03",
+      "name": "Shatter Rebar"
+     },
+     {
+      "id": "G04",
+      "name": "Explosive Rebar"
+     },
+     {
+      "id": "G05",
+      "name": "Rifle Ammo"
+     },
+     {
+      "id": "G06",
+      "name": "Homing Rifle Ammo"
+     },
+     {
+      "id": "G07",
+      "name": "Turbo Rifle Ammo"
+     },
+     {
+      "id": "G08",
+      "name": "Medicinal Inhaler"
+     }
+    ]
+   },
+   {
+    "id": "H",
+    "name": "Explosives and filters",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "H01",
+      "name": "Iodine-Infused Filter"
+     },
+     {
+      "id": "H02",
+      "name": "Gas Filter"
+     },
+     {
+      "id": "H03",
+      "name": "Gas Nobelisk"
+     },
+     {
+      "id": "H04",
+      "name": "Pulse Nobelisk"
+     },
+     {
+      "id": "H05",
+      "name": "Cluster Nobelisk"
+     },
+     {
+      "id": "H06",
+      "name": "Black Powder"
+     },
+     {
+      "id": "H07",
+      "name": "Smokeless Powder"
+     },
+     {
+      "id": "H08",
+      "name": "Nobelisk"
+     }
+    ]
+   },
+   {
+    "id": "I",
+    "name": "SAM and quantum materials",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "I01",
+      "name": "SAM"
+     },
+     {
+      "id": "I02",
+      "name": "Reanimated SAM"
+     },
+     {
+      "id": "I03",
+      "name": "SAM Fluctuator"
+     },
+     {
+      "id": "I04",
+      "name": "Ficsite Trigon"
+     },
+     {
+      "id": "I05",
+      "name": "Diamonds"
+     },
+     {
+      "id": "I06",
+      "name": "Time Crystal"
+     },
+     {
+      "id": "I07",
+      "name": "Dark Matter Crystal"
+     },
+     {
+      "id": "I08",
+      "name": "Superposition Oscillator"
+     }
+    ]
+   },
+   {
+    "id": "J",
+    "name": "Quantum components",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "J01",
+      "name": "Neural-Quantum Processor"
+     },
+     {
+      "id": "J02",
+      "name": "Alien Power Matrix"
+     },
+     {
+      "id": "J03",
+      "name": "Singularity Cell"
+     },
+     {
+      "id": "J04",
+      "name": null
+     },
+     {
+      "id": "J05",
+      "name": null
+     },
+     {
+      "id": "J06",
+      "name": null
+     },
+     {
+      "id": "J07",
+      "name": null
+     },
+     {
+      "id": "J08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "K",
+    "name": "Early project parts",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "K01",
+      "name": "Smart Plating"
+     },
+     {
+      "id": "K02",
+      "name": "Versatile Framework"
+     },
+     {
+      "id": "K03",
+      "name": "Automated Wiring"
+     },
+     {
+      "id": "K04",
+      "name": "Modular Engine"
+     },
+     {
+      "id": "K05",
+      "name": "Adaptive Control Unit"
+     },
+     {
+      "id": "K06",
+      "name": null
+     },
+     {
+      "id": "K07",
+      "name": null
+     },
+     {
+      "id": "K08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "L",
+    "name": "Advanced project parts",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "L01",
+      "name": "Assembly Director System"
+     },
+     {
+      "id": "L02",
+      "name": "Magnetic Field Generator"
+     },
+     {
+      "id": "L03",
+      "name": "Thermal Propulsion Rocket"
+     },
+     {
+      "id": "L04",
+      "name": "Nuclear Pasta"
+     },
+     {
+      "id": "L05",
+      "name": "Biochemical Sculptor"
+     },
+     {
+      "id": "L06",
+      "name": "AI Expansion Server"
+     },
+     {
+      "id": "L07",
+      "name": "Ballistic Warp Drive"
+     },
+     {
+      "id": "L08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "M",
+    "name": "Packaging and process fluids",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "M01",
+      "name": "Empty Canister"
+     },
+     {
+      "id": "M02",
+      "name": "Empty Fluid Tank"
+     },
+     {
+      "id": "M03",
+      "name": "Packaged Water"
+     },
+     {
+      "id": "M04",
+      "name": "Packaged Oil"
+     },
+     {
+      "id": "M05",
+      "name": "Packaged Heavy Oil Residue"
+     },
+     {
+      "id": "M06",
+      "name": "Packaged Alumina Solution"
+     },
+     {
+      "id": "M07",
+      "name": "Packaged Sulfuric Acid"
+     },
+     {
+      "id": "M08",
+      "name": "Packaged Nitric Acid"
+     }
+    ]
+   },
+   {
+    "id": "N",
+    "name": "Packaged gas and fuels",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "N01",
+      "name": "Packaged Nitrogen Gas"
+     },
+     {
+      "id": "N02",
+      "name": "Packaged Fuel"
+     },
+     {
+      "id": "N03",
+      "name": "Packaged Liquid Biofuel"
+     },
+     {
+      "id": "N04",
+      "name": "Packaged Turbofuel"
+     },
+     {
+      "id": "N05",
+      "name": "Packaged Rocket Fuel"
+     },
+     {
+      "id": "N06",
+      "name": "Packaged Ionized Fuel"
+     },
+     {
+      "id": "N07",
+      "name": null
+     },
+     {
+      "id": "N08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "O",
+    "name": "Raw resource reserves",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "O01",
+      "name": "Iron Ore"
+     },
+     {
+      "id": "O02",
+      "name": "Copper Ore"
+     },
+     {
+      "id": "O03",
+      "name": "Caterium Ore"
+     },
+     {
+      "id": "O04",
+      "name": "Limestone"
+     },
+     {
+      "id": "O05",
+      "name": "Coal"
+     },
+     {
+      "id": "O06",
+      "name": "Raw Quartz"
+     },
+     {
+      "id": "O07",
+      "name": "Sulfur"
+     },
+     {
+      "id": "O08",
+      "name": "Bauxite"
+     }
+    ]
+   },
+   {
+    "id": "P",
+    "name": "Byproducts and organic products",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "P01",
+      "name": "Polymer Resin"
+     },
+     {
+      "id": "P02",
+      "name": "Petroleum Coke"
+     },
+     {
+      "id": "P03",
+      "name": "Compacted Coal"
+     },
+     {
+      "id": "P04",
+      "name": "Biomass"
+     },
+     {
+      "id": "P05",
+      "name": "Solid Biofuel"
+     },
+     {
+      "id": "P06",
+      "name": "Alien Protein"
+     },
+     {
+      "id": "P07",
+      "name": "Alien DNA Capsule"
+     },
+     {
+      "id": "P08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "Q",
+    "name": "Gathered recipe ingredients",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "Q01",
+      "name": "Leaves"
+     },
+     {
+      "id": "Q02",
+      "name": "Wood"
+     },
+     {
+      "id": "Q03",
+      "name": "Mycelia"
+     },
+     {
+      "id": "Q04",
+      "name": "Hog Remains"
+     },
+     {
+      "id": "Q05",
+      "name": "Spitter Remains"
+     },
+     {
+      "id": "Q06",
+      "name": "Stinger Remains"
+     },
+     {
+      "id": "Q07",
+      "name": "Hatcher Remains"
+     },
+     {
+      "id": "Q08",
+      "name": "Hard Drive"
+     }
+    ]
+   },
+   {
+    "id": "R",
+    "name": "Slugs, food and discoveries",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "R01",
+      "name": "Blue Power Slug"
+     },
+     {
+      "id": "R02",
+      "name": "Yellow Power Slug"
+     },
+     {
+      "id": "R03",
+      "name": "Purple Power Slug"
+     },
+     {
+      "id": "R04",
+      "name": "Paleberry"
+     },
+     {
+      "id": "R05",
+      "name": "Beryl Nut"
+     },
+     {
+      "id": "R06",
+      "name": "Bacon Agaric"
+     },
+     {
+      "id": "R07",
+      "name": "Mercer Sphere"
+     },
+     {
+      "id": "R08",
+      "name": "Somersloop"
+     }
+    ]
+   }
+  ],
+  "hidden": [],
+  "floors": [
+   {
+    "id": "ground",
+    "label": "Ground floor",
+    "builtin": true
+   },
+   {
+    "id": "upper",
+    "label": "Upper floor",
+    "builtin": true
+   },
+   {
+    "id": "workshop",
+    "label": "Workshop",
+    "builtin": true
+   }
+  ],
+  "progress": [
+   [
+    "ground",
+    {
+     "done": 0,
+     "named": 64
+    }
+   ],
+   [
+    "upper",
+    {
+     "done": 0,
+     "named": 68
+    }
+   ]
+  ]
+ },
+ "originalEdited": {
+  "bays": [
+   {
+    "id": "A",
+    "name": "Building basics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "A01",
+      "name": "Concrete"
+     },
+     {
+      "id": "A02",
+      "name": "Iron Plate"
+     },
+     {
+      "id": "A03",
+      "name": null
+     },
+     {
+      "id": "A04",
+      "name": "Screws"
+     },
+     {
+      "id": "A05",
+      "name": "Reinforced Iron Plate"
+     },
+     {
+      "id": "A06",
+      "name": "Steel Beam"
+     },
+     {
+      "id": "A07",
+      "name": "Steel Pipe"
+     },
+     {
+      "id": "A08",
+      "name": "Encased Industrial Beam"
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "name": "Renamed",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "B01",
+      "name": "Modular Frame"
+     },
+     {
+      "id": "B02",
+      "name": "Heavy Modular Frame"
+     },
+     {
+      "id": "B03",
+      "name": "Fused Modular Frame"
+     },
+     {
+      "id": "B04",
+      "name": "Pressure Conversion Cube"
+     },
+     {
+      "id": "B05",
+      "name": "Rotor"
+     },
+     {
+      "id": "B06",
+      "name": "Stator"
+     },
+     {
+      "id": "B07",
+      "name": "Motor"
+     },
+     {
+      "id": "B08",
+      "name": "Turbo Motor"
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "name": "Electrical and electronics",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "C01",
+      "name": "Wire"
+     },
+     {
+      "id": "C02",
+      "name": "Cable"
+     },
+     {
+      "id": "C03",
+      "name": "Copper Sheet"
+     },
+     {
+      "id": "C04",
+      "name": "Quickwire"
+     },
+     {
+      "id": "C05",
+      "name": "Circuit Board"
+     },
+     {
+      "id": "C06",
+      "name": "AI Limiter"
+     },
+     {
+      "id": "C07",
+      "name": "High-Speed Connector"
+     },
+     {
+      "id": "C08",
+      "name": "Computer"
+     }
+    ]
+   },
+   {
+    "id": "D",
+    "name": "Control and cooling",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "D01",
+      "name": "Supercomputer"
+     },
+     {
+      "id": "D02",
+      "name": "Electromagnetic Control Rod"
+     },
+     {
+      "id": "D03",
+      "name": "Crystal Oscillator"
+     },
+     {
+      "id": "D04",
+      "name": "Radio Control Unit"
+     },
+     {
+      "id": "D05",
+      "name": "Heat Sink"
+     },
+     {
+      "id": "D06",
+      "name": "Cooling System"
+     },
+     {
+      "id": "D07",
+      "name": "Battery"
+     },
+     {
+      "id": "D08",
+      "name": "Power Shard"
+     }
+    ]
+   },
+   {
+    "id": "E",
+    "name": "Materials and construction",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "E01",
+      "name": "Plastic"
+     },
+     {
+      "id": "E02",
+      "name": "Rubber"
+     },
+     {
+      "id": "E03",
+      "name": "Fabric"
+     },
+     {
+      "id": "E04",
+      "name": "Quartz Crystal"
+     },
+     {
+      "id": "E05",
+      "name": "Silica"
+     },
+     {
+      "id": "E06",
+      "name": "Alclad Aluminum Sheet"
+     },
+     {
+      "id": "E07",
+      "name": "Aluminum Casing"
+     },
+     {
+      "id": "E08",
+      "name": "Portable Miner"
+     }
+    ]
+   },
+   {
+    "id": "F",
+    "name": "Metals and intermediates",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "F01",
+      "name": "Iron Ingot"
+     },
+     {
+      "id": "F02",
+      "name": "Copper Ingot"
+     },
+     {
+      "id": "F03",
+      "name": "Steel Ingot"
+     },
+     {
+      "id": "F04",
+      "name": "Caterium Ingot"
+     },
+     {
+      "id": "F05",
+      "name": "Aluminum Ingot"
+     },
+     {
+      "id": "F06",
+      "name": "Aluminum Scrap"
+     },
+     {
+      "id": "F07",
+      "name": "Copper Powder"
+     },
+     {
+      "id": "F08",
+      "name": "Ficsite Ingot"
+     }
+    ]
+   },
+   {
+    "id": "G",
+    "name": "Ammunition and first aid",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "G01",
+      "name": "Iron Rebar"
+     },
+     {
+      "id": "G02",
+      "name": "Stun Rebar"
+     },
+     {
+      "id": "G03",
+      "name": "Shatter Rebar"
+     },
+     {
+      "id": "G04",
+      "name": "Explosive Rebar"
+     },
+     {
+      "id": "G05",
+      "name": "Rifle Ammo"
+     },
+     {
+      "id": "G06",
+      "name": "Homing Rifle Ammo"
+     },
+     {
+      "id": "G07",
+      "name": "Turbo Rifle Ammo"
+     },
+     {
+      "id": "G08",
+      "name": "Medicinal Inhaler"
+     }
+    ]
+   },
+   {
+    "id": "H",
+    "name": "Explosives and filters",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "H01",
+      "name": "Iodine-Infused Filter"
+     },
+     {
+      "id": "H02",
+      "name": "Gas Filter"
+     },
+     {
+      "id": "H03",
+      "name": "Gas Nobelisk"
+     },
+     {
+      "id": "H04",
+      "name": "Pulse Nobelisk"
+     },
+     {
+      "id": "H05",
+      "name": "Cluster Nobelisk"
+     },
+     {
+      "id": "H06",
+      "name": "Black Powder"
+     },
+     {
+      "id": "H07",
+      "name": "Smokeless Powder"
+     },
+     {
+      "id": "H08",
+      "name": "Nobelisk"
+     }
+    ]
+   },
+   {
+    "id": "I",
+    "name": "SAM and quantum materials",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "I01",
+      "name": "SAM"
+     },
+     {
+      "id": "I02",
+      "name": "Reanimated SAM"
+     },
+     {
+      "id": "I03",
+      "name": "SAM Fluctuator"
+     },
+     {
+      "id": "I04",
+      "name": "Ficsite Trigon"
+     },
+     {
+      "id": "I05",
+      "name": "Diamonds"
+     },
+     {
+      "id": "I06",
+      "name": "Time Crystal"
+     },
+     {
+      "id": "I07",
+      "name": "Dark Matter Crystal"
+     },
+     {
+      "id": "I08",
+      "name": "Superposition Oscillator"
+     }
+    ]
+   },
+   {
+    "id": "J",
+    "name": "Quantum components",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "J01",
+      "name": "Neural-Quantum Processor"
+     },
+     {
+      "id": "J02",
+      "name": "Alien Power Matrix"
+     },
+     {
+      "id": "J03",
+      "name": "Singularity Cell"
+     },
+     {
+      "id": "J04",
+      "name": null
+     },
+     {
+      "id": "J05",
+      "name": null
+     },
+     {
+      "id": "J06",
+      "name": null
+     },
+     {
+      "id": "J07",
+      "name": null
+     },
+     {
+      "id": "J08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "K",
+    "name": "Early project parts",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "K01",
+      "name": "Smart Plating"
+     },
+     {
+      "id": "K02",
+      "name": "Versatile Framework"
+     },
+     {
+      "id": "K03",
+      "name": "Automated Wiring"
+     },
+     {
+      "id": "K04",
+      "name": "Modular Engine"
+     },
+     {
+      "id": "K05",
+      "name": "Adaptive Control Unit"
+     },
+     {
+      "id": "K06",
+      "name": null
+     },
+     {
+      "id": "K07",
+      "name": null
+     },
+     {
+      "id": "K08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "L",
+    "name": "Advanced project parts",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "L01",
+      "name": "Assembly Director System"
+     },
+     {
+      "id": "L02",
+      "name": "Magnetic Field Generator"
+     },
+     {
+      "id": "L03",
+      "name": "Thermal Propulsion Rocket"
+     },
+     {
+      "id": "L04",
+      "name": "Nuclear Pasta"
+     },
+     {
+      "id": "L05",
+      "name": "Biochemical Sculptor"
+     },
+     {
+      "id": "L06",
+      "name": "AI Expansion Server"
+     },
+     {
+      "id": "L07",
+      "name": "Ballistic Warp Drive"
+     },
+     {
+      "id": "L08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "M",
+    "name": "Packaging and process fluids",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "M01",
+      "name": "Empty Canister"
+     },
+     {
+      "id": "M02",
+      "name": "Empty Fluid Tank"
+     },
+     {
+      "id": "M03",
+      "name": "Packaged Water"
+     },
+     {
+      "id": "M04",
+      "name": "Packaged Oil"
+     },
+     {
+      "id": "M05",
+      "name": "Packaged Heavy Oil Residue"
+     },
+     {
+      "id": "M06",
+      "name": "Packaged Alumina Solution"
+     },
+     {
+      "id": "M07",
+      "name": "Packaged Sulfuric Acid"
+     },
+     {
+      "id": "M08",
+      "name": "Packaged Nitric Acid"
+     }
+    ]
+   },
+   {
+    "id": "N",
+    "name": "Packaged gas and fuels",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "N01",
+      "name": "Packaged Nitrogen Gas"
+     },
+     {
+      "id": "N02",
+      "name": "Packaged Fuel"
+     },
+     {
+      "id": "N03",
+      "name": "Packaged Liquid Biofuel"
+     },
+     {
+      "id": "N04",
+      "name": "Packaged Turbofuel"
+     },
+     {
+      "id": "N05",
+      "name": "Packaged Rocket Fuel"
+     },
+     {
+      "id": "N06",
+      "name": "Packaged Ionized Fuel"
+     },
+     {
+      "id": "N07",
+      "name": null
+     },
+     {
+      "id": "N08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "O",
+    "name": "Raw resource reserves",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "O01",
+      "name": "Iron Ore"
+     },
+     {
+      "id": "O02",
+      "name": "Copper Ore"
+     },
+     {
+      "id": "O03",
+      "name": "Caterium Ore"
+     },
+     {
+      "id": "O04",
+      "name": "Limestone"
+     },
+     {
+      "id": "O05",
+      "name": "Coal"
+     },
+     {
+      "id": "O06",
+      "name": "Raw Quartz"
+     },
+     {
+      "id": "O07",
+      "name": "Sulfur"
+     },
+     {
+      "id": "O08",
+      "name": "Bauxite"
+     }
+    ]
+   },
+   {
+    "id": "P",
+    "name": "Byproducts and organic products",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "P01",
+      "name": "Polymer Resin"
+     },
+     {
+      "id": "P02",
+      "name": "Petroleum Coke"
+     },
+     {
+      "id": "P03",
+      "name": "Compacted Coal"
+     },
+     {
+      "id": "P04",
+      "name": "Biomass"
+     },
+     {
+      "id": "P05",
+      "name": "Solid Biofuel"
+     },
+     {
+      "id": "P06",
+      "name": "Alien Protein"
+     },
+     {
+      "id": "P07",
+      "name": "Alien DNA Capsule"
+     },
+     {
+      "id": "P08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "R",
+    "name": "Slugs, food and discoveries",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "R01",
+      "name": "Blue Power Slug"
+     },
+     {
+      "id": "R02",
+      "name": "Yellow Power Slug"
+     },
+     {
+      "id": "R03",
+      "name": "Purple Power Slug"
+     },
+     {
+      "id": "R04",
+      "name": "Paleberry"
+     },
+     {
+      "id": "R05",
+      "name": "Beryl Nut"
+     },
+     {
+      "id": "R06",
+      "name": "Bacon Agaric"
+     },
+     {
+      "id": "R07",
+      "name": "Mercer Sphere"
+     },
+     {
+      "id": "R08",
+      "name": "Somersloop"
+     }
+    ]
+   }
+  ],
+  "hidden": [
+   {
+    "id": "Q",
+    "name": "Gathered recipe ingredients",
+    "items": [
+     "Leaves",
+     "Wood",
+     "Mycelia",
+     "Hog Remains",
+     "Spitter Remains",
+     "Stinger Remains",
+     "Hatcher Remains",
+     "Hard Drive"
+    ],
+    "taken": false,
+    "floor": "upper",
+    "moved": false
+   }
+  ],
+  "floors": [
+   {
+    "id": "ground",
+    "label": "Ground floor",
+    "builtin": true
+   },
+   {
+    "id": "upper",
+    "label": "Upper floor",
+    "builtin": true
+   },
+   {
+    "id": "workshop",
+    "label": "Workshop",
+    "builtin": true
+   }
+  ],
+  "progress": [
+   [
+    "ground",
+    {
+     "done": 0,
+     "named": 55
+    }
+   ],
+   [
+    "upper",
+    {
+     "done": 0,
+     "named": 68
+    }
+   ]
+  ]
+ },
+ "calculated": {
+  "bays": [
+   {
+    "id": "A",
+    "name": "Building basics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "A01",
+      "name": "Concrete"
+     },
+     {
+      "id": "A02",
+      "name": "Iron Plate"
+     },
+     {
+      "id": "A03",
+      "name": "Iron Rod"
+     },
+     {
+      "id": "A04",
+      "name": null
+     },
+     {
+      "id": "A05",
+      "name": "Reinforced Iron Plate"
+     },
+     {
+      "id": "A06",
+      "name": "Steel Beam"
+     },
+     {
+      "id": "A07",
+      "name": "Steel Pipe"
+     },
+     {
+      "id": "A08",
+      "name": "Encased Industrial Beam"
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "name": "Frames and machinery",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "B01",
+      "name": "Modular Frame"
+     },
+     {
+      "id": "B02",
+      "name": "Heavy Modular Frame"
+     },
+     {
+      "id": "B03",
+      "name": null
+     },
+     {
+      "id": "B04",
+      "name": null
+     },
+     {
+      "id": "B05",
+      "name": null
+     },
+     {
+      "id": "B06",
+      "name": null
+     },
+     {
+      "id": "B07",
+      "name": "Motor"
+     },
+     {
+      "id": "B08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "name": "Electrical and electronics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "C01",
+      "name": "Wire"
+     },
+     {
+      "id": "C02",
+      "name": "Cable"
+     },
+     {
+      "id": "C03",
+      "name": "Copper Sheet"
+     },
+     {
+      "id": "C04",
+      "name": null
+     },
+     {
+      "id": "C05",
+      "name": null
+     },
+     {
+      "id": "C06",
+      "name": null
+     },
+     {
+      "id": "C07",
+      "name": null
+     },
+     {
+      "id": "C08",
+      "name": "Computer"
+     }
+    ]
+   },
+   {
+    "id": "E",
+    "name": "Materials and construction",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "E01",
+      "name": "Plastic"
+     },
+     {
+      "id": "E02",
+      "name": "Rubber"
+     },
+     {
+      "id": "E03",
+      "name": null
+     },
+     {
+      "id": "E04",
+      "name": null
+     },
+     {
+      "id": "E05",
+      "name": null
+     },
+     {
+      "id": "E06",
+      "name": "Alclad Aluminum Sheet"
+     },
+     {
+      "id": "E07",
+      "name": "Aluminum Casing"
+     },
+     {
+      "id": "E08",
+      "name": null
+     }
+    ]
+   }
+  ],
+  "hidden": [],
+  "floors": [
+   {
+    "id": "ground",
+    "label": "Ground floor",
+    "builtin": true
+   },
+   {
+    "id": "upper",
+    "label": "Upper floor",
+    "builtin": true
+   },
+   {
+    "id": "workshop",
+    "label": "Workshop",
+    "builtin": true
+   }
+  ],
+  "progress": [
+   [
+    "ground",
+    {
+     "done": 0,
+     "named": 18
+    }
+   ]
+  ]
+ },
+ "calculatedCollectables": {
+  "bays": [
+   {
+    "id": "A",
+    "name": "Building basics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "A01",
+      "name": "Concrete"
+     },
+     {
+      "id": "A02",
+      "name": "Iron Plate"
+     },
+     {
+      "id": "A03",
+      "name": "Iron Rod"
+     },
+     {
+      "id": "A04",
+      "name": null
+     },
+     {
+      "id": "A05",
+      "name": "Reinforced Iron Plate"
+     },
+     {
+      "id": "A06",
+      "name": "Steel Beam"
+     },
+     {
+      "id": "A07",
+      "name": "Steel Pipe"
+     },
+     {
+      "id": "A08",
+      "name": "Encased Industrial Beam"
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "name": "Frames and machinery",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "B01",
+      "name": "Modular Frame"
+     },
+     {
+      "id": "B02",
+      "name": "Heavy Modular Frame"
+     },
+     {
+      "id": "B03",
+      "name": null
+     },
+     {
+      "id": "B04",
+      "name": null
+     },
+     {
+      "id": "B05",
+      "name": null
+     },
+     {
+      "id": "B06",
+      "name": null
+     },
+     {
+      "id": "B07",
+      "name": "Motor"
+     },
+     {
+      "id": "B08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "name": "Electrical and electronics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "C01",
+      "name": "Wire"
+     },
+     {
+      "id": "C02",
+      "name": "Cable"
+     },
+     {
+      "id": "C03",
+      "name": "Copper Sheet"
+     },
+     {
+      "id": "C04",
+      "name": null
+     },
+     {
+      "id": "C05",
+      "name": null
+     },
+     {
+      "id": "C06",
+      "name": null
+     },
+     {
+      "id": "C07",
+      "name": null
+     },
+     {
+      "id": "C08",
+      "name": "Computer"
+     }
+    ]
+   },
+   {
+    "id": "E",
+    "name": "Materials and construction",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "E01",
+      "name": "Plastic"
+     },
+     {
+      "id": "E02",
+      "name": "Rubber"
+     },
+     {
+      "id": "E03",
+      "name": null
+     },
+     {
+      "id": "E04",
+      "name": null
+     },
+     {
+      "id": "E05",
+      "name": null
+     },
+     {
+      "id": "E06",
+      "name": "Alclad Aluminum Sheet"
+     },
+     {
+      "id": "E07",
+      "name": "Aluminum Casing"
+     },
+     {
+      "id": "E08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "Q",
+    "name": "Gathered recipe ingredients",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "Q01",
+      "name": "Leaves"
+     },
+     {
+      "id": "Q02",
+      "name": "Wood"
+     },
+     {
+      "id": "Q03",
+      "name": "Mycelia"
+     },
+     {
+      "id": "Q04",
+      "name": "Hog Remains"
+     },
+     {
+      "id": "Q05",
+      "name": "Spitter Remains"
+     },
+     {
+      "id": "Q06",
+      "name": "Stinger Remains"
+     },
+     {
+      "id": "Q07",
+      "name": "Hatcher Remains"
+     },
+     {
+      "id": "Q08",
+      "name": "Hard Drive"
+     }
+    ]
+   },
+   {
+    "id": "R",
+    "name": "Slugs, food and discoveries",
+    "floor": "upper",
+    "items": [
+     {
+      "id": "R01",
+      "name": "Blue Power Slug"
+     },
+     {
+      "id": "R02",
+      "name": "Yellow Power Slug"
+     },
+     {
+      "id": "R03",
+      "name": "Purple Power Slug"
+     },
+     {
+      "id": "R04",
+      "name": "Paleberry"
+     },
+     {
+      "id": "R05",
+      "name": "Beryl Nut"
+     },
+     {
+      "id": "R06",
+      "name": "Bacon Agaric"
+     },
+     {
+      "id": "R07",
+      "name": "Mercer Sphere"
+     },
+     {
+      "id": "R08",
+      "name": "Somersloop"
+     }
+    ]
+   }
+  ],
+  "hidden": [],
+  "floors": [
+   {
+    "id": "ground",
+    "label": "Ground floor",
+    "builtin": true
+   },
+   {
+    "id": "upper",
+    "label": "Upper floor",
+    "builtin": true
+   },
+   {
+    "id": "workshop",
+    "label": "Workshop",
+    "builtin": true
+   }
+  ],
+  "progress": [
+   [
+    "ground",
+    {
+     "done": 0,
+     "named": 18
+    }
+   ],
+   [
+    "upper",
+    {
+     "done": 0,
+     "named": 16
+    }
+   ]
+  ]
+ },
+ "calculatedNoCollectables": {
+  "bays": [
+   {
+    "id": "A",
+    "name": "Building basics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "A01",
+      "name": "Concrete"
+     },
+     {
+      "id": "A02",
+      "name": "Iron Plate"
+     },
+     {
+      "id": "A03",
+      "name": "Iron Rod"
+     },
+     {
+      "id": "A04",
+      "name": null
+     },
+     {
+      "id": "A05",
+      "name": "Reinforced Iron Plate"
+     },
+     {
+      "id": "A06",
+      "name": "Steel Beam"
+     },
+     {
+      "id": "A07",
+      "name": "Steel Pipe"
+     },
+     {
+      "id": "A08",
+      "name": "Encased Industrial Beam"
+     }
+    ]
+   },
+   {
+    "id": "B",
+    "name": "Frames and machinery",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "B01",
+      "name": "Modular Frame"
+     },
+     {
+      "id": "B02",
+      "name": "Heavy Modular Frame"
+     },
+     {
+      "id": "B03",
+      "name": null
+     },
+     {
+      "id": "B04",
+      "name": null
+     },
+     {
+      "id": "B05",
+      "name": null
+     },
+     {
+      "id": "B06",
+      "name": null
+     },
+     {
+      "id": "B07",
+      "name": "Motor"
+     },
+     {
+      "id": "B08",
+      "name": null
+     }
+    ]
+   },
+   {
+    "id": "C",
+    "name": "Electrical and electronics",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "C01",
+      "name": "Wire"
+     },
+     {
+      "id": "C02",
+      "name": "Cable"
+     },
+     {
+      "id": "C03",
+      "name": "Copper Sheet"
+     },
+     {
+      "id": "C04",
+      "name": null
+     },
+     {
+      "id": "C05",
+      "name": null
+     },
+     {
+      "id": "C06",
+      "name": null
+     },
+     {
+      "id": "C07",
+      "name": null
+     },
+     {
+      "id": "C08",
+      "name": "Computer"
+     }
+    ]
+   },
+   {
+    "id": "E",
+    "name": "Materials and construction",
+    "floor": "ground",
+    "items": [
+     {
+      "id": "E01",
+      "name": "Plastic"
+     },
+     {
+      "id": "E02",
+      "name": "Rubber"
+     },
+     {
+      "id": "E03",
+      "name": null
+     },
+     {
+      "id": "E04",
+      "name": null
+     },
+     {
+      "id": "E05",
+      "name": null
+     },
+     {
+      "id": "E06",
+      "name": "Alclad Aluminum Sheet"
+     },
+     {
+      "id": "E07",
+      "name": "Aluminum Casing"
+     },
+     {
+      "id": "E08",
+      "name": null
+     }
+    ]
+   }
+  ],
+  "hidden": [],
+  "floors": [
+   {
+    "id": "ground",
+    "label": "Ground floor",
+    "builtin": true
+   },
+   {
+    "id": "upper",
+    "label": "Upper floor",
+    "builtin": true
+   },
+   {
+    "id": "workshop",
+    "label": "Workshop",
+    "builtin": true
+   }
+  ],
+  "progress": [
+   [
+    "ground",
+    {
+     "done": 0,
+     "named": 18
+    }
+   ]
+  ]
+ }
+}

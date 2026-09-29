@@ -35,6 +35,7 @@ const SHARED = [
   'preferences.ts',
   'progression.ts',
   'state.ts',
+  'storage-room.ts',
   'transfer.ts',
 ];
 const BUNDLED = ['app.ts', 'app-root.ts'];
@@ -156,12 +157,12 @@ async function buildPages() {
   );
   await fs.writeFile(path.join(out, 'index.html'), html);
   await fs.writeFile(path.join(out, 'browser-mode.js'), 'globalThis.PLANNER_BROWSER=true;\n');
-  const handbook = JSON.parse(await read('public/plan.json'));
   await fs.writeFile(
     path.join(out, 'plan.json'),
     JSON.stringify({
       version: 'public-template-v1',
-      storage: handbook.storage,
+      // The printed room is storage-room.ts, bundled with the app (#388).
+      storage: [],
       storageTasks: [],
       phases: { 3: [], 4: [], 5: [], post: [] },
       factories: [],
