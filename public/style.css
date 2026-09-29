@@ -3508,7 +3508,9 @@ button.rail-tile:hover {
   background: var(--accent);
 }
 /* A save or profile name renamed in place (SP-31, ui/InlineName.vue): the heading with its ✎
-   button, or the input with Save and Cancel. A long name wraps rather than overflowing. */
+   button, or the input with Save and Cancel. A long name wraps between words rather than
+   overflowing; only a word wider than the line breaks inside (break-word, not anywhere, which
+   let a squeezed heading split "Satisfactory", #452). */
 .inline-name {
   display: flex;
   align-items: center;
@@ -3519,7 +3521,7 @@ button.rail-tile:hover {
 .inline-name > h2,
 .inline-name > h3 {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .btn.inline-name-edit {
   flex: none;
@@ -3546,6 +3548,14 @@ button.rail-tile:hover {
 @media (max-width: 720px) {
   .btn.inline-name-edit {
     min-width: 44px;
+    min-height: 44px;
+  }
+  /* On a phone the save's name and ✎ take the section head's first row, and Try another
+     profile the row under it, so the name is not squeezed beside the button (#452). */
+  .save-panel .section-head > .inline-name {
+    flex-basis: 100%;
+  }
+  .save-panel .section-head > .btn {
     min-height: 44px;
   }
 }
