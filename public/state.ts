@@ -540,6 +540,26 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
 // A calculated profile's progress per phase it plans, for the save list (SP-32): the production
 // lines ticked Running (`calc-<stage>-<row id>`) over the phase's lines, from the profile's start
 // phase on. Both editions' workspace summaries send it; none without a calculated plan.
+// A plan made from another by a fresh solve (Recalculate as a new profile, round-up) keeps the
+// source plan's guide (#472): its phase steps, storage tasks, completion modules and power
+// content are the narrative the user ticks, and the carried state still holds those ticks.
+// Factory notes stay only for rows the new plan still has. Returns `plan` with the guide set,
+// unchanged when the source has none.
+export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>(
+  plan: T,
+  source: StoredCalculatedPlan | null | undefined,
+): T & { guide?: StoredCalculatedPlan['guide'] } {
+  const guide = source?.guide;
+  if (!guide) return plan;
+  const copy = structuredClone(guide);
+  if (copy.factories) {
+    const rows = new Set(Object.values(plan.stages).flatMap(x => (x?.rows || []).map(r => r.id)));
+    copy.factories = Object.fromEntries(
+      Object.entries(copy.factories).filter(([id]) => rows.has(id)),
+    );
+  }
+  return { ...plan, guide: copy };
+}
 export function phaseProgress(
   plan: StoredCalculatedPlan | null | undefined,
   checks: Record<string, boolean>,

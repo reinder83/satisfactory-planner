@@ -24,6 +24,7 @@ import {
   shareState,
   newProfileState,
   checkBase,
+  carryGuide,
   currentPayoff,
   phaseProgress,
 } from './state.ts';
@@ -181,7 +182,8 @@ export function createBrowserApi(
           id: profileId,
           name: profileName,
           kind: 'calculated',
-          plan,
+          // A recalculation of a guided plan keeps its guide (#472).
+          plan: carryGuide(plan, source?.plan),
           state: started.state,
         });
         save.activeProfile = profileId;
@@ -317,7 +319,7 @@ export function createBrowserApi(
           id: profileId,
           name: (profile.name + ' · whole machines').slice(0, 80),
           kind: 'calculated',
-          plan: rounded,
+          plan: carryGuide(rounded, profile.plan),
           state,
         });
         save.activeProfile = profileId;
