@@ -32,6 +32,7 @@ const SHARED = [
   'ada.ts',
   'browser-api.ts',
   'browser-store.ts',
+  'handbook-migration.ts',
   'preferences.ts',
   'progression.ts',
   'state.ts',
