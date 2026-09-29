@@ -284,12 +284,52 @@ export interface CurrentCalculatedPlan {
   createdAt: string;
 }
 
+// An end-game production line built once everything else is done.
+export interface CompletionLine {
+  id: string;
+  name: string;
+  recipe: string;
+  output: number;
+  machines: number;
+  machine: string;
+  lastClock: number;
+  inputs: ItemRates;
+  byproducts: ItemRates;
+}
+
+// A step of a plan guide: a narrative phase step or a storage task. The id is its saved check key.
+export interface GuideStep {
+  id: string;
+  title: string;
+  body: string;
+}
+// The narrative a plan can carry beyond what the planner calculates (#393): a migrated handbook
+// profile keeps its phase steps, storage tasks, completion modules, power commissioning and
+// factory notes this way, with every check id as the handbook had it. Nothing writes it yet
+// (#395); pages without one draw exactly as before. Each part is optional.
+export interface PlanGuide {
+  // Narrative steps per phase ('1'–'5', 'post'); a phase without an entry has none.
+  phases: Partial<Record<string, GuideStep[]>>;
+  storageTasks?: GuideStep[];
+  completion?: CompletionLine[];
+  // The commissioning checklist (power-… ids) and blocks of copy such as the rocket-fuel block.
+  power?: { checks: { id: string; label: string }[]; blocks: { title: string; body: string }[] };
+  // Per calculated row id: its note, printed page, and where it is built.
+  factories?: Record<
+    string,
+    { note?: string; page?: number; local?: boolean; nuclear?: boolean; site?: 'oil' | 'nuclear' }
+  >;
+  // Source links, https only.
+  sources?: { title: string; url: string }[];
+}
+
 export interface StoredCalculatedPlan {
   engine: string;
   settings: StoredSettings;
   stages: Record<StageKey, StoredStage>;
   warnings: string[];
   createdAt: string;
+  guide?: PlanGuide;
 }
 
 // Hard-drive payoff (#67): what allowing one more alternate recipe does to one phase of a

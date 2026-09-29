@@ -5,6 +5,7 @@
 // Phases, stages and ids arrive from JSON as plain strings, so these fields are `string`
 // rather than Phase: tests/types/data.types.ts checks plan.json against this type.
 import type { ItemRates } from './common.ts';
+import type { CompletionLine } from './calculated.ts';
 import type { PrintedBay } from './storage-room.ts';
 
 // A build-plan step: phase steps and storage tasks.
@@ -51,19 +52,6 @@ export interface HandbookFactory {
 
 // A storage bay of the printed room (types/storage-room.ts), as plan.json still carries it.
 export type HandbookBay = PrintedBay;
-
-// An end-game production line built once everything else is done.
-export interface CompletionLine {
-  id: string;
-  name: string;
-  recipe: string;
-  output: number;
-  machines: number;
-  machine: string;
-  lastClock: number;
-  inputs: ItemRates;
-  byproducts: ItemRates;
-}
 
 export interface HandbookDelivery {
   // '<phase>-<item slug>', the key of the saved delivery count.
