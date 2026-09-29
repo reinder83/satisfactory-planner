@@ -4159,11 +4159,15 @@ button.rail-tile:hover {
     line-height: 1.2;
   }
   /* A group's Build order dialog is headed by the name the user typed, up to 80 characters,
-     which its body does not repeat: it wraps in full (#435). That dialog has no Running row, so
-     three lines of title still leave the header short. */
+     which its body does not repeat: it wraps in full (#435). Its eyebrow wraps too, between
+     words, so the phase at its end is not lost to the ellipsis (#454). That dialog has no
+     Running row, so three lines of title still leave the header short. */
   .dialog-head.wrap-title h2 {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  .dialog-head.wrap-title .eyebrow {
+    white-space: normal;
   }
   .dialog-head .subtitle {
     margin-top: 2px;
