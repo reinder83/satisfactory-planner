@@ -242,7 +242,7 @@ const page = computed(() =>
       <table>
         <thead>
           <tr>
-            <th scope="col">Resource</th>
+            <th scope="col" class="resource-cell">Resource</th>
             <th scope="col">Required</th>
             <th scope="col">Budget</th>
             <th scope="col">Remaining</th>
@@ -251,8 +251,10 @@ const page = computed(() =>
         </thead>
         <tbody>
           <tr v-for="r in page.rows" :key="r.name" :class="r.idle ? 'muted' : undefined">
-            <td class="resource-name">
-              <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
+            <td class="resource-cell">
+              <div class="resource-name">
+                <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
+              </div>
             </td>
             <td class="number">{{ r.required }}</td>
             <td class="number">{{ r.budget }}</td>

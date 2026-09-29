@@ -335,3 +335,25 @@ test('the dialog’s × has a 44px touch target on a phone, and looks the same (
   assert.match(body, /translate\(-50%, -50%\)/, 'centred on the button');
   assert.doesNotMatch(body, /background|border/, 'nothing drawn');
 });
+
+// The resources tables scroll sideways on a phone; their resource column sticks at the left on
+// a solid background, so the columns sliding under it do not show through (#358). On paper it
+// is an ordinary cell.
+test('the resource column sticks on a solid background, and prints as a plain cell (#358)', () => {
+  const { screen, print } = splitCss();
+  const cell = rules(screen).find(r => r.selector === '.resource-cell')!;
+  assert.deepEqual(decls(cell.body, 'position'), ['sticky']);
+  assert.deepEqual(decls(cell.body, 'left'), ['0']);
+  assert.deepEqual(decls(cell.body, 'background'), ['var(--panel)']);
+  const head = rules(screen).find(r => r.selector === 'th.resource-cell')!;
+  assert.deepEqual(decls(head.body, 'background'), ['var(--panel2)']);
+  assert.ok(
+    rules(print).some(
+      r =>
+        r.selector
+          .split(',')
+          .map(x => x.trim())
+          .includes('.resource-cell') && decls(r.body, 'background').includes('white'),
+    ),
+  );
+});
