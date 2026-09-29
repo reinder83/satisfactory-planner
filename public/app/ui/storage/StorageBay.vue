@@ -12,7 +12,7 @@
 import { computed, nextTick, ref } from 'vue';
 import { bayCapacity } from '../../../state.ts';
 import { save, toast } from '../../api.ts';
-import { knownItem, slug } from '../../format.ts';
+import { knownItem } from '../../format.ts';
 import { layoutEditing, query, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
@@ -27,6 +27,7 @@ import {
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
+import ItemIcon from '../ItemIcon.vue';
 import ItemSearch from '../form/ItemSearch.vue';
 import { refocusAfterRemoval } from '../refocus.ts';
 import SlotCell from './SlotCell.vue';
@@ -61,7 +62,6 @@ const view = computed(() =>
         ...x,
         done: x.name ? slotDone(x.id) : false,
         match: slotMatches(x, query),
-        icon: x.name ? `./icons/${slug(x.name)}.png` : '',
       })),
       // A full bay still takes another container: it gets the next address, up to the
       // addressable limit.
@@ -418,14 +418,7 @@ async function addContainer(e: Event) {
             @click="openSlot(x.id)"
           >
             <strong>{{ x.id }}</strong
-            ><img
-              class="item-icon"
-              :src="x.icon"
-              width="48"
-              height="48"
-              loading="lazy"
-              alt=""
-            /><span>{{ x.name }}</span></button
+            ><ItemIcon :name="x.name" /><span>{{ x.name }}</span></button
           ><label class="slot-complete"
             ><input
               type="checkbox"

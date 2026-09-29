@@ -920,9 +920,10 @@ test('the calculated resources page lists items as icon rows, one panel per list
   assert.equal($$('#main .backup-grid > .panel').length, 5, 'and the conversions panel');
   const rows = (id: string) =>
     $$(`#main [data-rate-list="${id}"] ul.supply-summary > li`).map(li => {
-      const img = li.querySelector('img.item-icon')!;
+      // A name with no bundled artwork gets the placeholder glyph instead of an image (#448).
+      const img = li.querySelector('.item-icon')!;
       assert.equal(img.getAttribute('aria-hidden'), 'true', 'the icon is decorative');
-      assert.equal(img.getAttribute('alt'), '');
+      if (img.tagName === 'IMG') assert.equal(img.getAttribute('alt'), '');
       return [li.querySelector('b')!.textContent, li.textContent.replace(/\s+/g, ' ').trim()];
     });
   assert.deepEqual(rows('drone'), [['Packaged Fuel', 'Packaged Fuel 10/min']]);
