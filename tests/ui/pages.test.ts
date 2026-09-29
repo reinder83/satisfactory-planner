@@ -767,6 +767,8 @@ test('the handbook resources page shows every resource with its icon, and the po
   const resources = Object.keys(handbook.resources['3']!);
   assert.equal(rows.length, resources.length);
   for (const row of rows) {
+    // The resource column stays in view when the table scrolls sideways (#358).
+    assert.ok(row.firstElementChild!.classList.contains('resource-cell'));
     const name = row.querySelector('.resource-name span')!.textContent;
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     assert.equal(
@@ -855,6 +857,9 @@ test('the calculated resources page shows every budget with its icon and what is
   const rows = $$('#main tbody tr');
   const names = rows.map(r => r.querySelector('.resource-name span')!.textContent);
   assert.deepEqual([...names].sort(), Object.keys(p.settings.limits).sort(), 'every budget');
+  // The resource column stays in view when the table scrolls sideways (#358).
+  assert.ok($('#main thead th')!.classList.contains('resource-cell'));
+  for (const r of rows) assert.ok(r.firstElementChild!.classList.contains('resource-cell'));
   assert.equal(names[0], first, 'the one over budget comes first');
   for (const row of rows) {
     const name = row.querySelector('.resource-name span')!.textContent;
