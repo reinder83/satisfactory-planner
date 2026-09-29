@@ -105,7 +105,8 @@ test('Phase 5 recycling rounds the uranium plants to the chain period and the wa
     assert.ok(Math.abs(balance) < 1e-5, waste);
   }
   assert.ok(st.additionalHeadroomMW === 0 || st.availableMW! >= st.requiredMW! - 1);
-  const warning = plan.warnings.find(w => w.startsWith('Solid-part production')) || '';
+  const warning =
+    plan.warnings.find(w => w.startsWith('Uranium-fuelled Nuclear Power Plants')) || '';
   assert.ok(warning.includes('multiples of 20'), warning);
   assert.ok(!warning.includes('Fluid, power and nuclear balancing'), warning);
 });
@@ -161,4 +162,5 @@ test('precise balancing keeps the fractional nuclear plants', () => {
   assert.ok(!whole(uranium(st)), `${uranium(st)}`);
   assert.ok(!whole(row(st, 'Ficsonium').equivalent));
   assert.ok(!plan.warnings.some(w => w.startsWith('Solid-part production')));
+  assert.ok(!plan.warnings.some(w => w.startsWith('Uranium-fuelled')));
 });

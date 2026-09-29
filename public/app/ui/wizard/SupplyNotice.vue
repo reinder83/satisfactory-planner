@@ -55,8 +55,8 @@ const view = computed(() => {
       power" spare.
     </p>
     <p v-if="view.dropped.length" class="small">
-      <b>Phase {{ view.dropped.join(' and ') }}</b> could not be fitted to whole machines while
-      crediting them, so
+      <b>{{ view.dropped.length > 1 ? 'Phases' : 'Phase' }} {{ view.dropped.join(' and ') }}</b>
+      could not be fitted to whole machines while crediting them, so
       {{ view.dropped.length > 1 ? 'those phases are' : 'that phase is' }} planned as if you built
       all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead
       of whole machines usually keeps the credit.
