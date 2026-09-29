@@ -1193,6 +1193,74 @@ test('a budget over 100% shows a warning in the estimate (SP-33)', async () => {
   assert.match(text('[data-estimate-warning]'), /Phase 4 does not fit these settings\./);
 });
 
+// #412: on a phone the panel sits under the form, so a one-line bar at the foot of the screen
+// carries the tightest resource and a warning mark, and tapping it brings the panel into view with
+// its heading focused. It hides while the panel is on screen (the stylesheet hides it on wider
+// screens).
+test('a one-line estimate bar carries the tightest resource and its warning, and opens the panel (#412)', async () => {
+  freshEstimate();
+  stubFetch({ '/api/preview': estimated(0.5) });
+  wizardAt(4);
+  await pause(30);
+  const bar = () => $<HTMLButtonElement>('[data-estimate-peek]');
+  assert.equal(text('[data-estimate-peek-text]'), 'Iron Ore 50%');
+  assert.equal(text('[data-estimate-peek] .eyebrow'), 'Tightest');
+  assert.equal($('[data-estimate-peek] .estimate-peek-warn'), null, 'no warning mark');
+  assert.ok(!bar()!.classList.contains('warn'));
+  freshEstimate();
+  stubFetch({ '/api/preview': estimated(1.25) });
+  wizardAt(4);
+  await pause(30);
+  assert.equal(text('[data-estimate-peek-text]'), 'Iron Ore 125%');
+  // The mark sits outside the text, so a long figure cut short on a phone keeps it.
+  assert.ok($('[data-estimate-peek] .estimate-peek-warn'));
+  assert.match(
+    text('[data-estimate-peek]'),
+    /^Live estimate: TightestIron Ore 125%⚠, with a warning↓$/,
+  );
+  assert.ok(bar()!.classList.contains('warn'));
+  let scrolled: Element | null = null;
+  const scroll = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () {
+    scrolled = this;
+  };
+  try {
+    bar()!.click();
+    await nextTick();
+  } finally {
+    Element.prototype.scrollIntoView = scroll;
+  }
+  assert.equal(scrolled, $('[data-estimate]'), 'the panel comes into view');
+  assert.equal(document.activeElement, $('#wizard-estimate-title'), 'its heading takes focus');
+});
+
+test('the estimate bar hides while the panel is on screen (#412)', async () => {
+  freshEstimate();
+  stubFetch({ '/api/preview': estimated(0.5) });
+  const observers: ((e: { isIntersecting: boolean }[]) => void)[] = [];
+  const real = globalThis.IntersectionObserver;
+  globalThis.IntersectionObserver = class {
+    constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+      observers.push(cb);
+    }
+    observe() {}
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
+  try {
+    wizardAt(4);
+    await pause(30);
+    assert.ok($('[data-estimate-peek]'), 'shown while the panel is out of view');
+    observers.at(-1)!([{ isIntersecting: true }]);
+    await nextTick();
+    assert.equal($('[data-estimate-peek]'), null, 'hidden while the panel is on screen');
+    observers.at(-1)!([{ isIntersecting: false }]);
+    await nextTick();
+    assert.ok($('[data-estimate-peek]'), 'back when it scrolls away');
+  } finally {
+    globalThis.IntersectionObserver = real;
+  }
+});
+
 test('edits are debounced into one estimate of the latest settings, within a second (SP-33)', async () => {
   freshEstimate();
   const calls = stubFetch<{ settings: WizardSettings; estimate?: boolean }>({
