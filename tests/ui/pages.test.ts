@@ -19,6 +19,7 @@ import ResourcesPage from '../../public/app/ui/pages/ResourcesPage.vue';
 import { resourceUse, tightestFirst } from '../../public/app/views/resources.ts';
 import {
   answerConfirms,
+  applyUpdate,
   $,
   $$,
   evil,
@@ -29,7 +30,12 @@ import {
   page,
   stubFetch,
 } from './setup.ts';
-import type { Catalog, StoredCalculatedPlan, WorkspaceSummary } from '../../public/types/index.ts';
+import type {
+  Catalog,
+  StoredCalculatedPlan,
+  UpdateOp,
+  WorkspaceSummary,
+} from '../../public/types/index.ts';
 
 // User text inserted as markup would create an <x-evil> element. (innerHTML cannot tell:
 // a textarea's contents are serialised unescaped.)
@@ -1423,4 +1429,53 @@ test('the handbook resources table writes each rate with its own unit (#363)', (
   ]);
   // Water has no capacity: its requirement is in m³/min, the words beside it carry no unit.
   assert.deepEqual(rows.Water!.slice(0, 3), [num(r.Water) + ' m³/min', 'Extraction limited', '—']);
+});
+
+// A plan with a guide (#393, #469; a migrated handbook profile) adds its power section to the
+// calculated resources page: the commissioning checklist, ticking the guide's own ids, and its
+// blocks of copy, a paragraph per blank line. All of it is text.
+test("a guided plan's power commissioning and blocks on the resources page", async () => {
+  const p = {
+    ...generated(),
+    guide: {
+      phases: {},
+      power: {
+        checks: [
+          { id: 'power-retained', label: evil },
+          { id: 'power-rocket-1', label: 'Rocket-fuel block 1: +72 GW' },
+        ],
+        blocks: [
+          { title: evil, body: `${evil}\n\n10 refineries → 8 blenders.` },
+          { title: 'Nuclear sequence', body: 'Phase 4: 50 uranium reactors.' },
+        ],
+      },
+    },
+  };
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  openCalculatedResources(p);
+  noMarkup();
+  const guide = $('#main [data-guide-power]')!;
+  assert.deepEqual(
+    [...guide.querySelectorAll<HTMLInputElement>('[data-check]')].map(b => b.dataset.check),
+    ['power-retained', 'power-rocket-1'],
+  );
+  assert.ok(guide.querySelector('.checklist')!.textContent!.includes(evil), 'labels as text');
+  const blocks = [...guide.querySelectorAll('[data-guide-block]')];
+  assert.deepEqual(
+    blocks.map(b => b.querySelector('h2')!.textContent),
+    [evil, 'Nuclear sequence'],
+  );
+  assert.deepEqual(
+    [...blocks[0]!.querySelectorAll('p')].map(x => x.textContent),
+    [evil, '10 refineries → 8 blenders.'],
+  );
+  const box = guide.querySelector<HTMLInputElement>('[data-check="power-rocket-1"]')!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'power-rocket-1', value: true });
+  // Without a guide the page has none of it.
+  openCalculatedResources(generated());
+  await settle();
+  assert.equal($('#main [data-guide-power]'), null);
 });

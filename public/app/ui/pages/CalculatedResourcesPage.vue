@@ -4,20 +4,24 @@
   counts in its legend when the plan uses them), raw resources
   against the entered budgets (settings.limits), then a panel of icon rows each for drone fuel,
   vehicle fuel (when the plan has any), protected storage, credited existing production and
-  surplus (SP-28), and one for conversions. Everything reads the profile's frozen
-  calculation snapshot; nothing here recalculates.
+  surplus (SP-28), and one for conversions. A plan guide's power section (#393, #469; a migrated
+  handbook profile) follows: its commissioning checklist, ticking the guide's own ids, and its
+  blocks of copy such as the rocket-fuel block and the nuclear sequence, as the handbook page
+  showed them. Everything reads the profile's frozen calculation snapshot; nothing here
+  recalculates.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
-import { calcStage, calculated, workspace } from '../../session.ts';
+import { calcStage, calculated, checked, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
 import { itemRateRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
+import { toggleCheck } from '../actions.ts';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
@@ -120,7 +124,19 @@ const page = computed(() =>
     const x = calcStage();
     if (!calculated || !x) return null;
     const s = calculated.settings;
+    const g = calculated.guide?.power;
     return {
+      // The guide's commissioning checks and blocks, each block's text a paragraph per blank line.
+      guidePower: g
+        ? {
+            checks: g.checks.map(c => ({ ...c, done: checked(c.id) })),
+            blocks: g.blocks.map((b, i) => ({
+              key: i,
+              title: b.title,
+              paragraphs: b.body.split(/\n\s*\n/).filter(p => p.trim()),
+            })),
+          }
+        : null,
       power: headroom(x, s),
       // Tightest first (SP-27): over budget, then by use, and resources this phase does not
       // draw on last; the catalogue order breaks ties.
@@ -312,6 +328,22 @@ const page = computed(() =>
           Liquid and radioactive material balances are enforced. Do not let storage or overflow
           block recycling.
         </p>
+      </section>
+    </div>
+    <div v-if="page.guidePower" class="backup-grid" style="margin-top: 24px" data-guide-power>
+      <section v-if="page.guidePower.checks.length" class="panel">
+        <h2>Power commissioning</h2>
+        <div class="checklist">
+          <label v-for="c in page.guidePower.checks" :key="c.id" class="check-row"
+            ><input type="checkbox" :data-check="c.id" @change="toggleCheck" :checked="c.done" />{{
+              c.label
+            }}</label
+          >
+        </div>
+      </section>
+      <section v-for="b in page.guidePower.blocks" :key="b.key" class="panel" data-guide-block>
+        <h2>{{ b.title }}</h2>
+        <p v-for="(para, i) in b.paragraphs" :key="i">{{ para }}</p>
       </section>
     </div>
   </template>
