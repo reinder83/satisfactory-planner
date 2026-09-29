@@ -13,7 +13,20 @@ import type { Phase } from './common.ts';
 // handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link, 8 a
 // handbook bay moved to another floor, 9 a factory-group link to the vehicle fuel, 10 bays put in
 // their own order on a floor, 11 a link from one raw resource or existing-supply item.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+
+// Where a profile migrated from the original handbook came from (#387, #485), and whatever the
+// migration could not place on the calculated plan: ticks, notes and group assignments kept
+// exactly, for review, and never deleted. No update op edits it. Version 12.
+export interface HandbookOrigin {
+  // The handbook's own version (plan.json `version`, e.g. '2026-09-13').
+  version: string;
+  unmapped: {
+    checks: Record<string, boolean>;
+    notes: Record<string, string>;
+    assignments: Record<string, GroupAssignment[]>;
+  };
+}
 
 // A step the user added to the build plan. The id starts with 'custom-'.
 export interface CustomTask {
@@ -109,6 +122,8 @@ export interface ProgressState {
   storageEdits: StorageEdits;
   taskEdits: TaskEdits;
   factoryGroups: FactoryGroups;
+  // Only on a profile migrated from the handbook (version 12).
+  handbookOrigin?: HandbookOrigin;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -125,6 +140,7 @@ export interface SavedState {
   storageEdits?: Partial<StorageEdits>;
   taskEdits?: Partial<TaskEdits>;
   factoryGroups?: Partial<FactoryGroups>;
+  handbookOrigin?: HandbookOrigin;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.

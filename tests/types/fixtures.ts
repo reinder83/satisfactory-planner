@@ -155,6 +155,21 @@ export const version11 = {
   },
 } satisfies SavedState;
 
+// Version 12: a profile migrated from the handbook (#387, #485), with what the migration could
+// not place kept for review.
+export const version12 = {
+  ...version11,
+  version: 12,
+  handbookOrigin: {
+    version: '2026-09-13',
+    unmapped: {
+      checks: { 'factory-3-plastic': true, 'factory-3-rubber': false },
+      notes: { 'factory-old-campus': 'Moved the campus east' },
+      assignments: { 'old-campus': [{ group: 'fg-plates1', rate: null }] },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -169,6 +184,7 @@ export const states: [SavedState, number][] = [
   [version9, 9],
   [version10, 10],
   [version11, 11],
+  [version12, 12],
 ];
 
 export const backup = {
