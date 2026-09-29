@@ -373,3 +373,15 @@ test('a focused control is scrolled clear of the estimate bar (#412)', () => {
   assert.ok(px >= 12 + 12 + 20 + 1, `${px}px clears the bar`);
   assert.ok(pad.line < bar.line + 20, 'in the same phone block as the bar');
 });
+
+// On a phone a dialog's title is one line, cut short (#318), except the Build order dialog's,
+// the group name the user typed, which wraps in full (#435).
+test('a Build order title wraps on a phone, other dialog titles stay one line (#318, #435)', () => {
+  const css = screenCss();
+  const phone = css.slice(css.indexOf('.dialog-head .eyebrow,'));
+  const one = rules(phone).find(r => r.selector.split(', ').includes('.dialog-head h2'))!;
+  assert.deepEqual(decls(one.body, 'white-space'), ['nowrap']);
+  const wrap = rules(phone).find(r => r.selector === '.dialog-head.wrap-title h2')!;
+  assert.deepEqual(decls(wrap.body, 'white-space'), ['normal']);
+  assert.ok(wrap.line > one.line, 'the wrapping rule comes after the one-line rule');
+});

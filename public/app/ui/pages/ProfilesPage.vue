@@ -20,7 +20,7 @@ import {
   toast,
   writeQueue,
 } from '../../api.ts';
-import { num, slug } from '../../format.ts';
+import { num, plural, slug } from '../../format.ts';
 import {
   boot,
   currentProfile,
@@ -66,7 +66,8 @@ const page = computed(() =>
         summary: p.settings
           ? `${p.settings.purity} purity · ${num(p.settings.multiplier)}× elevator · ${num(p.settings.powerFactor)}× power`
           : '50× elevator · pure ingots · nuclear recycling',
-        progress: `${p.completed} checks complete · ${phaseLabel(p.phase)}`,
+        // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
+        progress: `${p.completed ? plural(p.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(p.phase)}`,
         bar: phaseBar(p),
       })),
     })),

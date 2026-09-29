@@ -5,20 +5,27 @@
      dialog: #detail in index.html has aria-labelledby="detail-title" (#321), and every #detail
      dialog renders this frame, so the name follows whichever dialog is shown. `summary` is a
      line under the title, as PageHeader has under a page's: a factory's output and storage rate
-     (SP-21, #256), in the units' own case, which the uppercase eyebrow would not keep. -->
+     (SP-21, #256), in the units' own case, which the uppercase eyebrow would not keep.
+     `wrapTitle` lets the title wrap on a phone rather than end in an ellipsis (#435), for a
+     name the user typed that the body does not repeat. -->
 <script setup lang="ts">
 import ItemIcon from '../ItemIcon.vue';
 import { closeDetail } from '../actions.ts';
 
-withDefaults(defineProps<{ title: string; subtitle?: string; summary?: string; icon?: string }>(), {
-  subtitle: '',
-  summary: '',
-  icon: '',
-});
+withDefaults(
+  defineProps<{
+    title: string;
+    subtitle?: string;
+    summary?: string;
+    icon?: string;
+    wrapTitle?: boolean;
+  }>(),
+  { subtitle: '', summary: '', icon: '', wrapTitle: false },
+);
 </script>
 
 <template>
-  <header class="dialog-head">
+  <header :class="['dialog-head', wrapTitle ? 'wrap-title' : '']">
     <div class="dialog-title">
       <span v-if="icon" class="dialog-icon"><ItemIcon :name="icon" /></span>
       <div>

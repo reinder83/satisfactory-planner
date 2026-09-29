@@ -1,6 +1,8 @@
 <!-- A factory group's build order (groupChain in factory-detail.ts): suppliers before
      consumers, each stage with what it needs and what it feeds, linked to its factory dialog.
-     Opened from "Build order ↗" on a group with more than one factory. -->
+     Opened from "Build order ↗" on a group with more than one factory. Its title is the group's
+     name, which the user typed (up to 80 characters) and the body does not repeat, so on a phone
+     it wraps rather than being cut short (#435). -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { groupChain } from '../../factory-detail.ts';
@@ -23,6 +25,7 @@ const chain = computed(() =>
   <DialogFrame
     v-if="chain && !chain.stages.length"
     :title="chain.name"
+    wrap-title
     subtitle="Factory group · build order"
   >
     <p class="small muted">No factories from this group produce anything in the current phase.</p>
@@ -30,6 +33,7 @@ const chain = computed(() =>
   <DialogFrame
     v-else-if="chain"
     :title="chain.name"
+    wrap-title
     :subtitle="'Factory group · build order · ' + chain.phase"
   >
     <p class="small muted">

@@ -724,7 +724,11 @@ test('a factory in a group’s build order moves focus into its dialog (#319)', 
   opener.focus();
   opener.click();
   assert.match($('#detail .eyebrow')!.textContent, /build order/);
+  // The group's name heads it and the body does not repeat it, so it may wrap on a phone (#435).
+  assert.ok($('#detail .dialog-head')!.classList.contains('wrap-title'));
   follow($('#detail .chain-title [data-calc-factory]')!, 'calc-3-' + supplier.id);
+  // A factory's own dialog keeps its one-line title (#318).
+  assert.ok(!$('#detail .dialog-head')!.classList.contains('wrap-title'));
   void closeDetail();
   await settle();
   assert.equal(document.activeElement === opener, true, 'the × returns focus to Build order');
