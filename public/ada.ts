@@ -29,6 +29,14 @@ export interface AdaFacts {
   storageMiss: string;
   // The original handbook's ground-floor moves are not marked done yet (SP-25, #260).
   groundMoves: boolean;
+  // A plan guide's own checklists (#393, #470; a migrated handbook profile): its power
+  // commissioning checks, its storage tasks and its completion modules, ticked of all. null
+  // without a guide; a part the guide leaves out counts 0 of 0.
+  guide: {
+    power: { done: number; total: number };
+    storageTasks: { done: number; total: number };
+    completion: { done: number; total: number };
+  } | null;
   deliveries: { open: number; total: number };
   hasPhaseNote: boolean;
   customTasks: number;
@@ -296,6 +304,31 @@ const RULES: AdaRule[] = [
     when: f => f.storage?.total && f.storage.done < f.storage.total,
     text: f =>
       `${f.storage.done} of ${f.storage.total} container positions verified. An unverified container is a pile of items with aspirations. Tick built, labelled, connected and verified in the storage room.`,
+  },
+  // A plan guide's checklists (#470): each on the page that holds it, while any of it is open.
+  {
+    id: 'guide-storage-tasks',
+    on: ['storage'],
+    tone: 'calm',
+    when: f => f.guide && f.guide.storageTasks.done < f.guide.storageTasks.total,
+    text: f =>
+      `${plural(f.guide!.storageTasks.total - f.guide!.storageTasks.done, 'storage build step')} still open in the checklist under the room. The room does not build itself, however long it is stared at.`,
+  },
+  {
+    id: 'guide-power',
+    on: ['resources'],
+    tone: 'calm',
+    when: f => f.guide && f.guide.power.done < f.guide.power.total,
+    text: f =>
+      `${f.guide!.power.done} of ${f.guide!.power.total} power commissioning steps ticked. A block that is built but not commissioned is scenery with a fuel bill. Tick each one here as it comes online.`,
+  },
+  {
+    id: 'guide-completion',
+    on: ['factories'],
+    tone: 'calm',
+    when: f => f.post && f.guide && f.guide.completion.done < f.guide.completion.total,
+    text: f =>
+      `${plural(f.guide!.completion.total - f.guide!.completion.done, 'completion module')} still to build, listed under the production lines. Their inputs come on top of the main budget, so allocate them first.`,
   },
   {
     id: 'deliveries',

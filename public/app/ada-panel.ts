@@ -124,6 +124,18 @@ function payoffFacts(): AdaFacts['payoff'] {
   };
 }
 
+// A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
+function guideFacts(): AdaFacts['guide'] {
+  const g = calculated?.guide;
+  if (!g) return null;
+  const count = (ids: string[]) => ({ done: ids.filter(checked).length, total: ids.length });
+  return {
+    power: count((g.power?.checks || []).map(c => c.id)),
+    storageTasks: count((g.storageTasks || []).map(t => t.id)),
+    completion: count((g.completion || []).map(c => 'completion-' + c.id)),
+  };
+}
+
 function adaFacts(): AdaFacts {
   const ts = currentSave.id ? planTasks() : [];
   const next = ts.find(t => !checked(t.id));
@@ -176,6 +188,7 @@ function adaFacts(): AdaFacts {
     },
     storageMiss: view === 'storage' && query && !storageMatches(query).length ? query : '',
     groundMoves: groundMovesPending(),
+    guide: guideFacts(),
     deliveries: {
       open: deliveries.filter(d => delivered(d) < d.target).length,
       total: deliveries.length,

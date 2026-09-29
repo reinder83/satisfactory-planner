@@ -416,3 +416,35 @@ test('the built ground floor’s open moves get a line on the storage page (SP-2
   assert.match(line.text, /Press Done on the ground floor/);
   assert.ok(!ids(facts({ view: 'storage', groundMoves: false })).includes('storage-ground-moves'));
 });
+
+// A plan guide's checklists (#393, #470): each gets a line while any of it is open, with the
+// guide's own counts, ranked first on the page that holds it; none without a guide or once it is
+// all ticked. Completion modules belong to Post Phase 5.
+test("ADA names a plan guide's open commissioning, storage tasks and completion modules", () => {
+  const guide = {
+    power: { done: 2, total: 9 },
+    storageTasks: { done: 3, total: 5 },
+    completion: { done: 0, total: 1 },
+  };
+  const guideIds = (view: string, over: Partial<AdaFacts> = {}) =>
+    ids({ ...facts({ view, guide }), ...over }).filter(id => id.startsWith('guide-'));
+  const text = (id: string, over: Partial<AdaFacts> = {}) =>
+    adaRemarks(facts({ guide, post: true, ...over })).find(r => r.id === id)!.text;
+  assert.match(text('guide-power'), /^2 of 9 power commissioning steps ticked\./);
+  assert.match(text('guide-storage-tasks'), /^2 storage build steps still open/);
+  assert.match(text('guide-completion'), /^1 completion module still to build/);
+  assert.equal(guideIds('resources')[0], 'guide-power');
+  assert.equal(guideIds('storage')[0], 'guide-storage-tasks');
+  assert.equal(guideIds('factories', { post: true })[0], 'guide-completion');
+  assert.ok(!guideIds('factories').includes('guide-completion'), 'only in Post Phase 5');
+  const done = {
+    power: { done: 9, total: 9 },
+    storageTasks: { done: 5, total: 5 },
+    completion: { done: 1, total: 1 },
+  };
+  for (const g of [done, null])
+    assert.deepEqual(
+      ids(facts({ post: true, guide: g })).filter(id => id.startsWith('guide-')),
+      [],
+    );
+});
