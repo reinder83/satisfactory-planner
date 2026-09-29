@@ -3385,6 +3385,12 @@ button.rail-tile:hover {
   .wizard-estimate {
     position: static;
   }
+  /* A control that takes focus is scrolled clear of the bar, not just to the viewport's foot
+     under it (WCAG 2.4.11): 72px is a little over the bar's height. Only while the bar is on
+     the page. */
+  html:has(.estimate-peek) {
+    scroll-padding-bottom: 72px;
+  }
   .estimate-peek {
     position: fixed;
     left: 0;

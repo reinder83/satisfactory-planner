@@ -9,6 +9,8 @@
   edited (#412), so a one-line bar at the foot of the screen carries the tightest resource and a
   ⚠ when there is a warning; tapping it brings the panel into view. It hides while the panel is
   on screen, which an IntersectionObserver reports; the stylesheet hides it on wider screens.
+  It is a touch shortcut: it comes after the panel and hides once the panel is on screen, so the
+  keyboard reaches the panel itself. The stylesheet keeps a focused control clear of it.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';

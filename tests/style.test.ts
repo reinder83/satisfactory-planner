@@ -357,3 +357,19 @@ test('the resource column sticks on a solid background, and prints as a plain ce
     ),
   );
 });
+
+// The wizard's estimate bar is fixed at the foot of a phone's screen (#412), so a focused control
+// is scrolled clear of it, not under it (WCAG 2.4.11, the #449 review).
+test('a focused control is scrolled clear of the estimate bar (#412)', () => {
+  const css = screenCss();
+  const pad = rules(css).find(r => r.selector === 'html:has(.estimate-peek)')!;
+  assert.ok(pad, 'the page keeps room for the bar');
+  const px = Number(/^(\d+)px$/.exec(decls(pad.body, 'scroll-padding-bottom')[0]!)![1]);
+  const bar = rules(css).find(
+    r => r.selector === '.estimate-peek' && /position:\s*fixed/.test(r.body),
+  )!;
+  assert.ok(bar, 'the bar is fixed');
+  // The bar: 12px padding above and below one line of text, and its 1px top border.
+  assert.ok(px >= 12 + 12 + 20 + 1, `${px}px clears the bar`);
+  assert.ok(pad.line < bar.line + 20, 'in the same phone block as the bar');
+});
