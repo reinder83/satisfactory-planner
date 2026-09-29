@@ -2165,18 +2165,25 @@ test('between groups: a card per group with what comes in and goes out, names es
   noMarkup();
   const section = $('[data-group-links]')!;
   assert.ok(section, 'shown once the profile has groups');
-  // One card per group, in the groups' order, after the mines' (#222); the elevator is only a
-  // row end.
-  const [mines, ...cards] = $$('[data-group-card]');
+  // One card per group, in the groups' order, after a card for each raw resource (#222, #339);
+  // the elevator is only a row end.
+  const all = $$('[data-group-card]');
+  const isSourceCard = (c: HTMLElement) => c.dataset.group!.startsWith('supply/');
+  const sourceCards = all.filter(isSourceCard),
+    cards = all.filter(c => !isSourceCard(c));
+  assert.ok(sourceCards.length > 1, 'a card per raw resource');
+  assert.deepEqual(all.slice(0, sourceCards.length), sourceCards, 'the sources come first');
   assert.deepEqual(
-    [mines, ...cards].map(c => c!.querySelector('h3')!.textContent),
-    ['Mines and existing supply', evil, 'Parts'],
+    cards.map(c => c.querySelector('h3')!.textContent),
+    [evil, 'Parts'],
   );
-  assert.deepEqual(
-    [...mines!.querySelectorAll<HTMLElement>('[data-flow]')].map(p => p.dataset.flow),
-    ['out'],
-    'the mines only send',
-  );
+  assert.equal($('[data-group="mines"]'), null, 'no combined mines card any more');
+  for (const c of sourceCards)
+    assert.deepEqual(
+      [...c.querySelectorAll<HTMLElement>('[data-flow]')].map(p => p.dataset.flow),
+      ['out'],
+      'a source only sends',
+    );
   // A group nothing reaches or leaves gets a line, not an empty card.
   assert.match(
     $('[data-idle-groups]')!.textContent!,
@@ -2203,12 +2210,17 @@ test('between groups: a card per group with what comes in and goes out, names es
   );
   assert.ok(outs.some(k => k!.startsWith('supply/Iron Ore:fg-')));
   const ends = (dir: string) => $$(`[data-flow="${dir}"] .flow-end`).map(text);
-  // Each raw resource is a source of its own (#231), with a section on the mines' card.
+  // Each raw resource is a source of its own (#231) with a card of its own (#339), named by its
+  // item, whose Out part counts and totals its links; no card has sections any more.
   assert.ok(ends('in').includes('← from Iron Ore'));
   assert.ok(ends('in').includes('← from Coal'));
-  const sources = [...mines!.querySelectorAll<HTMLElement>('[data-source]')];
-  assert.ok(sources.some(h => h.dataset.source === 'supply/Iron Ore'));
-  assert.match(text(sources[0]!), /^[A-Z][\w ]+ \d+ links? · [\d.,]+( m³)?\/min$/);
+  const iron = $('[data-group-card][data-group="supply/Iron Ore"]')!;
+  assert.equal(iron.querySelector('h3')!.textContent, 'Iron Ore');
+  assert.match(
+    text(iron.querySelector('[data-flow="out"] [data-flow-sum]')!),
+    /^\d+ links? · [\d.,]+( m³)?\/min$/,
+  );
+  assert.equal($('.flow-source'), null, 'no sections inside a card');
   assert.ok(ends('out').includes('→ to Space Elevator'));
   // The items with their rates, named for screen readers; the belts totalled per mark.
   const item = out.querySelector('.flow-items li')!;
@@ -2241,9 +2253,12 @@ test('between groups: a card per group with what comes in and goes out, names es
   render();
   await nextTick();
   assert.deepEqual(
-    $$('[data-group-card]').map(c => c.dataset.group),
-    ['mines', 'fg-parts1', 'ungrouped'],
+    $$('[data-group-card]')
+      .map(c => c.dataset.group)
+      .filter(id => !id!.startsWith('supply/')),
+    ['fg-parts1', 'ungrouped'],
   );
+  assert.ok($$('[data-group-card]')[0]!.dataset.group!.startsWith('supply/'));
   // Without groups there is nothing to show.
   open({ calculated: plan });
   go('logistics');
@@ -2374,7 +2389,7 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   noMarkup();
 });
 
-test('between groups: existing supply sent straight to storage has its row and controls on the mines card (#222)', async () => {
+test('between groups: existing supply sent straight to storage has its row and controls on its own card (#222, #339)', async () => {
   const supplied = generatedWith({ existingSupply: { 'Iron Plate': 30 } });
   open({
     calculated: supplied,
@@ -2389,11 +2404,13 @@ test('between groups: existing supply sent straight to storage has its row and c
   render();
   await nextTick();
   const key = 'supply/Iron Plate:storage';
-  const row = $(`[data-group-card][data-group="mines"] [data-link-out="${key}"]`)!;
+  const row = $(`[data-group-card][data-group="supply/Iron Plate"] [data-link-out="${key}"]`)!;
   assert.ok(row, 'the link with neither end on a group card shows');
   assert.match(row.textContent!.replace(/\s+/g, ' '), /→ to Protected storage Iron Plate: /);
-  // Existing supply is marked and comes after the mined resources (#231).
-  const heads = $$('[data-group="mines"] [data-source]').map(h => h.textContent!.trim());
+  // Existing supply is marked and its card comes after the mined resources' (#231, #339).
+  const heads = $$('[data-group-card]')
+    .filter(c => c.dataset.group!.startsWith('supply/'))
+    .map(c => c.querySelector('h3')!.textContent!.trim());
   const plate = heads.findIndex(h => h.startsWith('Iron Plate (existing supply)'));
   assert.ok(plate > 0, JSON.stringify(heads));
   assert.ok(heads.slice(0, plate).every(h => !h.includes('existing supply')));
