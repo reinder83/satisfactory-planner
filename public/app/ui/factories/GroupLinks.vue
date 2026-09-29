@@ -5,8 +5,9 @@
   shown when the profile has groups; flows inside a group are the group's own belts and are
   left out. Group names are user text, rendered as text.
   One card per group (#213), Ungrouped too when it has links, with an In part (where each flow
-  comes from) and an Out part (where it goes). The mines and existing supply get a card with only
-  an Out part when they send anything (#222). The destinations that are not groups (storage,
+  comes from) and an Out part (where it goes). Each raw resource and existing-supply item that
+  sends anything gets a card of its own with only an Out part (#222, #231, #339), before the
+  groups: mined resources first, then existing supply, the largest flow first within each. The destinations that are not groups (storage,
   fuel, the Space Elevator, the sink) only show as the other end of a row.
   Each link can instead go by truck, tractor, explorer, train or drone (#205): the user gives the
   round trip in minutes and, for a road vehicle, its fuel; linkLoad (logistics.ts) works out the
@@ -58,7 +59,6 @@ import type {
 // Names for the places that are not factory groups.
 const PLACES: Record<string, string> = {
   [UNGROUPED]: 'Ungrouped',
-  [MINES]: 'Mines and existing supply',
   [OUTSIDE.storage]: 'Protected storage',
   [OUTSIDE.drone]: 'Drone fuel',
   [OUTSIDE.transport]: 'Vehicle fuel',
@@ -187,20 +187,9 @@ const view = computed(() =>
       };
     });
     type Row = (typeof links)[number];
-    // A part lists its rows in sections: one unnamed section, or on the sources' card one per
-    // raw resource or existing-supply item (#231).
-    type Section = { id: string; name: string; rows: Row[]; count: string; total: string };
-    const section = (id: string, rows: Row[]): Section => ({
-      id,
-      name: id ? name(id) : '',
-      rows,
-      count: plural(rows.length, 'link'),
-      total: total(rows.flatMap(r => r.items)),
-    });
-    const part = (dir: 'in' | 'out', rows: Row[], sections = [section('', rows)]) => ({
+    const part = (dir: 'in' | 'out', rows: Row[]) => ({
       dir,
       rows,
-      sections,
       count: plural(rows.length, 'link'),
       total: total(rows.flatMap(r => r.items)),
     });
@@ -222,23 +211,19 @@ const view = computed(() =>
         ),
       ],
     }));
-    // The mines and existing supply send but never receive: a card with only an Out part, first,
-    // so every link, straight to storage, fuel, the elevator or the sink too, has its sender's
-    // Out row and its transport controls (#222). Each item is a source of its own with a section
-    // (#231): mined resources first, then existing supply, the largest first within each.
+    // Each raw resource and existing-supply item is a source of its own (#231), which sends but
+    // never receives: a card each with only an Out part, before the groups (#339), so every link,
+    // straight to storage, fuel, the elevator or the sink too, has its sender's Out row and its
+    // transport controls (#222). Mined resources come first, then existing supply, the largest
+    // flow first within each.
     const mined = links.filter(l => isSource(l.from));
-    if (mined.length) {
-      const sources = [...new Set(mined.map(l => l.from))].map(id =>
-        section(
-          id,
-          mined.filter(l => l.from === id),
-        ),
-      );
-      const flow = (sec: Section) => sec.rows.reduce((t, r) => t + r.items[0]!.rate, 0);
-      const minedFirst = (sec: Section) => (x.raw?.[sourceItem(sec.id)] ? 0 : 1);
-      sources.sort((a, b) => minedFirst(a) - minedFirst(b) || flow(b) - flow(a));
-      cards.unshift({ id: MINES, name: name(MINES), parts: [part('out', mined, sources)] });
-    }
+    const flow = (rows: Row[]) => rows.reduce((t, r) => t + r.items[0]!.rate, 0);
+    const minedFirst = (id: string) => (x.raw?.[sourceItem(id)] ? 0 : 1);
+    const sources = [...new Set(mined.map(l => l.from))]
+      .map(id => ({ id, rows: mined.filter(l => l.from === id) }))
+      .sort((a, b) => minedFirst(a.id) - minedFirst(b.id) || flow(b.rows) - flow(a.rows))
+      .map(({ id, rows }) => ({ id, name: name(id), parts: [part('out', rows)] }));
+    cards.unshift(...sources);
     const idle = places.filter(id => !used(id)).map(name);
     return { links, cards, idle };
   }),
@@ -431,95 +416,89 @@ async function recalculate(e: Event) {
             <p v-if="!p.rows.length" class="small muted">
               {{ p.dir === 'in' ? 'Nothing comes in.' : 'Nothing goes out.' }}
             </p>
-            <template v-for="sec in p.sections" :key="sec.id"
-              ><h5 v-if="sec.name" class="flow-source" :data-source="sec.id">
-                {{ sec.name }}
-                <span class="flow-sum">{{ sec.count }} · {{ sec.total }}</span>
-              </h5>
-              <div
-                v-for="l in sec.rows"
-                :key="l.key"
-                class="flow-row"
-                v-bind="p.dir === 'in' ? { 'data-link-in': l.key } : { 'data-link-out': l.key }"
-              >
-                <div class="flow-end">
-                  <template v-if="p.dir === 'in'"
-                    >← from <b>{{ l.fromName }}</b></template
+            <div
+              v-for="l in p.rows"
+              :key="l.key"
+              class="flow-row"
+              v-bind="p.dir === 'in' ? { 'data-link-in': l.key } : { 'data-link-out': l.key }"
+            >
+              <div class="flow-end">
+                <template v-if="p.dir === 'in'"
+                  >← from <b>{{ l.fromName }}</b></template
+                >
+                <template v-else
+                  >→ to <b>{{ l.toName }}</b></template
+                >
+              </div>
+              <ul class="flow-items">
+                <li v-for="i in l.items" :key="i.item" :title="i.title">
+                  <ItemIcon :name="i.item" /><span class="flow-item-name">{{ i.item }}: </span
+                  >{{ i.text }}
+                </li>
+              </ul>
+              <template v-if="p.dir === 'out'">
+                <div class="link-transport">
+                  <label
+                    >By
+                    <select
+                      :data-link-mode="l.key"
+                      :value="l.mode"
+                      @change="
+                        setTransport($event.target as HTMLSelectElement, l, {
+                          mode: ($event.target as HTMLSelectElement).value as LinkMode,
+                        })
+                      "
+                    >
+                      <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">
+                        {{ label }}
+                      </option>
+                    </select></label
                   >
-                  <template v-else
-                    >→ to <b>{{ l.toName }}</b></template
+                  <label v-if="l.transport"
+                    >Round trip
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="1440"
+                      step="0.1"
+                      :data-link-trip="l.key"
+                      :value="l.transport.roundTripMin"
+                      @change="setTrip($event, l)"
+                    />
+                    min</label
+                  >
+                  <label v-if="l.fuelled"
+                    >Fuel
+                    <select
+                      :data-link-fuel="l.key"
+                      :value="l.transport!.fuel"
+                      @change="
+                        setTransport($event.target as HTMLSelectElement, l, {
+                          fuel: ($event.target as HTMLSelectElement).value,
+                        })
+                      "
+                    >
+                      <option v-for="f in fuels" :key="f.name" :value="f.name">
+                        {{ f.name }}
+                      </option>
+                    </select></label
                   >
                 </div>
-                <ul class="flow-items">
-                  <li v-for="i in l.items" :key="i.item" :title="i.title">
-                    <ItemIcon :name="i.item" /><span class="flow-item-name">{{ i.item }}: </span
-                    >{{ i.text }}
-                  </li>
-                </ul>
-                <template v-if="p.dir === 'out'">
-                  <div class="link-transport">
-                    <label
-                      >By
-                      <select
-                        :data-link-mode="l.key"
-                        :value="l.mode"
-                        @change="
-                          setTransport($event.target as HTMLSelectElement, l, {
-                            mode: ($event.target as HTMLSelectElement).value as LinkMode,
-                          })
-                        "
-                      >
-                        <option v-for="[m, label] in LINK_MODES" :key="m" :value="m">
-                          {{ label }}
-                        </option>
-                      </select></label
-                    >
-                    <label v-if="l.transport"
-                      >Round trip
-                      <input
-                        type="number"
-                        min="0.1"
-                        max="1440"
-                        step="0.1"
-                        :data-link-trip="l.key"
-                        :value="l.transport.roundTripMin"
-                        @change="setTrip($event, l)"
-                      />
-                      min</label
-                    >
-                    <label v-if="l.fuelled"
-                      >Fuel
-                      <select
-                        :data-link-fuel="l.key"
-                        :value="l.transport!.fuel"
-                        @change="
-                          setTransport($event.target as HTMLSelectElement, l, {
-                            fuel: ($event.target as HTMLSelectElement).value,
-                          })
-                        "
-                      >
-                        <option v-for="f in fuels" :key="f.name" :value="f.name">
-                          {{ f.name }}
-                        </option>
-                      </select></label
-                    >
-                  </div>
-                  <template v-if="l.transport">
-                    <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>
-                      {{ line }}
-                    </p>
-                    <p v-if="l.packed.length" class="small muted">
-                      Packaged for the trip:
-                      {{ l.packed.map(i => `${i.item} as ${i.pack}`).join(', ') }}.
-                    </p>
-                  </template>
-                  <p v-else class="flow-badge" data-link-badge>{{ l.badge }}</p>
+                <template v-if="l.transport">
+                  <p v-for="(line, n) in l.load" :key="n" class="small" data-link-load>
+                    {{ line }}
+                  </p>
+                  <p v-if="l.packed.length" class="small muted">
+                    Packaged for the trip:
+                    {{ l.packed.map(i => `${i.item} as ${i.pack}`).join(', ') }}.
+                  </p>
                 </template>
-                <p v-else :class="['flow-badge', { vehicle: l.transport }]" data-link-badge>
-                  {{ l.badge }}
-                </p>
-              </div></template
-            >
+                <p v-else class="flow-badge" data-link-badge>{{ l.badge }}</p>
+              </template>
+              <p v-else :class="['flow-badge', { vehicle: l.transport }]" data-link-badge>
+                {{ l.badge }}
+              </p>
+            </div>
           </section>
         </div>
       </article>

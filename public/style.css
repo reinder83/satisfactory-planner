@@ -1575,19 +1575,6 @@ p.eyebrow {
 .flow-part > p {
   margin: 8px 0 0;
 }
-/* A resource's section on the mines and existing supply card (#231). */
-.flow-source {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 2px 10px;
-  margin: 12px 0 0;
-  padding-bottom: 3px;
-  border-bottom: 1px solid var(--line);
-  color: var(--ink);
-  font-size: 13px;
-}
 .flow-row {
   padding: 8px 0;
   border-bottom: 1px solid var(--line2);
