@@ -3371,12 +3371,54 @@ button.rail-tile:hover {
 .wizard-estimate .btn {
   width: 100%;
 }
+/* The estimate's one-line bar for phones (#412): fixed at the foot of the screen while the panel
+   under the form is out of view, the tightest resource in red when there is a warning. Below the
+   drawer (z-index 59), which covers it. The form keeps room under its Next button for it. */
+.estimate-peek {
+  display: none;
+}
 @media (max-width: 720px) {
   .wizard-body.with-estimate {
     grid-template-columns: minmax(0, 1fr);
+    padding-bottom: 60px;
   }
   .wizard-estimate {
     position: static;
+  }
+  .estimate-peek {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: var(--panel2);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .estimate-peek.warn {
+    border-top-color: var(--red);
+  }
+  .estimate-peek-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--bright);
+  }
+  .estimate-peek.warn .estimate-peek-text,
+  .estimate-peek-warn {
+    color: var(--red);
   }
 }
 .wizard-progress {
@@ -4458,6 +4500,7 @@ button.rail-tile:hover {
   .checklist-tools,
   .btn,
   #toast,
+  .estimate-peek,
   .phase-track,
   .ada-ticker,
   .ada {

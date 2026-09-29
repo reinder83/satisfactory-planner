@@ -9,7 +9,7 @@
   Review, which calculates, and on Review creates the profile. The submit stops here, since
   nothing else handles the wizard form. Beside Goals and Resources is the live estimate
   (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
-  sits under the form.
+  sits under the form, with a one-line summary at the foot of the screen (#412).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
