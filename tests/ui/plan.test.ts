@@ -2,6 +2,7 @@
 // CalculatedPlanPage.vue, with their parts in public/app/ui/plan/), mounted through render()
 // the way the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
+import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import { nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
 import {
@@ -840,4 +841,24 @@ test('the Build sequence intro follows whether the plan has a guide', async () =
     'Work through the steps in order and tick each one as it is done.',
   );
   assert.ok(!intro().some(t => /HUB|MAM|Milestone|startup/.test(t)), JSON.stringify(intro()));
+});
+
+// Ranking alternates solves a transcribed handbook afresh, once per alternate, so the payoff
+// panel says so first (#480); any other plan's does not.
+test('the payoff panel warns before ranking a transcribed plan (#480)', async () => {
+  for (const engine of ['handbook-2026-09-13', generated.engine]) {
+    open({
+      calculated: { ...structuredClone(generated), engine } as StoredCalculatedPlan,
+      phase: '3',
+    });
+    go('plan');
+    render();
+    await nextTick();
+    assert.ok($('[data-rank-alternates]'), engine);
+    assert.equal(
+      $('[data-payoff] [data-resolve-warning]')?.textContent ?? null,
+      engine.startsWith('handbook-') ? RESOLVE_WARNING : null,
+      engine,
+    );
+  }
 });

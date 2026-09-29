@@ -19,6 +19,7 @@ import {
   type PayoffColumn,
 } from '../../payoff.ts';
 import { browserMode } from '../../../browser-api.ts';
+import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import {
   calcStage,
   calculated,
@@ -39,6 +40,7 @@ const dir = ref<1 | -1>(1);
 // "Checking 23 of 67 alternates…" while a ranking runs; empty otherwise.
 const running = ref('');
 
+const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 const view = computed(() =>
   legacy(() => {
     if (!calculated || !calcStage()?.feasible) return null;
@@ -120,6 +122,8 @@ async function rank() {
         {{ view.ranking ? 'Re-rank' : 'Rank alternates' }}
       </button>
     </div>
+    <!-- Ranking solves a transcribed handbook afresh, once per alternate (#480). -->
+    <p v-if="transcribed" class="notice warn" data-resolve-warning>{{ RESOLVE_WARNING }}</p>
     <p v-if="running" class="small" data-payoff-progress role="status">
       {{ running }}
       <template v-if="!browserMode">This can take up to 20 seconds.</template>

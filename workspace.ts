@@ -1,4 +1,5 @@
 import { validateTransfer, transferFormat } from './public/transfer.ts';
+import { isTranscribed } from './public/handbook-migration.ts';
 import {
   shareState,
   newProfileState,
@@ -276,6 +277,7 @@ export async function openWorkspace({
           name: p.name,
           kind: p.kind,
           settings: p.plan?.settings,
+          ...(isTranscribed(p.plan) ? { transcribed: true as const } : {}),
           completed: Object.values(p.state.checks).filter(Boolean).length,
           phase: p.state.settings.phase,
           phases: phaseProgress(p.plan, p.state.checks),

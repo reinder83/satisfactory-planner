@@ -34,6 +34,15 @@ import type {
 // (decision 6B on #387).
 export const OIL_CAMPUS = 'Recycled petrochemical campus';
 
+// Whether a plan is a transcribed handbook (#486): its engine names the handbook, not a solver.
+export const isTranscribed = (plan: { engine?: string } | null | undefined): boolean =>
+  !!plan?.engine?.startsWith('handbook-');
+
+// What Recalculate, round-up and the payoff ranking say before they solve a transcribed plan
+// afresh (decision 7B on #387, #480). Naming the source is the point here, so it names the handbook.
+export const RESOLVE_WARNING =
+  'This plan was transcribed from the original handbook, not solved by this planner, so solving it afresh can change its recipes and machine counts.';
+
 // The warning on every transcribed snapshot. No "handbook" in user-facing copy (decision 8).
 export const TRANSCRIBED = 'Transcribed from the original plan; not solved by this planner.';
 

@@ -42,6 +42,7 @@ import {
 import { render } from '../../shell.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { fuelledModes } from '../../../state.ts';
+import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
@@ -230,6 +231,8 @@ const view = computed(() =>
   }),
 );
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
+// A transcribed handbook says so before it is solved afresh (#480).
+const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 
 type Link = NonNullable<typeof view.value>['links'][number];
 // Saves a link's transport with `change` applied; the page redraws with what was saved.
@@ -519,7 +522,10 @@ async function recalculate(e: Event) {
         <button class="btn primary" data-recalc-transport @click="recalculate">
           Recalculate with transport fuel
         </button>
-        creates a new profile that plans for it and opens it; this profile stays as it is.</template
+        creates a new profile that plans for it and opens it; this profile stays as it is.<template
+          v-if="transcribed"
+          ><br /><span data-resolve-warning>{{ RESOLVE_WARNING }}</span></template
+        ></template
       >
     </div>
   </section>
