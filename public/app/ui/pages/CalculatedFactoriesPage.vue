@@ -34,6 +34,7 @@ import {
   membershipsOf,
   siteEntry,
   statusFilter,
+  type StatusFilter,
 } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
@@ -72,7 +73,13 @@ const page = computed(() =>
       (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
     );
     const running = (r: (typeof found)[number]) => checked('calc-' + stage() + '-' + r.id);
-    const status = statusFilter(found, factoryFilter, running, [['held', r => !!heldBack(r.id)]]);
+    // A guide that builds some rows locally adds the handbook's Local chip (#478).
+    const notes = calculated.guide?.factories || {};
+    type Row = (typeof found)[number];
+    const chips: [StatusFilter, (r: Row) => boolean][] = [['held', r => !!heldBack(r.id)]];
+    if (Object.values(notes).some(x => x.local))
+      chips.unshift(['local', r => !!notes[r.id]?.local]);
+    const status = statusFilter(found, factoryFilter, running, chips);
     const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
     // A plan guide (#393, #468) places some ungrouped rows at a shared site, drawn together as the

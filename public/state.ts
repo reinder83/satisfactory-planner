@@ -537,9 +537,6 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
     ...(carried.links ? { links: carried.links } : {}),
   });
 }
-// A calculated profile's progress per phase it plans, for the save list (SP-32): the production
-// lines ticked Running (`calc-<stage>-<row id>`) over the phase's lines, from the profile's start
-// phase on. Both editions' workspace summaries send it; none without a calculated plan.
 // A plan made from another by a fresh solve (Recalculate as a new profile, round-up) keeps the
 // source plan's guide (#472): its phase steps, storage tasks, completion modules and power
 // content are the narrative the user ticks, and the carried state still holds those ticks.
@@ -560,6 +557,9 @@ export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>
   }
   return { ...plan, guide: copy };
 }
+// A calculated profile's progress per phase it plans, for the save list (SP-32): the production
+// lines ticked Running (`calc-<stage>-<row id>`) over the phase's lines, from the profile's start
+// phase on. Both editions' workspace summaries send it; none without a calculated plan.
 export function phaseProgress(
   plan: StoredCalculatedPlan | null | undefined,
   checks: Record<string, boolean>,

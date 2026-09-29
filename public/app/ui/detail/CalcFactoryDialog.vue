@@ -51,6 +51,8 @@ const view = computed(() =>
       subtitle:
         phaseLabel(phase()) + (guide?.page !== undefined ? ` · Printed page ${guide.page}` : ''),
       note: guide?.note ?? '',
+      // A row the guide builds at the nuclear site, as the handbook's dialog says (#478).
+      nuclear: !!guide?.nuclear,
       summary:
         main && !generator
           ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
@@ -113,6 +115,10 @@ const view = computed(() =>
       ></template
     >
     <div v-if="view.note" class="notice info" data-guide-note>{{ view.note }}</div>
+    <div v-if="view.nuclear" class="notice info" data-guide-nuclear>
+      Process buffer at the nuclear site. Keep radioactive recycling flows balanced; do not apply a
+      generic storage surplus.
+    </div>
     <FlowDiagram :model="view.flow" />
     <h3>Machine setup</h3>
     <MachineCells

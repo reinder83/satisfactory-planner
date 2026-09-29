@@ -2973,3 +2973,57 @@ test("a guided plan's sites, local badges, notes and completion modules on the f
   assert.equal($('#main .completion-grid'), null);
   assert.equal($('#main [data-local]'), null);
 });
+
+// Two more handbook behaviours for a guided plan (#478): a row the guide builds at the nuclear
+// site gets the handbook's nuclear-site notice in its dialog, and a guide that builds any row
+// locally adds the Local chip, which keeps just those rows. Without such a guide neither shows.
+test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', async () => {
+  const rows = plan.stages['3'].rows!;
+  const [nuclear, local] = [rows[0]!, rows[1]!];
+  const guided = {
+    ...structuredClone(plan),
+    guide: {
+      phases: {},
+      factories: { [nuclear.id]: { nuclear: true }, [local.id]: { local: true } },
+    },
+  };
+  open({ calculated: guided, phase: '3' });
+  go('factories');
+  render();
+  await nextTick();
+  const chips = () => $$('#main [data-filter]').map(c => c.dataset.filter);
+  assert.deepEqual(chips(), ['all', 'todo', 'done', 'local', 'held']);
+  $('#main [data-filter="local"]')!.click();
+  await nextTick();
+  assert.deepEqual(
+    $$('#main .factory-card button.name').map(b => b.dataset.calcFactory),
+    [local.id],
+    'Local keeps only the rows the guide builds locally',
+  );
+  $('#main [data-filter="all"]')!.click();
+  await nextTick();
+  openCalculatedFactory(nuclear.id);
+  await nextTick();
+  assert.match(
+    $('#detail [data-guide-nuclear]')!.textContent!.replace(/\s+/g, ' ').trim(),
+    /^Process buffer at the nuclear site\. Keep radioactive recycling flows balanced; do not apply a generic storage surplus\.$/,
+  );
+  void closeDetail();
+  await settle();
+  openCalculatedFactory(local.id);
+  await nextTick();
+  assert.equal($('#detail [data-guide-nuclear]'), null, 'only on the nuclear row');
+  void closeDetail();
+  await settle();
+  // Without a guide: the calculated chips as before, and no notice.
+  open({ calculated: plan, phase: '3' });
+  go('factories');
+  render();
+  await nextTick();
+  assert.deepEqual(chips(), ['all', 'todo', 'done', 'held']);
+  openCalculatedFactory(nuclear.id);
+  await nextTick();
+  assert.equal($('#detail [data-guide-nuclear]'), null);
+  void closeDetail();
+  await settle();
+});
