@@ -128,6 +128,16 @@ test('the floor tabs tell a screen reader which floor is shown', async () => {
   ]);
 });
 
+// The upper floor had a fixed note on where its bays sit and what they hold (#436). It described
+// one layout, not the one drawn, so it is gone: the floor's bays say what they hold themselves.
+test('the upper floor draws no fixed layout notice', () => {
+  setFloor('upper');
+  render();
+  assert.ok($('[data-slot]'), 'the upper floor has its bays');
+  assert.equal($('#main .notice'), null);
+  assert.doesNotMatch($('#main')!.textContent, /sits behind|Packaged fluids only/);
+});
+
 test('bays stay in address order in the document and take their hall position from the grid', () => {
   render();
   const order = letters();
