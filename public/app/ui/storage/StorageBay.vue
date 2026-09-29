@@ -12,8 +12,8 @@
 import { computed, nextTick, ref } from 'vue';
 import { bayCapacity } from '../../../state.ts';
 import { save, toast } from '../../api.ts';
-import { slug } from '../../format.ts';
-import { layoutEditing, query } from '../../session.ts';
+import { knownItem, slug } from '../../format.ts';
+import { layoutEditing, query, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
   bayProgress,
@@ -27,6 +27,7 @@ import {
 import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
+import ItemSearch from '../form/ItemSearch.vue';
 import { refocusAfterRemoval } from '../refocus.ts';
 import SlotCell from './SlotCell.vue';
 import type { StorageBayView } from '../../views/storage.ts';
@@ -65,6 +66,8 @@ const view = computed(() =>
       // A full bay still takes another container: it gets the next address, up to the
       // addressable limit.
       canAdd: b.items.length < bayCapacity,
+      // What the add field suggests (#295).
+      items: workspace.catalog.containerItems || [],
       // The address a container dropped past the last position gets (#208).
       next:
         b.items.length < bayCapacity ? b.id + String(b.items.length + 1).padStart(2, '0') : null,
@@ -260,11 +263,24 @@ async function removeBay(e: Event) {
 }
 
 // "+ Add": put an item in this bay, in a free position first; a bay with none gets the next
-// address after its last. A success empties the form.
+// address after its last. A success empties the form. The name must be one of the game's items
+// (#295), matched without regard to case and saved as the list spells it, so a typo cannot make
+// an unknown item; otherwise the field says so and nothing is saved. Containers saved earlier
+// under another name keep it. A catalog without the list (none should lack it) takes any name,
+// as before.
+const unknown = ref('');
 async function addContainer(e: Event) {
   const form = e.target as HTMLFormElement,
-    name = String(new FormData(form).get('name') || '').trim();
-  if (!name) return;
+    typed = String(new FormData(form).get('name') || '').trim(),
+    items = view.value.items;
+  if (!typed) return;
+  const name = items.length ? knownItem(items, typed) : typed;
+  if (!name) {
+    unknown.value = typed;
+    form.querySelector<HTMLInputElement>('[name=name]')?.focus();
+    return;
+  }
+  unknown.value = '';
   const bay = storageBays().find(b => b.id === props.bay.id);
   if (!bay) return;
   const free =
@@ -452,14 +468,27 @@ async function addContainer(e: Event) {
       :data-bay="bay.id"
       @submit.prevent="addContainer"
     >
-      <input
-        :id="'bay-draft-' + bay.id"
+      <ItemSearch
+        :items="view.items"
         name="name"
-        maxlength="120"
+        :input-id="'bay-draft-' + bay.id"
+        :list-id="'bay-draft-' + bay.id + '-options'"
+        :maxlength="120"
         required
         :placeholder="view.addPrompt"
         :aria-label="'Add container to bay ' + bay.id"
-      /><button class="btn" type="submit">+ Add</button>
+        :invalid="!!unknown"
+        :describedby="unknown ? 'bay-draft-' + bay.id + '-hint' : undefined"
+        @typing="unknown = ''"
+        @pick="unknown = ''"
+      /><button class="btn" type="submit">+ Add</button
+      ><span
+        v-if="unknown"
+        :id="'bay-draft-' + bay.id + '-hint'"
+        class="supply-hint warn"
+        role="status"
+        >No item of that name — pick one from the list.</span
+      >
     </form>
   </section>
 </template>

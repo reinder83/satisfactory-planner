@@ -7,7 +7,15 @@ import { nextTick } from 'vue';
 import type { DragDropManager } from '@dnd-kit/vue';
 import { beforeEach, test } from 'vitest';
 import { bayCapacity } from '../../public/state.ts';
-import { floor, setFloor, setLayoutEditing, setQuery, state } from '../../public/app/session.ts';
+import { slug } from '../../public/app/format.ts';
+import {
+  floor,
+  layoutEditing,
+  setFloor,
+  setLayoutEditing,
+  setQuery,
+  state,
+} from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { containerMove, openSlot, slotKeys, storageBays } from '../../public/app/views/storage.ts';
 import { moveContainer } from '../../public/app/ui/actions.ts';
@@ -17,6 +25,7 @@ import {
   $,
   $$,
   applyUpdate,
+  catalog,
   evil,
   generated,
   go,
@@ -1416,4 +1425,161 @@ test('a drop let go away from the position dnd-kit names saves nothing (#298)', 
   );
   assert.equal(calls.length, 2, 'the keyboard drop is saved');
   assert.equal(landsOnTarget({ ...keyDrop.operation, target: null }), false);
+});
+
+// "Add container" suggests the game's items as you type, each with its icon in front, and saves
+// only an item it knows (#295, ui/form/ItemSearch.vue).
+const addField = () => $<HTMLInputElement>('.add-container[data-bay="A"] input[name=name]')!;
+const addList = () => $('.add-container[data-bay="A"] [role=listbox]')!;
+const suggestions = () => $$('.add-container[data-bay="A"] [role=option]');
+const suggested = () => suggestions().map(o => o.textContent.trim());
+const typeAdd = async (text: string) => {
+  addField().value = text;
+  addField().dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+};
+const pressAdd = async (key: string) => {
+  const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+  addField().dispatchEvent(e);
+  await nextTick();
+  return e;
+};
+const submitAdd = async () => {
+  $('.add-container[data-bay="A"]')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  await settle();
+};
+const editWithCatalog = (slots: Record<string, string> = {}) => {
+  open({
+    workspace: { catalog: catalog() },
+    state: { storageEdits: someEdits({ clearedSlots: ['A01'], slots }) },
+  });
+  setLayoutEditing(true);
+  render();
+};
+
+test('the add-container field suggests item names, each with its icon, as you type', async () => {
+  stubFetch({ '/api/update': () => state });
+  editWithCatalog();
+  const field = addField();
+  assert.equal(field.getAttribute('role'), 'combobox');
+  assert.equal(field.getAttribute('aria-controls'), addList().id);
+  assert.equal(addList().hidden, true, 'nothing is offered before typing');
+  await typeAdd('iron');
+  assert.equal(addList().hidden, false);
+  assert.equal(field.getAttribute('aria-expanded'), 'true');
+  const names = suggested();
+  assert.ok(names.length > 3 && names.length <= 8, names.join());
+  assert.ok(names.every(n => n.toLowerCase().includes('iron')));
+  const starts = names.filter(n => n.toLowerCase().startsWith('iron'));
+  assert.deepEqual(names.slice(0, starts.length), starts, 'names that start with it come first');
+  assert.ok(names.includes('Iron Plate') && names.includes('Reinforced Iron Plate'));
+  for (const o of suggestions()) {
+    const icon = o.firstElementChild!;
+    assert.equal(icon.tagName, 'IMG', 'the icon comes first');
+    assert.equal(icon.getAttribute('src'), `./icons/${slug(o.textContent.trim())}.png`);
+    assert.equal(icon.getAttribute('alt'), '', 'the name beside it says what it is');
+  }
+  // Typing narrows the list.
+  await typeAdd('iron pl');
+  assert.deepEqual(suggested(), ['Iron Plate', 'Reinforced Iron Plate']);
+  // It offers the game's items, not only what a plan can store: ores and the Hard Drive, but no
+  // fluid, which does not go in a container.
+  await typeAdd('ore');
+  assert.ok(suggested().includes('Iron Ore'));
+  await typeAdd('hard dr');
+  assert.deepEqual(suggested(), ['Hard Drive']);
+  await typeAdd('water');
+  assert.ok(suggested().includes('Packaged Water'));
+  assert.ok(!suggested().includes('Water'));
+  await typeAdd('zzz');
+  assert.equal(addList().hidden, true, 'nothing matches, nothing is shown');
+  assert.equal(field.getAttribute('aria-expanded'), 'false');
+});
+
+test('the add-container suggestions work from the keyboard, and a pick fills the field', async () => {
+  const calls = stubFetch<LayoutOp>({ '/api/update': () => state });
+  editWithCatalog();
+  const field = addField();
+  field.focus();
+  await typeAdd('iron pl');
+  const selected = () => suggestions().findIndex(o => o.getAttribute('aria-selected') === 'true');
+  assert.equal(selected(), -1, 'nothing is highlighted yet');
+  await pressAdd('ArrowDown');
+  assert.equal(selected(), 0);
+  assert.equal(field.getAttribute('aria-activedescendant'), suggestions()[0]!.id);
+  await pressAdd('ArrowDown');
+  assert.equal(selected(), 1);
+  await pressAdd('ArrowDown');
+  assert.equal(selected(), 0, '↓ wraps round');
+  await pressAdd('ArrowUp');
+  assert.equal(selected(), 1, '↑ wraps round');
+  const escape = await pressAdd('Escape');
+  assert.equal(addList().hidden, true, 'Escape closes the list');
+  assert.ok(escape.defaultPrevented, 'and is not also taken as leaving the layout editor');
+  assert.equal(layoutEditing, true);
+  assert.equal(field.value, 'iron pl', 'what was typed stays');
+  await pressAdd('ArrowDown');
+  assert.equal(addList().hidden, false, '↓ opens it again');
+  await pressAdd('ArrowDown');
+  const enter = await pressAdd('Enter');
+  assert.ok(enter.defaultPrevented, 'Enter picks rather than submitting');
+  assert.equal(field.value, 'Iron Plate', 'the pick fills the field');
+  assert.equal(addList().hidden, true);
+  assert.equal(document.activeElement, field, 'focus stays in the field');
+  assert.equal($('.add-container[data-bay="A"] .supply-input')!.dataset.icon, 'Iron Plate');
+  assert.equal(calls.length, 0, 'picking saves nothing yet');
+  await submitAdd();
+  assert.deepEqual(calls.at(-1)![1], { type: 'storageSlotAssign', key: 'A01', name: 'Iron Plate' });
+  assert.equal(addField().value, '', 'the field empties after adding');
+  assert.equal($('.add-container[data-bay="A"] .has-icon'), null, 'and its icon goes with it');
+  // A click picks too, and puts focus back in the field.
+  await typeAdd('screw');
+  suggestions()[0]!.click();
+  await nextTick();
+  assert.equal(addField().value, 'Screws');
+  assert.equal(document.activeElement, addField());
+  // Enter on a name that already is an item keeps it, though the list offers only others.
+  await typeAdd('iron plate');
+  assert.deepEqual(suggested(), ['Reinforced Iron Plate']);
+  await pressAdd('Enter');
+  assert.equal(addField().value, 'Iron Plate');
+});
+
+test('a name that is not an item is not saved; one in another case is saved as the item', async () => {
+  const calls = stubFetch<LayoutOp>({ '/api/update': () => state });
+  editWithCatalog();
+  await typeAdd('Iron Plat');
+  await pressAdd('Escape');
+  await submitAdd();
+  assert.equal(calls.length, 0, 'a typo makes no unknown item');
+  const hint = $('.add-container[data-bay="A"] .supply-hint')!;
+  assert.match(hint.textContent, /No item of that name — pick one from the list\./);
+  assert.ok(hint.classList.contains('warn'));
+  assert.equal(addField().getAttribute('aria-invalid'), 'true');
+  assert.equal(addField().getAttribute('aria-describedby'), hint.id);
+  assert.equal(document.activeElement, addField(), 'focus is in the field to fix it');
+  assert.equal(addField().value, 'Iron Plat', 'what was typed stays to be corrected');
+  await typeAdd('iron plate');
+  assert.equal($('.add-container[data-bay="A"] .supply-hint'), null, 'typing clears the hint');
+  assert.equal(addField().getAttribute('aria-invalid'), null);
+  await pressAdd('Escape');
+  await submitAdd();
+  assert.deepEqual(
+    calls.at(-1)![1],
+    { type: 'storageSlotAssign', key: 'A01', name: 'Iron Plate' },
+    'saved as the list spells it',
+  );
+});
+
+test('containers saved under a name that is not an item still show and open', async () => {
+  stubFetch({ '/api/update': () => state });
+  editWithCatalog({ A02: 'Mystery crate', A03: evil });
+  assert.equal($('[data-slot="A02"] span')!.textContent, 'Mystery crate');
+  assert.equal($('[data-slot="A03"] span')!.textContent, evil);
+  noMarkup();
+  setLayoutEditing(false);
+  render();
+  await nextTick();
+  openSlot('A02');
+  assert.equal($('#detail h2')!.textContent, 'Mystery crate');
 });

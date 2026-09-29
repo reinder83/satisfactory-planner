@@ -1013,6 +1013,27 @@ test('the item search works from the keyboard', async () => {
   assert.equal(wizard!.supplyRows!.length, 1);
 });
 
+// The list leaves out the item the text already names, so its first suggestion is another item;
+// Enter with nothing highlighted used to pick that one (#295, form/ItemSearch.vue).
+test('Enter on a name that is already an item keeps that item', async () => {
+  supplyAt();
+  const input = $<HTMLInputElement>('input[name=supplyItem]')!;
+  input.value = 'iron plate';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await nextTick();
+  assert.deepEqual(
+    $$('.supply-option').map(o => o.textContent.trim()),
+    ['Reinforced Iron Plate'],
+    'the list offers only the other item',
+  );
+  assert.equal($$('.supply-option')[0]!.tabIndex, -1, 'a suggestion is no Tab stop');
+  input.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+  );
+  await settle();
+  assert.equal(wizard!.supplyRows![0]!.name, 'Iron Plate', 'spelled as the list spells it');
+});
+
 test('signing out drops an unfinished wizard draft, so the next user never sees it', async () => {
   wizardAt(2, { saveId: 's', saveName: 'Previous user' });
   assert.ok(wizard);

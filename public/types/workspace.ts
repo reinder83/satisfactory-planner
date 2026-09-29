@@ -98,6 +98,8 @@ export interface Catalog {
   standardRecipes: CatalogRecipe[];
   storageOptions: Choice[];
   supplyItems: string[];
+  // What a storage container can hold, offered when one is added (#295): every item but fluids.
+  containerItems: string[];
   // Items that can get a protected storage rate: needed to build, or delivered.
   storageItems: { name: string; build: boolean; delivered: boolean }[];
   distributions: Choice[];

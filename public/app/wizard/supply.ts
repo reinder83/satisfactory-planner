@@ -4,6 +4,7 @@
 // (possibly half-finished), and settings.existingSupply, the { item: rate } map
 // the planner receives. The rows and their item search are drawn and handled by
 // ui/wizard/SupplyRows.vue.
+import { itemMatches } from '../format.ts';
 import { draft, workspace } from '../session.ts';
 import { readGuidedForm } from './guided.ts';
 import { readWizard, type WizardDraft } from './wizard.ts';
@@ -32,18 +33,7 @@ const SUPPLY_SUGGESTIONS = 8;
 // Up to SUPPLY_SUGGESTIONS catalog items for the typed text, case-insensitive:
 // names that start with it first, then names that merely contain it.
 export function supplyMatches(query: unknown): string[] {
-  const q = String(query || '')
-    .trim()
-    .toLowerCase();
-  if (!q) return [];
-  const starts: string[] = [],
-    contains: string[] = [];
-  for (const n of workspace.catalog.supplyItems || []) {
-    const l = n.toLowerCase();
-    if (l.startsWith(q)) starts.push(n);
-    else if (l.includes(q)) contains.push(n);
-  }
-  return [...starts, ...contains].slice(0, SUPPLY_SUGGESTIONS);
+  return itemMatches(workspace.catalog.supplyItems || [], query, SUPPLY_SUGGESTIONS);
 }
 
 // The rows being edited, which is not the same thing as the rows that count. A
