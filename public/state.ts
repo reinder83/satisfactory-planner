@@ -12,6 +12,8 @@
 //   taskEdits      build-plan step edits (blankTaskEdits), version 3
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3;
 //                  links, the vehicle picked per group link, version 7
+//   handbookOrigin where a migrated handbook profile came from and what the migration could
+//                  not place (validateOrigin), version 12; no update op edits it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -27,6 +29,7 @@ import type {
   CustomTask,
   FactoryGroups,
   GroupAssignment,
+  HandbookOrigin,
   LinkMode,
   LinkTransport,
   Phase,
@@ -590,7 +593,50 @@ export function shareState(s: SavedState): ProgressState {
   clean.notes = {};
   clean.deliveries = {};
   clean.revision = 0;
+  // Its unmapped ticks and notes are progress too (#485).
+  delete clean.handbookOrigin;
   return validateState(clean);
+}
+// Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
+// follow the same rules as the state's own checks, notes and group assignments; the groups an
+// unmapped assignment names need not exist any more.
+function validateOrigin(raw: unknown): HandbookOrigin | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid handbook origin.');
+  if (!plain(raw) || typeof raw.version !== 'string' || !/^[\w.:-]{1,40}$/.test(raw.version)) bad();
+  const u = (raw as Raw).unmapped;
+  if (!plain(u)) bad();
+  const out: HandbookOrigin = {
+    version: (raw as Raw).version as string,
+    unmapped: { checks: {}, notes: {}, assignments: {} },
+  };
+  const { checks, notes, assignments } = u as Raw;
+  if (!plain(checks) || Object.keys(checks).length > 20000) bad();
+  for (const [k, v] of Object.entries(checks as Raw)) {
+    if (!safeKey(k) || typeof v !== 'boolean') bad();
+    out.unmapped.checks[k] = v as boolean;
+  }
+  if (!plain(notes) || Object.keys(notes).length > 20000) bad();
+  for (const [k, v] of Object.entries(notes as Raw)) {
+    if (!safeKey(k) || typeof v !== 'string' || v.length > 6000) bad();
+    out.unmapped.notes[k] = v as string;
+  }
+  if (!plain(assignments) || Object.keys(assignments).length > 1000) bad();
+  for (const [k, list] of Object.entries(assignments as Raw)) {
+    if (!safeKey(k) || !Array.isArray(list) || !list.length || list.length > 12) bad();
+    out.unmapped.assignments[k] = (list as unknown[]).map(m => {
+      const rate = plain(m) ? (m.rate ?? null) : undefined;
+      if (
+        !plain(m) ||
+        !groupId(m.group) ||
+        (rate !== null &&
+          (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 10000000))
+      )
+        bad();
+      return { group: (m as Raw).group as string, rate: rate as number | null };
+    });
+  }
+  return out;
 }
 // Returns a clean copy of storageEdits, or a blank one when absent (version 1 states).
 // Throws on anything malformed; only clearedSlots is quietly narrowed, see below.
@@ -709,17 +755,17 @@ const baysOn = (e: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–11 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–12 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(s: unknown): ProgressState {
-  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(s.version as number))
+  if (!plain(s) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(s.version as number))
     fail(
-      // Compared as the old code did, so a version given as "12" also gets the update message.
-      ((s as Raw | null | undefined)?.version as number) > 11
+      // Compared as the old code did, so a version given as "13" also gets the update message.
+      ((s as Raw | null | undefined)?.version as number) > 12
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -766,6 +812,8 @@ export function validateState(s: unknown): ProgressState {
   clean.storageEdits = validateEdits(s.storageEdits);
   clean.taskEdits = validateTaskEdits(s.taskEdits);
   clean.factoryGroups = validateGroups(s.factoryGroups);
+  const origin = validateOrigin(s.handbookOrigin);
+  if (origin) clean.handbookOrigin = origin;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -780,28 +828,32 @@ export function validateState(s: unknown): ProgressState {
   // an update. Bays put in their own order on a floor are 10 (#191): an older release would
   // drop bayOrder and put them back in letter order. A link from one raw resource or
   // existing-supply item as a source of its own (#231) is 11: an older release knows only the
-  // one 'mines' place and would refuse the state as malformed.
-  clean.version = linksNeedV11(clean.factoryGroups)
-    ? 11
-    : clean.storageEdits.bayOrder
-      ? 10
-      : linksNeedV9(clean.factoryGroups)
-        ? 9
-        : clean.storageEdits.bayFloors
-          ? 8
-          : clean.factoryGroups.links
-            ? 7
-            : clean.storageEdits.hiddenFloors.length
-              ? 6
-              : clean.storageEdits.hiddenBays.length
-                ? 5
-                : hasAddedSlots(clean.storageEdits)
-                  ? 4
-                  : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                    ? 3
-                    : hasEdits(clean.storageEdits)
-                      ? 2
-                      : 1;
+  // one 'mines' place and would refuse the state as malformed. A profile migrated from the
+  // handbook (#387) is 12: it carries handbookOrigin, and an older release would open it as an
+  // ordinary profile and drop what the migration kept for review.
+  clean.version = clean.handbookOrigin
+    ? 12
+    : linksNeedV11(clean.factoryGroups)
+      ? 11
+      : clean.storageEdits.bayOrder
+        ? 10
+        : linksNeedV9(clean.factoryGroups)
+          ? 9
+          : clean.storageEdits.bayFloors
+            ? 8
+            : clean.factoryGroups.links
+              ? 7
+              : clean.storageEdits.hiddenFloors.length
+                ? 6
+                : clean.storageEdits.hiddenBays.length
+                  ? 5
+                  : hasAddedSlots(clean.storageEdits)
+                    ? 4
+                    : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                      ? 3
+                      : hasEdits(clean.storageEdits)
+                        ? 2
+                        : 1;
   const revision = s.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
