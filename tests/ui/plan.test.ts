@@ -815,3 +815,29 @@ test("a guided plan shows the guide's steps for the phase, under their own ids",
   await nextTick();
   assert.deepEqual(steps(), []);
 });
+
+// A guided plan's Build sequence intro doesn't describe the generated startup, unlock and factory
+// steps it doesn't have (#479); without a guide the intro is as before.
+test('the Build sequence intro follows whether the plan has a guide', async () => {
+  const intro = () => $$('#main .split > section > p.small.muted').map(p => p.textContent!.trim());
+  open({ calculated: generated, phase: '3' });
+  go('plan');
+  render();
+  await nextTick();
+  assert.ok(intro().some(t => t.startsWith('Start with construction stock')));
+  assert.equal($('#main [data-guided-intro]'), null);
+  open({
+    calculated: {
+      ...structuredClone(generated),
+      guide: { phases: { '3': [{ id: 'phase-3-survey', title: 'Survey', body: 'Walk it.' }] } },
+    } as StoredCalculatedPlan,
+    phase: '3',
+  });
+  render();
+  await nextTick();
+  assert.equal(
+    $('#main [data-guided-intro]')!.textContent!.trim(),
+    'Work through the steps in order and tick each one as it is done.',
+  );
+  assert.ok(!intro().some(t => /HUB|MAM|Milestone|startup/.test(t)), JSON.stringify(intro()));
+});
