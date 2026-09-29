@@ -4102,6 +4102,13 @@ button.rail-tile:hover {
     font-size: 19px;
     line-height: 1.2;
   }
+  /* A group's Build order dialog is headed by the name the user typed, up to 80 characters,
+     which its body does not repeat: it wraps in full (#435). That dialog has no Running row, so
+     three lines of title still leave the header short. */
+  .dialog-head.wrap-title h2 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
   .dialog-head .subtitle {
     margin-top: 2px;
     line-height: 1.35;
