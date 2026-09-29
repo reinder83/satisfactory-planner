@@ -3,6 +3,7 @@ import {
   shareState,
   newProfileState,
   checkBase,
+  carryGuide,
   currentPayoff,
   phaseProgress,
 } from './public/state.ts';
@@ -606,7 +607,8 @@ export async function openWorkspace({
           id: profileId,
           name: profileName,
           kind: plan ? 'calculated' : 'original',
-          plan,
+          // A recalculation of a guided plan keeps its guide (#472).
+          plan: plan && carryGuide(plan, source?.plan),
           state: started.state,
         });
         save.activeProfile = profileId;
@@ -718,7 +720,7 @@ export async function openWorkspace({
           id: profileId,
           name: (previous.name + ' · whole machines').slice(0, 80),
           kind: 'calculated',
-          plan: rounded,
+          plan: carryGuide(rounded, previous.plan),
           state,
         });
         sv.activeProfile = profileId;
