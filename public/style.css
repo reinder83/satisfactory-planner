@@ -4433,7 +4433,8 @@ button.rail-tile:hover {
   .task,
   .checklist,
   .table-wrap,
-  th {
+  th,
+  .resource-cell {
     background: white;
     color: #1c2328;
     box-shadow: none;
@@ -4861,6 +4862,20 @@ button.rail-tile:hover {
   width: 26px;
   height: 26px;
   flex: none;
+}
+/* The resources tables scroll sideways on a phone (#358): their resource column stays in view,
+   on the panel colour, with a rule on its right edge, so the Use column is never read without
+   the resource it belongs to. The name sits in a div inside the cell, since a flex cell is no
+   table cell and could not stick. */
+.resource-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  box-shadow: inset -1px 0 0 var(--line);
+}
+th.resource-cell {
+  background: var(--panel2);
 }
 .supply-field {
   position: relative;
