@@ -103,9 +103,17 @@ try {
   // puts focus on the Notes heading.
   await page.locator('[data-phase-notes-link]').waitFor({ timeout: 180000 });
   assert.ok(await page.getByText('Saved in this browser', { exact: true }).count());
-  const check = page.locator('[data-check]').first();
-  const key = await check.getAttribute('data-check');
+  // Tick one step, found by its key (#438): a ticked step folds into "Done (n)" (SP-42), so
+  // `.first()` would move on to the next unfinished step while check() still verifies it, and
+  // Playwright's retries would go on ticking step after step, sometimes the whole phase.
+  const key = await page.locator('#main [data-check]').first().getAttribute('data-check');
+  const check = page.locator(`#main [data-check="${key}"]`);
   await check.check();
+  assert.equal(
+    await page.locator('#main [data-check]:checked').count(),
+    1,
+    'one step ticked, the one chosen',
+  );
   await page.waitForTimeout(250);
   await page.locator('[data-phase-notes-link]').focus();
   await page.keyboard.press('Enter');
