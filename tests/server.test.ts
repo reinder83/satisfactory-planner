@@ -41,7 +41,7 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     assert.ok(results.every(r => r.status === 200));
     await post(app.url, '/api/update', {
       type: 'note',
-      key: 'factory-iron-ingot',
+      key: 'global',
       value: 'Station A <test> & belt 2',
     });
     await post(app.url, '/api/update', {
@@ -56,7 +56,8 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     await close(app.server);
     app = await start(dir);
     s = await (await fetch(app.url + '/api/state')).json();
-    assert.equal(s.notes['factory-iron-ingot'], 'Station A <test> & belt 2');
+    // The fresh server's original profile migrates on the restart (#495); a global note stays.
+    assert.equal(s.notes.global, 'Station A <test> & belt 2');
     assert.equal(s.deliveries['3-modular-engine'], 321);
     assert.equal(s.customTasks.length, 1);
     for (let i = 0; i < 12; i++) assert.equal(s.checks['test-' + i], true);

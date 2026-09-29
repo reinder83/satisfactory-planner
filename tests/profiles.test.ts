@@ -16,10 +16,15 @@ import {
   DELIVERIES,
 } from '../planner.ts';
 import { elevatorParts } from '../public/preferences.ts';
+import { migrateOriginalProfile } from '../public/handbook-migration.ts';
+import handbookJson from '../migrations/handbook-2026-09-13.json' with { type: 'json' };
+import recipesJson from '../recipes.json' with { type: 'json' };
 import type {
   CurrentCalculatedPlan,
   CurrentStage,
+  Handbook,
   ProgressState,
+  Recipe,
   StageKey,
   WorkspaceSummary,
 } from '../public/types/index.ts';
@@ -154,7 +159,14 @@ test('migration, separate saves and profiles, explicit scope across tabs, durabl
     const restored = await json(
       await fetch(app.url + '/api/state?save=original-save&profile=original'),
     );
-    assert.deepEqual(restored, original);
+    // progress.json is handbook progress, so it migrated into a calculated profile (#495).
+    const migrated = migrateOriginalProfile(
+      { id: 'original', name: '', kind: 'original', state: original },
+      handbookJson as unknown as Handbook,
+      (recipesJson as unknown as { recipes: Recipe[] }).recipes,
+      catalog().pureLimits,
+    );
+    assert.deepEqual(restored, migrated.state);
     assert.equal(await fs.readFile(path.join(dir, 'progress.json'), 'utf8'), old);
   } finally {
     await close(app.server);

@@ -25,6 +25,7 @@ import type {
   StageKey,
   StoredCalculatedPlan,
   StoredSettings,
+  StoredProfile,
   StoredStage,
 } from './types/index.ts';
 
@@ -428,4 +429,28 @@ export function migrateHandbookState(
     factoryGroups: { ...s.factoryGroups, assignments },
     handbookOrigin: { version: handbook.version, unmapped },
   });
+}
+
+// An original profile migrated whole (#495): its own handbook, or the fallback (the server's
+// frozen copy of the handbook it was made with) when it carries none, transcribed with the
+// catalog's pure-node limits as the base budgets, so resources the handbook gave no capacity
+// (Water, Nitrogen Gas) are not shown over budget; then its progress re-keyed. The result is an
+// ordinary calculated profile with the same id and name and no handbook. Anything else is
+// returned as it is. The server, the browser store and imports all call this (#495, #497, #498).
+export function migrateOriginalProfile<P extends StoredProfile>(
+  profile: P,
+  fallbackHandbook: Handbook,
+  recipes: Recipe[],
+  pureLimits: Record<string, number>,
+): P {
+  if (profile.kind !== 'original') return profile;
+  const { handbook: own, state, ...rest } = profile;
+  const handbook = own || fallbackHandbook;
+  const conversion = handbookToPlan(handbook, recipes, pureLimits);
+  return {
+    ...rest,
+    kind: 'calculated',
+    plan: conversion.plan,
+    state: migrateHandbookState(state, handbook, conversion),
+  } as unknown as P;
 }

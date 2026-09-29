@@ -4,6 +4,7 @@ node_modules/
 public/icons/
 public/*.json
 recipes.json
+migrations/
 tests/fixtures/
 package-lock.json
 # Prose and CI config are edited by hand.
