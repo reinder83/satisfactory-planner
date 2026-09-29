@@ -90,7 +90,8 @@ export function machineCounts(machines: number, lastClock = 100): MachineCounts 
 // of the factories matching the search it keeps. The chosen value is `factoryFilter` in
 // session.ts, view state only and never saved, and keeps the values the handbook page's old
 // select used ('all', 'todo', 'done', 'local'); the calculated page adds 'held'. Local is a
-// handbook chip and Held back a calculated one, so a value the open page has no chip for (or
+// handbook chip, and a calculated one when a plan guide builds rows locally (#478); Held back is
+// a calculated one, so a value the open page has no chip for (or
 // any other) shows All, and is kept for when the other page is open again. Local and Held back
 // are subsets: a held-back row is ticked Running.
 export type StatusFilter = 'all' | 'todo' | 'done' | 'local' | 'held';
