@@ -765,3 +765,53 @@ test('a calculated step writes a fluid input or output in m³/min and a solid in
   const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
   assert.match(body(iron.id), /Inputs: Iron Ore [\d.,]+\/min\. Outputs: Iron Ingot [\d.,]+\/min\./);
 });
+
+// A plan with a guide (#393, #466; a migrated handbook profile once #395 writes one) shows the
+// guide's narrative steps for the phase instead of the generated ones, under their own check ids,
+// with names and bodies as text. A phase the guide leaves out has no generated steps either.
+test("a guided plan shows the guide's steps for the phase, under their own ids", async () => {
+  const guided = {
+    ...structuredClone(generated),
+    guide: {
+      phases: {
+        '3': [
+          { id: 'phase-3-survey', title: evil, body: evil },
+          {
+            id: 'phase-3-iron',
+            title: 'Build the first three iron halls',
+            body: 'Hall one first.',
+          },
+        ],
+        post: [{ id: 'phase-post-storage-first', title: 'Storage first', body: 'Then the rest.' }],
+      },
+    },
+  } as StoredCalculatedPlan;
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({ calculated: guided, phase: '3' });
+  go('plan');
+  render();
+  await nextTick();
+  noMarkup();
+  assert.deepEqual(steps(), ['phase-3-survey', 'phase-3-iron']);
+  assert.ok($('#main .checklist')!.textContent!.includes(evil), 'the title and body as text');
+  assert.equal(
+    planTasks().some(t => t.id.startsWith('calc-')),
+    false,
+    'no generated steps beside the guide',
+  );
+  // Ticking saves the guide's own id.
+  const box = $<HTMLInputElement>('#main [data-check="phase-3-survey"]')!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'phase-3-survey', value: true });
+  // Post-game reads the guide's post steps; a phase it leaves out (here 4) has none.
+  open({ calculated: guided, phase: 'post' });
+  render();
+  await nextTick();
+  assert.deepEqual(steps(), ['phase-post-storage-first']);
+  open({ calculated: guided, phase: '4' });
+  render();
+  await nextTick();
+  assert.deepEqual(steps(), []);
+});

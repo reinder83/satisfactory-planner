@@ -54,6 +54,9 @@ export const rowIcon = (r: CalcRow): string =>
 export function calcTasks(): PlanStepData[] {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
+  // A plan with a guide (#393, a migrated handbook profile) has the guide's steps for this phase
+  // instead, with their own check ids; a phase the guide leaves out has none (#466).
+  if (calculated.guide) return (calculated.guide.phases[phase()] ?? []).map(t => ({ ...t }));
   const p = calcStage(),
     g = progression(calculated, state, progressionData, phase());
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
