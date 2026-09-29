@@ -1,7 +1,7 @@
-// Item icons (#448): the list ItemIcon.vue draws from matches the icons bundled in public/icons/,
-// and the items a storage container can be named after that have no bundled icon are known, so a
-// new one is noticed. Those, and any other name without artwork, get ItemIcon's placeholder glyph
-// (tests/ui/storage.test.ts checks the drawing).
+// Item icons (#448, #455): the list ItemIcon.vue draws from matches the icons bundled in
+// public/icons/, and every item a storage container can be named after has one, with its source
+// recorded. A name without artwork, such as a container named after no item, gets ItemIcon's
+// placeholder glyph (tests/ui/storage.test.ts checks the drawing).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,25 +18,18 @@ test('the bundled icon list matches public/icons/', () => {
   assert.deepEqual([...BUNDLED_ICONS].sort(), files);
 });
 
-test('the container items without a bundled icon are the equipment and the coupon', () => {
-  const missing = catalog().containerItems.filter(n => !BUNDLED_ICONS.has(slug(n)));
-  assert.deepEqual(missing, [
-    'Blade Runners',
-    'Chainsaw',
-    'Factory Cart™',
-    'FICSIT Coupon',
-    'Gas Mask',
-    'Golden Factory Cart™',
-    'Hazmat Suit',
-    'Hoverpack',
-    'Jetpack',
-    'Nobelisk Detonator',
-    'Object Scanner',
-    'Parachute',
-    'Rebar Gun',
-    'Rifle',
-    'Xeno-Basher',
-    'Xeno-Zapper',
-    'Zipline',
-  ]);
+test('every container item has a bundled icon, with its wiki source (#455)', () => {
+  assert.deepEqual(
+    catalog().containerItems.filter(n => !BUNDLED_ICONS.has(slug(n))),
+    [],
+  );
+  const sources: Record<string, { file: string; url: string; source: string }> = JSON.parse(
+    fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url), 'utf8'),
+  );
+  const recorded = new Set(Object.values(sources).map(x => x.file));
+  for (const file of BUNDLED_ICONS) assert.ok(recorded.has(file + '.png'), file + ' has a source');
+  for (const [name, x] of Object.entries(sources)) {
+    assert.match(x.url, /^https:\/\/satisfactory\.wiki\.gg\/images\//, name);
+    assert.match(x.source, /^https:\/\/satisfactory\.wiki\.gg\/wiki\/File:/, name);
+  }
 });
