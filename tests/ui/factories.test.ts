@@ -723,7 +723,8 @@ test('a factory in a group’s build order moves focus into its dialog (#319)', 
   const opener = $<HTMLButtonElement>('[data-group-chain="fg-test01"]')!;
   opener.focus();
   opener.click();
-  assert.match($('#detail .eyebrow')!.textContent, /build order/);
+  // "build order" is joined by a no-break space, so a wrapping eyebrow keeps it whole (#460).
+  assert.match($('#detail .eyebrow')!.textContent, /^Factory group · build\u00a0order · /);
   // The group's name heads it and the body does not repeat it, so it may wrap on a phone (#435).
   assert.ok($('#detail .dialog-head')!.classList.contains('wrap-title'));
   follow($('#detail .chain-title [data-calc-factory]')!, 'calc-3-' + supplier.id);
@@ -2063,7 +2064,7 @@ test('a group build order stages suppliers before consumers', () => {
   render();
   assert.ok($('[data-group-chain="fg-test01"]'), 'the group offers its build order');
   openGroupChain('fg-test01');
-  assert.match($('#detail .eyebrow')!.textContent, /build order/);
+  assert.match($('#detail .eyebrow')!.textContent, /build\u00a0order/);
   const names = $$('#detail .chain-title .rail-link').map(b => b.textContent);
   assert.deepEqual(names, [supplier.name + ' ↗', consumer.name + ' ↗'], 'supplier first');
   assert.ok($('#detail .chain-title [data-calc-factory]'), 'stages link to their dialogs');
