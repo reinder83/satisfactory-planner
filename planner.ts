@@ -544,62 +544,71 @@ const NUCLEAR_PERIOD_MAX = 100;
 // item (mixed alternates or an amplified twin), or a period above NUCLEAR_PERIOD_MAX.
 type ChainRecipe = Pick<PoolRecipe, 'id' | 'inputs' | 'outputs'>;
 export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): number {
-  const uranium = pool.find(r => r.id === 'power-uranium');
+  const uranium = pool.find(recipe => recipe.id === 'power-uranium');
   if (!uranium) return 1;
   // The chain: every recipe that makes or uses a radioactive item the chain carries, starting
   // from the uranium plants' waste. The fuel feed (cells and rods) is upstream, so it stays out.
-  const radioactive = (n: string) => !!DATA.items[n]?.radioactive;
+  const radioactive = (item: string) => !!DATA.items[item]?.radioactive;
   const items = new Set(Object.keys(uranium.outputs).filter(radioactive));
   const chain: ChainRecipe[] = [];
   for (let grew = true; grew; ) {
     grew = false;
-    for (const r of pool)
+    for (const recipe of pool)
       if (
-        r !== uranium &&
-        !chain.includes(r) &&
-        [...Object.keys(r.inputs), ...Object.keys(r.outputs)].some(n => items.has(n))
+        recipe !== uranium &&
+        !chain.includes(recipe) &&
+        [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].some(item =>
+          items.has(item),
+        )
       ) {
-        chain.push(r);
-        Object.keys(r.outputs)
+        chain.push(recipe);
+        Object.keys(recipe.outputs)
           .filter(radioactive)
-          .forEach(n => items.add(n));
+          .forEach(item => items.add(item));
         grew = true;
       }
   }
   const names = [...items];
-  if (!chain.length || names.length !== chain.length || names.some(n => (demand[n] || 0) > 0))
+  if (!chain.length || names.length !== chain.length || names.some(item => (demand[item] || 0) > 0))
     return 1;
-  // One balance per chain item: the chain's net output plus the uranium plant's is zero.
-  const net = (r: ChainRecipe, n: string) => (r.outputs[n] || 0) - (r.inputs[n] || 0);
-  const m = names.map(n => [...chain.map(r => net(r, n)), -net(uranium, n)]);
+  // One balance per chain item: the chain's net output plus the uranium plant's is zero. Each row
+  // is one item: a coefficient per chain recipe, then the uranium plant's net as the right side.
+  const net = (recipe: ChainRecipe, item: string) =>
+    (recipe.outputs[item] || 0) - (recipe.inputs[item] || 0);
+  const matrix = names.map(item => [
+    ...chain.map(recipe => net(recipe, item)),
+    -net(uranium, item),
+  ]);
   // Gauss-Jordan elimination with partial pivoting. A singular system has no unique chain.
   const size = chain.length;
-  for (let c = 0; c < size; c++) {
-    let p = c;
-    for (let r = c + 1; r < size; r++) if (Math.abs(m[r]![c]!) > Math.abs(m[p]![c]!)) p = r;
-    if (Math.abs(m[p]![c]!) < 1e-9) return 1;
-    [m[c], m[p]] = [m[p]!, m[c]!];
-    const pivot = m[c]!;
-    for (let r = 0; r < size; r++) {
-      const row = m[r]!;
-      if (r === c || row[c] === 0) continue;
-      const f = row[c]! / pivot[c]!;
-      for (let k = c; k <= size; k++) row[k]! -= f * pivot[k]!;
+  for (let column = 0; column < size; column++) {
+    let pivotRow = column;
+    for (let row = column + 1; row < size; row++)
+      if (Math.abs(matrix[row]![column]!) > Math.abs(matrix[pivotRow]![column]!)) pivotRow = row;
+    if (Math.abs(matrix[pivotRow]![column]!) < 1e-9) return 1;
+    [matrix[column], matrix[pivotRow]] = [matrix[pivotRow]!, matrix[column]!];
+    const pivot = matrix[column]!;
+    for (let row = 0; row < size; row++) {
+      const current = matrix[row]!;
+      if (row === column || current[column] === 0) continue;
+      const factor = current[column]! / pivot[column]!;
+      for (let k = column; k <= size; k++) current[k]! -= factor * pivot[k]!;
     }
   }
-  const perPlant = m.map((row, c) => row[size]! / row[c]!);
+  const perPlant = matrix.map((row, column) => row[size]! / row[column]!);
   // The smallest denominator that makes each line's machines per plant whole.
   const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   let period = 1;
-  for (const x of perPlant) {
-    if (x < -1e-9) return 1;
-    let d = 1;
+  for (const machines of perPlant) {
+    if (machines < -1e-9) return 1;
+    let denominator = 1;
     while (
-      d <= NUCLEAR_PERIOD_MAX &&
-      Math.abs(x * d - Math.round(x * d)) > 1e-7 * Math.max(1, x * d)
+      denominator <= NUCLEAR_PERIOD_MAX &&
+      Math.abs(machines * denominator - Math.round(machines * denominator)) >
+        1e-7 * Math.max(1, machines * denominator)
     )
-      d++;
-    period = (period * d) / gcd(period, d);
+      denominator++;
+    period = (period * denominator) / gcd(period, denominator);
     if (period > NUCLEAR_PERIOD_MAX) return 1;
   }
   return period;
