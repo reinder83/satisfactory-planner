@@ -93,7 +93,7 @@ function checkGuide(g: unknown): PlanGuide {
   if (guide.storageTasks !== undefined) steps(guide.storageTasks);
   if (guide.completion !== undefined) {
     if (!Array.isArray(guide.completion)) bad();
-    for (const c of guide.completion as unknown as Record<string, unknown>[])
+    for (const c of guide.completion as unknown as Record<string, unknown>[]) {
       if (
         !record(c) ||
         ![c.id, c.name, c.recipe, c.machine].every(text) ||
@@ -102,6 +102,9 @@ function checkGuide(g: unknown): PlanGuide {
         !rates(c.byproducts)
       )
         bad();
+      // A module is ticked as completion-<id> (#468), so that key is held to the same rule (#477).
+      id('completion-' + c.id);
+    }
   }
   if (guide.power !== undefined) {
     const p = guide.power as unknown as Record<string, unknown>;

@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateTransfer } from '../public/transfer.ts';
 import { saveExport } from './types/fixtures.ts';
+import handbook from '../public/plan.json' with { type: 'json' };
 import type { PlanGuide, SaveExport } from '../public/types/index.ts';
 
 const guide: PlanGuide = {
@@ -77,6 +78,66 @@ test('a malformed plan guide is refused', () => {
       power: { checks: [{ id: 'power-x', label: 'l' }], blocks: [] },
     },
     { phases: {}, power: { checks: [{ id: 'power x', label: 'l' }], blocks: [] } },
+    // A completion module is ticked as completion-<id> (#477): the key rule, and unique.
+    {
+      phases: {},
+      completion: [
+        {
+          id: 'bad id',
+          name: 'n',
+          recipe: 'r',
+          machine: 'm',
+          output: 1,
+          machines: 1,
+          lastClock: 100,
+          inputs: {},
+          byproducts: {},
+        },
+      ],
+    },
+    {
+      phases: {},
+      completion: [
+        {
+          id: 'x'.repeat(150),
+          name: 'n',
+          recipe: 'r',
+          machine: 'm',
+          output: 1,
+          machines: 1,
+          lastClock: 100,
+          inputs: {},
+          byproducts: {},
+        },
+      ],
+    },
+    {
+      phases: {},
+      completion: [
+        {
+          id: 'dup',
+          name: 'n',
+          recipe: 'r',
+          machine: 'm',
+          output: 1,
+          machines: 1,
+          lastClock: 100,
+          inputs: {},
+          byproducts: {},
+        },
+        {
+          id: 'dup',
+          name: 'n',
+          recipe: 'r',
+          machine: 'm',
+          output: 1,
+          machines: 1,
+          lastClock: 100,
+          inputs: {},
+          byproducts: {},
+        },
+      ],
+    },
     // The parts later pages render are typed too.
     { phases: {}, completion: [{ id: 'c', name: 'n', recipe: 'r', machine: 'm', output: '1' }] },
     { phases: {}, factories: { 'iron-ingot': { site: 'moon' } } },
@@ -87,4 +148,14 @@ test('a malformed plan guide is refused', () => {
       /Invalid plan guide\./,
       JSON.stringify(bad),
     );
+});
+
+// The handbook's own completion ids pass, so the migration (#395) can carry them (#477).
+test("the handbook's completion modules pass as a guide's", () => {
+  const withCompletion = withGuide({ phases: {}, completion: handbook.completion });
+  assert.equal(
+    validateTransfer(withCompletion).saves[0]!.profiles[0]!.plan!.guide!.completion!.length,
+    handbook.completion.length,
+  );
+  assert.ok(handbook.completion.length > 0);
 });
