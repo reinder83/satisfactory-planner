@@ -192,6 +192,18 @@ const storable = (name: string) =>
   !DATA.items[name]?.fluid &&
   !DATA.items[name]?.radioactive &&
   (DATA.items[name]?.sink || 0) > 0;
+// What a storage container can be named after when one is added (#295): every item the game
+// has that is not a fluid, since a fluid does not go in a container, and not the two entries
+// of the recipe data that are not items at all. The Hard Drive is in no recipe, so the data
+// does not list it, but it is an item a container can hold.
+const CONTAINER_ITEMS = [
+  ...new Set([
+    ...Object.keys(DATA.items).filter(
+      n => !DATA.items[n]?.fluid && n !== 'Sink point' && n !== 'Power',
+    ),
+    'Hard Drive',
+  ]),
+].sort((a, b) => a.localeCompare(b));
 // Production you already run, entered as a rate. Matching an existing factory
 // against the plan's own rows does not work: your Modular Frame line is whatever
 // recipe and machine count you happened to build, not the one this solve picks.
@@ -1588,6 +1600,7 @@ export const catalog = (): Catalog => ({
   ]
     .filter(n => !RAW.includes(n) && !!DATA.items[n])
     .sort((a, b) => a.localeCompare(b)),
+  containerItems: CONTAINER_ITEMS,
   storageItems: Object.keys(DATA.items)
     .filter(storable)
     .map(name => ({

@@ -2378,6 +2378,23 @@ tr.muted td:first-child {
 .add-container input {
   font-size: 11.5px;
 }
+/* The add field is an item search (#295, ui/form/ItemSearch.vue): it stretches across the row
+   and to the button's height, as the plain field did, and its hint for a name that is not an
+   item goes on a line of its own. */
+.add-container {
+  flex-wrap: wrap;
+}
+.add-container .supply-field,
+.add-container .supply-field > label,
+.add-container .supply-input {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+.add-container .supply-hint {
+  flex-basis: 100%;
+}
 .bay-actions > span:last-child {
   display: flex;
   gap: 9px;

@@ -44,3 +44,29 @@ export const slug = (s: string): string =>
 
 export const plural = (n: number, word: string): string =>
   num(n) + ' ' + word + (n === 1 ? '' : 's');
+
+// The item searches (ui/form/ItemSearch.vue): up to `limit` of `items` for the typed text,
+// case-insensitive, names that start with it first, then names that merely contain it.
+export function itemMatches(items: readonly string[], query: unknown, limit = 8): string[] {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase();
+  if (!q) return [];
+  const starts: string[] = [],
+    contains: string[] = [];
+  for (const n of items) {
+    const l = n.toLowerCase();
+    if (l.startsWith(q)) starts.push(n);
+    else if (l.includes(q)) contains.push(n);
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+
+// The item of `items` the typed text names, ignoring case and surrounding spaces, spelled as
+// the list spells it; undefined when it names none.
+export function knownItem(items: readonly string[], typed: unknown): string | undefined {
+  const q = String(typed ?? '')
+    .trim()
+    .toLowerCase();
+  return q ? items.find(n => n.toLowerCase() === q) : undefined;
+}
