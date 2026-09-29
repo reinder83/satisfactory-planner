@@ -544,62 +544,73 @@ const NUCLEAR_PERIOD_MAX = 100;
 // item (mixed alternates or an amplified twin), or a period above NUCLEAR_PERIOD_MAX.
 type ChainRecipe = Pick<PoolRecipe, 'id' | 'inputs' | 'outputs'>;
 export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): number {
-  const uranium = pool.find(r => r.id === 'power-uranium');
+  const uranium = pool.find(recipe => recipe.id === 'power-uranium');
   if (!uranium) return 1;
   // The chain: every recipe that makes or uses a radioactive item the chain carries, starting
   // from the uranium plants' waste. The fuel feed (cells and rods) is upstream, so it stays out.
-  const radioactive = (n: string) => !!DATA.items[n]?.radioactive;
+  const radioactive = (item: string) => !!DATA.items[item]?.radioactive;
   const items = new Set(Object.keys(uranium.outputs).filter(radioactive));
   const chain: ChainRecipe[] = [];
   for (let grew = true; grew; ) {
     grew = false;
-    for (const r of pool)
+    for (const recipe of pool)
       if (
-        r !== uranium &&
-        !chain.includes(r) &&
-        [...Object.keys(r.inputs), ...Object.keys(r.outputs)].some(n => items.has(n))
+        recipe !== uranium &&
+        !chain.includes(recipe) &&
+        [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].some(item =>
+          items.has(item),
+        )
       ) {
-        chain.push(r);
-        Object.keys(r.outputs)
+        chain.push(recipe);
+        Object.keys(recipe.outputs)
           .filter(radioactive)
-          .forEach(n => items.add(n));
+          .forEach(item => items.add(item));
         grew = true;
       }
   }
   const names = [...items];
-  if (!chain.length || names.length !== chain.length || names.some(n => (demand[n] || 0) > 0))
+  if (!chain.length || names.length !== chain.length || names.some(item => (demand[item] || 0) > 0))
     return 1;
   // One balance per chain item: the chain's net output plus the uranium plant's is zero.
-  const net = (r: ChainRecipe, n: string) => (r.outputs[n] || 0) - (r.inputs[n] || 0);
-  const m = names.map(n => [...chain.map(r => net(r, n)), -net(uranium, n)]);
+  const net = (recipe: ChainRecipe, item: string) =>
+    (recipe.outputs[item] || 0) - (recipe.inputs[item] || 0);
+  // Each row is one item: its net output per machine of each chain line, then the uranium plant's
+  // waste on the right-hand side.
+  const matrix = names.map(item => [
+    ...chain.map(recipe => net(recipe, item)),
+    -net(uranium, item),
+  ]);
   // Gauss-Jordan elimination with partial pivoting. A singular system has no unique chain.
   const size = chain.length;
-  for (let c = 0; c < size; c++) {
-    let p = c;
-    for (let r = c + 1; r < size; r++) if (Math.abs(m[r]![c]!) > Math.abs(m[p]![c]!)) p = r;
-    if (Math.abs(m[p]![c]!) < 1e-9) return 1;
-    [m[c], m[p]] = [m[p]!, m[c]!];
-    const pivot = m[c]!;
-    for (let r = 0; r < size; r++) {
-      const row = m[r]!;
-      if (r === c || row[c] === 0) continue;
-      const f = row[c]! / pivot[c]!;
-      for (let k = c; k <= size; k++) row[k]! -= f * pivot[k]!;
+  for (let col = 0; col < size; col++) {
+    let best = col;
+    for (let row = col + 1; row < size; row++)
+      if (Math.abs(matrix[row]![col]!) > Math.abs(matrix[best]![col]!)) best = row;
+    if (Math.abs(matrix[best]![col]!) < 1e-9) return 1;
+    [matrix[col], matrix[best]] = [matrix[best]!, matrix[col]!];
+    const pivot = matrix[col]!;
+    for (let row = 0; row < size; row++) {
+      const line = matrix[row]!;
+      if (row === col || line[col] === 0) continue;
+      const factor = line[col]! / pivot[col]!;
+      for (let k = col; k <= size; k++) line[k]! -= factor * pivot[k]!;
     }
   }
-  const perPlant = m.map((row, c) => row[size]! / row[c]!);
+  // Machines of each chain line per uranium plant.
+  const perPlant = matrix.map((line, col) => line[size]! / line[col]!);
   // The smallest denominator that makes each line's machines per plant whole.
   const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   let period = 1;
-  for (const x of perPlant) {
-    if (x < -1e-9) return 1;
-    let d = 1;
+  for (const machines of perPlant) {
+    if (machines < -1e-9) return 1;
+    let denominator = 1;
+    const scaled = () => machines * denominator;
     while (
-      d <= NUCLEAR_PERIOD_MAX &&
-      Math.abs(x * d - Math.round(x * d)) > 1e-7 * Math.max(1, x * d)
+      denominator <= NUCLEAR_PERIOD_MAX &&
+      Math.abs(scaled() - Math.round(scaled())) > 1e-7 * Math.max(1, scaled())
     )
-      d++;
-    period = (period * d) / gcd(period, d);
+      denominator++;
+    period = (period * denominator) / gcd(period, denominator);
     if (period > NUCLEAR_PERIOD_MAX) return 1;
   }
   return period;
@@ -1418,7 +1429,7 @@ export function calculate(
       );
     if (dropped.length)
       warnings.push(
-        `Phase ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
+        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
       );
   }
   // Existing production: which credits some phase drew on, and phases that had to drop them.
@@ -1435,7 +1446,7 @@ export function calculate(
       );
     if (lost.length)
       warnings.push(
-        `Phase ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
+        `${lost.length > 1 ? 'Phases' : 'Phase'} ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
       );
   }
   // Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
@@ -1509,20 +1520,21 @@ export function calculate(
   if (s.wholeMachines) {
     const period = stages[5]?.nuclearPeriod;
     warnings.push(
-      'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.' +
-        (s.nuclear === 'none'
-          ? ''
-          : ' Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
-            (period
-              ? `. In Phase 5, which recycles the waste, they come in multiples of ${period}, so every line of the waste chain there, the plutonium and ficsonium plants included, also runs whole at 100%; the extra plants only add generation. Other nuclear fuel and waste lines balance exactly and can retain fractional clocks.`
-              : '. Their fuel and waste lines balance exactly and can retain fractional clocks.')),
+      'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
     );
+    if (s.nuclear !== 'none')
+      warnings.push(
+        'Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
+          (period
+            ? `. In Phase 5, which recycles the waste, they come in multiples of ${period}, so every line of the waste chain there, the plutonium and ficsonium plants included, also runs whole at 100%; the extra plants only add generation. Other nuclear fuel and waste lines balance exactly and can retain fractional clocks.`
+            : '. Their fuel and waste lines balance exactly and can retain fractional clocks.'),
+      );
     const fractional = Object.entries(stages)
       .filter(([, x]) => x.nuclearFractional)
       .map(([p]) => p);
     if (fractional.length)
       warnings.push(
-        `Phase ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
+        `${fractional.length > 1 ? 'Phases' : 'Phase'} ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
       );
   }
   warnings.push(
