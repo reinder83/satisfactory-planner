@@ -2,7 +2,8 @@
   #factories on a calculated profile: the rows of the current phase matching the search and the
   status chips (`factoryFilter`, FilterChips.vue, shared with the handbook page; Held back is this
   page's own chip, a row ticked Running that a missing supplier holds back), user groups first,
-  then the ungrouped rows. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
+  then a plan guide's shared sites (#468), then the ungrouped rows; Post Phase 5 adds a guide's
+  completion modules. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is.
@@ -17,6 +18,7 @@ import {
   factoryEditing,
   factoryFilter,
   loadContext,
+  phase,
   query,
   setQuery,
   setWorkspace,
@@ -25,10 +27,12 @@ import {
 import { render } from '../../shell.ts';
 import { heldBack } from '../../views/calculated.ts';
 import {
+  completionView,
   factoryGroupsState,
   filterEmptyText,
   groupJumps,
   membershipsOf,
+  siteEntry,
   statusFilter,
 } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
@@ -38,6 +42,7 @@ import { confirmAction } from '../confirm.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import { pickFactoryFilter } from '../actions.ts';
 import CalcFactoryCard from '../factories/CalcFactoryCard.vue';
+import CompletionModules from '../factories/CompletionModules.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditBar from '../factories/GroupEditBar.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
@@ -45,8 +50,16 @@ import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
 import JumpBar from '../factories/JumpBar.vue';
 import PageHeader from '../PageHeader.vue';
+import SiteSection from '../factories/SiteSection.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
+
+// What a plan guide's shared sites say under their heading (#468).
+const SITE_SUBS = {
+  oil: 'These outputs share one oil campus: build its machines together and balance them as one site.',
+  nuclear:
+    'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.',
+};
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
@@ -62,6 +75,24 @@ const page = computed(() =>
     const status = statusFilter(found, factoryFilter, running, [['held', r => !!heldBack(r.id)]]);
     const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
+    // A plan guide (#393, #468) places some ungrouped rows at a shared site, drawn together as the
+    // handbook drew its oil campus and nuclear site; the rest stay single cards.
+    const guide = calculated.guide;
+    const siteOf = (r: (typeof found)[number]) => guide?.factories?.[r.id]?.site ?? null;
+    const sites = (['oil', 'nuclear'] as const)
+      .map(kind =>
+        siteEntry(
+          kind,
+          SITE_SUBS[kind],
+          ungrouped.filter(r => siteOf(r) === kind),
+          found.filter(r => !membershipsOf(r.id).length && siteOf(r) === kind),
+          running,
+        ),
+      )
+      .filter(x => x !== null);
+    const singles = ungrouped.filter(r => !siteOf(r));
+    // Post Phase 5 adds a guide's completion modules, as the handbook page did.
+    const post = phase() === 'post' && !!guide?.completion?.length;
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
       gr => factoryEditing || rows.some(r => membershipsOf(r.id).some(m => m.group === gr.id)),
@@ -71,12 +102,19 @@ const page = computed(() =>
       query,
       chips: status.chips,
       active: status.active,
-      jumps: groupJumps(found, rows, r => r.id, running, factoryEditing),
+      // Groups first, then the shared sites, as the page draws them.
+      jumps: [
+        ...groupJumps(found, rows, r => r.id, running, factoryEditing),
+        ...sites.map(x => x.jump),
+      ],
       empty: filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
       rows,
-      ungrouped,
-      label: groupsShown && ungrouped.length > 0,
+      sites,
+      singles,
+      label: (groupsShown || sites.length > 0) && singles.length > 0,
+      post,
+      completion: post ? completionView(guide!.completion!, query) : [],
       // The profile has groups, so the Logistics page has something to show (#229).
       grouped: factoryGroupsState().groups.length > 0,
     };
@@ -166,9 +204,12 @@ async function roundUp(e: Event) {
     <GroupSections :items="page.rows" :key-of="r => r.id">
       <template #card="{ item, group }"><CalcFactoryCard :row="item" :group="group" /></template>
     </GroupSections>
+    <SiteSection v-for="x in page.sites" :key="x.kind" :site="x"
+      ><CalcFactoryCard v-for="r in x.members" :key="r.id" :row="r"
+    /></SiteSection>
     <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
     <div class="cards">
-      <CalcFactoryCard v-for="r in page.ungrouped" :key="r.id" :row="r" />
+      <CalcFactoryCard v-for="r in page.singles" :key="r.id" :row="r" />
       <div v-if="!page.rows.length" class="empty-state" data-filter-empty>
         {{ page.empty }}
         <button
@@ -181,6 +222,7 @@ async function roundUp(e: Event) {
         </button>
       </div>
     </div>
+    <CompletionModules v-if="page.post" :modules="page.completion" />
     <p v-if="page.grouped" class="small muted" data-logistics-link>
       What each group sends the others, and by which belt, pipe or vehicle, is on
       <a href="#logistics">Logistics</a>.

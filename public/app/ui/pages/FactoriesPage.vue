@@ -9,7 +9,6 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
 import {
   checked,
@@ -18,7 +17,6 @@ import {
   phase,
   plan,
   query,
-  sectionCollapsed,
   setQuery,
   stage,
 } from '../../session.ts';
@@ -27,22 +25,23 @@ import {
   factoryGroupsState,
   filterEmptyText,
   groupJumps,
-  jumpEntry,
+  completionView,
   membershipsOf,
+  siteEntry,
   statusFilter,
 } from '../../views/factories.ts';
-import { inputText } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
-import CollapseToggle from '../factories/CollapseToggle.vue';
+import CompletionModules from '../factories/CompletionModules.vue';
 import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditBar from '../factories/GroupEditBar.vue';
 import FactoryCard from '../factories/FactoryCard.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
+import SiteSection from '../factories/SiteSection.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
 import JumpBar from '../factories/JumpBar.vue';
 import PageHeader from '../PageHeader.vue';
-import { pickFactoryFilter, toggleCheck } from '../actions.ts';
+import { pickFactoryFilter } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
 
 // Which shared site a factory is drawn under; null means a card of its own.
@@ -68,32 +67,21 @@ const page = computed(() =>
     const status = statusFilter(found, factoryFilter, running, [['local', f => !!f.local]]);
     const list = status.list;
     const ungrouped = list.filter(f => !membershipsOf(f.id).length);
-    const site = (kind: 'oil' | 'nuclear', label: string, sub: string) => {
-      const members = ungrouped.filter(f => siteOf(f) === kind);
-      const key = 'site-' + kind;
-      // The jump bar counts what the search found at the site, whatever the chip keeps.
-      const atSite = found.filter(f => !membershipsOf(f.id).length && siteOf(f) === kind);
-      return members.length
-        ? {
-            kind,
-            key,
-            label,
-            sub,
-            members,
-            collapsed: sectionCollapsed(key),
-            jump: jumpEntry(key, label, atSite, running),
-          }
-        : null;
-    };
+    const site = (kind: 'oil' | 'nuclear', sub: string) =>
+      siteEntry(
+        kind,
+        sub,
+        ungrouped.filter(f => siteOf(f) === kind),
+        found.filter(f => !membershipsOf(f.id).length && siteOf(f) === kind),
+        running,
+      );
     const sites = [
       site(
         'oil',
-        'Oil campus',
         `One shared machine set produces these outputs together: ${num(p.oil.reduce((a, x) => a + x.machines, 0))} buildings · crude ${num(p.oilTotals.crude)}/min · water ${num(p.oilTotals.water)}/min. Open a card for the shared recipe table.`,
       ),
       site(
         'nuclear',
-        'Nuclear site',
         'Build and balance this radioactive chain as one site at the power plants. Process buffers stay here; the general storage surplus does not apply.',
       ),
     ].filter(s => s !== null);
@@ -118,22 +106,7 @@ const page = computed(() =>
       sites,
       singles,
       label: (groupsShown || sites.length > 0) && singles.length > 0,
-      completion:
-        phase() === 'post'
-          ? plan.completion
-              .filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
-              .map(r => ({
-                ...r,
-                check: 'completion-' + r.id,
-                done: checked('completion-' + r.id),
-                // The last machine is only named when it runs below 100%.
-                line:
-                  `${itemRate(r.name, r.output)} · ${num(r.machines)} ${r.machine}` +
-                  ((r.lastClock ?? 100) < 100 ? ` · last at ${num(r.lastClock)}%` : ''),
-                inputText: inputText(r.inputs),
-                byproducts: Object.keys(r.byproducts).length ? inputText(r.byproducts) : '',
-              }))
-          : [],
+      completion: phase() === 'post' ? completionView(plan.completion, query) : [],
     };
   }),
 );
@@ -175,26 +148,9 @@ function search(e: Event) {
     <GroupSections :items="page.list" :key-of="f => f.id">
       <template #card="{ item, group }"><FactoryCard :factory="item" :group="group" /></template>
     </GroupSections>
-    <section
-      v-for="s in page.sites"
-      :id="'section-' + s.key"
-      :key="s.kind"
-      :class="['site-group', s.collapsed ? 'collapsed' : '']"
-    >
-      <header class="site-head">
-        <div class="site-title">
-          <CollapseToggle :section-key="s.key" :label="'Outputs of ' + s.label" />
-          <div>
-            <span class="eyebrow">SHARED SITE · {{ s.members.length }} OUTPUTS</span>
-            <h2 tabindex="-1" data-section-heading>{{ s.label }}</h2>
-          </div>
-        </div>
-        <p class="small muted">{{ s.sub }}</p>
-      </header>
-      <div v-show="!s.collapsed" :id="'cards-' + s.key" class="cards">
-        <FactoryCard v-for="f in s.members" :key="f.id" :factory="f" />
-      </div>
-    </section>
+    <SiteSection v-for="s in page.sites" :key="s.kind" :site="s"
+      ><FactoryCard v-for="f in s.members" :key="f.id" :factory="f"
+    /></SiteSection>
     <p v-if="page.label" class="eyebrow">UNGROUPED FACTORIES</p>
     <div class="cards">
       <template v-if="page.singles.length"
@@ -212,29 +168,6 @@ function search(e: Event) {
         </button>
       </div>
     </div>
-    <section v-if="page.post" style="margin-top: 32px">
-      <h2>Additional completion modules</h2>
-      <div class="notice info">
-        These recipe inputs are additional to the main resource budget. Allocate their supply first.
-        Gathered feedstock and byproducts still need handling.
-      </div>
-      <div class="completion-grid">
-        <article v-for="r in page.completion" :key="r.id" class="completion-item">
-          <label class="check-row"
-            ><input
-              type="checkbox"
-              :data-check="r.check"
-              @change="toggleCheck"
-              :checked="r.done"
-            /><strong>{{ r.name }}</strong></label
-          >
-          <p>{{ r.line }}<br />{{ r.recipe }}</p>
-          <p>
-            <b>Inputs:</b> {{ r.inputText
-            }}<template v-if="r.byproducts"><br /><b>Byproducts:</b> {{ r.byproducts }}</template>
-          </p>
-        </article>
-      </div>
-    </section>
+    <CompletionModules v-if="page.post" :modules="page.completion" />
   </template>
 </template>

@@ -15,7 +15,7 @@
 import { computed } from 'vue';
 import { itemRate, rateOfItem, rateUnit } from '../../flow.ts';
 import { num } from '../../format.ts';
-import { checked, factoryEditing, stage } from '../../session.ts';
+import { calculated, checked, factoryEditing, stage } from '../../session.ts';
 import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
 import { power, powerParts } from '../../wizard/fields.ts';
@@ -52,6 +52,8 @@ const card = computed(() =>
     return {
       check,
       done: checked(check),
+      // Built at the site that uses it, as a plan guide says (#468).
+      local: !!calculated?.guide?.factories?.[r.id]?.local,
       // A generator shows its building, not its waste (#350).
       icon: rowIcon(r),
       // A generator's power, even when it also makes waste (#371), else the main output; a fluid
@@ -105,6 +107,7 @@ const card = computed(() =>
           <span aria-hidden="true">⚡︎</span> Generates power for the grid
         </div>
       </div>
+      <span v-if="card.local" class="badge" data-local>Local</span>
     </div>
     <div v-if="card.outputs.length" class="recipe">
       <template v-for="(o, i) in card.outputs" :key="i"><br v-if="i" />{{ o }}</template>
