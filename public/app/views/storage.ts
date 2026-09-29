@@ -230,7 +230,7 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   const e = storageEdits(),
     cleared = new Set(e.clearedSlots);
   const selected =
-    calculated && !calculated.engine.startsWith('handbook-')
+    calculated && !calculated.engine?.startsWith('handbook-')
       ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
       : null;
   const keepCollectables = calculated

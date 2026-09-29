@@ -132,7 +132,7 @@ const page = computed(() =>
       // A profile migrated from the handbook (engine 'handbook-…', #487) shows neither: its room
       // is the one built, not a template, and the built-room notice is dropped (decision 3B).
       notice:
-        floor !== 'ground' || calculated?.engine.startsWith('handbook-')
+        floor !== 'ground' || calculated?.engine?.startsWith('handbook-')
           ? ''
           : currentProfile.kind !== 'original'
             ? 'template'

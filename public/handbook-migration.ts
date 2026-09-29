@@ -321,8 +321,9 @@ export function handbookToPlan(
 // handbookOrigin.unmapped (#485); nothing is dropped:
 //   check factory-<stage>-<factory id>   → calc-<stage>-<row id>; unplaceable → unmapped
 //   note factory-<factory id>            → factory-<row id> for each row the factory became;
-//                                          unplaceable or clashing → unmapped
-//   factory-group assignment <factory id> → each row the factory became; unplaceable → unmapped
+//                                          an unknown id, unplaceable or clashing → unmapped
+//   factory-group assignment <factory id> → each row the factory became; an unknown id or
+//                                          unplaceable → unmapped
 //   step link to a factory id            → that factory's row in the step's phase; a link it
 //                                          cannot place stays as it is
 //   deliveries                           → ids unchanged; the handbook's own count written
@@ -363,10 +364,13 @@ export function migrateHandbookState(
   const notes: Record<string, string> = {};
   const factoryNotes: [string, string][] = [];
   const known = new Set(handbook.factories.map(f => f.id));
+  // In a handbook state every factory-<id> note names a handbook factory; one this handbook
+  // no longer has (an id renamed or removed between releases) is kept for review (#493 review).
   for (const [k, v] of Object.entries(s.notes)) {
     const fid = k.startsWith('factory-') ? k.slice('factory-'.length) : '';
-    if (fid && known.has(fid)) factoryNotes.push([fid, v]);
-    else notes[k] = v;
+    if (!fid) notes[k] = v;
+    else if (known.has(fid)) factoryNotes.push([fid, v]);
+    else unmapped.notes[k] = v;
   }
   for (const [fid, v] of factoryNotes) {
     const targets = rowsOf(fid);
@@ -380,9 +384,11 @@ export function migrateHandbookState(
   }
   const assignments: typeof s.factoryGroups.assignments = {};
   const assign: [string, (typeof assignments)[string]][] = [];
+  // Every assignment key of a handbook state is a factory id; one for no factory of this handbook
+  // would name no row of the plan, and a Recalculate would drop it, so it is kept for review.
   for (const [k, list] of Object.entries(s.factoryGroups.assignments))
     if (known.has(k)) assign.push([k, list]);
-    else assignments[k] = list;
+    else unmapped.assignments[k] = list;
   for (const [fid, list] of assign) {
     const targets = rowsOf(fid);
     if (!targets.length || targets.some(row => row in assignments)) {

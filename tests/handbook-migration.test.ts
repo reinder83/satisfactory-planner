@@ -17,7 +17,7 @@ import {
 } from '../public/handbook-migration.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import { saveExport, states, version11 } from './types/fixtures.ts';
-import { validateState } from '../public/state.ts';
+import { newProfileState, validateState } from '../public/state.ts';
 import type { Handbook, Recipe, SavedState, StoredCalculatedPlan } from '../public/types/index.ts';
 
 const handbook = handbookJson as unknown as Handbook;
@@ -230,23 +230,25 @@ test('migrateHandbookState moves each record to its new key, or keeps it unmappe
   assert.equal(m.checks['phase-3-survey'], true);
   assert.equal(m.checks['slot-A01-built'], true);
   for (const [k, v] of Object.entries(handbook.knownChecks)) assert.equal(m.checks[k], v);
-  // The factory note follows every row it became; an unknown factory's stays as it is: only
-  // the handbook's own factory ids are re-keyed.
+  // The factory note follows every row it became; one for a factory this handbook no longer
+  // has is kept for review (#493 review).
   for (const row of new Set([rowOf('3', mapped.id), rowOf('5', mapped.id)]))
     assert.equal(m.notes['factory-' + row], 'Build it by the lake');
-  assert.equal(m.notes['factory-no-such-factory'], 'An old note');
+  assert.equal('factory-no-such-factory' in m.notes, false);
+  assert.deepEqual(m.handbookOrigin!.unmapped.notes, { 'factory-no-such-factory': 'An old note' });
   assert.equal(m.notes['slot-A01'], 'Top shelf');
   // Deliveries keep their ids; the handbook's recorded count is written where none is saved.
   assert.equal(m.deliveries['3-modular-engine'], 12);
   for (const d of handbook.deliveries.filter(d => d.initial > 0 && d.id !== '3-modular-engine'))
     assert.equal(m.deliveries[d.id], d.initial);
-  // Group assignments follow the rows; one for no factory of the handbook stays as it is.
+  // Group assignments follow the rows; one for no factory of the handbook is kept for review.
   assert.deepEqual(m.factoryGroups.assignments[rowOf('3', mapped.id)!], [
     { group: 'fg-plates1', rate: null },
   ]);
-  assert.deepEqual(m.factoryGroups.assignments['no-such-factory'], [
-    { group: 'fg-plates1', rate: 5 },
-  ]);
+  assert.equal('no-such-factory' in m.factoryGroups.assignments, false);
+  assert.deepEqual(m.handbookOrigin!.unmapped.assignments, {
+    'no-such-factory': [{ group: 'fg-plates1', rate: 5 }],
+  });
   // A step link names its phase's row.
   assert.equal(m.taskEdits.links['phase-5-survey'], rowOf('5', mapped.id));
   // Task edits, custom tasks and the storage layout are untouched.
@@ -297,4 +299,16 @@ test('no record disappears, for every state version and the handbook state', () 
     assert.deepEqual(m.customTasks, before.customTasks);
     assert.equal(m.settings.phase, before.settings.phase);
   }
+});
+
+// What the migration kept for review survives a Recalculate of the migrated profile (#489), so
+// an unknown factory's note and assignment are never lost (#493 review).
+test("an unknown factory's note and assignment survive a Recalculate of the migrated profile", () => {
+  const m = migrateHandbookState(handbookState(), handbook, conversion);
+  const { state } = newProfileState(conversion.plan, m, conversion.plan, undefined, undefined);
+  assert.deepEqual(state.handbookOrigin, m.handbookOrigin);
+  assert.equal(state.handbookOrigin!.unmapped.notes['factory-no-such-factory'], 'An old note');
+  assert.deepEqual(state.handbookOrigin!.unmapped.assignments['no-such-factory'], [
+    { group: 'fg-plates1', rate: 5 },
+  ]);
 });
