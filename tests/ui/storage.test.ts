@@ -117,6 +117,26 @@ test('the handbook room shows its printed bays, notice and checklist', () => {
   );
 });
 
+// The shown floor's tab is the pressed one, the others not, and switching floors moves it (#348).
+test('the floor tabs tell a screen reader which floor is shown', async () => {
+  render();
+  const pressed = () =>
+    $$('#main .tabs [data-floor]').map(x => [x.dataset.floor, x.getAttribute('aria-pressed')]);
+  assert.deepEqual(pressed(), [
+    ['ground', 'true'],
+    ['upper', 'false'],
+    ['workshop', 'false'],
+  ]);
+  $<HTMLButtonElement>('#main .tabs [data-floor="upper"]')!.click();
+  await nextTick();
+  assert.equal(floor, 'upper');
+  assert.deepEqual(pressed(), [
+    ['ground', 'false'],
+    ['upper', 'true'],
+    ['workshop', 'false'],
+  ]);
+});
+
 // The upper floor had a fixed note on where its bays sit and what they hold (#436). It described
 // one layout, not the one drawn, so it is gone: the floor's bays say what they hold themselves.
 test('the upper floor draws no fixed layout notice', () => {
