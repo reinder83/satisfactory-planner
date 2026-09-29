@@ -126,14 +126,7 @@ const page = computed(() =>
       // The floor's notice. The ground-floor instructions describe the owner's built room,
       // so only original (handbook) profiles get them, copies included: a duplicated or
       // imported one has a new id but keeps its kind and the built ground floor.
-      notice:
-        floor === 'ground'
-          ? currentProfile.kind !== 'original'
-            ? 'template'
-            : 'built'
-          : floor === 'upper'
-            ? 'upper'
-            : '',
+      notice: floor === 'ground' ? (currentProfile.kind !== 'original' ? 'template' : 'built') : '',
       // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
       movedOff: storageBays()
         .filter(
@@ -457,10 +450,6 @@ function toggleLayout() {
         {{ page.movedOff.length === 1 ? 'it' : 'them' }} here.</span
       ></template
     >
-  </div>
-  <div v-else-if="page.notice === 'upper'" class="notice info">
-    Q sits behind O; R sits behind P. Packaged fluids only. Nuclear items and unpackaged fluids stay
-    outside this room.
   </div>
   <p v-if="page.query && page.matches" class="small muted">
     Filtered view: showing this floor's bays with a match only. Clear search to see the full floor
