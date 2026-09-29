@@ -2,8 +2,10 @@
   #storage on both profile kinds: floor tabs and the search, the layout editor, the workshop
   (on its floor), the bay grid and the storage build checklist. The search looks on every floor
   (#240): its results above the grid lead to each container, and it narrows the floor shown to
-  the bays with a match. The checklist is the handbook's storageTasks, or for a calculated
-  profile one step with the saved key `calc-storage-layout`. When the remembered floor no longer
+  the bays with a match. The checklist is the handbook's storageTasks; for a calculated profile
+  the plan guide's storage tasks under their own ids (#467), or else one step with the saved key
+  `calc-storage-layout`. A guided profile gets no ground-floor-built notice and no ground-floor
+  moves (decision 3B on #387): those need an original profile. When the remembered floor no longer
   exists (a removed floor), the page switches to the first one.
 -->
 <script setup lang="ts">
@@ -163,7 +165,7 @@ const page = computed(() =>
       // Every bay on the floor in its current order, search or not, for Move left / right.
       order: order ?? floorBays.map(b => b.id).sort((a, b) => a.localeCompare(b)),
       aisles: Math.floor(placed.length / 2),
-      tasks: calculated ? CALCULATED_TASKS : plan.storageTasks,
+      tasks: calculated ? (calculated.guide?.storageTasks ?? CALCULATED_TASKS) : plan.storageTasks,
       calculated: !!calculated,
     };
   }),
