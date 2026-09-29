@@ -409,3 +409,11 @@ test('a save name wraps between words on a phone, above its button (#452)', () =
   const button = rules(css).find(r => r.selector === '.save-panel .section-head > .btn')!;
   assert.deepEqual(decls(button.body, 'min-height'), ['44px']);
 });
+
+// A name with no bundled icon gets an empty dashed square in the line colour (#463).
+test('the missing-icon placeholder is a dashed square in the line colour (#463)', () => {
+  const r = rules(screenCss()).find(x => x.selector === '.item-icon-missing')!;
+  assert.deepEqual(decls(r.body, 'stroke'), ['var(--line)']);
+  assert.equal(decls(r.body, 'stroke-dasharray').length, 1);
+  assert.deepEqual(decls(r.body, 'fill'), ['none']);
+});
