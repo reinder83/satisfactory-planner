@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { calculate } from '../planner.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
-import { saveExport } from './types/fixtures.ts';
+import { saveExport, version12 } from './types/fixtures.ts';
 import type { BrowserWorkspace, Catalog, PlanGuide, SaveExport } from '../public/types/index.ts';
 
 const settings = { phase: '3' };
@@ -114,3 +114,99 @@ test('the Pages edition carries a plan guide to a recalculated and a rounded-up 
   assert.deepEqual(byName['Recalculated'], expected);
   assert.deepEqual(byName['Guided · whole machines'], expected);
 });
+
+// A profile carried from a migrated one keeps handbookOrigin, the record of what the migration
+// could not place (#489), whatever the carry picks; one carried from any other profile is as
+// before. Both editions, through Recalculate (POST /api/profiles with carryFrom).
+const migrated = (withOrigin: boolean): SaveExport => {
+  const x = exported();
+  const state = structuredClone(version12) as unknown as Record<string, unknown>;
+  if (!withOrigin) {
+    delete state.handbookOrigin;
+    state.version = 11;
+  }
+  x.saves[0]!.profiles[0]!.state = state as never;
+  return x;
+};
+for (const edition of ['Docker', 'Pages'] as const)
+  test(`the ${edition} edition carries handbookOrigin to a recalculated profile`, async () => {
+    const run = edition === 'Docker' ? dockerRoutes : pagesRoutes;
+    for (const withOrigin of [true, false]) {
+      const { post, profiles, close } = await run();
+      try {
+        const ws = await post('/api/import-saves', migrated(withOrigin));
+        const save = ws.saves.find((x: { name: string }) => x.name === 'Guided');
+        const source = save.profiles[0].id;
+        const h = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
+        // No carry picks at all: the origin still comes along.
+        await post(
+          '/api/profiles',
+          { saveId: save.id, name: 'Recalculated', settings, carryFrom: source, carry: [] },
+          h,
+        );
+        const state = (await profiles(save.id))['Recalculated']!;
+        if (withOrigin) {
+          assert.equal(state.version, 12);
+          assert.deepEqual(state.handbookOrigin, version12.handbookOrigin);
+        } else assert.equal('handbookOrigin' in state, false);
+      } finally {
+        await close();
+      }
+    }
+  });
+
+type Routes = {
+  post: Post;
+  profiles: (
+    saveId: string,
+  ) => Promise<Record<string, { version: number; handbookOrigin?: unknown }>>;
+  close: () => Promise<unknown>;
+};
+async function dockerRoutes(): Promise<Routes> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-origin-carry-'));
+  const server = await createApp({ dataDir: dir, password: '' });
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+  return {
+    post: async (route, body, headers = {}) => {
+      const r = await fetch(url + route, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
+        body: JSON.stringify(body),
+      });
+      assert.ok(r.ok, route + ': ' + (await r.clone().text()));
+      return r.json();
+    },
+    profiles: async saveId => {
+      const all = await (await fetch(url + '/api/export-saves')).json();
+      return Object.fromEntries(
+        all.saves
+          .find((x: { id: string }) => x.id === saveId)
+          .profiles.map((p: { name: string; state: unknown }) => [p.name, p.state]),
+      );
+    },
+    close: () => new Promise(r => server.close(r)),
+  };
+}
+async function pagesRoutes(): Promise<Routes> {
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
+  const store = {
+    async transaction<T>(change?: (d: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  const api = createBrowserApi(store, calculate, {} as Catalog);
+  return {
+    post: (route, body, headers = {}) =>
+      api(route, { body: JSON.stringify(body), headers }) as Promise<any>,
+    profiles: async saveId =>
+      Object.fromEntries(
+        data.saves.find(x => x.id === saveId)!.profiles.map(p => [p.name, p.state as never]),
+      ),
+    close: async () => undefined,
+  };
+}

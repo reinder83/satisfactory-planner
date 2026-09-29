@@ -507,6 +507,10 @@ export function newProfileState(
       if (grown) reviewCount++;
     }
   }
+  // What a handbook migration could not place is kept for review and never deleted (#485), so a
+  // profile carried from a migrated one takes it along unchanged, whatever the picks (#489).
+  const origin = validateOrigin(source.handbookOrigin);
+  if (origin) state.handbookOrigin = origin;
   const clean = validateState(state);
   return { state: clean, reviewCount, carried: Object.values(clean.checks).filter(Boolean).length };
 }
