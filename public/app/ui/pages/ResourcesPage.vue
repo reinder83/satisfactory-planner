@@ -17,19 +17,7 @@ import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import StatTile from '../StatTile.vue';
 import { toggleCheck } from '../actions.ts';
-
-// The handbook's power commissioning steps: saved check key, label.
-const POWER_STEPS: [id: string, title: string][] = [
-  ['power-retained', 'Retained turbofuel: 44.425 GW'],
-  ['power-rocket-1', 'Rocket-fuel block 1: +72 GW'],
-  ['power-rocket-2', 'Rocket-fuel block 2: +72 GW'],
-  ['power-u4', 'Phase 4 uranium: +125 GW'],
-  ...Array.from({ length: 4 }, (_, i): [string, string] => [
-    'power-rocket-' + (i + 3),
-    'Rocket-fuel block ' + (i + 3) + ': +72 GW',
-  ]),
-  ['power-nuclear-final', 'Complete nuclear fleet: 437.5 GW total'],
-];
+import { POWER_CHECKS } from '../../../handbook-migration.ts';
 
 // null for a stage the handbook has no plan for (Phase 1 or 2, which only a calculated profile
 // can be at): until render() swaps this page out, it draws nothing rather than throwing (#354).
@@ -67,7 +55,7 @@ const page = computed(() =>
             bar: u?.bar ?? 0,
           };
         }),
-      steps: POWER_STEPS.map(([id, title]) => ({ id, title, done: checked(id) })),
+      steps: POWER_CHECKS.map(({ id, label }) => ({ id, title: label, done: checked(id) })),
     };
   }),
 );
