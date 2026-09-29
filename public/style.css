@@ -3556,9 +3556,7 @@ button.rail-tile:hover {
   background: var(--accent);
 }
 /* A save or profile name renamed in place (SP-31, ui/InlineName.vue): the heading with its ✎
-   button, or the input with Save and Cancel. A long name wraps between words rather than
-   overflowing; only a word wider than the line breaks inside (break-word, not anywhere, which
-   let a squeezed heading split "Satisfactory", #452). */
+   button, or the input with Save and Cancel. A long name wraps rather than overflowing. */
 .inline-name {
   display: flex;
   align-items: center;
@@ -3569,7 +3567,7 @@ button.rail-tile:hover {
 .inline-name > h2,
 .inline-name > h3 {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .btn.inline-name-edit {
   flex: none;
@@ -3602,6 +3600,12 @@ button.rail-tile:hover {
      profile the row under it, so the name is not squeezed beside the button (#452). */
   .save-panel .section-head > .inline-name {
     flex-basis: 100%;
+  }
+  /* With that row to itself the save's name wraps between words: break-word breaks inside a word
+     only when the word is wider than the line. Profile names keep anywhere, since in a card
+     break-word would hold a long unbroken name at its full width and push the page sideways. */
+  .save-panel .section-head > .inline-name > h2 {
+    overflow-wrap: break-word;
   }
   .save-panel .section-head > .btn {
     min-height: 44px;
