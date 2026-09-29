@@ -789,6 +789,51 @@ test('a calculated profile shows only the items it stores, and its one checklist
   );
 });
 
+// A plan with a guide (#393, #467; a migrated handbook profile) lists the guide's storage tasks
+// under their own ids instead of the one calculated step, as text, and has no ground-floor-built
+// notice or ground-floor moves (decision 3B on #387): `storage-filter-moves` is a plain task.
+test("a guided plan's storage checklist is the guide's tasks, with no ground-floor moves", async () => {
+  const plan = generated();
+  const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
+  open({
+    calculated: {
+      ...plan,
+      guide: {
+        phases: {},
+        storageTasks: [
+          { id: 'storage-ground-shell', title: evil, body: evil },
+          { id: 'storage-filter-moves', title: 'Put the filters together', body: 'G08 → H02.' },
+        ],
+      },
+    },
+  });
+  render();
+  noMarkup();
+  assert.deepEqual(
+    $$('#main section:last-child [data-check]').map(b => b.dataset.check),
+    ['storage-ground-shell', 'storage-filter-moves'],
+  );
+  assert.ok(
+    $('#main [data-check="storage-ground-shell"]')!.closest('.task')!.textContent!.includes(evil),
+    'the title and body as text',
+  );
+  assert.equal($('[data-ground-floor]'), null, 'no ground-floor-built notice');
+  assert.equal($('[data-ground-moves]'), null, 'no ground-floor moves');
+  const box = $<HTMLInputElement>('#main [data-check="storage-filter-moves"]')!;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'storage-filter-moves', value: true });
+  // A guide without storage tasks keeps the calculated step.
+  open({ calculated: { ...plan, guide: { phases: {} } } });
+  render();
+  await nextTick();
+  assert.deepEqual(
+    $$('#main section:last-child [data-check]').map(b => b.dataset.check),
+    ['calc-storage-layout'],
+  );
+});
+
 test('the container dialog shows its place, checks, factory link and note', async () => {
   open({ state: { notes: { 'slot-A02': evil }, checks: { 'slot-A02-built': true } } });
   render();
