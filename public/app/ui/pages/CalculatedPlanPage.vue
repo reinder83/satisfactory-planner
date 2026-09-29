@@ -53,6 +53,8 @@ const page = computed(() =>
       title: phaseLabel(phase()),
       profileName: currentProfile.name,
       post: phase() === 'post',
+      // A plan guide's steps replace the generated ones (#466).
+      guided: !!calculated.guide,
       summary: [
         {
           key: 'factories',
@@ -100,7 +102,12 @@ const page = computed(() =>
           <EditStepsToggle />
         </div>
         <PlanProgress />
-        <p class="small muted">
+        <!-- A guided plan's steps are the guide's own (#466), not the startup, unlock and factory
+             steps this describes (#479). -->
+        <p v-if="page.guided" class="small muted" data-guided-intro>
+          Work through the steps in order and tick each one as it is done.
+        </p>
+        <p v-else class="small muted">
           Start with construction stock and currently available power. Mark HUB, MAM and recipe
           unlocks as you complete them; these carry across phases. Milestone cost guidance updates
           from factories marked running. Full-phase factory targets follow the startup and unlock
