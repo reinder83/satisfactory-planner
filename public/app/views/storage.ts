@@ -224,12 +224,15 @@ export function storageMatches(q: string): StorageMatch[] {
 // Handbook bays in `planOnly` show just the plan's items, without the user's container edits.
 function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   // `selected` is null for the original handbook; for a calculated profile it is every
-  // item any phase stores, so unselected handbook positions show as reserved.
+  // item any phase stores, so unselected handbook positions show as reserved. A plan
+  // transcribed from the handbook (engine 'handbook-…', #486) keeps the whole printed room, as
+  // the handbook profile it was migrated from showed it (#487).
   const e = storageEdits(),
     cleared = new Set(e.clearedSlots);
-  const selected = calculated
-    ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
-    : null;
+  const selected =
+    calculated && !calculated.engine?.startsWith('handbook-')
+      ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
+      : null;
   const keepCollectables = calculated
     ? (calculated.settings.collectables ?? calculated.settings.storage === 'all')
     : true;

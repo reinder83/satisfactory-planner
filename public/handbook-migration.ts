@@ -8,16 +8,20 @@
 // It is generic: a handbook an older release exported may have other factory ids or a recipe
 // this recipes.json no longer has. Such a factory is left out and reported in `skipped`, never
 // guessed; the state migration (#487) keeps its progress in handbookOrigin.unmapped.
+import { validateState } from './state.ts';
 import type {
   CalcRow,
   GuideStep,
   Handbook,
   HandbookFactory,
   HandbookFactoryStage,
+  HandbookOrigin,
   ItemRates,
   OilLine,
   PlanGuide,
+  ProgressState,
   Recipe,
+  SavedState,
   StageKey,
   StoredCalculatedPlan,
   StoredSettings,
@@ -310,4 +314,109 @@ export function handbookToPlan(
     rows,
     skipped,
   };
+}
+
+// A handbook profile's progress re-keyed for the plan handbookToPlan made of the same handbook
+// (#487, part 3c of #394). Every record is kept, moved to its new key, or kept for review in
+// handbookOrigin.unmapped (#485); nothing is dropped:
+//   check factory-<stage>-<factory id>   → calc-<stage>-<row id>; unplaceable → unmapped
+//   note factory-<factory id>            → factory-<row id> for each row the factory became;
+//                                          an unknown id, unplaceable or clashing → unmapped
+//   factory-group assignment <factory id> → each row the factory became; an unknown id or
+//                                          unplaceable → unmapped
+//   step link to a factory id            → that factory's row in the step's phase; a link it
+//                                          cannot place stays as it is
+//   deliveries                           → ids unchanged; the handbook's own count written
+//                                          where none is saved, as its page counted from
+//   the handbook's knownChecks           → written where none is saved, as its page counted
+//   everything else (other checks and notes, task edits, custom tasks, slot-* records,
+//   storageEdits, the phase) unchanged.
+// The Plastic and Rubber campus ticks are not guessed (decision 6B): the conversion skipped
+// them, so they land in unmapped. A state that already carries handbookOrigin is returned as it
+// is, so migrating twice equals migrating once.
+export function migrateHandbookState(
+  state: SavedState,
+  handbook: Handbook,
+  conversion: HandbookConversion,
+): ProgressState {
+  const s = validateState(structuredClone(state));
+  if (s.handbookOrigin) return s;
+  const rows = conversion.rows;
+  // Every row a factory became, in stage order, without repeats.
+  const rowsOf = (fid: string) => [
+    ...new Set(['3', '4', '5'].map(st => rows[st]?.[fid]).filter((x): x is string => !!x)),
+  ];
+  const unmapped: HandbookOrigin['unmapped'] = { checks: {}, notes: {}, assignments: {} };
+  const checks: Record<string, boolean> = {};
+  const moved: [string, boolean][] = [];
+  for (const [k, v] of Object.entries(s.checks)) {
+    const m = /^factory-([345])-(.+)$/.exec(k);
+    if (!m) checks[k] = v;
+    else if (rows[m[1]!]?.[m[2]!]) moved.push([`calc-${m[1]}-${rows[m[1]!]![m[2]!]}`, v]);
+    else unmapped.checks[k] = v;
+  }
+  // A moved tick never overwrites a check the state already holds under that key.
+  for (const [k, v] of moved)
+    if (k in checks) unmapped.checks[k.replace(/^calc-/, 'moved-calc-')] = v;
+    else checks[k] = v;
+  for (const [k, v] of Object.entries(handbook.knownChecks || {}))
+    if (!(k in checks)) checks[k] = v;
+  const notes: Record<string, string> = {};
+  const factoryNotes: [string, string][] = [];
+  const known = new Set(handbook.factories.map(f => f.id));
+  // In a handbook state every factory-<id> note names a handbook factory; one this handbook
+  // no longer has (an id renamed or removed between releases) is kept for review (#493 review).
+  for (const [k, v] of Object.entries(s.notes)) {
+    const fid = k.startsWith('factory-') ? k.slice('factory-'.length) : '';
+    if (!fid) notes[k] = v;
+    else if (known.has(fid)) factoryNotes.push([fid, v]);
+    else unmapped.notes[k] = v;
+  }
+  for (const [fid, v] of factoryNotes) {
+    const targets = rowsOf(fid);
+    let clash = !targets.length;
+    for (const row of targets) {
+      const key = 'factory-' + row;
+      if (key in notes && notes[key] !== v) clash = true;
+      else notes[key] = v;
+    }
+    if (clash) unmapped.notes['factory-' + fid] = v;
+  }
+  const assignments: typeof s.factoryGroups.assignments = {};
+  const assign: [string, (typeof assignments)[string]][] = [];
+  // Every assignment key of a handbook state is a factory id; one for no factory of this handbook
+  // would name no row of the plan, and a Recalculate would drop it, so it is kept for review.
+  for (const [k, list] of Object.entries(s.factoryGroups.assignments))
+    if (known.has(k)) assign.push([k, list]);
+    else unmapped.assignments[k] = list;
+  for (const [fid, list] of assign) {
+    const targets = rowsOf(fid);
+    if (!targets.length || targets.some(row => row in assignments)) {
+      unmapped.assignments[fid] = list;
+      continue;
+    }
+    for (const row of targets) assignments[row] = structuredClone(list);
+  }
+  // A saved step link names a handbook factory; it becomes that factory's row in the step's
+  // phase (Post Phase 5 uses Phase 5's), or its first row when the step has no phase.
+  const phaseOf = (step: string) =>
+    /^phase-([345]|post)-/.exec(step)?.[1] ?? s.customTasks.find(t => t.id === step)?.phase;
+  const links: Record<string, string> = {};
+  for (const [step, fid] of Object.entries(s.taskEdits.links)) {
+    const ph = phaseOf(step);
+    const st = ph === 'post' ? '5' : ph;
+    links[step] = (st && rows[st]?.[fid]) || rowsOf(fid)[0] || fid;
+  }
+  const deliveries = { ...s.deliveries };
+  for (const d of handbook.deliveries)
+    if (deliveries[d.id] === undefined && d.initial > 0) deliveries[d.id] = d.initial;
+  return validateState({
+    ...s,
+    checks,
+    notes,
+    deliveries,
+    taskEdits: { ...s.taskEdits, links },
+    factoryGroups: { ...s.factoryGroups, assignments },
+    handbookOrigin: { version: handbook.version, unmapped },
+  });
 }

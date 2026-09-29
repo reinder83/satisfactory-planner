@@ -129,7 +129,14 @@ const page = computed(() =>
       // The floor's notice. The ground-floor instructions describe the owner's built room,
       // so only original (handbook) profiles get them, copies included: a duplicated or
       // imported one has a new id but keeps its kind and the built ground floor.
-      notice: floor === 'ground' ? (currentProfile.kind !== 'original' ? 'template' : 'built') : '',
+      // A profile migrated from the handbook (engine 'handbook-…', #487) shows neither: its room
+      // is the one built, not a template, and the built-room notice is dropped (decision 3B).
+      notice:
+        floor !== 'ground' || calculated?.engine?.startsWith('handbook-')
+          ? ''
+          : currentProfile.kind !== 'original'
+            ? 'template'
+            : 'built',
       // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
       movedOff: storageBays()
         .filter(

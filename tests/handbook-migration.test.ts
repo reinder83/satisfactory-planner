@@ -9,14 +9,16 @@ import handbookJson from '../public/plan.json' with { type: 'json' };
 import recipesJson from '../recipes.json' with { type: 'json' };
 import {
   handbookToPlan,
+  migrateHandbookState,
   OIL_CAMPUS,
   POWER_BLOCKS,
   POWER_CHECKS,
   TRANSCRIBED,
 } from '../public/handbook-migration.ts';
 import { validateTransfer } from '../public/transfer.ts';
-import { saveExport } from './types/fixtures.ts';
-import type { Handbook, Recipe, StoredCalculatedPlan } from '../public/types/index.ts';
+import { saveExport, states, version11 } from './types/fixtures.ts';
+import { newProfileState, validateState } from '../public/state.ts';
+import type { Handbook, Recipe, SavedState, StoredCalculatedPlan } from '../public/types/index.ts';
 
 const handbook = handbookJson as unknown as Handbook;
 const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
@@ -174,4 +176,139 @@ test("Phase 3's Plastic and Rubber take their oil campus line's machines", () =>
     assert.equal(row.machines, line.machines, name);
     assert.ok(row.machines > 0, name + ' is built by some refineries');
   }
+});
+
+// ---- migrateHandbookState (#487, part 3c) ----
+const conversion = handbookToPlan(handbook, recipes);
+const rowOf = (st: string, fid: string) => conversion.rows[st]![fid];
+const mapped = handbook.factories.find(f => f.stages['3'] && rowOf('3', f.id) && f.stages['5'])!;
+const campus = 'plastic';
+// A handbook profile's progress touching every rule, on top of the version-11 fixture.
+const handbookState = (): SavedState => {
+  const s = structuredClone(version11) as SavedState;
+  s.checks = {
+    ...s.checks,
+    ['factory-3-' + mapped.id]: true,
+    ['factory-5-' + mapped.id]: false,
+    ['factory-4-' + campus]: true,
+    'factory-3-no-such-factory': true,
+    'phase-3-survey': true,
+    'slot-A01-built': true,
+  };
+  s.notes = {
+    ...s.notes,
+    ['factory-' + mapped.id]: 'Build it by the lake',
+    'factory-no-such-factory': 'An old note',
+    'slot-A01': 'Top shelf',
+  };
+  s.deliveries = { '3-modular-engine': 12 };
+  s.factoryGroups = {
+    groups: [{ id: 'fg-plates1', name: 'Plates' }],
+    assignments: {
+      [mapped.id]: [{ group: 'fg-plates1', rate: null }],
+      'no-such-factory': [{ group: 'fg-plates1', rate: 5 }],
+    },
+  };
+  s.taskEdits = { ...s.taskEdits, links: { 'phase-5-survey': mapped.id } };
+  return s;
+};
+
+test('migrateHandbookState moves each record to its new key, or keeps it unmapped', () => {
+  const m = migrateHandbookState(handbookState(), handbook, conversion);
+  assert.equal(m.version, 12);
+  assert.equal(m.handbookOrigin!.version, handbook.version);
+  // Factory ticks become their row's, per stage.
+  assert.equal(m.checks[`calc-3-${rowOf('3', mapped.id)}`], true);
+  assert.equal(m.checks[`calc-5-${rowOf('5', mapped.id)}`], false);
+  assert.equal('factory-3-' + mapped.id in m.checks, false);
+  // The campus tick is not guessed (6B), nor is an unknown factory's.
+  assert.deepEqual(m.handbookOrigin!.unmapped.checks, {
+    ['factory-4-' + campus]: true,
+    'factory-3-no-such-factory': true,
+  });
+  // Everything else is unchanged, and the handbook's known checks are written.
+  assert.equal(m.checks['phase-3-survey'], true);
+  assert.equal(m.checks['slot-A01-built'], true);
+  for (const [k, v] of Object.entries(handbook.knownChecks)) assert.equal(m.checks[k], v);
+  // The factory note follows every row it became; one for a factory this handbook no longer
+  // has is kept for review (#493 review).
+  for (const row of new Set([rowOf('3', mapped.id), rowOf('5', mapped.id)]))
+    assert.equal(m.notes['factory-' + row], 'Build it by the lake');
+  assert.equal('factory-no-such-factory' in m.notes, false);
+  assert.deepEqual(m.handbookOrigin!.unmapped.notes, { 'factory-no-such-factory': 'An old note' });
+  assert.equal(m.notes['slot-A01'], 'Top shelf');
+  // Deliveries keep their ids; the handbook's recorded count is written where none is saved.
+  assert.equal(m.deliveries['3-modular-engine'], 12);
+  for (const d of handbook.deliveries.filter(d => d.initial > 0 && d.id !== '3-modular-engine'))
+    assert.equal(m.deliveries[d.id], d.initial);
+  // Group assignments follow the rows; one for no factory of the handbook is kept for review.
+  assert.deepEqual(m.factoryGroups.assignments[rowOf('3', mapped.id)!], [
+    { group: 'fg-plates1', rate: null },
+  ]);
+  assert.equal('no-such-factory' in m.factoryGroups.assignments, false);
+  assert.deepEqual(m.handbookOrigin!.unmapped.assignments, {
+    'no-such-factory': [{ group: 'fg-plates1', rate: 5 }],
+  });
+  // A step link names its phase's row.
+  assert.equal(m.taskEdits.links['phase-5-survey'], rowOf('5', mapped.id));
+  // Task edits, custom tasks and the storage layout are untouched.
+  assert.deepEqual(m.customTasks, validateState(handbookState()).customTasks);
+  assert.deepEqual(m.storageEdits, validateState(handbookState()).storageEdits);
+  assert.deepEqual(m.taskEdits.titles, validateState(handbookState()).taskEdits.titles);
+});
+
+test('migrating twice equals migrating once', () => {
+  const once = migrateHandbookState(handbookState(), handbook, conversion);
+  assert.deepEqual(migrateHandbookState(once, handbook, conversion), once);
+});
+
+// Nothing disappears: every check, note, delivery count and assignment of the state is either
+// kept under its key, moved to its new key, or listed in unmapped. Over plan.json with every
+// fixture version 1–11 and the handbook state above.
+test('no record disappears, for every state version and the handbook state', () => {
+  for (const [state, version] of [...states, [handbookState(), 11] as const]) {
+    const before = validateState(structuredClone(state));
+    const m = migrateHandbookState(state, handbook, conversion);
+    const u = m.handbookOrigin!.unmapped;
+    for (const [k, v] of Object.entries(before.checks)) {
+      const f = /^factory-([345])-(.+)$/.exec(k);
+      const moved = f && rowOf(f[1]!, f[2]!) ? `calc-${f[1]}-${rowOf(f[1]!, f[2]!)}` : k;
+      assert.ok(m.checks[moved] === v || u.checks[k] === v, `v${version} check ${k}`);
+    }
+    for (const [k, v] of Object.entries(before.notes)) {
+      const fid = k.slice('factory-'.length);
+      const rows = [rowOf('3', fid), rowOf('4', fid), rowOf('5', fid)].filter(Boolean);
+      assert.ok(
+        m.notes[k] === v || rows.some(r => m.notes['factory-' + r] === v) || u.notes[k] === v,
+        `v${version} note ${k}`,
+      );
+    }
+    for (const [k, v] of Object.entries(before.deliveries))
+      assert.equal(m.deliveries[k], v, `v${version} delivery ${k}`);
+    for (const [k, list] of Object.entries(before.factoryGroups.assignments)) {
+      const rows = [rowOf('3', k), rowOf('4', k), rowOf('5', k)].filter(Boolean) as string[];
+      assert.ok(
+        JSON.stringify(m.factoryGroups.assignments[k]) === JSON.stringify(list) ||
+          rows.some(r => JSON.stringify(m.factoryGroups.assignments[r]) === JSON.stringify(list)) ||
+          JSON.stringify(u.assignments[k]) === JSON.stringify(list),
+        `v${version} assignment ${k}`,
+      );
+    }
+    // The layout, task edits, custom tasks and phase are as they were.
+    assert.deepEqual(m.storageEdits, before.storageEdits, `v${version} layout`);
+    assert.deepEqual(m.customTasks, before.customTasks);
+    assert.equal(m.settings.phase, before.settings.phase);
+  }
+});
+
+// What the migration kept for review survives a Recalculate of the migrated profile (#489), so
+// an unknown factory's note and assignment are never lost (#493 review).
+test("an unknown factory's note and assignment survive a Recalculate of the migrated profile", () => {
+  const m = migrateHandbookState(handbookState(), handbook, conversion);
+  const { state } = newProfileState(conversion.plan, m, conversion.plan, undefined, undefined);
+  assert.deepEqual(state.handbookOrigin, m.handbookOrigin);
+  assert.equal(state.handbookOrigin!.unmapped.notes['factory-no-such-factory'], 'An old note');
+  assert.deepEqual(state.handbookOrigin!.unmapped.assignments['no-such-factory'], [
+    { group: 'fg-plates1', rate: 5 },
+  ]);
 });
