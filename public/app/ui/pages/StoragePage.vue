@@ -343,13 +343,16 @@ function toggleLayout() {
   <div class="toolbar">
     <!-- A tab's count is part of its name as words ("Ground floor, 41 of 64 done", which starts
          with the label drawn); the figures drawn beside the label are hidden from a screen reader
-         (SP-23, #258). A floor without a container shows none. -->
+         (SP-23, #258). A floor without a container shows none. The floor on screen is the pressed
+         one, so a screen reader hears which it is (#348); they stay buttons, not a tablist, so the
+         Tab order is unchanged. -->
     <div class="tabs">
       <button
         v-for="f in page.floors"
         :key="f.id"
         :class="['tab', f.active ? 'active' : '']"
         :data-floor="f.id"
+        :aria-pressed="f.active ? 'true' : 'false'"
         :aria-label="f.named ? `${f.label}, ${f.done} of ${f.named} done` : undefined"
         @click="showFloor(f.id)"
       >

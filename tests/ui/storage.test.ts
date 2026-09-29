@@ -108,6 +108,26 @@ test('the handbook room shows its printed bays, notice and checklist', () => {
   );
 });
 
+// The shown floor's tab is the pressed one, the others not, and switching floors moves it (#348).
+test('the floor tabs tell a screen reader which floor is shown', async () => {
+  render();
+  const pressed = () =>
+    $$('#main .tabs [data-floor]').map(x => [x.dataset.floor, x.getAttribute('aria-pressed')]);
+  assert.deepEqual(pressed(), [
+    ['ground', 'true'],
+    ['upper', 'false'],
+    ['workshop', 'false'],
+  ]);
+  $<HTMLButtonElement>('#main .tabs [data-floor="upper"]')!.click();
+  await nextTick();
+  assert.equal(floor, 'upper');
+  assert.deepEqual(pressed(), [
+    ['ground', 'false'],
+    ['upper', 'true'],
+    ['workshop', 'false'],
+  ]);
+});
+
 test('bays stay in address order in the document and take their hall position from the grid', () => {
   render();
   const order = letters();
