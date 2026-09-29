@@ -148,6 +148,38 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
   assert.equal($('[data-phase-bar="q"]')!.getAttribute('aria-label'), 'Post Phase 5, 75%');
 });
 
+// A profile card counts its ticked checks in words that agree with the number (#421).
+test('a profile card says 1 check, N checks, or none yet', () => {
+  const card = (id: string, completed: number) => ({
+    id,
+    kind: 'calculated',
+    name: id,
+    completed,
+    phase: '2',
+  });
+  const workspace = {
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'a',
+        profiles: [card('a', 0), card('b', 1), card('c', 1234)],
+      },
+    ],
+  } as unknown as Partial<WorkspaceSummary>;
+  open({ workspace });
+  go('profiles');
+  render();
+  assert.deepEqual(
+    $$('.profile-card').map(c => c.querySelector('.small')!.textContent),
+    [
+      'No checks complete yet · Phase 2',
+      '1 check complete · Phase 2',
+      `${num(1234)} checks complete · Phase 2`,
+    ],
+  );
+});
+
 test('Saves & profiles lists every profile, escaped, with its actions', () => {
   go('profiles');
   render();
