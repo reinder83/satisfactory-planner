@@ -91,9 +91,10 @@ const plain = (x: unknown): x is Raw =>
   typeof x === 'object' &&
   !Array.isArray(x) &&
   Object.getPrototypeOf(x) === Object.prototype;
-// Every record address (check, note, delivery, step or row id) must pass this. The
+// Every record address (check, note, delivery, step or row id) must pass this, a plan guide's
+// step ids too (transfer.ts). The
 // prototype names are refused so a saved key can never reach an object's prototype.
-const safeKey = (k: unknown): k is string =>
+export const safeKey = (k: unknown): k is string =>
   typeof k === 'string' &&
   /^[a-zA-Z0-9:_-]{1,160}$/.test(k) &&
   !['__proto__', 'constructor', 'prototype'].includes(k);

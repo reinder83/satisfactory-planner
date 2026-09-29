@@ -1,4 +1,4 @@
-import { validateState } from './state.ts';
+import { safeKey, validateState } from './state.ts';
 import type {
   Handbook,
   PlanGuide,
@@ -68,39 +68,71 @@ const httpsOnly = <T extends { url: string }>(xs: T[]) =>
 // A calculated plan's optional guide (#393, #466): its shape is checked, since pages render it,
 // and its source links keep only https ones. Returns a clean copy, or throws.
 function checkGuide(g: unknown): PlanGuide {
-  const bad = () => invalid('Invalid plan guide.');
-  const text = (x: unknown) => typeof x === 'string';
-  const step = (x: unknown) =>
-    record(x) &&
-    text((x as GuideShape).id) &&
-    text((x as GuideShape).title) &&
-    text((x as GuideShape).body);
-  const steps = (x: unknown) => Array.isArray(x) && x.every(step);
+  const bad = (): never => invalid('Invalid plan guide.');
+  const text = (x: unknown): x is string => typeof x === 'string';
+  const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
+  const rates = (x: unknown) => record(x) && Object.values(x as object).every(num);
+  // Every id a guide gives is a saved check key: it must pass state.ts's key rule and be unique
+  // across the guide, or its step could never be ticked, or would tick with its twin (#471).
+  const ids = new Set<string>();
+  const id = (x: unknown) => {
+    if (!safeKey(x) || ids.has(x)) bad();
+    ids.add(x as string);
+  };
+  const steps = (x: unknown) => {
+    if (!Array.isArray(x)) bad();
+    for (const s of x as GuideShape[]) {
+      if (!record(s) || !text(s.title) || !text(s.body)) bad();
+      id(s.id);
+    }
+  };
   if (!record(g)) bad();
   const guide = structuredClone(g) as PlanGuide & Record<string, unknown>;
-  if (!record(guide.phases) || !Object.values(guide.phases).every(steps)) bad();
-  if (guide.storageTasks !== undefined && !steps(guide.storageTasks)) bad();
-  if (
-    guide.completion !== undefined &&
-    !(Array.isArray(guide.completion) && guide.completion.every(record))
-  )
-    bad();
+  if (!record(guide.phases)) bad();
+  Object.values(guide.phases).forEach(steps);
+  if (guide.storageTasks !== undefined) steps(guide.storageTasks);
+  if (guide.completion !== undefined) {
+    if (!Array.isArray(guide.completion)) bad();
+    for (const c of guide.completion as unknown as Record<string, unknown>[])
+      if (
+        !record(c) ||
+        ![c.id, c.name, c.recipe, c.machine].every(text) ||
+        ![c.output, c.machines, c.lastClock].every(num) ||
+        !rates(c.inputs) ||
+        !rates(c.byproducts)
+      )
+        bad();
+  }
   if (guide.power !== undefined) {
     const p = guide.power as unknown as Record<string, unknown>;
+    if (!record(p) || !Array.isArray(p.checks) || !Array.isArray(p.blocks)) bad();
+    for (const c of p.checks as Record<string, unknown>[]) {
+      if (!record(c) || !text(c.label)) bad();
+      id(c.id);
+    }
     if (
-      !record(p) ||
-      !Array.isArray(p.checks) ||
-      !p.checks.every(c => record(c) && text(c.id) && text(c.label)) ||
-      !Array.isArray(p.blocks) ||
-      !p.blocks.every(b => record(b) && text(b.title) && text(b.body))
+      !(p.blocks as unknown[]).every(
+        x => record(x) && text((x as GuideShape).title) && text((x as GuideShape).body),
+      )
     )
       bad();
   }
-  if (
-    guide.factories !== undefined &&
-    !(record(guide.factories) && Object.values(guide.factories).every(record))
-  )
-    bad();
+  if (guide.factories !== undefined) {
+    if (!record(guide.factories)) bad();
+    for (const [row, x] of Object.entries(
+      guide.factories as Record<string, Record<string, unknown>>,
+    ))
+      if (
+        !safeKey(row) ||
+        !record(x) ||
+        (x.note !== undefined && !text(x.note)) ||
+        (x.page !== undefined && !num(x.page)) ||
+        (x.local !== undefined && typeof x.local !== 'boolean') ||
+        (x.nuclear !== undefined && typeof x.nuclear !== 'boolean') ||
+        (x.site !== undefined && x.site !== 'oil' && x.site !== 'nuclear')
+      )
+        bad();
+  }
   if (guide.sources !== undefined) {
     if (!Array.isArray(guide.sources) || !guide.sources.every(x => record(x) && text(x.url))) bad();
     guide.sources = httpsOnly(guide.sources);

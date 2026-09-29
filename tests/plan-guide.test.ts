@@ -56,6 +56,31 @@ test('a malformed plan guide is refused', () => {
     { phases: {}, power: { checks: [{ id: 'power-x' }], blocks: [] } },
     { phases: {}, factories: { a: 'note' } },
     { phases: {}, sources: [{ title: 'No url' }] },
+    // A step id is a saved check key (#471): the key rule, and unique across the guide.
+    { phases: { '3': [{ id: 'phase 3 survey', title: 't', body: 'b' }] } },
+    { phases: { '3': [{ id: 'x'.repeat(161), title: 't', body: 'b' }] } },
+    { phases: { '3': [{ id: '__proto__', title: 't', body: 'b' }] } },
+    {
+      phases: {
+        '3': [
+          { id: 'dup', title: 't', body: 'b' },
+          { id: 'dup', title: 't', body: 'b' },
+        ],
+      },
+    },
+    {
+      phases: { '3': [{ id: 'dup', title: 't', body: 'b' }] },
+      storageTasks: [{ id: 'dup', title: 't', body: 'b' }],
+    },
+    {
+      phases: { post: [{ id: 'power-x', title: 't', body: 'b' }] },
+      power: { checks: [{ id: 'power-x', label: 'l' }], blocks: [] },
+    },
+    { phases: {}, power: { checks: [{ id: 'power x', label: 'l' }], blocks: [] } },
+    // The parts later pages render are typed too.
+    { phases: {}, completion: [{ id: 'c', name: 'n', recipe: 'r', machine: 'm', output: '1' }] },
+    { phases: {}, factories: { 'iron-ingot': { site: 'moon' } } },
+    { phases: {}, factories: { 'iron-ingot': { page: 'twelve' } } },
   ])
     assert.throws(
       () => validateTransfer(withGuide(bad)),
