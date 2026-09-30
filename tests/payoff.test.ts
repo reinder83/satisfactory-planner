@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
+import { seedLegacy } from './helpers/seed.ts';
 import { createBrowserApi, workerJobs, type CalculatorWorker } from '../public/browser-api.ts';
 import { calculate, rankAlternates } from '../planner.ts';
 import type {
@@ -21,6 +22,7 @@ import type {
 
 const settings = { phase: '1', goal: 'minimal' };
 async function start(dir: string, rankBudgetMs?: number) {
+  await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '', rankBudgetMs });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
@@ -66,10 +68,9 @@ test('the server ranks on request, stores the result with the profile and keeps 
       const exported = await json(await fetch(app.url + '/api/export-saves' + q));
       assert.ok(!JSON.stringify(exported).includes('"payoff"'), 'export ' + q);
     }
-    // Refusals: a bad phase, and the original handbook profile.
+    // Refusals: a bad phase. (The default profile was a handbook one, which a ranking refused;
+    // it is a migrated calculated profile now, #495, #496.)
     assert.equal((await app.post('/api/rank-alternates', { phase: '9' }, ah)).status, 400);
-    const original = { 'X-Save-Id': 'original-save', 'X-Profile-Id': 'original' };
-    assert.equal((await app.post('/api/rank-alternates', { phase: '3' }, original)).status, 400);
     await app.close();
     // After a restart it is still there; a ranking of an older plan is not shown.
     app = await start(dir);

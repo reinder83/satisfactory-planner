@@ -156,6 +156,10 @@ export function createBrowserApi(
     // from newProfileState, optionally carrying progress from body.carryFrom. Unlike the server,
     // it cannot create an 'original' (handbook) profile: every profile here is calculated.
     if (ep === '/api/profiles') {
+      if (body.kind === 'original')
+        throw Error(
+          'Handbook profiles can no longer be created. Create a calculated profile instead.',
+        );
       const profileName = cleanName(body.name),
         saveName = body.saveId ? null : cleanName(body.saveName),
         plan = await calculator(body.settings, options.onProgress),

@@ -365,3 +365,32 @@ test('the browser edition refuses a stale whole-value write like the server', as
   assert.equal(state.notes.n, 'one');
   assert.equal(state.checks.k, true);
 });
+
+// The Pages edition never made handbook profiles; like the server, it refuses the retired
+// kind outright instead of calculating one (#496), and stores nothing.
+test("POST /api/profiles refuses kind 'original'", async () => {
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  let solved = 0;
+  const api = createBrowserApi(
+    store,
+    ((settings: unknown) => (solved++, calculate(settings as never))) as typeof calculate,
+    {} as Catalog,
+  );
+  await assert.rejects(
+    api('/api/profiles', {
+      body: JSON.stringify({ saveName: 'World', name: 'Handbook', kind: 'original' }),
+    }),
+    /can no longer be created/,
+  );
+  assert.equal(solved, 0, 'nothing is calculated');
+  assert.deepEqual(data.saves, []);
+});

@@ -115,14 +115,12 @@ const migrateOriginals = async (saves: Save[]) => {
 //   POST /api/update, /api/import   change or restore the scoped profile's progress
 export async function openWorkspace({
   dataDir,
-  initialState,
   validateState,
   mutate,
   rankBudgetMs = 20000,
   estimateBudgetMs = 20000,
 }: {
   dataDir: string;
-  initialState: () => ProgressState;
   validateState: (s: unknown) => ProgressState;
   mutate: (s: ProgressState, update: UpdateOp) => ProgressState;
   // A ranking recalculates the plan once per candidate recipe on the request, holding up every
@@ -204,19 +202,18 @@ export async function openWorkspace({
           "Check the data folder's permissions, then start again. Nothing has been changed.",
       );
     // First start of this format: migrate the single-profile progress.json of earlier
-    // releases into the Original profile of one save, or start from server.ts's initial
-    // state when neither file exists. progress.json is only read, never changed, so it
-    // stays as the pre-migration copy; a corrupt one stops start-up. The 'wx' flag refuses
-    // to overwrite a workspace.json that appeared in the meantime.
-    let legacy: ProgressState;
-    let found = true;
+    // releases into the Original profile of one save. progress.json is only read, never
+    // changed, so it stays as the pre-migration copy; a corrupt one stops start-up. With
+    // neither file, the owner starts with no saves, and the interface opens the guided start
+    // like the Pages edition (decision 5A on #387, #496). The 'wx' flag refuses to overwrite a
+    // workspace.json that appeared in the meantime.
+    let legacy: ProgressState | null;
     try {
       legacy = validateState(
         JSON.parse(await fs.readFile(path.join(dataDir, 'progress.json'), 'utf8')),
       );
     } catch (e) {
-      found = false;
-      if (code(e) === 'ENOENT') legacy = initialState();
+      if (code(e) === 'ENOENT') legacy = null;
       else throw new Error('Progress could not be read; existing data has not been overwritten.');
     }
     db = {
@@ -224,21 +221,23 @@ export async function openWorkspace({
       revision: 0,
       accountsEnabled: false,
       registration: false,
-      users: [{ id: 'owner', username: 'Local pioneer', activeSave: 'original-save' }],
-      saves: [
-        {
-          id: 'original-save',
-          name: 'My Satisfactory save',
-          userId: 'owner',
-          activeProfile: 'original',
-          profiles: [original(legacy)],
-        },
-      ],
+      users: [{ id: 'owner', username: 'Local pioneer', activeSave: legacy && 'original-save' }],
+      saves: legacy
+        ? [
+            {
+              id: 'original-save',
+              name: 'My Satisfactory save',
+              userId: 'owner',
+              activeProfile: 'original',
+              profiles: [original(legacy)],
+            },
+          ]
+        : [],
       sessions: [],
     };
     // Progress from progress.json is handbook progress: it migrates before it is first written
     // (#495), and progress.json itself is its pre-migration copy.
-    if (found) await migrateOriginals(db.saves);
+    await migrateOriginals(db.saves);
     await fs.writeFile(file, JSON.stringify(db), { flag: 'wx', mode: 0o600 });
   }
   // A workspace.json with original profiles (#495): first keep it as it was read in
@@ -610,17 +609,19 @@ export async function openWorkspace({
         if (budget) budget.count += performance.now() - start;
       }
     }
-    // Creates a profile in one of the user's saves (saveId) or in a new save (saveName).
-    // kind 'original' uses the preserved handbook; anything else is calculated now and the
-    // snapshot stored. carryFrom names a sibling profile in the same save to start from
+    // Creates a profile in one of the user's saves (saveId) or in a new save (saveName). It is
+    // calculated now and the snapshot stored; kind 'original' is refused, since the handbook
+    // profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
     // (copied, never moved) and built lists finished work; see newProfileState. The plan is
     // calculated before the commit; the save lookup and limits are checked inside it.
     if (endpoint === '/api/profiles' && req.method === 'POST') {
       throttle(req);
       const b = await body(req);
+      if (b.kind === 'original')
+        fail('Handbook profiles can no longer be created. Create a calculated profile instead.');
       const saveName = b.saveId ? null : name(b.saveName),
         profileName = name(b.name);
-      const plan = b.kind === 'original' ? null : calculate(b.settings);
+      const plan = calculate(b.settings);
       const profileId = id();
       // A saveId that is not one of the user's save ids is refused inside the commit.
       let saveId = (b.saveId || id()) as string;
@@ -653,9 +654,9 @@ export async function openWorkspace({
         save.profiles.push({
           id: profileId,
           name: profileName,
-          kind: plan ? 'calculated' : 'original',
+          kind: 'calculated',
           // A recalculation of a guided plan keeps its guide (#472).
-          plan: plan && carryGuide(plan, source?.plan),
+          plan: carryGuide(plan, source?.plan),
           state: started.state,
         });
         save.activeProfile = profileId;

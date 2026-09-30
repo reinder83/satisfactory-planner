@@ -11,6 +11,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp, initialState } from '../server.ts';
+import { seedLegacy } from './helpers/seed.ts';
 import { mutate, validateState } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
@@ -70,6 +71,7 @@ test('saves made before the change load exactly as they were', () => {
 });
 
 async function start(dir: string) {
+  await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   // Listening on a TCP port, so address() is an AddressInfo.
@@ -91,7 +93,7 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-ground-moves-'));
   let app = await start(dir);
   try {
-    // The fresh server's own handbook profile, and a second handbook profile beside it.
+    // The default profile (migrated from a handbook one, #495) and a second profile beside it.
     const oh = { 'X-Save-Id': 'original-save', 'X-Profile-Id': 'original' };
     const before = await json(await fetch(app.url + '/api/state', { headers: oh }));
     assert.equal(before.checks[KEY], undefined, 'a fresh handbook starts with the moves to do');
@@ -99,14 +101,14 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
       await post(app.url, '/api/profiles', {
         saveId: 'original-save',
         name: 'Other',
-        kind: 'original',
+        settings: {},
       }),
     );
     const bh = { 'X-Save-Id': other.saveId, 'X-Profile-Id': other.profileId };
     await json(await post(app.url, '/api/update', { type: 'check', key: KEY, value: true }, oh));
     const done = await json(await fetch(app.url + '/api/state', { headers: oh }));
     assert.equal(done.checks[KEY], true);
-    assert.equal(done.version, 1);
+    assert.equal(done.version, before.version, 'a tick leaves the content version as it was');
     assert.deepEqual(
       { ...done.checks, [KEY]: undefined },
       { ...before.checks, [KEY]: undefined },
