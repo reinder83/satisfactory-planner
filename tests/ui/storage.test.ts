@@ -1105,7 +1105,8 @@ test('the update stand-in applies an op like the server: a refused one leaves th
     /Invalid hidden bay|handbook/,
   );
   assert.throws(
-    () => applyUpdate({ type: 'check', key: 'x', value: 'yes' as unknown as boolean }),
+    // @ts-expect-error: a check's value must be a boolean
+    () => applyUpdate({ type: 'check', key: 'x', value: 'yes' }),
     /Invalid checks value/,
   );
   assert.deepEqual(state, before, 'nothing on the page changed');

@@ -57,6 +57,8 @@ const title = (name: unknown): string => {
   return name;
 };
 const record = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
+// record() as a type guard, for a value whose fields are read next.
+const fields = (value: unknown): value is Record<string, unknown> => record(value);
 // Only https links survive, in a handbook's or a plan guide's sources.
 const httpsOnly = <T extends { url: string }>(sources: T[]) =>
   sources.filter(source => {
@@ -69,7 +71,8 @@ const httpsOnly = <T extends { url: string }>(sources: T[]) =>
 // A calculated plan's optional guide (#393, #466): its shape is checked, since pages render it,
 // and its source links keep only https ones. Returns a clean copy, or throws.
 function checkGuide(input: unknown): PlanGuide {
-  const bad = (): never => invalid('Invalid plan guide.');
+  // Typed on the name, so a check followed by bad() narrows what comes after it.
+  const bad: () => never = () => invalid('Invalid plan guide.');
   const text = (value: unknown): value is string => typeof value === 'string';
   const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
   const rates = (value: unknown) => record(value) && Object.values(value as object).every(finite);
@@ -94,9 +97,10 @@ function checkGuide(input: unknown): PlanGuide {
   if (guide.storageTasks !== undefined) steps(guide.storageTasks);
   if (guide.completion !== undefined) {
     if (!Array.isArray(guide.completion)) bad();
-    for (const module of guide.completion as unknown as Record<string, unknown>[]) {
+    const completion: unknown[] = guide.completion;
+    for (const module of completion) {
       if (
-        !record(module) ||
+        !fields(module) ||
         ![module.id, module.name, module.recipe, module.machine].every(text) ||
         ![module.output, module.machines, module.lastClock].every(finite) ||
         !rates(module.inputs) ||
@@ -108,8 +112,8 @@ function checkGuide(input: unknown): PlanGuide {
     }
   }
   if (guide.power !== undefined) {
-    const power = guide.power as unknown as Record<string, unknown>;
-    if (!record(power) || !Array.isArray(power.checks) || !Array.isArray(power.blocks)) bad();
+    const power: unknown = guide.power;
+    if (!fields(power) || !Array.isArray(power.checks) || !Array.isArray(power.blocks)) bad();
     for (const check of power.checks as Record<string, unknown>[]) {
       if (!record(check) || !text(check.label)) bad();
       id(check.id);

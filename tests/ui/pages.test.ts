@@ -32,6 +32,7 @@ import {
 } from './setup.ts';
 import type {
   Catalog,
+  ProfileSummary,
   StoredCalculatedPlan,
   UpdateOp,
   WorkspaceSummary,
@@ -130,7 +131,7 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
         ],
       },
     ],
-  } as unknown as Partial<WorkspaceSummary>;
+  } satisfies Partial<WorkspaceSummary>;
   open({ workspace });
   go('profiles');
   render();
@@ -160,7 +161,7 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
 
 // A profile card counts its ticked checks in words that agree with the number (#421).
 test('a profile card says 1 check, N checks, or none yet', () => {
-  const card = (id: string, completed: number) => ({
+  const card = (id: string, completed: number): ProfileSummary => ({
     id,
     kind: 'calculated',
     name: id,
@@ -176,7 +177,7 @@ test('a profile card says 1 check, N checks, or none yet', () => {
         profiles: [card('a', 0), card('b', 1), card('c', 1234)],
       },
     ],
-  } as unknown as Partial<WorkspaceSummary>;
+  } satisfies Partial<WorkspaceSummary>;
   open({ workspace });
   go('profiles');
   render();

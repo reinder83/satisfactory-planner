@@ -1241,13 +1241,22 @@ test('the estimate bar hides while the panel is on screen (#412)', async () => {
   stubFetch({ '/api/preview': estimated(0.5) });
   const observers: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
   const real = globalThis.IntersectionObserver;
-  globalThis.IntersectionObserver = class {
-    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
-      observers.push(callback);
+  globalThis.IntersectionObserver = class implements IntersectionObserver {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly scrollMargin = '';
+    readonly thresholds = [];
+    constructor(callback: IntersectionObserverCallback) {
+      // A partial entry: the estimate bar reads only isIntersecting.
+      observers.push(entries => callback(entries as IntersectionObserverEntry[], this));
     }
     observe() {}
+    unobserve() {}
     disconnect() {}
-  } as unknown as typeof IntersectionObserver;
+    takeRecords() {
+      return [];
+    }
+  };
   try {
     wizardAt(4);
     await pause(30);
