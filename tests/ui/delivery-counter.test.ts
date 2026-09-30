@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { slug } from '../../public/app/format.ts';
+import { num, slug } from '../../public/app/format.ts';
 import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
@@ -66,11 +66,29 @@ test('a delivery with a rate reads complete at its target, not 0 minutes remaini
   const engine = '3-modular-engine';
   open({ state: { deliveries: { [engine]: 24950 } } });
   render();
-  assert.equal(text(engine), '50/min net · 1 minutes remaining');
+  assert.equal(text(engine), '50/min net · 1 minute left');
   open({ state: { deliveries: { [engine]: 25000 } } });
   render();
   await nextTick();
   assert.equal(text(engine), 'Delivery complete');
+});
+
+test('the time left reads as a plain duration with the right plural (#624)', async () => {
+  // A calculated Versatile Framework delivery of 2,500 at 5.3/min, as in the issue.
+  const plan = generated();
+  Object.assign(plan.stages['3']!.delivery!['Versatile Framework']!, { target: 2500, rate: 5.3 });
+  const cases: [number, string][] = [
+    [0, 'about 7 h 52 min left'], // 471.7 minutes
+    [2499, 'less than a minute left'], // 0.19 minutes
+    [2500 - 5.3 * 12, '12 minutes left'],
+    [2500 - 5.3 * 120, 'about 2 h left'],
+  ];
+  for (const [count, left] of cases) {
+    open({ calculated: plan, state: { deliveries: { [id]: Math.round(count) } } });
+    render();
+    await nextTick();
+    assert.equal(text(), `${num(5.3)}/min net · ${left}`);
+  }
 });
 
 test('a complete delivery of a later phase does not read as Phase 3', async () => {

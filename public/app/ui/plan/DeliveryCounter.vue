@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
-import { num } from '../../format.ts';
+import { duration, num } from '../../format.ts';
 import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
@@ -31,14 +31,14 @@ const counter = computed(() =>
       left = Math.max(0, delivery.target - count);
     // The text follows the saved count: at the target it reads complete, with or without a
     // rate (#596), and a lowered count no longer does (#590). Without a rate there are no
-    // minutes to give. It names no phase, as the calculated plan draws every phase's (#595).
+    // minutes to give; with one the wait reads as a plain duration (#624). It names no phase, as the calculated plan draws every phase's (#595).
     return {
       value: count,
       width: Math.min(100, (count / delivery.target) * 100),
       remaining: !left
         ? 'Delivery complete'
         : delivery.rate
-          ? `${num(delivery.rate)}/min net · ${num(left / delivery.rate)} minutes remaining`
+          ? `${num(delivery.rate)}/min net · ${duration(left / delivery.rate)} left`
           : `${num(left)} remaining`,
     };
   }),
