@@ -25,7 +25,7 @@ test('a workspace written by a newer planner is refused, not read or written bac
 });
 
 test('a database upgraded by a newer planner explains itself instead of a VersionError', async () => {
-  const store = openBrowserStore(fakeIndexedDB(2, new Map()));
+  const store = openBrowserStore(fakeIndexedDB(3, new Map()));
   await assert.rejects(store.transaction(), /newer version of the planner/);
 });
 
@@ -136,13 +136,13 @@ test('a refused record carries storedData, and readStoredData hands it back exac
   assert.match(refusal!.message, /Download the stored data/);
   assert.deepEqual(await readStoredData(fakeIndexedDB(1, records)), damaged);
   assert.deepEqual(records.get('main'), damaged, 'reading it changed nothing');
-  // Written by a newer release: the database is at version 2, which the store refuses to open.
+  // Written by a newer release: the database is at version 3, which the store refuses to open.
   const newer = new Map<string, unknown>([['main', { version: 2, saves: [] }]]);
-  const newerRefusal = await openBrowserStore(fakeIndexedDB(2, newer))
+  const newerRefusal = await openBrowserStore(fakeIndexedDB(3, newer))
     .transaction()
     .catch((e: Error & { storedData?: boolean }) => e);
   assert.equal((newerRefusal as { storedData?: boolean }).storedData, true);
-  assert.deepEqual(await readStoredData(fakeIndexedDB(2, newer)), { version: 2, saves: [] });
+  assert.deepEqual(await readStoredData(fakeIndexedDB(3, newer)), { version: 2, saves: [] });
   // No database at all: nothing to hand back, and no empty database is created.
   assert.equal(await readStoredData(fakeIndexedDB(0, new Map())), undefined);
 });
@@ -409,4 +409,124 @@ test('a damaged or newer record is not migrated, only refused as before', async 
     assert.deepEqual(records.get('main'), found);
     assert.equal(records.has(PRE_HANDBOOK), false);
   }
+});
+
+// A tab of an earlier release, still open: its connection is at schema version 1 and, like every
+// release since 2026-09-26 (`closes`), it closes when another tab upgrades the database, refusing
+// its later writes with a reload message. `write` is its /api/update: one readwrite transaction
+// on `main` that changes the record in place, as the earlier openBrowserStore did.
+const earlierTab = (indexedDB: IDBFactory, closes = true) =>
+  new Promise<{
+    closed: boolean;
+    close(): void;
+    write(change: (d: BrowserWorkspace) => void): Promise<void>;
+  }>((resolve, reject) => {
+    const request = indexedDB.open('satisfactory-planner-browser-v1', 1);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tab = {
+        closed: false,
+        close() {
+          tab.closed = true;
+          db.close();
+        },
+        write: (change: (d: BrowserWorkspace) => void) =>
+          new Promise<void>((done, fail) => {
+            if (tab.closed) return fail(Error('Reload this tab to continue.'));
+            const tx = db.transaction('workspace', 'readwrite'),
+              store = tx.objectStore('workspace'),
+              get = store.get('main');
+            get.onsuccess = () => {
+              const data = get.result as BrowserWorkspace;
+              change(data);
+              store.put(data, 'main');
+            };
+            tx.oncomplete = () => done();
+            tx.onabort = () => fail(tx.error);
+          }),
+      };
+      if (closes) db.onversionchange = () => tab.close();
+      resolve(tab);
+    };
+    request.onerror = () => reject(request.error);
+  });
+
+test('a tab of the previous release still open is closed by the migration, so it files nothing under handbook keys (#518)', async () => {
+  const seeded = record([original('p')]);
+  const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
+  const indexedDB = fakeIndexedDB(1, records);
+  // Tab A loaded the previous release: it still shows the original profile.
+  const earlier = await earlierTab(indexedDB);
+  // Tab B opens this release, which migrates the record.
+  const read = await openBrowserStore(indexedDB, undefined, loader()).transaction();
+  assert.equal(read.saves[0]!.profiles[0]!.kind, 'calculated');
+  // In tab A the user ticks the factory and edits its note, under the handbook's keys.
+  const handbookCheck = 'factory-3-' + factory.id,
+    handbookNote = 'factory-' + factory.id;
+  const tick = await earlier
+    .write(d => {
+      const state = d.saves[0]!.profiles[0]!.state;
+      state.checks[handbookCheck] = false;
+      state.notes[handbookNote] = 'Moved to the hill';
+    })
+    .then(
+      () => 'written',
+      (error: Error) => error.message,
+    );
+  const migrated = main(records).saves[0]!.profiles[0]!;
+  assert.equal(migrated.state.checks[handbookCheck], undefined, 'no tick under a handbook key');
+  assert.equal(migrated.state.notes[handbookNote], undefined, 'no note under a handbook key');
+  assert.equal(migrated.state.checks['calc-3-' + row], true, 'the migrated tick is intact');
+  assert.equal(migrated.state.notes['factory-' + row], 'By the lake');
+  assert.equal(earlier.closed, true, 'the earlier tab heard of the upgrade and closed');
+  assert.match(tick, /Reload/, 'its write is refused with a reload message');
+  // After a reload, the previous release refuses the upgraded database with a VersionError,
+  // which it reports as saves written by a newer version.
+  await assert.rejects(earlierTab(indexedDB), { name: 'VersionError' });
+  assert.deepEqual(records.get(PRE_HANDBOOK), seeded);
+});
+
+test('a tab of a release that does not close for an upgrade blocks it, until it is closed', async () => {
+  const seeded = record([original('p')]);
+  const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
+  const indexedDB = fakeIndexedDB(1, records);
+  const earlier = await earlierTab(indexedDB, false);
+  const store = openBrowserStore(indexedDB, undefined, loader());
+  await assert.rejects(store.transaction(), /Close other planner tabs/);
+  assert.deepEqual(main(records), seeded, 'nothing migrated while the older tab is open');
+  earlier.close();
+  // The next request (or a reload) upgrades and migrates.
+  assert.equal((await store.transaction()).saves[0]!.profiles[0]!.kind, 'calculated');
+  assert.deepEqual(records.get(PRE_HANDBOOK), seeded);
+});
+
+test('a failed migration keeps schema version 1, so the previous release still opens the saves', async () => {
+  const seeded = record([original('p')]);
+  const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
+  const c = controls();
+  c.failNextCommit = true;
+  const indexedDB = fakeIndexedDB(1, records, c);
+  await assert.rejects(
+    openBrowserStore(indexedDB, undefined, loader()).transaction(),
+    /could not be updated/,
+  );
+  const earlier = await earlierTab(indexedDB);
+  await earlier.write(d => (d.activeSave = 's'));
+  assert.deepEqual(main(records), seeded);
+  assert.equal(records.has(PRE_HANDBOOK), false);
+  earlier.close();
+});
+
+test('an original profile stored after the upgrade (an import) is migrated on the next open', async () => {
+  // Schema version 2 already: no earlier release can have this database open.
+  const seeded = record([original('p'), calculated]);
+  const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
+  const c = controls(),
+    load = loader();
+  const read = await openBrowserStore(fakeIndexedDB(2, records, c), undefined, load).transaction();
+  assert.equal(load.calls, 1);
+  assert.equal(c.writes, 1);
+  assert.equal(read.saves[0]!.profiles[0]!.kind, 'calculated');
+  assert.equal(read.saves[0]!.profiles[0]!.state.checks['calc-3-' + row], true);
+  assert.deepEqual(records.get(PRE_HANDBOOK), seeded);
 });

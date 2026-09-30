@@ -500,11 +500,15 @@ try {
   const state = await api<ProgressState>('/api/state');
   assert.equal(state.checks['parallel-one'], true);
   assert.equal(state.checks['parallel-two'], true);
-  // The browser edition, upgraded (#497): a record holding an original profile with its own
-  // handbook, as an import from an earlier release stored it, is migrated on the next open into
-  // a calculated profile with its ticks, and the record as it was stays under the second key.
-  // Seeded in the separate browser profile, which holds nothing else yet.
-  other.on('pageerror', e => errors.push('Upgraded browser: ' + e.message));
+  // The browser edition, upgraded (#497, #518): a record holding an original profile with its
+  // own handbook, as an import from an earlier release stored it, is migrated on the next open
+  // into a calculated profile with its ticks, and the record as it was stays under the second
+  // key. Seeded at schema version 1 in a fresh browser profile by a tab standing in for the
+  // previous release, which stays open: the upgrade to version 2 closes its connection.
+  const upgradedContext = await browser.newContext(),
+    upgradedPage = await upgradedContext.newPage(),
+    earlierTab = await upgradedContext.newPage();
+  upgradedPage.on('pageerror', e => errors.push('Upgraded browser: ' + e.message));
   const handbook = JSON.parse(
     await fs.readFile(path.join(source, 'public', 'plan.json'), 'utf8'),
   ) as Handbook;
@@ -545,7 +549,8 @@ try {
     p.evaluate(
       async ({ key, record }) => {
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('satisfactory-planner-browser-v1', 1);
+          // At the version it has: 2 once the planner has opened it.
+          const r = indexedDB.open('satisfactory-planner-browser-v1');
           r.onsuccess = () => resolve(r.result);
           r.onerror = () => reject(r.error);
         });
@@ -563,30 +568,77 @@ try {
       },
       { key, record },
     );
-  await idb(other, 'main', seeded);
-  // It was on the guided start (#wizard); the build plan is where the ticks show.
-  await other.goto(base + '#plan');
-  await other.reload();
-  await other.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
+  // Any page of the site shares its storage; the favicon runs none of the planner.
+  await earlierTab.goto(base + 'favicon.svg');
+  await earlierTab.evaluate(
+    record =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('satisfactory-planner-browser-v1', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('workspace');
+        request.onsuccess = () => {
+          const db = request.result,
+            earlier = { closed: false };
+          Object.assign(window, { earlier });
+          // As every release since 2026-09-26 does.
+          db.onversionchange = () => {
+            earlier.closed = true;
+            db.close();
+          };
+          const tx = db.transaction('workspace', 'readwrite');
+          tx.objectStore('workspace').put(record, 'main');
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(tx.error);
+        };
+        request.onerror = () => reject(request.error);
+      }),
+    seeded,
+  );
+  await upgradedPage.goto(base + '#plan');
+  await upgradedPage.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
   assert.equal(
-    await other
+    await upgradedPage
       .locator('#main [data-check="phase-3-survey"]')
       .evaluate(x => (x as HTMLInputElement).checked),
     true,
     'the guide step is still ticked after the upgrade',
   );
-  const upgraded = (await idb(other, 'main')) as BrowserWorkspace;
+  const upgraded = (await idb(upgradedPage, 'main')) as BrowserWorkspace;
   const migratedOriginal = upgraded.saves[0]!.profiles[0]!;
   assert.equal(migratedOriginal.kind, 'calculated');
   assert.equal(migratedOriginal.handbook, undefined);
   assert.equal(migratedOriginal.plan?.engine, 'handbook-' + handbook.version);
   assert.equal(migratedOriginal.state.checks['calc-3-' + factoryRow], true, 'the factory tick');
   assert.equal(migratedOriginal.state.notes.global, 'Kept through the upgrade');
-  assert.deepEqual(await idb(other, 'pre-handbook'), seeded, 'the pre-migration copy');
+  assert.deepEqual(await idb(upgradedPage, 'pre-handbook'), seeded, 'the pre-migration copy');
+  // The tab of the previous release heard of the upgrade and closed, so it cannot file a tick
+  // under a handbook key on the migrated profile; on a reload it cannot open the database.
+  assert.equal(
+    await earlierTab.evaluate(
+      () => (window as unknown as { earlier: { closed: boolean } }).earlier.closed,
+    ),
+    true,
+    'the earlier tab was told of the upgrade',
+  );
+  assert.equal(
+    await earlierTab.evaluate(
+      () =>
+        new Promise<string>(resolve => {
+          const request = indexedDB.open('satisfactory-planner-browser-v1', 1);
+          request.onsuccess = () => {
+            request.result.close();
+            resolve('opened');
+          };
+          request.onerror = () => resolve(request.error?.name ?? 'error');
+        }),
+    ),
+    'VersionError',
+    'the previous release is refused the upgraded database',
+  );
   // Opening it again changes nothing.
-  await other.reload();
-  await other.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
-  assert.deepEqual(await idb(other, 'main'), upgraded);
+  await upgradedPage.reload();
+  await upgradedPage.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
+  assert.deepEqual(await idb(upgradedPage, 'main'), upgraded);
+  await upgradedContext.close();
   // The Docker edition, upgraded from an early release: its single-profile progress.json is
   // handbook progress, which migrates into a calculated profile with the guide (#495). A
   // brand-new server would start with no saves (#496). Its export carries that plan and the
