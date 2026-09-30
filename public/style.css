@@ -1667,6 +1667,30 @@ p.eyebrow {
 .notes-phases > p {
   margin: 0 0 14px;
 }
+/* What the move from the original plan could not place (ui/notes/UnplacedRecords.vue, #499),
+   listed under the phase notes. Saved text wraps and keeps its line breaks. */
+.notes-phases + .unplaced {
+  margin-top: 24px;
+}
+.unplaced h3 {
+  margin: 16px 0 6px;
+}
+.unplaced-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.unplaced-list li + li {
+  margin-top: 6px;
+}
+.unplaced-what {
+  color: var(--bright);
+  overflow-wrap: anywhere;
+}
+.unplaced-note {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .phase-notes summary {
   margin: -16px;
   padding: 11px 15px;

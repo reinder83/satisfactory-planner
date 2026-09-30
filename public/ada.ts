@@ -39,6 +39,8 @@ export interface AdaFacts {
   } | null;
   deliveries: { open: number; total: number };
   hasPhaseNote: boolean;
+  // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
+  unplaced: number;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -337,6 +339,14 @@ const RULES: AdaRule[] = [
     when: f => f.deliveries?.open > 0,
     text: f =>
       `${plural(f.deliveries.open, 'elevator part')} still short of target. The Space Elevator will wait. Patiently. Indefinitely. Silently. Judging.`,
+  },
+  {
+    id: 'unplaced',
+    on: ['plan', 'notes'],
+    tone: 'calm',
+    when: f => f.unplaced > 0,
+    text: f =>
+      `${plural(f.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
   },
   {
     id: 'notes',
