@@ -15,7 +15,7 @@ import { factoryEditing, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
-import { useDrafts } from '../draft.ts';
+import { resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
@@ -57,7 +57,7 @@ function rename(event: Event, id: string) {
     } finally {
       render();
       const name = savedNames()[id];
-      if (name !== undefined) names[id] = name;
+      if (name !== undefined) resetDraft(names, id, name);
     }
   });
 }

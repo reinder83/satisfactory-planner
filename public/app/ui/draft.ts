@@ -9,9 +9,20 @@
 // meanwhile, and its own save then left that out (#664). Untouched is whether the user typed, not
 // whether the text still equals the value saved before: a count typed back to that value during
 // its own save looked untouched, and the save's result replaced it (#678). After a commit, the
-// handler puts the saved value back itself (settle or reset below), whether the entry was
+// handler puts the saved value back itself (settle, reset or resetDraft below), whether the entry was
 // refused, saved or failed to save.
-import { customRef, reactive, watch, type Ref } from 'vue';
+import {
+  customRef,
+  effectScope,
+  getCurrentScope,
+  isRef,
+  onScopeDispose,
+  reactive,
+  toRaw,
+  watch,
+  type EffectScope,
+  type Ref,
+} from 'vue';
 
 // How each draft of useDraft takes a saved value, which leaves it untouched again.
 const adopters = new WeakMap<Ref<string>, (value: string) => void>();
@@ -62,16 +73,41 @@ export function settle(draft: Ref<string>, shown: string, saved: string) {
   return true;
 }
 
-// A field per key, for a list drawn with v-for: `saved` reads every key's saved value. A key
-// whose saved value changes gets it while its draft is untouched, and a new key gets it; the
-// others keep what is typed. Untouched here still means showing the value saved before: these
-// fields are read-only while they save (app/busy.ts), so none is typed back to it meanwhile.
+// A field per key, for a list drawn with v-for: `saved` reads every key's saved value. Each key
+// has a draft of its own, from useDraft, so the same rule holds for every field: a new saved value
+// replaces a key's draft only while nothing has been typed in it since it last took the saved
+// value, not while it still shows the value saved before (#683). A new key gets its saved value,
+// and a key that goes loses its draft, so it comes back untouched. The record returned unwraps
+// the drafts: reading a key reads its draft and writing a key (the input event) types in it. A
+// handler puts the saved value back after its commit with resetDraft.
 export function useDrafts(saved: () => Record<string, string>) {
-  const drafts = reactive<Record<string, string>>({ ...saved() });
-  watch(saved, (now, before) => {
-    for (const [key, value] of Object.entries(now))
-      if (!(key in before) || (value !== before[key] && drafts[key] === before[key]))
-        drafts[key] = value;
-  });
+  const drafts = reactive<Record<string, string>>({}),
+    scopes = new Map<string, EffectScope>();
+  const add = (key: string) => {
+    const scope = effectScope(true);
+    scopes.set(key, scope);
+    (drafts as Record<string, unknown>)[key] = scope.run(() => useDraft(() => saved()[key] ?? ''));
+  };
+  for (const key of Object.keys(saved())) add(key);
+  watch(
+    () => Object.keys(saved()),
+    keys => {
+      for (const [key, scope] of scopes)
+        if (!keys.includes(key)) {
+          scope.stop();
+          scopes.delete(key);
+          delete drafts[key];
+        }
+      for (const key of keys) if (!scopes.has(key)) add(key);
+    },
+  );
+  if (getCurrentScope()) onScopeDispose(() => scopes.forEach(scope => scope.stop()));
   return drafts;
+}
+
+// reset() for one key of useDrafts: its saved value again, untouched.
+export function resetDraft(drafts: Record<string, string>, key: string, saved: string) {
+  const draft = (toRaw(drafts) as Record<string, unknown>)[key];
+  if (isRef(draft)) reset(draft as Ref<string>, saved);
+  else drafts[key] = saved;
 }

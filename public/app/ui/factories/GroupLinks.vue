@@ -53,7 +53,7 @@ import { fuelledModes } from '../../../state.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
-import { useDrafts } from '../draft.ts';
+import { resetDraft, useDrafts } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -191,9 +191,12 @@ const savedTrips = (): Record<string, string> =>
   );
 const trips = useDrafts(savedTrips);
 // Then the saved minutes again, after a refused entry or a save (failed or not).
-const savedTrip = (link: Link) =>
-  (trips[link.key] =
-    savedTrips()[link.key] ?? String(link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN));
+const savedTrip = (link: Link) => {
+  const minutes =
+    savedTrips()[link.key] ?? String(link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN);
+  resetDraft(trips, link.key, minutes);
+  return minutes;
+};
 
 async function setTrip(event: Event, link: Link) {
   const input = event.target as HTMLInputElement,

@@ -17,7 +17,12 @@ vi.mock('../../public/browser-api.ts', async original => ({
 }));
 
 import { applyUpdate } from './setup.ts';
-import { races, typedDuringOwnSave, typedDuringSave } from './input-race.ts';
+import {
+  races,
+  typedBackWhileAnotherTabSaves,
+  typedDuringOwnSave,
+  typedDuringSave,
+} from './input-race.ts';
 
 const stub = (held: () => Promise<void>) => {
   edition.reply = async (path, options) => {
@@ -31,6 +36,19 @@ for (const [name, race] of Object.entries(races))
   test(`a ${name} typed while another one saves is kept and saved in the browser (#627, #654)`, async () => {
     await typedDuringSave(race, stub);
   });
+
+const answer = (reply: (update: UpdateOp) => unknown) => {
+  edition.reply = async (path, options) => {
+    if (path !== '/api/update') throw Error('unexpected ' + path);
+    return reply(JSON.parse(String(options.body)) as UpdateOp);
+  };
+};
+
+for (const [name, race] of Object.entries(races))
+  if (race.elsewhere)
+    test(`a ${name} typed back to its saved value keeps it when another tab saves one in the browser (#683)`, async () => {
+      await typedBackWhileAnotherTabSaves(race, answer);
+    });
 
 test('a delivery count typed while the same counter saves is kept and saved in the browser (#664)', async () => {
   await typedDuringOwnSave(stub);
