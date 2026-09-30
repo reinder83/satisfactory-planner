@@ -42,6 +42,7 @@ import type {
   Catalog,
   CurrentCalculatedPlan,
   CurrentStage,
+  ProgressState,
   Recipe,
   StageKey,
   StoredProfile,
@@ -73,6 +74,24 @@ export type Ranker = (
 ) => Promise<AlternateRanking> | AlternateRanking;
 // A ranking in this edition runs on the worker, so the page stays usable; it still stops here.
 const RANK_BUDGET_MS = 120000;
+// What every route handler in createBrowserApi gets: the route as a URL, app/api.ts's plain
+// headers object, the parsed JSON body ({} when there is none) and the request options, which
+// carry the progress callbacks. A handler in readRoutes or writeRoutes also gets the workspace
+// record and the save and profile scope() found in it.
+interface RouteRequest {
+  url: URL;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+  options: BrowserRequestOptions;
+}
+type ScopedRequest = RouteRequest & {
+  data: BrowserWorkspace;
+  save: BrowserSave;
+  profile: StoredProfile;
+};
+type Handler<Request> = (request: Request) => unknown;
+// The refusal for a route only the self-hosted server answers (accounts, login...).
+const NEEDS_SERVER = 'This feature needs a self-hosted server.';
 
 // Set by browser-mode.js, which build.ts writes only into the Pages build.
 export const browserMode = (globalThis as { PLANNER_BROWSER?: unknown }).PLANNER_BROWSER === true;
@@ -138,6 +157,329 @@ export function createBrowserApi(
     if (!profile) throw Error('Profile not found.');
     return { save, profile };
   };
+  // Unscoped routes, in routes below. Each opens its own transactions.
+  async function workspaceSummary() {
+    return summary(await store.transaction());
+  }
+  // Wizard preview: calculate only, nothing stored.
+  function preview({ body, options }: RouteRequest) {
+    return calculator(body.settings, options.onProgress);
+  }
+  // Mirrors POST /api/profiles. Names are checked and the plan calculated first; the write
+  // then re-finds the target save, applies the 50-save/30-profile limits and starts the state
+  // from newProfileState, optionally carrying progress from body.carryFrom. Unlike the server,
+  // it cannot create an 'original' (handbook) profile: every profile here is calculated.
+  async function createProfile({ body, options }: RouteRequest) {
+    if (body.kind === 'original')
+      throw Error(
+        'Handbook profiles can no longer be created. Create a calculated profile instead.',
+      );
+    const profileName = cleanName(body.name),
+      saveName = body.saveId ? null : cleanName(body.saveName),
+      plan = await calculator(body.settings, options.onProgress),
+      profileId = uid();
+    return store.transaction(data => {
+      let save = data.saves.find(s => s.id === body.saveId);
+      if (body.saveId && !save) throw Error('Save not found.');
+      if (!save) {
+        if (data.saves.length >= 50) throw Error('Save limit reached.');
+        // saveName is set whenever no saveId was given; activeProfile is set below.
+        save = { id: uid(), name: saveName as string, activeProfile: '', profiles: [] };
+        data.saves.push(save);
+      }
+      if (save.profiles.length >= 30) throw Error('Profile limit reached.');
+      const source = body.carryFrom ? save.profiles.find(p => p.id === body.carryFrom) : null;
+      if (body.carryFrom && !source)
+        throw Error('The profile to carry progress from was not found.');
+      const started = newProfileState(
+        plan,
+        source?.state || null,
+        source?.plan || null,
+        body.carry,
+        body.built,
+      );
+      save.profiles.push({
+        id: profileId,
+        name: profileName,
+        kind: 'calculated',
+        // A recalculation of a guided plan keeps its guide (#472).
+        plan: carryGuide(plan, source?.plan),
+        state: started.state,
+      });
+      save.activeProfile = profileId;
+      data.activeSave = save.id;
+      return {
+        saveId: save.id,
+        profileId,
+        reviewCount: started.reviewCount,
+        carriedChecks: started.carried,
+        workspace: summary(data),
+      };
+    });
+  }
+  // Mirrors GET /api/export-saves: all saves, the listed ones (?saves=), one save (?save=), or
+  // one profile (?profile=, with ?share=1 stripping progress through shareState). Only an unscoped full export stamps
+  // lastBackup, which is why this runs as a readwrite transaction. Unlike the server it adds no
+  // default handbook to 'original' profiles; an imported one keeps its own.
+  function exportSaves({ url }: RouteRequest) {
+    const saveId = url.searchParams.get('save'),
+      profileId = url.searchParams.get('profile'),
+      share = url.searchParams.get('share') === '1',
+      chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
+    return store.transaction(data => {
+      let saves = structuredClone(data.saves);
+      if (chosen) {
+        saves = saves.filter(s => chosen.includes(s.id));
+        if (saves.length !== new Set(chosen).size) throw Error('Save not found.');
+      }
+      if (saveId) {
+        saves = saves.filter(s => s.id === saveId);
+        if (!saves.length) throw Error('Save not found.');
+      }
+      if (profileId) {
+        saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
+        if (!saves.length) throw Error('Profile not found.');
+      }
+      for (const save of saves) {
+        if (profileId) save.profiles = save.profiles.filter(p => p.id === profileId);
+        // The filters above keep only saves with a matching profile.
+        if (!save.profiles.some(p => p.id === save.activeProfile))
+          save.activeProfile = save.profiles[0]!.id;
+        if (share) for (const profile of save.profiles) profile.state = shareState(profile.state);
+        // A payoff ranking is derived and can be run again; exports leave it out, as on the server.
+        for (const profile of save.profiles) delete profile.payoff;
+      }
+      const exportedAt = new Date().toISOString();
+      const exported = { format: transferFormat, version: 1, exportedAt, saves };
+      // Only a full export counts as a backup, and not one past the import limit: the
+      // Backup page refuses to download that (#118), so it must not reset the reminder.
+      if (
+        !chosen &&
+        !saveId &&
+        !profileId &&
+        !share &&
+        transferFileSize(exported) <= transferImportLimit
+      )
+        data.lastBackup = exportedAt;
+      return exported;
+    });
+  }
+  // Mirrors POST /api/duplicate-profile: a deep copy with a new id, selected afterwards. The
+  // profile is named by the body's ids, then the headers, like select and remove-profile.
+  function duplicateProfile({ url, headers, body }: RouteRequest) {
+    return store.transaction(data => {
+      const { save, profile } = scope(data, url, headers, body);
+      if (save.profiles.length >= 30) throw Error('Profile limit reached.');
+      const profileId = uid();
+      save.profiles.push({
+        ...structuredClone(profile),
+        id: profileId,
+        name: (profile.name + ' · copy').slice(0, 80),
+      });
+      save.activeProfile = profileId;
+      data.activeSave = save.id;
+      return { saveId: save.id, profileId, workspace: summary(data) };
+    });
+  }
+  // Mirrors POST /api/import-saves: validateTransfer checks the file and each state first, then
+  // each save and profile gets a new id so an import never overwrites what is here. A throw
+  // aborts the transaction, so a failed import leaves the workspace unchanged.
+  function importSaves({ body }: RouteRequest) {
+    const imported = validateTransfer(body);
+    return store.transaction(data => {
+      if (data.saves.length + imported.saves.length > 50)
+        throw Error('Import would exceed the save limit.');
+      for (const save of imported.saves) {
+        const oldActive = save.activeProfile;
+        for (const importedProfile of save.profiles) {
+          const previous = importedProfile.id;
+          importedProfile.id = uid();
+          if (previous === oldActive) save.activeProfile = importedProfile.id;
+        }
+        save.id = uid();
+        data.saves.push(save);
+        data.activeSave = save.id;
+      }
+      return summary(data);
+    });
+  }
+  // Mirrors POST /api/round-up: read, recalculate with wholeMachines outside any transaction,
+  // then write a new profile. Its checks are copied, and a `calc-` check whose row now needs
+  // more machines or more input is unticked for review (counted in reviewCount). The copy is
+  // taken from the profile as it is at write time, so ticks made meanwhile in another tab carry.
+  async function roundUp({ url, headers, options }: RouteRequest) {
+    const before = scope(await store.transaction(), url, headers);
+    // A calculated profile always carries its plan.
+    if (before.profile.kind !== 'calculated' || before.profile.plan!.settings.wholeMachines)
+      throw Error('Choose a calculated profile without whole-machine production.');
+    const rounded = await calculator(
+        { ...before.profile.plan!.settings, wholeMachines: true },
+        options.onProgress,
+      ),
+      profileId = uid();
+    return store.transaction(data => {
+      const { save, profile } = scope(data, url, headers);
+      if (save.profiles.length >= 30) throw Error('Profile limit reached.');
+      const state = structuredClone(profile.state);
+      let reviewCount = 0;
+      for (const [phase, stage] of Object.entries(rounded.stages) as [StageKey, CurrentStage][])
+        for (const row of stage.rows || []) {
+          const old = profile.plan?.stages[phase]?.rows?.find(r => r.id === row.id);
+          if (
+            !old ||
+            row.machines > old.machines ||
+            Object.entries(row.inputs).some(
+              ([item, rate]) => rate > (old.inputs[item] || 0) + 0.001,
+            )
+          ) {
+            const checkKey = 'calc-' + phase + '-' + row.id;
+            if (state.checks[checkKey]) {
+              state.checks[checkKey] = false;
+              reviewCount++;
+            }
+          }
+        }
+      save.profiles.push({
+        id: profileId,
+        name: (profile.name + ' · whole machines').slice(0, 80),
+        kind: 'calculated',
+        plan: carryGuide(rounded, profile.plan),
+        state,
+      });
+      save.activeProfile = profileId;
+      data.activeSave = save.id;
+      return { saveId: save.id, profileId, reviewCount, workspace: summary(data) };
+    });
+  }
+  // Mirrors POST /api/rank-alternates: read the profile, rank on the worker outside any
+  // transaction, then store the result on the profile if its plan is still the one ranked.
+  async function rankPayoff({ url, headers, body, options }: RouteRequest) {
+    if (!ranker) throw Error(NEEDS_SERVER);
+    const { profile: before } = scope(await store.transaction(), url, headers);
+    const plan = before.plan;
+    if (before.kind !== 'calculated' || !plan)
+      throw Error('Hard-drive payoff needs a calculated profile.');
+    const phase = String(body.phase) as StageKey;
+    if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
+    const ranking = await ranker(plan.settings, phase, options.onRankProgress);
+    return store.transaction(data => {
+      const { profile } = scope(data, url, headers);
+      if (profile.plan?.createdAt !== plan.createdAt)
+        throw Error('The profile changed while ranking. Rank again.');
+      profile.payoff = {
+        planCreatedAt: plan.createdAt,
+        rankedAt: new Date().toISOString(),
+        ranking,
+      };
+      return profile.payoff;
+    });
+  }
+
+  // Scoped routes, in readRoutes and writeRoutes below: request() has already found the save
+  // and profile in the transaction's record.
+  // GET /api/context: what the UI loads when it opens a profile.
+  function profileContext({ save, profile }: ScopedRequest) {
+    return {
+      save: { id: save.id, name: save.name },
+      profile: { id: profile.id, name: profile.name, kind: profile.kind },
+      state: profile.state,
+      plan: profile.plan,
+      handbook: profile.handbook,
+      payoff: currentPayoff(profile),
+    };
+  }
+  function progressState({ profile }: ScopedRequest) {
+    return profile.state;
+  }
+  // GET /api/export: the progress-only backup format for one profile.
+  function exportProgress({ save, profile }: ScopedRequest) {
+    return {
+      format: 'satisfactory-planner-backup',
+      profileId: profile.id,
+      saveName: save.name,
+      profileName: profile.name,
+      state: profile.state,
+    };
+  }
+  // POST /api/select, remove-profile and rename mirror the server routes of the same name.
+  // Removing a save's last profile removes the save.
+  function selectProfile({ data, save, profile }: ScopedRequest) {
+    data.activeSave = save.id;
+    save.activeProfile = profile.id;
+    return summary(data);
+  }
+  function removeProfile({ data, save, profile, body }: ScopedRequest) {
+    if (body.confirmed !== true) throw Error('Confirm profile removal first.');
+    save.profiles = save.profiles.filter(p => p.id !== profile.id);
+    if (!save.profiles.length) data.saves = data.saves.filter(s => s.id !== save.id);
+    // The save still has profiles here.
+    else if (save.activeProfile === profile.id) save.activeProfile = save.profiles[0]!.id;
+    if (!data.saves.some(s => s.id === data.activeSave))
+      data.activeSave = data.saves[0]?.id || null;
+    return summary(data);
+  }
+  function rename({ data, save, profile, body }: ScopedRequest) {
+    if (body.target === 'save') save.name = cleanName(body.name);
+    else if (body.target === 'profile') profile.name = cleanName(body.name);
+    else throw Error('Invalid rename target.');
+    return summary(data);
+  }
+  // /api/update applies one save-queue operation through mutate() (state.ts); /api/import
+  // restores a progress backup through validateState. Either way writeProgress bumps the
+  // revision. As on the server, a backup with a different `format` is rejected before
+  // validateState.
+  function updateProgress({ headers, body, profile }: ScopedRequest) {
+    // As on the server: a stale whole-value write is refused (checkBase, #165).
+    checkBase(profile.state, body, headers['X-Planner-Revision']);
+    // The body is the operation as sent; mutate checks it.
+    return writeProgress(profile, mutate(structuredClone(profile.state), body as UpdateOp));
+  }
+  function importProgress({ body, profile }: ScopedRequest) {
+    if (body.format && body.format !== 'satisfactory-planner-backup')
+      throw Error('Wrong backup format.');
+    if (body.profileId && body.profileId !== profile.id)
+      throw Error('Switch to the matching profile before restoring progress.');
+    return writeProgress(profile, validateState(body.format ? body.state : body));
+  }
+  // Stores `next` as the profile's progress with the revision after its current one. An
+  // original profile cannot be moved before Phase 3, which its handbook does not cover.
+  function writeProgress(profile: StoredProfile, next: ProgressState) {
+    if (profile.kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
+      throw Error('The imported handbook covers Phase 3 onward.');
+    // Every state this store wrote carries a revision (newProfileState, validateState).
+    next.revision = (profile.state.revision as number) + 1;
+    profile.state = next;
+    return next;
+  }
+
+  // One handler per /api/ path, in three tables by what the handler needs. routes run on their
+  // own; readRoutes get the scoped save and profile from a readonly transaction, writeRoutes
+  // from inside a readwrite one, whose changes their handler makes.
+  const routes: Record<string, Handler<RouteRequest>> = {
+    '/api/workspace': workspaceSummary,
+    '/api/preview': preview,
+    '/api/profiles': createProfile,
+    '/api/export-saves': exportSaves,
+    '/api/duplicate-profile': duplicateProfile,
+    '/api/import-saves': importSaves,
+    '/api/round-up': roundUp,
+    '/api/rank-alternates': rankPayoff,
+  };
+  const readRoutes: Record<string, Handler<ScopedRequest>> = {
+    '/api/context': profileContext,
+    '/api/state': progressState,
+    '/api/export': exportProgress,
+  };
+  const writeRoutes: Record<string, Handler<ScopedRequest>> = {
+    '/api/select': selectProfile,
+    '/api/remove-profile': removeProfile,
+    '/api/rename': rename,
+    '/api/update': updateProgress,
+    '/api/import': importProgress,
+  };
+  // The scoped routes whose body names the save and profile (saveId, profileId) ahead of the
+  // headers; the others ignore body ids.
+  const scopedByBody = new Set(['/api/select', '/api/remove-profile']);
   // Takes the same (path, fetch options) app/api.ts would give fetch(); `options.onProgress`
   // is extra and receives the phase number the worker is calculating.
   // Concurrency: every change happens inside one store.transaction(), and IndexedDB serializes
@@ -146,305 +488,25 @@ export function createBrowserApi(
   return async function request(route, options = {}) {
     // app/api.ts sends a JSON string and a plain headers object.
     const url = new URL(route, 'https://planner.invalid'),
-      ep = url.pathname,
+      path = url.pathname,
       body: Record<string, unknown> = options.body ? JSON.parse(options.body as string) : {},
-      headers = (options.headers || {}) as Record<string, string>;
-    if (ep === '/api/workspace') return summary(await store.transaction());
-    // Wizard preview: calculate only, nothing stored.
-    if (ep === '/api/preview') return calculator(body.settings, options.onProgress);
-    // Mirrors POST /api/profiles. Names are checked and the plan calculated first; the write
-    // then re-finds the target save, applies the 50-save/30-profile limits and starts the state
-    // from newProfileState, optionally carrying progress from body.carryFrom. Unlike the server,
-    // it cannot create an 'original' (handbook) profile: every profile here is calculated.
-    if (ep === '/api/profiles') {
-      if (body.kind === 'original')
-        throw Error(
-          'Handbook profiles can no longer be created. Create a calculated profile instead.',
-        );
-      const profileName = cleanName(body.name),
-        saveName = body.saveId ? null : cleanName(body.saveName),
-        plan = await calculator(body.settings, options.onProgress),
-        profileId = uid();
-      return store.transaction(d => {
-        let save = d.saves.find(s => s.id === body.saveId);
-        if (body.saveId && !save) throw Error('Save not found.');
-        if (!save) {
-          if (d.saves.length >= 50) throw Error('Save limit reached.');
-          // saveName is set whenever no saveId was given; activeProfile is set below.
-          save = { id: uid(), name: saveName as string, activeProfile: '', profiles: [] };
-          d.saves.push(save);
-        }
-        if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-        const source = body.carryFrom ? save.profiles.find(p => p.id === body.carryFrom) : null;
-        if (body.carryFrom && !source)
-          throw Error('The profile to carry progress from was not found.');
-        const started = newProfileState(
-          plan,
-          source?.state || null,
-          source?.plan || null,
-          body.carry,
-          body.built,
-        );
-        save.profiles.push({
-          id: profileId,
-          name: profileName,
-          kind: 'calculated',
-          // A recalculation of a guided plan keeps its guide (#472).
-          plan: carryGuide(plan, source?.plan),
-          state: started.state,
-        });
-        save.activeProfile = profileId;
-        d.activeSave = save.id;
-        return {
-          saveId: save.id,
-          profileId,
-          reviewCount: started.reviewCount,
-          carriedChecks: started.carried,
-          workspace: summary(d),
-        };
-      });
-    }
-    // Mirrors GET /api/export-saves: all saves, the listed ones (?saves=), one save (?save=), or
-    // one profile (?profile=, with ?share=1 stripping progress through shareState). Only an unscoped full export stamps
-    // lastBackup, which is why this runs as a readwrite transaction. Unlike the server it adds no
-    // default handbook to 'original' profiles; an imported one keeps its own.
-    if (ep === '/api/export-saves') {
-      const saveId = url.searchParams.get('save'),
-        profileId = url.searchParams.get('profile'),
-        share = url.searchParams.get('share') === '1',
-        chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
-      return store.transaction(d => {
-        let saves = structuredClone(d.saves);
-        if (chosen) {
-          saves = saves.filter(s => chosen.includes(s.id));
-          if (saves.length !== new Set(chosen).size) throw Error('Save not found.');
-        }
-        if (saveId) {
-          saves = saves.filter(s => s.id === saveId);
-          if (!saves.length) throw Error('Save not found.');
-        }
-        if (profileId) {
-          saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
-          if (!saves.length) throw Error('Profile not found.');
-        }
-        for (const s of saves) {
-          if (profileId) s.profiles = s.profiles.filter(p => p.id === profileId);
-          // The filters above keep only saves with a matching profile.
-          if (!s.profiles.some(p => p.id === s.activeProfile)) s.activeProfile = s.profiles[0]!.id;
-          if (share) for (const p of s.profiles) p.state = shareState(p.state);
-          // A payoff ranking is derived and can be run again; exports leave it out, as on the server.
-          for (const p of s.profiles) delete p.payoff;
-        }
-        const exportedAt = new Date().toISOString();
-        const exported = { format: transferFormat, version: 1, exportedAt, saves };
-        // Only a full export counts as a backup, and not one past the import limit: the
-        // Backup page refuses to download that (#118), so it must not reset the reminder.
-        if (
-          !chosen &&
-          !saveId &&
-          !profileId &&
-          !share &&
-          transferFileSize(exported) <= transferImportLimit
-        )
-          d.lastBackup = exportedAt;
-        return exported;
-      });
-    }
-    // Mirrors POST /api/duplicate-profile: a deep copy with a new id, selected afterwards.
-    if (ep === '/api/duplicate-profile') {
-      return store.transaction(d => {
-        const { save, profile } = scope(d, url, headers, body);
-        if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-        const profileId = uid();
-        save.profiles.push({
-          ...structuredClone(profile),
-          id: profileId,
-          name: (profile.name + ' · copy').slice(0, 80),
-        });
-        save.activeProfile = profileId;
-        d.activeSave = save.id;
-        return { saveId: save.id, profileId, workspace: summary(d) };
-      });
-    }
-    // Mirrors POST /api/import-saves: validateTransfer checks the file and each state first, then
-    // each save and profile gets a new id so an import never overwrites what is here. A throw
-    // aborts the transaction, so a failed import leaves the workspace unchanged.
-    if (ep === '/api/import-saves') {
-      const imported = validateTransfer(body);
-      return store.transaction(d => {
-        if (d.saves.length + imported.saves.length > 50)
-          throw Error('Import would exceed the save limit.');
-        for (const s of imported.saves) {
-          const old = s.activeProfile;
-          for (const p of s.profiles) {
-            const previous = p.id;
-            p.id = uid();
-            if (previous === old) s.activeProfile = p.id;
-          }
-          s.id = uid();
-          d.saves.push(s);
-          d.activeSave = s.id;
-        }
-        return summary(d);
-      });
-    }
-    // Mirrors POST /api/round-up: read, recalculate with wholeMachines outside any transaction,
-    // then write a new profile. Its checks are copied, and a `calc-` check whose row now needs
-    // more machines or more input is unticked for review (counted in reviewCount). The copy is
-    // taken from the profile as it is at write time, so ticks made meanwhile in another tab carry.
-    if (ep === '/api/round-up') {
-      const before = scope(await store.transaction(), url, headers);
-      // A calculated profile always carries its plan.
-      if (before.profile.kind !== 'calculated' || before.profile.plan!.settings.wholeMachines)
-        throw Error('Choose a calculated profile without whole-machine production.');
-      const rounded = await calculator(
-          { ...before.profile.plan!.settings, wholeMachines: true },
-          options.onProgress,
-        ),
-        profileId = uid();
-      return store.transaction(d => {
-        const { save, profile } = scope(d, url, headers);
-        if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-        const state = structuredClone(profile.state);
-        let reviewCount = 0;
-        for (const [ph, stage] of Object.entries(rounded.stages) as [StageKey, CurrentStage][])
-          for (const row of stage.rows || []) {
-            const old = profile.plan?.stages[ph]?.rows?.find(r => r.id === row.id);
-            if (
-              !old ||
-              row.machines > old.machines ||
-              Object.entries(row.inputs).some(([n, q]) => q > (old.inputs[n] || 0) + 0.001)
-            ) {
-              const key = 'calc-' + ph + '-' + row.id;
-              if (state.checks[key]) {
-                state.checks[key] = false;
-                reviewCount++;
-              }
-            }
-          }
-        save.profiles.push({
-          id: profileId,
-          name: (profile.name + ' · whole machines').slice(0, 80),
-          kind: 'calculated',
-          plan: carryGuide(rounded, profile.plan),
-          state,
-        });
-        save.activeProfile = profileId;
-        d.activeSave = save.id;
-        return { saveId: save.id, profileId, reviewCount, workspace: summary(d) };
-      });
-    }
-    // Mirrors POST /api/rank-alternates: read the profile, rank on the worker outside any
-    // transaction, then store the result on the profile if its plan is still the one ranked.
-    if (ep === '/api/rank-alternates') {
-      if (!ranker) throw Error('This feature needs a self-hosted server.');
-      const { profile: before } = scope(await store.transaction(), url, headers);
-      const plan = before.plan;
-      if (before.kind !== 'calculated' || !plan)
-        throw Error('Hard-drive payoff needs a calculated profile.');
-      const phase = String(body.phase) as StageKey;
-      if (!['1', '2', '3', '4', '5'].includes(phase)) throw Error('Choose a phase from 1 to 5.');
-      const ranking = await ranker(plan.settings, phase, options.onRankProgress);
-      return store.transaction(d => {
-        const { profile } = scope(d, url, headers);
-        if (profile.plan?.createdAt !== plan.createdAt)
-          throw Error('The profile changed while ranking. Rank again.');
-        profile.payoff = {
-          planCreatedAt: plan.createdAt,
-          rankedAt: new Date().toISOString(),
-          ranking,
-        };
-        return profile.payoff;
-      });
-    }
-    // The remaining routes all act on one scoped save/profile. Reads use a readonly transaction;
-    // everything else runs `operation` inside a readwrite one. Any other route (accounts,
-    // logout) is refused before the scope lookup, so it does not report "Save not found."
-    // when no save is open.
-    const scoped = [
-      '/api/select',
-      '/api/remove-profile',
-      '/api/rename',
-      '/api/update',
-      '/api/import',
-    ];
-    const read = ['/api/context', '/api/state', '/api/export'].includes(ep);
-    if (!read && !scoped.includes(ep)) throw Error('This feature needs a self-hosted server.');
-    const operation = (d: BrowserWorkspace): unknown => {
-      const { save, profile } = scope(
-        d,
-        url,
-        headers,
-        ['/api/select', '/api/remove-profile'].includes(ep) ? body : undefined,
-      );
-      // GET /api/context: what the UI loads when it opens a profile.
-      if (ep === '/api/context')
-        return {
-          save: { id: save.id, name: save.name },
-          profile: { id: profile.id, name: profile.name, kind: profile.kind },
-          state: profile.state,
-          plan: profile.plan,
-          handbook: profile.handbook,
-          payoff: currentPayoff(profile),
-        };
-      if (ep === '/api/state') return profile.state;
-      // GET /api/export: the progress-only backup format for one profile.
-      if (ep === '/api/export')
-        return {
-          format: 'satisfactory-planner-backup',
-          profileId: profile.id,
-          saveName: save.name,
-          profileName: profile.name,
-          state: profile.state,
-        };
-      // POST /api/select, remove-profile and rename mirror the server routes of the same name.
-      // Removing a save's last profile removes the save.
-      if (ep === '/api/select') {
-        d.activeSave = save.id;
-        save.activeProfile = profile.id;
-        return summary(d);
-      }
-      if (ep === '/api/remove-profile') {
-        if (body.confirmed !== true) throw Error('Confirm profile removal first.');
-        save.profiles = save.profiles.filter(p => p.id !== profile.id);
-        if (!save.profiles.length) d.saves = d.saves.filter(s => s.id !== save.id);
-        // The save still has profiles here.
-        else if (save.activeProfile === profile.id) save.activeProfile = save.profiles[0]!.id;
-        if (!d.saves.some(s => s.id === d.activeSave)) d.activeSave = d.saves[0]?.id || null;
-        return summary(d);
-      }
-      if (ep === '/api/rename') {
-        if (body.target === 'save') save.name = cleanName(body.name);
-        else if (body.target === 'profile') profile.name = cleanName(body.name);
-        else throw Error('Invalid rename target.');
-        return summary(d);
-      }
-      // /api/update applies one save-queue operation through mutate() (state.ts); /api/import
-      // restores a progress backup through validateState. Either way the revision is bumped. As on
-      // the server, a backup with a different `format` is rejected before validateState.
-      if (ep === '/api/update' || ep === '/api/import') {
-        if (ep === '/api/import' && body.format && body.format !== 'satisfactory-planner-backup')
-          throw Error('Wrong backup format.');
-        if (ep === '/api/import' && body.profileId && body.profileId !== profile.id)
-          throw Error('Switch to the matching profile before restoring progress.');
-        // As on the server: a stale whole-value write is refused (checkBase, #165).
-        if (ep === '/api/update') checkBase(profile.state, body, headers['X-Planner-Revision']);
-        const next =
-          ep === '/api/update'
-            ? // The body is the operation as sent; mutate checks it.
-              mutate(structuredClone(profile.state), body as UpdateOp)
-            : validateState(body.format ? body.state : body);
-        if (profile.kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
-          throw Error('The imported handbook covers Phase 3 onward.');
-        // Every state this store wrote carries a revision (newProfileState, validateState).
-        next.revision = (profile.state.revision as number) + 1;
-        profile.state = next;
-        return next;
-      }
-      // Unreachable: every route left after the check above is handled.
-      throw Error('This feature needs a self-hosted server.');
-    };
-    return read ? operation(await store.transaction()) : store.transaction(operation);
+      headers = (options.headers || {}) as Record<string, string>,
+      routeRequest: RouteRequest = { url, headers, body, options };
+    const unscoped = routes[path];
+    if (unscoped) return unscoped(routeRequest);
+    // Any other route (accounts, logout) is refused before the scope lookup, so it does not
+    // report "Save not found." when no save is open.
+    const read = readRoutes[path],
+      write = writeRoutes[path];
+    if (!read && !write) throw Error(NEEDS_SERVER);
+    const scoped = (data: BrowserWorkspace): ScopedRequest => ({
+      ...routeRequest,
+      data,
+      ...scope(data, url, headers, scopedByBody.has(path) ? body : undefined),
+    });
+    if (read) return read(scoped(await store.transaction()));
+    // write is set: one of the two tables had the route.
+    return store.transaction(data => write!(scoped(data)));
   };
 }
 // The part of a Worker the calculator wrapper uses; tests pass a stand-in.

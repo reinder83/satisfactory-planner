@@ -496,3 +496,64 @@ test('the Pages edition opens an upgraded browser with its original profile migr
     Object.assign(globalThis, saved);
   }
 });
+
+// request() looks each route up in one of three tables (#525): an unknown route is refused before
+// any transaction or scope lookup, reads of the scoped profile use a readonly transaction and
+// its changes a readwrite one, and only select and remove-profile take the profile from the body.
+test('each route runs in the transaction it always did, and an unknown one opens none', async () => {
+  let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
+  const opened: string[] = [];
+  const store = {
+    async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      opened.push(change ? 'readwrite' : 'readonly');
+      const copy = structuredClone(data);
+      if (!change) return copy as T;
+      const result = change(copy);
+      data = copy;
+      return structuredClone(result);
+    },
+  };
+  const api = createBrowserApi(store, calculate, {} as Catalog),
+    post = (route: string, body: unknown) => api(route, { body: JSON.stringify(body) });
+  const settings = { phase: '1', goal: 'minimal' };
+  const first = (await post('/api/profiles', {
+    saveName: 'S',
+    name: 'A',
+    settings,
+  })) as ProfileReply;
+  const second = (await post('/api/profiles', {
+    saveId: first.saveId,
+    name: 'B',
+    settings,
+  })) as ProfileReply;
+  const modes = async (run: () => Promise<unknown>) => {
+    opened.length = 0;
+    await run();
+    return [...opened];
+  };
+  for (const route of ['/api/login', '/api/logout', '/api/nothing', '/api/rank-alternates']) {
+    opened.length = 0;
+    await assert.rejects(post(route, {}), /^Error: This feature needs a self-hosted server\.$/);
+    assert.deepEqual(opened, [], route + ' is refused before any transaction');
+  }
+  for (const route of ['/api/workspace', '/api/context', '/api/state', '/api/export'])
+    assert.deepEqual(await modes(() => api(route)), ['readonly'], route);
+  assert.deepEqual(await modes(() => api('/api/export-saves')), ['readwrite']);
+  const update = () => post('/api/update', { type: 'note', key: 'n', value: 'x' });
+  assert.deepEqual(await modes(update), ['readwrite']);
+  // The active profile is B; rename ignores the body's ids, select follows them.
+  const ids = { saveId: first.saveId, profileId: first.profileId };
+  await post('/api/rename', { ...ids, target: 'profile', name: 'Renamed' });
+  const names = () => data.saves[0]!.profiles.map(p => p.name);
+  assert.deepEqual(names(), ['A', 'Renamed']);
+  assert.equal(data.saves[0]!.activeProfile, second.profileId);
+  assert.deepEqual(await modes(() => post('/api/select', ids)), ['readwrite']);
+  assert.equal(data.saves[0]!.activeProfile, first.profileId);
+  // The scope is still looked up before a route's own checks.
+  await assert.rejects(
+    api('/api/remove-profile', { body: '{}', headers: { 'X-Save-Id': 'gone' } }),
+    /Save not found/,
+  );
+  await assert.rejects(post('/api/remove-profile', ids), /Confirm profile removal first/);
+  assert.equal(data.saves[0]!.profiles.length, 2);
+});
