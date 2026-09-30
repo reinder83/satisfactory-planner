@@ -59,11 +59,11 @@ jobs:
           done
           curl --fail --silent http://127.0.0.1:18080/api/state | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).checks['docker-smoke']!==true)process.exit(1)})"
           curl --fail --silent -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"settings":{"recipes":"all","pureIngots":true,"nuclear":"recycle"}}' http://127.0.0.1:18080/api/preview | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(!JSON.parse(s).stages['5'].feasible)process.exit(1)})"
-      # A root-owned data directory from an older image, as a Synology bind mount holds it. It is a
+      # A root-owned data directory from an older image, as a host bind mount can hold it. It is a
       # named volume rather than a runner path: on the NAS runner the Docker daemon resolves host
       # paths on the NAS, not in the runner container (#399), and the first container makes the
       # directory root-owned either way.
-      - name: Test Synology IDs and root-owned data migration
+      - name: Test custom PUID/PGID and root-owned data migration
         run: |
           docker volume rm planner-nas-data || true
           docker volume create planner-nas-data
