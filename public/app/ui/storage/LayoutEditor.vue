@@ -15,7 +15,7 @@ import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/stora
 import type { StorageFloor } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
-import { useDraft } from '../draft.ts';
+import { reset, useDraft } from '../draft.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
@@ -65,7 +65,8 @@ async function submit(
 // The letter box starts on the next free letter; the user may type any other. It shows a draft
 // (ui/draft.ts), so the redraws of other saves leave a typed letter alone (#670), and a save that
 // moves the suggestion (a bay added in another tab) moves an untouched box only (#677). Once a bay
-// is added the box starts again on the next free letter.
+// is added the box starts again on the next free letter, untouched, so it follows the next move
+// too (reset, #678).
 const suggested = () => legacy(() => nextBayLetter() || '');
 const letter = useDraft(suggested);
 const addBay = async (event: Event) => {
@@ -102,7 +103,7 @@ const addBay = async (event: Event) => {
       ...(replace ? { replace: true } : {}),
     };
   });
-  if (added) letter.value = suggested();
+  if (added) reset(letter, suggested());
 };
 const addFloor = (event: Event) =>
   submit(event, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));

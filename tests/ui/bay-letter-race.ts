@@ -143,4 +143,14 @@ export async function letterTypedWhileSuggestionMoves(
   );
   assert.match(field().value, /^[A-Z]{1,2}$/, 'a next suggestion after adding the suggested one');
   assert.notEqual(field().value, fourth, 'not the letter just added');
+  // The box put back after that add is untouched too: it follows the next move (#678).
+  const fifth = field().value;
+  taken = fifth;
+  await renameC('Renamed four times');
+  assert.ok(
+    state.storageEdits.bays.some(bay => bay.id === fifth),
+    'the other tab took the next one',
+  );
+  assert.match(field().value, /^[A-Z]{1,2}$/, 'a suggestion after the other tab took it');
+  assert.notEqual(field().value, fifth, 'following the suggestion after adding the suggested one');
 }
