@@ -68,6 +68,9 @@ export interface FlowOutput {
   shipSub?: string;
   subTxt?: string;
   rateTxt?: string;
+  // The destination takes no item: a generator's power grid. It is drawn without an icon or
+  // an empty icon frame, and is not item demand for the bank note (#560).
+  noItem?: true;
 }
 
 // One input of a flow diagram, with its lanes; local marks one made on site.
@@ -613,6 +616,7 @@ export const generatorOutputs = (row: CalcRow): FlowOutput[] =>
           label: 'Power grid',
           shipSub: 'generation',
           rateTxt: power(row.generationMW),
+          noItem: true,
         },
       ]
     : [];
@@ -644,7 +648,8 @@ export interface FlowNotes {
 // machines at 100% plus, when the equivalent is fractional, one adjustable machine; its clock
 // is in the dialog's Machine setup table. Consumer, storage and delivery rates are the item's
 // plan-wide demand, not this row's share: the bank note under the destinations says so, and
-// `shared` adds that another row makes one of the same items. No destinations, no bank note.
+// `shared` adds that another row makes one of the same items. No item destinations (none, or
+// a generator's power grid alone), no bank note (#560).
 export function flowNotes(
   row: CalcRow,
   outputs: FlowOutput[],
@@ -660,7 +665,7 @@ export function flowNotes(
         ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
         : '',
     clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
-    bankNote: outputs.length ? { shared } : null,
+    bankNote: outputs.some(o => !o.noItem) ? { shared } : null,
   };
 }
 
