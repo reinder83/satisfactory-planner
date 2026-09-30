@@ -14,6 +14,7 @@ import { render } from '../../shell.ts';
 import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/storage.ts';
 import type { StorageFloor } from '../../views/storage.ts';
 import { confirmAction } from '../confirm.ts';
+import { vValue } from '../form/value.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
@@ -40,27 +41,33 @@ const randomId = (prefix: string, bytes: number) =>
   ).join('');
 
 // Saves `makeUpdate(name)` from a form's name field, then empties the form and redraws.
-// `makeUpdate` may ask first (a promise); null saves nothing.
+// `makeUpdate` may ask first (a promise); null saves nothing. True once saved.
 async function submit(
   event: Event,
   makeUpdate: (name: string) => UpdateOp | null | Promise<UpdateOp | null>,
 ) {
   const form = event.target as HTMLFormElement,
     name = String(new FormData(form).get('name') || '').trim();
-  if (!name) return;
+  if (!name) return false;
   const change = await makeUpdate(name);
-  if (!change) return;
+  if (!change) return false;
   try {
     await save(change);
     form.reset();
     render();
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-// The letter box starts on the next free letter; the user may type any other.
+// The letter box starts on the next free letter; the user may type any other. It is bound with
+// v-value (form/value.ts), so the redraws of other saves leave a typed letter alone (#670); once a
+// bay is added the box starts again on the next free letter.
 const suggested = () => nextBayLetter() || '';
-const addBay = (event: Event) =>
-  submit(event, async name => {
+const letterField = ref<HTMLInputElement>();
+const addBay = async (event: Event) => {
+  const added = await submit(event, async name => {
     const field = new FormData(event.target as HTMLFormElement).get('letter');
     const letter = String(field || '')
       .trim()
@@ -93,6 +100,8 @@ const addBay = (event: Event) =>
       ...(replace ? { replace: true } : {}),
     };
   });
+  if (added && letterField.value) letterField.value.value = suggested();
+};
 const addFloor = (event: Event) =>
   submit(event, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
 const renameFloor = (event: Event) =>
@@ -168,7 +177,8 @@ async function removeFloor(event: Event) {
           maxlength="2"
           required
           pattern="[A-Za-z]{1,2}"
-          :value="suggested()"
+          ref="letterField"
+          v-value="suggested()"
           aria-label="New bay letter"
         /><input
           id="new-bay-name"
