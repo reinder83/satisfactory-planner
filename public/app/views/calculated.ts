@@ -109,6 +109,19 @@ export function headroomAdvice(snapshot: StoredStage, shownPhase: Phase): string
   return `${label} plans ${list}; add generation beyond those, or count on existing spare power.`;
 }
 
+// The bold heading over an infeasible phase `snapshot`'s reason: the plan page's draft notice
+// (ui/plan/CalcWarnings.vue), or with `phase` the wizard's Review (ui/wizard/ReviewStep.vue).
+// It names a budget only when the planner measured one (shortfalls, the hours it would fit in,
+// or whole machines breaking it). A stopped search, recipes that cannot make the goal and an
+// older snapshot carry none of those, so the heading stays neutral and the reason says why (#626).
+export function draftHeading(snapshot: StoredStage, phase?: string): string {
+  const overBudget = Boolean(
+    snapshot.shortfalls || snapshot.minHours || snapshot.wholeMachinesOnly,
+  );
+  if (phase) return `Phase ${phase}${overBudget ? ' — budget exceeded' : ''}:`;
+  return overBudget ? 'Planning draft — budget exceeded.' : 'Planning draft.';
+}
+
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
 // The options for an infeasible phase `snapshot` under `settings`, as sentences (none for an
 // older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review

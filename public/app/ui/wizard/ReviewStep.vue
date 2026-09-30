@@ -9,7 +9,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { draft } from '../../session.ts';
-import { draftFixes } from '../../views/calculated.ts';
+import { draftFixes, draftHeading } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
@@ -40,6 +40,7 @@ const view = computed(() =>
         .filter(([, stageResult]) => !stageResult.feasible)
         .map(([phase, stageResult]) => ({
           phase,
+          heading: draftHeading(stageResult, phase),
           reason: stageResult.reason,
           fixes: draftFixes(stageResult, preview.settings),
         })),
@@ -82,7 +83,7 @@ const view = computed(() =>
     </div>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
     <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">
-      <b>Phase {{ phaseDraft.phase }}:</b> {{ phaseDraft.reason
+      <b>{{ phaseDraft.heading }}</b> {{ phaseDraft.reason
       }}<template v-if="phaseDraft.fixes.length"
         ><p><b>Options</b></p>
         <ul>
