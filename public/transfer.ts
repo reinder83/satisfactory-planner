@@ -1,5 +1,9 @@
 import { safeKey, validateState } from './state.ts';
-import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
+import {
+  migrateOriginalProfile,
+  usableHandbook,
+  type MigrationData,
+} from './handbook-migration.ts';
 import type {
   Handbook,
   PlanGuide,
@@ -215,6 +219,12 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
       const handbook = kind === 'original' ? structuredClone(profile.handbook) : undefined;
       if (handbook && handbook.sources !== undefined && !Array.isArray(handbook.sources))
         invalid('Invalid handbook sources.');
+      // Every part the conversion reads must be there and of its shape (#609). The stores convert
+      // such a profile with what they can read, keeping their pre-migration copy; an import is
+      // refused instead, since the file is the user's own copy. Every release exported a whole
+      // handbook, so only a hand-made or damaged file is refused.
+      if (kind === 'original' && !usableHandbook(profile.handbook).complete)
+        invalid('This original profile is incomplete or damaged, so it cannot be imported.');
       if (handbook) handbook.sources = httpsOnly(handbook.sources || []);
       const plan =
         kind === 'calculated' ? (structuredClone(profile.plan) as StoredCalculatedPlan) : null;
@@ -268,7 +278,8 @@ export async function importableTransfer(
         // validateTransfer requires an original profile to carry its own handbook.
         return migrateOriginalProfile(profile, profile.handbook!, recipes, pureLimits);
       } catch {
-        // Only a handbook no release exported (#609) fails to convert.
+        // A last guard: validateTransfer already refused a handbook the conversion cannot read
+        // (#609).
         return invalid('This original profile’s handbook could not be converted.');
       }
     });

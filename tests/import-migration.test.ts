@@ -190,7 +190,7 @@ test('an already migrated export imports exactly as validateTransfer returns it'
   assert.deepEqual(imported, migrated);
 });
 
-test('an original profile whose handbook cannot be converted is refused with 400', async () => {
+test('an original profile whose handbook is incomplete is refused with 400', async () => {
   const data = firstExport();
   // @ts-expect-error a partial handbook no release exported, which the import refuses
   originalOf(data).handbook = { factories: [], phases: {}, storage: [] };
@@ -198,7 +198,7 @@ test('an original profile whose handbook cannot be converted is refused with 400
     importableTransfer(data, async () => migration),
     {
       status: 400,
-      message: 'This original profile’s handbook could not be converted.',
+      message: 'This original profile is incomplete or damaged, so it cannot be imported.',
     },
   );
 });
@@ -238,7 +238,7 @@ test('Docker edition: /api/import-saves stores the converted profile, and a rest
     assert.equal(refused.status, 400);
     assert.equal(
       (await refused.json()).error,
-      'This original profile’s handbook could not be converted.',
+      'This original profile is incomplete or damaged, so it cannot be imported.',
     );
     // Exporting and importing the migrated save again adds an identical copy.
     const exported = await (await fetch(app.url + '/api/export-saves')).json();
@@ -317,7 +317,7 @@ test('Pages edition: a failed conversion or recipe fetch leaves the record uncha
       createBrowserApi(store, calculate, catalog(), undefined, async () => migration),
       bad,
     ),
-    /could not be converted/,
+    /incomplete or damaged/,
   );
   assert.deepEqual(data, before);
 });
