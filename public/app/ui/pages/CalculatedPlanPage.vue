@@ -39,16 +39,16 @@ import PayoffPanel from '../plan/PayoffPanel.vue';
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
-    const x = calcStage();
-    if (!calculated || !x) return null;
+    const stagePlan = calcStage();
+    if (!calculated || !stagePlan) return null;
     // A production line's Running box is its checklist step, `calc-<stage>-<row id>`.
-    const rows = x.rows || [];
+    const rows = stagePlan.rows || [];
     const running = rows.filter(r => checked('calc-' + stage() + '-' + r.id)).length;
     const slots = storageBays()
       .flatMap(b => b.items)
       .filter(s => s.name);
     const ready = slots.filter(s => checked('slot-' + s.id + '-verified')).length;
-    const buildings = num(rows.reduce((a, r) => a + r.machines, 0));
+    const buildings = num(rows.reduce((total, row) => total + row.machines, 0));
     return {
       title: phaseLabel(phase()),
       profileName: currentProfile.name,
@@ -66,13 +66,13 @@ const page = computed(() =>
           href: '#storage',
           text: `${ready} of ${slots.length} storage positions verified`,
         },
-        { key: 'power', href: '#resources', text: `${power(x.generationMW)} new power` },
-        { key: 'hours', text: `Delivery in ${num(x.hours)} h at steady state` },
+        { key: 'power', href: '#resources', text: `${power(stagePlan.generationMW)} new power` },
+        { key: 'hours', text: `Delivery in ${num(stagePlan.hours)} h at steady state` },
       ],
-      deliveries: Object.entries(x.delivery || {}).map(([n, d]) => ({
-        id: stage() + '-' + slug(n),
-        name: n,
-        ...d,
+      deliveries: Object.entries(stagePlan.delivery || {}).map(([item, delivery]) => ({
+        id: stage() + '-' + slug(item),
+        name: item,
+        ...delivery,
         initial: 0,
       })),
       warnings: calculated.warnings,
@@ -120,12 +120,16 @@ const page = computed(() =>
       <aside>
         <section class="panel">
           <h2>Elevator delivery</h2>
-          <DeliveryCounter v-for="d in page.deliveries" :key="d.id" :delivery="d" />
+          <DeliveryCounter
+            v-for="delivery in page.deliveries"
+            :key="delivery.id"
+            :delivery="delivery"
+          />
         </section>
         <BuildStatusPanel />
         <section class="panel">
           <h2>Profile assumptions</h2>
-          <p v-for="(w, i) in page.warnings" :key="i" class="small">{{ w }}</p>
+          <p v-for="(warning, i) in page.warnings" :key="i" class="small">{{ warning }}</p>
         </section>
       </aside>
     </div>

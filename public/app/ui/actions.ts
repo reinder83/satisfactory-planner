@@ -26,8 +26,8 @@ export type FactoryLink = { factory: string } | { calcFactory: string };
 // factory dialog's target check. It saves when ticked; a failed write puts the box back.
 // The box is busy while it saves (app/busy.ts): it keeps focus, and a second press meanwhile does
 // not tick it (#299).
-export function toggleCheck(e: Event) {
-  const el = e.target as HTMLInputElement;
+export function toggleCheck(event: Event) {
+  const el = event.target as HTMLInputElement;
   const value = el.checked;
   return whileBusy(el, async () => {
     try {
@@ -59,23 +59,23 @@ export const factoryLink = (link: FactoryLink | null | undefined) =>
 // the dialog stays open when the user keeps it. Notes save themselves (ui/note-draft.ts), so
 // saving one no longer closes it.
 export async function closeDetail() {
-  const d = required<HTMLDialogElement>('#detail');
-  if (!d.open) return;
-  const asked = allowSwitch(d);
-  if (asked === true || (await asked)) d.close();
+  const dialog = required<HTMLDialogElement>('#detail');
+  if (!dialog.open) return;
+  const asked = allowSwitch(dialog);
+  if (asked === true || (await asked)) dialog.close();
 }
 
 // Escape on #detail (bound in listeners.ts): the browser closes the dialog itself after this
 // cancel event, so with a note that could not be saved the close is cancelled here and the
 // note asked about, as the × does; leaving anyway closes it then. A browser may still close
 // it after repeated presses, whatever the answer.
-export function cancelDetail(e: Event) {
-  const d = required<HTMLDialogElement>('#detail');
-  const asked = allowSwitch(d);
+export function cancelDetail(event: Event) {
+  const dialog = required<HTMLDialogElement>('#detail');
+  const asked = allowSwitch(dialog);
   if (asked === true) return;
-  e.preventDefault();
+  event.preventDefault();
   void asked.then(ok => {
-    if (ok && d.open) d.close();
+    if (ok && dialog.open) dialog.close();
   });
 }
 
@@ -95,8 +95,8 @@ export async function openProfile(saveId: string, profileId: string, busy?: (on:
     setWorkspace(await post<WorkspaceSummary>('/api/select', { saveId, profileId }));
     await loadContext(saveId, profileId);
     navigate('plan');
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     busy?.(false);
   }
@@ -110,8 +110,8 @@ export async function signOut() {
   await writeQueue;
   try {
     await post('/api/logout', {});
-  } catch (err) {
-    toast((err as Error).message || 'Could not sign out.', true);
+  } catch (error) {
+    toast((error as Error).message || 'Could not sign out.', true);
     return;
   }
   setAuthMode('login');
@@ -121,14 +121,14 @@ export async function signOut() {
 // A storage container dropped on another position (#208, StoragePage.vue): one save that moves
 // it, or swaps it with the container there, its checks and note going along.
 export async function moveContainer(from: string, to: string) {
-  const op = containerMove(from, to);
-  if (!op || op.type !== 'storageSlotMove') return;
+  const move = containerMove(from, to);
+  if (!move || move.type !== 'storageSlotMove') return;
   try {
-    await save(op);
+    await save(move);
     toast(
-      op.toName
-        ? `${op.fromName} and ${op.toName} swapped places (${from} ↔ ${to}), each with its checkmarks and note.`
-        : `${op.fromName} moved from ${from} to ${to}, with its checkmarks and note.`,
+      move.toName
+        ? `${move.fromName} and ${move.toName} swapped places (${from} ↔ ${to}), each with its checkmarks and note.`
+        : `${move.fromName} moved from ${from} to ${to}, with its checkmarks and note.`,
     );
   } catch {
   } finally {

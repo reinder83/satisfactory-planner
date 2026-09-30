@@ -26,12 +26,12 @@ const page = computed(() =>
     // Factory and storage counters. The check keys are saved progress and must not change:
     // `factory-<stage>-<id>` is a factory's Running box, `slot-<address>-verified` the last
     // of a container's four checks (see slotKeys in views/storage.ts).
-    const fs = plan.factories.filter(f => f.stages[stage()]);
+    const factories = plan.factories.filter(f => f.stages[stage()]);
     const slots = storageBays()
       .flatMap(b => b.items)
-      .filter(x => x.name);
-    const built = fs.filter(f => checked('factory-' + stage() + '-' + f.id)).length,
-      ready = slots.filter(x => checked('slot-' + x.id + '-verified')).length;
+      .filter(slot => slot.name);
+    const built = factories.filter(f => checked('factory-' + stage() + '-' + f.id)).length,
+      ready = slots.filter(slot => checked('slot-' + slot.id + '-verified')).length;
     return {
       title: phaseLabel(phase()) + ' field plan',
       post: phase() === 'post',
@@ -39,7 +39,7 @@ const page = computed(() =>
         {
           key: 'factories',
           href: '#factories',
-          text: `${built} of ${fs.length} factories running`,
+          text: `${built} of ${factories.length} factories running`,
         },
         {
           key: 'storage',
@@ -89,7 +89,10 @@ const page = computed(() =>
           <a class="btn" href="#factories">Completion modules →</a></template
         >
         <template v-else
-          ><DeliveryCounter v-for="d in page.deliveries" :key="d.id" :delivery="d"
+          ><DeliveryCounter
+            v-for="delivery in page.deliveries"
+            :key="delivery.id"
+            :delivery="delivery"
         /></template>
       </section>
       <section class="panel accent">

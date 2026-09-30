@@ -29,21 +29,21 @@ const page = computed(() =>
     const current = phase();
     const offered = phaseOptions();
     const notes = state.notes || {};
-    const has = (p: Phase) => !!notes['phase-' + p]?.trim();
+    const has = (listedPhase: Phase) => !!notes['phase-' + listedPhase]?.trim();
     const listed = ALL.filter(p => offered.includes(p) || has(p));
     return {
       saveName: currentSave.name,
       profileName: currentProfile.name,
-      phases: [current, ...listed.filter(p => p !== current)].map(p => ({
-        phase: p,
-        label: phaseLabel(p),
-        current: p === current,
+      phases: [current, ...listed.filter(p => p !== current)].map(listedPhase => ({
+        phase: listedPhase,
+        label: phaseLabel(listedPhase),
+        current: listedPhase === current,
         tag:
-          p === current
+          listedPhase === current
             ? 'Working on'
-            : !offered.includes(p)
+            : !offered.includes(listedPhase)
               ? 'Before this profile'
-              : has(p)
+              : has(listedPhase)
                 ? 'Has notes'
                 : 'Empty',
       })),
@@ -73,19 +73,19 @@ const page = computed(() =>
     </div>
     <p class="small muted">Locations, train routes, things to check on your next session.</p>
     <details
-      v-for="p in page.phases"
-      :key="p.phase"
+      v-for="entry in page.phases"
+      :key="entry.phase"
       class="panel phase-notes"
-      :open="p.current || undefined"
-      :data-phase-notes="p.phase"
+      :open="entry.current || undefined"
+      :data-phase-notes="entry.phase"
     >
       <summary>
-        {{ p.label }} <span class="small muted">· {{ p.tag }}</span>
+        {{ entry.label }} <span class="small muted">· {{ entry.tag }}</span>
       </summary>
       <NoteBox
-        :id="'phase-note-' + p.phase"
-        :note-key="'phase-' + p.phase"
-        :aria-label="p.label + ' notes'"
+        :id="'phase-note-' + entry.phase"
+        :note-key="'phase-' + entry.phase"
+        :aria-label="entry.label + ' notes'"
       />
     </details>
   </section>

@@ -40,7 +40,7 @@ async function close() {
     document.querySelector<HTMLElement>(
       'button' +
         Object.entries(props.hook)
-          .map(([k, v]) => `[${k}="${CSS.escape(v)}"]`)
+          .map(([attribute, hookValue]) => `[${attribute}="${CSS.escape(hookValue)}"]`)
           .join(''),
     );
   (edit.value?.isConnected ? edit.value : again())?.focus();

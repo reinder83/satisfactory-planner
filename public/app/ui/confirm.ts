@@ -34,30 +34,30 @@ function settle(ok: boolean) {
   const current = open;
   if (!current) return;
   open = null;
-  const d = required<HTMLDialogElement>('#confirm');
-  if (d.open) d.close();
+  const dialog = required<HTMLDialogElement>('#confirm');
+  if (dialog.open) dialog.close();
   current.app.unmount();
   if (current.trigger?.isConnected) current.trigger.focus();
   current.resolve(ok);
 }
 
 export function confirmAction(options: ConfirmOptions): Promise<boolean> {
-  const d = required<HTMLDialogElement>('#confirm');
-  if (listening !== d) {
+  const dialog = required<HTMLDialogElement>('#confirm');
+  if (listening !== dialog) {
     // A click on the backdrop (outside the box, pressed there too) answers Cancel.
-    onBackdropClick(d, () => settle(false));
+    onBackdropClick(dialog, () => settle(false));
     // Escape: answer Cancel here rather than letting the browser close the dialog by itself.
-    d.addEventListener('cancel', e => {
-      e.preventDefault();
+    dialog.addEventListener('cancel', event => {
+      event.preventDefault();
       settle(false);
     });
     // Closed any other way (a browser that closes it after repeated Escapes regardless): the
     // same as Cancel. The close event of an earlier answer arrives after the next question
     // may have reopened the dialog, so an open dialog is left alone.
-    d.addEventListener('close', () => {
-      if (!d.open) settle(false);
+    dialog.addEventListener('close', () => {
+      if (!dialog.open) settle(false);
     });
-    listening = d;
+    listening = dialog;
   }
   // A second question while one is open (not expected) answers the first one Cancel.
   settle(false);
@@ -65,11 +65,11 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
   const trigger = active instanceof HTMLElement && active !== document.body ? active : null;
   return new Promise<boolean>(resolve => {
     const app = createApp(ConfirmDialog, { ...options, answer: settle });
-    app.mount(d);
+    app.mount(dialog);
     open = { app, trigger, resolve };
-    d.showModal();
-    d.querySelector<HTMLElement>(
-      options.danger ? '[data-confirm-cancel]' : '[data-confirm-ok]',
-    )?.focus();
+    dialog.showModal();
+    dialog
+      .querySelector<HTMLElement>(options.danger ? '[data-confirm-cancel]' : '[data-confirm-ok]')
+      ?.focus();
   });
 }

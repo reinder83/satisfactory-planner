@@ -80,22 +80,22 @@ export function useNoteAutosave(
       if (sending === null) status.value = savedAt.value ? 'saved' : 'idle';
       return;
     }
-    const n = ++writes;
-    latest.set(boxId, n);
+    const write = ++writes;
+    latest.set(boxId, write);
     sending = value;
     sent = blank(value);
     status.value = 'saving';
     const mine = () => mounted && id() === boxId;
     save({ type: 'note', key, value }).then(
       () => {
-        if (latest.get(boxId) !== n || !mine()) return;
+        if (latest.get(boxId) !== write || !mine()) return;
         sending = null;
         status.value = 'saved';
         savedAt.value = clock();
       },
       () => {
         // save() has already shown the error in a toast.
-        if (latest.get(boxId) !== n) return;
+        if (latest.get(boxId) !== write) return;
         if (!mine()) {
           orphans.set(boxId, value);
           return;
@@ -124,8 +124,8 @@ export function useNoteAutosave(
     send();
   }
 
-  watch([id, saved], ([k, now], [before, was]) => {
-    if (k !== before) {
+  watch([id, saved], ([boxId, now], [before, was]) => {
+    if (boxId !== before) {
       // Another phase, profile or save. A note still waiting goes to its own key first. Only
       // within the same save and profile: save() writes to the open one. allowSwitch() sends
       // it before a switch, so otherwise it is kept as unsaved for when its box opens again.
@@ -138,7 +138,7 @@ export function useNoteAutosave(
           orphans.set(before, text.value);
         }
       }
-      const kept = adopt(k);
+      const kept = adopt(boxId);
       text.value = kept ?? now;
       status.value = kept === undefined ? 'idle' : 'failed';
       savedAt.value = '';

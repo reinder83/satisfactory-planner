@@ -24,35 +24,35 @@ import { POWER_CHECKS } from '../../../handbook-migration.ts';
 const page = computed(() =>
   legacy(() => {
     const resources = plan.resources[stage()],
-      p = plan.plans[stage()];
-    if (!resources || !p) return null;
+      stagePlan = plan.plans[stage()];
+    if (!resources || !stagePlan) return null;
     return {
       power: num(plan.power[stage()]) + ' GW',
-      peak: num(p.manufacturingPeakGW) + ' GW',
-      average: num(p.manufacturingAvgGW) + ' GW',
+      peak: num(stagePlan.manufacturingPeakGW) + ' GW',
+      average: num(stagePlan.manufacturingAvgGW) + ' GW',
       coal: num(74400 - resources.Coal!) + '/min',
       // Nitrogen Gas is a fluid, in m³/min (#363).
       nitrogen: itemRate('Nitrogen Gas', resources['Nitrogen Gas'] || 0),
       rows: Object.entries(resources)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, q]) => {
+        .map(([name, required]) => {
           // The same use figure and bar as a calculated profile's page (views/resources.ts).
           const cap = plan.capacities[name],
-            u = cap ? resourceUse(q, cap) : null;
+            use = cap ? resourceUse(required, cap) : null;
           // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore.
           return {
             name,
-            required: itemRate(name, q),
+            required: itemRate(name, required),
             available: cap
               ? itemRate(name, cap)
               : name === 'Water'
                 ? 'Extraction limited'
                 : 'Verify wells',
-            remaining: cap ? itemRate(name, cap - q) : '—',
-            tight: !!u?.tight,
-            over: !!u?.over,
-            use: u?.use ?? null,
-            bar: u?.bar ?? 0,
+            remaining: cap ? itemRate(name, cap - required) : '—',
+            tight: !!use?.tight,
+            over: !!use?.over,
+            use: use?.use ?? null,
+            bar: use?.bar ?? 0,
           };
         }),
       steps: POWER_CHECKS.map(({ id, label }) => ({ id, title: label, done: checked(id) })),
@@ -95,23 +95,23 @@ const page = computed(() =>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in page.rows" :key="r.name">
+          <tr v-for="row in page.rows" :key="row.name">
             <td class="resource-cell">
               <div class="resource-name">
-                <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
+                <ItemIcon :name="row.name" /><span>{{ row.name }}</span>
               </div>
             </td>
-            <td class="number">{{ r.required }}</td>
-            <td class="number">{{ r.available }}</td>
-            <td :class="['number', r.tight ? 'warn' : '']">{{ r.remaining }}</td>
+            <td class="number">{{ row.required }}</td>
+            <td class="number">{{ row.available }}</td>
+            <td :class="['number', row.tight ? 'warn' : '']">{{ row.remaining }}</td>
             <td>
-              <template v-if="r.use"
-                >{{ r.use }}
+              <template v-if="row.use"
+                >{{ row.use }}
                 <div
-                  :class="['resource-bar', r.over ? 'over' : r.tight ? 'tight' : '']"
+                  :class="['resource-bar', row.over ? 'over' : row.tight ? 'tight' : '']"
                   aria-hidden="true"
                 >
-                  <span :style="{ width: r.bar + '%' }"></span></div
+                  <span :style="{ width: row.bar + '%' }"></span></div
               ></template>
               <template v-else>—</template>
             </td>
@@ -127,10 +127,13 @@ const page = computed(() =>
       <section class="panel">
         <h2>Power commissioning</h2>
         <div class="checklist">
-          <label v-for="s in page.steps" :key="s.id" class="check-row"
-            ><input type="checkbox" :data-check="s.id" @change="toggleCheck" :checked="s.done" />{{
-              s.title
-            }}</label
+          <label v-for="step in page.steps" :key="step.id" class="check-row"
+            ><input
+              type="checkbox"
+              :data-check="step.id"
+              @change="toggleCheck"
+              :checked="step.done"
+            />{{ step.title }}</label
           >
         </div>
       </section>

@@ -70,15 +70,17 @@ const page = computed(() =>
     if (!calculated) return null;
     // The rows matching the search, then those the status chip keeps. The chips count what the
     // search found.
-    const found = (calcStage()?.rows || []).filter(r =>
-      (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes(query.toLowerCase()),
+    const found = (calcStage()?.rows || []).filter(row =>
+      (row.name + ' ' + Object.keys(row.outputs).join(' '))
+        .toLowerCase()
+        .includes(query.toLowerCase()),
     );
-    const running = (r: (typeof found)[number]) => checked('calc-' + stage() + '-' + r.id);
+    const running = (row: (typeof found)[number]) => checked('calc-' + stage() + '-' + row.id);
     // A guide that builds some rows locally adds the handbook's Local chip (#478).
     const notes = calculated.guide?.factories || {};
     type Row = (typeof found)[number];
-    const chips: [StatusFilter, (r: Row) => boolean][] = [['held', r => !!heldBack(r.id)]];
-    if (Object.values(notes).some(x => x.local))
+    const chips: [StatusFilter, (row: Row) => boolean][] = [['held', r => !!heldBack(r.id)]];
+    if (Object.values(notes).some(note => note.local))
       chips.unshift(['local', r => !!notes[r.id]?.local]);
     const status = statusFilter(found, factoryFilter, running, chips);
     const rows = status.list;
@@ -86,7 +88,7 @@ const page = computed(() =>
     // A plan guide (#393, #468) places some ungrouped rows at a shared site, drawn together as the
     // handbook drew its oil campus and nuclear site; the rest stay single cards.
     const guide = calculated.guide;
-    const siteOf = (r: (typeof found)[number]) => guide?.factories?.[r.id]?.site ?? null;
+    const siteOf = (row: (typeof found)[number]) => guide?.factories?.[row.id]?.site ?? null;
     const sites = (['oil', 'nuclear'] as const)
       .map(kind =>
         siteEntry(
@@ -97,13 +99,14 @@ const page = computed(() =>
           running,
         ),
       )
-      .filter(x => x !== null);
+      .filter(site => site !== null);
     const singles = ungrouped.filter(r => !siteOf(r));
     // Post Phase 5 adds a guide's completion modules, as the handbook page did.
     const post = phase() === 'post' && !!guide?.completion?.length;
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
-      gr => factoryEditing || rows.some(r => membershipsOf(r.id).some(m => m.group === gr.id)),
+      group =>
+        factoryEditing || rows.some(r => membershipsOf(r.id).some(m => m.group === group.id)),
     );
     return {
       whole: calculated.settings.wholeMachines,
@@ -113,7 +116,7 @@ const page = computed(() =>
       // Groups first, then the shared sites, as the page draws them.
       jumps: [
         ...groupJumps(found, rows, r => r.id, running, factoryEditing),
-        ...sites.map(x => x.jump),
+        ...sites.map(site => site.jump),
       ],
       empty: filterEmptyText('production lines', status.active, query),
       editing: factoryEditing,
@@ -129,8 +132,8 @@ const page = computed(() =>
   }),
 );
 
-function search(e: Event) {
-  setQuery((e.target as HTMLInputElement).value);
+function search(event: Event) {
+  setQuery((event.target as HTMLInputElement).value);
   render();
 }
 
@@ -140,9 +143,9 @@ function search(e: Event) {
 // heading (refocusOnOpenedPage in ui/refocus.ts, #300, #304).
 // "Round up production…" (SP-18): a one-line offer whose explanation is in the confirm dialog
 // (ui/confirm.ts, SP-06); confirmed, the flow is as before.
-async function roundUp(e: Event) {
-  const b = e.currentTarget as HTMLButtonElement;
-  if (isBusy(b)) return;
+async function roundUp(event: Event) {
+  const button = event.currentTarget as HTMLButtonElement;
+  if (isBusy(button)) return;
   const confirmed = await confirmAction({
     title: 'Round up production?',
     body:
@@ -152,28 +155,28 @@ async function roundUp(e: Event) {
     confirmLabel: 'Round up production',
   });
   if (!confirmed || !(await allowSwitch())) return;
-  const refocus = refocusOnOpenedPage(b);
-  await whileBusy(b, async () => {
+  const refocus = refocusOnOpenedPage(button);
+  await whileBusy(button, async () => {
     try {
       await writeQueue;
-      const r = await post<{
+      const reply = await post<{
         workspace: WorkspaceSummary;
         saveId: string;
         profileId: string;
         reviewCount: number;
-      }>('/api/round-up', {}, true, calcProgress(b, 'Recalculating…'));
-      setWorkspace(r.workspace);
-      await loadContext(r.saveId, r.profileId);
+      }>('/api/round-up', {}, true, calcProgress(button, 'Recalculating…'));
+      setWorkspace(reply.workspace);
+      await loadContext(reply.saveId, reply.profileId);
       render();
       toast(
         'Created rounded profile. ' +
-          r.reviewCount +
+          reply.reviewCount +
           ' completed factory checks need review; previous progress is preserved.',
       );
       void refocus();
-    } catch (err) {
-      toast((err as Error).message, true);
-      b.textContent = 'Round up production…';
+    } catch (error) {
+      toast((error as Error).message, true);
+      button.textContent = 'Round up production…';
     }
   });
 }
@@ -207,7 +210,7 @@ async function roundUp(e: Event) {
       /><FilterChips
         :chips="page.chips"
         :active="page.active.value"
-        @pick="v => pickFactoryFilter(v)"
+        @pick="value => pickFactoryFilter(value)"
       /><span>{{ page.rows.length }} production lines</span><EditGroupsToggle />
     </div>
     <JumpBar :entries="page.jumps" />
@@ -215,12 +218,12 @@ async function roundUp(e: Event) {
     <GroupSections :items="page.rows" :key-of="r => r.id">
       <template #card="{ item, group }"><CalcFactoryCard :row="item" :group="group" /></template>
     </GroupSections>
-    <SiteSection v-for="x in page.sites" :key="x.kind" :site="x"
-      ><CalcFactoryCard v-for="r in x.members" :key="r.id" :row="r"
+    <SiteSection v-for="site in page.sites" :key="site.kind" :site="site"
+      ><CalcFactoryCard v-for="row in site.members" :key="row.id" :row="row"
     /></SiteSection>
     <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
     <div class="cards">
-      <CalcFactoryCard v-for="r in page.singles" :key="r.id" :row="r" />
+      <CalcFactoryCard v-for="row in page.singles" :key="row.id" :row="row" />
       <div v-if="!page.rows.length" class="empty-state" data-filter-empty>
         {{ page.empty }}
         <button

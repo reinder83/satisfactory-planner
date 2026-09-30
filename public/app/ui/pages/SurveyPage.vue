@@ -44,21 +44,22 @@ import WorldSettings from '../survey/WorldSettings.vue';
 
 const MAP_URL = 'https://satisfactory-calculator.com/en/interactive-map';
 const BUDGET_ROWS = [...minedResources, 'Crude Oil', 'Nitrogen Gas'];
-const marks = minerMarks.map(([v, l]) => [String(v), l]);
-const clocks = clockChoices.map(([v, l]) => [String(v), l]);
+const marks = minerMarks.map(([value, label]) => [String(value), label]);
+const clocks = clockChoices.map(([value, label]) => [String(value), label]);
 
 // null once the draft has left the survey: until render() swaps this page out, it draws
 // nothing rather than reading a survey that is not there.
 const page = computed(() =>
   legacy(() => {
     if (wizard?.mode !== 'extraction') return null;
-    const e = extractionOf(wizard),
+    const extraction = extractionOf(wizard),
       // openExtraction sets the screen when it switches to this mode.
       step = wizard.extractionStep ?? 1;
-    const sample = (name: string, purity: string) => num(Math.round(nodeYield(name, purity, e)));
+    const sample = (name: string, purity: string) =>
+      num(Math.round(nodeYield(name, purity, extraction)));
     const budgets = BUDGET_ROWS.map(name => {
-      const pool = Math.round(resourcePool(e, name)),
-        used = Number(e.used?.[name]) || 0;
+      const pool = Math.round(resourcePool(extraction, name)),
+        used = Number(extraction.used?.[name]) || 0;
       // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore. The
       // committed input keeps a bare number; its unit is a suffix beside it and in its name.
       const fluid = FLUIDS.has(name);
@@ -75,18 +76,18 @@ const page = computed(() =>
     // Leaving a resource at zero is a legitimate answer, and it is also exactly what a
     // half-finished survey looks like. The plan that follows would simply fail to fit, so
     // the last screen names them rather than let that be a surprise.
-    const empty = BUDGET_ROWS.filter(n => resourcePool(e, n) <= 0);
+    const empty = BUDGET_ROWS.filter(name => resourcePool(extraction, name) <= 0);
     return {
       step,
       last: step >= EXTRACTION_STEPS.length,
-      mark: String(e.mark),
-      clock: String(e.clock),
+      mark: String(extraction.mark),
+      clock: String(extraction.clock),
       samples: {
         impure: sample('Iron Ore', 'impure'),
         normal: sample('Iron Ore', 'normal'),
         pure: sample('Iron Ore', 'pure'),
-        oil: itemRate('Crude Oil', Math.round(nodeYield('Crude Oil', 'normal', e))),
-        well: itemRate('Crude Oil', Math.round(wellYield('normal', e))),
+        oil: itemRate('Crude Oil', Math.round(nodeYield('Crude Oil', 'normal', extraction))),
+        well: itemRate('Crude Oil', Math.round(wellYield('normal', extraction))),
       },
       water: itemRate('Water', wizard.settings.limits.Water || 0),
       budgets,
@@ -106,13 +107,13 @@ const page = computed(() =>
 // totals and budgets follow the counts. Choosing a purity and distribution whose world is
 // fully known (knownWorld) refills every count from that preset. Any other edit drops a
 // pending undo (of a reset or refill): undoing after it would silently throw the edit away.
-function changed(e: Event) {
-  const el = e.target as HTMLInputElement | HTMLSelectElement;
+function changed(event: Event) {
+  const el = event.target as HTMLInputElement | HTMLSelectElement;
   if (!/^(mark|clock|purity|distribution|node:|well:|used:)/.test(String(el.name))) return;
-  readExtraction(e.currentTarget as HTMLFormElement);
+  readExtraction(event.currentTarget as HTMLFormElement);
   if (['purity', 'distribution'].includes(el.name)) {
-    const s = draft().settings;
-    if (knownWorld(s.purity, s.distribution)) refillExtraction();
+    const settings = draft().settings;
+    if (knownWorld(settings.purity, settings.distribution)) refillExtraction();
   } else draft().extractionUndo = null;
   render();
 }
@@ -136,15 +137,15 @@ function submit() {
     />
     <div class="wizard-progress">
       <button
-        v-for="(n, i) in EXTRACTION_STEPS"
-        :key="n"
+        v-for="(title, i) in EXTRACTION_STEPS"
+        :key="title"
         type="button"
         :class="page.step === i + 1 ? 'current' : ''"
         :data-extraction-step="i + 1"
         :aria-current="page.step === i + 1 ? 'step' : undefined"
         @click="go(i + 1)"
       >
-        {{ i + 1 }}. {{ n }}
+        {{ i + 1 }}. {{ title }}
       </button>
     </div>
     <form
@@ -232,27 +233,27 @@ function submit() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in page.budgets" :key="r.name">
+              <tr v-for="budget in page.budgets" :key="budget.name">
                 <td class="resource-name">
-                  <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
+                  <ItemIcon :name="budget.name" /><span>{{ budget.name }}</span>
                 </td>
-                <td class="number">{{ r.pool }}</td>
+                <td class="number">{{ budget.pool }}</td>
                 <td>
                   <span class="used-field"
                     ><input
                       class="used-input"
-                      :name="'used:' + r.name"
+                      :name="'used:' + budget.name"
                       type="number"
                       min="0"
                       max="10000000"
                       step="any"
-                      :value="r.used"
+                      :value="budget.used"
                       placeholder="0"
-                      :aria-label="r.label"
-                    /><span class="used-unit" aria-hidden="true">{{ r.unit }}</span></span
+                      :aria-label="budget.label"
+                    /><span class="used-unit" aria-hidden="true">{{ budget.unit }}</span></span
                   >
                 </td>
-                <td :class="['number', r.over ? 'warn' : '']">{{ r.left }}</td>
+                <td :class="['number', budget.over ? 'warn' : '']">{{ budget.left }}</td>
               </tr>
             </tbody>
           </table>

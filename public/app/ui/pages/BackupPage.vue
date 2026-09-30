@@ -43,10 +43,10 @@ const page = computed(() =>
     warnings: calculated?.warnings || [],
     sources: plan?.sources || [],
     // For "Choose saves to export": every save of this user with its profile count.
-    saves: workspace.saves.map(s => ({
-      id: s.id,
-      name: s.name,
-      profiles: s.profiles.length,
+    saves: workspace.saves.map(save => ({
+      id: save.id,
+      name: save.name,
+      profiles: save.profiles.length,
     })),
     // The browser edition's backup status (SP-40): its age, worked out on every render, and
     // when it was. Warn-toned after a week, or when there has been no full backup.
@@ -99,8 +99,8 @@ async function exportSaves(selection?: string[]) {
         ? `${selection.length} save${selection.length === 1 ? '' : 's'} downloaded.`
         : 'Full save backup downloaded.',
     );
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     exporting.value = false;
   }
@@ -111,8 +111,8 @@ async function exportSaves(selection?: string[]) {
 // reloads the whole workspace with boot() and shows the profiles page. The success toast
 // only follows a successful import; any failure (too large, not JSON, refused by the
 // server) is a toast.
-async function importSaves(e: Event) {
-  const input = e.target as HTMLInputElement;
+async function importSaves(event: Event) {
+  const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
   try {
@@ -132,8 +132,8 @@ async function importSaves(e: Event) {
     await boot();
     navigate('profiles');
     toast('Imported saves. Existing progress was kept.');
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     // Clear the picker either way so choosing the same file again fires change again.
     input.value = '';
@@ -148,9 +148,9 @@ async function importSaves(e: Event) {
 // the saves already queued, before any made meanwhile, shown as "Saving…", and its reply only
 // shown if this profile is still open. It toasts its own errors; "Backup restored." only
 // follows a successful response.
-async function restoreProgress(e: Event) {
-  const el = e.target as HTMLInputElement,
-    file = el.files?.[0];
+async function restoreProgress(event: Event) {
+  const input = event.target as HTMLInputElement,
+    file = input.files?.[0];
   if (!file) return;
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a backup smaller than 2 MB.');
@@ -167,11 +167,11 @@ async function restoreProgress(e: Event) {
     await queuedWrite('/api/import', data);
     render();
     toast('Backup restored.');
-  } catch (err) {
-    toast((err as Error).message || 'Could not restore backup.', true);
+  } catch (error) {
+    toast((error as Error).message || 'Could not restore backup.', true);
   } finally {
     // Cleared every time, so choosing the same file again fires another change.
-    el.value = '';
+    input.value = '';
   }
 }
 
@@ -185,8 +185,8 @@ async function persistStorage() {
         ? 'Persistent browser storage enabled.'
         : 'Browser did not grant persistence. Keep downloaded backups.',
     );
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   }
 }
 </script>
@@ -250,10 +250,12 @@ async function persistStorage() {
         Export some saves on their own, for example to move them or to keep a file under the import
         limit. This is not recorded as a full backup.
       </p>
-      <label v-for="s in page.saves" :key="s.id" class="check-row"
-        ><input type="checkbox" :value="s.id" v-model="chosen" data-choose-save />{{ s.name }}
+      <label v-for="save in page.saves" :key="save.id" class="check-row"
+        ><input type="checkbox" :value="save.id" v-model="chosen" data-choose-save />{{
+          save.name
+        }}
         <span class="small muted"
-          >· {{ s.profiles }} profile{{ s.profiles === 1 ? '' : 's' }}</span
+          >· {{ save.profiles }} profile{{ save.profiles === 1 ? '' : 's' }}</span
         ></label
       >
       <button
@@ -336,7 +338,7 @@ async function persistStorage() {
     </p>
     <section class="panel">
       <h2>Calculation assumptions</h2>
-      <p v-for="(w, i) in page.warnings" :key="i">{{ w }}</p>
+      <p v-for="(warning, i) in page.warnings" :key="i">{{ warning }}</p>
       <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
         >Recipe data source</a
       >
@@ -395,8 +397,13 @@ async function persistStorage() {
         require collection; equipment and inhalers are manually crafted.
       </p>
       <div class="list-links">
-        <a v-for="s in page.sources" :key="s.url" :href="s.url" target="_blank" rel="noreferrer"
-          >{{ s.title }} ↗</a
+        <a
+          v-for="source in page.sources"
+          :key="source.url"
+          :href="source.url"
+          target="_blank"
+          rel="noreferrer"
+          >{{ source.title }} ↗</a
         >
       </div>
     </section>

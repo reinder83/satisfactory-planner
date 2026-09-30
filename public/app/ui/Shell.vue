@@ -105,11 +105,13 @@ const frame = computed(() =>
     footer: profileFooter(),
     // The open save's profiles, for the switcher. A signed-out workspace has no saves, and the
     // frame may redraw once more before the sign-in screen replaces it.
-    profiles: (workspace.saves?.find(s => s.id === currentSave.id)?.profiles ?? []).map(p => ({
-      id: p.id,
-      name: p.name,
-      open: p.id === currentProfile?.id,
-    })),
+    profiles: (workspace.saves?.find(s => s.id === currentSave.id)?.profiles ?? []).map(
+      profile => ({
+        id: profile.id,
+        name: profile.name,
+        open: profile.id === currentProfile?.id,
+      }),
+    ),
     accountsEnabled: !!workspace.accountsEnabled,
   })),
 );
@@ -122,9 +124,9 @@ function switchTo(id: string, open: boolean) {
   return openProfile(currentSave.id, id, on => (switching.value = on));
 }
 // A page of the switcher's menu, through the address as a sidebar link would.
-const go = (v: View) => {
+const go = (page: View) => {
   closeMenu(false);
-  location.hash = v;
+  location.hash = page;
 };
 
 // The phone drawer (SP-37): open or closed, the ☰ button that opens it, and the drawer itself.
@@ -149,21 +151,21 @@ function closeMenu(refocus = true) {
   if (refocus) void nextTick(() => toggle.value?.focus());
 }
 // Inside the open drawer: Tab and Shift+Tab wrap around it, Esc closes it.
-function drawerKey(e: KeyboardEvent) {
+function drawerKey(event: KeyboardEvent) {
   if (!menuOpen.value) return;
-  if (e.key === 'Escape') {
-    e.preventDefault();
+  if (event.key === 'Escape') {
+    event.preventDefault();
     closeMenu();
-  } else if (e.key === 'Tab') {
+  } else if (event.key === 'Tab') {
     const all = focusable();
     if (!all.length) return;
     const first = all[0]!,
       last = all.at(-1)!;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
       last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
       first.focus();
     }
   }
@@ -171,17 +173,17 @@ function drawerKey(e: KeyboardEvent) {
 // A navigation link followed from the drawer: close it. The link is then hidden, so it lets go
 // of focus and the page it opens takes it (focusOpenedPage in ui/refocus.ts); the page already
 // shown opens nothing, so focus goes back to ☰ instead.
-function navFollowed(e: Event) {
+function navFollowed(event: Event) {
   if (!menuOpen.value) return;
-  const link = e.currentTarget as HTMLAnchorElement;
+  const link = event.currentTarget as HTMLAnchorElement;
   const same = link.getAttribute('href') === location.hash;
   closeMenu(same);
   if (!same) link.blur();
 }
 // Widening past the phone layout shows the sidebar again, so the drawer closes.
 let wide: MediaQueryList | undefined;
-const widened = (e: MediaQueryListEvent) => {
-  if (e.matches) closeMenu(false);
+const widened = (event: MediaQueryListEvent) => {
+  if (event.matches) closeMenu(false);
 };
 onMounted(() => {
   wide = globalThis.matchMedia?.('(min-width: 721px)');
@@ -197,13 +199,13 @@ const savedShortWidest = browserMode ? 'Saved in browser' : 'No save yet';
 // lines. The original handbook's settings are fixed, so they are written out.
 function profileFooter() {
   if (calculated) {
-    const s = calculated.settings;
+    const settings = calculated.settings;
     const date = new Date(calculated.createdAt);
-    const purity = purities.find(([id]) => id === s.purity)?.[1] || s.purity;
+    const purity = purities.find(([id]) => id === settings.purity)?.[1] || settings.purity;
     return [
       currentProfile.name,
-      `${purity} purity · ${num(s.multiplier)}× elevator parts`,
-      `${num(s.powerFactor)}× power consumption`,
+      `${purity} purity · ${num(settings.multiplier)}× elevator parts`,
+      `${num(settings.powerFactor)}× power consumption`,
       ...(Number.isNaN(date.getTime())
         ? []
         : [
@@ -230,8 +232,8 @@ function profileFooter() {
 // on failure it shows the saved phase again. The redraw shows the new phase's notes, so an
 // unsaved note is asked about first; kept, the select goes back to the saved phase.
 // Busy while it saves (app/busy.ts, #299): a key pressed on it meanwhile shows the saved phase again.
-async function pickPhase(e: Event) {
-  const el = e.target as HTMLSelectElement;
+async function pickPhase(event: Event) {
+  const el = event.target as HTMLSelectElement;
   if (isBusy(el) || trackBusy.value || !(await allowSwitch())) {
     el.value = phase();
     return;
@@ -258,8 +260,8 @@ function checkSavedPhase() {
   );
   if (saved) saved.checked = true;
 }
-async function pickTrack(e: Event) {
-  const el = e.target as HTMLInputElement;
+async function pickTrack(event: Event) {
+  const el = event.target as HTMLInputElement;
   if (trackBusy.value || isBusy(document.querySelector('#phase-picker'))) return checkSavedPhase();
   trackBusy.value = true;
   try {
@@ -366,18 +368,18 @@ async function pickTrack(e: Event) {
           >
             <div class="eyebrow" aria-hidden="true">Profiles in {{ frame.saveName }}</div>
             <button
-              v-for="p in frame.profiles"
-              :key="p.id"
+              v-for="profile in frame.profiles"
+              :key="profile.id"
               type="button"
               role="menuitemradio"
               tabindex="-1"
               class="btn"
-              :aria-checked="p.open ? 'true' : 'false'"
-              :data-switch-profile="p.id"
-              @click="switchTo(p.id, p.open)"
+              :aria-checked="profile.open ? 'true' : 'false'"
+              :data-switch-profile="profile.id"
+              @click="switchTo(profile.id, profile.open)"
             >
-              {{ p.name
-              }}<span v-if="p.open" class="action-menu-mark" aria-hidden="true">Open</span>
+              {{ profile.name
+              }}<span v-if="profile.open" class="action-menu-mark" aria-hidden="true">Open</span>
             </button>
           </div>
           <button
@@ -455,20 +457,21 @@ async function pickTrack(e: Event) {
             data-phase-track
           >
             <label
-              v-for="s in frame.track"
-              :key="s.phase"
-              :class="['phase-track-seg', s.phase === frame.phase ? 'current' : '']"
-              :data-phase-seg="s.phase"
+              v-for="segment in frame.track"
+              :key="segment.phase"
+              :class="['phase-track-seg', segment.phase === frame.phase ? 'current' : '']"
+              :data-phase-seg="segment.phase"
               ><input
                 type="radio"
                 name="phase-track"
-                :value="s.phase"
-                :checked="s.phase === frame.phase"
+                :value="segment.phase"
+                :checked="segment.phase === frame.phase"
                 :disabled="!frame.canPickPhase"
-                @change="pickTrack" /><span class="phase-track-name">{{ s.label }}</span
-              ><span v-if="s.pct !== null" class="visually-hidden">, {{ s.pct }}% done</span
-              ><span v-if="s.pct !== null" class="phase-track-bar" aria-hidden="true"
-                ><span :style="{ width: s.pct + '%' }"></span></span
+                @change="pickTrack" /><span class="phase-track-name">{{ segment.label }}</span
+              ><span v-if="segment.pct !== null" class="visually-hidden"
+                >, {{ segment.pct }}% done</span
+              ><span v-if="segment.pct !== null" class="phase-track-bar" aria-hidden="true"
+                ><span :style="{ width: segment.pct + '%' }"></span></span
             ></label>
           </div>
           <label class="small phase-select"
@@ -480,7 +483,9 @@ async function pickTrack(e: Event) {
               :value="frame.phase"
               @change="pickPhase"
             >
-              <option v-for="[p, label] in frame.phases" :key="p" :value="p">{{ label }}</option>
+              <option v-for="[value, label] in frame.phases" :key="value" :value="value">
+                {{ label }}
+              </option>
             </select></label
           >
           <div class="save-status">

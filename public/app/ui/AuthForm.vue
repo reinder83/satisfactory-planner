@@ -15,9 +15,9 @@ const error = ref('');
 
 // The button is busy meanwhile (bound aria-disabled, app/busy.ts): it keeps focus (#299), and a
 // second press or Enter in a field sends nothing more.
-async function submit(e: Event) {
+async function submit(event: Event) {
   if (busy.value) return;
-  const form = e.target as HTMLFormElement;
+  const form = event.target as HTMLFormElement;
   const data: Record<string, unknown> = Object.fromEntries(new FormData(form));
   data.registration = new FormData(form).has('registration');
   busy.value = true;
@@ -25,8 +25,8 @@ async function submit(e: Event) {
   try {
     await post('/api/' + (workspace.accountsEnabled ? authMode : 'setup'), data, false);
     await boot();
-  } catch (err) {
-    error.value = (err as Error).message;
+  } catch (failure) {
+    error.value = (failure as Error).message;
     busy.value = false;
   }
 }

@@ -80,7 +80,7 @@ const page = computed(() =>
     const current = floors.find(f => f.id === floor)!;
     // Bays on this floor; the search narrows them to bays with a match.
     const floorBays = storageBays().filter(b => b.floor === floor),
-      display = floorBays.filter(b => !query || b.items.some(x => slotMatches(x, query)));
+      display = floorBays.filter(b => !query || b.items.some(item => slotMatches(item, query)));
     // The containers that answer the search on every floor (#240).
     const matches = storageMatches(query),
       floorsHit = new Set(matches.map(m => m.floor)).size;
@@ -100,9 +100,9 @@ const page = computed(() =>
       ? inHallOrder(order.filter(id => shown.has(id)))
       : [...display]
           .sort(
-            (a, b) =>
-              Math.floor((b.id.charCodeAt(0) - 65) / 2) -
-                Math.floor((a.id.charCodeAt(0) - 65) / 2) || a.id.localeCompare(b.id),
+            (left, right) =>
+              Math.floor((right.id.charCodeAt(0) - 65) / 2) -
+                Math.floor((left.id.charCodeAt(0) - 65) / 2) || left.id.localeCompare(right.id),
           )
           .map(b => b.id);
     const byId = new Map(display.map(b => [b.id, b]));
@@ -110,11 +110,11 @@ const page = computed(() =>
     // bays' lines, over the bays the room shows. The search does not narrow it.
     const progress = floorProgress();
     return {
-      floors: floors.map(f => ({
-        ...f,
-        active: f.id === floor,
-        done: progress.get(f.id)?.done ?? 0,
-        named: progress.get(f.id)?.named ?? 0,
+      floors: floors.map(storageFloor => ({
+        ...storageFloor,
+        active: storageFloor.id === floor,
+        done: progress.get(storageFloor.id)?.done ?? 0,
+        named: progress.get(storageFloor.id)?.named ?? 0,
       })),
       current,
       floorBays: floorBays.length,
@@ -140,10 +140,10 @@ const page = computed(() =>
       // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
       movedOff: storageBays()
         .filter(
-          b =>
-            !b.custom &&
-            b.floor !== 'ground' &&
-            STORAGE_ROOM.find(x => x.id === b.id)?.floor === 'ground',
+          bay =>
+            !bay.custom &&
+            bay.floor !== 'ground' &&
+            STORAGE_ROOM.find(builtBay => builtBay.id === bay.id)?.floor === 'ground',
         )
         .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
       query,
@@ -188,13 +188,13 @@ function showFloor(id: string) {
 // container's button (the target its dialog and Complete room use too). Focus moves without the
 // browser's own scroll, then the whole container card (its address, item and Done box) is
 // scrolled just into view, not only the button, which ends above the Done box (#327).
-async function showMatch(m: StorageMatch) {
-  if (m.floor !== floor) {
-    setFloor(m.floor);
+async function showMatch(match: StorageMatch) {
+  if (match.floor !== floor) {
+    setFloor(match.floor);
     render();
     await nextTick();
   }
-  const target = document.querySelector<HTMLElement>(`#main [data-slot="${CSS.escape(m.id)}"]`);
+  const target = document.querySelector<HTMLElement>(`#main [data-slot="${CSS.escape(match.id)}"]`);
   if (!target) return;
   target.focus({ preventScroll: true });
   (target.closest<HTMLElement>('.slot') ?? target).scrollIntoView({
@@ -203,8 +203,8 @@ async function showMatch(m: StorageMatch) {
   });
 }
 
-function search(e: Event) {
-  setQuery((e.target as HTMLInputElement).value);
+function search(event: Event) {
+  setQuery((event.target as HTMLInputElement).value);
   render();
 }
 
@@ -218,14 +218,14 @@ const hiddenList = (after: string[]) => ({
 
 // "Restore": bring a hidden handbook bay back, with everything saved for it. Once nothing is
 // left to restore, focus goes to the bay's Hide on this floor, else to its floor's tab.
-async function restoreBay(e: Event, id: string) {
-  const button = e.currentTarget as HTMLButtonElement,
-    on = hiddenStorageBays().find(b => b.id === id)?.floor ?? '';
+async function restoreBay(event: Event, id: string) {
+  const button = event.currentTarget as HTMLButtonElement,
+    bayFloor = hiddenStorageBays().find(b => b.id === id)?.floor ?? '';
   const refocus = refocusAfterRemoval(
     button,
     hiddenList([
       `#main [data-hide-bay="${CSS.escape(id)}"]`,
-      `#main .tabs [data-floor="${CSS.escape(on)}"]`,
+      `#main .tabs [data-floor="${CSS.escape(bayFloor)}"]`,
     ]),
   );
   let saved = false;
@@ -245,8 +245,8 @@ async function restoreBay(e: Event, id: string) {
 
 // "Restore" on a hidden built-in floor (#168): its tab comes back, and takes focus once nothing
 // is left to restore.
-async function restoreFloor(e: Event, id: string) {
-  const button = e.currentTarget as HTMLButtonElement;
+async function restoreFloor(event: Event, id: string) {
+  const button = event.currentTarget as HTMLButtonElement;
   const refocus = refocusAfterRemoval(
     button,
     hiddenList([`#main .tabs [data-floor="${CSS.escape(id)}"]`]),
@@ -268,8 +268,8 @@ async function restoreFloor(e: Event, id: string) {
 // "Done" on the built room's moves (SP-25, #260): ticks their storage step, which this profile
 // alone keeps, and the notice goes. Its button goes with it, so focus moves to the ground floor's
 // tab just above (ui/refocus.ts). Unticking the step in the build checklist brings it back.
-async function groundMovesDone(e: Event) {
-  const button = e.currentTarget as HTMLButtonElement;
+async function groundMovesDone(event: Event) {
+  const button = event.currentTarget as HTMLButtonElement;
   const refocus = refocusAfterRemoval(button, {
     fallback: ['#main .tabs [data-floor="ground"]'],
   });
@@ -351,16 +351,22 @@ function toggleLayout() {
          Tab order is unchanged. -->
     <div class="tabs">
       <button
-        v-for="f in page.floors"
-        :key="f.id"
-        :class="['tab', f.active ? 'active' : '']"
-        :data-floor="f.id"
-        :aria-pressed="f.active ? 'true' : 'false'"
-        :aria-label="f.named ? `${f.label}, ${f.done} of ${f.named} done` : undefined"
-        @click="showFloor(f.id)"
+        v-for="storageFloor in page.floors"
+        :key="storageFloor.id"
+        :class="['tab', storageFloor.active ? 'active' : '']"
+        :data-floor="storageFloor.id"
+        :aria-pressed="storageFloor.active ? 'true' : 'false'"
+        :aria-label="
+          storageFloor.named
+            ? `${storageFloor.label}, ${storageFloor.done} of ${storageFloor.named} done`
+            : undefined
+        "
+        @click="showFloor(storageFloor.id)"
       >
-        {{ f.label }}
-        <span v-if="f.named" class="count" aria-hidden="true">{{ f.done }}/{{ f.named }}</span>
+        {{ storageFloor.label }}
+        <span v-if="storageFloor.named" class="count" aria-hidden="true"
+          >{{ storageFloor.done }}/{{ storageFloor.named }}</span
+        >
       </button>
     </div>
     <input
@@ -386,10 +392,15 @@ function toggleLayout() {
     data-search-results
   >
     <ul v-if="page.matches" class="storage-results-list">
-      <li v-for="m in page.results" :key="m.id">
-        <button type="button" class="storage-result" :data-find-slot="m.id" @click="showMatch(m)">
-          <ItemIcon :name="m.name" /><span
-            ><b>{{ m.name }}</b> · {{ m.floorLabel }} · {{ m.id }}</span
+      <li v-for="match in page.results" :key="match.id">
+        <button
+          type="button"
+          class="storage-result"
+          :data-find-slot="match.id"
+          @click="showMatch(match)"
+        >
+          <ItemIcon :name="match.name" /><span
+            ><b>{{ match.name }}</b> · {{ match.floorLabel }} · {{ match.id }}</span
           >
         </button>
       </li>
@@ -417,18 +428,22 @@ function toggleLayout() {
     <p v-if="page.hidden.length" class="small muted">
       Their containers, checkmarks and notes are kept until you restore them.
     </p>
-    <div v-for="b in page.hidden" :key="b.id" class="check-row">
+    <div v-for="bay in page.hidden" :key="bay.id" class="check-row">
       <span
-        ><b>{{ b.id }}</b> · {{ b.name }}</span
-      ><span v-if="b.taken" class="small muted">An added bay uses this letter.</span
-      ><button v-else class="btn" :data-restore-bay="b.id" @click="restoreBay($event, b.id)">
+        ><b>{{ bay.id }}</b> · {{ bay.name }}</span
+      ><span v-if="bay.taken" class="small muted">An added bay uses this letter.</span
+      ><button v-else class="btn" :data-restore-bay="bay.id" @click="restoreBay($event, bay.id)">
         Restore
       </button>
     </div>
-    <div v-for="f in page.hiddenFloors" :key="f.id" class="check-row">
+    <div v-for="hiddenFloor in page.hiddenFloors" :key="hiddenFloor.id" class="check-row">
       <span
-        ><b>{{ f.label }}</b> · floor</span
-      ><button class="btn" :data-restore-floor="f.id" @click="restoreFloor($event, f.id)">
+        ><b>{{ hiddenFloor.label }}</b> · floor</span
+      ><button
+        class="btn"
+        :data-restore-floor="hiddenFloor.id"
+        @click="restoreFloor($event, hiddenFloor.id)"
+      >
         Restore
       </button>
     </div>
@@ -485,14 +500,19 @@ function toggleLayout() {
   <DragDropProvider @drag-start="dragStarted" @drag-end="dropped"
     ><div class="floor-grid">
       <template v-if="page.aisles || page.bays.length"
-        ><div v-for="r in page.aisles" :key="'aisle' + r" class="aisle" :style="`--aisle-row:${r}`">
+        ><div
+          v-for="aisle in page.aisles"
+          :key="'aisle' + aisle"
+          class="aisle"
+          :style="`--aisle-row:${aisle}`"
+        >
           MAIN AISLE
         </div>
         <StorageBay
-          v-for="b in page.bays"
-          :key="b.bay.id"
-          :bay="b.bay"
-          :position="b.position"
+          v-for="placed in page.bays"
+          :key="placed.bay.id"
+          :bay="placed.bay"
+          :position="placed.position"
           :order="page.order"
       /></template>
       <div v-else-if="!page.floorBays && !page.workshop" class="empty-state">
