@@ -164,7 +164,13 @@ test("flowOutputs sinks the waste strategy's plutonium rods", () => {
 
 test('generatorOutputs gives a generator the power grid, and any other row nothing', () => {
   assert.deepEqual(generatorOutputs({ ...plates, generationMW: 1500 }), [
-    { kind: 'ship', label: 'Power grid', shipSub: 'generation', rateTxt: power(1500) },
+    {
+      kind: 'ship',
+      label: 'Power grid',
+      shipSub: 'generation',
+      rateTxt: power(1500),
+      noItem: true,
+    },
   ]);
   assert.deepEqual(generatorOutputs(plates), []);
 });
@@ -203,4 +209,21 @@ test('flowNotes splits the machines across deliveries, and says when the item is
   // A fractional equivalent is whole machines plus one adjustable machine.
   const clocked = { ...plates, equivalent: 3.5 };
   assert.equal(flowNotes(clocked, [], stage).clock, '@ 100% + 1 adjustable');
+});
+
+test('flowNotes gives no bank note when the power grid is the only destination (#560)', () => {
+  const fuelPlant = { ...row('fuel-power', { Fuel: 96 }, {}), generationMW: 1250 };
+  const stage = context({ rows: [fuelPlant] });
+  const grid = generatorOutputs(fuelPlant);
+  assert.equal(flowNotes(fuelPlant, grid, stage).bankNote, null, 'the grid is no item demand');
+  // A nuclear plant belts its waste on as well: that destination is item demand.
+  const nuclear = {
+    ...row('nuclear', { 'Uranium Fuel Rod': 1 }, { 'Uranium Waste': 50 }),
+    generationMW: 2500,
+  };
+  const recycle = row('recycle', { 'Uranium Waste': 50 }, { 'Non-Fissile Uranium': 75 });
+  const books = context({ rows: [nuclear, recycle] });
+  const outputs = [...generatorOutputs(nuclear), ...flowOutputs(nuclear, books)];
+  assert.deepEqual(labels(outputs), ['Power grid', 'recycle 50']);
+  assert.deepEqual(flowNotes(nuclear, outputs, books).bankNote, { shared: false });
 });
