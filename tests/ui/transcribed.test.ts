@@ -4,18 +4,12 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { test } from 'vitest';
-import handbookJson from '../../public/plan.json' with { type: 'json' };
-import recipesJson from '../../recipes.json' with { type: 'json' };
 import { handbookToPlan } from '../../public/handbook-migration.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, catalog, go, open, page } from './setup.ts';
-import type { Handbook, Phase, Recipe } from '../../public/types/index.ts';
+import { $, $$, catalog, go, handbook, open, page, recipes } from './setup.ts';
+import type { Phase } from '../../public/types/index.ts';
 
-const { plan } = handbookToPlan(
-  handbookJson as unknown as Handbook,
-  (recipesJson as unknown as { recipes: Recipe[] }).recipes,
-  catalog().pureLimits,
-);
+const { plan } = handbookToPlan(handbook, recipes, catalog().pureLimits);
 
 test('the transcribed handbook draws on every calculated page in every phase', async () => {
   page();

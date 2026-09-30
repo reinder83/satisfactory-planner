@@ -12,17 +12,27 @@ import {
   storageBays,
   storageFloors,
 } from '../../public/app/views/storage.ts';
-import handbookJson from '../../public/plan.json' with { type: 'json' };
-import recipesJson from '../../recipes.json' with { type: 'json' };
 import { handbookToPlan, migrateHandbookState } from '../../public/handbook-migration.ts';
 import * as session from '../../public/app/session.ts';
 import { planTasks } from '../../public/app/tasks.ts';
-import { $$, catalog, generated, generatedWith, go, open, page } from './setup.ts';
+import {
+  $$,
+  catalog,
+  generated,
+  generatedWith,
+  go,
+  handbook,
+  open,
+  page,
+  recipes,
+} from './setup.ts';
 import { nextTick } from 'vue';
 import { render } from '../../public/app/shell.ts';
-import type { Handbook, Phase, Recipe, StorageEdits } from '../../public/types/index.ts';
+import type { Phase, StorageEdits } from '../../public/types/index.ts';
 
 const golden = 'tests/fixtures/storage-room-golden.json';
+// A partial test fixture: the page reads only the layout edits a test gives it.
+const layoutEdits = (edits: Partial<StorageEdits>) => edits as StorageEdits;
 
 const room = () => ({
   bays: storageBays(),
@@ -38,12 +48,12 @@ function snapshot() {
   open({
     state: {
       checks: { 'slot-A01-built': true, 'slot-C02-verified': true },
-      storageEdits: {
+      storageEdits: layoutEdits({
         hiddenBays: ['Q'],
         bayFloors: { C: 'upper' },
         bayNames: { B: 'Renamed' },
         clearedSlots: ['A03'],
-      } as unknown as StorageEdits,
+      }),
     },
   });
   out.originalEdited = room();
@@ -68,21 +78,16 @@ test('the storage room is drawn exactly as before the move out of plan.json (#38
 // every slot record and layout edit as it was. Its plan steps keep their ids and order too.
 test('a migrated handbook profile has the same storage room and plan steps', async () => {
   page();
-  const handbook = handbookJson as unknown as Handbook;
-  const conversion = handbookToPlan(
-    handbook,
-    (recipesJson as unknown as { recipes: Recipe[] }).recipes,
-    catalog().pureLimits,
-  );
+  const conversion = handbookToPlan(handbook, recipes, catalog().pureLimits);
   const state = {
     checks: { 'slot-A01-built': true, 'slot-C02-verified': true, 'phase-3-survey': true },
-    storageEdits: {
+    storageEdits: layoutEdits({
       hiddenBays: ['Q'],
       bayFloors: { C: 'upper' },
       bayNames: { B: 'Renamed' },
       clearedSlots: ['A03'],
       slots: { A09: 'Hard Drive' },
-    } as unknown as StorageEdits,
+    }),
   };
   const steps = () => planTasks().map(t => t.id);
   const before: Record<string, unknown> = {};

@@ -460,7 +460,7 @@ export function migrateOriginalProfile<P extends StoredProfile>(
   fallbackHandbook: Handbook,
   recipes: Recipe[],
   pureLimits: Record<string, number>,
-): P {
+): P | MigratedProfile<P> {
   if (profile.kind !== 'original') return profile;
   const { handbook: own, state, ...rest } = profile;
   const handbook = own || fallbackHandbook;
@@ -470,5 +470,11 @@ export function migrateOriginalProfile<P extends StoredProfile>(
     kind: 'calculated',
     plan: conversion.plan,
     state: migrateHandbookState(state, handbook, conversion),
-  } as unknown as P;
+  };
 }
+// A migrated original profile: the profile's other fields, as a calculated profile with no handbook.
+export type MigratedProfile<P extends StoredProfile> = Omit<P, 'handbook' | 'state'> & {
+  kind: 'calculated';
+  plan: StoredCalculatedPlan;
+  state: ProgressState;
+};

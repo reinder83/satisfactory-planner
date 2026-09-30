@@ -22,6 +22,7 @@ import type {
   Phase,
   Purity,
   ProgressState,
+  Recipe,
   StoredCalculatedPlan,
   StoredSettings,
   UpdateOp,
@@ -30,6 +31,8 @@ import type {
 
 // Vitest runs from the repository root.
 export const handbook: Handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
+const recipesFile: { recipes: Recipe[] } = JSON.parse(fs.readFileSync('recipes.json', 'utf8'));
+export const recipes = recipesFile.recipes;
 setProgressionData(JSON.parse(fs.readFileSync('public/progression.json', 'utf8')));
 // A real calculated plan (planner.ts with default settings), made once per test file. The
 // planner reads its data files through import.meta.url, which happy-dom does not give it, so
