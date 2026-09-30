@@ -24,10 +24,9 @@ import {
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
-  basePlanTasks,
   filteredPlanTasks,
   planTasks,
-  taskEditsState,
+  removedPlanTasks,
   taskIcon,
   taskLink,
   taskLinkChoices,
@@ -42,7 +41,6 @@ const list = computed(() =>
   legacy(() => {
     const tasks = planTasks(),
       shown = filteredPlanTasks(tasks);
-    const removed = new Set(taskEditsState().removed);
     const steps = shown.map(
       (task): PlanStepView => ({
         id: task.id,
@@ -73,11 +71,9 @@ const list = computed(() =>
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       removed: planEditing
-        ? basePlanTasks()
-            .filter(t => removed.has(t.id))
-            .map(
-              (task): RemovedStepView => ({ id: task.id, title: task.title, icon: taskIcon(task) }),
-            )
+        ? removedPlanTasks().map(
+            (task): RemovedStepView => ({ id: task.id, title: task.title, icon: taskIcon(task) }),
+          )
         : [],
     };
   }),
