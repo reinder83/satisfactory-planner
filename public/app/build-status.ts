@@ -58,10 +58,11 @@ export interface BuildStatus {
 
 // Ratios this close to 1 are 1: the planner's balances carry floating-point dust.
 const EPSILON = 1e-9;
-const settle = (x: number) => (x > 1 - 1e-6 ? 1 : Math.max(0, x));
+const settle = (ratio: number) => (ratio > 1 - 1e-6 ? 1 : Math.max(0, ratio));
 
 const add = (into: Record<string, number>, from: ItemRates | undefined, scale = 1) => {
-  for (const [n, v] of Object.entries(from || {})) into[n] = (into[n] || 0) + v * scale;
+  for (const [item, rate] of Object.entries(from || {}))
+    into[item] = (into[item] || 0) + rate * scale;
 };
 // Per item: what is always available (raw and supplied), and what these built rows ask for
 // together with what the plan gives outside the rows (storage, drone fuel, delivery).
@@ -72,8 +73,9 @@ function books(stage: StoredStage, built: Set<string>) {
   const demand: Record<string, number> = {};
   add(demand, stage.storage);
   add(demand, stage.drone);
-  for (const [n, d] of Object.entries(stage.delivery || {})) add(demand, { [n]: d.rate || 0 });
-  for (const r of stage.rows || []) if (built.has(r.id)) add(demand, r.inputs);
+  for (const [item, delivery] of Object.entries(stage.delivery || {}))
+    add(demand, { [item]: delivery.rate || 0 });
+  for (const row of stage.rows || []) if (built.has(row.id)) add(demand, row.inputs);
   return { extra, demand };
 }
 
@@ -84,15 +86,18 @@ function shares(stage: StoredStage, built: Set<string>): Map<string, number> {
   const share = new Map(rows.map(r => [r.id, built.has(r.id) ? 1 : 0]));
   for (let round = 0; round < 100; round++) {
     const supply: Record<string, number> = { ...extra };
-    for (const r of rows) add(supply, r.outputs, share.get(r.id)!);
+    for (const row of rows) add(supply, row.outputs, share.get(row.id)!);
     let changed = false;
-    for (const r of rows) {
-      if (!built.has(r.id)) continue;
-      let s = 1;
-      for (const n of Object.keys(r.inputs || {}))
-        s = Math.min(s, demand[n]! > EPSILON ? settle((supply[n] || 0) / demand[n]!) : 1);
-      if (Math.abs(s - share.get(r.id)!) > EPSILON) changed = true;
-      share.set(r.id, s);
+    for (const row of rows) {
+      if (!built.has(row.id)) continue;
+      let rowShare = 1;
+      for (const item of Object.keys(row.inputs || {}))
+        rowShare = Math.min(
+          rowShare,
+          demand[item]! > EPSILON ? settle((supply[item] || 0) / demand[item]!) : 1,
+        );
+      if (Math.abs(rowShare - share.get(row.id)!) > EPSILON) changed = true;
+      share.set(row.id, rowShare);
     }
     if (!changed) break;
   }
@@ -102,16 +107,18 @@ function shares(stage: StoredStage, built: Set<string>): Map<string, number> {
 // What the built rows make, the delivery that reaches the elevator, and the mean delivery share.
 function flows(stage: StoredStage, built: Set<string>, share: Map<string, number>) {
   const { extra: produced, demand } = books(stage, built);
-  for (const r of stage.rows || []) add(produced, r.outputs, share.get(r.id)!);
-  const delivery: DeliveryStatus[] = Object.entries(stage.delivery || {}).map(([item, d]) => {
-    const planned = d.rate || 0;
-    const fraction =
-      demand[item]! > EPSILON ? Math.min(1, settle((produced[item] || 0) / demand[item]!)) : 0;
-    return { item, planned, now: planned * fraction };
-  });
+  for (const row of stage.rows || []) add(produced, row.outputs, share.get(row.id)!);
+  const delivery: DeliveryStatus[] = Object.entries(stage.delivery || {}).map(
+    ([item, stageDelivery]) => {
+      const planned = stageDelivery.rate || 0;
+      const fraction =
+        demand[item]! > EPSILON ? Math.min(1, settle((produced[item] || 0) / demand[item]!)) : 0;
+      return { item, planned, now: planned * fraction };
+    },
+  );
   const parts = delivery.filter(d => d.planned > EPSILON);
   const deliveryShare = parts.length
-    ? parts.reduce((t, d) => t + d.now / d.planned, 0) / parts.length
+    ? parts.reduce((sum, part) => sum + part.now / part.planned, 0) / parts.length
     : 0;
   return { produced, demand, delivery, deliveryShare };
 }
@@ -143,16 +150,16 @@ export function buildStatus(
   const built = new Set(rows.filter(r => checks[`calc-${stageKey}-${r.id}`]).map(r => r.id));
   const share = shares(stage, built);
   const { produced, demand, delivery, deliveryShare } = flows(stage, built, share);
-  const statusRows: RowStatus[] = rows.map(r => {
-    const s = share.get(r.id)!;
-    const status: RowStatus = { id: r.id, built: built.has(r.id), share: s };
-    if (status.built && s < 1) {
+  const statusRows: RowStatus[] = rows.map(row => {
+    const rowShare = share.get(row.id)!;
+    const status: RowStatus = { id: row.id, built: built.has(row.id), share: rowShare };
+    if (status.built && rowShare < 1) {
       // The input with the lowest supply against everything that asks for it (the ratio
       // shares() limits the row by), so a competing consumer or storage counts too.
       let worst = Infinity;
-      for (const n of Object.keys(r.inputs || {})) {
-        const ratio = demand[n]! > EPSILON ? (produced[n] || 0) / demand[n]! : Infinity;
-        if (ratio < worst) [worst, status.shortOf] = [ratio, n];
+      for (const item of Object.keys(row.inputs || {})) {
+        const ratio = demand[item]! > EPSILON ? (produced[item] || 0) / demand[item]! : Infinity;
+        if (ratio < worst) [worst, status.shortOf] = [ratio, item];
       }
     }
     return status;
@@ -165,25 +172,28 @@ export function buildStatus(
   const { spareMW } = stageSupply(stage, sparePowerMW);
   let drawMW = 0,
     supplyMW = spareMW;
-  for (const r of rows) {
-    const s = share.get(r.id)!;
-    if (r.power > 0) {
-      const perEquivalent = r.machines && r.peakMW ? r.peakMW / r.machines : r.power;
-      drawMW += perEquivalent * (r.equivalent || 0) * utility * s;
-    } else supplyMW += (r.generationMW || 0) * (1 + boost) * s;
+  for (const row of rows) {
+    const rowShare = share.get(row.id)!;
+    if (row.power > 0) {
+      const perEquivalent = row.machines && row.peakMW ? row.peakMW / row.machines : row.power;
+      drawMW += perEquivalent * (row.equivalent || 0) * utility * rowShare;
+    } else supplyMW += (row.generationMW || 0) * (1 + boost) * rowShare;
   }
   // The planner's own balance leaves float dust, so a fully built plan never trips the flag.
   const short = stageKey !== '1' && drawMW > supplyMW + 1e-6 * Math.max(1, supplyMW);
   // Machine-equivalents running among the rows built now, under a set of shares.
-  const running = (s: Map<string, number>) =>
-    rows.reduce((t, r) => t + (built.has(r.id) ? (r.equivalent || 0) * s.get(r.id)! : 0), 0);
+  const running = (sharesById: Map<string, number>) =>
+    rows.reduce(
+      (sum, row) => sum + (built.has(row.id) ? (row.equivalent || 0) * sharesById.get(row.id)! : 0),
+      0,
+    );
   const runningNow = running(share);
   // The unbuilt row whose completion adds the most delivery, then the one that frees the most
   // built machines; ties go to build order. With neither, the first unbuilt row in build order.
   let next: BuildStatus['next'] = null;
-  for (const r of rows) {
-    if (built.has(r.id)) continue;
-    const trial = new Set(built).add(r.id);
+  for (const row of rows) {
+    if (built.has(row.id)) continue;
+    const trial = new Set(built).add(row.id);
     const trialShares = shares(stage, trial);
     const gain = Math.max(0, flows(stage, trial, trialShares).deliveryShare - deliveryShare);
     const unblocks = Math.max(0, running(trialShares) - runningNow);
@@ -191,7 +201,7 @@ export function buildStatus(
       !next ||
       gain > next.gain + 1e-6 ||
       (Math.abs(gain - next.gain) <= 1e-6 && unblocks > next.unblocks + 1e-6);
-    if (better) next = { id: r.id, gain: gain > 1e-6 ? gain : 0, unblocks };
+    if (better) next = { id: row.id, gain: gain > 1e-6 ? gain : 0, unblocks };
   }
   return {
     rows: statusRows,

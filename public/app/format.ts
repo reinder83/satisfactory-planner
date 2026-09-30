@@ -1,16 +1,16 @@
 // Small DOM and text helpers shared by every screen.
 
-// The first element matching `s`, or null. `E` narrows the element type for TypeScript
+// The first element matching `selector`, or null. `E` narrows the element type for TypeScript
 // callers (`$<HTMLDialogElement>('#detail')`); it is not checked at run time.
-export const $ = <E extends Element = HTMLElement>(s: string): E | null =>
-  document.querySelector<E>(s);
+export const $ = <E extends Element = HTMLElement>(selector: string): E | null =>
+  document.querySelector<E>(selector);
 
-// The element matching `s` that the page always has (#app, #detail, #toast in index.html, or
-// one the caller just drew). Throws, naming the selector, if it is missing, where `$(s).x`
+// The element matching `selector` that the page always has (#app, #detail, #toast in index.html, or
+// one the caller just drew). Throws, naming the selector, if it is missing, where `$(selector).x`
 // would have thrown a vaguer TypeError.
-export const required = <E extends Element = HTMLElement>(s: string): E => {
-  const el = document.querySelector<E>(s);
-  if (!el) throw Error('Missing element ' + s);
+export const required = <E extends Element = HTMLElement>(selector: string): E => {
+  const el = document.querySelector<E>(selector);
+  if (!el) throw Error('Missing element ' + selector);
   return el;
 };
 
@@ -24,40 +24,40 @@ const ENTITIES: Record<string, string> = {
   '"': '&quot;',
   "'": '&#39;',
 };
-export const esc = (s: unknown): string =>
-  String(s ?? '').replace(/[&<>"']/g, c => ENTITIES[c] ?? c);
+export const esc = (value: unknown): string =>
+  String(value ?? '').replace(/[&<>"']/g, match => ENTITIES[match] ?? match);
 
 // Locale-formatted numbers with at most 2 (num) or 3 (num3) decimals. A missing value
 // formats as 0.
-export const num = (n: number | null | undefined): string =>
-  Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-export const num3 = (n: number | null | undefined): string =>
-  Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+export const num = (value: number | null | undefined): string =>
+  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+export const num3 = (value: number | null | undefined): string =>
+  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 // "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
 // saved keys (calculated delivery ids), so its output must stay the same.
-export const slug = (s: string): string =>
-  s
+export const slug = (text: string): string =>
+  text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
-export const plural = (n: number, word: string): string =>
-  num(n) + ' ' + word + (n === 1 ? '' : 's');
+export const plural = (count: number, word: string): string =>
+  num(count) + ' ' + word + (count === 1 ? '' : 's');
 
 // The item searches (ui/form/ItemSearch.vue): up to `limit` of `items` for the typed text,
 // case-insensitive, names that start with it first, then names that merely contain it.
 export function itemMatches(items: readonly string[], query: unknown, limit = 8): string[] {
-  const q = String(query || '')
+  const search = String(query || '')
     .trim()
     .toLowerCase();
-  if (!q) return [];
+  if (!search) return [];
   const starts: string[] = [],
     contains: string[] = [];
-  for (const n of items) {
-    const l = n.toLowerCase();
-    if (l.startsWith(q)) starts.push(n);
-    else if (l.includes(q)) contains.push(n);
+  for (const item of items) {
+    const lower = item.toLowerCase();
+    if (lower.startsWith(search)) starts.push(item);
+    else if (lower.includes(search)) contains.push(item);
   }
   return [...starts, ...contains].slice(0, limit);
 }
@@ -65,8 +65,8 @@ export function itemMatches(items: readonly string[], query: unknown, limit = 8)
 // The item of `items` the typed text names, ignoring case and surrounding spaces, spelled as
 // the list spells it; undefined when it names none.
 export function knownItem(items: readonly string[], typed: unknown): string | undefined {
-  const q = String(typed ?? '')
+  const search = String(typed ?? '')
     .trim()
     .toLowerCase();
-  return q ? items.find(n => n.toLowerCase() === q) : undefined;
+  return search ? items.find(item => item.toLowerCase() === search) : undefined;
 }

@@ -59,8 +59,8 @@ export function rowShares(
   memberships: { group: string; rate: number | null }[] | undefined,
 ): Map<string, number> {
   const shares = new Map<string, number>();
-  const add = (place: string, x: number) => {
-    if (x > LINK_DUST) shares.set(place, (shares.get(place) || 0) + x);
+  const add = (place: string, share: number) => {
+    if (share > LINK_DUST) shares.set(place, (shares.get(place) || 0) + share);
   };
   if (!memberships?.length || total <= LINK_DUST) {
     shares.set(UNGROUPED, 1);
@@ -68,18 +68,18 @@ export function rowShares(
   }
   const fixed = memberships.filter(m => m.rate != null);
   let taken = 0;
-  for (const m of fixed) {
+  for (const membership of fixed) {
     // Fixed rates past the row's total are capped at what is left.
-    const x = Math.min(m.rate! / total, 1 - taken);
-    add(m.group, x);
-    taken += Math.max(0, x);
+    const share = Math.min(membership.rate! / total, 1 - taken);
+    add(membership.group, share);
+    taken += Math.max(0, share);
   }
   // What the fixed rates leave is split evenly between the memberships without a rate (a row
   // just added to a second group has two), or is Ungrouped when every membership has a rate.
   // The factory cards (allocationText in views/factories.ts) use the same rule (#197).
   const rest = Math.max(0, 1 - taken);
   const open = memberships.filter(m => m.rate == null);
-  if (open.length) for (const m of open) add(m.group, rest / open.length);
+  if (open.length) for (const membership of open) add(membership.group, rest / open.length);
   else add(UNGROUPED, rest);
   return shares;
 }
@@ -96,49 +96,55 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     rate: number,
   ) => {
     if (rate <= LINK_DUST) return;
-    const m = (books[item] ??= new Map());
-    m.set(place, (m.get(place) || 0) + rate);
+    const placeRates = (books[item] ??= new Map());
+    placeRates.set(place, (placeRates.get(place) || 0) + rate);
   };
-  for (const r of stage.rows || []) {
-    const total = Object.values(r.outputs || {})[0] || r.generationMW || 0;
+  for (const row of stage.rows || []) {
+    const total = Object.values(row.outputs || {})[0] || row.generationMW || 0;
     // A membership in a group that no longer exists counts as ungrouped.
-    const memberships = (groups.assignments[r.id] || []).map(m =>
-      known.has(m.group) ? m : { ...m, group: UNGROUPED },
+    const memberships = (groups.assignments[row.id] || []).map(membership =>
+      known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
     );
     for (const [place, share] of rowShares(total, memberships)) {
-      for (const [n, q] of Object.entries(r.outputs || {})) put(supply, n, place, q * share);
-      for (const [n, q] of Object.entries(r.inputs || {})) put(demand, n, place, q * share);
+      for (const [item, rate] of Object.entries(row.outputs || {}))
+        put(supply, item, place, rate * share);
+      for (const [item, rate] of Object.entries(row.inputs || {}))
+        put(demand, item, place, rate * share);
     }
   }
   for (const books of [stage.raw, stage.supplied] as (ItemRates | undefined)[])
-    for (const [n, q] of Object.entries(books || {})) put(supply, n, sourceOf(n), q);
-  for (const [n, q] of Object.entries(stage.storage || {})) put(demand, n, OUTSIDE.storage, q);
-  for (const [n, q] of Object.entries(stage.drone || {})) put(demand, n, OUTSIDE.drone, q);
-  for (const [n, q] of Object.entries(stage.transport || {})) put(demand, n, OUTSIDE.transport, q);
-  for (const [n, d] of Object.entries(stage.delivery || {}))
-    put(demand, n, OUTSIDE.delivery, d.rate || 0);
-  for (const [n, q] of Object.entries(stage.surplus || {})) put(demand, n, OUTSIDE.surplus, q);
+    for (const [item, rate] of Object.entries(books || {})) put(supply, item, sourceOf(item), rate);
+  for (const [item, rate] of Object.entries(stage.storage || {}))
+    put(demand, item, OUTSIDE.storage, rate);
+  for (const [item, rate] of Object.entries(stage.drone || {}))
+    put(demand, item, OUTSIDE.drone, rate);
+  for (const [item, rate] of Object.entries(stage.transport || {}))
+    put(demand, item, OUTSIDE.transport, rate);
+  for (const [item, delivery] of Object.entries(stage.delivery || {}))
+    put(demand, item, OUTSIDE.delivery, delivery.rate || 0);
+  for (const [item, rate] of Object.entries(stage.surplus || {}))
+    put(demand, item, OUTSIDE.surplus, rate);
   // Share each item's supply out in proportion to demand.
   const links = new Map<string, GroupLink>();
-  for (const [n, sources] of Object.entries(supply)) {
-    const sinks = demand[n];
+  for (const [item, sources] of Object.entries(supply)) {
+    const sinks = demand[item];
     if (!sinks) continue;
-    const made = [...sources.values()].reduce((a, b) => a + b, 0);
-    const asked = [...sinks.values()].reduce((a, b) => a + b, 0);
+    const made = [...sources.values()].reduce((sum, rate) => sum + rate, 0);
+    const asked = [...sinks.values()].reduce((sum, rate) => sum + rate, 0);
     // What actually moves: the smaller of the two, split both ways by share.
     const moved = Math.min(made, asked);
-    for (const [from, s] of sources)
-      for (const [to, d] of sinks) {
+    for (const [from, supplied] of sources)
+      for (const [to, wanted] of sinks) {
         if (from === to) continue;
-        const rate = (moved * s * d) / (made * asked);
+        const rate = (moved * supplied * wanted) / (made * asked);
         if (rate <= LINK_DUST) continue;
         const key = from + '\u0000' + to;
         const link = links.get(key) ?? { from, to, items: [] };
-        link.items.push({ item: n, rate });
+        link.items.push({ item, rate });
         links.set(key, link);
       }
   }
-  const total = (l: GroupLink) => l.items.reduce((a, x) => a + x.rate, 0);
-  for (const l of links.values()) l.items.sort((a, b) => b.rate - a.rate);
+  const total = (link: GroupLink) => link.items.reduce((sum, entry) => sum + entry.rate, 0);
+  for (const link of links.values()) link.items.sort((a, b) => b.rate - a.rate);
   return [...links.values()].sort((a, b) => total(b) - total(a));
 }

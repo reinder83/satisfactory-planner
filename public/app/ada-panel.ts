@@ -89,21 +89,23 @@ export function adaStore() {
 // counts, feasibility, power, backups. It re-derives the counters the pages show from
 // the same checklist keys (factory-/calc-<stage>-<id>, slot-<address>-verified).
 // ADA's view of the build-so-far status (views/calculated.ts), with row ids turned into names.
-function buildFacts(x: StoredStage): AdaFacts['build'] {
-  const s = currentBuildStatus();
-  if (!s) return null;
-  const name = (id: string) => x.rows?.find(r => r.id === id)?.name || id;
-  const held = s.rows.filter(r => r.built && r.share < 1 && r.shortOf);
+function buildFacts(storedStage: StoredStage): AdaFacts['build'] {
+  const status = currentBuildStatus();
+  if (!status) return null;
+  const name = (id: string) => storedStage.rows?.find(r => r.id === id)?.name || id;
+  const held = status.rows.filter(r => r.built && r.share < 1 && r.shortOf);
   return {
-    built: s.builtCount,
-    total: s.rowCount,
-    share: Math.round(s.deliveryShare * 100),
-    next: s.next ? name(s.next.id) : '',
-    nextGain: s.next ? Math.max(s.next.gain > 0 ? 1 : 0, Math.round(s.next.gain * 100)) : 0,
-    nextUnblocks: s.next?.unblocks || 0,
+    built: status.builtCount,
+    total: status.rowCount,
+    share: Math.round(status.deliveryShare * 100),
+    next: status.next ? name(status.next.id) : '',
+    nextGain: status.next
+      ? Math.max(status.next.gain > 0 ? 1 : 0, Math.round(status.next.gain * 100))
+      : 0,
+    nextUnblocks: status.next?.unblocks || 0,
     waiting: held.map(r => name(r.id)),
     shortOf: [...new Set(held.map(r => r.shortOf!))],
-    powerShort: s.power.short,
+    powerShort: status.power.short,
   };
 }
 
@@ -126,44 +128,44 @@ function payoffFacts(): AdaFacts['payoff'] {
 
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
 function guideFacts(): AdaFacts['guide'] {
-  const g = calculated?.guide;
-  if (!g) return null;
+  const guide = calculated?.guide;
+  if (!guide) return null;
   const count = (ids: string[]) => ({ done: ids.filter(checked).length, total: ids.length });
   return {
-    power: count((g.power?.checks || []).map(c => c.id)),
-    storageTasks: count((g.storageTasks || []).map(t => t.id)),
-    completion: count((g.completion || []).map(c => 'completion-' + c.id)),
+    power: count((guide.power?.checks || []).map(c => c.id)),
+    storageTasks: count((guide.storageTasks || []).map(t => t.id)),
+    completion: count((guide.completion || []).map(c => 'completion-' + c.id)),
   };
 }
 
 function adaFacts(): AdaFacts {
-  const ts = currentSave.id ? planTasks() : [];
-  const next = ts.find(t => !checked(t.id));
+  const steps = currentSave.id ? planTasks() : [];
+  const next = steps.find(t => !checked(t.id));
   // Read only with a calculated profile open; an empty stage stands in if its data is missing.
-  const x: StoredStage = calcStage() ?? { feasible: false };
+  const storedStage: StoredStage = calcStage() ?? { feasible: false };
   const rows: { id: string }[] = calculated
-    ? x.rows || []
+    ? storedStage.rows || []
     : plan.factories.filter(f => f.stages[stage()]);
-  const runningKey = (r: { id: string }) =>
-    (calculated ? 'calc-' : 'factory-') + stage() + '-' + r.id;
+  const runningKey = (row: { id: string }) =>
+    (calculated ? 'calc-' : 'factory-') + stage() + '-' + row.id;
   const slots = storageBays()
     .flatMap(b => b.items)
     .filter(i => i.name);
   // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.ts.
   const deliveries = calculated
-    ? Object.entries<StageDelivery>(x.delivery || {}).map(([n, d]) => ({
-        id: stage() + '-' + slug(n),
-        target: d.target,
+    ? Object.entries<StageDelivery>(storedStage.delivery || {}).map(([item, delivery]) => ({
+        id: stage() + '-' + slug(item),
+        target: delivery.target,
         initial: 0,
       }))
     : plan.deliveries.filter(d => d.phase === phase());
   // Same default as ui/plan/DeliveryCounter.vue: the original handbook starts from its recorded amounts.
-  const delivered = (d: { id: string; initial: number }) =>
-    state.deliveries[d.id] ?? (currentProfile.kind === 'original' ? d.initial : 0);
+  const delivered = (delivery: { id: string; initial: number }) =>
+    state.deliveries[delivery.id] ?? (currentProfile.kind === 'original' ? delivery.initial : 0);
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
-  const headroom = calculated ? x.additionalHeadroomMW || 0 : 0;
+  const headroom = calculated ? storedStage.additionalHeadroomMW || 0 : 0;
   // What the stage's power is balanced against, as build-status.ts measures it (#334).
-  const supply = stageSupply(x, spareMW);
+  const supply = stageSupply(storedStage, spareMW);
   // Plain data only; ada.ts decides which remarks apply.
   return {
     view,
@@ -178,9 +180,9 @@ function adaFacts(): AdaFacts {
     kind: currentSave.id ? currentProfile?.kind || 'original' : 'none',
     save: currentSave.name || 'this save',
     profile: currentProfile?.name || 'Pioneer',
-    steps: { done: ts.filter(t => checked(t.id)).length, total: ts.length },
+    steps: { done: steps.filter(t => checked(t.id)).length, total: steps.length },
     next: next?.title || '',
-    retireOpen: ts.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
+    retireOpen: steps.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,
@@ -197,18 +199,20 @@ function adaFacts(): AdaFacts {
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: taskEditsState().removed.length,
     groups: factoryGroupsState().groups.length,
-    feasible: calculated ? x.feasible !== false : true,
-    reason: calculated ? x.reason || '' : '',
+    feasible: calculated ? storedStage.feasible !== false : true,
+    reason: calculated ? storedStage.reason || '' : '',
     // Raw resources this stage uses beyond the profile's resource limits.
     short: calculated
       ? (workspace.catalog?.raw || []).filter(
-          n => (x.raw?.[n] || 0) > (calculated?.settings.limits?.[n] ?? Infinity),
+          resource =>
+            (storedStage.raw?.[resource] || 0) >
+            (calculated?.settings.limits?.[resource] ?? Infinity),
         )
       : [],
     power:
       headroom > 0.01
         ? {
-            required: power(x.requiredMW || 0),
+            required: power(storedStage.requiredMW || 0),
             generation: supply.generationMW > 0.01 ? power(supply.generationMW) : '',
             spare: power(spareMW),
             augmented: supply.spareMW - spareMW > 0.01 ? power(supply.spareMW) : '',
@@ -217,13 +221,13 @@ function adaFacts(): AdaFacts {
             tight: true,
           }
         : null,
-    hours: calculated && x.hours ? num(x.hours) + ' h' : '',
+    hours: calculated && storedStage.hours ? num(storedStage.hours) + ' h' : '',
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
     backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',
     startPhase: startPhase(),
     assumptions: calculated ? (calculated.warnings || []).length : 0,
-    build: buildFacts(x),
+    build: buildFacts(storedStage),
     payoff: payoffFacts(),
   };
 }
@@ -242,9 +246,9 @@ export function adaCurrent(): AdaLine | null {
     adaIndex = 0;
   }
   const lap = Math.floor(adaIndex / list.length),
-    at = adaIndex % list.length;
-  // at is below list.length, so list[at] is a remark.
-  return lap > 0 && !at ? adaEncore(lap, facts) : list[at]!;
+    position = adaIndex % list.length;
+  // position is below list.length, so list[position] is a remark.
+  return lap > 0 && !position ? adaEncore(lap, facts) : list[position]!;
 }
 
 // Prodding the badge is the only way to reach these, and the last one restores
@@ -277,8 +281,8 @@ export function adaPoke() {
 export function adaView() {
   try {
     if (adaMuted) return { muted: true };
-    const r = adaCurrent();
-    return r ? { tone: r.tone, name: r.name || '', text: r.text } : null;
+    const remark = adaCurrent();
+    return remark ? { tone: remark.tone, name: remark.name || '', text: remark.text } : null;
   } catch {
     return null;
   }

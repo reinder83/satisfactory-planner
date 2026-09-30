@@ -6,23 +6,26 @@
 // backdrop also fires a click on the <dialog>, so the press must have started there too.
 
 // Whether a mouse event landed on the backdrop: on the <dialog> itself, outside its box.
-function onBackdrop(dialog: HTMLDialogElement, e: MouseEvent) {
-  if (e.target !== dialog) return false;
+function onBackdrop(dialog: HTMLDialogElement, event: MouseEvent) {
+  if (event.target !== dialog) return false;
   const box = dialog.getBoundingClientRect();
   return (
-    e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom
+    event.clientX < box.left ||
+    event.clientX > box.right ||
+    event.clientY < box.top ||
+    event.clientY > box.bottom
   );
 }
 
 // Calls `dismiss` for a click that was both pressed and released on the dialog's backdrop.
 export function onBackdropClick(dialog: HTMLDialogElement, dismiss: () => void) {
   let pressedOnBackdrop = false;
-  dialog.addEventListener('mousedown', e => {
-    pressedOnBackdrop = onBackdrop(dialog, e);
+  dialog.addEventListener('mousedown', event => {
+    pressedOnBackdrop = onBackdrop(dialog, event);
   });
-  dialog.addEventListener('click', e => {
+  dialog.addEventListener('click', event => {
     const pressed = pressedOnBackdrop;
     pressedOnBackdrop = false;
-    if (pressed && onBackdrop(dialog, e)) dismiss();
+    if (pressed && onBackdrop(dialog, event)) dismiss();
   });
 }

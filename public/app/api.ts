@@ -51,21 +51,22 @@ export function toast(message: string, error = false) {
 // The caller names the reply's type (T); it is not checked at run time.
 export async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   if (browserMode && path.startsWith('/api/')) return browserRequest(path, options) as Promise<T>;
-  const r = await fetch(browserMode ? new URL('.' + path, appRoot) : path, {
+  const response = await fetch(browserMode ? new URL('.' + path, appRoot) : path, {
     cache: 'no-store',
     ...options,
   });
   let data;
   try {
-    data = await r.json();
+    data = await response.json();
   } catch {
     throw new Error('The server returned an unreadable response.');
   }
   // The server's own password (HTTP Basic, server.ts) also answers 401, with a
   // WWW-Authenticate challenge the browser handles; only the app's 401 means a session ended.
-  if (r.status === 401 && !r.headers.has('WWW-Authenticate')) sessionEnded();
+  if (response.status === 401 && !response.headers.has('WWW-Authenticate')) sessionEnded();
   // The status goes with the error, so a caller can tell a conflict (409) from a refusal.
-  if (!r.ok) throw Object.assign(new Error(data.error || 'Request failed.'), { status: r.status });
+  if (!response.ok)
+    throw Object.assign(new Error(data.error || 'Request failed.'), { status: response.status });
   return data;
 }
 
@@ -91,15 +92,15 @@ function sessionEnded() {
 // it first (loadContext, imports, profile removal) so no queued write lands elsewhere.
 export let writeQueue: Promise<unknown> = Promise.resolve();
 
-// Saves one progress change. `op` is an operation for mutate() in state.ts, e.g.
+// Saves one progress change. `operation` is an operation for mutate() in state.ts, e.g.
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
 // profile's full new state. Does not render: callers render() after it resolves. On failure
 // it shows an error toast and rejects, and callers usually just restore their control
 // instead of rendering.
-export function save(op: UpdateOp): Promise<ProgressState> {
-  return queuedWrite('/api/update', op).catch((e: Error) => {
-    toast(e.message, true);
-    throw e;
+export function save(operation: UpdateOp): Promise<ProgressState> {
+  return queuedWrite('/api/update', operation).catch((error: Error) => {
+    toast(error.message, true);
+    throw error;
   });
 }
 
@@ -136,11 +137,11 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
       // Ignore the reply if the user has since opened another save or profile.
       if (stillOpen()) setState(next);
       return next;
-    } catch (e) {
+    } catch (error) {
       // Refused as stale: load the latest state so the page shows what is saved now, then
       // reject with the explanation for save() to show.
-      if ((e as { status?: number }).status === 409) await refreshState(true).catch(() => {});
-      throw e;
+      if ((error as { status?: number }).status === 409) await refreshState(true).catch(() => {});
+      throw error;
     }
   });
   // A failed write must not block the writes queued after it.
@@ -217,12 +218,12 @@ let navigating = false;
 // listeners.ts, which renders; an unchanged hash would not, so render directly.
 // A route change from here is not checked for unsaved notes: the callers that leave a page
 // with notes on it (switching profile, starting the wizard) have already asked allowSwitch().
-export function navigate(v: View) {
-  setView(v);
-  if (location.hash === '#' + v) render();
+export function navigate(nextView: View) {
+  setView(nextView);
+  if (location.hash === '#' + nextView) render();
   else {
     navigating = true;
-    location.hash = v;
+    location.hash = nextView;
   }
 }
 
@@ -262,8 +263,8 @@ export type NoteBox = {
 };
 export const noteBoxes = new Set<NoteBox>();
 const boxesIn = (root: ParentNode) =>
-  [...noteBoxes].filter(b => {
-    const el = b.el();
+  [...noteBoxes].filter(box => {
+    const el = box.el();
     return !!el && root.contains(el);
   });
 
@@ -271,7 +272,7 @@ const boxesIn = (root: ParentNode) =>
 // dialog showing it goes away. save() queues the write at once with the current save and
 // profile, so it lands there even when the page changes before it finishes.
 export function flushNotes(root: ParentNode = document) {
-  for (const b of boxesIn(root)) b.flush();
+  for (const box of boxesIn(root)) box.flush();
 }
 
 // Whether a notes box in `root` shows text that is not saved yet. Holds back refreshing the
@@ -306,9 +307,9 @@ export function downloadJson(data: unknown, name: string) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
   );
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
