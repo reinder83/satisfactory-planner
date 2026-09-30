@@ -27,7 +27,8 @@ for (const target of targets)
 // Scripts at the root of public/ ship as separate files, as they are in development: the
 // server imports some of them, browser-check.ts imports browser-api.js into the page, and
 // each must stay one module instance. Only public/app/ (and app-root.ts) is bundled. Each
-// public/<name>.ts ships as <name>.js.
+// public/<name>.ts ships as <name>.js. The modules state.ts re-exports, in public/state/, ship
+// the same way, as state/<name>.js (#532).
 const SHARED = [
   'ada.ts',
   'browser-api.ts',
@@ -38,9 +39,18 @@ const SHARED = [
   'state.ts',
   'storage-room.ts',
   'transfer.ts',
+  'state/carry.ts',
+  'state/factory-groups.ts',
+  'state/mutate.ts',
+  'state/summary.ts',
+  'state/validate.ts',
 ];
+// The folders of public/ that hold shared scripts.
+const SHARED_DIRS = ['state'];
 const BUNDLED = ['app.ts', 'app-root.ts'];
 const shipped = (name: string) => name.replace(/\.ts$/, '.js');
+// A file's path under public/ as SHARED lists it ('state/mutate.ts').
+const publicPath = (file: string) => path.relative(publicDir, file).split(path.sep).join('/');
 
 // Source edits for the browser edition must all apply, or the build would ship server-only code.
 const replaceOnce = (text: string, from: string, to: string) => {
@@ -54,7 +64,7 @@ const minifyJs = async (code: string, loader: 'js' | 'ts' = 'js') =>
 // scripts renamed to the .js files they ship as (esbuild keeps the specifiers as written).
 const sharedJs = async (name: string) => {
   const code = await minifyJs(await read('public/' + name), 'ts');
-  return code.replace(/(from\s*|import\s*\(\s*)(["'])(\.\/[\w-]+)\.ts\2/g, '$1$2$3.js$2');
+  return code.replace(/(from\s*|import\s*\(\s*)(["'])(\.\.?\/[\w/-]+)\.ts\2/g, '$1$2$3.js$2');
 };
 // The page loads app.ts in development; the editions ship the bundle as app.js.
 const shippedPage = (html: string) => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
@@ -83,13 +93,13 @@ async function bundleApp() {
         // Called with the import as written, so relative ones are resolved against the importer.
         external: (id, importer, resolved) => {
           const file = resolved || !importer ? id : path.resolve(path.dirname(importer), id);
-          return path.dirname(file) === publicDir && SHARED.includes(path.basename(file));
+          return SHARED.includes(publicPath(file));
         },
         output: {
           format: 'es',
           entryFileNames: 'app.js',
 
-          paths: id => './' + shipped(path.basename(id)),
+          paths: id => './' + shipped(publicPath(id)),
         },
       },
     },
@@ -104,15 +114,18 @@ async function bundleApp() {
   return app[0]!.code;
 }
 
-// Every script at the root of public/ must be classified above, so a new one is never
-// shipped unminified or bundled twice by accident.
-const rootScripts = (await fs.readdir(publicDir)).filter(name => /\.(js|ts)$/.test(name));
-for (const name of rootScripts)
-  if (!SHARED.includes(name) && !BUNDLED.includes(name))
-    throw Error(`build.ts: add public/${name} to SHARED or BUNDLED`);
+// Every script at the root of public/ and in SHARED_DIRS must be classified above, so a new one
+// is never shipped unminified or bundled twice by accident.
+for (const dir of ['', ...SHARED_DIRS])
+  for (const name of await fs.readdir(path.join(publicDir, dir))) {
+    const file = dir ? dir + '/' + name : name;
+    if (/\.(js|ts)$/.test(name) && !SHARED.includes(file) && !BUNDLED.includes(file))
+      throw Error(`build.ts: add public/${file} to SHARED or BUNDLED`);
+  }
 
 async function writeScripts(out: string) {
   await fs.writeFile(path.join(out, 'app.js'), await bundleApp());
+  for (const dir of SHARED_DIRS) await fs.mkdir(path.join(out, dir), { recursive: true });
   for (const name of SHARED)
     await fs.writeFile(path.join(out, shipped(name)), await sharedJs(name));
   await fs.writeFile(path.join(out, 'style.css'), await minifyCss(await read('public/style.css')));
@@ -126,7 +139,7 @@ async function buildWeb() {
   const skip = new Set([
     path.join(publicDir, 'app'),
     path.join(publicDir, 'types'),
-    ...[...BUNDLED, ...SHARED].map(name => path.join(publicDir, name)),
+    ...[...BUNDLED, ...SHARED, ...SHARED_DIRS].map(name => path.join(publicDir, name)),
   ]);
   await fs.cp(publicDir, out, {
     recursive: true,
