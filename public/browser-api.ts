@@ -480,6 +480,16 @@ export function createBrowserApi(
   // The scoped routes whose body names the save and profile (saveId, profileId) ahead of the
   // headers; the others ignore body ids.
   const scopedByBody = new Set(['/api/select', '/api/remove-profile']);
+  // The parsed JSON body, {} when there is none. Every route that reads a body expects a JSON
+  // object, so any other JSON value (null, a list, a string or a number) is refused here before
+  // a route reads a field of it, with the server's message (workspace.ts, #541, #573).
+  const readBody = (raw: BrowserRequestOptions['body']): Record<string, unknown> => {
+    if (!raw) return {};
+    const input: unknown = JSON.parse(raw as string);
+    if (input === null || typeof input !== 'object' || Array.isArray(input))
+      throw Error('Expected a JSON object.');
+    return input as Record<string, unknown>;
+  };
   // Takes the same (path, fetch options) app/api.ts would give fetch(); `options.onProgress`
   // is extra and receives the phase number the worker is calculating.
   // Concurrency: every change happens inside one store.transaction(), and IndexedDB serializes
@@ -489,7 +499,7 @@ export function createBrowserApi(
     // app/api.ts sends a JSON string and a plain headers object.
     const url = new URL(route, 'https://planner.invalid'),
       path = url.pathname,
-      body: Record<string, unknown> = options.body ? JSON.parse(options.body as string) : {},
+      body = readBody(options.body),
       headers = (options.headers || {}) as Record<string, string>,
       routeRequest: RouteRequest = { url, headers, body, options };
     const unscoped = routes[path];
