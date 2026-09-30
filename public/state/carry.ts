@@ -349,7 +349,8 @@ export function wholeMachineProfile<P extends RowsPlan, S extends SavedState>(
 }
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
-// Used by /api/export-saves?share=1 in workspace.ts and browser-api.ts; the input is cloned.
+// Used by /api/export-saves?share=1 in server/save-routes.ts and browser-api.ts; the input is
+// cloned.
 export function shareState(state: SavedState): ProgressState {
   const clean = validateState(structuredClone(state));
   clean.checks = {};

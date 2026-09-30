@@ -10,8 +10,8 @@
 //    phase picker) and mounts the page for the current hash route (#plan, #factories, ...)
 //    into <main>. Every page is a Vue component in app/ui/pages/, listed by route in
 //    app/ui/pages.ts; #wizard shows the node survey, the guided start or the five steps by
-//    the wizard draft's mode. The data behind them lives in plain modules: app/views/*.js
-//    (factories, storage, a calculated profile's plan) and app/wizard/*.js (the draft, its
+//    the wizard draft's mode. The data behind them lives in plain modules: app/views/*.ts
+//    (factories, storage, a calculated profile's plan) and app/wizard/*.ts (the draft, its
 //    readers and moves).
 // 3. Session state is not reactive: components read it inside legacy() from
 //    app/ui/bridge.ts, which re-runs whenever render() calls invalidate().

@@ -4,8 +4,9 @@
 // recalculated. Post Phase 5 has no stage of its own: the interface shows Phase 5's stage for it
 // (`stage()` in public/app/session.ts).
 //
-// Callers: workspace.ts (`/api/preview`, `/api/profiles`, `/api/round-up`, and `catalog()` in
-// the session summary) for the Docker edition. The Pages edition runs a copy that build.ts adapts
+// Callers in the Docker edition: server/save-routes.ts (`/api/preview`, `/api/profiles`),
+// server/profile-routes.ts (`/api/round-up`) and `catalog()` in the session summary
+// (server/scope.ts). The Pages edition runs a copy that build.ts adapts
 // for the browser, inside calculator-worker.js, which public/browser-api.ts drives; `catalog()` is
 // written to catalog.json at build time. tests/*.test.ts import this module directly.
 //
@@ -772,10 +773,12 @@ function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
 //   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
 // The two-step fit may add nuclearFractional, supplyDropped or amplificationDropped.
-// calculate() may add aheadOf, fuelVerdict, or turn a failed
-// phase into a draft with reason/shortfalls/minHours. The interface reads these fields in
-// public/app/views/calculated.ts, public/app/flow.ts and public/app/wizard/. Only calculate()
-// calls run, directly and through the two-step fit below.
+// calculate() may add aheadOf (pullFinalPhaseForward), fuelVerdict (judgeAugmenterFuel), or turn
+// a failed phase into a draft with reason/shortfalls/minHours (draftStage). The interface reads
+// these fields through calcStage() in public/app/session.ts: mainly
+// public/app/views/calculated.ts, public/app/flow.ts and the components in public/app/ui/plan/
+// and public/app/ui/wizard/. Only calculate() calls run, through its phase helpers (solvePhase,
+// draftStage, resolveEarlierPhases, solveUnfueled) and the two-step fit below.
 export function run(
   config: CurrentSettings,
   phase: number,
@@ -1455,12 +1458,13 @@ function buildOrder(rows: CalcRow[]): CalcRow[] {
 // Returns { engine, settings, stages: { 1..5: stage }, warnings: [string], createdAt }. A stage is
 // run()'s result, or for a phase that does not fit a draft with `feasible: false`, the diagnostic
 // solve's rows and a `reason`, plus `shortfalls` [{ name, needed, budget }], `minHours` and
-// `wholeMachinesOnly` where they apply (see draftOptions in public/app/views/calculated.ts).
+// `wholeMachinesOnly` where they apply (see draftFixes in public/app/views/calculated.ts).
 // Stored as `profile.plan` and never recalculated behind the user's back, so a field added here
 // must be optional for plans saved by older engines.
 //
-// Callers: workspace.ts (/api/preview, /api/profiles, /api/round-up), calculator-worker.js in
-// the Pages edition (via public/browser-api.ts), and the tests.
+// Callers: server/save-routes.ts (/api/preview, /api/profiles) and server/profile-routes.ts
+// (/api/round-up), calculator-worker.js in the Pages edition (via public/browser-api.ts), and
+// the tests.
 export function calculate(
   input: unknown,
   onPhase?: (phase: number) => void,
@@ -1694,10 +1698,11 @@ function pullFinalPhaseForward(config: CurrentSettings, stages: PhaseStages): st
 // are the most machines any phase from n to 5 builds, so running a line harder than its own
 // plan asks never needs a building that is not built anyway. The re-solve maximises output
 // under those caps, and is kept only when it finishes strictly sooner, recording the time it
-// replaces as `aheadOf` (shown by public/app/wizard/wizard.ts). A re-solve that stopped at its
-// limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or Phase 5's
-// deadline) proves nothing either way: that phase keeps its own plan, and the warning says the
-// search stopped instead of claiming it could not finish sooner (#650). Returns those phases.
+// replaces as `aheadOf` (shown by public/app/ui/wizard/ReviewStep.vue). A re-solve that
+// stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or
+// Phase 5's deadline) proves nothing either way: that phase keeps its own plan, and the warning
+// says the search stopped instead of claiming it could not finish sooner (#650). Returns those
+// phases.
 function resolveEarlierPhases(config: CurrentSettings, stages: PhaseStages): number[] {
   const built: Record<number, Record<string, number>> = {};
   const stopped: number[] = [];
@@ -1982,7 +1987,7 @@ const WARNING_GROUPS: WarningGroup[] = [
 ];
 // Static data the interface needs before any calculation: recipe lists for the wizard's
 // alternate picker, storage, supply and raw-resource options, default budgets and goal labels.
-// The Docker edition sends it with the session summary (workspace.ts); build.ts writes it to
+// The Docker edition sends it with the session summary (server/scope.ts); build.ts writes it to
 // catalog.json for the Pages edition, which public/browser-api.ts loads. The UI reads it as
 // `workspace.catalog`.
 export const catalog = (): Catalog => ({
