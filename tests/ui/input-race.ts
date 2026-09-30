@@ -129,11 +129,15 @@ export const races: Record<string, Race> = {
   })(),
 };
 
+const type = (input: HTMLInputElement, value: string) => {
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+};
+
 // `stub(held)` makes the edition's saves reply; each save awaits held() first, which holds the
-// first save until the second field has been typed in and lets every later one through.
-export async function typedDuringSave(race: Race, stub: (held: () => Promise<void>) => void) {
-  page();
-  await race.open();
+// first save until the returned release() and lets every later one through.
+type Stub = (held: () => Promise<void>) => void;
+function holdFirst(stub: Stub) {
   let release!: () => void;
   const gate = new Promise<void>(resolve => (release = resolve));
   let first = true;
@@ -142,13 +146,17 @@ export async function typedDuringSave(race: Race, stub: (held: () => Promise<voi
     first = false;
     return gate;
   });
+  return release;
+}
+
+// The first save is held until the second field has been typed in.
+export async function typedDuringSave(race: Race, stub: Stub) {
+  page();
+  await race.open();
+  const release = holdFirst(stub);
   const one = $<HTMLInputElement>(race.first)!,
     two = $<HTMLInputElement>(race.second)!;
   assert.ok(one && two, 'both fields are drawn');
-  const type = (input: HTMLInputElement, value: string) => {
-    input.value = value;
-    input.dispatchEvent(new Event('input'));
-  };
   // Typing starts in the second field before the first is committed, and goes on while the
   // first one saves: the Saving indicator and the redraw after the save both leave it alone.
   type(two, race.typed[0]);
@@ -166,4 +174,29 @@ export async function typedDuringSave(race: Race, stub: (held: () => Promise<voi
   assert.deepEqual(race.stored(), race.expected, 'the typed value is saved');
   assert.equal(two.value, race.typed[1]);
   assert.equal(one.value, race.commit);
+}
+
+// One field typed in again while its own save is in flight (#664): the delivery counter, which
+// stays editable while it saves (the other fields are read-only meanwhile, app/busy.ts). Its save
+// changes the saved count, and a draft replaced by every new saved count lost what was typed
+// after the commit. It is kept, then saved when committed in turn.
+export async function typedDuringOwnSave(stub: Stub) {
+  page();
+  await races['delivery counter']!.open();
+  const release = holdFirst(stub);
+  const input = $<HTMLInputElement>('#delivery-3-modular-engine')!,
+    stored = () => state.deliveries['3-modular-engine'];
+  assert.ok(input, 'the counter is drawn');
+  type(input, '5');
+  input.dispatchEvent(new Event('change'));
+  await nextTick();
+  type(input, '7');
+  release();
+  await settle();
+  assert.equal(stored(), 5);
+  assert.equal(input.value, '7', 'kept after its own save of the count before');
+  input.dispatchEvent(new Event('change'));
+  await settle();
+  assert.equal(stored(), 7, 'the typed count is saved');
+  assert.equal(input.value, '7');
 }

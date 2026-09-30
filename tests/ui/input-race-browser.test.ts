@@ -17,15 +17,21 @@ vi.mock('../../public/browser-api.ts', async original => ({
 }));
 
 import { applyUpdate } from './setup.ts';
-import { races, typedDuringSave } from './input-race.ts';
+import { races, typedDuringOwnSave, typedDuringSave } from './input-race.ts';
+
+const stub = (held: () => Promise<void>) => {
+  edition.reply = async (path, options) => {
+    if (path !== '/api/update') throw Error('unexpected ' + path);
+    await held();
+    return applyUpdate(JSON.parse(String(options.body)) as UpdateOp);
+  };
+};
 
 for (const [name, race] of Object.entries(races))
   test(`a ${name} typed while another one saves is kept and saved in the browser (#627, #654)`, async () => {
-    await typedDuringSave(race, held => {
-      edition.reply = async (path, options) => {
-        if (path !== '/api/update') throw Error('unexpected ' + path);
-        await held();
-        return applyUpdate(JSON.parse(String(options.body)) as UpdateOp);
-      };
-    });
+    await typedDuringSave(race, stub);
   });
+
+test('a delivery count typed while the same counter saves is kept and saved in the browser (#664)', async () => {
+  await typedDuringOwnSave(stub);
+});
