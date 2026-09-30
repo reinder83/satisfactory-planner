@@ -68,6 +68,9 @@ export interface AdaFacts {
   backupDays: number | null;
   post: boolean;
   startPhase: string;
+  // The saved working phase, as a label, when the profile opened on an earlier phase that still
+  // has open checks (#570, app/opening-phase.ts); '' otherwise.
+  openedFrom: string;
   assumptions: number;
   // A calculated profile's build-so-far status (app/build-status.ts), or null: factories marked
   // running of all, the share of the elevator delivery rate flowing now (0-100), the step to
@@ -488,6 +491,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.post,
     text: () =>
       `Project Assembly is delivered and you are still here, building. FICSIT files that under “retention”. Protect the storage allowances first and sink what is left over.`,
+  },
+  {
+    id: 'opened-earlier',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => facts.openedFrom,
+    text: facts =>
+      `You are working on ${facts.openedFrom}, but ${facts.phaseLabel} still has open steps, so the build plan opens here. Tick them off, or pick ${facts.openedFrom} in the phase track to go straight back. FICSIT prefers its paperwork in order.`,
   },
   {
     id: 'start-phase',
