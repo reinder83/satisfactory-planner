@@ -21,20 +21,16 @@ import {
 import { validateTransfer } from '../public/transfer.ts';
 import { catalog } from '../planner.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
-import frozenJson from '../migrations/handbook-2026-09-13.json' with { type: 'json' };
-import recipesJson from '../recipes.json' with { type: 'json' };
+import { frozenHandbook as frozen, recipes } from './helpers/data.ts';
 import type {
   BrowserWorkspace,
   Handbook,
   ProgressState,
-  Recipe,
   SaveExport,
   StoredProfile,
   WorkspaceFile,
 } from '../public/types/index.ts';
 
-const frozen = frozenJson as unknown as Handbook;
-const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
 const { pureLimits } = catalog();
 const whole = handbookToPlan(frozen, recipes, pureLimits);
 // Two Phase 3 factories the whole handbook turns into rows.
@@ -42,19 +38,23 @@ const [kept, damaged] = frozen.factories.filter(f => whole.rows['3']![f.id]);
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
 
 // The handbooks no release exported. `bare` is the one the issue names; `broken` is a whole one
-// with parts missing or of the wrong shape, so the rest of it still converts.
-const bare = () => ({ factories: [], phases: {}, storage: [] }) as unknown as Handbook;
+// with parts missing or of the wrong shape, so the rest of it still converts. Both are partial
+// fixtures, typed as the Handbook a stored profile claims to carry.
+function bare(): Handbook {
+  const handbook: Partial<Handbook> = { factories: [], phases: {}, storage: [] };
+  return handbook as Handbook;
+}
 function broken(): Handbook {
-  const handbook = structuredClone(frozen) as unknown as Record<string, unknown>;
+  const handbook: Partial<Handbook> = structuredClone(frozen);
   delete handbook.version;
   delete handbook.plans;
   delete handbook.deliveries;
+  // @ts-expect-error: power of the wrong shape, on purpose.
   handbook.power = 'none';
-  const factory = (handbook.factories as { id: string; stages: Record<string, unknown> }[]).find(
-    f => f.id === damaged!.id,
-  )!;
+  const factory = handbook.factories!.find(f => f.id === damaged!.id)!;
+  // @ts-expect-error: a stage of the wrong shape, on purpose.
   factory.stages['3'] = { recipe: 5 };
-  return handbook as unknown as Handbook;
+  return handbook as Handbook;
 }
 // Progress on a handbook profile: a tick and a note on each factory, a step, and a delivery.
 const progress = (): ProgressState => ({

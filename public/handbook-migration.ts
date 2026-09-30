@@ -27,6 +27,7 @@ import type {
   StoredSettings,
   StoredProfile,
   StoredStage,
+  UntypedHandbookFields,
 } from './types/index.ts';
 
 // The recipe the handbook gives its Plastic and Rubber factories where one shared oil campus
@@ -473,7 +474,8 @@ export function usableHandbook(raw: unknown): { handbook: Handbook; complete: bo
   const key = safeKey;
   const task = (value: unknown) =>
     record(value) && key(value.id) && text(value.title) && text(value.body);
-  const handbook: Record<string, unknown> = record(raw) ? structuredClone(raw) : {};
+  // Every field unknown until the checks below narrow it; the return says what they left.
+  const handbook: UntypedHandbookFields = record(raw) ? structuredClone(raw) : {};
   // A required field: kept when `valid`, otherwise the empty `fallback`.
   const field = (name: string, valid: (value: unknown) => boolean, fallback: unknown) => {
     if (!valid(handbook[name])) handbook[name] = fallback;
@@ -577,7 +579,7 @@ export function usableHandbook(raw: unknown): { handbook: Handbook; complete: bo
   if (Array.isArray(handbook.sources))
     only(handbook.sources, source => record(source) && text(source.url));
   return {
-    handbook: handbook as unknown as Handbook,
+    handbook: handbook as Handbook,
     complete: JSON.stringify(handbook) === JSON.stringify(raw),
   };
 }

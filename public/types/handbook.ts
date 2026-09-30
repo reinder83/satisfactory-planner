@@ -111,3 +111,10 @@ export interface Handbook {
   knownChecks: Record<string, boolean>;
   sources?: { title: string; url: string }[];
 }
+
+// A stored or imported handbook while usableHandbook checks it: its fields by name, each unknown
+// until a check narrows it, and whatever other keys the file carries. It converts to Handbook
+// with a single cast, which the checks vouch for (#572).
+export type UntypedHandbookFields = Record<string, unknown> & {
+  [Field in keyof Handbook]?: unknown;
+};

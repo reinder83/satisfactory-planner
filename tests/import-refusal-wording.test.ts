@@ -7,7 +7,6 @@ import { readFileSync } from 'node:fs';
 import { initialState } from '../server.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import frozenJson from '../migrations/handbook-2026-09-13.json' with { type: 'json' };
-import type { MigrationData } from '../public/handbook-migration.ts';
 
 const retired = /handbook|original profile/i;
 const next = /Export it again from the planner that made it\.$/;
@@ -51,7 +50,8 @@ test('each refusal of a file from an older planner says what to do next', async 
     ],
     [
       'a conversion that fails',
-      () => importableTransfer(exportOf(whole()), async () => ({}) as unknown as MigrationData),
+      // @ts-expect-error: conversion data without recipes, on purpose.
+      () => importableTransfer(exportOf(whole()), async () => ({})),
     ],
   ];
   for (const [name, run] of cases) {
