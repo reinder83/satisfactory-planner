@@ -80,7 +80,10 @@ export const POWER_CHECKS: { id: string; label: string }[] = [
   { id: 'power-rocket-1', label: 'Rocket-fuel block 1: +72 GW' },
   { id: 'power-rocket-2', label: 'Rocket-fuel block 2: +72 GW' },
   { id: 'power-u4', label: 'Phase 4 uranium: +125 GW' },
-  ...[3, 4, 5, 6].map(n => ({ id: 'power-rocket-' + n, label: `Rocket-fuel block ${n}: +72 GW` })),
+  ...[3, 4, 5, 6].map(block => ({
+    id: 'power-rocket-' + block,
+    label: `Rocket-fuel block ${block}: +72 GW`,
+  })),
   { id: 'power-nuclear-final', label: 'Complete nuclear fleet: 437.5 GW total' },
 ];
 
@@ -124,13 +127,13 @@ export interface HandbookConversion {
   skipped: SkippedFactory[];
 }
 
-const scale = (rates: ItemRates, k: number): ItemRates =>
-  Object.fromEntries(Object.entries(rates).map(([n, q]) => [n, q * k]));
+const scale = (rates: ItemRates, factor: number): ItemRates =>
+  Object.fromEntries(Object.entries(rates).map(([item, rate]) => [item, rate * factor]));
 // The last machine's clock in % for `equivalent` machine-equivalents on `machines` buildings.
 const lastClock = (equivalent: number, machines: number) =>
   Math.round((equivalent - (machines - 1)) * 100 * 1000) / 1000;
 // A row's name is what it makes, as a calculated row's is: the recipe without "Alternate: ".
-const productName = (r: Recipe) => r.name.replace(/^Alternate:\s*/, '');
+const productName = (recipe: Recipe) => recipe.name.replace(/^Alternate:\s*/, '');
 
 // One handbook factory at one stage as a calculated row: the handbook's machines, rates, inputs
 // and peak power; outputs are the recipe's scaled to the handbook's machine-equivalents, with the
@@ -138,34 +141,34 @@ const productName = (r: Recipe) => r.name.replace(/^Alternate:\s*/, '');
 // Plastic and Rubber, which the handbook lists with 0 machines and no inputs) takes its machines,
 // power and inputs from that campus line, and keeps its own name and output.
 function factoryRow(
-  f: HandbookFactory,
-  s: HandbookFactoryStage,
-  r: Recipe,
+  factory: HandbookFactory,
+  stage: HandbookFactoryStage,
+  recipe: Recipe,
   line?: OilLine,
 ): CalcRow {
-  const equivalent = line?.equivalent ?? s.equivalent ?? s.machines;
-  const outputs = scale(r.outputs, equivalent);
-  outputs[f.name] = s.output;
+  const equivalent = line?.equivalent ?? stage.equivalent ?? stage.machines;
+  const outputs = scale(recipe.outputs, equivalent);
+  outputs[factory.name] = stage.output;
   return {
-    id: r.id,
-    name: f.name,
-    alternate: r.alternate,
-    phase: r.phase,
-    machine: line?.machine ?? s.machine,
-    power: r.power,
-    inputs: line ? scale(r.inputs, line.equivalent) : { ...s.inputs },
+    id: recipe.id,
+    name: factory.name,
+    alternate: recipe.alternate,
+    phase: recipe.phase,
+    machine: line?.machine ?? stage.machine,
+    power: recipe.power,
+    inputs: line ? scale(recipe.inputs, line.equivalent) : { ...stage.inputs },
     outputs,
     equivalent,
-    machines: line?.machines ?? s.machines,
-    lastClock: line ? lastClock(line.equivalent, line.machines) : (s.lastClock ?? 100),
-    peakMW: line?.peakMW ?? s.peakMW,
+    machines: line?.machines ?? stage.machines,
+    lastClock: line ? lastClock(line.equivalent, line.machines) : (stage.lastClock ?? 100),
+    peakMW: line?.peakMW ?? stage.peakMW,
     generationMW: 0,
   };
 }
 
 function stageOf(
   handbook: Handbook,
-  st: string,
+  phase: string,
   byName: Map<string, Recipe>,
   rowsOf: Record<string, string>,
   skipped: SkippedFactory[],
@@ -173,68 +176,77 @@ function stageOf(
 ): StoredStage {
   const rows: CalcRow[] = [];
   const seen = new Set<string>();
-  for (const f of handbook.factories) {
-    const s = f.stages[st];
-    if (!s) continue;
-    const r = byName.get(s.recipe);
-    if (s.recipe === OIL_CAMPUS || !r || seen.has(r.id)) {
+  for (const factory of handbook.factories) {
+    const stage = factory.stages[phase];
+    if (!stage) continue;
+    const recipe = byName.get(stage.recipe);
+    if (stage.recipe === OIL_CAMPUS || !recipe || seen.has(recipe.id)) {
       skipped.push({
-        stage: st,
-        factory: f.id,
-        recipe: s.recipe,
-        why: s.recipe === OIL_CAMPUS ? 'oil-campus' : !r ? 'unknown-recipe' : 'duplicate-recipe',
+        stage: phase,
+        factory: factory.id,
+        recipe: stage.recipe,
+        why:
+          stage.recipe === OIL_CAMPUS
+            ? 'oil-campus'
+            : !recipe
+              ? 'unknown-recipe'
+              : 'duplicate-recipe',
       });
       continue;
     }
-    seen.add(r.id);
+    seen.add(recipe.id);
     rows.push(
       factoryRow(
-        f,
-        s,
-        r,
-        handbook.plans[st]?.oil?.find(l => l.recipe === s.recipe),
+        factory,
+        stage,
+        recipe,
+        handbook.plans[phase]?.oil?.find(line => line.recipe === stage.recipe),
       ),
     );
-    rowsOf[f.id] = r.id;
+    rowsOf[factory.id] = recipe.id;
     // The factory's note, page and where it is built follow its row; the handbook drew its
     // Plastic and Rubber, and nuclear factories, at a shared site.
-    const site = ['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : undefined;
-    notes[r.id] ??= {
-      ...(f.note ? { note: f.note } : {}),
-      page: f.page,
-      ...(f.local ? { local: true } : {}),
-      ...(f.nuclear ? { nuclear: true } : {}),
+    const site = ['Plastic', 'Rubber'].includes(factory.name)
+      ? 'oil'
+      : factory.nuclear
+        ? 'nuclear'
+        : undefined;
+    notes[recipe.id] ??= {
+      ...(factory.note ? { note: factory.note } : {}),
+      page: factory.page,
+      ...(factory.local ? { local: true } : {}),
+      ...(factory.nuclear ? { nuclear: true } : {}),
       ...(site ? { site } : {}),
     };
   }
   // The oil campus's own lines, unless a factory row already makes the same recipe (Phase 3's
   // Plastic and Rubber factories are those lines, drawn with the line's figures above).
-  for (const l of handbook.plans[st]?.oil ?? []) {
-    const r = byName.get(l.recipe);
-    if (!r || seen.has(r.id)) continue;
-    seen.add(r.id);
+  for (const line of handbook.plans[phase]?.oil ?? []) {
+    const recipe = byName.get(line.recipe);
+    if (!recipe || seen.has(recipe.id)) continue;
+    seen.add(recipe.id);
     rows.push({
-      id: r.id,
-      name: productName(r),
-      alternate: r.alternate,
-      phase: r.phase,
-      machine: l.machine,
-      power: r.power,
-      inputs: scale(r.inputs, l.equivalent),
-      outputs: scale(r.outputs, l.equivalent),
-      equivalent: l.equivalent,
-      machines: l.machines,
-      lastClock: lastClock(l.equivalent, l.machines),
-      peakMW: l.peakMW,
+      id: recipe.id,
+      name: productName(recipe),
+      alternate: recipe.alternate,
+      phase: recipe.phase,
+      machine: line.machine,
+      power: recipe.power,
+      inputs: scale(recipe.inputs, line.equivalent),
+      outputs: scale(recipe.outputs, line.equivalent),
+      equivalent: line.equivalent,
+      machines: line.machines,
+      lastClock: lastClock(line.equivalent, line.machines),
+      peakMW: line.peakMW,
       generationMW: 0,
     });
-    notes[r.id] ??= { site: 'oil' };
+    notes[recipe.id] ??= { site: 'oil' };
   }
-  const deliveries = handbook.deliveries.filter(d => d.phase === st);
+  const deliveries = handbook.deliveries.filter(d => d.phase === phase);
   // The handbook's power figure is the gross generation at the stage's completion; it lists no
   // generators, so there are no generator rows and generation is that figure.
-  const generationMW = (handbook.power[st] ?? 0) * 1000,
-    requiredMW = (handbook.plans[st]?.manufacturingPeakGW ?? 0) * 1000;
+  const generationMW = (handbook.power[phase] ?? 0) * 1000,
+    requiredMW = (handbook.plans[phase]?.manufacturingPeakGW ?? 0) * 1000;
   // Hours to hand in what the handbook had not yet handed in, at its rates.
   const hours = Math.max(
     0,
@@ -243,19 +255,19 @@ function stageOf(
   return {
     feasible: true,
     rows,
-    raw: { ...(handbook.resources[st] ?? {}) },
+    raw: { ...(handbook.resources[phase] ?? {}) },
     supplied: {},
     storage: Object.fromEntries(
       handbook.factories
-        .filter(f => (f.stages[st]?.storage ?? 0) > 0)
-        .map(f => [f.name, f.stages[st]!.storage]),
+        .filter(f => (f.stages[phase]?.storage ?? 0) > 0)
+        .map(f => [f.name, f.stages[phase]!.storage]),
     ),
     drone: {},
     transport: {},
     delivery: Object.fromEntries(deliveries.map(d => [d.name, { target: d.target, rate: d.rate }])),
     surplus: {},
     plutoniumSink: 0,
-    peakMW: rows.reduce((a, r) => a + r.peakMW, 0),
+    peakMW: rows.reduce((total, row) => total + row.peakMW, 0),
     generationMW,
     sloopsUsed: 0,
     augmenters: 0,
@@ -267,12 +279,12 @@ function stageOf(
     requiredMW,
     additionalHeadroomMW: Math.max(0, requiredMW - generationMW),
     hours,
-    conversions: handbook.factories.filter(f => f.conversion && f.stages[st]).map(f => f.name),
+    conversions: handbook.factories.filter(f => f.conversion && f.stages[phase]).map(f => f.name),
   };
 }
 
-const steps = (ts: { id: string; title: string; body: string }[]): GuideStep[] =>
-  ts.map(t => ({ id: t.id, title: t.title, body: t.body }));
+const steps = (tasks: { id: string; title: string; body: string }[]): GuideStep[] =>
+  tasks.map(task => ({ id: task.id, title: task.title, body: task.body }));
 
 // The handbook as a calculated snapshot (#486). Phases 1 and 2, which the handbook never
 // planned, are empty phases a profile can still select (decision 4 on #387). `baseLimits` are
@@ -288,12 +300,13 @@ export function handbookToPlan(
   const rows: Record<string, Record<string, string>> = {};
   const skipped: SkippedFactory[] = [];
   const notes: NonNullable<PlanGuide['factories']> = {};
-  const stage = (st: StageKey): StoredStage =>
-    st === '1' || st === '2'
+  const stage = (phase: StageKey): StoredStage =>
+    phase === '1' || phase === '2'
       ? { feasible: true, rows: [] }
-      : stageOf(handbook, st, byName, (rows[st] = {}), skipped, notes);
+      : stageOf(handbook, phase, byName, (rows[phase] = {}), skipped, notes);
   const phases: PlanGuide['phases'] = {};
-  for (const [ph, ts] of Object.entries(handbook.phases)) if (ts?.length) phases[ph] = steps(ts);
+  for (const [phase, tasks] of Object.entries(handbook.phases))
+    if (tasks?.length) phases[phase] = steps(tasks);
   const guide: PlanGuide = {
     phases,
     // A part the handbook does not have is left out, not written empty (#473 review).
@@ -349,60 +362,63 @@ export function migrateHandbookState(
   handbook: Handbook,
   conversion: HandbookConversion,
 ): ProgressState {
-  const s = validateState(structuredClone(state));
-  if (s.handbookOrigin) return s;
+  const progress = validateState(structuredClone(state));
+  if (progress.handbookOrigin) return progress;
   const rows = conversion.rows;
   // Every row a factory became, in stage order, without repeats.
-  const rowsOf = (fid: string) => [
-    ...new Set(['3', '4', '5'].map(st => rows[st]?.[fid]).filter((x): x is string => !!x)),
+  const rowsOf = (factoryId: string) => [
+    ...new Set(
+      ['3', '4', '5'].map(phase => rows[phase]?.[factoryId]).filter((row): row is string => !!row),
+    ),
   ];
   const unmapped: HandbookOrigin['unmapped'] = { checks: {}, notes: {}, assignments: {} };
   const checks: Record<string, boolean> = {};
   const moved: [string, boolean][] = [];
-  for (const [k, v] of Object.entries(s.checks)) {
-    const m = /^factory-([345])-(.+)$/.exec(k);
-    if (!m) checks[k] = v;
-    else if (rows[m[1]!]?.[m[2]!]) moved.push([`calc-${m[1]}-${rows[m[1]!]![m[2]!]}`, v]);
-    else unmapped.checks[k] = v;
+  for (const [key, ticked] of Object.entries(progress.checks)) {
+    const match = /^factory-([345])-(.+)$/.exec(key);
+    if (!match) checks[key] = ticked;
+    else if (rows[match[1]!]?.[match[2]!])
+      moved.push([`calc-${match[1]}-${rows[match[1]!]![match[2]!]}`, ticked]);
+    else unmapped.checks[key] = ticked;
   }
   // A moved tick never overwrites a check the state already holds under that key.
-  for (const [k, v] of moved)
-    if (k in checks) unmapped.checks[k.replace(/^calc-/, 'moved-calc-')] = v;
-    else checks[k] = v;
-  for (const [k, v] of Object.entries(handbook.knownChecks || {}))
-    if (!(k in checks)) checks[k] = v;
+  for (const [key, ticked] of moved)
+    if (key in checks) unmapped.checks[key.replace(/^calc-/, 'moved-calc-')] = ticked;
+    else checks[key] = ticked;
+  for (const [key, ticked] of Object.entries(handbook.knownChecks || {}))
+    if (!(key in checks)) checks[key] = ticked;
   const notes: Record<string, string> = {};
   const factoryNotes: [string, string][] = [];
   const known = new Set(handbook.factories.map(f => f.id));
   // In a handbook state every factory-<id> note names a handbook factory; one this handbook
   // no longer has (an id renamed or removed between releases) is kept for review (#493 review).
-  for (const [k, v] of Object.entries(s.notes)) {
-    const fid = k.startsWith('factory-') ? k.slice('factory-'.length) : '';
-    if (!fid) notes[k] = v;
-    else if (known.has(fid)) factoryNotes.push([fid, v]);
-    else unmapped.notes[k] = v;
+  for (const [key, note] of Object.entries(progress.notes)) {
+    const factoryId = key.startsWith('factory-') ? key.slice('factory-'.length) : '';
+    if (!factoryId) notes[key] = note;
+    else if (known.has(factoryId)) factoryNotes.push([factoryId, note]);
+    else unmapped.notes[key] = note;
   }
-  for (const [fid, v] of factoryNotes) {
-    const targets = rowsOf(fid);
+  for (const [factoryId, note] of factoryNotes) {
+    const targets = rowsOf(factoryId);
     let clash = !targets.length;
     for (const row of targets) {
       const key = 'factory-' + row;
-      if (key in notes && notes[key] !== v) clash = true;
-      else notes[key] = v;
+      if (key in notes && notes[key] !== note) clash = true;
+      else notes[key] = note;
     }
-    if (clash) unmapped.notes['factory-' + fid] = v;
+    if (clash) unmapped.notes['factory-' + factoryId] = note;
   }
-  const assignments: typeof s.factoryGroups.assignments = {};
+  const assignments: typeof progress.factoryGroups.assignments = {};
   const assign: [string, (typeof assignments)[string]][] = [];
   // Every assignment key of a handbook state is a factory id; one for no factory of this handbook
   // would name no row of the plan, and a Recalculate would drop it, so it is kept for review.
-  for (const [k, list] of Object.entries(s.factoryGroups.assignments))
-    if (known.has(k)) assign.push([k, list]);
-    else unmapped.assignments[k] = list;
-  for (const [fid, list] of assign) {
-    const targets = rowsOf(fid);
+  for (const [factoryId, list] of Object.entries(progress.factoryGroups.assignments))
+    if (known.has(factoryId)) assign.push([factoryId, list]);
+    else unmapped.assignments[factoryId] = list;
+  for (const [factoryId, list] of assign) {
+    const targets = rowsOf(factoryId);
     if (!targets.length || targets.some(row => row in assignments)) {
-      unmapped.assignments[fid] = list;
+      unmapped.assignments[factoryId] = list;
       continue;
     }
     for (const row of targets) assignments[row] = structuredClone(list);
@@ -410,23 +426,25 @@ export function migrateHandbookState(
   // A saved step link names a handbook factory; it becomes that factory's row in the step's
   // phase (Post Phase 5 uses Phase 5's), or its first row when the step has no phase.
   const phaseOf = (step: string) =>
-    /^phase-([345]|post)-/.exec(step)?.[1] ?? s.customTasks.find(t => t.id === step)?.phase;
+    /^phase-([345]|post)-/.exec(step)?.[1] ??
+    progress.customTasks.find(task => task.id === step)?.phase;
   const links: Record<string, string> = {};
-  for (const [step, fid] of Object.entries(s.taskEdits.links)) {
-    const ph = phaseOf(step);
-    const st = ph === 'post' ? '5' : ph;
-    links[step] = (st && rows[st]?.[fid]) || rowsOf(fid)[0] || fid;
+  for (const [step, factoryId] of Object.entries(progress.taskEdits.links)) {
+    const phase = phaseOf(step);
+    const stage = phase === 'post' ? '5' : phase;
+    links[step] = (stage && rows[stage]?.[factoryId]) || rowsOf(factoryId)[0] || factoryId;
   }
-  const deliveries = { ...s.deliveries };
-  for (const d of handbook.deliveries)
-    if (deliveries[d.id] === undefined && d.initial > 0) deliveries[d.id] = d.initial;
+  const deliveries = { ...progress.deliveries };
+  for (const delivery of handbook.deliveries)
+    if (deliveries[delivery.id] === undefined && delivery.initial > 0)
+      deliveries[delivery.id] = delivery.initial;
   return validateState({
-    ...s,
+    ...progress,
     checks,
     notes,
     deliveries,
-    taskEdits: { ...s.taskEdits, links },
-    factoryGroups: { ...s.factoryGroups, assignments },
+    taskEdits: { ...progress.taskEdits, links },
+    factoryGroups: { ...progress.factoryGroups, assignments },
     handbookOrigin: { version: handbook.version, unmapped },
   });
 }
