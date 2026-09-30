@@ -152,7 +152,6 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
     }
     const wrap = { format: 'satisfactory-planner-saves', version: 1 };
     for (const [data, error] of [
-      [null, 'Choose a full planner save export.'],
       [{ ...wrap, saves: 'x' }, 'Choose a full planner save export.'],
       [{ ...wrap, saves: [null] }, 'Invalid profiles in export.'],
       [{ ...wrap, saves: [{ profiles: [null] }] }, 'Invalid profile.'],
@@ -192,6 +191,55 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// A body that is valid JSON but not an object (null, a list, a string or a number) is refused
+// by the one body reader with 400, never reported as a storage failure (#541).
+test('a JSON body that is not an object is refused with 400 before any route reads it', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-body-'));
+  const fresh = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-body-fresh-'));
+  const app = await start(dir);
+  const empty = await createApp({ dataDir: fresh });
+  await new Promise<void>(r => empty.listen(0, '127.0.0.1', r));
+  const emptyUrl = 'http://127.0.0.1:' + (empty.address() as AddressInfo).port;
+  try {
+    const before = await (await fetch(app.url + '/api/state')).json();
+    const cases: [string, string[]][] = [
+      [emptyUrl, ['/api/setup', '/api/login', '/api/register']],
+      [
+        app.url,
+        [
+          '/api/preview',
+          '/api/profiles',
+          '/api/select',
+          '/api/remove-profile',
+          '/api/rename',
+          '/api/duplicate-profile',
+          '/api/rank-alternates',
+          '/api/import',
+          '/api/update',
+          '/api/import-saves',
+        ],
+      ],
+    ];
+    for (const [url, endpoints] of cases)
+      for (const endpoint of endpoints)
+        for (const data of [null, [], 'x', 5]) {
+          const r = await post(url, endpoint, data);
+          const label = endpoint + ' ' + JSON.stringify(data);
+          assert.equal(r.status, 400, label);
+          assert.equal((await r.json()).error, 'Expected a JSON object.', label);
+        }
+    assert.deepEqual(await (await fetch(app.url + '/api/state')).json(), before);
+    // An object body still reaches its route.
+    const ok = await post(app.url, '/api/update', { type: 'check', key: 'body-ok', value: true });
+    assert.equal(ok.status, 200);
+  } finally {
+    await close(app.server);
+    await close(empty);
+    await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(fresh, { recursive: true, force: true });
   }
 });
 
