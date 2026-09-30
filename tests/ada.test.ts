@@ -335,6 +335,19 @@ test('ADA reads the build-so-far status: held-back rows, nothing flowing, the ne
     assert.ok(!ids(f).some(id => id.startsWith('build-')));
 });
 
+test('ADA points at the records the original plan could not place (#499)', () => {
+  for (const view of ['plan', 'notes']) {
+    const line = adaRemarks(facts({ view, unplaced: 3 })).find(r => r.id === 'unplaced')!;
+    assert.equal(line.tone, 'calm');
+    assert.match(line.text, /^3 records from the original plan .* foot of Notes/);
+    assert.doesNotMatch(line.text, /handbook/i, 'no "handbook" in user-facing copy (decision 8)');
+    assert.ok(!ids(facts({ view, unplaced: 0 })).includes('unplaced'));
+    assert.ok(!ids(facts({ view })).includes('unplaced'), 'absent means none');
+  }
+  const one = adaRemarks(facts({ view: 'notes', unplaced: 1 })).find(r => r.id === 'unplaced')!;
+  assert.match(one.text, /^1 record from/);
+});
+
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
   for (const view of ['plan', 'notes']) {
     const bare = adaRemarks(facts({ view, hasPhaseNote: false }));

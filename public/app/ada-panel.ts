@@ -138,6 +138,17 @@ function guideFacts(): AdaFacts['guide'] {
   };
 }
 
+// The ticks, notes and group assignments the move from the original plan could not place, which
+// the Notes page lists (ui/notes/UnplacedRecords.vue, #499).
+function unplacedCount(): number {
+  const unmapped = state.handbookOrigin?.unmapped;
+  if (!unmapped) return 0;
+  return [unmapped.checks, unmapped.notes, unmapped.assignments].reduce(
+    (total, records) => total + Object.keys(records || {}).length,
+    0,
+  );
+}
+
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
   const next = steps.find(t => !checked(t.id));
@@ -196,6 +207,7 @@ function adaFacts(): AdaFacts {
       total: deliveries.length,
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
+    unplaced: unplacedCount(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: taskEditsState().removed.length,
     groups: factoryGroupsState().groups.length,
