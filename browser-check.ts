@@ -5,10 +5,15 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createApp, initialState } from './server.ts';
+import { handbookToPlan } from './public/handbook-migration.ts';
+import { catalog } from './planner.ts';
 import os from 'node:os';
 import type { Page } from 'playwright';
 import type {
+  BrowserWorkspace,
   ContextReply,
+  Handbook,
+  Recipe,
   ProgressState,
   SaveExport,
   StoredPayoff,
@@ -19,7 +24,8 @@ type BrowserApi = typeof import('./public/browser-api.ts');
 const { chromium }: typeof import('playwright') = await import(
   process.env.PLANNER_PLAYWRIGHT ? pathToFileURL(process.env.PLANNER_PLAYWRIGHT).href : 'playwright'
 );
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'dist');
+const source = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(source, 'dist');
 const types: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -494,6 +500,93 @@ try {
   const state = await api<ProgressState>('/api/state');
   assert.equal(state.checks['parallel-one'], true);
   assert.equal(state.checks['parallel-two'], true);
+  // The browser edition, upgraded (#497): a record holding an original profile with its own
+  // handbook, as an import from an earlier release stored it, is migrated on the next open into
+  // a calculated profile with its ticks, and the record as it was stays under the second key.
+  // Seeded in the separate browser profile, which holds nothing else yet.
+  other.on('pageerror', e => errors.push('Upgraded browser: ' + e.message));
+  const handbook = JSON.parse(
+    await fs.readFile(path.join(source, 'public', 'plan.json'), 'utf8'),
+  ) as Handbook;
+  const { recipes } = JSON.parse(await fs.readFile(path.join(source, 'recipes.json'), 'utf8')) as {
+    recipes: Recipe[];
+  };
+  const transcribed = handbookToPlan(handbook, recipes, catalog().pureLimits);
+  const handbookFactory = handbook.factories.find(f => transcribed.rows['3']![f.id])!;
+  const factoryRow = transcribed.rows['3']![handbookFactory.id]!;
+  const seeded = {
+    version: 1,
+    activeSave: 'upgraded-save',
+    lastBackup: null,
+    saves: [
+      {
+        id: 'upgraded-save',
+        name: 'Upgraded world',
+        activeProfile: 'upgraded-original',
+        profiles: [
+          {
+            id: 'upgraded-original',
+            name: 'Original · 50× complete automation',
+            kind: 'original',
+            handbook,
+            state: {
+              ...initialState(),
+              checks: { ['factory-3-' + handbookFactory.id]: true, 'phase-3-survey': true },
+              notes: { global: 'Kept through the upgrade' },
+              settings: { phase: '3' },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  // The page's own IndexedDB, the database and key the planner uses; `key` undefined writes.
+  const idb = (p: Page, key: string, record?: unknown) =>
+    p.evaluate(
+      async ({ key, record }) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const r = indexedDB.open('satisfactory-planner-browser-v1', 1);
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+        try {
+          return await new Promise<unknown>((resolve, reject) => {
+            const tx = db.transaction('workspace', record ? 'readwrite' : 'readonly');
+            const store = tx.objectStore('workspace');
+            const r = record ? store.put(record, key) : store.get(key);
+            tx.oncomplete = () => resolve(record ? undefined : r.result);
+            tx.onabort = () => reject(tx.error);
+          });
+        } finally {
+          db.close();
+        }
+      },
+      { key, record },
+    );
+  await idb(other, 'main', seeded);
+  // It was on the guided start (#wizard); the build plan is where the ticks show.
+  await other.goto(base + '#plan');
+  await other.reload();
+  await other.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
+  assert.equal(
+    await other
+      .locator('#main [data-check="phase-3-survey"]')
+      .evaluate(x => (x as HTMLInputElement).checked),
+    true,
+    'the guide step is still ticked after the upgrade',
+  );
+  const upgraded = (await idb(other, 'main')) as BrowserWorkspace;
+  const migratedOriginal = upgraded.saves[0]!.profiles[0]!;
+  assert.equal(migratedOriginal.kind, 'calculated');
+  assert.equal(migratedOriginal.handbook, undefined);
+  assert.equal(migratedOriginal.plan?.engine, 'handbook-' + handbook.version);
+  assert.equal(migratedOriginal.state.checks['calc-3-' + factoryRow], true, 'the factory tick');
+  assert.equal(migratedOriginal.state.notes.global, 'Kept through the upgrade');
+  assert.deepEqual(await idb(other, 'pre-handbook'), seeded, 'the pre-migration copy');
+  // Opening it again changes nothing.
+  await other.reload();
+  await other.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
+  assert.deepEqual(await idb(other, 'main'), upgraded);
   // The Docker edition, upgraded from an early release: its single-profile progress.json is
   // handbook progress, which migrates into a calculated profile with the guide (#495). A
   // brand-new server would start with no saves (#496). Its export carries that plan and the
@@ -560,7 +653,7 @@ try {
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(temp, 'browser-check.png'), fullPage: true });
   console.log(
-    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, export/import, Docker roundtrip.',
+    'Browser checks passed: wizard, WASM calculator, IndexedDB reload, profile isolation, tabs, handbook upgrade, export/import, Docker roundtrip.',
   );
 } finally {
   await browser?.close();
