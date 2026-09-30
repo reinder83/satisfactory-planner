@@ -27,24 +27,24 @@ const props = defineProps<{ items: T[]; keyOf: (item: T) => string }>();
 const sections = computed(() =>
   legacy(() =>
     factoryGroupsState()
-      .groups.map(gr => ({
-        ...gr,
-        members: props.items.filter(x =>
-          membershipsOf(props.keyOf(x)).some(m => m.group === gr.id),
+      .groups.map(group => ({
+        ...group,
+        members: props.items.filter(item =>
+          membershipsOf(props.keyOf(item)).some(m => m.group === group.id),
         ),
-        collapsed: sectionCollapsed(gr.id),
+        collapsed: sectionCollapsed(group.id),
       }))
-      .filter(gr => gr.members.length || factoryEditing),
+      .filter(section => section.members.length || factoryEditing),
   ),
 );
 const editing = computed(() => legacy(() => factoryEditing));
 
 // A group's name field, read-only while it saves (app/busy.ts, #299).
-function rename(e: Event, id: string) {
-  const el = e.target as HTMLInputElement;
-  return whileBusy(el, async () => {
+function rename(event: Event, id: string) {
+  const input = event.target as HTMLInputElement;
+  return whileBusy(input, async () => {
     try {
-      await save({ type: 'factoryGroupRename', id, name: el.value });
+      await save({ type: 'factoryGroupRename', id, name: input.value });
     } catch {
     } finally {
       render();
@@ -55,8 +55,8 @@ function rename(e: Event, id: string) {
 // "Remove group", after a confirmation: only the group goes; its factories and their
 // progress stay. Focus then goes to the next group's Remove, else the previous one's, else the
 // new group field (ui/refocus.ts, #286).
-async function remove(e: Event, id: string) {
-  const refocus = refocusAfterRemoval(e.currentTarget, {
+async function remove(event: Event, id: string) {
+  const refocus = refocusAfterRemoval(event.currentTarget, {
     row: '#main .user-group',
     control: '[data-remove-group]',
     fallback: ['#new-group-name'],
@@ -80,52 +80,52 @@ async function remove(e: Event, id: string) {
 
 <template>
   <section
-    v-for="gr in sections"
-    :id="'section-' + gr.id"
-    :key="gr.id"
-    :class="['site-group', 'user-group', gr.collapsed ? 'collapsed' : '']"
+    v-for="section in sections"
+    :id="'section-' + section.id"
+    :key="section.id"
+    :class="['site-group', 'user-group', section.collapsed ? 'collapsed' : '']"
   >
     <header class="site-head">
       <div class="site-title">
-        <CollapseToggle :section-key="gr.id" :label="'Factories in ' + gr.name" />
+        <CollapseToggle :section-key="section.id" :label="'Factories in ' + section.name" />
         <div>
           <span class="eyebrow"
-            >FACTORY GROUP · {{ gr.members.length }}
-            {{ gr.members.length === 1 ? 'FACTORY' : 'FACTORIES' }}</span
+            >FACTORY GROUP · {{ section.members.length }}
+            {{ section.members.length === 1 ? 'FACTORY' : 'FACTORIES' }}</span
           ><input
             v-if="editing"
             class="bay-rename"
-            :data-group-rename="gr.id"
+            :data-group-rename="section.id"
             data-section-heading
-            :value="gr.name"
+            :value="section.name"
             maxlength="80"
-            :aria-label="'Rename group ' + gr.name"
-            @change="rename($event, gr.id)"
+            :aria-label="'Rename group ' + section.name"
+            @change="rename($event, section.id)"
           />
-          <h2 v-else tabindex="-1" data-section-heading>{{ gr.name }}</h2>
+          <h2 v-else tabindex="-1" data-section-heading>{{ section.name }}</h2>
         </div>
       </div>
       <button
         v-if="editing"
         class="btn danger"
-        :data-remove-group="gr.id"
-        @click="remove($event, gr.id)"
+        :data-remove-group="section.id"
+        @click="remove($event, section.id)"
       >
         Remove group
       </button>
       <button
-        v-else-if="gr.members.length > 1"
+        v-else-if="section.members.length > 1"
         class="btn"
-        :data-group-chain="gr.id"
-        @click="openGroupChain(gr.id)"
+        :data-group-chain="section.id"
+        @click="openGroupChain(section.id)"
       >
         Build order ↗
       </button>
     </header>
-    <div v-show="!gr.collapsed" :id="'cards-' + gr.id" class="cards">
-      <template v-if="gr.members.length"
-        ><template v-for="x in gr.members" :key="keyOf(x)"
-          ><slot name="card" :item="x" :group="gr.id" /></template
+    <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
+      <template v-if="section.members.length"
+        ><template v-for="item in section.members" :key="keyOf(item)"
+          ><slot name="card" :item="item" :group="section.id" /></template
       ></template>
       <div v-else class="empty-state">
         Empty group. Add factories with the group selector on their cards.

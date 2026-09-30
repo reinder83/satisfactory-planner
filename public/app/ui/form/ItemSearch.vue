@@ -43,7 +43,7 @@ const emit = defineEmits<{
   // Typing, with the text as it now is.
   typing: [value: string];
   // The field's own change event (the text committed by leaving it).
-  commit: [e: Event];
+  commit: [event: Event];
 }>();
 
 const root = ref<HTMLElement | null>(null);
@@ -73,12 +73,12 @@ const matches = ref<string[]>([]);
 const active = ref(-1);
 
 function show(value: string) {
-  const m = itemMatches(props.items, value, props.limit).filter(
-    n => n.toLowerCase() !== value.trim().toLowerCase(),
+  const found = itemMatches(props.items, value, props.limit).filter(
+    match => match.toLowerCase() !== value.trim().toLowerCase(),
   );
-  if (!m.length) return hide();
+  if (!found.length) return hide();
   open.value = true;
-  matches.value = m;
+  matches.value = found;
   active.value = -1;
 }
 function hide() {
@@ -87,68 +87,68 @@ function hide() {
   active.value = -1;
 }
 
-function typing(e: Event) {
-  const value = (e.target as HTMLInputElement).value;
+function typing(event: Event) {
+  const value = (event.target as HTMLInputElement).value;
   typed.value = value;
   show(value);
   emit('typing', value);
 }
 
-function key(e: KeyboardEvent) {
+function key(event: KeyboardEvent) {
   const shown = open.value && matches.value.length > 0,
-    value = (e.target as HTMLInputElement).value;
-  if (e.key === 'Escape') {
+    value = (event.target as HTMLInputElement).value;
+  if (event.key === 'Escape') {
     if (shown) {
-      e.preventDefault();
+      event.preventDefault();
       hide();
     }
     return;
   }
-  if (e.key === 'ArrowDown' && !shown) {
+  if (event.key === 'ArrowDown' && !shown) {
     show(value);
-    e.preventDefault();
+    event.preventDefault();
     return;
   }
   if (!shown) return;
-  const n = matches.value.length,
+  const count = matches.value.length,
     at = active.value;
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault();
-    active.value = e.key === 'ArrowDown' ? (at + 1) % n : at <= 0 ? n - 1 : at - 1;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    active.value = event.key === 'ArrowDown' ? (at + 1) % count : at <= 0 ? count - 1 : at - 1;
     nextTick(() =>
       root.value
         ?.querySelectorAll('.supply-option')
         [active.value]?.scrollIntoView({ block: 'nearest' }),
     );
-  } else if (e.key === 'Enter') {
+  } else if (event.key === 'Enter') {
     // Enter picks rather than submitting the form. With nothing highlighted, text that already
     // names an item keeps that item: the list leaves it out, so its first suggestion is another
     // one ("Iron Plate" would otherwise become "Reinforced Iron Plate").
-    e.preventDefault();
+    event.preventDefault();
     // shown means the list has at least one suggestion.
     pick(at >= 0 ? matches.value[at]! : (knownItem(props.items, value) ?? matches.value[0]!));
   }
 }
 
 // Leaving the field closes its list; moving inside it (field to suggestion) does not.
-function left(e: FocusEvent) {
-  if (open.value && !root.value?.contains(e.relatedTarget as Node | null)) hide();
+function left(event: FocusEvent) {
+  if (open.value && !root.value?.contains(event.relatedTarget as Node | null)) hide();
 }
 
-function committed(e: Event) {
+function committed(event: Event) {
   hide();
-  emit('commit', e);
+  emit('commit', event);
 }
 
 // A click on a suggestion took focus to it, so focus goes back to the field first.
 function pick(name: string) {
-  const el = input.value;
-  if (!el) return;
-  el.value = name;
+  const field = input.value;
+  if (!field) return;
+  field.value = name;
   typed.value = name;
   hide();
-  if (document.activeElement !== el) el.focus();
-  emit('pick', name, el);
+  if (document.activeElement !== field) field.focus();
+  emit('pick', name, field);
 }
 </script>
 
@@ -183,18 +183,18 @@ function pick(name: string) {
     <div :id="listId" class="supply-options" role="listbox" :hidden="!open">
       <template v-if="open"
         ><button
-          v-for="(n, k) in matches"
-          :id="listId + '-' + k"
-          :key="n"
+          v-for="(match, i) in matches"
+          :id="listId + '-' + i"
+          :key="match"
           type="button"
           tabindex="-1"
           role="option"
-          :aria-selected="k === active ? 'true' : 'false'"
+          :aria-selected="i === active ? 'true' : 'false'"
           class="supply-option"
-          :data-item-pick="n"
-          @click="pick(n)"
+          :data-item-pick="match"
+          @click="pick(match)"
         >
-          <ItemIcon :name="n" /><span>{{ n }}</span>
+          <ItemIcon :name="match" /><span>{{ match }}</span>
         </button></template
       >
     </div>

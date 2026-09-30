@@ -4,8 +4,8 @@
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
 
-async function add(e: Event) {
-  const form = e.target as HTMLFormElement;
+async function add(event: Event) {
+  const form = event.target as HTMLFormElement;
   const name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
   try {
@@ -13,8 +13,8 @@ async function add(e: Event) {
       type: 'factoryGroupAdd',
       id:
         'fg-' +
-        Array.from(crypto.getRandomValues(new Uint8Array(6)), b =>
-          b.toString(16).padStart(2, '0'),
+        Array.from(crypto.getRandomValues(new Uint8Array(6)), byte =>
+          byte.toString(16).padStart(2, '0'),
         ).join(''),
       name,
     });

@@ -16,7 +16,7 @@ const props = withDefaults(
   { value: '' },
 );
 const shown = computed(() =>
-  props.options.some(([v]) => v === String(props.value))
+  props.options.some(([value]) => value === String(props.value))
     ? String(props.value)
     : props.options[0]?.[0],
 );
@@ -25,7 +25,9 @@ const shown = computed(() =>
 <template>
   <label class="field"
     >{{ label }} <HelpTip :name="name" /><select :name="name" :value="shown">
-      <option v-for="[v, l] in options" :key="v" :value="v">{{ l }}</option>
+      <option v-for="[optionValue, optionLabel] in options" :key="optionValue" :value="optionValue">
+        {{ optionLabel }}
+      </option>
     </select></label
   >
 </template>

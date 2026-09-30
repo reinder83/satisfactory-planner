@@ -11,21 +11,21 @@ import type { FilterChip, StatusFilter } from '../../views/factories.ts';
 const props = defineProps<{ chips: FilterChip[]; active: StatusFilter }>();
 const emit = defineEmits<{ pick: [value: StatusFilter] }>();
 
-// The chip a key moves to from chip i, or -1 for a key the group leaves alone.
-function target(key: string, i: number, n: number) {
-  if (key === 'ArrowRight' || key === 'ArrowDown') return (i + 1) % n;
-  if (key === 'ArrowLeft' || key === 'ArrowUp') return (i - 1 + n) % n;
+// The chip a key moves to from chip `index`, or -1 for a key the group leaves alone.
+function target(key: string, index: number, count: number) {
+  if (key === 'ArrowRight' || key === 'ArrowDown') return (index + 1) % count;
+  if (key === 'ArrowLeft' || key === 'ArrowUp') return (index - 1 + count) % count;
   if (key === 'Home') return 0;
-  if (key === 'End') return n - 1;
+  if (key === 'End') return count - 1;
   return -1;
 }
 
 // The chips are keyed by value, so the one focused here is still there after the redraw.
-function move(e: KeyboardEvent, i: number) {
-  const to = target(e.key, i, props.chips.length);
+function move(event: KeyboardEvent, index: number) {
+  const to = target(event.key, index, props.chips.length);
   if (to < 0) return;
-  e.preventDefault();
-  const group = (e.currentTarget as HTMLButtonElement).parentElement;
+  event.preventDefault();
+  const group = (event.currentTarget as HTMLButtonElement).parentElement;
   group?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[to]?.focus();
   // to is an index into chips (target() keeps it in range).
   emit('pick', props.chips[to]!.value);
@@ -35,18 +35,18 @@ function move(e: KeyboardEvent, i: number) {
 <template>
   <div id="factory-filter" class="tabs filter-chips" role="radiogroup" aria-label="Factory status">
     <button
-      v-for="(c, i) in chips"
-      :key="c.value"
+      v-for="(chip, i) in chips"
+      :key="chip.value"
       type="button"
       role="radio"
-      :class="['tab', c.value === active ? 'active' : '']"
-      :aria-checked="c.value === active"
-      :tabindex="c.value === active ? 0 : -1"
-      :data-filter="c.value"
-      @click="emit('pick', c.value)"
+      :class="['tab', chip.value === active ? 'active' : '']"
+      :aria-checked="chip.value === active"
+      :tabindex="chip.value === active ? 0 : -1"
+      :data-filter="chip.value"
+      @click="emit('pick', chip.value)"
       @keydown="move($event, i)"
     >
-      {{ c.label }} <span class="count">{{ c.count }}</span>
+      {{ chip.label }} <span class="count">{{ chip.count }}</span>
     </button>
   </div>
 </template>

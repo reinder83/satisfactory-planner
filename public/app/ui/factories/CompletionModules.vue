@@ -16,20 +16,20 @@ defineProps<{ modules: CompletionView[] }>();
       Gathered feedstock and byproducts still need handling.
     </div>
     <div class="completion-grid">
-      <article v-for="r in modules" :key="r.id" class="completion-item">
+      <article v-for="module in modules" :key="module.id" class="completion-item">
         <label class="check-row"
           ><input
             type="checkbox"
-            :data-check="r.check"
+            :data-check="module.check"
             @change="toggleCheck"
-            :checked="r.done"
-          /><strong>{{ r.name }}</strong></label
+            :checked="module.done"
+          /><strong>{{ module.name }}</strong></label
         >
-        <p>{{ r.line }}<br />{{ r.recipe }}</p>
+        <p>{{ module.line }}<br />{{ module.recipe }}</p>
         <p>
-          <b>Inputs:</b> {{ r.inputText
-          }}<template v-if="r.byproductText"
-            ><br /><b>Byproducts:</b> {{ r.byproductText }}</template
+          <b>Inputs:</b> {{ module.inputText
+          }}<template v-if="module.byproductText"
+            ><br /><b>Byproducts:</b> {{ module.byproductText }}</template
           >
         </p>
       </article>

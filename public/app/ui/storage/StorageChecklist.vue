@@ -14,12 +14,17 @@ const props = defineProps<{ steps: Step[] }>();
 const rows = computed(() =>
   legacy(() =>
     props.steps.map(
-      (t): PlanStepView => ({ ...t, done: checked(t.id), icon: taskIcon(t), link: null }),
+      (task): PlanStepView => ({
+        ...task,
+        done: checked(task.id),
+        icon: taskIcon(task),
+        link: null,
+      }),
     ),
   ),
 );
 </script>
 
 <template>
-  <div class="checklist"><PlanStep v-for="s in rows" :key="s.id" :step="s" /></div>
+  <div class="checklist"><PlanStep v-for="step in rows" :key="step.id" :step="step" /></div>
 </template>

@@ -35,17 +35,20 @@ const blocked = computed(() =>
 
 const randomId = (prefix: string, bytes: number) =>
   prefix +
-  Array.from(crypto.getRandomValues(new Uint8Array(bytes)), b =>
-    b.toString(16).padStart(2, '0'),
+  Array.from(crypto.getRandomValues(new Uint8Array(bytes)), byte =>
+    byte.toString(16).padStart(2, '0'),
   ).join('');
 
-// Saves `op(name)` from a form's name field, then empties the form and redraws. `op` may
-// ask first (a promise); null saves nothing.
-async function submit(e: Event, op: (name: string) => UpdateOp | null | Promise<UpdateOp | null>) {
-  const form = e.target as HTMLFormElement,
+// Saves `makeUpdate(name)` from a form's name field, then empties the form and redraws.
+// `makeUpdate` may ask first (a promise); null saves nothing.
+async function submit(
+  event: Event,
+  makeUpdate: (name: string) => UpdateOp | null | Promise<UpdateOp | null>,
+) {
+  const form = event.target as HTMLFormElement,
     name = String(new FormData(form).get('name') || '').trim();
   if (!name) return;
-  const change = await op(name);
+  const change = await makeUpdate(name);
   if (!change) return;
   try {
     await save(change);
@@ -56,9 +59,9 @@ async function submit(e: Event, op: (name: string) => UpdateOp | null | Promise<
 
 // The letter box starts on the next free letter; the user may type any other.
 const suggested = () => nextBayLetter() || '';
-const addBay = (e: Event) =>
-  submit(e, async name => {
-    const field = new FormData(e.target as HTMLFormElement).get('letter');
+const addBay = (event: Event) =>
+  submit(event, async name => {
+    const field = new FormData(event.target as HTMLFormElement).get('letter');
     const letter = String(field || '')
       .trim()
       .toUpperCase();
@@ -90,10 +93,10 @@ const addBay = (e: Event) =>
       ...(replace ? { replace: true } : {}),
     };
   });
-const addFloor = (e: Event) =>
-  submit(e, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
-const renameFloor = (e: Event) =>
-  submit(e, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
+const addFloor = (event: Event) =>
+  submit(event, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
+const renameFloor = (event: Event) =>
+  submit(event, name => ({ type: 'storageFloorRename', id: props.floor.id, label: name }));
 
 // Once a floor is hidden or removed, focus goes to the tab of the floor now shown
 // (ui/refocus.ts, #286).
@@ -104,9 +107,9 @@ const floorTabs = { fallback: ['#main .tabs [data-floor].active'] };
 // Hide and Remove are busy while they save (bound aria-disabled, app/busy.ts: a failed save
 // leaves focus on them, #299).
 const hiding = ref(false);
-async function hideFloor(e: Event) {
+async function hideFloor(event: Event) {
   if (hiding.value) return;
-  const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
+  const refocus = refocusAfterRemoval(event.currentTarget, floorTabs);
   if (
     !(await confirmAction({
       title: `Hide ${props.floor.label}?`,
@@ -128,9 +131,9 @@ async function hideFloor(e: Event) {
 
 // "Remove this floor", after a confirmation; then back to the ground floor.
 const removing = ref(false);
-async function removeFloor(e: Event) {
+async function removeFloor(event: Event) {
   if (removing.value) return;
-  const refocus = refocusAfterRemoval(e.currentTarget, floorTabs);
+  const refocus = refocusAfterRemoval(event.currentTarget, floorTabs);
   if (
     !(await confirmAction({
       title: 'Remove this floor?',

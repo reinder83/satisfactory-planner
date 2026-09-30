@@ -29,16 +29,16 @@ async function jump(key: string) {
 <template>
   <nav v-if="entries.length" class="jump-bar" aria-label="Groups on this page">
     <button
-      v-for="e in entries"
-      :key="e.key"
+      v-for="entry in entries"
+      :key="entry.key"
       type="button"
       class="btn"
-      :data-jump="e.key"
-      @click="jump(e.key)"
+      :data-jump="entry.key"
+      @click="jump(entry.key)"
     >
-      {{ e.label }}
-      <span class="count" aria-hidden="true">{{ e.running }}/{{ e.total }}</span
-      ><span class="visually-hidden">, {{ e.running }} of {{ e.total }} running</span>
+      {{ entry.label }}
+      <span class="count" aria-hidden="true">{{ entry.running }}/{{ entry.total }}</span
+      ><span class="visually-hidden">, {{ entry.running }} of {{ entry.total }} running</span>
     </button>
   </nav>
 </template>

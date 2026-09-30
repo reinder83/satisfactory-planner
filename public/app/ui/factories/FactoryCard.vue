@@ -27,23 +27,25 @@ const props = withDefaults(defineProps<{ factory: HandbookFactory; group?: strin
 
 const card = computed(() =>
   legacy(() => {
-    const f = props.factory,
+    const factory = props.factory,
       // The pages draw only factories with this stage.
-      r = f.stages[stage()]!,
-      check = 'factory-' + stage() + '-' + f.id;
+      stageRow = factory.stages[stage()]!,
+      check = 'factory-' + stage() + '-' + factory.id;
     return {
       check,
       done: checked(check),
-      output: num(r.output),
+      output: num(stageRow.output),
       // m³/min for a fluid, as the dialog's summary line says it (#351).
-      unit: rateUnit(f.name),
-      recipe: r.recipe.replace('Alternate: ', ''),
-      machines: r.machines
-        ? machineLine(r.machines, r.machine, r.lastClock)
+      unit: rateUnit(factory.name),
+      recipe: stageRow.recipe.replace('Alternate: ', ''),
+      machines: stageRow.machines
+        ? machineLine(stageRow.machines, stageRow.machine, stageRow.lastClock)
         : 'See shared oil campus',
-      storage: `· storage ${itemRate(f.name, r.storage)}`,
+      storage: `· storage ${itemRate(factory.name, stageRow.storage)}`,
       allocation: props.group
-        ? allocationText(f.id, props.group, r.output, r.machines, q => itemRate(f.name, q))
+        ? allocationText(factory.id, props.group, stageRow.output, stageRow.machines, rate =>
+            itemRate(factory.name, rate),
+          )
         : '',
       editing: factoryEditing,
     };
