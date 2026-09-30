@@ -79,7 +79,7 @@ function ui() {
     querySelector: () => null,
     querySelectorAll: () => [],
   };
-  const c = vm.createContext({
+  const context = vm.createContext({
     document: {
       querySelector: () => node,
       querySelectorAll: () => [],
@@ -152,32 +152,34 @@ function ui() {
     uniformPurities,
     richShape,
   });
-  vm.runInContext(source, c);
-  c.fixture = JSON.parse(fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'));
-  c.catalogData = catalog();
-  c.progressionFixture = JSON.parse(
+  vm.runInContext(source, context);
+  context.fixture = JSON.parse(
+    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
+  );
+  context.catalogData = catalog();
+  context.progressionFixture = JSON.parse(
     fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   );
-  c.generated = calculate({});
+  context.generated = calculate({});
   vm.runInContext(
     `plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World'};currentProfile={id:'p',kind:'calculated',name:'Balanced'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=generated;`,
-    c,
+    context,
   );
-  return c;
+  return context;
 }
-const guided = (c: Context, extra = '') =>
+const guided = (context: Context, extra = '') =>
   vm.runInContext(
     `wizard={step:1,saveId:null,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:null,carryFrom:null,carry:{},mode:'guided',guidedStep:1,guidedAsk:null,tutorial:'doing'};${extra}`,
-    c,
+    context,
   );
 
 // The wizard and guided screens themselves: tests/ui/wizard.test.ts.
 
 test('guided answers write the same settings object the wizard writes', () => {
-  const c = ui();
-  guided(c);
+  const context = ui();
+  guided(context);
   const form = (answers: Record<string, string | string[]>) => ({
-    querySelector: (s: string) => (s === '.guided-topup' ? {} : null),
+    querySelector: (selector: string) => (selector === '.guided-topup' ? {} : null),
     entries: () => [],
     __answers: answers,
   });
@@ -185,84 +187,95 @@ test('guided answers write the same settings object the wizard writes', () => {
   // that answers exactly as the rendered radios would.
   vm.runInContext(
     `FormData=class{constructor(f){this.f=f;}get(k){return this.f.__answers[k]??null;}getAll(k){const v=this.f.__answers[k];return v===undefined?[]:[].concat(v);}has(k){return this.f.__answers[k]!==undefined;}}`,
-    c,
+    context,
   );
-  c.formFor = form;
+  context.formFor = form;
   vm.runInContext(
     `readGuided(formFor({'guided:phase':'4','guided:goal':'minimal','guided:recipes':'all','guided:stock':'construction','guided:exact':'precise',topup:['Concrete','Iron Rod']}))`,
-    c,
+    context,
   );
-  const s = vm.runInContext('JSON.parse(JSON.stringify(wizard.settings))', c);
-  assert.equal(s.phase, '4');
-  assert.equal(s.goal, 'minimal');
-  assert.equal(s.recipes, 'all');
-  assert.equal(s.storage, 'construction');
-  assert.equal(s.wholeMachines, false);
+  const settings = vm.runInContext('JSON.parse(JSON.stringify(wizard.settings))', context);
+  assert.equal(settings.phase, '4');
+  assert.equal(settings.goal, 'minimal');
+  assert.equal(settings.recipes, 'all');
+  assert.equal(settings.storage, 'construction');
+  assert.equal(settings.wholeMachines, false);
   // The general construction rate is the most expensive control in the app and
   // the guided start never raises it; the per-item floors do the same job.
-  assert.equal(s.buildRate, 1);
-  assert.equal(s.storageRate, 1);
-  assert.deepEqual(s.storageOverrides, {
+  assert.equal(settings.buildRate, 1);
+  assert.equal(settings.storageRate, 1);
+  assert.deepEqual(settings.storageOverrides, {
     Concrete: GUIDED_TOPUP_RATE,
     'Iron Rod': GUIDED_TOPUP_RATE,
   });
   // And the result is a settings object the planner accepts unchanged.
-  const plan = calculate(s);
+  const plan = calculate(settings);
   assert.equal(plan.settings.phase, '4');
   assert.equal(plan.settings.storageOverrides.Concrete, GUIDED_TOPUP_RATE);
   assert.equal(plan.stages[4].feasible, true);
 });
 
 test('switching to All settings keeps every guided answer and can switch back', () => {
-  const c = ui();
-  guided(c);
+  const context = ui();
+  guided(context);
   vm.runInContext(
     `FormData=class{constructor(){}get(){return null;}getAll(){return [];}has(){return false;}*[Symbol.iterator](){}}`,
-    c,
+    context,
   );
-  vm.runInContext(`wizard.settings.goal='minimal';wizard.settings.phase='5';toAdvanced(3)`, c);
-  assert.equal(vm.runInContext('wizard.mode', c), 'advanced');
-  assert.equal(vm.runInContext('wizard.step', c), 3, 'lands on the step that owns the question');
-  assert.equal(vm.runInContext('wizard.settings.goal', c), 'minimal', 'answers survive the switch');
-  assert.equal(vm.runInContext('wizard.settings.phase', c), '5');
-  vm.runInContext('toGuided()', c);
-  assert.equal(vm.runInContext('wizard.mode', c), 'guided');
-  assert.equal(vm.runInContext('wizard.settings.goal', c), 'minimal');
+  vm.runInContext(
+    `wizard.settings.goal='minimal';wizard.settings.phase='5';toAdvanced(3)`,
+    context,
+  );
+  assert.equal(vm.runInContext('wizard.mode', context), 'advanced');
+  assert.equal(
+    vm.runInContext('wizard.step', context),
+    3,
+    'lands on the step that owns the question',
+  );
+  assert.equal(
+    vm.runInContext('wizard.settings.goal', context),
+    'minimal',
+    'answers survive the switch',
+  );
+  assert.equal(vm.runInContext('wizard.settings.phase', context), '5');
+  vm.runInContext('toGuided()', context);
+  assert.equal(vm.runInContext('wizard.mode', context), 'guided');
+  assert.equal(vm.runInContext('wizard.settings.goal', context), 'minimal');
 });
 
 test('the tutorial question is asked at Phase 1 and the already-running one after it', () => {
-  const c = ui();
-  guided(c);
-  vm.runInContext(`wizard.settings.phase='1'`, c);
+  const context = ui();
+  guided(context);
+  vm.runInContext(`wizard.settings.phase='1'`, context);
   assert.equal(
-    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, c),
+    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
     'phase,tutorial,goal,recipes,stock,exact',
   );
-  vm.runInContext(`wizard.settings.phase='3'`, c);
+  vm.runInContext(`wizard.settings.phase='3'`, context);
   assert.equal(
-    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, c),
+    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
     'phase,supply,goal,recipes,stock,exact',
   );
   // A save that already has profiles uses the Review step's carry panel instead.
-  vm.runInContext(`wizard.saveId='s1'`, c);
+  vm.runInContext(`wizard.saveId='s1'`, context);
   assert.equal(
-    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, c),
+    vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
     'phase,goal,recipes,stock,exact',
   );
 });
 
 test('a second profile for a save you already play is asked what changed, not everything again', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `workspace.saves=[{id:'s1',name:'World',activeProfile:'p1',profiles:[{id:'p1',name:'First run',kind:'calculated'}]}];`,
-    c,
+    context,
   );
-  guided(c, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
+  guided(context, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
   // Nothing chosen yet: the topic picker comes first, and asks every question it offers.
-  assert.equal(vm.runInContext('wizard.guidedAsk', c), null);
+  assert.equal(vm.runInContext('wizard.guidedAsk', context), null);
   // Choosing only the phase asks only the phase.
-  vm.runInContext(`wizard.guidedAsk=['phase']`, c);
-  assert.equal(vm.runInContext("guidedFlow().map(q=>q.id).join(',')", c), 'phase');
+  vm.runInContext(`wizard.guidedAsk=['phase']`, context);
+  assert.equal(vm.runInContext("guidedFlow().map(q=>q.id).join(',')", context), 'phase');
 });
 
 test('a new profile without a list of finished work is exactly the blank state as before', () => {
@@ -339,13 +352,13 @@ test('a source profile still wins over a key reported as already finished', () =
 test('a profile created from the guided start keeps its ticks through the server', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'planner-guided-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
-  const post = (ep: string, b: unknown) =>
-    fetch(url + ep, {
+  const post = (endpoint: string, body: unknown) =>
+    fetch(url + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
-      body: JSON.stringify(b),
+      body: JSON.stringify(body),
     });
   try {
     const settings = {
@@ -365,31 +378,31 @@ test('a profile created from the guided start keeps its ticks through the server
       name: 'Guided',
       settings,
       built,
-    }).then(r => r.json());
+    }).then(response => response.json());
     assert.ok(created.profileId);
     assert.equal(created.carriedChecks, 4, 'the marked lines are reported back');
-    const ctx = await fetch(
+    const context = await fetch(
       url + '/api/context?save=' + created.saveId + '&profile=' + created.profileId,
-    ).then(r => r.json());
-    for (const key of built) assert.equal(ctx.state.checks[key], true, key);
+    ).then(response => response.json());
+    for (const key of built) assert.equal(context.state.checks[key], true, key);
     assert.equal(
-      Object.values(ctx.state.checks).filter(Boolean).length,
+      Object.values(context.state.checks).filter(Boolean).length,
       4,
       'and nothing else is ticked',
     );
-    assert.equal(ctx.plan.settings.storageOverrides.Concrete, GUIDED_TOPUP_RATE);
+    assert.equal(context.plan.settings.storageOverrides.Concrete, GUIDED_TOPUP_RATE);
     // A profile made without the new field is still the blank state.
     const plain = await post('/api/profiles', {
       saveId: created.saveId,
       name: 'Plain',
       settings,
-    }).then(r => r.json());
-    const ctx2 = await fetch(
+    }).then(response => response.json());
+    const plainContext = await fetch(
       url + '/api/context?save=' + created.saveId + '&profile=' + plain.profileId,
-    ).then(r => r.json());
-    assert.deepEqual(ctx2.state.checks, {});
+    ).then(response => response.json());
+    assert.deepEqual(plainContext.state.checks, {});
   } finally {
-    await new Promise(r => server.close(r));
+    await new Promise(resolve => server.close(resolve));
     await fsp.rm(dir, { recursive: true, force: true });
   }
 });
@@ -420,38 +433,54 @@ test('the phase cards use bundled, attributed artwork that matches the deliverie
 
 test('every guided question reads as a question and names the step that owns it', () => {
   const seen = new Set();
-  for (const q of [...guidedQuestions, guidedStandingQuestion('1'), guidedStandingQuestion('3')]) {
-    assert.ok(q.title && q.lead, q.id + ' reads as a question');
-    assert.ok(q.short && q.short.length <= 20, q.id + ' has a short name for the progress strip');
-    assert.ok(q.step >= 1 && q.step <= 4, q.id + ' names the advanced step that owns it');
+  for (const question of [
+    ...guidedQuestions,
+    guidedStandingQuestion('1'),
+    guidedStandingQuestion('3'),
+  ]) {
+    assert.ok(question.title && question.lead, question.id + ' reads as a question');
+    assert.ok(
+      question.short && question.short.length <= 20,
+      question.id + ' has a short name for the progress strip',
+    );
+    assert.ok(
+      question.step >= 1 && question.step <= 4,
+      question.id + ' names the advanced step that owns it',
+    );
     // One question is an input rather than a choice; the rest are picture cards.
-    if (q.kind === 'supply') {
-      assert.ok(!q.options, q.id);
+    if (question.kind === 'supply') {
+      assert.ok(!question.options, question.id);
       continue;
     }
     // Every question but the supply one is a choice with options.
-    assert.ok(q.options!.length >= 2, q.id);
-    for (const o of q.options!) {
-      assert.ok(o.label && o.detail, q.id + '/' + o.value + ' is a picture and a sentence');
-      assert.ok(o.items || o.glyph, q.id + '/' + o.value + ' has artwork');
-      assert.ok(o.set && typeof o.set === 'object', q.id + '/' + o.value + ' says what it sets');
-      seen.add(q.id + ':' + o.value);
+    assert.ok(question.options!.length >= 2, question.id);
+    for (const option of question.options!) {
+      assert.ok(
+        option.label && option.detail,
+        question.id + '/' + option.value + ' is a picture and a sentence',
+      );
+      assert.ok(option.items || option.glyph, question.id + '/' + option.value + ' has artwork');
+      assert.ok(
+        option.set && typeof option.set === 'object',
+        question.id + '/' + option.value + ' says what it sets',
+      );
+      seen.add(question.id + ':' + option.value);
     }
   }
   assert.ok(seen.size >= 15);
   // Every option's settings patch, applied on its own, is a plan the planner makes.
-  for (const q of guidedQuestions)
-    for (const o of q.options!) {
-      if (o.handoff) continue;
+  for (const question of guidedQuestions)
+    for (const option of question.options!) {
+      if (option.handoff) continue;
       assert.doesNotThrow(
-        () => calculate({ phase: '3', limitsConfirmed: true, ...o.set }),
-        q.id + '/' + o.value,
+        () => calculate({ phase: '3', limitsConfirmed: true, ...option.set }),
+        question.id + '/' + option.value,
       );
     }
 });
 
 test('ADA has something to say about the guided start', () => {
-  const ids = (f: Partial<AdaFacts>) => new Set(adaRemarks(f).map(r => r.id));
+  const ids = (given: Partial<AdaFacts>) => new Set(adaRemarks(given).map(r => r.id));
   assert.ok(ids({ view: 'wizard', guided: true, guidedStep: 2, guidedTotal: 6 }).has('guided'));
   assert.ok(ids({ view: 'wizard', supplyDeclared: 2 }).has('guided-supply'));
   assert.ok(ids({ view: 'wizard', tutorialDone: true }).has('guided-tutorial'));
@@ -466,59 +495,64 @@ test('ADA has something to say about the guided start', () => {
 });
 
 test('the only progress a guided answer can tick is the HUB tutorial', () => {
-  const c = ui();
-  guided(c, `wizard.step=5;wizard.guidedStep=99;wizard.preview=generated;`);
+  const context = ui();
+  guided(context, `wizard.step=5;wizard.guidedStep=99;wizard.preview=generated;`);
   // Everything else the guided start learns is a rate, which changes the plan
   // rather than its progress — so there is no production line to pre-tick and no
   // way to claim work the user did not do.
-  assert.equal(vm.runInContext('guidedBuiltKeys(wizard).length', c), 0);
-  vm.runInContext(`wizard.settings.existingSupply={'Modular Frame':50};`, c);
+  assert.equal(vm.runInContext('guidedBuiltKeys(wizard).length', context), 0);
+  vm.runInContext(`wizard.settings.existingSupply={'Modular Frame':50};`, context);
   assert.equal(
-    vm.runInContext('guidedBuiltKeys(wizard).length', c),
+    vm.runInContext('guidedBuiltKeys(wizard).length', context),
     0,
     'declaring a line ticks nothing',
   );
-  vm.runInContext(`wizard.tutorial='done'`, c);
-  assert.equal(vm.runInContext('guidedBuiltKeys(wizard).join(",")', c), tutorialKeys.join(','));
+  vm.runInContext(`wizard.tutorial='done'`, context);
+  assert.equal(
+    vm.runInContext('guidedBuiltKeys(wizard).join(",")', context),
+    tutorialKeys.join(','),
+  );
 });
 
 test('leaving the "what is different" screen starts the questions it chose', async () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `workspace.saves=[{id:'s1',name:'World',activeProfile:'p1',profiles:[{id:'p1',name:'First run',kind:'calculated'}]}];`,
-    c,
+    context,
   );
-  guided(c, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
+  guided(context, `wizard.saveId='s1';wizard.saveName='World';wizard.carryFrom='p1';`);
   vm.runInContext(
     `FormData=class{constructor(f){this.f=f;}get(){return null;}getAll(k){return k==='topic'?['phase','goal']:[];}has(){return false;}*[Symbol.iterator](){}}`,
-    c,
+    context,
   );
   // $('#wizard-form') reads document.querySelector, so stand a form in for it.
-  c.formStub = {
-    querySelector: (s: string) => (s === '.guided-topics' ? {} : null),
+  context.formStub = {
+    querySelector: (selector: string) => (selector === '.guided-topics' ? {} : null),
     reportValidity: () => true,
   };
   vm.runInContext(
     'render=()=>{};document={querySelector:()=>formStub,querySelectorAll:()=>[],addEventListener(){}};',
-    c,
+    context,
   );
-  await vm.runInContext('moveGuided(2)', c);
+  await vm.runInContext('moveGuided(2)', context);
   assert.equal(
-    vm.runInContext('wizard.guidedStep', c),
+    vm.runInContext('wizard.guidedStep', context),
     1,
     'it starts at the first chosen question, not past it',
   );
-  assert.equal(vm.runInContext(`wizard.guidedAsk.join(',')`, c), 'phase,goal');
-  assert.equal(vm.runInContext('guidedFlow().length', c), 2);
-  assert.equal(vm.runInContext('wizard.mode', c), 'guided', 'and it has not calculated yet');
+  assert.equal(vm.runInContext(`wizard.guidedAsk.join(',')`, context), 'phase,goal');
+  assert.equal(vm.runInContext('guidedFlow().length', context), 2);
+  assert.equal(vm.runInContext('wizard.mode', context), 'guided', 'and it has not calculated yet');
 });
 
 // --- Production you already run ---------------------------------------------
 // A plan's stages, or a single stage, as text without the calculation time.
-const strip = (p: CurrentCalculatedPlan | CurrentStage) =>
-  JSON.stringify('stages' in p ? p.stages : p, (k, v) => (k === 'createdAt' ? undefined : v));
-const machines = (st: CurrentStage) =>
-  st.feasible ? (st.rows || []).reduce((a, r) => a + r.machines, 0) : null;
+const strip = (planOrStage: CurrentCalculatedPlan | CurrentStage) =>
+  JSON.stringify('stages' in planOrStage ? planOrStage.stages : planOrStage, (key, value) =>
+    key === 'createdAt' ? undefined : value,
+  );
+const machines = (stage: CurrentStage) =>
+  stage.feasible ? (stage.rows || []).reduce((total, r) => total + r.machines, 0) : null;
 const BASE = {
   phase: '3',
   goal: 'balanced',
@@ -598,9 +632,13 @@ test('declaring production never costs you a plan', { timeout: 600000 }, () => {
     ['Motor', 40],
     ['Plastic', 300],
   ] satisfies [string, number][]) {
-    const p = calculate({ ...BASE, existingSupply: { [item]: rate } });
-    for (const ph of ['3', '4', '5'] as const)
-      assert.equal(p.stages[ph].feasible, true, item + ' made phase ' + ph + ' infeasible');
+    const plan = calculate({ ...BASE, existingSupply: { [item]: rate } });
+    for (const phase of ['3', '4', '5'] as const)
+      assert.equal(
+        plan.stages[phase].feasible,
+        true,
+        item + ' made phase ' + phase + ' infeasible',
+      );
   }
 });
 
@@ -657,8 +695,8 @@ test('only real, non-raw items can be declared', () => {
 });
 
 test('the plan says what it credited and warns about the budgets', () => {
-  const p = calculate({ ...BASE, existingSupply: { 'Modular Frame': 50 } });
-  const notice = p.warnings.find(w => w.includes('production you already run'));
+  const plan = calculate({ ...BASE, existingSupply: { 'Modular Frame': 50 } });
+  const notice = plan.warnings.find(w => w.includes('production you already run'));
   assert.ok(notice, 'the assumption is stated');
   assert.match(notice, /Modular Frame/);
   assert.match(notice, /net of them/, 'and says the budgets must already exclude it');
@@ -670,28 +708,28 @@ test('the plan says what it credited and warns about the budgets', () => {
 });
 
 test('every guided question can be walked past, including the one that is not a choice', async () => {
-  const c = ui();
-  guided(c);
-  c.formStub = {
-    querySelector: (s: string) => (s === '.supply-list' ? {} : null),
+  const context = ui();
+  guided(context);
+  context.formStub = {
+    querySelector: (selector: string) => (selector === '.supply-list' ? {} : null),
     reportValidity: () => true,
   };
   vm.runInContext(
     `FormData=class{constructor(){}get(){return null;}getAll(){return [];}has(){return false;}*[Symbol.iterator](){}}`,
-    c,
+    context,
   );
   vm.runInContext(
     'render=()=>{};document={querySelector:()=>formStub,querySelectorAll:()=>[],addEventListener(){}};',
-    c,
+    context,
   );
-  const total = vm.runInContext('guidedFlow().length', c);
+  const total = vm.runInContext('guidedFlow().length', context);
   // Walking forward from each question in turn must land on the next one and
   // never throw: the supply question carries no options to look a hand-off up in.
   for (let step = 1; step < total; step++) {
-    vm.runInContext(`wizard.guidedStep=${step}`, c);
-    await vm.runInContext(`moveGuided(${step + 1})`, c);
+    vm.runInContext(`wizard.guidedStep=${step}`, context);
+    await vm.runInContext(`moveGuided(${step + 1})`, context);
     assert.equal(
-      vm.runInContext('wizard.guidedStep', c),
+      vm.runInContext('wizard.guidedStep', context),
       step + 1,
       'stuck leaving question ' + step,
     );
@@ -699,7 +737,7 @@ test('every guided question can be walked past, including the one that is not a 
 });
 
 test('a plan saved before existing production existed still renders every page', () => {
-  const c = ui();
+  const context = ui();
   // Exactly what a profile calculated by an earlier release looks like: no
   // existingSupply in its settings, no supplied on any stage.
   const legacy: StoredCalculatedPlan = structuredClone(
@@ -707,24 +745,24 @@ test('a plan saved before existing production existed still renders every page',
   );
   delete legacy.settings.existingSupply;
   for (const stage of Object.values(legacy.stages)) delete stage.supplied;
-  c.legacyPlan = legacy;
+  context.legacyPlan = legacy;
   vm.runInContext(
     `calculated=legacyPlan;currentProfile={id:'p',kind:'calculated',name:'Older profile'};state={settings:{phase:'3'},checks:{['calc-3-'+legacyPlan.stages['3'].rows[0].id]:true},notes:{},deliveries:{},customTasks:[]};`,
-    c,
+    context,
   );
   // The pages, and the wizard Review of such a plan, are components: tests/ui/ render them
   // for this shape too.
   // ADA reads the same counters and must not throw on the older shape.
-  assert.doesNotThrow(() => vm.runInContext('adaFacts()', c));
+  assert.doesNotThrow(() => vm.runInContext('adaFacts()', context));
   // And its progress is untouched by any of this.
-  assert.equal(vm.runInContext(`Object.values(state.checks).filter(Boolean).length`, c), 1);
+  assert.equal(vm.runInContext(`Object.values(state.checks).filter(Boolean).length`, context), 1);
 });
 
 test('the item search ranks prefix matches first and stays short', () => {
-  const c = ui();
-  guided(c);
-  const matches = (q: string) =>
-    vm.runInContext(`JSON.stringify(supplyMatches(${JSON.stringify(q)}))`, c);
+  const context = ui();
+  guided(context);
+  const matches = (query: string) =>
+    vm.runInContext(`JSON.stringify(supplyMatches(${JSON.stringify(query)}))`, context);
   assert.equal(matches(''), '[]', 'nothing typed, nothing offered');
   const frame = JSON.parse(matches('frame'));
   assert.ok(
@@ -746,18 +784,18 @@ test('the item search ranks prefix matches first and stays short', () => {
 });
 
 test('a half-finished row survives, and is plainly not counted yet', () => {
-  const c = ui();
-  guided(c);
-  vm.runInContext(`wizard.guidedStep=guidedFlow().findIndex(q=>q.id==='supply')+1`, c);
+  const context = ui();
+  guided(context);
+  vm.runInContext(`wizard.guidedStep=guidedFlow().findIndex(q=>q.id==='supply')+1`, context);
   const form = (rows: string[][]) => ({
-    querySelector: (s: string) => (s === '.supply-list' ? {} : null),
+    querySelector: (selector: string) => (selector === '.supply-list' ? {} : null),
     __rows: rows,
   });
   vm.runInContext(
     `FormData=class{constructor(f){this.f=f;}get(){return null;}getAll(k){return k==='supplyItem'?this.f.__rows.map(r=>r[0]):k==='supplyRate'?this.f.__rows.map(r=>r[1]):[];}has(){return false;}*[Symbol.iterator](){}}`,
-    c,
+    context,
   );
-  c.formFor = form;
+  context.formFor = form;
   // Picking a suggestion commits the name before there is any rate to go with
   // it; that row has to survive the redraw or the pick erases itself.
   // Through readGuided, which is the path the screen actually uses.
@@ -768,11 +806,11 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
       ['Modular Frame', ''],
       ['', ''],
     ]),
-    c,
+    context,
   );
   assert.equal(kept, '{}', 'nothing is credited without a rate');
   assert.equal(
-    vm.runInContext('JSON.stringify(wizard.supplyRows)', c),
+    vm.runInContext('JSON.stringify(wizard.supplyRows)', context),
     '[{"name":"Modular Frame","rate":""}]',
     'but the row is still there',
   );
@@ -783,19 +821,19 @@ test('a half-finished row survives, and is plainly not counted yet', () => {
       ['Modul', '12'],
       ['', ''],
     ]),
-    c,
+    context,
   );
-  assert.equal(vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', c), '{}');
+  assert.equal(vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', context), '{}');
   // Completed, it counts.
   vm.runInContext(
     call([
       ['Modular Frame', '50'],
       ['', ''],
     ]),
-    c,
+    context,
   );
   assert.equal(
-    vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', c),
+    vm.runInContext('JSON.stringify(wizard.settings.existingSupply)', context),
     '{"Modular Frame":50}',
   );
 });
@@ -812,19 +850,19 @@ test('the icons the item search shows are bundled', () => {
 // The survey for the default world: the wiki's node counts, mined the way the
 // shipped budgets assume — Mk.3 miners at 250%.
 const defaultSurvey = () => {
-  const e = blankExtraction();
+  const survey = blankExtraction();
   for (const [name, [impure, normal, pure]] of Object.entries(nodeCounts)) {
     // Nitrogen comes out of resource wells; everything else out of ordinary nodes.
-    (name === 'Nitrogen Gas' ? e.wells : e.nodes)[name] = { impure, normal, pure };
+    (name === 'Nitrogen Gas' ? survey.wells : survey.nodes)[name] = { impure, normal, pure };
   }
-  return e;
+  return survey;
 };
 
 test('the extraction maths rebuilds the shipped budgets from the node counts', () => {
-  const e = defaultSurvey();
+  const survey = defaultSurvey();
   for (const name of [...minedResources, 'Crude Oil', 'Nitrogen Gas']) {
     assert.equal(
-      Math.round(resourcePool(e, name)),
+      Math.round(resourcePool(survey, name)),
       DEFAULT_LIMITS[name],
       name + ' at Mk.3 and 250%',
     );
@@ -844,11 +882,11 @@ test('the extraction maths rebuilds the shipped budgets from the node counts', (
   assert.equal(wellYield('normal', { clock: 2.5 }), 150, 'well satellites are their own rate');
   // All-pure is the same nodes at pure, which is exactly the shipped pure table.
   const pure = blankExtraction();
-  for (const [name, [i, n, p]] of Object.entries(nodeCounts))
+  for (const [name, [impureCount, normalCount, pureCount]] of Object.entries(nodeCounts))
     (name === 'Nitrogen Gas' ? pure.wells : pure.nodes)[name] = {
       impure: 0,
       normal: 0,
-      pure: i + n + p,
+      pure: impureCount + normalCount + pureCount,
     };
   for (const name of [...minedResources, 'Crude Oil', 'Nitrogen Gas']) {
     assert.equal(Math.round(resourcePool(pure, name)), PURE_LIMITS[name], name + ' all pure');
@@ -867,18 +905,18 @@ test('the two shipped limit tables agree with the node counts they come from', (
 });
 
 test('a survey becomes budgets, less what is already committed', () => {
-  const e = defaultSurvey();
-  const full = extractionLimits(e, { Water: 1000000 });
+  const survey = defaultSurvey();
+  const full = extractionLimits(survey, { Water: 1000000 });
   assert.equal(full['Iron Ore'], 92100);
   assert.equal(full.Water, 1000000, 'water keeps its allowance rather than being counted');
   // Committed extraction comes off the top, which is what a budget means here.
-  e.used = { 'Iron Ore': 12100 };
-  const left = extractionLimits(e, { Water: 1000000 });
+  survey.used = { 'Iron Ore': 12100 };
+  const left = extractionLimits(survey, { Water: 1000000 });
   assert.equal(left['Iron Ore'], 80000);
   assert.equal(left.Limestone, full.Limestone, 'and only off the resource it names');
   // Never negative, however much is claimed.
-  e.used = { 'Iron Ore': 1e9 };
-  assert.equal(extractionLimits(e, {})['Iron Ore'], 0);
+  survey.used = { 'Iron Ore': 1e9 };
+  assert.equal(extractionLimits(survey, {})['Iron Ore'], 0);
   // The miner and clock scale everything.
   const mk1 = extractionLimits({ ...defaultSurvey(), mark: 1, clock: 1 }, {});
   assert.equal(mk1['Iron Ore'], 92100 / 10, 'Mk.1 at 100% is a tenth of Mk.3 at 250%');
@@ -886,11 +924,11 @@ test('a survey becomes budgets, less what is already committed', () => {
 });
 
 test('the survey is recorded on the profile but never read by the solver', () => {
-  const e = defaultSurvey();
+  const survey = defaultSurvey();
   const withSurvey = calculate({
     phase: '3',
     limitsConfirmed: true,
-    extraction: e,
+    extraction: survey,
     limits: { ...DEFAULT_LIMITS },
   });
   const without = calculate({ phase: '3', limitsConfirmed: true, limits: { ...DEFAULT_LIMITS } });
@@ -918,28 +956,32 @@ test('the survey is recorded on the profile but never read by the solver', () =>
 // The survey screens themselves are tested in tests/ui/survey.test.ts.
 
 test('applying the survey writes the budgets and confirms them', () => {
-  const c = ui();
+  const context = ui();
   guided(
-    c,
+    context,
     `wizard.mode='extraction';wizard.extractionStep=4;wizard.extractionReturn={mode:'advanced',step:4};wizard.extraction=${JSON.stringify(defaultSurvey())};wizard.settings.limitsConfirmed=false;`,
   );
   vm.runInContext(
     `render=()=>{};toast=()=>{};document={querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}};`,
-    c,
+    context,
   );
-  vm.runInContext('moveExtraction(5)', c);
-  assert.equal(vm.runInContext(`wizard.settings.limits['Iron Ore']`, c), 92100);
-  assert.equal(vm.runInContext(`wizard.settings.limits.Limestone`, c), 69300);
+  vm.runInContext('moveExtraction(5)', context);
+  assert.equal(vm.runInContext(`wizard.settings.limits['Iron Ore']`, context), 92100);
+  assert.equal(vm.runInContext(`wizard.settings.limits.Limestone`, context), 69300);
   assert.equal(
-    vm.runInContext('wizard.settings.limitsConfirmed', c),
+    vm.runInContext('wizard.settings.limitsConfirmed', context),
     true,
     'counted numbers are confirmed numbers',
   );
-  assert.equal(vm.runInContext('wizard.preview', c), null, 'and the plan is recalculated');
-  assert.equal(vm.runInContext('wizard.mode', c), 'advanced', 'returning where it was opened from');
-  assert.equal(vm.runInContext('wizard.step', c), 4);
+  assert.equal(vm.runInContext('wizard.preview', context), null, 'and the plan is recalculated');
   assert.equal(
-    vm.runInContext(`JSON.stringify(wizard.settings.extraction.nodes['Iron Ore'])`, c),
+    vm.runInContext('wizard.mode', context),
+    'advanced',
+    'returning where it was opened from',
+  );
+  assert.equal(vm.runInContext('wizard.step', context), 4);
+  assert.equal(
+    vm.runInContext(`JSON.stringify(wizard.settings.extraction.nodes['Iron Ore'])`, context),
     '{"impure":39,"normal":42,"pure":46}',
     'the survey is kept for next time',
   );
@@ -952,17 +994,17 @@ test('every node preset reproduces that purity setting’s shipped budget', () =
   // removing any, so each preset is the known map count rearranged — and must
   // come back out as exactly the budget resourceDefaults already ships.
   for (const [purity] of nodePresets) {
-    const e = presetSurvey(purity);
+    const survey = presetSurvey(purity);
     const want = resourceDefaults(purity, 'original').limits;
     for (const name of [...minedResources, 'Crude Oil', 'Nitrogen Gas']) {
-      assert.equal(Math.round(resourcePool(e, name)), want[name], purity + ' / ' + name);
+      assert.equal(Math.round(resourcePool(survey, name)), want[name], purity + ' / ' + name);
     }
   }
   // The node total never changes; only which purity column holds it.
   for (const [purity] of nodePresets) {
-    const e = presetSurvey(purity);
+    const survey = presetSurvey(purity);
     for (const [name, counts] of Object.entries(nodeCounts)) {
-      const row = (name === 'Nitrogen Gas' ? e.wells : e.nodes)[name]!;
+      const row = (name === 'Nitrogen Gas' ? survey.wells : survey.nodes)[name]!;
       assert.equal(
         row.impure + row.normal + row.pure,
         counts[0] + counts[1] + counts[2],
@@ -990,29 +1032,30 @@ test('every node preset reproduces that purity setting’s shipped budget', () =
 test('a resource-rich world is described, never counted for the user', () => {
   // Direction is the only thing every published count of these worlds agrees
   // on, so it is the only thing the screen says. No numbers, and nothing filled.
-  for (const d of ['basic', 'advanced', 'fossil']) {
-    assert.ok(richShape[d], d + ' is described');
-    assert.ok(!/[0-9]/.test(richShape[d]), d + ' promises no numbers');
+  for (const distribution of ['basic', 'advanced', 'fossil']) {
+    assert.ok(richShape[distribution], distribution + ' is described');
+    assert.ok(!/[0-9]/.test(richShape[distribution]), distribution + ' promises no numbers');
     assert.equal(
-      JSON.stringify(startingSurvey({ purity: 'pure', distribution: d }).nodes),
+      JSON.stringify(startingSurvey({ purity: 'pure', distribution: distribution }).nodes),
       '{}',
-      d + ' fills nothing',
+      distribution + ' fills nothing',
     );
-    assert.equal(knownWorld('pure', d), false, d + ' is never knowable');
+    assert.equal(knownWorld('pure', distribution), false, distribution + ' is never knowable');
   }
   // The default and shuffled worlds are not described this way: they are counted.
-  for (const d of ['original', 'randomized']) assert.equal(richShape[d], undefined, d);
+  for (const distribution of ['original', 'randomized'])
+    assert.equal(richShape[distribution], undefined, distribution);
 });
 test('well yields do not survive the shuffle, so Random leaves the wells alone', () => {
   // A well is randomized as a whole, and the map's seventeen wells hold
   // different numbers of satellites, so whichever resource lands on the
   // ten-satellite well gains and whichever lands on a six loses. The ordinary
   // nodes are unaffected: those are what the shuffle preserves.
-  const def = presetSurvey('pure', null, 'original'),
-    rnd = presetSurvey('pure', null, 'randomized');
-  assert.deepEqual(rnd.nodes, def.nodes, 'ordinary nodes are the same either way');
-  assert.equal(def.wells['Nitrogen Gas']!.pure, 45, 'default distribution fills nitrogen');
-  assert.equal(rnd.wells['Nitrogen Gas'], undefined, 'Random does not');
+  const original = presetSurvey('pure', null, 'original'),
+    randomized = presetSurvey('pure', null, 'randomized');
+  assert.deepEqual(randomized.nodes, original.nodes, 'ordinary nodes are the same either way');
+  assert.equal(original.wells['Nitrogen Gas']!.pure, 45, 'default distribution fills nitrogen');
+  assert.equal(randomized.wells['Nitrogen Gas'], undefined, 'Random does not');
   // The same holds for a survey started from the settings alone.
   assert.equal(
     JSON.stringify(startingSurvey({ purity: 'pure', distribution: 'randomized' }).wells),
@@ -1051,9 +1094,9 @@ test('Random shuffles where the nodes are, not how many of each there are', () =
   for (const purity of ['vanilla', 'mostly-pure', 'mostly-impure'])
     assert.equal(knownWorld(purity, 'randomized'), false, 'Random + ' + purity);
   // And a resource-rich distribution is unknowable whatever the purity.
-  for (const d of ['basic', 'advanced', 'fossil'])
+  for (const distribution of ['basic', 'advanced', 'fossil'])
     for (const purity of presetPurities)
-      assert.equal(knownWorld(purity, d), false, d + ' + ' + purity);
+      assert.equal(knownWorld(purity, distribution), false, distribution + ' + ' + purity);
   // Random with All Pure fills the ordinary nodes but not the wells; with the map's
   // own split it fills nothing. (What the screen says about each: tests/ui/survey.test.ts.)
   const pure = startingSurvey({ purity: 'pure', distribution: 'randomized' });
@@ -1070,13 +1113,13 @@ test('changing a world setting refills the counts, and leaves alone what it cann
   const kept = blankExtraction();
   kept.wells = { 'Crude Oil': { impure: 0, normal: 6, pure: 0 } };
   kept.nodes = { 'Iron Ore': { impure: 39, normal: 42, pure: 46 } };
-  const e = presetSurvey('pure', kept);
-  assert.equal(e.wells['Crude Oil']!.normal, 6, 'the oil wells the user counted survive');
-  assert.equal(e.nodes['Iron Ore']!.pure, 127, 'and the rest is refilled');
-  assert.equal(e.nodes['Iron Ore']!.impure, 0);
+  const survey = presetSurvey('pure', kept);
+  assert.equal(survey.wells['Crude Oil']!.normal, 6, 'the oil wells the user counted survive');
+  assert.equal(survey.nodes['Iron Ore']!.pure, 127, 'and the rest is refilled');
+  assert.equal(survey.nodes['Iron Ore']!.impure, 0);
   // Nitrogen is a well, so it is filled there rather than as a node.
-  assert.equal(e.nodes['Nitrogen Gas'], undefined);
-  assert.equal(e.wells['Nitrogen Gas']!.pure, 45);
+  assert.equal(survey.nodes['Nitrogen Gas'], undefined);
+  assert.equal(survey.wells['Nitrogen Gas']!.pure, 45);
   // And the counts now match that world, which the screen names.
-  assert.equal(matchingPreset(e), 'pure');
+  assert.equal(matchingPreset(survey), 'pure');
 });
