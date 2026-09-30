@@ -24,6 +24,18 @@ export interface LpSolution {
 
 // Loaded once, when the module is first imported (server start, or the browser worker's import).
 const highs = await loadHighs();
+// How far one integer search may go, per solve, not per plan: `calculate` makes several solves
+// per phase. The limit that decides is a count of branch-and-bound nodes, not the clock (#558):
+// this HiGHS build is single-threaded, so the same model explores the same nodes in the same
+// order on every run, in Node and in the browser's worker alike, and a search stopped at a node
+// count always stops at the same place. The 3-second clock this replaces let a search that needs
+// about 2.5 seconds finish on a quiet machine and cut it off on a busy or slower one, so the same
+// settings gave one of two plans from run to run (the cut-off one without amplification). 5000 is
+// half as much again as the most nodes any search of the test set's plans or of #558's settings
+// needs (about 3300); a search that would need more ends as 'Unknown' and falls back exactly as
+// a time-out did (see AMPLIFY_CANDIDATES and twoStepFit in planner.ts). The clock stays only as
+// a backstop far above any search the node limit allows on an ordinary machine.
+const SEARCH_LIMITS = { output_flag: false, mip_max_nodes: 5000, time_limit: 30 };
 // Solves one model and returns every variable's value by name.
 //
 // The model shape is the planner's own:
@@ -36,8 +48,9 @@ const highs = await loadHighs();
 //
 // Returns { solverStatus, feasible, bounded, values }, with a variable HiGHS reports no value
 // for read as 0. `feasible` and `bounded` are both simply "HiGHS said Optimal": a MIP stopped by
-// the time limit, even with a usable incumbent, counts as not feasible, and `run`/`calculate`
-// tell that case apart from a real shortage by `solverStatus`.
+// the node or time limit ('Unknown' or 'Time limit reached'), even with a usable incumbent,
+// counts as not feasible, and `run`/`calculate` tell that case apart from a real shortage by
+// `solverStatus`.
 export function solve(model: LpModel): LpSolution {
   // Variables and constraints are renamed v0, v1, … and c0, c1, … because the planner's names
   // ('item:Iron Plate', 'raw:Crude Oil', 'amp:Recipe_…') are not valid LP-format names.
@@ -79,9 +92,7 @@ export function solve(model: LpModel): LpSolution {
   const integers = names.map((name, i) => (model.ints?.[name] ? columns[i] : null)).filter(Boolean);
   if (integers.length) lines.push('Generals', integers.join(' '));
   lines.push('End');
-  // Three seconds per solve, not per plan: `calculate` makes several solves per phase. The
-  // integer searches are the ones that can hit it (see AMPLIFY_CANDIDATES in planner.ts).
-  const result = highs.solve(lines.join('\n'), { output_flag: false, time_limit: 3 });
+  const result = highs.solve(lines.join('\n'), SEARCH_LIMITS);
   // A column of an infeasible solution carries no value; it, and a missing one, read as 0.
   const primal = (name: string) => {
     const column = result.Columns?.[name];
