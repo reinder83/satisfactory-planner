@@ -5,8 +5,6 @@
 // and reports what it left out.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import handbookJson from '../public/plan.json' with { type: 'json' };
-import recipesJson from '../recipes.json' with { type: 'json' };
 import {
   handbookToPlan,
   migrateHandbookState,
@@ -18,10 +16,9 @@ import {
 import { validateTransfer } from '../public/transfer.ts';
 import { saveExport, states, version11 } from './types/fixtures.ts';
 import { newProfileState, validateState } from '../public/state.ts';
-import type { Handbook, Recipe, SavedState, StoredCalculatedPlan } from '../public/types/index.ts';
+import type { SavedState, StoredCalculatedPlan } from '../public/types/index.ts';
+import { handbook, recipes } from './helpers/data.ts';
 
-const handbook = handbookJson as unknown as Handbook;
-const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
 const byName = new Map(recipes.map(r => [r.name, r]));
 const accepts = (plan: StoredCalculatedPlan) => {
   const x = structuredClone(saveExport);

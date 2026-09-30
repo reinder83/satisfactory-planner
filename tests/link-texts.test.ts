@@ -14,7 +14,12 @@ import {
   linkTransportUpdate,
   linkVehicleText,
 } from '../public/app/logistics.ts';
-import type { FactoryGroups, LinkTransport, StoredCalculatedPlan } from '../public/types/index.ts';
+import type {
+  CalcRow,
+  FactoryGroups,
+  LinkTransport,
+  StoredCalculatedPlan,
+} from '../public/types/index.ts';
 
 const catalog = {
   stacks: { 'Iron Plate': 200 },
@@ -204,17 +209,26 @@ test('a transport choice builds the factoryLinkTransport update, fields in order
 });
 
 test('a source link with a mines choice saved before #231 has the sources going there in any phase as siblings', () => {
-  const stages = {
+  // A partial row: linkSiblings reads only a row's id, inputs and outputs.
+  const row = (fields: Pick<CalcRow, 'id' | 'inputs' | 'outputs'>) => fields as CalcRow;
+  const stages: StoredCalculatedPlan['stages'] = {
     1: {
+      feasible: true,
       raw: { 'Iron Ore': 60, Coal: 30 },
-      rows: [{ id: 'r1', inputs: { 'Iron Ore': 60, Coal: 30 }, outputs: { 'Steel Ingot': 30 } }],
+      rows: [
+        row({ id: 'r1', inputs: { 'Iron Ore': 60, Coal: 30 }, outputs: { 'Steel Ingot': 30 } }),
+      ],
     },
     2: {
+      feasible: true,
       raw: { Limestone: 10 },
-      rows: [{ id: 'r2', inputs: { Limestone: 10 }, outputs: { Concrete: 3 } }],
+      rows: [row({ id: 'r2', inputs: { Limestone: 10 }, outputs: { Concrete: 3 } })],
     },
-    3: { raw: { Sulfur: 5 }, rows: [] },
-  } as unknown as StoredCalculatedPlan['stages'];
+    3: { feasible: true, raw: { Sulfur: 5 }, rows: [] },
+    // Stages without rows, which linkSiblings skips.
+    4: { feasible: true },
+    5: { feasible: true },
+  };
   const groups: FactoryGroups = {
     groups: [{ id: 'fg-a', name: 'A' }],
     assignments: { r1: [{ group: 'fg-a', rate: null }], r2: [{ group: 'fg-a', rate: null }] },

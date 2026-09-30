@@ -678,9 +678,13 @@ try {
   // The tab of the previous release heard of the upgrade and closed, so it cannot file a tick
   // under a handbook key on the migrated profile; on a reload it cannot open the database.
   assert.equal(
-    await earlierTab.evaluate(
-      () => (window as unknown as { earlier: { closed: boolean } }).earlier.closed,
-    ),
+    await earlierTab.evaluate(() => {
+      // Set by the Object.assign above, so the window's type does not know it.
+      const earlier: unknown = Reflect.get(window, 'earlier');
+      return typeof earlier === 'object' && earlier !== null && 'closed' in earlier
+        ? earlier.closed
+        : undefined;
+    }),
     true,
     'the earlier tab was told of the upgrade',
   );

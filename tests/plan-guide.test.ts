@@ -29,7 +29,8 @@ const guide: PlanGuide = {
 
 const withGuide = (planGuide: unknown): SaveExport => {
   const exported = structuredClone(saveExport);
-  (exported.saves[0]!.profiles[0]!.plan as unknown as { guide: unknown }).guide = planGuide;
+  // Any value, as a hand-edited file may hold one: validateTransfer is the check under test.
+  Object.assign(exported.saves[0]!.profiles[0]!.plan!, { guide: planGuide });
   return exported;
 };
 
