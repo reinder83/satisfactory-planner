@@ -67,15 +67,18 @@ export function taskEditsState(): TaskEdits {
   };
 }
 
+// A step with the user's edited title and body in place of the generated ones, where edited.
+function withEditedWording(t: Step, edits: TaskEdits): Step {
+  return { ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body };
+}
+
 // Applies the user's edits to the generated steps: drops removed ones, swaps in edited
 // wording and sorts by the saved order for this phase. Steps missing from the saved
 // order (new in a later release, or added since) keep their place after the ordered ones.
 function applyTaskEdits(base: Step[]): Step[] {
   const edits = taskEditsState(),
     removed = new Set(edits.removed);
-  const visible = base
-    .filter(t => !removed.has(t.id))
-    .map(t => ({ ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body }));
+  const visible = base.filter(t => !removed.has(t.id)).map(t => withEditedWording(t, edits));
   const savedOrder = edits.order[phase()];
   if (!savedOrder?.length) return visible;
   const position = new Map(savedOrder.map((id, i) => [id, i]));
@@ -114,6 +117,16 @@ export function basePlanTasks(): Step[] {
 // The steps as the user sees them in the build plan (edits applied, no search filter).
 export function planTasks(): Step[] {
   return applyTaskEdits(basePlanTasks());
+}
+
+// The current phase's removed steps, in their generated order and with the user's edited
+// wording, so "Removed steps in this phase" names each step as the checklist did (#639).
+export function removedPlanTasks(): Step[] {
+  const edits = taskEditsState(),
+    removed = new Set(edits.removed);
+  return basePlanTasks()
+    .filter(t => removed.has(t.id))
+    .map(t => withEditedWording(t, edits));
 }
 
 // A calculated production step (calc-<phase>-<rowId>) links to its own factory row.
