@@ -18,17 +18,19 @@ export function phaseProgress(
   if (!plan) return undefined;
   const from = Number(plan.settings.phase || 1);
   return (Object.entries(plan.stages) as [StageKey, StoredCalculatedPlan['stages'][StageKey]][])
-    .filter(([ph]) => Number(ph) >= from)
-    .map(([ph, x]) => {
-      const rows = x?.rows || [];
+    .filter(([phase]) => Number(phase) >= from)
+    .map(([phase, stage]) => {
+      const rows = stage?.rows || [];
       return {
-        phase: ph,
-        done: rows.filter(r => checks['calc-' + ph + '-' + r.id]).length,
+        phase,
+        done: rows.filter(row => checks['calc-' + phase + '-' + row.id]).length,
         total: rows.length,
       };
     });
 }
 // A profile's stored hard-drive payoff ranking (#203) while it was ranked against the plan the
 // profile has now, otherwise null. GET /api/context sends this in both editions.
-export const currentPayoff = (p: Pick<StoredProfile, 'plan' | 'payoff'>): StoredPayoff | null =>
-  p.plan && p.payoff?.planCreatedAt === p.plan.createdAt ? p.payoff : null;
+export const currentPayoff = (
+  profile: Pick<StoredProfile, 'plan' | 'payoff'>,
+): StoredPayoff | null =>
+  profile.plan && profile.payoff?.planCreatedAt === profile.plan.createdAt ? profile.payoff : null;
