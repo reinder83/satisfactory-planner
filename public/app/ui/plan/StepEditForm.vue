@@ -58,17 +58,28 @@ async function submit(event: Event) {
   } catch {}
 }
 
-// "Cancel": close the form without saving.
-async function cancel(event: Event) {
-  const refocus = backToEdit(event.currentTarget);
+// "Cancel", or Escape in the form (#601): close the form without saving. `trigger` is
+// the control that had focus: Cancel, or the field Escape was pressed in.
+async function cancel(trigger: EventTarget | null) {
+  const refocus = backToEdit(trigger);
   setEditingTask(null);
   render();
   await refocus();
 }
+
+// Escape in the form acts as Cancel (#601). An Escape something already handled (an open
+// native list, an input method composing text) is left alone, and preventDefault tells the
+// edit bar's Escape (ui/EditBar.vue) that this one is taken, so edit mode stays on. Focus goes
+// back to the Edit button as for Cancel, whichever field had it.
+function escape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+  event.preventDefault();
+  void cancel(document.activeElement);
+}
 </script>
 
 <template>
-  <form class="task task-edit" :data-task-edit="step.id" @submit.prevent="submit">
+  <form class="task task-edit" :data-task-edit="step.id" @submit.prevent="submit" @keydown="escape">
     <label class="field">Step title<input v-model="title" name="title" maxlength="240" /></label>
     <label class="field"
       >Details<textarea name="body" class="notes" maxlength="6000" v-model="body"></textarea>
@@ -83,7 +94,9 @@ async function cancel(event: Event) {
     >
     <div class="task-edit-actions">
       <button class="btn primary" type="submit">Save step</button>
-      <button class="btn" type="button" data-cancel-task-edit @click="cancel">Cancel</button>
+      <button class="btn" type="button" data-cancel-task-edit @click="cancel($event.currentTarget)">
+        Cancel
+      </button>
     </div>
     <p class="small muted">
       Restore the original text by clearing a field. The step keeps its checkmark either way.

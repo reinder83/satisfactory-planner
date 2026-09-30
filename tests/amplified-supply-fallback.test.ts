@@ -19,19 +19,17 @@ const settings = {
 // time. The solver's clock backstop (30 seconds) then stops every search that reads the clock more
 // than 30000 / `step` times: with 100, the amplified searches over the widened network, never the
 // unamplified ones. It counts reads, not time, so it stops the same searches on every machine.
+// Only performance.now ticks, the clock HiGHS reads: Date.now, which the phase's deadline for its
+// searches reads (#592), keeps the real time, so that deadline is never reached here.
 function onTickingClock<T>(step: number, body: () => T): T {
-  const now = performance.now,
-    dateNow = Date.now;
-  const start = now.call(performance),
-    dateStart = dateNow();
+  const now = performance.now;
+  const start = now.call(performance);
   let reads = 0;
   performance.now = () => start + ++reads * step;
-  Date.now = () => dateStart + ++reads * step;
   try {
     return body();
   } finally {
     performance.now = now;
-    Date.now = dateNow;
   }
 }
 const phase3 = (amplifySloops: number) =>

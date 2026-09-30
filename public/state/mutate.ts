@@ -63,26 +63,26 @@ export function checkBase(current: SavedState, update: unknown, base: string | n
   if (seen !== (current.revision ?? 0)) throw Object.assign(Error(staleWrite), { status: 409 });
 }
 
-// Applies one /api/update operation (op.type below) to a state and returns the validated
-// result. It changes s in place first: the server passes the profile inside its draft copy
+// Applies one /api/update operation (update.type below) to a state and returns the validated
+// result. It changes state in place first: the server passes the profile inside its draft copy
 // of the workspace and browser-api.ts passes a structuredClone, so a throw from the final
 // validateState discards the change. Values such as a check's boolean or a delivery count
 // are only type-checked there, not here.
 //
 // The operation arrives as the request body, so it is checked as unknown data here, whatever
 // its declared type (UpdateOp, for callers). Values only validateState checks are written as
-// they came (the casts below), and a malformed one fails there. s may be a stored state of
+// they came (the casts below), and a malformed one fails there. state may be a stored state of
 // any version: each section is normalised before it is edited.
-export function mutate(s: SavedState, update: UpdateOp): ProgressState {
-  const op: unknown = update;
-  if (!plain(op)) fail('Invalid update.');
+export function mutate(state: SavedState, update: UpdateOp): ProgressState {
+  const input: unknown = update;
+  if (!plain(input)) fail('Invalid update.');
   // A type that is not a string is refused here, before any lookup.
-  if (typeof op.type !== 'string') fail('Unknown update.');
-  stateEditFor(op.type)(s, op);
-  return validateState(s);
+  if (typeof input.type !== 'string') fail('Unknown update.');
+  stateEditFor(input.type)(state, input);
+  return validateState(state);
 }
-// One update applied to s (see mutate).
-type StateEdit = (s: SavedState, op: Raw) => void;
+// One update applied to state (see mutate).
+type StateEdit = (state: SavedState, update: Raw) => void;
 // The edit for update `type`: a progress record's own (recordEdits), else the one of its family,
 // which looks up its own table: mutateTasks, mutateGroups or mutateLayout.
 function stateEditFor(type: string): StateEdit {
@@ -94,44 +94,45 @@ function stateEditFor(type: string): StateEdit {
   fail('Unknown update.');
 }
 // check, note and delivery: one record under its address. A blank note is deleted.
-function setRecord(s: SavedState, op: Raw) {
-  if (!safeKey(op.key)) fail('Invalid record address.');
-  const type = op.type as 'check' | 'note' | 'delivery';
+function setRecord(state: SavedState, update: Raw) {
+  if (!safeKey(update.key)) fail('Invalid record address.');
+  const type = update.type as 'check' | 'note' | 'delivery';
   const kind = ({ check: 'checks', note: 'notes', delivery: 'deliveries' } as const)[type];
-  if (type === 'note' && typeof op.value === 'string' && !op.value.trim()) delete s.notes[op.key];
-  else (s[kind] as Raw)[op.key] = op.value;
+  if (type === 'note' && typeof update.value === 'string' && !update.value.trim())
+    delete state.notes[update.key];
+  else (state[kind] as Raw)[update.key] = update.value;
 }
 // Ticks or clears many checklist keys at once.
-function setChecks(s: SavedState, op: Raw) {
+function setChecks(state: SavedState, update: Raw) {
   if (
-    !Array.isArray(op.keys) ||
-    !op.keys.length ||
-    op.keys.length > 1000 ||
-    op.keys.some((key: unknown) => !safeKey(key)) ||
-    typeof op.value !== 'boolean'
+    !Array.isArray(update.keys) ||
+    !update.keys.length ||
+    update.keys.length > 1000 ||
+    update.keys.some((key: unknown) => !safeKey(key)) ||
+    typeof update.value !== 'boolean'
   )
     fail('Invalid checklist update.');
-  for (const key of op.keys as string[]) s.checks[key] = op.value;
+  for (const key of update.keys as string[]) state.checks[key] = update.value;
 }
-function setPhase(s: SavedState, op: Raw) {
-  s.settings.phase = op.value as Phase;
+function setPhase(state: SavedState, update: Raw) {
+  state.settings.phase = update.value as Phase;
 }
-function addTask(s: SavedState, op: Raw) {
-  s.customTasks.push({ id: op.id, title: op.title, phase: op.phase } as CustomTask);
+function addTask(state: SavedState, update: Raw) {
+  state.customTasks.push({ id: update.id, title: update.title, phase: update.phase } as CustomTask);
 }
 // Deleting a personal task also removes its tick and any step edits naming it. The id is not
 // checked: an unknown one matches nothing.
-function removeTask(s: SavedState, op: Raw) {
-  const id = op.id as string;
-  s.customTasks = s.customTasks.filter(t => t.id !== id);
-  delete s.checks[id];
-  const edits = (s.taskEdits = validateTaskEdits(s.taskEdits));
+function removeTask(state: SavedState, update: Raw) {
+  const id = update.id as string;
+  state.customTasks = state.customTasks.filter(task => task.id !== id);
+  delete state.checks[id];
+  const edits = (state.taskEdits = validateTaskEdits(state.taskEdits));
   delete edits.titles[id];
   delete edits.bodies[id];
   delete edits.links[id];
-  edits.removed = edits.removed.filter(k => k !== id);
+  edits.removed = edits.removed.filter(stepId => stepId !== id);
   for (const phase of Object.keys(edits.order) as Phase[])
-    edits.order[phase] = edits.order[phase]!.filter(k => k !== id);
+    edits.order[phase] = edits.order[phase]!.filter(stepId => stepId !== id);
 }
 const recordEdits: Record<string, StateEdit> = {
   check: setRecord,
@@ -144,15 +145,15 @@ const recordEdits: Record<string, StateEdit> = {
 };
 
 // One build-plan step edit, applied to the normalised step edits (see mutateTasks).
-type TaskEdit = (edits: TaskEdits, op: Raw) => void;
+type TaskEdit = (edits: TaskEdits, update: Raw) => void;
 
 // Title, body and link of a step; an empty value restores the original.
-function editTask(edits: TaskEdits, op: Raw) {
-  if (!safeKey(op.id)) fail('Invalid step.');
-  const id = op.id;
+function editTask(edits: TaskEdits, update: Raw) {
+  if (!safeKey(update.id)) fail('Invalid step.');
+  const id = update.id;
   const texts: ['titles' | 'bodies', unknown, number][] = [
-    ['titles', op.title, 240],
-    ['bodies', op.body, 6000],
+    ['titles', update.title, 240],
+    ['bodies', update.body, 6000],
   ];
   for (const [kind, value, max] of texts) {
     if (value === undefined) continue;
@@ -160,35 +161,35 @@ function editTask(edits: TaskEdits, op: Raw) {
     if (value.trim()) edits[kind][id] = value.trim();
     else delete edits[kind][id];
   }
-  if (op.link === undefined) return;
-  if (op.link === '' || op.link === null) delete edits.links[id];
+  if (update.link === undefined) return;
+  if (update.link === '' || update.link === null) delete edits.links[id];
   else {
-    if (!safeKey(op.link)) fail('Invalid linked factory.');
-    edits.links[id] = op.link;
+    if (!safeKey(update.link)) fail('Invalid linked factory.');
+    edits.links[id] = update.link;
   }
 }
 // Hides a step; its tick is kept.
-function removeTaskStep(edits: TaskEdits, op: Raw) {
-  if (!safeKey(op.id)) fail('Invalid step.');
-  const id = op.id;
+function removeTaskStep(edits: TaskEdits, update: Raw) {
+  if (!safeKey(update.id)) fail('Invalid step.');
+  const id = update.id;
   if (!edits.removed.includes(id)) edits.removed.push(id);
 }
-function restoreTaskStep(edits: TaskEdits, op: Raw) {
-  if (!safeKey(op.id)) fail('Invalid step.');
-  edits.removed = edits.removed.filter(k => k !== op.id);
+function restoreTaskStep(edits: TaskEdits, update: Raw) {
+  if (!safeKey(update.id)) fail('Invalid step.');
+  edits.removed = edits.removed.filter(stepId => stepId !== update.id);
 }
 // The order of one phase's steps, sent whole; an empty list restores the original order.
-function orderTasks(edits: TaskEdits, op: Raw) {
+function orderTasks(edits: TaskEdits, update: Raw) {
   if (
-    !isPhase(op.phase) ||
-    !Array.isArray(op.ids) ||
-    op.ids.length > 600 ||
-    op.ids.some((key: unknown) => !safeKey(key)) ||
-    new Set(op.ids).size !== op.ids.length
+    !isPhase(update.phase) ||
+    !Array.isArray(update.ids) ||
+    update.ids.length > 600 ||
+    update.ids.some((key: unknown) => !safeKey(key)) ||
+    new Set(update.ids).size !== update.ids.length
   )
     fail('Invalid step order.');
-  if (op.ids.length) edits.order[op.phase] = [...op.ids];
-  else delete edits.order[op.phase];
+  if (update.ids.length) edits.order[update.phase] = [...update.ids];
+  else delete edits.order[update.phase];
 }
 const taskEdits: Record<string, TaskEdit> = {
   taskEdit: editTask,
@@ -197,81 +198,85 @@ const taskEdits: Record<string, TaskEdit> = {
   taskOrder: orderTasks,
 };
 // Build-plan step edits, one function per update type above.
-function mutateTasks(s: SavedState, op: Raw) {
-  const edits = (s.taskEdits = validateTaskEdits(s.taskEdits));
+function mutateTasks(state: SavedState, update: Raw) {
+  const edits = (state.taskEdits = validateTaskEdits(state.taskEdits));
   // mutate only sends types starting with 'task', which no Object.prototype key does.
-  const edit = taskEdits[op.type as string];
+  const edit = taskEdits[update.type as string];
   if (!edit) fail('Unknown update.');
-  edit(edits, op);
+  edit(edits, update);
 }
 
 // One factory group edit, applied to the normalised groups (see mutateGroups).
-type GroupEdit = (factory: FactoryGroups, op: Raw) => void;
+type GroupEdit = (factory: FactoryGroups, update: Raw) => void;
 
-function addGroup(factory: FactoryGroups, op: Raw) {
-  if (!groupId(op.id) || factory.groups.some(group => group.id === op.id) || !label(op.name))
+function addGroup(factory: FactoryGroups, update: Raw) {
+  if (
+    !groupId(update.id) ||
+    factory.groups.some(group => group.id === update.id) ||
+    !label(update.name)
+  )
     fail('Invalid factory group.');
   if (factory.groups.length >= 60) fail('You can keep up to 60 factory groups.');
-  factory.groups.push({ id: op.id, name: op.name.trim() });
+  factory.groups.push({ id: update.id, name: update.name.trim() });
 }
-function renameGroup(factory: FactoryGroups, op: Raw) {
-  if (!factory.groups.some(group => group.id === op.id)) fail('Unknown factory group.');
-  if (!label(op.name)) fail('Invalid group name.');
+function renameGroup(factory: FactoryGroups, update: Raw) {
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
+  if (!label(update.name)) fail('Invalid group name.');
   // The check above found it.
-  factory.groups.find(group => group.id === op.id)!.name = op.name.trim();
+  factory.groups.find(group => group.id === update.id)!.name = update.name.trim();
 }
 // Removing a group also drops it from every row's assignment list.
-function removeGroup(factory: FactoryGroups, op: Raw) {
-  if (!factory.groups.some(group => group.id === op.id)) fail('Unknown factory group.');
-  factory.groups = factory.groups.filter(group => group.id !== op.id);
+function removeGroup(factory: FactoryGroups, update: Raw) {
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
+  factory.groups = factory.groups.filter(group => group.id !== update.id);
   for (const [rowKey, list] of Object.entries(factory.assignments)) {
-    const kept = list.filter(member => member.group !== op.id);
+    const kept = list.filter(member => member.group !== update.id);
     if (kept.length) factory.assignments[rowKey] = kept;
     else delete factory.assignments[rowKey];
   }
   // Its links go too; they joined a place that no longer exists.
   for (const link of Object.keys(factory.links || {}))
-    if (link.split(':').includes(op.id as string)) delete factory.links![link];
+    if (link.split(':').includes(update.id as string)) delete factory.links![link];
   if (factory.links && !Object.keys(factory.links).length) delete factory.links;
 }
 // The first choice for one item of a mines link saved before #231 splits that link: the other
 // items on it (`siblings`, the sources the page shows going the same way) keep the old choice as
 // their own, and the old entry goes, so nothing chosen is lost.
-function splitLegacyMinesLink(links: Record<string, LinkTransport>, op: Raw) {
-  const legacy = MINES_PLACE + ':' + op.to;
-  if (!sourcePlace(op.from) || !links[legacy]) return;
-  const siblings = op.siblings ?? [];
+function splitLegacyMinesLink(links: Record<string, LinkTransport>, update: Raw) {
+  const legacy = MINES_PLACE + ':' + update.to;
+  if (!sourcePlace(update.from) || !links[legacy]) return;
+  const siblings = update.siblings ?? [];
   if (!Array.isArray(siblings) || siblings.length > 200 || !siblings.every(sourcePlace))
     fail('Invalid factory group link.');
   for (const sibling of siblings as string[])
-    if (sibling !== op.from) links[sibling + ':' + op.to] ??= links[legacy]!;
+    if (sibling !== update.from) links[sibling + ':' + update.to] ??= links[legacy]!;
   delete links[legacy];
 }
 // The transport on the link from one place to another; belts, the default, are not stored.
-function setLinkTransport(factory: FactoryGroups, op: Raw) {
-  if (!linkKey(op.from, op.to, new Set(factory.groups.map(group => group.id))))
+function setLinkTransport(factory: FactoryGroups, update: Raw) {
+  if (!linkKey(update.from, update.to, new Set(factory.groups.map(group => group.id))))
     fail('Unknown factory group link.');
-  const key = op.from + ':' + op.to;
+  const key = update.from + ':' + update.to;
   const links = { ...factory.links };
-  splitLegacyMinesLink(links, op);
-  if (op.mode === 'belt') delete links[key];
+  splitLegacyMinesLink(links, update);
+  if (update.mode === 'belt') delete links[key];
   else
     links[key] = linkTransport({
-      mode: op.mode,
-      roundTripMin: op.roundTripMin,
-      ...(op.fuel === undefined ? {} : { fuel: op.fuel }),
+      mode: update.mode,
+      roundTripMin: update.roundTripMin,
+      ...(update.fuel === undefined ? {} : { fuel: update.fuel }),
     });
   if (Object.keys(links).length > 500) fail('You can set up to 500 group links.');
   if (Object.keys(links).length) factory.links = links;
   else delete factory.links;
 }
 // The groups a row's machines work in, each with an optional production rate.
-function assignGroups(factory: FactoryGroups, op: Raw) {
-  if (!safeKey(op.key) || !Array.isArray(op.groups) || op.groups.length > 12)
+function assignGroups(factory: FactoryGroups, update: Raw) {
+  if (!safeKey(update.key) || !Array.isArray(update.groups) || update.groups.length > 12)
     fail('Invalid factory group assignment.');
   const known = new Set(factory.groups.map(group => group.id)),
     used = new Set<string>();
-  const list = op.groups.map((member: unknown): GroupAssignment => {
+  const list = update.groups.map((member: unknown): GroupAssignment => {
     if (!plain(member) || !known.has(member.group as string) || used.has(member.group as string))
       fail('Invalid factory group assignment.');
     // known holds only group ids, so the check above leaves a string.
@@ -285,8 +290,8 @@ function assignGroups(factory: FactoryGroups, op: Raw) {
       fail('Enter a production rate above 0.');
     return { group, rate };
   });
-  if (list.length) factory.assignments[op.key] = list;
-  else delete factory.assignments[op.key];
+  if (list.length) factory.assignments[update.key] = list;
+  else delete factory.assignments[update.key];
 }
 const groupEdits: Record<string, GroupEdit> = {
   factoryGroupAdd: addGroup,
@@ -296,162 +301,178 @@ const groupEdits: Record<string, GroupEdit> = {
   factoryAssign: assignGroups,
 };
 // Factory group edits, one function per update type above.
-function mutateGroups(s: SavedState, op: Raw) {
-  const factory = (s.factoryGroups = validateGroups(s.factoryGroups));
+function mutateGroups(state: SavedState, update: Raw) {
+  const factory = (state.factoryGroups = validateGroups(state.factoryGroups));
   // mutate only sends types starting with 'factory', which no Object.prototype key does.
-  const edit = groupEdits[op.type as string];
+  const edit = groupEdits[update.type as string];
   if (!edit) fail('Unknown update.');
-  edit(factory, op);
+  edit(factory, update);
 }
 // Deletes everything recorded for bay `id`'s addresses: its name, container names and cleared
 // positions, and its 'slot-<address>' notes and 'slot-<address>-<step>' checks.
-function clearBayRecords(s: SavedState, e: StorageEdits, id: string) {
-  delete e.bayNames[id];
+function clearBayRecords(state: SavedState, layout: StorageEdits, id: string) {
+  delete layout.bayNames[id];
   // A handbook bay's move goes too, so a bay taking its letter starts on its own floor.
-  if (e.bayFloors?.[id]) {
-    const { [id]: _gone, ...rest } = e.bayFloors;
-    if (Object.keys(rest).length) e.bayFloors = rest;
-    else delete e.bayFloors;
+  if (layout.bayFloors?.[id]) {
+    const { [id]: _gone, ...rest } = layout.bayFloors;
+    if (Object.keys(rest).length) layout.bayFloors = rest;
+    else delete layout.bayFloors;
   }
   // And its place in a floor's order (#191).
-  dropFromOrder(e, id);
-  for (const k of Object.keys(e.slots)) if (slotAddr(k) && bayOfSlot(k) === id) delete e.slots[k];
-  e.clearedSlots = e.clearedSlots.filter(k => bayOfSlot(k) !== id);
-  for (const records of [s.checks, s.notes] as Record<string, unknown>[])
-    for (const k of Object.keys(records || {})) {
-      const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(k)?.[1];
-      if (address && bayOfSlot(address) === id) delete records[k];
+  dropFromOrder(layout, id);
+  for (const address of Object.keys(layout.slots))
+    if (slotAddr(address) && bayOfSlot(address) === id) delete layout.slots[address];
+  layout.clearedSlots = layout.clearedSlots.filter(address => bayOfSlot(address) !== id);
+  for (const records of [state.checks, state.notes] as Record<string, unknown>[])
+    for (const key of Object.keys(records || {})) {
+      const address = /^slot-([A-Z]{1,2}[0-9]{2})(?:-|$)/.exec(key)?.[1];
+      if (address && bayOfSlot(address) === id) delete records[key];
     }
 }
 // The floor bay `id` stands on: an added bay's own (also under a hidden handbook letter, #167),
 // else a handbook bay's move (#190) or its handbook floor. null for a letter that is neither.
-function bayFloor(e: StorageEdits, id: string): string | null {
-  const added = e.bays.find(b => b.id === id);
+function bayFloor(layout: StorageEdits, id: string): string | null {
+  const added = layout.bays.find(bay => bay.id === id);
   if (added) return added.floor;
-  return handbookBay(id) ? (e.bayFloors?.[id] ?? handbookFloor(id)) : null;
+  return handbookBay(id) ? (layout.bayFloors?.[id] ?? handbookFloor(id)) : null;
 }
 // Takes bay `id` out of every floor's order (#191): it moved or went, so a letter reused later
 // starts at its default place.
-function dropFromOrder(e: StorageEdits, id: string) {
-  if (!e.bayOrder) return;
+function dropFromOrder(layout: StorageEdits, id: string) {
+  if (!layout.bayOrder) return;
   const order: Record<string, string[]> = {};
-  for (const [f, list] of Object.entries(e.bayOrder)) {
-    const kept = list.filter(x => x !== id);
-    if (kept.length) order[f] = kept;
+  for (const [floor, list] of Object.entries(layout.bayOrder)) {
+    const kept = list.filter(letter => letter !== id);
+    if (kept.length) order[floor] = kept;
   }
-  if (Object.keys(order).length) e.bayOrder = order;
-  else delete e.bayOrder;
+  if (Object.keys(order).length) layout.bayOrder = order;
+  else delete layout.bayOrder;
 }
-// Sets e.bayOrder to `order`, or drops the field when no floor has an order left.
-function setBayOrder(e: StorageEdits, order: Record<string, string[]>) {
-  if (Object.keys(order).length) e.bayOrder = order;
-  else delete e.bayOrder;
+// Sets layout.bayOrder to `order`, or drops the field when no floor has an order left.
+function setBayOrder(layout: StorageEdits, order: Record<string, string[]>) {
+  if (Object.keys(order).length) layout.bayOrder = order;
+  else delete layout.bayOrder;
 }
-// Empties container position k the way storageSlotClear does: an added position disappears
-// with its container; a handbook one stays as a reserved address so its printed label keeps
-// meaning something.
-function emptySlot(e: StorageEdits, k: string) {
-  delete e.slots[k];
-  if (!addedSlot(k) && !e.clearedSlots.includes(k)) e.clearedSlots.push(k);
+// Empties container position `address` the way storageSlotClear does: an added position
+// disappears with its container; a handbook one stays as a reserved address so its printed label
+// keeps meaning something.
+function emptySlot(layout: StorageEdits, address: string) {
+  delete layout.slots[address];
+  if (!addedSlot(address) && !layout.clearedSlots.includes(address))
+    layout.clearedSlots.push(address);
 }
-// Puts the container `name` at position k, which is then no longer a cleared one.
-function fillSlot(e: StorageEdits, k: string, name: string) {
-  e.slots[k] = name.trim();
-  e.clearedSlots = e.clearedSlots.filter(x => x !== k);
+// Puts the container `name` at position `address`, which is then no longer a cleared one.
+function fillSlot(layout: StorageEdits, address: string, name: string) {
+  layout.slots[address] = name.trim();
+  layout.clearedSlots = layout.clearedSlots.filter(cleared => cleared !== address);
 }
-// One storage layout edit, applied to s and its normalised layout e (see mutateLayout).
-type LayoutEdit = (s: SavedState, e: StorageEdits, op: Raw) => void;
+// One storage layout edit, applied to state and its normalised layout (see mutateLayout).
+type LayoutEdit = (state: SavedState, layout: StorageEdits, update: Raw) => void;
 
-function addFloor(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!addedFloorId(op.id) || e.floors.some(f => f.id === op.id) || !label(op.label))
+function addFloor(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (
+    !addedFloorId(update.id) ||
+    layout.floors.some(floor => floor.id === update.id) ||
+    !label(update.label)
+  )
     fail('Invalid floor.');
-  e.floors.push({ id: op.id as string, label: op.label.trim() });
+  layout.floors.push({ id: update.id as string, label: update.label.trim() });
 }
-function renameFloor(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!floorId(op.id) || !knownFloor(e, op.id)) fail('Unknown floor.');
-  if (typeof op.label === 'string' && !op.label.trim()) delete e.floorNames[op.id];
+function renameFloor(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!floorId(update.id) || !knownFloor(layout, update.id)) fail('Unknown floor.');
+  if (typeof update.label === 'string' && !update.label.trim()) delete layout.floorNames[update.id];
   else {
-    if (!label(op.label)) fail('Invalid floor name.');
-    e.floorNames[op.id] = op.label.trim();
+    if (!label(update.label)) fail('Invalid floor name.');
+    layout.floorNames[update.id] = update.label.trim();
   }
 }
 // storageFloorHide and storageFloorRestore. Built-in floors are hidden, never removed (#168);
 // an added floor is removed instead.
-function hideOrRestoreFloor(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!builtinFloors.some(([id]) => id === op.id))
+function hideOrRestoreFloor(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!builtinFloors.some(([id]) => id === update.id))
     fail('Only built-in floors can be hidden. Remove an added floor instead.');
-  const id = op.id as string;
-  if (op.type === 'storageFloorRestore') e.hiddenFloors = e.hiddenFloors.filter(f => f !== id);
+  const id = update.id as string;
+  if (update.type === 'storageFloorRestore')
+    layout.hiddenFloors = layout.hiddenFloors.filter(hiddenId => hiddenId !== id);
   else {
-    if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
-    const hidden = new Set([...e.hiddenFloors, id]);
-    if (hidden.size === builtinFloors.length && !e.floors.length)
+    if (baysOn(layout, id)) fail('Remove or move the bays on this floor first.');
+    const hidden = new Set([...layout.hiddenFloors, id]);
+    if (hidden.size === builtinFloors.length && !layout.floors.length)
       fail('Keep at least one floor in the storage room.');
-    e.hiddenFloors = builtinFloors.map(([f]) => f).filter(f => hidden.has(f));
+    layout.hiddenFloors = builtinFloors
+      .map(([floorId]) => floorId)
+      .filter(floorId => hidden.has(floorId));
   }
 }
-function removeFloor(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!e.floors.some(f => f.id === op.id)) fail('Only added floors can be removed.');
+function removeFloor(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!layout.floors.some(floor => floor.id === update.id))
+    fail('Only added floors can be removed.');
   // The check above matched an added floor, so the id is a string.
-  const id = op.id as string;
-  if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
-  if (e.hiddenFloors.length === builtinFloors.length && e.floors.length === 1)
+  const id = update.id as string;
+  if (baysOn(layout, id)) fail('Remove or move the bays on this floor first.');
+  if (layout.hiddenFloors.length === builtinFloors.length && layout.floors.length === 1)
     fail('Keep at least one floor in the storage room.');
-  e.floors = e.floors.filter(f => f.id !== id);
-  delete e.floorNames[id];
-  if (e.bayOrder?.[id]) {
-    const { [id]: _gone, ...rest } = e.bayOrder;
-    setBayOrder(e, rest);
+  layout.floors = layout.floors.filter(floor => floor.id !== id);
+  delete layout.floorNames[id];
+  if (layout.bayOrder?.[id]) {
+    const { [id]: _gone, ...rest } = layout.bayOrder;
+    setBayOrder(layout, rest);
   }
 }
-function addBay(s: SavedState, e: StorageEdits, op: Raw) {
-  if (!bayId(op.id) || !label(op.name) || !floorId(op.floor)) fail('Invalid bay.');
-  if (e.bays.some(b => b.id === op.id)) fail(`Bay ${op.id} already exists. Choose another letter.`);
+function addBay(state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!bayId(update.id) || !label(update.name) || !floorId(update.floor)) fail('Invalid bay.');
+  if (layout.bays.some(bay => bay.id === update.id))
+    fail(`Bay ${update.id} already exists. Choose another letter.`);
   // Any free letter, the owner's choice on #167. A handbook letter is free only while that
   // bay is hidden, and taking it needs `replace`: the hidden bay's kept records are cleared
   // first (as removing an added bay does, #51), so the new bay starts clean.
-  if (handbookBay(op.id)) {
-    if (!e.hiddenBays.includes(op.id))
-      fail(`Bay ${op.id} is in the room. Hide that handbook bay first, or choose another letter.`);
-    if (op.replace !== true)
-      fail(`Bay ${op.id} still has saved progress from the handbook bay. Confirm to replace it.`);
+  if (handbookBay(update.id)) {
+    if (!layout.hiddenBays.includes(update.id))
+      fail(
+        `Bay ${update.id} is in the room. Hide that handbook bay first, or choose another letter.`,
+      );
+    if (update.replace !== true)
+      fail(
+        `Bay ${update.id} still has saved progress from the handbook bay. Confirm to replace it.`,
+      );
   }
-  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
-  if (handbookBay(op.id)) clearBayRecords(s, e, op.id);
-  e.bays.push({ id: op.id, name: op.name.trim(), floor: op.floor });
+  if (!knownFloor(layout, update.floor)) fail('Unknown floor.');
+  if (handbookBay(update.id)) clearBayRecords(state, layout, update.id);
+  layout.bays.push({ id: update.id, name: update.name.trim(), floor: update.floor });
 }
-function renameBay(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!bayId(op.id)) fail('Invalid bay.');
-  if (typeof op.name === 'string' && !op.name.trim()) delete e.bayNames[op.id];
+function renameBay(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!bayId(update.id)) fail('Invalid bay.');
+  if (typeof update.name === 'string' && !update.name.trim()) delete layout.bayNames[update.id];
   else {
-    if (!label(op.name)) fail('Invalid bay name.');
-    e.bayNames[op.id] = op.name.trim();
+    if (!label(update.name)) fail('Invalid bay name.');
+    layout.bayNames[update.id] = update.name.trim();
   }
 }
 // Any bay can move to another floor (#190), keeping its letter and so every address, check,
 // note and name. An added bay (also one holding a hidden handbook letter, #167) changes its own
 // floor; a handbook bay is recorded in bayFloors. Only to a floor in the tabs: a hidden
 // built-in floor is restored first.
-function moveBay(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!bayId(op.id)) fail('Invalid bay.');
-  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
-  if (e.hiddenFloors.includes(op.floor)) fail('Restore that floor before moving a bay onto it.');
-  const added = e.bays.find(b => b.id === op.id);
-  if (added) added.floor = op.floor;
-  else if (handbookBay(op.id)) {
-    const { [op.id]: _old, ...moved } = e.bayFloors || {};
-    if (op.floor !== handbookFloor(op.id)) moved[op.id] = op.floor;
-    if (Object.keys(moved).length) e.bayFloors = moved;
-    else delete e.bayFloors;
+function moveBay(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!bayId(update.id)) fail('Invalid bay.');
+  if (!knownFloor(layout, update.floor)) fail('Unknown floor.');
+  if (layout.hiddenFloors.includes(update.floor))
+    fail('Restore that floor before moving a bay onto it.');
+  const added = layout.bays.find(bay => bay.id === update.id);
+  if (added) added.floor = update.floor;
+  else if (handbookBay(update.id)) {
+    const { [update.id]: _old, ...moved } = layout.bayFloors || {};
+    if (update.floor !== handbookFloor(update.id)) moved[update.id] = update.floor;
+    if (Object.keys(moved).length) layout.bayFloors = moved;
+    else delete layout.bayFloors;
   } else fail('Unknown bay.');
   // It joins the new floor at its default place and leaves the old floor's order.
-  dropFromOrder(e, op.id);
+  dropFromOrder(layout, update.id);
 }
 // The order of the bays on one floor (#191), sent whole by Move left / Move right. Only bays on
 // that floor; one left out keeps its default place (views/storage.ts orderBays).
-function orderBays(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
-  const list = op.order;
+function orderBays(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!knownFloor(layout, update.floor)) fail('Unknown floor.');
+  const list = update.order;
   if (
     !Array.isArray(list) ||
     list.length > 60 ||
@@ -459,68 +480,72 @@ function orderBays(_s: SavedState, e: StorageEdits, op: Raw) {
     new Set(list).size !== list.length
   )
     fail('Invalid bay order.');
-  if (list.some((id: string) => bayFloor(e, id) !== op.floor))
+  if (list.some((id: string) => bayFloor(layout, id) !== update.floor))
     fail('Only bays on this floor can be put in order.');
-  const { [op.floor]: _old, ...rest } = e.bayOrder || {};
-  if (list.length) rest[op.floor] = [...list];
-  setBayOrder(e, rest);
+  const { [update.floor]: _old, ...rest } = layout.bayOrder || {};
+  if (list.length) rest[update.floor] = [...list];
+  setBayOrder(layout, rest);
 }
 // storageBayHide and storageBayRestore, for handbook bays only.
-function hideOrRestoreBay(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (typeof op.id !== 'string' || !handbookBay(op.id))
+function hideOrRestoreBay(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (typeof update.id !== 'string' || !handbookBay(update.id))
     fail('Only handbook bays can be hidden. Remove an added bay instead.');
-  const hidden = new Set(e.hiddenBays);
+  const hidden = new Set(layout.hiddenBays);
   // An added bay under a handbook letter still in the room predates #91 and shares that bay's
   // addresses and records. Hiding the handbook bay would make removing the added one clear
   // them (storageBayRemove treats a hidden letter's records as the added bay's own), so the
   // added bay has to go first. A letter an added bay took with `replace` is already hidden.
-  if (op.type === 'storageBayHide' && !hidden.has(op.id) && e.bays.some(b => b.id === op.id))
-    fail(`An added bay uses the letter ${op.id}. Remove it before hiding the handbook bay.`);
-  if (op.type === 'storageBayHide') hidden.add(op.id);
-  else if (e.bays.some(b => b.id === op.id))
-    fail(`An added bay uses the letter ${op.id}. Remove it before restoring the handbook bay.`);
-  else hidden.delete(op.id);
-  e.hiddenBays = [...hidden].sort();
+  if (
+    update.type === 'storageBayHide' &&
+    !hidden.has(update.id) &&
+    layout.bays.some(bay => bay.id === update.id)
+  )
+    fail(`An added bay uses the letter ${update.id}. Remove it before hiding the handbook bay.`);
+  if (update.type === 'storageBayHide') hidden.add(update.id);
+  else if (layout.bays.some(bay => bay.id === update.id))
+    fail(`An added bay uses the letter ${update.id}. Remove it before restoring the handbook bay.`);
+  else hidden.delete(update.id);
+  layout.hiddenBays = [...hidden].sort();
 }
-function removeBay(s: SavedState, e: StorageEdits, op: Raw) {
-  if (!e.bays.some(b => b.id === op.id))
+function removeBay(state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!layout.bays.some(bay => bay.id === update.id))
     fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
-  e.bays = e.bays.filter(b => b.id !== op.id);
+  layout.bays = layout.bays.filter(bay => bay.id !== update.id);
   // The check above matched an added bay, so the id is a string.
-  const id = op.id as string;
+  const id = update.id as string;
   // An added bay under the letter of a handbook bay that is still in the room predates
   // storageBayAdd refusing one (only a direct request or an edited import could make it). Its
   // addresses, name, checks and notes are the handbook bay's too, so removing it removes the
   // entry and nothing else. Under a hidden handbook letter (#167) the records are its own.
-  if (handbookBay(id) && !e.hiddenBays.includes(id)) return;
-  clearBayRecords(s, e, id);
+  if (handbookBay(id) && !layout.hiddenBays.includes(id)) return;
+  clearBayRecords(state, layout, id);
 }
-function assignSlot(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!slotAddr(op.key) || !label(op.name, 120)) fail('Invalid container.');
-  fillSlot(e, op.key, op.name);
+function assignSlot(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!slotAddr(update.key) || !label(update.name, 120)) fail('Invalid container.');
+  fillSlot(layout, update.key, update.name);
 }
-function clearSlot(_s: SavedState, e: StorageEdits, op: Raw) {
-  if (!slotAddr(op.key)) fail('Invalid container address.');
-  emptySlot(e, op.key);
+function clearSlot(_state: SavedState, layout: StorageEdits, update: Raw) {
+  if (!slotAddr(update.key)) fail('Invalid container address.');
+  emptySlot(layout, update.key);
 }
 // A container dragged to another position (#208), in its bay or another. The page sends the
 // items it shows at both addresses (the server does not know the handbook's), `toName` null for
 // an empty position: a move, else a swap. The owner's choice on #208: progress moves with the
 // container, so the two addresses' 'slot-' checks and notes always trade places; an empty
 // position's leftover records go to the address left behind, never deleted.
-function moveSlot(s: SavedState, e: StorageEdits, op: Raw) {
-  const { from, to } = op;
+function moveSlot(state: SavedState, layout: StorageEdits, update: Raw) {
+  const { from, to } = update;
   if (!slotAddr(from) || !slotAddr(to) || from === to) fail('Invalid container move.');
-  for (const k of [from, to])
-    if (!handbookBay(bayOfSlot(k)) && !e.bays.some(b => b.id === bayOfSlot(k)))
+  for (const address of [from, to])
+    if (!handbookBay(bayOfSlot(address)) && !layout.bays.some(bay => bay.id === bayOfSlot(address)))
       fail('Unknown bay.');
-  if (!label(op.fromName, 120) || (op.toName !== null && !label(op.toName, 120)))
+  if (!label(update.fromName, 120) || (update.toName !== null && !label(update.toName, 120)))
     fail('Invalid container.');
-  const put = (k: string, name: string | null) =>
-    name === null ? emptySlot(e, k) : fillSlot(e, k, name);
-  put(to, op.fromName);
-  put(from, op.toName as string | null);
-  swapSlotRecords(s, from, to);
+  const put = (address: string, name: string | null) =>
+    name === null ? emptySlot(layout, address) : fillSlot(layout, address, name);
+  put(to, update.fromName);
+  put(from, update.toName as string | null);
+  swapSlotRecords(state, from, to);
 }
 const layoutEdits: Record<string, LayoutEdit> = {
   storageFloorAdd: addFloor,
@@ -545,26 +570,30 @@ const layoutEdits: Record<string, LayoutEdit> = {
 // and addresses only, with one exception: removing an added bay also deletes the 'slot-' checks
 // and notes of its addresses (the owner's decision in #51), so a bay that later reuses the
 // letter starts clean. A removed floor has no records of its own.
-function mutateLayout(s: SavedState, op: Raw) {
-  const e = (s.storageEdits = validateEdits(
-    s.storageEdits === undefined ? undefined : s.storageEdits,
+function mutateLayout(state: SavedState, update: Raw) {
+  const layout = (state.storageEdits = validateEdits(
+    state.storageEdits === undefined ? undefined : state.storageEdits,
   ));
   // mutate only sends types starting with 'storage', which no Object.prototype key does.
-  const edit = layoutEdits[op.type as string];
+  const edit = layoutEdits[update.type as string];
   if (!edit) fail('Unknown update.');
-  edit(s, e, op);
+  edit(state, layout, update);
 }
-// Trades every 'slot-<a>' note and 'slot-<a>-<step>' check with those of address b.
-function swapSlotRecords(s: SavedState, a: string, b: string) {
-  for (const records of [s.checks, s.notes] as Record<string, unknown>[]) {
+// Trades every 'slot-<first>' note and 'slot-<first>-<step>' check with those of address
+// `second`.
+function swapSlotRecords(state: SavedState, first: string, second: string) {
+  for (const records of [state.checks, state.notes] as Record<string, unknown>[]) {
     if (!records) continue;
     const moved: [string, unknown][] = [];
-    for (const k of Object.keys(records)) {
-      const m = /^slot-([A-Z]{1,2}[0-9]{2})(-.*)?$/.exec(k);
-      if (!m || (m[1] !== a && m[1] !== b)) continue;
-      moved.push(['slot-' + (m[1] === a ? b : a) + (m[2] ?? ''), records[k]]);
-      delete records[k];
+    for (const key of Object.keys(records)) {
+      const match = /^slot-([A-Z]{1,2}[0-9]{2})(-.*)?$/.exec(key);
+      if (!match || (match[1] !== first && match[1] !== second)) continue;
+      moved.push([
+        'slot-' + (match[1] === first ? second : first) + (match[2] ?? ''),
+        records[key],
+      ]);
+      delete records[key];
     }
-    for (const [k, v] of moved) records[k] = v;
+    for (const [key, value] of moved) records[key] = value;
   }
 }

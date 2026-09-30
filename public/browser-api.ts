@@ -18,7 +18,7 @@
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
-import { isTranscribed } from './handbook-migration.ts';
+import { isTranscribed, type MigrationData } from './handbook-migration.ts';
 import {
   validateState,
   mutate,
@@ -30,7 +30,7 @@ import {
   phaseProgress,
 } from './state.ts';
 import {
-  validateTransfer,
+  importableTransfer,
   transferFormat,
   transferFileSize,
   transferImportLimit,
@@ -100,12 +100,15 @@ let instance: Promise<BrowserRequest> | undefined;
 // Builds the request handler. `store` is openBrowserStore()'s object, `calculator(settings,
 // onProgress)` resolves to a plan and `catalog` is catalog.json; tests pass a stand-in store
 // and planner.ts's calculate. `ranker` runs a payoff ranking; without one that route is refused.
+// `loadMigration` loads what converting an imported original profile needs (importableTransfer
+// in transfer.ts); without it (tests of other behaviour) an import stores one as it is.
 // Errors are thrown; app/api.ts shows them like a server { error }.
 export function createBrowserApi(
   store: BrowserStore,
   calculator: Calculator,
   catalog: Catalog,
   ranker?: Ranker,
+  loadMigration?: () => Promise<MigrationData>,
 ): BrowserRequest {
   const randomId = () => crypto.randomUUID();
   const cleanName = (name: unknown): string => {
@@ -281,11 +284,12 @@ export function createBrowserApi(
       return { saveId: save.id, profileId, workspace: summary(data) };
     });
   }
-  // Mirrors POST /api/import-saves: validateTransfer checks the file and each state first, then
-  // each save and profile gets a new id so an import never overwrites what is here. A throw
-  // aborts the transaction, so a failed import leaves the workspace unchanged.
-  function importSaves({ body }: RouteRequest) {
-    const imported = validateTransfer(body);
+  // Mirrors POST /api/import-saves: importableTransfer checks the file and each state first and
+  // converts an original profile, outside any transaction, then each save and profile gets a new
+  // id so an import never overwrites what is here. A throw aborts the transaction, so a failed
+  // import leaves the workspace unchanged.
+  async function importSaves({ body }: RouteRequest) {
+    const imported = await importableTransfer(body, loadMigration);
     return store.transaction(data => {
       if (data.saves.length + imported.saves.length > 50)
         throw Error('Import would exceed the save limit.');
@@ -657,8 +661,9 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
       const catalog = (await response.json()) as Catalog;
-      // The handbook migration's recipes (#497), fetched only when the record holds an original
-      // profile. A failed fetch fails that request and changes nothing; the next one tries again.
+      // The handbook migration's recipes (#497), fetched only when the record or an import (#605)
+      // holds an original profile. A failed fetch fails that request and changes nothing; the
+      // next one tries again.
       const loadMigration = async () => {
         const recipes = await fetch(new URL('./recipes.json', import.meta.url));
         if (!recipes.ok)
@@ -675,6 +680,7 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
         jobs.calculate,
         catalog,
         jobs.rank,
+        loadMigration,
       );
     })());
     starting.catch(() => {

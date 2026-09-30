@@ -5,6 +5,7 @@ import { readStoredData } from '../browser-store.ts';
 import { initialState } from '../state.ts';
 import { downloadJson, request, toast, writeQueue } from './api.ts';
 import { required } from './format.ts';
+import { phaseToOpen } from './opening-phase.ts';
 import { render } from './shell.ts';
 import { showSignedOut, unmountShell } from './ui/mount.ts';
 import { startWizard, type WizardDraft } from './wizard/wizard.ts';
@@ -199,6 +200,9 @@ export const startPhase = (): StageKey =>
 export const phase = (): Phase => {
   const saved = state.settings.phase;
   if (!currentSave.id) return wizard?.settings.phase || saved;
+  // Opened on an earlier phase with open checks (#570), while the saved phase is still the one
+  // that was worked out from: another tab picking a phase shows that one.
+  if (openedOn?.saved === saved) return openedOn.phase;
   return saved !== 'post' && Number(saved) < Number(startPhase()) ? startPhase() : saved;
 };
 
@@ -243,6 +247,31 @@ export async function loadContext(saveId: string, profileId: string) {
     ),
   );
   required<HTMLDialogElement>('#detail').close();
+  openOnPhase();
+}
+
+// The phase the profile just opened shows (#570, app/opening-phase.ts): the saved working phase,
+// or an earlier one that still has open checks. It is not saved: the saved phase stays the one the
+// user picked, so each opening looks again. The phase picker drops it (setOpenedPhase(null)) once
+// it has saved the phase picked, and opening another profile replaces it.
+let openedOn: { saved: Phase; phase: Phase } | null = null;
+export function setOpenedPhase(value: typeof openedOn) {
+  openedOn = value;
+}
+// The saved working phase while the profile shows an earlier one it opened on, else null (ADA).
+export const openedFrom = (): Phase | null =>
+  openedOn?.saved === state.settings.phase ? openedOn.saved : null;
+// Works out where the profile just opened starts. A failure here must not stop it opening, so it
+// then shows the saved phase, as before.
+function openOnPhase() {
+  try {
+    const saved = state.settings.phase,
+      open = phaseToOpen();
+    // Only an earlier phase, which openingPhase finds from the start phase on.
+    openedOn = open === saved ? null : { saved, phase: open };
+  } catch {
+    openedOn = null;
+  }
 }
 
 // Makes an /api/context reply the open save and profile ({ save, profile, state, plan,
@@ -257,6 +286,7 @@ export function setContext(reply: ContextReply) {
   payoff = reply.payoff ?? null;
   plan = reply.handbook || basePlan || plan;
   query = '';
+  openedOn = null;
   endEditing();
 }
 

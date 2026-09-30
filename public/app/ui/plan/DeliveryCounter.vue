@@ -7,9 +7,9 @@
   failed write, puts the saved count back.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { save, toast } from '../../api.ts';
-import { num } from '../../format.ts';
+import { duration, num } from '../../format.ts';
 import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
@@ -29,18 +29,30 @@ const counter = computed(() =>
     const delivery = props.delivery,
       count = saved(),
       left = Math.max(0, delivery.target - count);
-    // Without a rate there are no minutes to give: the text follows the saved count, so a
-    // lowered count no longer reads as complete (#590).
+    // The text follows the saved count: at the target it reads complete, with or without a
+    // rate (#596), and a lowered count no longer does (#590). Without a rate there are no
+    // minutes to give; with one the wait reads as a plain duration (#624). It names no phase, as the calculated plan draws every phase's (#595).
     return {
       value: count,
       width: Math.min(100, (count / delivery.target) * 100),
-      remaining: delivery.rate
-        ? `${num(delivery.rate)}/min net · ${num(left / delivery.rate)} minutes remaining`
-        : left
-          ? `${num(left)} remaining`
-          : 'Phase 3 delivery already complete',
+      remaining: !left
+        ? 'Delivery complete'
+        : delivery.rate
+          ? `${num(delivery.rate)}/min net · ${duration(left / delivery.rate)} left`
+          : `${num(left)} remaining`,
     };
   }),
+);
+
+// What the input shows: the saved count, then what the user types. Vue writes a bound value back
+// into the input on every redraw of this counter, and saving any control redraws it (the Saving
+// indicator, then render()). Bound to the saved count, that put it back over a number typed but
+// not yet committed, and the change event that followed saved the old count (#627). A new saved
+// count (this counter's own save, a reload from another tab) still replaces what is shown.
+const draft = ref(String(saved()));
+watch(
+  () => counter.value.value,
+  count => (draft.value = String(count)),
 );
 
 async function change(event: Event) {
@@ -49,14 +61,14 @@ async function change(event: Event) {
     count = Number(input.value);
   if (!Number.isInteger(count) || count < 0 || count > delivery.target) {
     toast('Enter a whole number between 0 and ' + num(delivery.target) + '.', true);
-    input.value = String(saved());
+    input.value = draft.value = String(saved());
     return;
   }
   try {
     await save({ type: 'delivery', key: delivery.id, value: count });
     render();
   } catch {
-    input.value = String(saved());
+    input.value = draft.value = String(saved());
   }
 }
 </script>
@@ -72,7 +84,8 @@ async function change(event: Event) {
         min="0"
         :max="delivery.target"
         step="1"
-        :value="counter.value"
+        :value="draft"
+        @input="draft = ($event.target as HTMLInputElement).value"
         @change="change"
       /><small>/ {{ num(delivery.target) }}</small>
     </div>

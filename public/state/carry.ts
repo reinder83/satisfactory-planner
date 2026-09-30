@@ -93,8 +93,8 @@ export const carryPicks = (raw: unknown): Record<string, boolean> =>
 // Rows of a plan keyed by the checklist address their step uses.
 const planRows = (plan: RowsPlan | null | undefined): Map<string, CalcRow> => {
   const rows = new Map<string, CalcRow>();
-  for (const [ph, stage] of Object.entries(plan?.stages || {}))
-    for (const r of stage.rows || []) rows.set('calc-' + ph + '-' + r.id, r);
+  for (const [phase, stage] of Object.entries(plan?.stages || {}))
+    for (const row of stage.rows || []) rows.set('calc-' + phase + '-' + row.id, row);
   return rows;
 };
 // Hand-picking alternates states which recipes you own: the recipes ticked in
@@ -121,8 +121,8 @@ const builtKeys = (raw: unknown, plan: RowsPlan | null): string[] => {
   if (!Array.isArray(raw) || raw.length > 2000) fail('Invalid list of finished work.');
   const rows = planRows(plan);
   return [...new Set<unknown>(raw)].filter(
-    (k): k is string =>
-      safeKey(k) && (rows.has(k) || k.startsWith('early-base-') || k.startsWith('unlock-')),
+    (key): key is string =>
+      safeKey(key) && (rows.has(key) || key.startsWith('early-base-') || key.startsWith('unlock-')),
   );
 };
 // Build the starting progress for a newly created profile. Without a source
@@ -169,7 +169,7 @@ export function newProfileState(
     .filter(([key]) => picks[key])
     .flatMap(([, list]) => list);
   for (const [key, value] of Object.entries(source.checks || {}))
-    if (prefixes.some(p => key.startsWith(p))) state.checks[key] = value;
+    if (prefixes.some(prefix => key.startsWith(prefix))) state.checks[key] = value;
   if (picks.deliveries) state.deliveries = { ...source.deliveries };
   if (picks.storage)
     for (const [key, value] of Object.entries(source.notes || {}))
@@ -199,7 +199,9 @@ export function newProfileState(
       const grown =
         !old ||
         row.machines > old.machines ||
-        Object.entries(row.inputs || {}).some(([n, q]) => q > (old.inputs?.[n] || 0) + 0.001);
+        Object.entries(row.inputs || {}).some(
+          ([item, rate]) => rate > (old.inputs?.[item] || 0) + 0.001,
+        );
       state.checks[key] = !grown;
       if (grown) reviewCount++;
     }
@@ -216,23 +218,23 @@ export function newProfileState(
 function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | null): FactoryGroups {
   const carried = validateGroups(raw);
   if (!carried.groups.length) return defaults;
-  const rows = new Set([...planRows(plan).values()].map(r => r.id));
+  const rows = new Set([...planRows(plan).values()].map(row => row.id));
   const groups = [...carried.groups];
-  const known = new Set(groups.map(g => g.id));
+  const known = new Set(groups.map(group => group.id));
   const assignments: Record<string, GroupAssignment[]> = {};
   for (const [key, list] of Object.entries(carried.assignments))
     if (rows.has(key)) assignments[key] = list;
   for (const [key, list] of Object.entries(defaults.assignments)) {
     if (assignments[key]) continue;
-    for (const m of list)
-      if (!known.has(m.group)) {
-        const g = defaults.groups.find(x => x.id === m.group);
-        if (g && groups.length < 60) {
-          groups.push(g);
-          known.add(g.id);
+    for (const member of list)
+      if (!known.has(member.group)) {
+        const defaultGroup = defaults.groups.find(group => group.id === member.group);
+        if (defaultGroup && groups.length < 60) {
+          groups.push(defaultGroup);
+          known.add(defaultGroup.id);
         }
       }
-    if (list.every(m => known.has(m.group))) assignments[key] = list;
+    if (list.every(member => known.has(member.group))) assignments[key] = list;
   }
   // Vehicle links (#205) join carried groups or fixed places, all still known here.
   return validateGroups({
@@ -254,7 +256,9 @@ export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>
   if (!guide) return plan;
   const copy = structuredClone(guide);
   if (copy.factories) {
-    const rows = new Set(Object.values(plan.stages).flatMap(x => (x?.rows || []).map(r => r.id)));
+    const rows = new Set(
+      Object.values(plan.stages).flatMap(stage => (stage?.rows || []).map(row => row.id)),
+    );
     copy.factories = Object.fromEntries(
       Object.entries(copy.factories).filter(([id]) => rows.has(id)),
     );
@@ -264,8 +268,8 @@ export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
 // Used by /api/export-saves?share=1 in workspace.ts and browser-api.ts; the input is cloned.
-export function shareState(s: SavedState): ProgressState {
-  const clean = validateState(structuredClone(s));
+export function shareState(state: SavedState): ProgressState {
+  const clean = validateState(structuredClone(state));
   clean.checks = {};
   clean.notes = {};
   clean.deliveries = {};

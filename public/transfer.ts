@@ -1,4 +1,9 @@
 import { safeKey, validateState } from './state.ts';
+import {
+  migrateOriginalProfile,
+  usableHandbook,
+  type MigrationData,
+} from './handbook-migration.ts';
 import type {
   Handbook,
   PlanGuide,
@@ -209,11 +214,23 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
         !profile.handbook?.phases ||
         !profile.handbook?.storage
       )
-        invalid('This original profile needs its full handbook export.');
+        invalid(
+          'This save file comes from an older planner and is incomplete, so it cannot be imported. Export it again from the planner that made it.',
+        );
       // Handbook source links survive only as https URLs.
       const handbook = kind === 'original' ? structuredClone(profile.handbook) : undefined;
       if (handbook && handbook.sources !== undefined && !Array.isArray(handbook.sources))
-        invalid('Invalid handbook sources.');
+        invalid(
+          'This save file has damaged source links, so it cannot be imported. Export it again from the planner that made it.',
+        );
+      // Every part the conversion reads must be there and of its shape (#609). The stores convert
+      // such a profile with what they can read, keeping their pre-migration copy; an import is
+      // refused instead, since the file is the user's own copy. Every release exported a whole
+      // handbook, so only a hand-made or damaged file is refused.
+      if (kind === 'original' && !usableHandbook(profile.handbook).complete)
+        invalid(
+          'This save file comes from an older planner and is incomplete or damaged, so it cannot be imported. Export it again from the planner that made it.',
+        );
       if (handbook) handbook.sources = httpsOnly(handbook.sources || []);
       const plan =
         kind === 'calculated' ? (structuredClone(profile.plan) as StoredCalculatedPlan) : null;
@@ -241,4 +258,38 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
     };
   });
   return { format: transferFormat, version: 1, saves };
+}
+
+// What /api/import-saves stores, in both editions: the export checked by validateTransfer, with
+// every original profile converted into a calculated one with its own handbook (#387, #605),
+// the same conversion the stores run on the profiles they already hold (migrateOriginalProfile).
+// Every record is kept, re-keyed or kept for review in handbookOrigin.unmapped; calculated
+// profiles, an already migrated export's among them, are left exactly as validateTransfer
+// returns them. `load` (the recipes and the catalog's pure-node limits) is only called when there
+// is an original profile to convert; without it (tests of other behaviour) none is. The imported
+// file is the user's own copy of the unconverted data. Throws before anything is written, like
+// validateTransfer.
+export async function importableTransfer(
+  data: unknown,
+  load?: () => Promise<MigrationData>,
+): Promise<Omit<SaveExport, 'exportedAt'>> {
+  const transfer = validateTransfer(data);
+  const original = transfer.saves.some(save => save.profiles.some(p => p.kind === 'original'));
+  if (!load || !original) return transfer;
+  const { recipes, pureLimits } = await load();
+  for (const save of transfer.saves)
+    save.profiles = save.profiles.map(profile => {
+      if (profile.kind !== 'original') return profile;
+      try {
+        // validateTransfer requires an original profile to carry its own handbook.
+        return migrateOriginalProfile(profile, profile.handbook!, recipes, pureLimits);
+      } catch {
+        // A last guard: validateTransfer already refused a handbook the conversion cannot read
+        // (#609).
+        return invalid(
+          'This save file comes from an older planner and could not be converted, so it cannot be imported. Export it again from the planner that made it.',
+        );
+      }
+    });
+  return transfer;
 }

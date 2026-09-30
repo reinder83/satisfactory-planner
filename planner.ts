@@ -29,7 +29,7 @@ import {
   resourceDefaults,
 } from './public/preferences.ts';
 import fs from 'node:fs';
-import { solve, type LpModel } from './optimizer.ts';
+import { setSearchDeadline, solve, type LpModel } from './optimizer.ts';
 import type {
   AlternatePayoff,
   AlternateRanking,
@@ -1465,6 +1465,20 @@ export function calculate(
   input: unknown,
   onPhase?: (phase: number) => void,
 ): CurrentCalculatedPlan {
+  try {
+    return calculatePlan(input, onPhase);
+  } finally {
+    setSearchDeadline(Infinity);
+  }
+}
+// How long the integer searches of one phase may take together, in milliseconds (#592): well
+// inside the browser worker's limit of 180 seconds per phase (workerJobs in public/browser-api.ts).
+// Its timer restarts only when a phase starts, so what runs after the Phase 5 solve (phaseTime
+// 'final', fueled augmenters) shares Phase 5's deadline. The rest of the worker's limit is left
+// for the linear solves and the other work of a slower device. On an ordinary machine the heaviest
+// phases of the test set search for about 20 seconds, so this changes no plan there.
+const PHASE_SEARCH_MS = 120000;
+function calculatePlan(input: unknown, onPhase?: (phase: number) => void): CurrentCalculatedPlan {
   const config = settings(input);
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
@@ -1478,6 +1492,7 @@ export function calculate(
   // scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
+    setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
     const maximised = config.goal === 'maximum' && phase >= 2;
     let result = run(
       config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
@@ -1497,8 +1512,8 @@ export function calculate(
     }
     // Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
     // budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
-    // solver timed out (no shortage proven); the recipes and power options cannot make it at all;
-    // or it is a budget problem, split into "only whole machines break it" and a real shortfall.
+    // search stopped (no shortage proven); the recipes and power options cannot make it at all; or
+    // it is a budget problem, split into "only whole machines break it" and a real shortfall.
     // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
     // The diagnostics solve without production amplification (the owner's choice in #64): the
     // exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
@@ -1513,7 +1528,7 @@ export function calculate(
       const stage: CurrentStage = { ...diagnostic, feasible: false };
       if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
         stage.reason =
-          'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.';
+          'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
       else if (!diagnostic.feasible)
         stage.reason =
           'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
@@ -1641,41 +1656,53 @@ export function calculate(
   // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
   // and compare like for like: same goal, same budgets, same recipes.
   if (config.fueledAugmenters && stages[5]?.feasible) {
+    // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
+    // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
+    let stopped = false;
     const unfueled = (() => {
       const options = { maximum: config.goal === 'maximum' };
-      let result = run({ ...config, fueledAugmenters: 0 }, 5, {
-        ...options,
-        conversion: config.sam === 'allow',
-      });
-      if (!result.feasible && config.sam !== 'avoid')
-        result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion: true });
+      const attempt = (conversion: boolean) => {
+        const result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
+        if (!result.feasible && result.solverStatus && !/infeasible/i.test(result.solverStatus))
+          stopped = true;
+        return result;
+      };
+      let result = attempt(config.sam === 'allow');
+      if (!result.feasible && config.sam !== 'avoid') result = attempt(true);
       return result;
     })();
-    // `fuelVerdict` (rendered by fuelVerdictHtml in public/app/wizard/review.js) compares the
+    // Without a proven unfueled answer there is nothing to compare (#634): no verdict, and the
+    // plan's assumptions say why, as the other stopped searches do.
+    if (!unfueled.feasible && stopped)
+      warnings.push(
+        'Fueling the augmenters could not be compared with an unfueled Phase 5: the search stopped before it could prove the best plan without the fuel, so no verdict is given on whether fueling pays off. No resource shortage has been established for the unfueled plan.',
+      );
+    // `fuelVerdict` (rendered by public/app/ui/wizard/FuelVerdict.vue) compares the
     // fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
     const count = (stage: Partial<StageResult>) =>
         (stage.rows || []).reduce((total, row) => total + row.machines, 0),
       fueled = stages[5] as Solved;
-    stages[5] = {
-      ...fueled,
-      fuelVerdict: {
-        unfueledFeasible: !!unfueled.feasible,
-        buildings: count(fueled),
-        buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
-        requiredMW: fueled.requiredMW,
-        requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
-        availableMW: fueled.availableMW,
-        availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
-        hours: fueled.hours,
-        hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
-        matrixRate: fueled.matrixRate,
-        worthIt:
-          !unfueled.feasible ||
-          (config.goal === 'maximum'
-            ? fueled.hours < unfueled.hours - 1e-6
-            : count(fueled) < count(unfueled)),
-      },
-    };
+    if (unfueled.feasible || !stopped)
+      stages[5] = {
+        ...fueled,
+        fuelVerdict: {
+          unfueledFeasible: !!unfueled.feasible,
+          buildings: count(fueled),
+          buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
+          requiredMW: fueled.requiredMW,
+          requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
+          availableMW: fueled.availableMW,
+          availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
+          hours: fueled.hours,
+          hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
+          matrixRate: fueled.matrixRate,
+          worthIt:
+            !unfueled.feasible ||
+            (config.goal === 'maximum'
+              ? fueled.hours < unfueled.hours - 1e-6
+              : count(fueled) < count(unfueled)),
+        },
+      };
   }
   // Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
   // amplification budget. Warned about, never enforced: the plan is still calculated.
@@ -1702,7 +1729,7 @@ export function calculate(
       );
     if (dropped.length)
       warnings.push(
-        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
+        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
       );
   }
   // Existing production: which credits some phase drew on, and phases that had to drop them.

@@ -8,7 +8,7 @@
 // It is generic: a handbook an older release exported may have other factory ids or a recipe
 // this recipes.json no longer has. Such a factory is left out and reported in `skipped`, never
 // guessed; the state migration (#487) keeps its progress in handbookOrigin.unmapped.
-import { validateState } from './state.ts';
+import { safeKey, validateState } from './state.ts';
 import type {
   CalcRow,
   GuideStep,
@@ -449,6 +449,139 @@ export function migrateHandbookState(
   });
 }
 
+// The parts of a stored or imported handbook the conversion can read (#609). Every release
+// exported a whole plan.json, but a hand-made or damaged file could carry, say, only factories,
+// phases and storage, and handbookToPlan and migrateHandbookState read every field unchecked: a
+// store holding such a profile could not migrate it, so the server would not start and the
+// browser edition refused every transaction. Here a field the conversion reads that is missing
+// or of the wrong shape becomes empty, and an entry of the wrong shape (a factory, a factory's
+// stage, a delivery, an oil line, a step) is left out, so the rest still converts. Nothing of the
+// progress is lost that way: a tick or note for a factory or stage left out lands in
+// handbookOrigin.unmapped, like one for a factory the handbook lacks, and each store keeps the
+// record as it was in its pre-migration copy. `complete` says nothing had to be left out or
+// filled in; an import refuses a handbook that is not (validateTransfer), since the file is the
+// user's own copy. A whole handbook comes back equal to what went in.
+export function usableHandbook(raw: unknown): { handbook: Handbook; complete: boolean } {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+  const text = (value: unknown): value is string => typeof value === 'string';
+  const finite = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isFinite(value);
+  const optionalFinite = (value: unknown) => value === undefined || finite(value);
+  const rates = (value: unknown) => record(value) && Object.values(value).every(finite);
+  // A saved check, note or delivery key.
+  const key = safeKey;
+  const task = (value: unknown) =>
+    record(value) && key(value.id) && text(value.title) && text(value.body);
+  const handbook: Record<string, unknown> = record(raw) ? structuredClone(raw) : {};
+  // A required field: kept when `valid`, otherwise the empty `fallback`.
+  const field = (name: string, valid: (value: unknown) => boolean, fallback: unknown) => {
+    if (!valid(handbook[name])) handbook[name] = fallback;
+  };
+  // Filters a list in place, keeping the entries `keep` accepts.
+  const only = (list: unknown[], keep: (value: unknown) => boolean) => {
+    for (let i = list.length - 1; i >= 0; i--) if (!keep(list[i])) list.splice(i, 1);
+  };
+  // Filters a record's values in place.
+  const onlyValues = (values: Record<string, unknown>, keep: (value: unknown) => boolean) => {
+    for (const [name, value] of Object.entries(values)) if (!keep(value)) delete values[name];
+  };
+  field('version', value => text(value) && /^[\w.:-]{1,40}$/.test(value), 'unknown');
+  field('phases', record, {});
+  onlyValues(handbook.phases as Record<string, unknown>, Array.isArray);
+  for (const tasks of Object.values(handbook.phases as Record<string, unknown[]>))
+    only(tasks, task);
+  field('factories', Array.isArray, []);
+  const stage = (value: unknown) =>
+    record(value) &&
+    text(value.recipe) &&
+    text(value.machine) &&
+    finite(value.machines) &&
+    finite(value.output) &&
+    finite(value.peakMW) &&
+    rates(value.inputs) &&
+    optionalFinite(value.equivalent) &&
+    optionalFinite(value.lastClock) &&
+    optionalFinite(value.storage);
+  only(
+    handbook.factories as unknown[],
+    factory => record(factory) && text(factory.id) && text(factory.name),
+  );
+  for (const factory of handbook.factories as Record<string, unknown>[]) {
+    if (!record(factory.stages)) factory.stages = {};
+    onlyValues(factory.stages as Record<string, unknown>, stage);
+    if (factory.note !== undefined && !text(factory.note)) delete factory.note;
+    if (factory.page !== undefined && !finite(factory.page)) delete factory.page;
+  }
+  field('deliveries', Array.isArray, []);
+  only(
+    handbook.deliveries as unknown[],
+    delivery =>
+      record(delivery) &&
+      key(delivery.id) &&
+      text(delivery.phase) &&
+      text(delivery.name) &&
+      finite(delivery.target) &&
+      finite(delivery.rate) &&
+      // Written as a saved delivery count when none is saved (migrateHandbookState).
+      Number.isSafeInteger(delivery.initial) &&
+      (delivery.initial as number) >= 0 &&
+      (delivery.initial as number) <= 1000000000,
+  );
+  field('resources', record, {});
+  onlyValues(handbook.resources as Record<string, unknown>, rates);
+  field('capacities', record, {});
+  onlyValues(handbook.capacities as Record<string, unknown>, finite);
+  field('power', record, {});
+  onlyValues(handbook.power as Record<string, unknown>, finite);
+  field('plans', record, {});
+  onlyValues(handbook.plans as Record<string, unknown>, record);
+  for (const plan of Object.values(handbook.plans as Record<string, Record<string, unknown>>)) {
+    if (plan.oil !== undefined && !Array.isArray(plan.oil)) delete plan.oil;
+    if (Array.isArray(plan.oil))
+      only(
+        plan.oil,
+        line =>
+          record(line) &&
+          text(line.recipe) &&
+          text(line.machine) &&
+          finite(line.equivalent) &&
+          finite(line.machines) &&
+          finite(line.peakMW),
+      );
+    if (plan.manufacturingPeakGW !== undefined && !finite(plan.manufacturingPeakGW))
+      delete plan.manufacturingPeakGW;
+  }
+  // Optional parts: left out when of the wrong shape, their entries filtered like the rest.
+  if (handbook.knownChecks !== undefined && !record(handbook.knownChecks))
+    delete handbook.knownChecks;
+  if (record(handbook.knownChecks))
+    for (const [name, value] of Object.entries(handbook.knownChecks))
+      if (!key(name) || typeof value !== 'boolean') delete handbook.knownChecks[name];
+  if (handbook.storageTasks !== undefined && !Array.isArray(handbook.storageTasks))
+    delete handbook.storageTasks;
+  if (Array.isArray(handbook.storageTasks)) only(handbook.storageTasks, task);
+  if (handbook.completion !== undefined && !Array.isArray(handbook.completion))
+    delete handbook.completion;
+  if (Array.isArray(handbook.completion))
+    only(
+      handbook.completion,
+      line =>
+        record(line) &&
+        [line.id, line.name, line.recipe, line.machine].every(text) &&
+        [line.output, line.machines, line.lastClock].every(finite) &&
+        rates(line.inputs) &&
+        rates(line.byproducts),
+    );
+  if (handbook.sources !== undefined && !Array.isArray(handbook.sources)) delete handbook.sources;
+  if (Array.isArray(handbook.sources))
+    only(handbook.sources, source => record(source) && text(source.url));
+  return {
+    handbook: handbook as unknown as Handbook,
+    complete: JSON.stringify(handbook) === JSON.stringify(raw),
+  };
+}
+
 // An original profile migrated whole (#495): its own handbook, or the fallback (the server's
 // frozen copy of the handbook it was made with) when it carries none, transcribed with the
 // catalog's pure-node limits as the base budgets, so resources the handbook gave no capacity
@@ -463,7 +596,8 @@ export function migrateOriginalProfile<P extends StoredProfile>(
 ): P | MigratedProfile<P> {
   if (profile.kind !== 'original') return profile;
   const { handbook: own, state, ...rest } = profile;
-  const handbook = own || fallbackHandbook;
+  // Only what the conversion can read (#609); a whole handbook is used as it is.
+  const { handbook } = usableHandbook(own || fallbackHandbook);
   const conversion = handbookToPlan(handbook, recipes, pureLimits);
   return {
     ...rest,
@@ -471,6 +605,13 @@ export function migrateOriginalProfile<P extends StoredProfile>(
     plan: conversion.plan,
     state: migrateHandbookState(state, handbook, conversion),
   };
+}
+// What migrateOriginalProfile needs besides the handbook: recipes.json's recipes and the
+// catalog's pureLimits (the base budgets). Each edition loads them only when there is something
+// to migrate: the server from its files, the browser edition by fetching them.
+export interface MigrationData {
+  recipes: Recipe[];
+  pureLimits: Record<string, number>;
 }
 // A migrated original profile: the profile's other fields, as a calculated profile with no handbook.
 export type MigratedProfile<P extends StoredProfile> = Omit<P, 'handbook' | 'state'> & {

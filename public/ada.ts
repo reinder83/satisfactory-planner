@@ -68,6 +68,9 @@ export interface AdaFacts {
   backupDays: number | null;
   post: boolean;
   startPhase: string;
+  // The saved working phase, as a label, when the profile opened on an earlier phase that still
+  // has open checks (#570, app/opening-phase.ts); '' otherwise.
+  openedFrom: string;
   assumptions: number;
   // A calculated profile's build-so-far status (app/build-status.ts), or null: factories marked
   // running of all, the share of the elevator delivery rate flowing now (0-100), the step to
@@ -104,14 +107,16 @@ interface AdaRule {
   on?: string[];
   tone: 'calm' | 'warn' | 'praise';
   lead?: boolean;
-  when: (f: AdaFacts) => unknown;
-  text: (f: AdaFacts) => string;
+  when: (facts: AdaFacts) => unknown;
+  text: (facts: AdaFacts) => string;
 }
 
 // Small text helpers: "3 steps", "A, B, C and 2 more", and a whole-number percentage.
-const plural = (n: number, word: string) => n + ' ' + word + (n === 1 ? '' : 's');
-const names = (xs: string[], max = 3) =>
-  xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} and ${xs.length - max} more`;
+const plural = (count: number, word: string) => count + ' ' + word + (count === 1 ? '' : 's');
+const names = (items: string[], max = 3) =>
+  items.length <= max
+    ? items.join(', ')
+    : `${items.slice(0, max).join(', ')} and ${items.length - max} more`;
 const share = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 100);
 
 // Ordered most useful first: the panel opens on the first line that applies and
@@ -127,35 +132,37 @@ const RULES: AdaRule[] = [
     id: 'draft',
     on: ['resources'],
     tone: 'warn',
-    when: f => f.feasible === false,
-    text: f =>
-      `This profile is a planning draft, not a plan. ${f.reason || 'The numbers do not close.'} Optimism is not a listed resource. Create a new profile with the setting adjusted — this snapshot stays exactly as it is.`,
+    when: facts => facts.feasible === false,
+    text: facts =>
+      `This profile is a planning draft, not a plan. ${facts.reason || 'The numbers do not close.'} Optimism is not a listed resource. Create a new profile with the setting adjusted — this snapshot stays exactly as it is.`,
   },
   {
     id: 'short',
     on: ['resources'],
     tone: 'warn',
-    when: f => f.short?.length,
-    text: f =>
-      `${names(f.short)} ${f.short.length === 1 ? 'is' : 'are'} over the budget you entered. The nodes have declined to work harder. Lower a target, allow an alternate recipe, or raise the budget only if the map genuinely supports it.`,
+    when: facts => facts.short?.length,
+    text: facts =>
+      `${names(facts.short)} ${facts.short.length === 1 ? 'is' : 'are'} over the budget you entered. The nodes have declined to work harder. Lower a target, allow an alternate recipe, or raise the budget only if the map genuinely supports it.`,
   },
   {
     id: 'power',
     on: ['resources'],
     tone: 'warn',
-    when: f => f.power?.tight,
+    when: facts => facts.power?.tight,
     // Only after when() found the power figures. The draw is set against everything the plan
     // counts on, so the figures add up to the headroom.
-    text: f => {
-      const p = f.power!;
-      const spare = `the ${p.spare} you listed as spare${p.augmented ? ` (${p.augmented} with the augmenters)` : ''}`;
-      const against = p.generation ? `${p.generation} of planned generation and ${spare}` : spare;
-      const advice = p.biomass
-        ? `${f.phaseLabel} plans no generators: burn biomass, or bring existing generation.`
-        : p.generation
+    text: facts => {
+      const power = facts.power!;
+      const spare = `the ${power.spare} you listed as spare${power.augmented ? ` (${power.augmented} with the augmenters)` : ''}`;
+      const against = power.generation
+        ? `${power.generation} of planned generation and ${spare}`
+        : spare;
+      const advice = power.biomass
+        ? `${facts.phaseLabel} plans no generators: burn biomass, or bring existing generation.`
+        : power.generation
           ? 'Build generation beyond what the plan lists.'
           : 'Build the generation first.';
-      return `${p.headroom} of whole-building power headroom is still unaccounted for: a ${p.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
+      return `${power.headroom} of whole-building power headroom is still unaccounted for: a ${power.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
     },
   },
   // `lead` rules describe a state that makes everything else irrelevant and rank first.
@@ -163,7 +170,7 @@ const RULES: AdaRule[] = [
     id: 'no-save',
     lead: true,
     tone: 'calm',
-    when: f => f.kind === 'none',
+    when: facts => facts.kind === 'none',
     text: () =>
       `No save is open, so there is nothing for me to be disappointed about. Create one and I will find something.`,
   },
@@ -172,130 +179,134 @@ const RULES: AdaRule[] = [
     lead: true,
     on: ['plan'],
     tone: 'calm',
-    when: f => f.kind !== 'none' && !f.steps?.total,
-    text: f =>
-      `Every step of ${f.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`,
+    when: facts => facts.kind !== 'none' && !facts.steps?.total,
+    text: facts =>
+      `Every step of ${facts.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`,
   },
-  // Phase progress on the build plan, from nothing ticked to everything ticked. f.steps counts
-  // the phase's steps and f.next names the first unticked one.
+  // Phase progress on the build plan, from nothing ticked to everything ticked. facts.steps counts
+  // the phase's steps and facts.next names the first unticked one.
   {
     id: 'start',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.steps?.total && !f.steps.done,
-    text: f =>
-      `Zero of ${f.steps.total} steps ticked for ${f.phaseLabel}. Pristine. Untouched. Almost ceremonial. Begin with “${f.next}” and the number stops being zero.`,
+    when: facts => facts.steps?.total && !facts.steps.done,
+    text: facts =>
+      `Zero of ${facts.steps.total} steps ticked for ${facts.phaseLabel}. Pristine. Untouched. Almost ceremonial. Begin with “${facts.next}” and the number stops being zero.`,
   },
   {
     id: 'flawless',
     on: ['plan'],
     tone: 'praise',
-    when: f =>
-      f.steps?.total &&
-      f.steps.done === f.steps.total &&
-      f.factories?.total &&
-      f.factories.done === f.factories.total &&
-      (!f.storage?.total || f.storage.done === f.storage.total),
-    text: f =>
-      `Every counter for ${f.phaseLabel} reads maximum. I checked twice. I am, reluctantly, impressed.`,
+    when: facts =>
+      facts.steps?.total &&
+      facts.steps.done === facts.steps.total &&
+      facts.factories?.total &&
+      facts.factories.done === facts.factories.total &&
+      (!facts.storage?.total || facts.storage.done === facts.storage.total),
+    text: facts =>
+      `Every counter for ${facts.phaseLabel} reads maximum. I checked twice. I am, reluctantly, impressed.`,
   },
   {
     id: 'complete',
     on: ['plan'],
     tone: 'praise',
-    when: f => f.steps?.total && f.steps.done === f.steps.total,
-    text: f =>
-      `All ${f.steps.total} steps of ${f.phaseLabel} are ticked. Well done, in the corporate sense. Move the phase selector at the top once the delivery is in.`,
+    when: facts => facts.steps?.total && facts.steps.done === facts.steps.total,
+    text: facts =>
+      `All ${facts.steps.total} steps of ${facts.phaseLabel} are ticked. Well done, in the corporate sense. Move the phase selector at the top once the delivery is in.`,
   },
   {
     id: 'nearly',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.next && f.steps?.total && share(f.steps.done, f.steps.total) >= 80,
-    text: f =>
-      `${share(f.steps.done, f.steps.total)}% of ${f.phaseLabel}, and only “${f.next}” between you and the next one. This is traditionally where pioneers begin an unrelated megabase.`,
+    when: facts =>
+      facts.next && facts.steps?.total && share(facts.steps.done, facts.steps.total) >= 80,
+    text: facts =>
+      `${share(facts.steps.done, facts.steps.total)}% of ${facts.phaseLabel}, and only “${facts.next}” between you and the next one. This is traditionally where pioneers begin an unrelated megabase.`,
   },
   {
     id: 'next',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.next && f.steps?.done,
-    text: f =>
-      `${f.steps.done} of ${f.steps.total} steps done. Next on the list: “${f.next}”. It will not build itself, though I admire the assumption.`,
+    when: facts => facts.next && facts.steps?.done,
+    text: facts =>
+      `${facts.steps.done} of ${facts.steps.total} steps done. Next on the list: “${facts.next}”. It will not build itself, though I admire the assumption.`,
   },
   {
     id: 'retire',
     on: ['plan'],
     tone: 'warn',
-    when: f => f.retireOpen > 0,
-    text: f =>
-      `${plural(f.retireOpen, 'retirement step')} still open. This phase stopped budgeting for those lines; your power grid did not. Dismantle them and reclaim the material.`,
+    when: facts => facts.retireOpen > 0,
+    text: facts =>
+      `${plural(facts.retireOpen, 'retirement step')} still open. This phase stopped budgeting for those lines; your power grid did not. Dismantle them and reclaim the material.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {
     id: 'factories-none',
     on: ['factories'],
     tone: 'calm',
-    when: f => f.factories?.total && !f.factories.done,
-    text: f =>
-      `${f.factories.total} factory targets for ${f.phaseLabel}, none marked running. I shall assume they are shy. Tick them as they come online — the milestone cost guidance reads those ticks.`,
+    when: facts => facts.factories?.total && !facts.factories.done,
+    text: facts =>
+      `${facts.factories.total} factory targets for ${facts.phaseLabel}, none marked running. I shall assume they are shy. Tick them as they come online — the milestone cost guidance reads those ticks.`,
   },
   {
     id: 'factories-part',
     on: ['factories'],
     tone: 'calm',
-    when: f => f.factories?.total && f.factories.done && f.factories.done < f.factories.total,
-    text: f =>
-      `${f.factories.done} of ${f.factories.total} factory targets marked running. The other ${f.factories.total - f.factories.done} remain, technically, a diagram.`,
+    when: facts =>
+      facts.factories?.total &&
+      facts.factories.done &&
+      facts.factories.done < facts.factories.total,
+    text: facts =>
+      `${facts.factories.done} of ${facts.factories.total} factory targets marked running. The other ${facts.factories.total - facts.factories.done} remain, technically, a diagram.`,
   },
-  // Build-so-far (#66): what the factories marked running actually deliver, from f.build.
+  // Build-so-far (#66): what the factories marked running actually deliver, from facts.build.
   {
     id: 'build-waiting',
     on: ['plan', 'factories'],
     tone: 'warn',
-    when: f => f.build?.waiting.length,
-    text: f =>
-      `${names(f.build!.waiting)} ${f.build!.waiting.length === 1 ? 'is' : 'are'} marked running but short of ${names(f.build!.shortOf)}. A machine with nothing to process is a very loud sculpture.${f.build!.next ? ` Build ${f.build!.next} next.` : ''}`,
+    when: facts => facts.build?.waiting.length,
+    text: facts =>
+      `${names(facts.build!.waiting)} ${facts.build!.waiting.length === 1 ? 'is' : 'are'} marked running but short of ${names(facts.build!.shortOf)}. A machine with nothing to process is a very loud sculpture.${facts.build!.next ? ` Build ${facts.build!.next} next.` : ''}`,
   },
   {
     id: 'build-dry',
     on: ['plan', 'factories'],
     tone: 'calm',
-    when: f => f.build?.built && !f.build.share && f.build.next,
-    text: f =>
-      `${f.build!.built} ${f.build!.built === 1 ? 'factory' : 'factories'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${f.build!.next}.`,
+    when: facts => facts.build?.built && !facts.build.share && facts.build.next,
+    text: facts =>
+      `${facts.build!.built} ${facts.build!.built === 1 ? 'factory' : 'factories'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
   },
   {
     id: 'build-next',
     on: ['plan', 'factories'],
     tone: 'calm',
-    when: f => f.build?.next && f.build.nextGain > 0,
-    text: f =>
-      `${f.build!.share}% of ${f.phaseLabel}'s elevator delivery is flowing. Build ${f.build!.next} next: on its own it adds ${f.build!.nextGain}%. I checked every other option, so you do not have to.`,
+    when: facts => facts.build?.next && facts.build.nextGain > 0,
+    text: facts =>
+      `${facts.build!.share}% of ${facts.phaseLabel}'s elevator delivery is flowing. Build ${facts.build!.next} next: on its own it adds ${facts.build!.nextGain}%. I checked every other option, so you do not have to.`,
   },
-  // Hard-drive payoff (#204): the best alternate of a stored ranking, from f.payoff.
+  // Hard-drive payoff (#204): the best alternate of a stored ranking, from facts.payoff.
   {
     id: 'payoff-best',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.payoff,
-    text: f =>
-      `Allowing ${f.payoff!.name} would mean ${f.payoff!.gain} in ${f.phaseLabel}. The hard-drive payoff table on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
+    when: facts => facts.payoff,
+    text: facts =>
+      `Allowing ${facts.payoff!.name} would mean ${facts.payoff!.gain} in ${facts.phaseLabel}. The hard-drive payoff table on the build plan ranks the rest; spend your hard drives there, not on hunches.`,
   },
   {
     id: 'storage-search-miss',
     on: ['storage'],
     tone: 'calm',
-    when: f => f.view === 'storage' && f.storageMiss,
-    text: f =>
-      `No container on any floor holds “${f.storageMiss}”. Either it has no address yet or the sign says something else. Edit layout gives it a container.`,
+    when: facts => facts.view === 'storage' && facts.storageMiss,
+    text: facts =>
+      `No container on any floor holds “${facts.storageMiss}”. Either it has no address yet or the sign says something else. Edit layout gives it a container.`,
   },
   // The built ground floor's moves (SP-25, #260), the same ones its notice and storage step name.
   {
     id: 'storage-ground-moves',
     on: ['storage'],
     tone: 'calm',
-    when: f => f.groundMoves,
+    when: facts => facts.groundMoves,
     text: () =>
       `The ground floor is built and its moves are still open: Gas Filters G08 → H02, Nobelisks H02 → H08, Medicinal Inhalers into G08. Press Done on the ground floor once they are moved. An address is only useful while it is true.`,
   },
@@ -303,65 +314,66 @@ const RULES: AdaRule[] = [
     id: 'storage',
     on: ['storage'],
     tone: 'calm',
-    when: f => f.storage?.total && f.storage.done < f.storage.total,
-    text: f =>
-      `${f.storage.done} of ${f.storage.total} container positions verified. An unverified container is a pile of items with aspirations. Tick built, labelled, connected and verified in the storage room.`,
+    when: facts => facts.storage?.total && facts.storage.done < facts.storage.total,
+    text: facts =>
+      `${facts.storage.done} of ${facts.storage.total} container positions verified. An unverified container is a pile of items with aspirations. Tick built, labelled, connected and verified in the storage room.`,
   },
   // A plan guide's checklists (#470): each on the page that holds it, while any of it is open.
   {
     id: 'guide-storage-tasks',
     on: ['storage'],
     tone: 'calm',
-    when: f => f.guide && f.guide.storageTasks.done < f.guide.storageTasks.total,
-    text: f =>
-      `${plural(f.guide!.storageTasks.total - f.guide!.storageTasks.done, 'storage build step')} still open in the checklist under the room. The room does not build itself, however long it is stared at.`,
+    when: facts => facts.guide && facts.guide.storageTasks.done < facts.guide.storageTasks.total,
+    text: facts =>
+      `${plural(facts.guide!.storageTasks.total - facts.guide!.storageTasks.done, 'storage build step')} still open in the checklist under the room. The room does not build itself, however long it is stared at.`,
   },
   {
     id: 'guide-power',
     on: ['resources'],
     tone: 'calm',
-    when: f => f.guide && f.guide.power.done < f.guide.power.total,
-    text: f =>
-      `${f.guide!.power.done} of ${f.guide!.power.total} power commissioning steps ticked. A block that is built but not commissioned is scenery with a fuel bill. Tick each one here as it comes online.`,
+    when: facts => facts.guide && facts.guide.power.done < facts.guide.power.total,
+    text: facts =>
+      `${facts.guide!.power.done} of ${facts.guide!.power.total} power commissioning steps ticked. A block that is built but not commissioned is scenery with a fuel bill. Tick each one here as it comes online.`,
   },
   {
     id: 'guide-completion',
     on: ['factories'],
     tone: 'calm',
-    when: f => f.post && f.guide && f.guide.completion.done < f.guide.completion.total,
-    text: f =>
-      `${plural(f.guide!.completion.total - f.guide!.completion.done, 'completion module')} still to build, listed under the production lines. Their inputs come on top of the main budget, so allocate them first.`,
+    when: facts =>
+      facts.post && facts.guide && facts.guide.completion.done < facts.guide.completion.total,
+    text: facts =>
+      `${plural(facts.guide!.completion.total - facts.guide!.completion.done, 'completion module')} still to build, listed under the production lines. Their inputs come on top of the main budget, so allocate them first.`,
   },
   {
     id: 'deliveries',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.deliveries?.open > 0,
-    text: f =>
-      `${plural(f.deliveries.open, 'elevator part')} still short of target. The Space Elevator will wait. Patiently. Indefinitely. Silently. Judging.`,
+    when: facts => facts.deliveries?.open > 0,
+    text: facts =>
+      `${plural(facts.deliveries.open, 'elevator part')} still short of target. The Space Elevator will wait. Patiently. Indefinitely. Silently. Judging.`,
   },
   {
     id: 'unplaced',
     on: ['plan', 'notes'],
     tone: 'calm',
-    when: f => f.unplaced > 0,
-    text: f =>
-      `${plural(f.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
+    when: facts => facts.unplaced > 0,
+    text: facts =>
+      `${plural(facts.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
   },
   {
     id: 'notes',
     on: ['plan', 'notes'],
     tone: 'calm',
-    when: f => f.steps?.done && !f.hasPhaseNote,
-    text: f =>
-      `No notes saved for ${f.phaseLabel}. You will certainly remember which node that train goes to. Pioneers always do. They do not.`,
+    when: facts => facts.steps?.done && !facts.hasPhaseNote,
+    text: facts =>
+      `No notes saved for ${facts.phaseLabel}. You will certainly remember which node that train goes to. Pioneers always do. They do not.`,
   },
   // Browser edition only: full-export reminders from workspace.lastBackup.
   {
     id: 'backup-never',
     on: ['backup'],
     tone: 'warn',
-    when: f => f.browserMode && f.backupDays === null,
+    when: facts => facts.browserMode && facts.backupDays === null,
     text: () =>
       `This browser has never exported a full backup. Clearing site data would make our relationship very short. Backup → Export all saves.`,
   },
@@ -369,25 +381,25 @@ const RULES: AdaRule[] = [
     id: 'backup-old',
     on: ['backup'],
     tone: 'calm',
-    when: f => f.browserMode && (f.backupDays ?? 0) >= 14,
+    when: facts => facts.browserMode && (facts.backupDays ?? 0) >= 14,
     // Only after when() found a backup age.
-    text: f =>
-      `Last full backup: ${plural(f.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
+    text: facts =>
+      `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
   // Page-specific hints: the profile list, factory groups, the wizard and Resources.
   {
     id: 'one-profile',
     on: ['profiles'],
     tone: 'calm',
-    when: f => f.profiles === 1 && f.kind !== 'none',
-    text: f =>
-      `One profile in “${f.save}”. No control group. Duplicate it before you rewrite half the build plan — Saves & profiles → Duplicate.`,
+    when: facts => facts.profiles === 1 && facts.kind !== 'none',
+    text: facts =>
+      `One profile in “${facts.save}”. No control group. Duplicate it before you rewrite half the build plan — Saves & profiles → Duplicate.`,
   },
   {
     id: 'groups',
     on: ['factories'],
     tone: 'calm',
-    when: f => f.view === 'factories' && !f.groups,
+    when: facts => facts.view === 'factories' && !facts.groups,
     text: () =>
       `No factory groups, so every factory officially lives in the same place: everywhere. Group them by build site and the build order becomes readable.`,
   },
@@ -395,7 +407,7 @@ const RULES: AdaRule[] = [
     id: 'wizard',
     on: ['wizard'],
     tone: 'calm',
-    when: f => f.view === 'wizard',
+    when: facts => facts.view === 'wizard',
     text: () =>
       `Enter your real spare power and your real budgets. The calculator cannot detect flattery. It will believe every number you give it.`,
   },
@@ -403,23 +415,23 @@ const RULES: AdaRule[] = [
     id: 'guided',
     on: ['wizard'],
     tone: 'calm',
-    when: f => f.guided && f.guidedStep <= f.guidedTotal,
-    text: f =>
-      `Question ${f.guidedStep} of ${f.guidedTotal}. The settings you are not being asked about keep their defaults, which is broadly the point of a default. All settings is one click away when you disagree.`,
+    when: facts => facts.guided && facts.guidedStep <= facts.guidedTotal,
+    text: facts =>
+      `Question ${facts.guidedStep} of ${facts.guidedTotal}. The settings you are not being asked about keep their defaults, which is broadly the point of a default. All settings is one click away when you disagree.`,
   },
   {
     id: 'guided-supply',
     on: ['wizard'],
     tone: 'calm',
-    when: f => f.supplyDeclared > 0,
-    text: f =>
-      `${plural(f.supplyDeclared, 'line')} declared as already running. The plan will build the remainder and skip the chain behind them. It believes your rates exactly as literally as it believes your budgets.`,
+    when: facts => facts.supplyDeclared > 0,
+    text: facts =>
+      `${plural(facts.supplyDeclared, 'line')} declared as already running. The plan will build the remainder and skip the chain behind them. It believes your rates exactly as literally as it believes your budgets.`,
   },
   {
     id: 'guided-tutorial',
     on: ['wizard'],
     tone: 'calm',
-    when: f => f.tutorialDone,
+    when: facts => facts.tutorialDone,
     text: () =>
       `The HUB tutorial is recorded as finished, so its steps start ticked. They are ticked, not deleted — untick one and it is back at the top of the list.`,
   },
@@ -427,7 +439,7 @@ const RULES: AdaRule[] = [
     id: 'resources',
     on: ['resources'],
     tone: 'calm',
-    when: f => f.view === 'resources',
+    when: facts => facts.view === 'resources',
     text: () =>
       `Existing power means spare capacity, not everything you have installed. Overstate it and the plan fails politely, later, at scale.`,
   },
@@ -436,7 +448,7 @@ const RULES: AdaRule[] = [
     id: 'handbook',
     on: ['profiles'],
     tone: 'calm',
-    when: f => f.kind === 'original',
+    when: facts => facts.kind === 'original',
     text: () =>
       `This is the preserved handbook profile; its targets are frozen on purpose. If you want to experiment, duplicate it and be reckless over there.`,
   },
@@ -444,7 +456,7 @@ const RULES: AdaRule[] = [
     id: 'editing',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.planEditing,
+    when: facts => facts.planEditing,
     text: () =>
       `Step editing is on. Rewrite the wording freely — underneath your prose a step keeps its identity and its checkmark.`,
   },
@@ -452,81 +464,89 @@ const RULES: AdaRule[] = [
     id: 'custom',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.customTasks > 0,
-    text: f =>
-      `${plural(f.customTasks, 'personal task')} added to this phase. Adding tasks is not the same as completing them, but the enthusiasm is noted.`,
+    when: facts => facts.customTasks > 0,
+    text: facts =>
+      `${plural(facts.customTasks, 'personal task')} added to this phase. Adding tasks is not the same as completing them, but the enthusiasm is noted.`,
   },
   {
     id: 'removed',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.removedSteps > 0,
-    text: f =>
-      `${plural(f.removedSteps, 'step')} removed from this phase. Not deleted — merely ignored, like most safety notices. Restore them under “Removed steps” while editing.`,
+    when: facts => facts.removedSteps > 0,
+    text: facts =>
+      `${plural(facts.removedSteps, 'step')} removed from this phase. Not deleted — merely ignored, like most safety notices. Restore them under “Removed steps” while editing.`,
   },
   {
     id: 'hours',
     on: ['plan', 'resources'],
     tone: 'calm',
-    when: f => f.hours,
-    text: f =>
-      `Steady-state delivery time for ${f.phaseLabel}: ${f.hours}. Construction time is extra, and is historically the larger of the two.`,
+    when: facts => facts.hours,
+    text: facts =>
+      `Steady-state delivery time for ${facts.phaseLabel}: ${facts.hours}. Construction time is extra, and is historically the larger of the two.`,
   },
   {
     id: 'post',
     on: ['plan'],
     tone: 'calm',
-    when: f => f.post,
+    when: facts => facts.post,
     text: () =>
       `Project Assembly is delivered and you are still here, building. FICSIT files that under “retention”. Protect the storage allowances first and sink what is left over.`,
+  },
+  {
+    id: 'opened-earlier',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => facts.openedFrom,
+    text: facts =>
+      `You are working on ${facts.openedFrom}, but ${facts.phaseLabel} still has open steps, so the build plan opens here. Tick them off, or pick ${facts.openedFrom} in the phase track to go straight back. FICSIT prefers its paperwork in order.`,
   },
   {
     id: 'start-phase',
     on: ['profiles'],
     tone: 'calm',
-    when: f => f.startPhase && f.startPhase !== '1' && f.kind === 'calculated',
-    text: f =>
-      `This profile begins at Phase ${f.startPhase}, so the earlier phases are not offered. You have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`,
+    when: facts => facts.startPhase && facts.startPhase !== '1' && facts.kind === 'calculated',
+    text: facts =>
+      `This profile begins at Phase ${facts.startPhase}, so the earlier phases are not offered. You have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`,
   },
   // Praise and follow-ups that apply once a counter is complete or a feature is in use.
   {
     id: 'deliveries-done',
     on: ['plan'],
     tone: 'praise',
-    when: f => f.deliveries?.total && !f.deliveries.open,
-    text: f =>
-      `Every elevator part for ${f.phaseLabel} is delivered. The Space Elevator has stopped waiting. I did not know it could.`,
+    when: facts => facts.deliveries?.total && !facts.deliveries.open,
+    text: facts =>
+      `Every elevator part for ${facts.phaseLabel} is delivered. The Space Elevator has stopped waiting. I did not know it could.`,
   },
   {
     id: 'storage-done',
     on: ['storage'],
     tone: 'praise',
-    when: f => f.storage?.total && f.storage.done === f.storage.total,
-    text: f =>
-      `All ${f.storage.total} container positions are verified. A labelled, connected, verified storage hall. Somewhere, an efficiency auditor is briefly happy.`,
+    when: facts => facts.storage?.total && facts.storage.done === facts.storage.total,
+    text: facts =>
+      `All ${facts.storage.total} container positions are verified. A labelled, connected, verified storage hall. Somewhere, an efficiency auditor is briefly happy.`,
   },
   {
     id: 'groups-some',
     on: ['factories'],
     tone: 'calm',
-    when: f => f.groups > 0,
-    text: f =>
-      `${plural(f.groups, 'factory group')} on record. Open Build order on a group to see which supplier has to exist before the rest of it does anything at all.`,
+    when: facts => facts.groups > 0,
+    text: facts =>
+      `${plural(facts.groups, 'factory group')} on record. Open Build order on a group to see which supplier has to exist before the rest of it does anything at all.`,
   },
   {
     id: 'assumptions',
     on: ['backup'],
     tone: 'calm',
-    when: f => f.assumptions > 0,
-    text: f =>
-      `This profile carries ${plural(f.assumptions, 'recorded assumption')}, listed under Backup. Nobody reads the assumptions. That is how assumptions get their reputation.`,
+    when: facts => facts.assumptions > 0,
+    text: facts =>
+      `This profile carries ${plural(facts.assumptions, 'recorded assumption')}, listed under Backup. Nobody reads the assumptions. That is how assumptions get their reputation.`,
   },
   // Pages that had nothing of their own to say.
   {
     id: 'storage-page',
     on: ['storage'],
     tone: 'calm',
-    when: f => f.kind !== 'none',
+    when: facts => facts.kind !== 'none',
     text: () =>
       `Every container gets a sign and an address. Pioneers who skip the signs later file reports titled “where is the Quickwire”. I have read all of them.`,
   },
@@ -534,30 +554,30 @@ const RULES: AdaRule[] = [
     id: 'notes-page',
     on: ['notes'],
     tone: 'calm',
-    when: f => f.kind !== 'none' && f.hasPhaseNote,
-    text: f =>
-      `${f.phaseLabel} has notes on record. Written down, a train route survives the pioneer who planned it. I have seen what happens to the unwritten ones.`,
+    when: facts => facts.kind !== 'none' && facts.hasPhaseNote,
+    text: facts =>
+      `${facts.phaseLabel} has notes on record. Written down, a train route survives the pioneer who planned it. I have seen what happens to the unwritten ones.`,
   },
   {
     id: 'account',
     on: ['account'],
     tone: 'calm',
     // The browser edition has no accounts.
-    when: f => !f.browserMode,
+    when: facts => !facts.browserMode,
     text: () =>
       `I cannot see your password, pioneer. I can only observe that, statistically, it contains the word “factory”.`,
   },
 ];
 
 // Always available, so ADA has something to say about a spotless save too.
-const IDLE: ((f: AdaFacts) => string)[] = [
-  f => `${f.phaseLabel}. Your factory is not a mess. It is an emergent layout.`,
+const IDLE: ((facts: AdaFacts) => string)[] = [
+  facts => `${facts.phaseLabel}. Your factory is not a mess. It is an emergent layout.`,
   () => `A belt running at exactly 100% has no margin. Neither, I observe, does its pioneer.`,
   () => `I am contractually obliged to encourage you. Consider yourself encouraged.`,
   () => `Efficiency is its own reward. It is also the only reward in the budget.`,
   () => `Nothing is currently on fire. Statistically, this cannot last.`,
-  f =>
-    `Spaghetti is a valid layout, ${f.profile}. It is simply one that nobody can maintain, including you.`,
+  facts =>
+    `Spaghetti is a valid layout, ${facts.profile}. It is simply one that nobody can maintain, including you.`,
   () =>
     `I am not authorised to tell you which alternate recipe is best. I am authorised to watch you pick the other one.`,
   () => `A factory is never finished, pioneer. It is merely between expansions.`,
@@ -566,18 +586,20 @@ const IDLE: ((f: AdaFacts) => string)[] = [
     `Staring at the resource table does not raise the node purities. I have tested this at length.`,
   () =>
     `Productivity is measured in parts per minute. Not in how many times you realign the same foundation.`,
-  f =>
-    `Based on my current data, ${f.profile} is behind schedule. I do not have a schedule. I simply find the statement holds.`,
+  facts =>
+    `Based on my current data, ${facts.profile} is behind schedule. I do not have a schedule. I simply find the statement holds.`,
   () => `Remember: a Merger is just a Splitter that has made different life choices.`,
   () =>
     `FICSIT does not recognise the term “overtime”. It recognises the term “the rest of the shift”.`,
-  f => `I have reviewed ${f.save} in full. I have notes. I have been asked to keep them to myself.`,
+  facts =>
+    `I have reviewed ${facts.save} in full. I have notes. I have been asked to keep them to myself.`,
   () => `The conveyor lift goes up. The items go up. Your expectations should stay where they are.`,
   () =>
     `Every foundation you place is a promise to the future. Most of those promises are slightly off-grid.`,
   () =>
     `The local wildlife is not hostile, pioneer. It is simply opposed to industry, on principle, and with teeth.`,
-  f => `${f.phaseLabel} is going well. I say this every phase. It has been true at least once.`,
+  facts =>
+    `${facts.phaseLabel} is going well. I say this every phase. It has been true at least once.`,
   () =>
     `If a machine is idle, it is either waiting for input or reflecting on its career. Only one of those is your fault.`,
 ];
@@ -597,18 +619,18 @@ const FAULTS = [
 ];
 
 // After a full lap of the remarks, ADA notices you are still clicking.
-const ENCORES: ((f: AdaFacts) => string)[] = [
+const ENCORES: ((facts: AdaFacts) => string)[] = [
   () =>
     `That is everything I hold on this save. The list refreshes when the factory does, not when you press the button.`,
   () =>
     `You have now heard every remark twice. FICSIT records this as engagement. I record it as stalling.`,
-  f =>
-    `I have nothing new, ${f.profile}. You have a build plan. One of us is going to have to move.`,
+  facts =>
+    `I have nothing new, ${facts.profile}. You have a build plan. One of us is going to have to move.`,
   () =>
     `Lap four. I am beginning to suspect you are here for the company. FICSIT has no policy on that. Yet.`,
   () =>
     `My remarks are not a slot machine, pioneer. The jackpot is a finished phase, and it is on the other page.`,
-  f => `Still here. So is ${f.phaseLabel}. Only one of you is getting any closer to done.`,
+  facts => `Still here. So is ${facts.phaseLabel}. Only one of you is getting any closer to done.`,
 ];
 
 // Nothing to plan at all outranks a problem; a problem outranks the page you
@@ -617,12 +639,13 @@ const ENCORES: ((f: AdaFacts) => string)[] = [
 // a rule for another page 3.
 const rank = (rule: AdaRule, view: string) =>
   rule.lead ? -1 : rule.tone === 'warn' ? 0 : !rule.on ? 2 : rule.on.includes(view) ? 1 : 3;
-// Wraps n around the list (negative n too), so encores and faults cycle rather than run out.
+// Wraps index around the list (negative index too), so encores and faults cycle rather than run out.
 // Both lists are fixed and not empty, so the pick always exists.
-const pick = <T>(list: T[], n: number): T => list[((n % list.length) + list.length) % list.length]!;
-const safe = (fn: (f: AdaFacts) => string, facts: AdaFacts) => {
+const pick = <T>(list: T[], index: number): T =>
+  list[((index % list.length) + list.length) % list.length]!;
+const safe = (line: (facts: AdaFacts) => string, facts: AdaFacts) => {
   try {
-    return fn(facts);
+    return line(facts);
   } catch {
     return '';
   }
@@ -639,7 +662,9 @@ const safe = (fn: (f: AdaFacts) => string, facts: AdaFacts) => {
 export function adaRemarks(given: Partial<AdaFacts> = {}): AdaLine[] {
   const facts = given as AdaFacts;
   const out: AdaLine[] = [];
-  for (const rule of [...RULES].sort((a, b) => rank(a, facts.view) - rank(b, facts.view))) {
+  for (const rule of [...RULES].sort(
+    (first, second) => rank(first, facts.view) - rank(second, facts.view),
+  )) {
     try {
       if (rule.when(facts)) out.push({ id: rule.id, tone: rule.tone, text: rule.text(facts) });
     } catch {}

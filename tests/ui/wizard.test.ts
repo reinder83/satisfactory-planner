@@ -566,7 +566,7 @@ test('the goals step and what Review says about each phase', () => {
   });
   noMarkup();
   assert.doesNotMatch(main(), /Earlier phase shortfall/, 'a phase behind the start');
-  assert.ok(main().includes('Phase 5: ' + evil), 'a phase it plans');
+  assert.ok(main().includes('Phase 5 — budget exceeded: ' + evil), 'a phase it plans');
   assert.match(main(), /Raise the short budget/, 'with its options');
 });
 

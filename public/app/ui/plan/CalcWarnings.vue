@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { calcStage, calculated, phase } from '../../session.ts';
-import { draftFixes, headroomAdvice } from '../../views/calculated.ts';
+import { draftFixes, draftHeading, headroomAdvice } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 
@@ -17,6 +17,7 @@ const notices = computed(() =>
     if (!stageResult) return { draft: null, headroom: '', advice: '' };
     return {
       draft: !stageResult.feasible && {
+        heading: draftHeading(stageResult),
         reason: stageResult.reason,
         fixes: draftFixes(stageResult, calculated?.settings),
       },
@@ -32,7 +33,7 @@ const notices = computed(() =>
 
 <template>
   <div v-if="notices.draft" class="notice warn">
-    <b>Planning draft — resource budget exceeded or recipe combination unavailable.</b>
+    <b>{{ notices.draft.heading }}</b>
     {{ notices.draft.reason
     }}<template v-if="notices.draft.fixes.length"
       ><p><b>Options</b></p>

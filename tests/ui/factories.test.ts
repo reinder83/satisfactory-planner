@@ -1025,7 +1025,10 @@ test('a handbook dialog says output and storage under its title instead of in ti
   openFactory('iron-ingot');
   noTiles();
   assert.equal(summary(), `${num(5850)}/min · storage${noBreakSpace}${num(10)}/min`);
-  assert.match(card.querySelector('.output')!.textContent!, new RegExp(num(5850)));
+  // Escaped: on nl-NL the thousands separator is a dot, a regex wildcard (#576).
+  const rate = new RegExp(num(5850).replace(/[.,]/g, '\\$&'));
+  assert.match(card.querySelector('.output')!.textContent!, rate);
+  assert.doesNotMatch(num(5850).replace(/[.,]/, 'X'), rate, 'a wrong separator does not pass');
   assert.match(card.textContent!, /storage 10\/min/, 'the card says the same');
   assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Handbook page 54');
   // The recipe badge stays, and the flow follows it; the handbook note comes after the flow.
@@ -1770,9 +1773,12 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
       assert.ok(row.classList.contains('rail-row'), `${where}: only rows in the grid`);
       const kids = [...row.children];
       assert.equal(kids.length, 4, `${where}: ${row.textContent} has four cells`);
-      // An icon or an empty frame, or the power grid's blank cell: it takes no item (#560).
+      // An icon or an empty frame, or the power grid's blank, icon-wide cell: it takes no item
+      // (#560, #599).
       const blank =
-        kids[0]!.tagName === 'SPAN' && !kids[0]!.className && !kids[0]!.childNodes.length;
+        kids[0]!.tagName === 'SPAN' &&
+        kids[0]!.className === 'rail-noframe' &&
+        !kids[0]!.childNodes.length;
       assert.ok(
         /\b(item-icon|rail-noicon)\b/.test(kids[0]!.className) ||
           (blank && /Power grid/.test(row.textContent!)),
@@ -2199,7 +2205,7 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
     );
     assert.ok(line, item);
     assert.ok(
-      line.textContent.startsWith(`${num(delivery.rate)} of ${num(delivery.rate)} / min now`),
+      line.textContent.startsWith(`${num(delivery.rate)} of ${num(delivery.rate)}/min now`),
       item,
     );
   }

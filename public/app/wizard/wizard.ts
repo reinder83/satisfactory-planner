@@ -88,12 +88,12 @@ interface CreatedProfile {
 // Copy the carry panel's choices into wizard.carryFrom / wizard.carry. Does
 // nothing when the panel is not on screen. Also called by the create submit.
 export function readCarry(form: HTMLFormElement | null, data?: FormData) {
-  const w = draft();
+  const wizardDraft = draft();
   if (!form?.querySelector('.carry-list')) return;
-  const f = data || new FormData(form),
-    on = new Set(f.getAll('carry').map(String));
-  w.carryFrom = (f.get('carryFrom') as string | null) || null;
-  w.carry = Object.fromEntries(carryOptions.map(([key]) => [key, on.has(key)]));
+  const formData = data || new FormData(form),
+    ticked = new Set(formData.getAll('carry').map(String));
+  wizardDraft.carryFrom = (formData.get('carryFrom') as string | null) || null;
+  wizardDraft.carry = Object.fromEntries(carryOptions.map(([key]) => [key, ticked.has(key)]));
 }
 
 // Open a new draft and show it: saveId null creates a new save, otherwise the
@@ -236,8 +236,8 @@ export function noteWizardEdit() {
 // Nothing has been saved yet, so it only asks when something was entered (the owner's choice
 // in #58), in the in-app confirmation; an untouched draft goes without a question, at once.
 export function cancelWizard() {
-  const w = draft();
-  if (!edited.has(w)) return dropWizard();
+  const wizardDraft = draft();
+  if (!edited.has(wizardDraft)) return dropWizard();
   void confirmAction({
     title: 'Discard these answers?',
     body: 'Discard the answers you entered? Nothing has been saved yet.',
@@ -245,7 +245,7 @@ export function cancelWizard() {
     danger: true,
   }).then(ok => {
     // Only while the draft asked about is still the open one.
-    if (ok && wizard === w) dropWizard();
+    if (ok && wizard === wizardDraft) dropWizard();
   });
 }
 
@@ -355,11 +355,11 @@ function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardS
 // boxes stay unset, zero is kept.
 function readStorageOverrides(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
   if (!form.querySelector('.rate-list')) return;
-  const over: ItemRates = {};
+  const overrides: ItemRates = {};
   for (const [name, value] of data)
     if (name.startsWith('rate:') && String(value).trim() !== '' && Number.isFinite(Number(value)))
-      over[name.slice(5)] = Number(value);
-  settings.storageOverrides = over;
+      overrides[name.slice(5)] = Number(value);
+  settings.storageOverrides = overrides;
 }
 
 // An unticked checkbox is absent from FormData, so these are read only on the
@@ -433,14 +433,14 @@ const TIMEOUT_ADVICE = [
 // there is none). A timeout gets suggestions; the message itself is escaped. The line sits
 // above the step's buttons as an error notice (SP-34) and takes focus, which scrolls it into
 // view on a long step and has a screen reader read it out.
-export function wizardError(form: HTMLFormElement | null, err: Error) {
+export function wizardError(form: HTMLFormElement | null, error: Error) {
   const el = form?.querySelector<HTMLElement>('.form-error');
   if (!el) {
-    toast(err.message, true);
+    toast(error.message, true);
     return;
   }
-  if (/timed out/i.test(err.message)) el.innerHTML = esc(err.message) + TIMEOUT_ADVICE;
-  else el.textContent = err.message;
+  if (/timed out/i.test(error.message)) el.innerHTML = esc(error.message) + TIMEOUT_ADVICE;
+  else el.textContent = error.message;
   el.focus();
 }
 
@@ -450,29 +450,31 @@ export function wizardError(form: HTMLFormElement | null, err: Error) {
 // built when the guided answers say it is done. Nothing is created until the post succeeds.
 // `button` shows the progress (see calcProgress). A failure goes in the form's error line.
 export async function createProfile(form: HTMLFormElement, button: HTMLElement | null) {
-  const w = draft();
+  const wizardDraft = draft();
   readCarry(form);
-  const r = await post<CreatedProfile>(
+  const created = await post<CreatedProfile>(
     '/api/profiles',
     {
-      saveId: w.saveId,
-      saveName: w.saveName,
-      name: w.name,
-      settings: w.settings,
-      carryFrom: w.saveId ? w.carryFrom : null,
-      carry: w.carry,
-      built: guidedBuiltKeys(w),
+      saveId: wizardDraft.saveId,
+      saveName: wizardDraft.saveName,
+      name: wizardDraft.name,
+      settings: wizardDraft.settings,
+      carryFrom: wizardDraft.saveId ? wizardDraft.carryFrom : null,
+      carry: wizardDraft.carry,
+      built: guidedBuiltKeys(wizardDraft),
     },
     true,
     calcProgress(button, 'Saving profile…'),
   );
-  setWorkspace(r.workspace);
-  await loadContext(r.saveId, r.profileId);
+  setWorkspace(created.workspace);
+  await loadContext(created.saveId, created.profileId);
   setWizard(null);
   navigate('plan');
   const carried = [
-    r.carriedChecks ? plural(r.carriedChecks, 'step') + ' carried over' : '',
-    r.reviewCount ? plural(r.reviewCount, 'expanded production line') + ' left for review' : '',
+    created.carriedChecks ? plural(created.carriedChecks, 'step') + ' carried over' : '',
+    created.reviewCount
+      ? plural(created.reviewCount, 'expanded production line') + ' left for review'
+      : '',
   ]
     .filter(Boolean)
     .join('; ');
@@ -484,14 +486,14 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
 }
 
 // The primary button's label on the current screen: the guided questions, the five steps.
-export const submitLabel = (w: WizardDraft) =>
-  w.mode === 'guided' && w.guidedStep <= guidedFlow().length
-    ? w.guidedStep >= guidedFlow().length
+export const submitLabel = (wizardDraft: WizardDraft) =>
+  wizardDraft.mode === 'guided' && wizardDraft.guidedStep <= guidedFlow().length
+    ? wizardDraft.guidedStep >= guidedFlow().length
       ? 'Calculate plan'
       : 'Continue →'
-    : w.step === 5
+    : wizardDraft.step === 5
       ? 'Create profile'
-      : w.step === 4
+      : wizardDraft.step === 4
         ? 'Calculate plan'
         : 'Continue →';
 
@@ -518,31 +520,33 @@ export async function moveWizard(target: number) {
 // pressed one keeps focus (#299), and a click on one does nothing. On failure
 // the draft stays where it was and the error is shown in the form.
 export async function calculateWizard(form: HTMLFormElement | null) {
-  const w = draft();
+  const wizardDraft = draft();
   wizardBusy = true;
   const buttons = document.querySelectorAll<HTMLButtonElement>(
     '[data-wizard-step],[data-guided-advanced],#wizard-form button',
   );
-  buttons.forEach(b => markBusy(b, true));
+  buttons.forEach(button => markBusy(button, true));
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]'),
     label = submit?.textContent ?? '';
   try {
     // The goal is one of the catalog's: the guided cards and the Goals step only offer those.
-    w.name = w.name.trim() || workspace.catalog.goals.find(g => g.id === w.settings.goal)!.name;
-    w.preview = await post<StoredCalculatedPlan>(
+    wizardDraft.name =
+      wizardDraft.name.trim() ||
+      workspace.catalog.goals.find(g => g.id === wizardDraft.settings.goal)!.name;
+    wizardDraft.preview = await post<StoredCalculatedPlan>(
       '/api/preview',
-      { settings: w.settings },
+      { settings: wizardDraft.settings },
       true,
       calcProgress(submit, 'Calculating…'),
     );
-    w.step = 5;
-    w.guidedStep = guidedFlow().length + 1;
+    wizardDraft.step = 5;
+    wizardDraft.guidedStep = guidedFlow().length + 1;
     render();
-  } catch (err) {
-    wizardError(form, err as Error);
+  } catch (error) {
+    wizardError(form, error as Error);
     if (submit) submit.textContent = label;
   } finally {
     wizardBusy = false;
-    buttons.forEach(b => markBusy(b, false));
+    buttons.forEach(button => markBusy(button, false));
   }
 }

@@ -2807,6 +2807,13 @@ button.rail-tile:hover {
   background: var(--panel2);
   border: 1px dashed var(--line2);
 }
+/* The power grid row's blank icon cell: no frame, but as wide as an icon so its label lines up
+   with the other destinations when the rows fall back to flex (#599). */
+.rail-noframe {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
 .rail-main {
   flex: 1;
   min-width: 0;
@@ -4366,6 +4373,23 @@ button.rail-tile:hover {
   border-bottom-color: rgba(224, 85, 58, 0.5);
   background: transparent;
 }
+/* On a phone the step tools take their own row under the title, so the title keeps the row's
+   full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
+   keep their order, and their buttons grow to 44px touch targets. */
+@media (max-width: 720px) {
+  .task.is-editing {
+    grid-template-columns: 20px 26px minmax(0, 1fr);
+  }
+  .task.is-editing .task-tools {
+    grid-column: 3;
+    justify-content: flex-start;
+    margin-top: -8px;
+  }
+  .task-tools .btn.quiet {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .task-link {
   display: inline-block;
   margin-top: 8px;
@@ -4695,6 +4719,11 @@ button.rail-tile:hover {
 }
 .guided-name .form-error:not(:empty) {
   margin: 6px 0 0;
+}
+/* All settings step 1's Save name (#578, SettingsStep.vue): the same message, under the box in
+   its grid cell. */
+.settings-name .form-error:not(:empty) {
+  margin: 0 0 6px;
 }
 /* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
    accent, and "3 of 6" beside them. */
