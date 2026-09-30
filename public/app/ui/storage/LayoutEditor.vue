@@ -13,8 +13,9 @@ import { setFloor } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { hiddenStorageBays, nextBayLetter, storageBays } from '../../views/storage.ts';
 import type { StorageFloor } from '../../views/storage.ts';
+import { legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
-import { vValue } from '../form/value.ts';
+import { useDraft } from '../draft.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import type { UpdateOp } from '../../../types/index.ts';
 
@@ -61,11 +62,12 @@ async function submit(
   }
 }
 
-// The letter box starts on the next free letter; the user may type any other. It is bound with
-// v-value (form/value.ts), so the redraws of other saves leave a typed letter alone (#670); once a
-// bay is added the box starts again on the next free letter.
-const suggested = () => nextBayLetter() || '';
-const letterField = ref<HTMLInputElement>();
+// The letter box starts on the next free letter; the user may type any other. It shows a draft
+// (ui/draft.ts), so the redraws of other saves leave a typed letter alone (#670), and a save that
+// moves the suggestion (a bay added in another tab) moves an untouched box only (#677). Once a bay
+// is added the box starts again on the next free letter.
+const suggested = () => legacy(() => nextBayLetter() || '');
+const letter = useDraft(suggested);
 const addBay = async (event: Event) => {
   const added = await submit(event, async name => {
     const field = new FormData(event.target as HTMLFormElement).get('letter');
@@ -100,7 +102,7 @@ const addBay = async (event: Event) => {
       ...(replace ? { replace: true } : {}),
     };
   });
-  if (added && letterField.value) letterField.value.value = suggested();
+  if (added) letter.value = suggested();
 };
 const addFloor = (event: Event) =>
   submit(event, name => ({ type: 'storageFloorAdd', id: randomId('cf-', 6), label: name }));
@@ -177,9 +179,9 @@ async function removeFloor(event: Event) {
           maxlength="2"
           required
           pattern="[A-Za-z]{1,2}"
-          ref="letterField"
-          v-value="suggested()"
+          :value="letter"
           aria-label="New bay letter"
+          @input="letter = ($event.target as HTMLInputElement).value"
         /><input
           id="new-bay-name"
           name="name"
