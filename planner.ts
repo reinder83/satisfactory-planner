@@ -542,8 +542,9 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
 // extractors, packagers and generators have no slots. Opt-in: with no budget nothing is offered,
 // so a plan that does not want to go slug hunting is calculated exactly as before.
 // How many of the largest lines are offered an amplified twin. Every twin is another integer
-// variable, and the fit has to finish inside the solver's time limit: whole-machine plans already
-// carry integer machine counts, so they can afford fewer twins than precisely balanced ones.
+// variable, and the fit has to finish inside the solver's search limit (SEARCH_LIMITS in
+// optimizer.ts): whole-machine plans already carry integer machine counts, so they can afford
+// fewer twins than precisely balanced ones.
 // Measured against the heaviest plans in the test set; raising these starts losing whole phases.
 export const AMPLIFY_CANDIDATES = { whole: 22, precise: 26 };
 // Somersloop slots per production machine, as in the game. Amplifying a machine fills all its
@@ -806,7 +807,8 @@ export function run(
   const demands = phaseDemands(context, reachableItems(context, pool));
   const { model, period } = buildModel(context, pool, demands);
   const solved = solveModel(model, maximum);
-  // solverStatus lets calculate() tell a time-out ('Time limit reached') from a real shortage.
+  // solverStatus lets calculate() tell a search stopped at its limit ('Unknown' at the node limit,
+  // 'Time limit reached' at the clock's backstop) from a real shortage.
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   if (!satisfiesModel(model, solved)) return { feasible: false };
@@ -842,8 +844,9 @@ type Solution = ReturnType<typeof solve>;
 type FitOptions = Pick<RunOptions, 'maximum' | 'conversion' | 'ignoreLimits' | 'caps'>;
 // Two-step fit for whole machines and amplification. First the exact LP (fractional machines,
 // no amplification) chooses the recipe network; then the integer fit re-solves over only that
-// network (`recipeIds`), which keeps the integer search small enough for the solver's 3-second
-// limit. Hence the warning that the result is not a global mixed-recipe integer optimum.
+// network (`recipeIds`), which keeps the integer search small enough for the solver's search
+// limit (SEARCH_LIMITS in optimizer.ts). Hence the warning that the result is not a global
+// mixed-recipe integer optimum.
 function twoStepFit(context: PhaseContext): RunResult {
   const { config, phase, maximum, conversion, ignoreLimits, caps } = context;
   const sharedOptions: FitOptions = { maximum, conversion, ignoreLimits, caps };
