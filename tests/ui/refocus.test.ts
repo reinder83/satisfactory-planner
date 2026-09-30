@@ -36,7 +36,7 @@ import {
 import type { StorageEdits, TaskEdits, WorkspaceSummary } from '../../public/types/index.ts';
 
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 // Focus a control, then press it.
@@ -101,10 +101,10 @@ test('removing the only step shown moves focus to the personal task field', asyn
 
 test('deleting a personal task moves focus to the next step’s summary, or its Remove while editing', async () => {
   stubFetch({ '/api/update': applyUpdate });
-  const customTasks = ['one', 'two', 'three'].map(n => ({
-    id: 'custom-' + n,
+  const customTasks = ['one', 'two', 'three'].map(name => ({
+    id: 'custom-' + name,
     phase: '3' as const,
-    title: 'Task ' + n,
+    title: 'Task ' + name,
   }));
   open({ state: { customTasks } });
   go('plan');
@@ -163,8 +163,8 @@ test('removing or hiding a bay moves focus to the next bay’s Remove or Hide', 
   const bays = () => $$('#main .floor-grid .bay');
   const expectAfter = (letter: string) => {
     const list = bays(),
-      at = list.findIndex(b => b.querySelector('.bay-letter')!.textContent === letter);
-    const next = list[at + 1] ?? list[at - 1]!;
+      index = list.findIndex(b => b.querySelector('.bay-letter')!.textContent === letter);
+    const next = list[index + 1] ?? list[index - 1]!;
     return next.querySelector<HTMLElement>(control)!;
   };
   const afterS = expectAfter('S');
@@ -210,11 +210,11 @@ test('removing a profile moves focus to the next profile’s ⋯ menu', async ()
     completed: 0,
     phase: '3' as const,
   }));
-  const save = (ps: typeof profiles) => ({
+  const save = (saveProfiles: typeof profiles) => ({
     id: 's',
     name: 'World',
     activeProfile: 'original',
-    profiles: ps,
+    profiles: saveProfiles,
   });
   open({ workspace: { saves: [save(profiles)] } as Partial<WorkspaceSummary> });
   const before = { ...workspace },

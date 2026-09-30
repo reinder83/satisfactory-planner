@@ -28,9 +28,9 @@ test('the confirm button answers yes and Cancel no, and the dialog closes and em
   assert.equal(await yes, true);
   assert.equal(dialog().open, false);
   assert.equal(dialog().querySelector('button'), null, 'unmounted');
-  const no = ask(true);
+  const declined = ask(true);
   $('#confirm [data-confirm-cancel]')!.click();
-  assert.equal(await no, false);
+  assert.equal(await declined, false);
 });
 
 test('focus starts on Cancel for a destructive action, on the confirm button otherwise, and goes back', async () => {

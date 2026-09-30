@@ -25,8 +25,8 @@ const plan = generated();
 
 beforeEach(() => {
   page();
-  const d = $<HTMLDialogElement>('#detail')!;
-  for (const [, name, value] of detailAttrs) d.setAttribute(name!, value!);
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  for (const [, name, value] of detailAttrs) dialog.setAttribute(name!, value!);
   answerConfirms(true);
 });
 
@@ -61,7 +61,7 @@ test('a handbook factory dialog is named by its title, and the one a link puts i
   $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!.click();
   namedBy('Cable', 'the Cable dialog that replaced it');
   void closeDetail();
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   openFactory('wire');
   namedBy('Wire', 'the Wire dialog opened again');
 });
@@ -70,24 +70,26 @@ test('a calculated factory dialog is named by its title, also after a link repla
   open({ calculated: plan });
   go('factories');
   render();
-  const x = calcStage()!;
-  const r = x.rows!.find(r =>
-    Object.keys(r.outputs).some(n => x.rows!.some(o => o.id !== r.id && o.inputs[n])),
+  const stage = calcStage()!;
+  const producer = stage.rows!.find(row =>
+    Object.keys(row.outputs).some(n => stage.rows!.some(o => o.id !== row.id && o.inputs[n])),
   )!;
-  openCalculatedFactory(r.id);
-  namedBy(r.name, 'the calculated factory dialog');
+  openCalculatedFactory(producer.id);
+  namedBy(producer.name, 'the calculated factory dialog');
   const link = $<HTMLElement>('#detail .dialog-body [data-calc-factory]')!;
-  const next = x.rows!.find(o => o.id === link.dataset.calcFactory)!;
+  const next = stage.rows!.find(o => o.id === link.dataset.calcFactory)!;
   link.click();
   namedBy(next.name, 'the calculated factory dialog that replaced it');
 });
 
 test('a group build order is named by the group, and a factory opened from it by its own (#321)', () => {
-  const x = plan.stages['3'];
-  const consumer = x.rows!.find(r =>
-    x.rows!.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
+  const stage = plan.stages['3'];
+  const consumer = stage.rows!.find(row =>
+    stage.rows!.some(
+      o => o.id !== row.id && Object.keys(o.outputs || {}).some(n => row.inputs?.[n]),
+    ),
   )!;
-  const supplier = x.rows!.find(
+  const supplier = stage.rows!.find(
     o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
   )!;
   open({

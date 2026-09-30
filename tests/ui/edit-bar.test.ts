@@ -83,27 +83,27 @@ const MODES: {
   },
 ];
 
-for (const m of MODES)
-  test(`${m.name}: the edit bar shows while editing, and Done leaves with focus on the toggle (SP-13)`, async () => {
-    open(m.calculated ? { calculated: generated() } : {});
-    go(m.view);
+for (const mode of MODES)
+  test(`${mode.name}: the edit bar shows while editing, and Done leaves with focus on the toggle (SP-13)`, async () => {
+    open(mode.calculated ? { calculated: generated() } : {});
+    go(mode.view);
     render();
     assert.equal($('[data-edit-bar]'), null, 'no bar before editing');
-    $<HTMLButtonElement>(m.toggle)!.click();
+    $<HTMLButtonElement>(mode.toggle)!.click();
     await tick();
-    assert.equal(m.on(), true);
+    assert.equal(mode.on(), true);
     const bar = $('[data-edit-bar]')!;
     assert.ok(bar, 'the bar shows');
     assert.equal(bar.parentElement, $('#main'), 'a child of <main>, so it sticks to the page');
     assert.ok(bar.previousElementSibling!.matches('.heading-row'), 'right under the page header');
     assert.equal(bar.getAttribute('role'), 'region');
-    assert.equal(bar.getAttribute('aria-label'), m.label);
-    assert.equal(bar.querySelector('.edit-bar-label')!.textContent, m.label);
+    assert.equal(bar.getAttribute('aria-label'), mode.label);
+    assert.equal(bar.querySelector('.edit-bar-label')!.textContent, mode.label);
     $<HTMLButtonElement>('[data-edit-bar-done]')!.click();
     await tick();
-    assert.equal(m.on(), false, 'Done leaves edit mode');
+    assert.equal(mode.on(), false, 'Done leaves edit mode');
     assert.equal($('[data-edit-bar]'), null);
-    assert.equal(document.activeElement, $(m.toggle), 'focus goes to the toggle');
+    assert.equal(document.activeElement, $(mode.toggle), 'focus goes to the toggle');
   });
 
 test('Esc leaves edit mode, except while typing or with a dialog open (SP-13)', async () => {

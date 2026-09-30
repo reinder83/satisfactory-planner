@@ -25,10 +25,10 @@ test('equal() on two different elements fails at once and names both', () => {
   // Without a message of its own, node:assert's usual one, with the two names in it.
   assert.throws(
     () => assert.strictEqual($('#go'), $('input')),
-    (e: Error) =>
-      e.message.startsWith('Expected values to be strictly equal:') &&
-      e.message.includes("'<button#go.btn.primary[data-confirm-ok]>'") &&
-      e.message.includes(`'<input[name="supplyRate"]>'`),
+    (error: Error) =>
+      error.message.startsWith('Expected values to be strictly equal:') &&
+      error.message.includes("'<button#go.btn.primary[data-confirm-ok]>'") &&
+      error.message.includes(`'<input[name="supplyRate"]>'`),
   );
 });
 

@@ -18,15 +18,19 @@ import { render } from '../../public/app/shell.ts';
 import { $, $$, catalog, generated, go, open, page } from './setup.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 
-const text = (s: string) => $(s)!.textContent.replace(/\s+/g, ' ');
+const text = (selector: string) => $(selector)!.textContent.replace(/\s+/g, ' ');
 const main = () => text('#main');
 
 // The survey for the default world: the wiki's node counts.
 const defaultSurvey = () => {
-  const e = blankExtraction();
+  const extraction = blankExtraction();
   for (const [name, [impure, normal, pure]] of Object.entries(nodeCounts))
-    (name === 'Nitrogen Gas' ? e.wells : e.nodes)[name] = { impure, normal, pure };
-  return e;
+    (name === 'Nitrogen Gas' ? extraction.wells : extraction.nodes)[name] = {
+      impure,
+      normal,
+      pure,
+    };
+  return extraction;
 };
 
 beforeEach(() => {
@@ -288,15 +292,15 @@ test('a world with no table says why, and fills nothing', async () => {
   assert.match(main(), /no fixed split to rearrange/);
   assert.equal(JSON.stringify(wizard!.extraction!.nodes), '{}', 'nothing is invented');
   // A resource-rich distribution describes its direction, never numbers.
-  for (const d of ['basic', 'advanced', 'fossil'] as const) {
+  for (const distribution of ['basic', 'advanced', 'fossil'] as const) {
     page();
     open({ workspace: { catalog: catalog() } });
-    survey(2, { purity: 'pure', distribution: d });
-    assert.match(main(), /No preset for these settings/, d);
-    assert.match(main(), /a third apart from one seed to the next/, d);
-    assert.ok(main().includes(richShape[d]!), d + ' shape shown');
-    assert.match(main(), /Which way it goes is consistent; how far is not/, d);
-    assert.equal(JSON.stringify(wizard!.extraction!.nodes), '{}', d + ' fills nothing');
+    survey(2, { purity: 'pure', distribution });
+    assert.match(main(), /No preset for these settings/, distribution);
+    assert.match(main(), /a third apart from one seed to the next/, distribution);
+    assert.ok(main().includes(richShape[distribution]!), distribution + ' shape shown');
+    assert.match(main(), /Which way it goes is consistent; how far is not/, distribution);
+    assert.equal(JSON.stringify(wizard!.extraction!.nodes), '{}', distribution + ' fills nothing');
   }
   // Counts already on screen under a world with no table are flagged as the default
   // world's rather than passed off as the user's.
@@ -412,20 +416,20 @@ test('leaving the survey alone changes no budget', async () => {
 // The oil screen totals crude oil nodes and the crude oil and nitrogen wells in m³/min, the unit
 // the rest of the app measures a fluid in; an ore row keeps /min (#363).
 test('the oil screen totals its fluid rows in m³/min, an ore row in /min (#363)', async () => {
-  const e = blankExtraction();
-  e.nodes = {
+  const extraction = blankExtraction();
+  extraction.nodes = {
     'Iron Ore': { impure: 1, normal: 1, pure: 1 },
     'Crude Oil': { impure: 0, normal: 2, pure: 0 },
   };
-  e.wells = {
+  extraction.wells = {
     'Crude Oil': { impure: 0, normal: 3, pure: 0 },
     'Nitrogen Gas': { impure: 1, normal: 0, pure: 0 },
   };
-  survey(3, { purity: 'vanilla', distribution: 'original' }, { extraction: e });
+  survey(3, { purity: 'vanilla', distribution: 'original' }, { extraction });
   const totals = () =>
-    $$('.count-row').map(r => [
-      r.querySelector('.count-name')!.textContent,
-      r.querySelector('.count-total')!.textContent.replace(/ /g, ' '),
+    $$('.count-row').map(row => [
+      row.querySelector('.count-name')!.textContent,
+      row.querySelector('.count-total')!.textContent.replace(/ /g, ' '),
     ]);
   const fluids = totals();
   assert.deepEqual(
@@ -482,7 +486,7 @@ test('leaving the survey by the address with a count still being typed keeps it 
   field.focus();
   field.value = '4';
   const errors: unknown[] = [];
-  const onError = (e: ErrorEvent) => errors.push(e.error ?? e.message);
+  const onError = (event: ErrorEvent) => errors.push(event.error ?? event.message);
   window.addEventListener('error', onError);
   const restore = changeOnRemoval(field);
   const log = console.error;
@@ -502,10 +506,10 @@ test('leaving the survey by the address with a count still being typed keeps it 
   assert.ok($('#main h1'), 'and the resources page is drawn');
   assert.equal($$('#main h1').length, 1, 'once');
   // Nothing typed is lost: the draft still holds every count, the last one too.
-  const e = wizard!.extraction!;
-  assert.equal(e.nodes!['Crude Oil']!.normal, 2);
-  assert.equal(e.wells!['Crude Oil']!.normal, 3);
-  assert.equal(e.wells!['Nitrogen Gas']!.normal, 4);
+  const extraction = wizard!.extraction!;
+  assert.equal(extraction.nodes!['Crude Oil']!.normal, 2);
+  assert.equal(extraction.wells!['Crude Oil']!.normal, 3);
+  assert.equal(extraction.wells!['Nitrogen Gas']!.normal, 4);
   assert.equal(wizard!.mode, 'extraction', 'the survey is still open in the draft');
   go('wizard');
   render();

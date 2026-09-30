@@ -20,7 +20,8 @@ import type {
 // Vitest runs from the repository root.
 const handbook: Handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
 const evil = '<x-evil onclick=alert(1)> & "quoted"';
-const $ = <E extends Element = HTMLElement>(s: string) => document.querySelector<E>(s);
+const $ = <E extends Element = HTMLElement>(selector: string) =>
+  document.querySelector<E>(selector);
 
 function open({ name = evil, phase = '3' }: { name?: string; phase?: Phase } = {}) {
   // Partial fixtures: only the fields the frame reads.
@@ -97,7 +98,7 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
   // Each glyph is shown now (SP-10), and stays out of the link's name.
   const icons = [...document.querySelectorAll('.nav a .navicon')];
   assert.equal(icons.length, 7, 'every page has a glyph, Notes included');
-  for (const i of icons) assert.equal(i.getAttribute('aria-hidden'), 'true');
+  for (const icon of icons) assert.equal(icon.getAttribute('aria-hidden'), 'true');
 });
 
 test('navigation marks the current page', async () => {
@@ -144,34 +145,38 @@ test('the phase track shows each phase’s progress and switches phases like the
     ],
     'the select’s phases, the working one checked',
   );
-  const seg = (p: string) => $(`[data-phase-seg="${p}"]`)!;
-  assert.ok(seg('4').classList.contains('current'));
-  assert.equal(seg('4').querySelector('.phase-track-name')!.textContent, 'Phase 4');
-  const pct = Math.round((1 / phase4.length) * 100);
+  const segment = (phaseId: string) => $(`[data-phase-seg="${phaseId}"]`)!;
+  assert.ok(segment('4').classList.contains('current'));
+  assert.equal(segment('4').querySelector('.phase-track-name')!.textContent, 'Phase 4');
+  const percent = Math.round((1 / phase4.length) * 100);
   assert.equal(
-    seg('4').querySelector<HTMLElement>('.phase-track-bar > span')!.style.width,
-    pct + '%',
+    segment('4').querySelector<HTMLElement>('.phase-track-bar > span')!.style.width,
+    percent + '%',
   );
-  assert.equal(seg('4').querySelector('.visually-hidden')!.textContent, `, ${pct}% done`);
-  assert.equal(seg('post').querySelector('.phase-track-bar'), null, 'post-game has no checklist');
+  assert.equal(segment('4').querySelector('.visually-hidden')!.textContent, `, ${percent}% done`);
+  assert.equal(
+    segment('post').querySelector('.phase-track-bar'),
+    null,
+    'post-game has no checklist',
+  );
   // The breadcrumb names the save only; the phase is the track's (or the select's).
   assert.equal($('.breadcrumbs')!.textContent!.trim(), $('.breadcrumbs a')!.textContent);
   assert.ok($('#phase-picker'), 'the select stays for phone widths');
   // Choosing a segment saves the phase, as the select does, and redraws both.
   const calls = stubFetch<{ type: string; value: string }>({ '/api/update': applyUpdate });
   const pick = async (value: string) => {
-    const r = radios().find(x => x.value === value)!;
-    r.focus();
-    r.checked = true;
-    r.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise(res => setTimeout(res, 20));
+    const radio = radios().find(x => x.value === value)!;
+    radio.focus();
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 20));
     await nextTick();
   };
   await pick('5');
   assert.deepEqual(calls.at(-1), ['/api/update', { type: 'phase', value: '5' }]);
   assert.equal(phase(), '5');
   assert.equal($<HTMLSelectElement>('#phase-picker')!.value, '5');
-  assert.ok(seg('5').classList.contains('current'));
+  assert.ok(segment('5').classList.contains('current'));
   assert.equal(
     document.activeElement,
     radios().find(x => x.value === '5'),
@@ -262,10 +267,10 @@ test('at phone width ADA is a one-line ticker that unfolds the panel in place (S
 test('the phone ticker keeps the remark announced while folded (style.css, SP-38)', () => {
   const css = fs.readFileSync('public/style.css', 'utf8').replace(/\r/g, '');
   const phone = css.slice(css.indexOf('@media (max-width: 720px)'));
-  const rule = (sel: string) => {
-    const at = phone.indexOf(`\n  ${sel} {`);
-    assert.ok(at > 0, `${sel} at ≤720px`);
-    return phone.slice(at, phone.indexOf('}', at));
+  const rule = (selector: string) => {
+    const start = phone.indexOf(`\n  ${selector} {`);
+    assert.ok(start > 0, `${selector} at ≤720px`);
+    return phone.slice(start, phone.indexOf('}', start));
   };
   assert.match(rule('.ada-ticker'), /display: flex/);
   assert.match(rule('.ada-ticker'), /min-height: 44px/);

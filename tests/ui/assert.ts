@@ -23,9 +23,10 @@ export function nodeName(value: unknown): string {
   }
   let name = value.tagName.toLowerCase();
   if (value.id) name += '#' + value.id;
-  for (const c of value.classList) name += '.' + c;
-  for (const { name: attr, value: v } of value.attributes)
-    if (attr === 'name' || attr.startsWith('data-')) name += v ? `[${attr}="${v}"]` : `[${attr}]`;
+  for (const className of value.classList) name += '.' + className;
+  for (const { name: attr, value: attrValue } of value.attributes)
+    if (attr === 'name' || attr.startsWith('data-'))
+      name += attrValue ? `[${attr}="${attrValue}"]` : `[${attr}]`;
   return `<${name}>${value.isConnected ? '' : ' (not in the page)'}`;
 }
 
@@ -37,15 +38,17 @@ function fail(
   stackStartFn: Function,
 ): never {
   if (message instanceof Error) throw message;
-  const a = nodeName(actual);
-  const e = nodeName(expected);
+  const actualName = nodeName(actual);
+  const expectedName = nodeName(expected);
   // Without a message node:assert writes its usual one from the two short names; two
   // different nodes can print alike, so that case says so.
-  const alike = operator === 'strictEqual' && a === e;
+  const alike = operator === 'strictEqual' && actualName === expectedName;
   throw new strict.AssertionError({
-    message: alike ? `${message ?? 'Expected the same node'}: two different ${a} nodes` : message,
-    actual: a,
-    expected: e,
+    message: alike
+      ? `${message ?? 'Expected the same node'}: two different ${actualName} nodes`
+      : message,
+    actual: actualName,
+    expected: expectedName,
     operator,
     stackStartFn,
   });

@@ -62,11 +62,11 @@ import { noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
-const text = (s: string) => ($(s)?.textContent || '').replace(/\s+/g, ' ');
+const text = (selector: string) => ($(selector)?.textContent || '').replace(/\s+/g, ' ');
 const main = () => text('#main');
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
-const settle = () => new Promise(r => setTimeout(r, 20)).then(() => nextTick());
+const settle = () => new Promise(resolve => setTimeout(resolve, 20)).then(() => nextTick());
 
 beforeEach(() => {
   page();
@@ -323,9 +323,9 @@ test('a failed calculation says why in the form and gives the button back', asyn
   assert.equal(error.getAttribute('role'), 'alert');
   assert.equal(error.nextElementSibling, $('#wizard-form .wizard-actions'), 'above the buttons');
   assert.equal(document.activeElement, error, 'the error takes focus');
-  const b = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
-  assert.equal(b.textContent, 'Calculate plan');
-  assert.equal(b.disabled, false);
+  const button = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
+  assert.equal(button.textContent, 'Calculate plan');
+  assert.equal(button.disabled, false);
   // Another step clears the error line.
   await click('[data-wizard-step="3"]');
   assert.equal(text('#wizard-error'), '');
@@ -376,8 +376,8 @@ test('the alternate picker ticks, forces, filters and shows each recipe', async 
   assert.ok(shown.length > 0 && shown.length < $$('.alt-row').length);
   await click('[data-alt-all]');
   for (const row of shown) {
-    const b = row.querySelector<HTMLInputElement>('input[name=alt]');
-    if (b) assert.ok(b.checked, row.dataset.altText);
+    const checkbox = row.querySelector<HTMLInputElement>('input[name=alt]');
+    if (checkbox) assert.ok(checkbox.checked, row.dataset.altText);
   }
   assert.equal(box('Recipe_Alternate_Screw_C')!.checked, true, 'a hidden row keeps its tick');
   assert.equal(box('Recipe_Alternate_Turbofuel_C')!.checked, false, 'and a hidden row gets none');
@@ -470,7 +470,7 @@ test('storage rates: two group rates, per-item overrides and live placeholders',
     {},
     { storage: 'all', storageRate: 1, buildRate: 30, storageOverrides: { Concrete: 60 } },
   );
-  const rate = (n: string) => $<HTMLInputElement>(`input[name="rate:${n}"]`);
+  const rate = (item: string) => $<HTMLInputElement>(`input[name="rate:${item}"]`);
   assert.equal($<HTMLInputElement>('input[name=buildRate]')!.value, '30');
   assert.equal($<HTMLInputElement>('input[name=storageRate]')!.value, '1');
   assert.ok($<HTMLDetailsElement>('details.rate-picker')!.open, 'open while any override is set');
@@ -541,12 +541,12 @@ test('the goals step and what Review says about each phase', () => {
   wizardAt(3, {}, { goal: 'timed', phaseTime: 'final', multiplier: 10 });
   assert.equal($<HTMLSelectElement>('select[name=phaseTime]')!.value, 'final');
   assert.match(text('.goal-card:has(input[value=timed])'), /Suggested/);
-  const p = generated();
+  const plan = generated();
   wizardAt(5, {
     preview: {
-      ...p,
-      settings: { ...p.settings, phase: '1' },
-      stages: { ...p.stages, 1: { ...p.stages[1], hours: 5.21, aheadOf: 9.92 } },
+      ...plan,
+      settings: { ...plan.settings, phase: '1' },
+      stages: { ...plan.stages, 1: { ...plan.stages[1], hours: 5.21, aheadOf: 9.92 } },
     },
   });
   assert.match(main(), /was 9[.,]92 h/, 'a pulled-forward phase shows what it used to take');
@@ -555,10 +555,10 @@ test('the goals step and what Review says about each phase', () => {
   // Review flags only the phases the profile plans.
   wizardAt(5, {
     preview: {
-      ...p,
-      settings: { ...p.settings, phase: '4' },
+      ...plan,
+      settings: { ...plan.settings, phase: '4' },
       stages: {
-        ...p.stages,
+        ...plan.stages,
         3: { feasible: false, reason: 'Earlier phase shortfall' },
         5: { feasible: false, reason: evil, shortfalls: [{ name: 'Coal', needed: 10, budget: 5 }] },
       },
@@ -572,13 +572,13 @@ test('the goals step and what Review says about each phase', () => {
 
 // A short fluid budget is named in m³/min, a short ore budget in /min (#367).
 test('Review names a short fluid budget in m³/min and a short ore in /min (#367)', () => {
-  const p = generated();
+  const plan = generated();
   wizardAt(5, {
     preview: {
-      ...p,
-      settings: { ...p.settings, phase: '5' },
+      ...plan,
+      settings: { ...plan.settings, phase: '5' },
       stages: {
-        ...p.stages,
+        ...plan.stages,
         5: {
           feasible: false,
           reason: 'Short',
@@ -590,25 +590,25 @@ test('Review names a short fluid budget in m³/min and a short ore in /min (#367
       },
     },
   });
-  const t = main().replace(/ /g, ' ');
-  assert.match(t, /Crude Oil to about 300 m³\/min \(entered: 120 m³\/min\)/);
-  assert.match(t, /Coal to about 10\/min \(entered: 5\/min\)/);
+  const review = main().replace(/ /g, ' ');
+  assert.match(review, /Crude Oil to about 300 m³\/min \(entered: 120 m³\/min\)/);
+  assert.match(review, /Coal to about 10\/min \(entered: 5\/min\)/);
 });
 
 test('Review credits production you already run, and says nothing for an older plan', () => {
-  const p = generated();
+  const plan = generated();
   wizardAt(5);
   assert.equal($('.supply-notice'), null, 'nothing declared, nothing credited');
   const older: StoredCalculatedPlan = generated();
   delete older.settings.existingSupply;
-  for (const st of Object.values(older.stages)) delete st.supplied;
+  for (const stage of Object.values(older.stages)) delete stage.supplied;
   wizardAt(5, { preview: older });
   assert.equal($('.supply-notice'), null, 'a plan from before the question');
   wizardAt(5, {
     preview: {
-      ...p,
-      settings: { ...p.settings, existingSupply: { 'Modular Frame': 50, Plastic: 5 } },
-      stages: { ...p.stages, 4: { ...p.stages[4], supplied: { 'Modular Frame': 20 } } },
+      ...plan,
+      settings: { ...plan.settings, existingSupply: { 'Modular Frame': 50, Plastic: 5 } },
+      stages: { ...plan.stages, 4: { ...plan.stages[4], supplied: { 'Modular Frame': 20 } } },
     },
   });
   assert.match(text('.supply-notice'), /Modular Frame 50\/min declared · the plan draws up to 20/);
@@ -646,14 +646,14 @@ test('adding a profile to a save offers to carry its progress, hostile names and
     null,
     'no recipe picks without custom recipes',
   );
-  const p = generated();
+  const plan = generated();
   wizardAt(5, {
     saveId: 's',
     carryFrom: 'p',
     preview: {
-      ...p,
+      ...plan,
       settings: {
-        ...p.settings,
+        ...plan.settings,
         recipes: 'custom',
         alternateRecipes: ['Recipe_Alternate_Screw_C'],
       },
@@ -705,9 +705,9 @@ test('a failed create leaves the draft and says why', async () => {
   await submit();
   assert.ok(wizard, 'nothing was created');
   assert.match($('#wizard-error')!.textContent, /unexpected \/api\/profiles/);
-  const b = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
-  assert.equal(b.textContent, 'Create profile');
-  assert.equal(b.disabled, false);
+  const button = $<HTMLButtonElement>('#wizard-form button[type=submit]')!;
+  assert.equal(button.textContent, 'Create profile');
+  assert.equal(button.disabled, false);
 });
 
 test('Cancel drops the draft and shows the profiles', async () => {
@@ -757,8 +757,8 @@ test('every guided screen offers All settings at the step that owns its question
 
 test('an answer redraws the question, and All settings keeps it', async () => {
   guidedAt(1);
-  const at = guidedFlow().findIndex(q => q.id === 'goal') + 1;
-  guidedAt(at, { saveName: evil });
+  const goalStep = guidedFlow().findIndex(q => q.id === 'goal') + 1;
+  guidedAt(goalStep, { saveName: evil });
   noMarkup();
   assert.equal($<HTMLInputElement>('input[name=saveName]')!.value, evil);
   assert.equal($('input[name=hours]'), null, 'hours only for a timed goal');
@@ -882,8 +882,8 @@ test('"← Guided start" after All settings with no topics ticked returns to the
 
 test('the already-running question asks for a rate, with an item search we own', async () => {
   guidedAt(1);
-  const at = guidedFlow().findIndex(q => q.id === 'supply') + 1;
-  guidedAt(at);
+  const supplyStep = guidedFlow().findIndex(q => q.id === 'supply') + 1;
+  guidedAt(supplyStep);
   assert.ok($('.supply-list'));
   assert.equal($('.guided-card'), null, 'no cards to pick from');
   assert.equal($<HTMLInputElement>('input[name=supplyItem]')!.placeholder, 'Search item');
@@ -895,7 +895,7 @@ test('the already-running question asks for a rate, with an item search we own',
   assert.equal($('datalist'), null, 'suggestions are drawn in the page');
   assert.equal($('.supply-options')!.getAttribute('role'), 'listbox');
   assert.equal($$('input[name=supplyItem]').length, 1, 'one blank row to start');
-  guidedAt(at, {}, { existingSupply: { 'Modular Frame': 50 } });
+  guidedAt(supplyStep, {}, { existingSupply: { 'Modular Frame': 50 } });
   assert.equal($$('input[name=supplyItem]').length, 2, 'the declared line plus a blank row');
   assert.equal($<HTMLInputElement>('input[name=supplyItem]')!.value, 'Modular Frame');
   assert.equal($<HTMLInputElement>('input[name=supplyRate]')!.value, '50');
@@ -964,9 +964,9 @@ test('a chosen item shows its icon, and the icon follows the typing', async () =
 test('the item search works from the keyboard', async () => {
   supplyAt();
   const input = () => $<HTMLInputElement>('input[name=supplyItem]')!;
-  const key = async (k: string) => {
+  const key = async (name: string) => {
     input().dispatchEvent(
-      new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }),
+      new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }),
     );
     await nextTick();
   };
@@ -1117,7 +1117,8 @@ test('Cancel asks only once something was entered since the wizard started', asy
 // SP-33 (#268): Goals and Resources show a live estimate from a background /api/preview marked
 // `estimate`, debounced so it starts ESTIMATE_DELAY after the last edit (under a second with the
 // solve), one at a time, and cancelled when the step is left or the estimate is paused.
-const pause = (ms: number) => new Promise(r => setTimeout(r, ms)).then(() => nextTick());
+const pause = (ms: number) =>
+  new Promise(resolve => setTimeout(resolve, ms)).then(() => nextTick());
 function freshEstimate() {
   cancelEstimate(true);
   setEstimatePaused(false, null);
@@ -1125,11 +1126,11 @@ function freshEstimate() {
 // The generated plan with Iron Ore at `share` of its budget in Phase 5, and enough power there
 // (the fixture's Phase 5 asks for more than it has, which the estimate warns about too).
 function estimated(share: number) {
-  const p = structuredClone(generated());
-  const last = p.stages['5'];
-  last.raw!['Iron Ore'] = p.settings.limits['Iron Ore']! * share;
+  const plan = structuredClone(generated());
+  const last = plan.stages['5'];
+  last.raw!['Iron Ore'] = plan.settings.limits['Iron Ore']! * share;
   last.availableMW = (last.requiredMW ?? 0) + 100;
-  return p;
+  return plan;
 }
 const previews = <B>(calls: [string, B][]) =>
   calls.filter(([path]) => path.startsWith('/api/preview'));
@@ -1148,11 +1149,11 @@ test('Goals and Resources show a live estimate beside the form, the other steps 
   assert.equal(previews(calls).length, 1);
   // Marked in the address, which the server reads before the body (#413).
   assert.equal(calls[0]![0], '/api/preview?estimate=1', 'marked as an estimate');
-  const p = estimated(0.5),
-    last = p.stages['5'];
+  const plan = estimated(0.5),
+    last = plan.stages['5'];
   assert.equal(
     text('[data-estimate-buildings]').trim(),
-    num(last.rows!.reduce((a, r) => a + r.machines, 0)),
+    num(last.rows!.reduce((total, row) => total + row.machines, 0)),
   );
   assert.equal(
     text('[data-estimate-power]').trim(),
@@ -1173,9 +1174,9 @@ test('a budget over 100% shows a warning in the estimate (SP-33)', async () => {
   assert.match(text('[data-estimate-warning]'), /Iron Ore is over its budget: 125% in Phase 5\./);
   // Too little power at the last phase warns as well, as the plan's headroom notice would.
   freshEstimate();
-  const p = generated(),
-    last = p.stages['5'];
-  stubFetch({ '/api/preview': p });
+  const plan = generated(),
+    last = plan.stages['5'];
+  stubFetch({ '/api/preview': plan });
   wizardAt(3);
   await pause(30);
   assert.ok($('[data-estimate-power]')!.classList.contains('warn'));
@@ -1186,7 +1187,7 @@ test('a budget over 100% shows a warning in the estimate (SP-33)', async () => {
   );
   // A phase that does not fit says so.
   freshEstimate();
-  const draft = structuredClone(p);
+  const draft = structuredClone(plan);
   draft.stages['4'] = { ...draft.stages['4'], feasible: false, reason: 'Needs more coal.' };
   stubFetch({ '/api/preview': draft });
   wizardAt(3);
@@ -1238,11 +1239,11 @@ test('a one-line estimate bar carries the tightest resource and its warning, and
 test('the estimate bar hides while the panel is on screen (#412)', async () => {
   freshEstimate();
   stubFetch({ '/api/preview': estimated(0.5) });
-  const observers: ((e: { isIntersecting: boolean }[]) => void)[] = [];
+  const observers: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
   const real = globalThis.IntersectionObserver;
   globalThis.IntersectionObserver = class {
-    constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
-      observers.push(cb);
+    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+      observers.push(callback);
     }
     observe() {}
     disconnect() {}
@@ -1271,8 +1272,8 @@ test('edits are debounced into one estimate of the latest settings, within a sec
   await pause(30);
   const before = previews(calls).length;
   const box = $<HTMLInputElement>('input[name="limit:Iron Ore"]')!;
-  for (const v of ['1', '12', '123']) {
-    box.value = v;
+  for (const value of ['1', '12', '123']) {
+    box.value = value;
     box.dispatchEvent(new Event('input', { bubbles: true }));
     await pause(50);
   }
@@ -1292,11 +1293,11 @@ test('edits are debounced into one estimate of the latest settings, within a sec
 
 test('leaving the step or pausing cancels the estimate, and a late answer is ignored (SP-33)', async () => {
   freshEstimate();
-  let answer: (v: Response) => void = () => {};
+  let answer: (response: Response) => void = () => {};
   const bodies: unknown[] = [];
   globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
     bodies.push(JSON.parse(String(options.body)));
-    return new Promise<Response>(r => (answer = r));
+    return new Promise<Response>(resolve => (answer = resolve));
   }) as typeof fetch;
   wizardAt(3);
   await pause(30);
@@ -1343,8 +1344,8 @@ test('with whole machines, a quick exact-ratio estimate shows first and the full
       ...JSON.parse(String(options.body)),
       estimate: String(path).endsWith('?estimate=1'),
     });
-    return new Promise<Response>(r =>
-      answers.push(plan => r(new Response(JSON.stringify(plan), { status: 200 }))),
+    return new Promise<Response>(resolve =>
+      answers.push(plan => resolve(new Response(JSON.stringify(plan), { status: 200 }))),
     );
   }) as typeof fetch;
   wizardAt(4, {}, { wholeMachines: true });

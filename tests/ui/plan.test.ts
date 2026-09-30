@@ -43,7 +43,7 @@ const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 // Lets a save() round trip and the redraw after it finish.
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 const steps = () => $$('#main .checklist [data-check]').map(e => e.dataset.check);
@@ -106,27 +106,27 @@ test('the plan shows one progress bar and a summary line linking to each page (S
   // (The side column's delivery counters keep their own bars.)
   assert.equal($$('#main .split > section .progress-track').length, 1, 'one checklist bar');
   assert.ok(!$('#main')!.textContent!.includes('% complete'), 'no percentage beside it');
-  const s = summary();
+  const handbookSummary = summary();
   assert.deepEqual(
-    s.map(([key, href]) => [key, href]),
+    handbookSummary.map(([key, href]) => [key, href]),
     [
       ['factories', '#factories'],
       ['storage', '#storage'],
       ['power', '#resources'],
     ],
   );
-  assert.match(s[0]![2]!, /^1 of \d+ factories running$/);
-  assert.match(s[1]![2]!, /^0 of \d+ storage positions verified$/);
-  assert.match(s[2]![2]!, / GW planned power$/);
+  assert.match(handbookSummary[0]![2]!, /^1 of \d+ factories running$/);
+  assert.match(handbookSummary[1]![2]!, /^0 of \d+ storage positions verified$/);
+  assert.match(handbookSummary[2]![2]!, / GW planned power$/);
   // The calculated plan: the same bar, its lines and buildings, storage, new power and the
   // delivery time, which has no page of its own.
   open({ calculated: generated });
   render();
   assert.ok($('#main .plan-progress [role=progressbar]'));
   assert.equal($('#main .stat'), null);
-  const c = summary();
+  const calculatedSummary = summary();
   assert.deepEqual(
-    c.map(([key, href]) => [key, href]),
+    calculatedSummary.map(([key, href]) => [key, href]),
     [
       ['factories', '#factories'],
       ['storage', '#storage'],
@@ -134,15 +134,15 @@ test('the plan shows one progress bar and a summary line linking to each page (S
       ['hours', null],
     ],
   );
-  assert.match(c[0]![2]!, /^0 of \d+ production lines running, [\d,.]+ buildings$/);
-  assert.match(c[3]![2]!, /^Delivery in [\d,.]+ h at steady state$/);
+  assert.match(calculatedSummary[0]![2]!, /^0 of \d+ production lines running, [\d,.]+ buildings$/);
+  assert.match(calculatedSummary[3]![2]!, /^Delivery in [\d,.]+ h at steady state$/);
 });
 
 test('a duplicated or imported original profile also starts from the handbook counts', () => {
   open({ profileId: 'copy-uuid' });
   render();
-  for (const d of handbookDeliveries('3'))
-    assert.equal($<HTMLInputElement>(`#delivery-${d.id}`)!.value, String(d.initial));
+  for (const delivery of handbookDeliveries('3'))
+    assert.equal($<HTMLInputElement>(`#delivery-${delivery.id}`)!.value, String(delivery.initial));
 });
 
 test('post-game reads the Phase 5 stage and swaps deliveries for its priority note', () => {
@@ -175,7 +175,7 @@ test('the checklist can be searched and can hide completed steps', async () => {
   assert.ok(steps().includes('phase-3-iron'), 'unfinished steps stay visible');
   assert.equal($('.checklist-tools .muted')!.textContent, '8 of 9 steps');
   assert.equal($('[data-plan-progress]')!.textContent, '1 of 9 done', 'progress counts every step');
-  for (const t of planTasks()) state.checks[t.id] = true;
+  for (const task of planTasks()) state.checks[task.id] = true;
   render();
   await nextTick();
   assert.match($('[data-phase-complete]')!.textContent, /Phase checklist complete/);
@@ -252,9 +252,9 @@ test('the lead step offers its factory; search, Hide completed and editing still
   open({ calculated: generated });
   render();
   await nextTick();
-  const ts = planTasks(),
-    ids = ts.map(t => t.id);
-  const linked = ts.findIndex(t => $(`#main [data-task="${t.id}"] .task-link`));
+  const tasks = planTasks(),
+    ids = tasks.map(t => t.id);
+  const linked = tasks.findIndex(t => $(`#main [data-task="${t.id}"] .task-link`));
   assert.ok(linked > 0, 'a later step links a factory');
   for (const id of ids.slice(0, linked)) state.checks[id] = true;
   render();
@@ -265,7 +265,7 @@ test('the lead step offers its factory; search, Hide completed and editing still
   assert.ok(!link.classList.contains('quiet'), 'a full button on the lead step');
   assert.ok($('#main .task.lead [data-mark-done]'));
   // The search looks in both groups; a completed match shows under Done.
-  $<HTMLInputElement>('#plan-search')!.value = ts[0]!.title;
+  $<HTMLInputElement>('#plan-search')!.value = tasks[0]!.title;
   $('#plan-search')!.dispatchEvent(new Event('input'));
   await nextTick();
   assert.ok(doneIds().includes(ids[0]));
@@ -390,8 +390,8 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   $('[data-move-task="phase-3-iron"][data-dir="1"]')!.click();
   await settle();
   const order = planTasks().map(t => t.id);
-  const i = order.indexOf('phase-3-iron');
-  [order[i], order[i + 1]] = [order[i + 1]!, order[i]!];
+  const position = order.indexOf('phase-3-iron');
+  [order[position], order[position + 1]] = [order[position + 1]!, order[position]!];
   // The removed survey step keeps its slot at the top for when it is restored.
   assert.deepEqual(calls.at(-1)![1], {
     type: 'taskOrder',
@@ -449,18 +449,22 @@ test('adding a personal task saves it and empties the form', async () => {
 test('a delivery count must be a whole number up to the target', async () => {
   const calls = stubFetch({ '/api/update': () => state });
   render();
-  const d = handbookDeliveries('3')[0]!;
-  const input = $<HTMLInputElement>(`#delivery-${d.id}`)!;
-  input.value = String(d.target + 1);
+  const delivery = handbookDeliveries('3')[0]!;
+  const input = $<HTMLInputElement>(`#delivery-${delivery.id}`)!;
+  input.value = String(delivery.target + 1);
   input.dispatchEvent(new Event('change'));
   await settle();
   assert.equal(calls.length, 0);
-  assert.equal(input.value, String(d.initial), 'an invalid entry shows the saved count again');
+  assert.equal(
+    input.value,
+    String(delivery.initial),
+    'an invalid entry shows the saved count again',
+  );
   assert.match($('#toast')!.textContent, /whole number between 0 and/);
   input.value = '7';
   input.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(calls[0]![1], { type: 'delivery', key: d.id, value: 7 });
+  assert.deepEqual(calls[0]![1], { type: 'delivery', key: delivery.id, value: 7 });
 });
 
 test('with completed steps hidden, moving a step passes the neighbour on screen', async () => {
@@ -546,9 +550,9 @@ test('a cleared step title restores the original, and an automatic link can be r
 test('reordering keeps a removed step’s place, so restoring it puts it back', async () => {
   // The /api/update stand-in applies the saved order the way the server does.
   stubFetch<UpdateOp>({
-    '/api/update': (op: UpdateOp) =>
-      op.type === 'taskOrder'
-        ? { ...state, taskEdits: { ...state.taskEdits!, order: { [op.phase]: op.ids } } }
+    '/api/update': (update: UpdateOp) =>
+      update.type === 'taskOrder'
+        ? { ...state, taskEdits: { ...state.taskEdits!, order: { [update.phase]: update.ids } } }
         : state,
   });
   const removed: Partial<TaskEdits> = { removed: ['phase-3-retire-power'] };
@@ -643,8 +647,8 @@ test('the power headroom notice speaks of the phase shown, on every phase', () =
       .map(n => n.textContent.replace(/\s+/g, ' ').trim())
       .find(t => /whole-building power headroom/.test(t));
   for (const phase of ['1', '2', '3', '4', '5', 'post'] as const) {
-    const x = plan.stages[phase === 'post' ? '5' : phase]!;
-    assert.ok(x.additionalHeadroomMW! > 0.01, `Phase ${phase} has headroom to allow`);
+    const stage = plan.stages[phase === 'post' ? '5' : phase]!;
+    assert.ok(stage.additionalHeadroomMW! > 0.01, `Phase ${phase} has headroom to allow`);
     for (const view of ['plan', 'factories', 'resources'] as const) {
       page();
       open({ calculated: plan, phase });
@@ -658,10 +662,11 @@ test('the power headroom notice speaks of the phase shown, on every phase', () =
         continue;
       }
       assert.doesNotMatch(text, /Phase 1|biomass/, `${label} is not told to use biomass`);
-      const machines = new Set(x.rows!.filter(r => r.generationMW > 0).map(r => r.machine));
+      const machines = new Set(stage.rows!.filter(r => r.generationMW > 0).map(r => r.machine));
       assert.ok(machines.size > 0, `${label} builds generators`);
       assert.ok(text.includes(label + ' plans '), `${label}: ${text}`);
-      for (const m of machines) assert.ok(text.includes(m + 's'), `${label} names ${m}: ${text}`);
+      for (const machine of machines)
+        assert.ok(text.includes(machine + 's'), `${label} names ${machine}: ${text}`);
     }
   }
   // The handbook profile has no calculated power figures, so it draws no such notice.

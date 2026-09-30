@@ -39,13 +39,13 @@ import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
-const letters = () => $$('#main .bay-letter').map(e => e.textContent);
+const letters = () => $$('#main .bay-letter').map(letter => letter.textContent);
 // A floor tab's own label, without the count beside it (SP-23, #258).
-const tabLabel = (t: HTMLElement) =>
-  [...t.childNodes]
+const tabLabel = (floorTab: HTMLElement) =>
+  [...floorTab.childNodes]
     .filter(n => n.nodeType === Node.TEXT_NODE)
     .map(n => n.textContent)
     .join('')
@@ -54,16 +54,16 @@ const tab = (id: string) => $(`#main .tabs [data-floor="${id}"]`)!;
 // A tab's count as drawn ("41/64") and as its name reads it after the label (", 41 of 64 done");
 // null without one.
 const tabCount = (id: string) => {
-  const t = tab(id),
-    drawn = t.querySelector('.count'),
-    name = t.getAttribute('aria-label');
+  const floorTab = tab(id),
+    drawn = floorTab.querySelector('.count'),
+    name = floorTab.getAttribute('aria-label');
   if (!drawn) {
     assert.equal(name, null, 'a tab without a count is named by its label');
     return null;
   }
   assert.equal(drawn.getAttribute('aria-hidden'), 'true', 'the figures are not read out twice');
-  assert.ok(name!.startsWith(tabLabel(t) + ','), 'the name starts with the label drawn');
-  return [drawn.textContent, name!.slice(tabLabel(t).length)];
+  assert.ok(name!.startsWith(tabLabel(floorTab) + ','), 'the name starts with the label drawn');
+  return [drawn.textContent, name!.slice(tabLabel(floorTab).length)];
 };
 // The named containers of the handbook's bays on a floor, leaving out the bays in `except`.
 const namedOn = (floorId: string, except: string[] = []) =>
@@ -152,11 +152,11 @@ test('bays stay in address order in the document and take their hall position fr
   const order = letters();
   assert.ok(order.length > 2 && order.length % 2 === 0, 'whole rows of bays');
   assert.deepEqual(order, [...order].sort(), 'a single narrow column reads alphabetically');
-  const at = Object.fromEntries(
-    $$('#main .bay').map(b => {
-      const style = b.getAttribute('style')!;
+  const positions = Object.fromEntries(
+    $$('#main .bay').map(bay => {
+      const style = bay.getAttribute('style')!;
       return [
-        b.querySelector('.bay-letter')!.textContent,
+        bay.querySelector('.bay-letter')!.textContent,
         [
           Number(style.match(/--bay-row: ?(\d+)/)![1]),
           Number(style.match(/--bay-col: ?(\d+)/)![1]),
@@ -164,9 +164,17 @@ test('bays stay in address order in the document and take their hall position fr
       ];
     }),
   );
-  assert.deepEqual(at.A, [order.length / 2, 1], 'A stays at the entrance, left of the aisle');
-  assert.deepEqual(at.B, [order.length / 2, 3], 'B stays at the entrance, right of the aisle');
-  assert.deepEqual(at[order.at(-2)!], [1, 1], 'the last pair stays at the rear of the hall');
+  assert.deepEqual(
+    positions.A,
+    [order.length / 2, 1],
+    'A stays at the entrance, left of the aisle',
+  );
+  assert.deepEqual(
+    positions.B,
+    [order.length / 2, 3],
+    'B stays at the entrance, right of the aisle',
+  );
+  assert.deepEqual(positions[order.at(-2)!], [1, 1], 'the last pair stays at the rear of the hall');
   assert.equal($$('#main .aisle').length, order.length / 2, 'every row keeps its aisle');
   assert.equal($('#main .eyebrow.floor-marker')!.textContent, 'REAR OF HALL ↑');
 });
@@ -180,8 +188,8 @@ test('the storage key sits above the grid, a decorative swatch beside each state
   const grid = $('#main .floor-grid')!,
     rear = $('#main .eyebrow.floor-marker')!,
     entry = $('#main .entry.floor-marker')!;
-  const before = (a: Node, b: Node) =>
-    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const before = (first: Node, second: Node) =>
+    Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
   assert.ok(
     before(key, rear) && before(key, grid),
     'the key comes before the rear marker and grid',
@@ -202,9 +210,9 @@ test('the storage key sits above the grid, a decorative swatch beside each state
     swatches.map(s => [...s.classList].filter(c => c !== 'key-swatch')),
     [['done'], ['empty'], ['added']],
   );
-  for (const s of swatches) {
-    assert.equal(s.getAttribute('aria-hidden'), 'true', 'a swatch is decoration');
-    assert.equal(s.textContent, '', 'a swatch holds no words of its own');
+  for (const swatch of swatches) {
+    assert.equal(swatch.getAttribute('aria-hidden'), 'true', 'a swatch is decoration');
+    assert.equal(swatch.textContent, '', 'a swatch holds no words of its own');
   }
   assert.equal(
     entry.nextElementSibling!.tagName,
@@ -236,8 +244,8 @@ test('a floor without bays draws no key, the workshop and an added floor alike (
 test('the key swatches share the grid states’ colour rules, and a phone keeps only "added" (SP-24)', () => {
   const css = fs.readFileSync('public/style.css', 'utf8').replace(/\r\n/g, '\n');
   const rule = (selector: string) =>
-    [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m =>
-      m[1]!
+    [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(match =>
+      match[1]!
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .split(',')
         .map(s => s.trim())
@@ -500,14 +508,14 @@ test('floor tabs count the Done containers of each floor, as its bays do (SP-23,
   assert.equal(tab('ground').getAttribute('aria-label'), `Ground floor, 1 of ${ground} done`);
   assert.equal(tabCount('workshop'), null, 'a floor without containers shows no count');
   // The bays' own lines add up to the tab's count.
-  const lines = $$('#main .bay-actions .muted').map(e =>
-    e.textContent
+  const lines = $$('#main .bay-actions .muted').map(note =>
+    note.textContent
       .match(/^(\d+)\/(\d+) containers done$/)!
       .slice(1)
       .map(Number),
   );
   assert.deepEqual(
-    lines.reduce((sum, [d, n]) => [sum[0]! + d!, sum[1]! + n!], [0, 0]),
+    lines.reduce((sum, [done, total]) => [sum[0]! + done!, sum[1]! + total!], [0, 0]),
     [1, ground],
   );
   // Bay A's bar sits under its title with its share Done, hidden from a screen reader beside
@@ -725,8 +733,8 @@ test('the built room’s moves are a to-do: Done saves their step and the notice
 });
 
 test('Done on the moves is busy while it saves, and a failed save keeps the notice and focus', async () => {
-  let answer!: (r: Response) => void;
-  globalThis.fetch = () => new Promise<Response>(r => (answer = r));
+  let answer!: (response: Response) => void;
+  globalThis.fetch = () => new Promise<Response>(resolve => (answer = resolve));
   render();
   const done = $<HTMLButtonElement>('[data-ground-moves-done]')!;
   done.focus();
@@ -1115,7 +1123,7 @@ test('bays move left and right on their floor in edit mode, and the hall pairs t
   await nextTick();
   const place = (id: string) => {
     const bay = $(`[data-slot="${id}01"]`)!.closest<HTMLElement>('.bay')!.style;
-    return ['--bay-row', '--bay-col'].map(p => bay.getPropertyValue(p).trim());
+    return ['--bay-row', '--bay-col'].map(property => bay.getPropertyValue(property).trim());
   };
   // The handbook's pairing: A and B share the row by the entrance, G and H the rear one.
   assert.deepEqual(letters(), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
@@ -1265,8 +1273,8 @@ test('containers get drag handles in edit mode, and a drop moves or swaps them w
 // The drop targets @dnd-kit/vue has registered for the page, by the address each answers to,
 // with the address the cell registered under it shows (its data-drop). Read from the manager
 // the page's DragDropProvider gives its cells, found through a cell's component instance.
-const isManager = (x: unknown): x is DragDropManager =>
-  !!x && typeof x === 'object' && 'registry' in x && 'monitor' in x;
+const isManager = (value: unknown): value is DragDropManager =>
+  !!value && typeof value === 'object' && 'registry' in value && 'monitor' in value;
 function dropManager(): DragDropManager {
   const cell = $('[data-drop]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
   const instance = cell?.__vueParentComponent as { provides?: object } | undefined;
@@ -1274,9 +1282,9 @@ function dropManager(): DragDropManager {
   assert.ok(provides, 'a drop cell is a mounted component');
   let manager: DragDropManager | undefined;
   // `provides` inherits from the parents' through its prototype chain.
-  for (let p: object | null = provides; p && !manager; p = Object.getPrototypeOf(p))
-    for (const key of Reflect.ownKeys(p)) {
-      const value: unknown = Reflect.get(p, key);
+  for (let scope: object | null = provides; scope && !manager; scope = Object.getPrototypeOf(scope))
+    for (const key of Reflect.ownKeys(scope)) {
+      const value: unknown = Reflect.get(scope, key);
       const ref = value && typeof value === 'object' && 'value' in value ? value.value : value;
       if (isManager(ref)) manager = ref;
     }
@@ -1285,9 +1293,9 @@ function dropManager(): DragDropManager {
 }
 function dropTargets(): Map<string, string | null> {
   return new Map(
-    [...dropManager().registry.droppables].map(d => [
-      String(d.id),
-      d.element?.getAttribute('data-drop') ?? null,
+    [...dropManager().registry.droppables].map(droppable => [
+      String(droppable.id),
+      droppable.element?.getAttribute('data-drop') ?? null,
     ]),
   );
 }
@@ -1333,9 +1341,10 @@ test('a drop past the end lands on the position it shows, also once the one befo
 function pageDragEnd(): (event: unknown, manager: unknown) => Promise<void> {
   type Instance = { parent: Instance | null; vnode: { props: Record<string, unknown> | null } };
   const cell = $('[data-drop="A01"]') as (HTMLElement & { __vueParentComponent?: unknown }) | null;
-  let at = cell?.__vueParentComponent as Instance | null | undefined;
-  while (at && typeof at.vnode.props?.onDragEnd !== 'function') at = at.parent;
-  const dragEnd = at?.vnode.props?.onDragEnd as
+  let component = cell?.__vueParentComponent as Instance | null | undefined;
+  while (component && typeof component.vnode.props?.onDragEnd !== 'function')
+    component = component.parent;
+  const dragEnd = component?.vnode.props?.onDragEnd as
     | ((event: unknown, manager: unknown) => Promise<void>)
     | undefined;
   assert.ok(dragEnd, 'the page handles dragend');
@@ -1392,20 +1401,20 @@ test('a position is the drop target only while the pointer is over it, in the wi
   assert.ok(droppables.length > 8);
   // dnd-kit's default would fall back to the dragged card's shape when no position is under the
   // pointer, so a card let go in the aisle landed on whichever position it overlapped.
-  for (const d of droppables)
-    assert.equal(d.collisionDetector, pointerOnly, `drop target ${String(d.id)}`);
+  for (const droppable of droppables)
+    assert.equal(droppable.collisionDetector, pointerOnly, `drop target ${String(droppable.id)}`);
   // Where the detector looks at all: a pointer outside the window hits nothing, not the
   // out-of-sight position below or beside it.
-  const at = (x: number, y: number, activatorEvent: Event) =>
+  const inWindow = (x: number, y: number, activatorEvent: Event) =>
     inView({ activatorEvent, position: { current: { x, y } } });
   const mouse = new PointerEvent('pointerdown'),
     keys = new KeyboardEvent('keydown');
-  assert.equal(at(10, 10, mouse), true);
-  assert.equal(at(10, innerHeight + 80, mouse), false);
-  assert.equal(at(innerWidth + 5, 10, mouse), false);
-  assert.equal(at(-1, 10, mouse), false);
+  assert.equal(inWindow(10, 10, mouse), true);
+  assert.equal(inWindow(10, innerHeight + 80, mouse), false);
+  assert.equal(inWindow(innerWidth + 5, 10, mouse), false);
+  assert.equal(inWindow(-1, 10, mouse), false);
   // The keyboard moves the card's centre and never auto-scrolls, so it is not held to the window.
-  assert.equal(at(10, innerHeight + 80, keys), true);
+  assert.equal(inWindow(10, innerHeight + 80, keys), true);
 });
 
 test('the drop target follows the page as it scrolls under a pointer held still (#303)', async () => {
@@ -1417,7 +1426,7 @@ test('the drop target follows the page as it scrolls under a pointer held still 
   // dnd-kit's drag feedback asks for the page's animations, which happy-dom does not have.
   document.getAnimations ??= () => [];
   Element.prototype.getAnimations ??= () => [];
-  const frame = () => new Promise(r => requestAnimationFrame(r));
+  const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
   const over = () => $$('.drop-over').map(c => c.dataset.drop);
   // A02 is picked up and held over A06, with A07 below.
   placeCell('A06', 200, 200);
@@ -1428,7 +1437,7 @@ test('the drop target follows the page as it scrolls under a pointer held still 
     event: new PointerEvent('pointerdown'),
   });
   // dnd-kit measures the positions as they come into view, which happy-dom never reports.
-  for (const d of manager.registry.droppables) d.refreshShape();
+  for (const droppable of manager.registry.droppables) droppable.refreshShape();
   manager.actions.move({ to: { x: 250, y: 251 } });
   await settle();
   assert.deepEqual(over(), ['A06']);
@@ -1514,10 +1523,10 @@ const typeAdd = async (text: string) => {
   await nextTick();
 };
 const pressAdd = async (key: string) => {
-  const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-  addField().dispatchEvent(e);
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+  addField().dispatchEvent(event);
   await nextTick();
-  return e;
+  return event;
 };
 const submitAdd = async () => {
   $('.add-container[data-bay="A"]')!.dispatchEvent(new Event('submit', { cancelable: true }));
@@ -1578,10 +1587,10 @@ test('the add-container field suggests item names, each with its icon, as you ty
   const starts = names.filter(n => n.toLowerCase().startsWith('iron'));
   assert.deepEqual(names.slice(0, starts.length), starts, 'names that start with it come first');
   assert.ok(names.includes('Iron Plate') && names.includes('Reinforced Iron Plate'));
-  for (const o of suggestions()) {
-    const icon = o.firstElementChild!;
+  for (const option of suggestions()) {
+    const icon = option.firstElementChild!;
     assert.equal(icon.tagName, 'IMG', 'the icon comes first');
-    assert.equal(icon.getAttribute('src'), `./icons/${slug(o.textContent.trim())}.png`);
+    assert.equal(icon.getAttribute('src'), `./icons/${slug(option.textContent.trim())}.png`);
     assert.equal(icon.getAttribute('alt'), '', 'the name beside it says what it is');
   }
   // Typing narrows the list.

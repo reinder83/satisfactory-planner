@@ -31,7 +31,7 @@ function emptyWorkspace() {
 // What Tab reaches first inside <main>.
 const firstTabStop = () =>
   $$<HTMLElement>('#main button, #main a[href], #main input, #main select, #main summary').find(
-    e => e.tabIndex >= 0 && !(e as HTMLButtonElement).disabled,
+    element => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled,
   );
 
 beforeEach(() => {
