@@ -9,20 +9,17 @@ const OLD = /time limit/i;
 
 // Runs `body` on a clock that moves `step` milliseconds every time it is read, so the solver's
 // clock backstop stops the searches that read it often enough, the same on every machine (the
-// technique of tests/amplified-supply-fallback.test.ts).
+// technique of tests/amplified-supply-fallback.test.ts). Only performance.now ticks, the clock
+// HiGHS reads; Date.now keeps the real time, so the phase's search deadline (#592) is not reached.
 function onTickingClock<T>(step: number, body: () => T): T {
-  const now = performance.now,
-    dateNow = Date.now;
-  const start = now.call(performance),
-    dateStart = dateNow();
+  const now = performance.now;
+  const start = now.call(performance);
   let reads = 0;
   performance.now = () => start + ++reads * step;
-  Date.now = () => dateStart + ++reads * step;
   try {
     return body();
   } finally {
     performance.now = now;
-    Date.now = dateNow;
   }
 }
 

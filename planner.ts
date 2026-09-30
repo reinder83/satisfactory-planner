@@ -29,7 +29,7 @@ import {
   resourceDefaults,
 } from './public/preferences.ts';
 import fs from 'node:fs';
-import { solve, type LpModel } from './optimizer.ts';
+import { setSearchDeadline, solve, type LpModel } from './optimizer.ts';
 import type {
   AlternatePayoff,
   AlternateRanking,
@@ -1465,6 +1465,20 @@ export function calculate(
   input: unknown,
   onPhase?: (phase: number) => void,
 ): CurrentCalculatedPlan {
+  try {
+    return calculatePlan(input, onPhase);
+  } finally {
+    setSearchDeadline(Infinity);
+  }
+}
+// How long the integer searches of one phase may take together, in milliseconds (#592): well
+// inside the browser worker's limit of 180 seconds per phase (workerJobs in public/browser-api.ts).
+// Its timer restarts only when a phase starts, so what runs after the Phase 5 solve (phaseTime
+// 'final', fueled augmenters) shares Phase 5's deadline. The rest of the worker's limit is left
+// for the linear solves and the other work of a slower device. On an ordinary machine the heaviest
+// phases of the test set search for about 20 seconds, so this changes no plan there.
+const PHASE_SEARCH_MS = 120000;
+function calculatePlan(input: unknown, onPhase?: (phase: number) => void): CurrentCalculatedPlan {
   const config = settings(input);
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
@@ -1478,6 +1492,7 @@ export function calculate(
   // scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
+    setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
     const maximised = config.goal === 'maximum' && phase >= 2;
     let result = run(
       config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
