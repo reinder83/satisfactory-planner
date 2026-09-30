@@ -19,8 +19,8 @@ const EYEBROW = 'Factory group · build\u00a0order';
 
 const chain = computed(() =>
   legacy(() => {
-    const c = groupChain(props.id);
-    return c && { ...c, phase: phaseLabel(stage()) };
+    const buildOrder = groupChain(props.id);
+    return buildOrder && { ...buildOrder, phase: phaseLabel(stage()) };
   }),
 );
 </script>
@@ -45,30 +45,31 @@ const chain = computed(() =>
       produced by a later stage: run that stage from a starter batch first, then close the loop.
     </p>
     <div class="chain">
-      <div v-for="s in chain.stages" :key="s.id" class="chain-stage">
-        <span class="chain-no">{{ s.no }}</span>
+      <div v-for="chainStage in chain.stages" :key="chainStage.id" class="chain-stage">
+        <span class="chain-no">{{ chainStage.no }}</span>
         <div class="chain-body">
           <div class="chain-title">
-            <button class="rail-link" v-bind="factoryLink(s.link)">{{ s.name }} ↗</button
-            ><span class="muted">{{ s.machines }}</span>
+            <button class="rail-link" v-bind="factoryLink(chainStage.link)">
+              {{ chainStage.name }} ↗</button
+            ><span class="muted">{{ chainStage.machines }}</span>
           </div>
-          <p v-if="s.needs.length" class="small">
+          <p v-if="chainStage.needs.length" class="small">
             <b>Needs</b
-            ><template v-for="(n, i) in s.needs" :key="i"
-              ><br />{{ n.text }}
+            ><template v-for="(need, i) in chainStage.needs" :key="i"
+              ><br />{{ need.text }}
               <span class="muted"
-                >· <b v-if="n.loop" class="chain-loop">loop — seed a starter batch</b
-                ><template v-else>{{ n.from }}</template></span
+                >· <b v-if="need.loop" class="chain-loop">loop — seed a starter batch</b
+                ><template v-else>{{ need.from }}</template></span
               ></template
             >
           </p>
           <p v-else class="small muted">No belt or pipe inputs.</p>
           <p class="small">
-            <b>Feeds</b><br /><template v-if="s.feeds.length"
-              ><template v-for="(f, i) in s.feeds" :key="i"
-                ><br v-if="i" />{{ f }}</template
+            <b>Feeds</b><br /><template v-if="chainStage.feeds.length"
+              ><template v-for="(feed, i) in chainStage.feeds" :key="i"
+                ><br v-if="i" />{{ feed }}</template
               ></template
-            ><template v-else>{{ s.power ? 'Power grid' : '—' }}</template>
+            ><template v-else>{{ chainStage.power ? 'Power grid' : '—' }}</template>
           </p>
         </div>
       </div>

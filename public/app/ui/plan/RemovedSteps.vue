@@ -13,8 +13,8 @@ defineProps<{ steps: RemovedStepView[] }>();
 // "Restore": the step goes back into the checklist and its Restore leaves this list, so focus goes
 // to the next removed step's Restore, else the previous one's, and once none is left to the
 // restored step's Remove in the checklist, else the personal task field (ui/refocus.ts, #290).
-async function restore(e: Event, id: string) {
-  const refocus = refocusAfterRemoval(e.currentTarget, {
+async function restore(event: Event, id: string) {
+  const refocus = refocusAfterRemoval(event.currentTarget, {
     row: '#main .removed-steps .removed-step',
     control: '[data-restore-task]',
     fallback: [`#main .checklist [data-remove-step="${CSS.escape(id)}"]`, '#add-task [name=title]'],
@@ -30,9 +30,9 @@ async function restore(e: Event, id: string) {
 <template>
   <details class="panel removed-steps">
     <summary>Removed steps in this phase ({{ steps.length }})</summary>
-    <div v-for="s in steps" :key="s.id" class="removed-step">
-      <span><StepIcon :icon="s.icon" />{{ s.title }}</span
-      ><button class="btn quiet" :data-restore-task="s.id" @click="restore($event, s.id)">
+    <div v-for="step in steps" :key="step.id" class="removed-step">
+      <span><StepIcon :icon="step.icon" />{{ step.title }}</span
+      ><button class="btn quiet" :data-restore-task="step.id" @click="restore($event, step.id)">
         Restore
       </button>
     </div>

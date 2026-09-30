@@ -30,13 +30,13 @@ const title = ref(props.step.title);
 const body = ref(props.step.body || '');
 const link = ref(props.current);
 
-async function submit(e: Event) {
+async function submit(event: Event) {
   const id = props.step.id,
-    fd = new FormData(e.target as HTMLFormElement);
+    formData = new FormData(event.target as HTMLFormElement);
   const base = basePlanTasks().find(t => t.id === id);
-  const title = String(fd.get('title') || '').trim(),
-    body = String(fd.get('body') || '').trim(),
-    link = String(fd.get('link') || '');
+  const title = String(formData.get('title') || '').trim(),
+    body = String(formData.get('body') || '').trim(),
+    link = String(formData.get('link') || '');
   try {
     await save({
       type: 'taskEdit',
@@ -66,8 +66,8 @@ function cancel() {
     <label class="field"
       >Linked factory<select v-model="link" name="link">
         <option value="">No linked factory</option>
-        <option v-for="[v, l] in options" :key="v" :value="v">
-          {{ l }}
+        <option v-for="[factoryId, name] in options" :key="factoryId" :value="factoryId">
+          {{ name }}
         </option>
       </select></label
     >

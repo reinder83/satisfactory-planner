@@ -29,7 +29,7 @@ const form = () => document.querySelector<HTMLFormElement>('#wizard-form');
 
 const view = computed(() =>
   legacy(() => {
-    const p = estimate.plan;
+    const plan = estimate.plan;
     // The quick pass (exact ratios, wizard/estimate.ts) is shown while the whole-machine one
     // runs; a phase it says fits may still not fit once rounded.
     const quick = estimate.status === 'running' && estimate.quick;
@@ -41,25 +41,25 @@ const view = computed(() =>
           ? 'Estimating…'
           : estimate.status === 'error'
             ? estimate.error
-            : p
+            : plan
               ? 'Estimate for the settings on screen.'
               : 'An estimate appears as you change these settings.';
-    if (!p)
+    if (!plan)
       return { status, error: estimate.status === 'error', paused: estimate.paused, figures: null };
-    const from = Number(p.settings.phase || 1);
-    const stages = Object.entries(p.stages).filter(([ph]) => Number(ph) >= from);
+    const from = Number(plan.settings.phase || 1);
+    const stages = Object.entries(plan.stages).filter(([phase]) => Number(phase) >= from);
     const [lastPhase, last] = stages.at(-1)!;
     // The tightest raw resource over every phase the plan covers.
     let tightest: { name: string; phase: string; use: ReturnType<typeof resourceUse> } | null =
       null;
-    for (const [ph, x] of stages)
-      for (const [name, q] of Object.entries(x.raw || {})) {
-        const use = resourceUse(q, p.settings.limits[name] ?? 0);
+    for (const [phase, stageResult] of stages)
+      for (const [name, rate] of Object.entries(stageResult.raw || {})) {
+        const use = resourceUse(rate, plan.settings.limits[name] ?? 0);
         if (!use.idle && (!tightest || use.fraction > tightest.use.fraction))
-          tightest = { name, phase: ph, use };
+          tightest = { name, phase, use };
       }
     const short = (last.requiredMW ?? 0) - (last.availableMW ?? 0) > 0.01;
-    const unfit = stages.filter(([, x]) => !x.feasible).map(([ph]) => ph);
+    const unfit = stages.filter(([, stageResult]) => !stageResult.feasible).map(([phase]) => phase);
     const warnings = [
       ...(tightest?.use.over
         ? [`${tightest.name} is over its budget: ${tightest.use.use} in Phase ${tightest.phase}.`]
@@ -82,7 +82,7 @@ const view = computed(() =>
       stale: estimate.status === 'running' && !quick,
       figures: {
         phase: lastPhase,
-        buildings: last.rows ? num(last.rows.reduce((a, r) => a + r.machines, 0)) : '—',
+        buildings: last.rows ? num(last.rows.reduce((sum, row) => sum + row.machines, 0)) : '—',
         power: `${power(last.requiredMW)} of ${power(last.availableMW)}`,
         short,
         tightest,
@@ -94,10 +94,10 @@ const view = computed(() =>
 
 // The phone bar's one line: the tightest resource once there is one, else the status.
 const peek = computed(() => {
-  const t = view.value.figures?.tightest;
+  const tightest = view.value.figures?.tightest;
   return {
-    label: t ? 'Tightest' : 'Live estimate',
-    text: t ? `${t.name} ${t.use.use}` : view.value.status,
+    label: tightest ? 'Tightest' : 'Live estimate',
+    text: tightest ? `${tightest.name} ${tightest.use.use}` : view.value.status,
     warn: !!(view.value.figures && view.value.warnings?.length),
   };
 });
@@ -117,10 +117,10 @@ async function showPanel() {
 }
 
 onMounted(() => {
-  const f = form();
-  if (f) scheduleEstimate(f, 0);
+  const wizardForm = form();
+  if (wizardForm) scheduleEstimate(wizardForm, 0);
   if (typeof IntersectionObserver === 'function' && panel.value) {
-    seen = new IntersectionObserver(([e]) => (panelShown.value = !!e?.isIntersecting));
+    seen = new IntersectionObserver(([entry]) => (panelShown.value = !!entry?.isIntersecting));
     seen.observe(panel.value);
   }
 });
@@ -179,7 +179,9 @@ onBeforeUnmount(() => {
       </div>
     </dl>
     <div v-if="view.figures && view.warnings.length" class="notice warn" data-estimate-warning>
-      <p v-for="w in view.warnings" :key="w"><span aria-hidden="true">⚠ </span>{{ w }}</p>
+      <p v-for="warning in view.warnings" :key="warning">
+        <span aria-hidden="true">⚠ </span>{{ warning }}
+      </p>
     </div>
     <button
       type="button"

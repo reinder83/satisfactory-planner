@@ -14,24 +14,24 @@ import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
 import SupplyRows from './SupplyRows.vue';
 
-const PHASES = ['1', '2', '3', '4', '5'].map(x => [x, 'Phase ' + x]);
+const PHASES = ['1', '2', '3', '4', '5'].map(phase => [phase, 'Phase ' + phase]);
 
 const view = computed(() =>
   legacy(() => {
-    const w = draft(),
-      s = w.settings;
+    const wizardDraft = draft(),
+      settings = wizardDraft.settings;
     return {
-      saveName: w.saveName,
-      adding: !!w.saveId,
-      phase: s.phase,
-      purity: s.purity,
-      distribution: s.distribution,
-      worldSeed: s.worldSeed || '',
-      multiplier: s.multiplier,
-      powerFactor: s.powerFactor,
-      availablePowerMW: s.availablePowerGW * 1000,
-      installedPowerMW: (s.installedPowerGW ?? s.availablePowerGW) * 1000,
-      modNotes: s.modNotes || '',
+      saveName: wizardDraft.saveName,
+      adding: !!wizardDraft.saveId,
+      phase: settings.phase,
+      purity: settings.purity,
+      distribution: settings.distribution,
+      worldSeed: settings.worldSeed || '',
+      multiplier: settings.multiplier,
+      powerFactor: settings.powerFactor,
+      availablePowerMW: settings.availablePowerGW * 1000,
+      installedPowerMW: (settings.installedPowerGW ?? settings.availablePowerGW) * 1000,
+      modNotes: settings.modNotes || '',
     };
   }),
 );

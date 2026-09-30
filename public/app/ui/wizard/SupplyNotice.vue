@@ -13,23 +13,24 @@ import type { ItemRates, StoredCalculatedPlan, StoredStage } from '../../../type
 const props = defineProps<{ plan: StoredCalculatedPlan }>();
 
 const view = computed(() => {
-  const p = props.plan,
-    declared = p.settings?.existingSupply || {};
+  const plan = props.plan,
+    declared = plan.settings?.existingSupply || {};
   if (!Object.keys(declared).length) return null;
-  const start = Number(p.settings.phase || 1);
+  const start = Number(plan.settings.phase || 1);
   const used: ItemRates = {};
-  for (const [ph, st] of Object.entries(p.stages) as [string, StoredStage][])
-    if (Number(ph) >= start)
-      for (const [n, q] of Object.entries(st.supplied || {})) used[n] = Math.max(used[n] || 0, q);
+  for (const [phase, stageResult] of Object.entries(plan.stages) as [string, StoredStage][])
+    if (Number(phase) >= start)
+      for (const [item, rate] of Object.entries(stageResult.supplied || {}))
+        used[item] = Math.max(used[item] || 0, rate);
   return {
-    lines: Object.entries(declared).map(([n, q]) => ({
-      name: n,
-      rate: num(q),
-      drawn: (used[n] || 0) > 0.002 ? num(used[n]) : '',
+    lines: Object.entries(declared).map(([item, rate]) => ({
+      name: item,
+      rate: num(rate),
+      drawn: (used[item] || 0) > 0.002 ? num(used[item]) : '',
     })),
-    dropped: (Object.entries(p.stages) as [string, StoredStage][])
-      .filter(([ph, st]) => st.supplyDropped && Number(ph) >= start)
-      .map(([ph]) => ph),
+    dropped: (Object.entries(plan.stages) as [string, StoredStage][])
+      .filter(([phase, stageResult]) => stageResult.supplyDropped && Number(phase) >= start)
+      .map(([phase]) => phase),
   };
 });
 </script>
@@ -39,11 +40,11 @@ const view = computed(() => {
     <b>Crediting production you already run.</b> These lines are not planned again, and neither is
     the chain behind them.
     <ul class="supply-summary">
-      <li v-for="l in view.lines" :key="l.name">
-        <ItemIcon :name="l.name" /><span
-          ><b>{{ l.name }}</b> {{ l.rate }}/min declared{{
-            l.drawn
-              ? ` · the plan draws up to ${l.drawn}/min of it, and builds no line for it`
+      <li v-for="line in view.lines" :key="line.name">
+        <ItemIcon :name="line.name" /><span
+          ><b>{{ line.name }}</b> {{ line.rate }}/min declared{{
+            line.drawn
+              ? ` · the plan draws up to ${line.drawn}/min of it, and builds no line for it`
               : ' · this plan has no use for it, so nothing changes'
           }}</span
         >

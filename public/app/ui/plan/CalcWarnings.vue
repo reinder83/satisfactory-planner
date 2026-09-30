@@ -13,15 +13,18 @@ import { legacy } from '../bridge.ts';
 
 const notices = computed(() =>
   legacy(() => {
-    const x = calcStage();
-    if (!x) return { draft: null, headroom: '', advice: '' };
+    const stageResult = calcStage();
+    if (!stageResult) return { draft: null, headroom: '', advice: '' };
     return {
-      draft: !x.feasible && {
-        reason: x.reason,
-        fixes: draftFixes(x, calculated?.settings),
+      draft: !stageResult.feasible && {
+        reason: stageResult.reason,
+        fixes: draftFixes(stageResult, calculated?.settings),
       },
-      headroom: (x.additionalHeadroomMW ?? 0) > 0.01 ? power(x.additionalHeadroomMW!) : '',
-      advice: headroomAdvice(x, phase()),
+      headroom:
+        (stageResult.additionalHeadroomMW ?? 0) > 0.01
+          ? power(stageResult.additionalHeadroomMW!)
+          : '',
+      advice: headroomAdvice(stageResult, phase()),
     };
   }),
 );
@@ -34,7 +37,7 @@ const notices = computed(() =>
     }}<template v-if="notices.draft.fixes.length"
       ><p><b>Options</b></p>
       <ul>
-        <li v-for="f in notices.draft.fixes" :key="f">{{ f }}</li>
+        <li v-for="fix in notices.draft.fixes" :key="fix">{{ fix }}</li>
       </ul>
       <p class="small">
         Profiles are calculated snapshots: create a new profile with adjusted settings to apply an

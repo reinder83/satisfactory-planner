@@ -26,22 +26,22 @@ const NONE: string[] = [];
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
-    const s = wizard.settings;
+    const settings = wizard.settings;
     return {
-      alternates: s.alternateRecipes || NONE,
-      preferred: s.preferredRecipes || NONE,
-      rows: (workspace.catalog.alternates || []).map(a => {
-        const outs = Object.keys(a.outputs);
+      alternates: settings.alternateRecipes || NONE,
+      preferred: settings.preferredRecipes || NONE,
+      rows: (workspace.catalog.alternates || []).map(alternate => {
+        const outs = Object.keys(alternate.outputs);
         return {
-          id: a.id,
-          name: a.name,
+          id: alternate.id,
+          name: alternate.name,
           outs,
-          text: (a.name + ' ' + outs.join(' ')).toLowerCase(),
-          when: a.mam ? 'MAM research' : 'Phase ' + a.phase,
+          text: (alternate.name + ' ' + outs.join(' ')).toLowerCase(),
+          when: alternate.mam ? 'MAM research' : 'Phase ' + alternate.phase,
           why:
-            a.mam && !['auto', 'coal', 'fuel'].includes(s.mainPower || 'auto')
+            alternate.mam && !['auto', 'coal', 'fuel'].includes(settings.mainPower || 'auto')
               ? 'power preference'
-              : a.pure && s.pureIngots === true
+              : alternate.pure && settings.pureIngots === true
                 ? 'ingot preference'
                 : '',
         };
@@ -74,8 +74,8 @@ watch(
 );
 
 const filter = ref('');
-const shown = (r: AltRow) =>
-  filter.value.trim() === '' || r.text.includes(filter.value.trim().toLowerCase());
+const shown = (row: AltRow) =>
+  filter.value.trim() === '' || row.text.includes(filter.value.trim().toLowerCase());
 const count = computed(() =>
   touched.value
     ? // touched is only set by the boxes, which the view draws.
@@ -83,23 +83,23 @@ const count = computed(() =>
     : picked.value.size,
 );
 
-function tick(r: AltRow, on: boolean) {
-  const p = new Set(picked.value),
-    s = new Set(starred.value);
-  on ? p.add(r.id) : p.delete(r.id);
-  if (!on) s.delete(r.id);
-  picked.value = p;
-  starred.value = s;
+function tick(row: AltRow, on: boolean) {
+  const picks = new Set(picked.value),
+    stars = new Set(starred.value);
+  on ? picks.add(row.id) : picks.delete(row.id);
+  if (!on) stars.delete(row.id);
+  picked.value = picks;
+  starred.value = stars;
   touched.value = true;
 }
-function star(r: AltRow, on: boolean) {
-  const s = new Set(starred.value);
-  on ? s.add(r.id) : s.delete(r.id);
-  starred.value = s;
+function star(row: AltRow, on: boolean) {
+  const stars = new Set(starred.value);
+  on ? stars.add(row.id) : stars.delete(row.id);
+  starred.value = stars;
 }
 function all(on: boolean) {
   // The buttons are only drawn with the view.
-  for (const r of view.value!.rows) if (!r.why && shown(r)) tick(r, on);
+  for (const row of view.value!.rows) if (!row.why && shown(row)) tick(row, on);
 }
 
 // Planner's choice: its label shows the calculation's progress meanwhile, busy (bound
@@ -109,29 +109,29 @@ const bestLabel = ref('Planner’s choice');
 async function best() {
   if (busy.value) return;
   busy.value = true;
-  const w = draft();
+  const wizardDraft = draft();
   try {
     readWizard(required<HTMLFormElement>('#wizard-form'));
     const preview = await post<StoredCalculatedPlan>(
       '/api/preview',
-      { settings: { ...w.settings, recipes: 'all' } },
+      { settings: { ...wizardDraft.settings, recipes: 'all' } },
       true,
       calcProgress(
         {
-          set textContent(v: string | null) {
-            if (v === null) return;
-            bestLabel.value = v;
+          set textContent(text: string | null) {
+            if (text === null) return;
+            bestLabel.value = text;
           },
         },
         'Calculating…',
       ),
     );
     const used = alternatesUsed(preview);
-    w.settings.alternateRecipes = used;
+    wizardDraft.settings.alternateRecipes = used;
     render();
     toast(`Selected ${used.length} alternate recipes the planner uses with your current settings.`);
-  } catch (err) {
-    wizardError($<HTMLFormElement>('#wizard-form'), err as Error);
+  } catch (error) {
+    wizardError($<HTMLFormElement>('#wizard-form'), error as Error);
   } finally {
     busy.value = false;
     bestLabel.value = 'Planner’s choice';
@@ -184,52 +184,52 @@ async function best() {
     </p>
     <div class="alt-list">
       <div
-        v-for="r in view.rows"
-        :key="r.id"
+        v-for="row in view.rows"
+        :key="row.id"
         class="alt-row"
-        :data-alt-text="r.text"
-        :hidden="!shown(r)"
+        :data-alt-text="row.text"
+        :hidden="!shown(row)"
       >
         <label class="check-row"
           ><input
-            v-if="r.why"
+            v-if="row.why"
             type="checkbox"
             checked
             disabled
-            :aria-label="`${r.name} is required by your ${r.why}`"
+            :aria-label="`${row.name} is required by your ${row.why}`"
           /><input
             v-else
             type="checkbox"
             name="alt"
-            :value="r.id"
-            :checked="picked.has(r.id)"
-            @change="tick(r, ($event.target as HTMLInputElement).checked)"
+            :value="row.id"
+            :checked="picked.has(row.id)"
+            @change="tick(row, ($event.target as HTMLInputElement).checked)"
           /><span
-            >{{ r.name
+            >{{ row.name
             }}<small class="muted">
-              · {{ r.outs.join(', ') }} · {{ r.when
-              }}{{ r.why ? ' · required by your ' + r.why : '' }}</small
+              · {{ row.outs.join(', ') }} · {{ row.when
+              }}{{ row.why ? ' · required by your ' + row.why : '' }}</small
             ></span
           ></label
         ><label
-          v-if="!r.why"
+          v-if="!row.why"
           class="alt-pref"
-          :title="`Force this recipe: the plan will not use any other recipe for ${r.outs[0]} once this one is available`"
+          :title="`Force this recipe: the plan will not use any other recipe for ${row.outs[0]} once this one is available`"
           ><input
             type="checkbox"
             name="altpref"
-            :value="r.id"
-            :checked="starred.has(r.id)"
-            :disabled="!picked.has(r.id)"
-            :aria-label="`Force ${r.name} as the only ${r.outs[0]} recipe`"
-            @change="star(r, ($event.target as HTMLInputElement).checked)"
+            :value="row.id"
+            :checked="starred.has(row.id)"
+            :disabled="!picked.has(row.id)"
+            :aria-label="`Force ${row.name} as the only ${row.outs[0]} recipe`"
+            @change="star(row, ($event.target as HTMLInputElement).checked)"
           /><span>★</span></label
         ><button
           type="button"
           class="btn quiet alt-info"
-          :data-alt-info="r.id"
-          :aria-label="`Show the ${r.name} recipe`"
-          @click="openAltRecipe(r.id)"
+          :data-alt-info="row.id"
+          :aria-label="`Show the ${row.name} recipe`"
+          @click="openAltRecipe(row.id)"
         >
           recipe ↗
         </button>

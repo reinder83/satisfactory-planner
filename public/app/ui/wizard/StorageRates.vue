@@ -27,19 +27,19 @@ import { vValue } from '../form/value.ts';
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
-    const s = wizard.settings;
-    const items = (workspace.catalog.storageItems || []).filter(i =>
-      wantsStorage(i.name, s.storage),
+    const settings = wizard.settings;
+    const items = (workspace.catalog.storageItems || []).filter(item =>
+      wantsStorage(item.name, settings.storage),
     );
     if (!items.length) return null;
-    const over = s.storageOverrides || {};
+    const overrides = settings.storageOverrides || {};
     return {
-      set: items.filter(i => over[i.name] !== undefined).length,
-      rows: items.map(i => ({
-        name: i.name,
-        group: i.build ? 'build' : i.delivered ? 'delivered' : 'other',
-        value: over[i.name] ?? '',
-        placeholder: num(storageRateFor({ ...s, storageOverrides: {} }, i.name)),
+      set: items.filter(item => overrides[item.name] !== undefined).length,
+      rows: items.map(item => ({
+        name: item.name,
+        group: item.build ? 'build' : item.delivered ? 'delivered' : 'other',
+        value: overrides[item.name] ?? '',
+        placeholder: num(storageRateFor({ ...settings, storageOverrides: {} }, item.name)),
       })),
     };
   }),
@@ -50,14 +50,14 @@ const view = computed(() =>
 const placeholders = reactive<Record<string, string>>({});
 watch(
   view,
-  v => {
-    for (const r of v?.rows || []) placeholders[r.name] = r.placeholder;
+  current => {
+    for (const row of current?.rows || []) placeholders[row.name] = row.placeholder;
   },
   { immediate: true },
 );
-function groupRates(e: Event) {
-  if (!['buildRate', 'storageRate'].includes((e.target as HTMLInputElement).name)) return;
-  const form = e.currentTarget as HTMLFormElement;
+function groupRates(event: Event) {
+  if (!['buildRate', 'storageRate'].includes((event.target as HTMLInputElement).name)) return;
+  const form = event.currentTarget as HTMLFormElement;
   const read = (name: string) => {
     const value = form.querySelector<HTMLInputElement>('[name=' + name + ']')?.value;
     return value !== undefined && value !== '' && Number.isFinite(Number(value))
@@ -66,9 +66,9 @@ function groupRates(e: Event) {
   };
   const general = read('storageRate'),
     build = read('buildRate') ?? general;
-  for (const r of view.value?.rows || []) {
-    const rate = r.group === 'delivered' ? 0 : r.group === 'build' ? build : general;
-    if (rate !== null) placeholders[r.name] = num(rate);
+  for (const row of view.value?.rows || []) {
+    const rate = row.group === 'delivered' ? 0 : row.group === 'build' ? build : general;
+    if (rate !== null) placeholders[row.name] = num(rate);
   }
 }
 // The group-rate fields sit elsewhere on the step, so listen on the step's form.
@@ -83,8 +83,8 @@ onMounted(() => {
 onBeforeUnmount(() => form?.removeEventListener('input', groupRates));
 
 const filter = ref('');
-const shown = (r: { name: string }) =>
-  filter.value.trim() === '' || r.name.toLowerCase().includes(filter.value.trim().toLowerCase());
+const shown = (row: { name: string }) =>
+  filter.value.trim() === '' || row.name.toLowerCase().includes(filter.value.trim().toLowerCase());
 </script>
 
 <template>
@@ -109,28 +109,28 @@ const shown = (r: { name: string }) =>
     />
     <div class="rate-list">
       <label
-        v-for="r in view.rows"
-        :key="r.name"
+        v-for="row in view.rows"
+        :key="row.name"
         class="rate-row field"
-        :data-rate-text="r.name.toLowerCase()"
-        :data-rate-group="r.group"
-        :hidden="!shown(r)"
+        :data-rate-text="row.name.toLowerCase()"
+        :data-rate-group="row.group"
+        :hidden="!shown(row)"
         ><span
-          >{{ r.name
-          }}<template v-if="r.group === 'build'"
+          >{{ row.name
+          }}<template v-if="row.group === 'build'"
             >{{ ' ' }}<small class="muted">· construction</small></template
-          ><template v-else-if="r.group === 'delivered'"
+          ><template v-else-if="row.group === 'delivered'"
             >{{ ' ' }}<small class="muted">· delivered</small></template
           ></span
         ><input
-          :name="'rate:' + r.name"
+          :name="'rate:' + row.name"
           type="number"
           min="0"
           max="300"
           step="0.1"
-          v-value="r.value"
-          :placeholder="placeholders[r.name]"
-          :aria-label="`Storage refill for ${r.name} per minute`"
+          v-value="row.value"
+          :placeholder="placeholders[row.name]"
+          :aria-label="`Storage refill for ${row.name} per minute`"
       /></label>
     </div>
   </details>

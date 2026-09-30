@@ -12,12 +12,12 @@ import { legacy } from '../bridge.ts';
 
 const progress = computed(() =>
   legacy(() => {
-    const ts = planTasks(),
-      done = ts.filter(t => checked(t.id)).length;
+    const tasks = planTasks(),
+      done = tasks.filter(t => checked(t.id)).length;
     return {
       done,
-      total: ts.length,
-      pct: ts.length ? Math.round((done / ts.length) * 100) : 100,
+      total: tasks.length,
+      percent: tasks.length ? Math.round((done / tasks.length) * 100) : 100,
     };
   }),
 );
@@ -34,7 +34,7 @@ const progress = computed(() =>
       :aria-valuenow="progress.done"
       :aria-valuetext="progress.done + ' of ' + progress.total + ' steps done'"
     >
-      <span :style="{ width: progress.pct + '%' }"></span>
+      <span :style="{ width: progress.percent + '%' }"></span>
     </div>
     <span class="small muted" data-plan-progress aria-hidden="true"
       >{{ progress.done }} of {{ progress.total }} done</span

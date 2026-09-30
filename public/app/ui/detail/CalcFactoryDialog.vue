@@ -29,21 +29,21 @@ const props = defineProps<{ id: string }>();
 
 const view = computed(() =>
   legacy(() => {
-    const r = calcStage()?.rows?.find(r => r.id === props.id);
-    if (!r) return null;
-    const m = machineSetup(r),
-      counts = machineCounts(r.machines, m.partial ? m.clock : 100),
-      easy = easierSetup(m);
-    const check = 'calc-' + stage() + '-' + r.id;
+    const row = calcStage()?.rows?.find(r => r.id === props.id);
+    if (!row) return null;
+    const setup = machineSetup(row),
+      counts = machineCounts(row.machines, setup.partial ? setup.clock : 100),
+      easy = easierSetup(setup);
+    const check = 'calc-' + stage() + '-' + row.id;
     // The card's headline (SP-21): a generator's power, even when it also makes waste (#371),
     // else the main output. The outputs list below stays only where the card lists them too: a
     // generator's waste, more than one, or one that is not what the row is named after.
-    const guide = calculated?.guide?.factories?.[r.id];
-    const outputs = Object.entries(r.outputs || {}),
+    const guide = calculated?.guide?.factories?.[row.id];
+    const outputs = Object.entries(row.outputs || {}),
       [main, rate] = outputs[0] || [],
-      generator = r.generationMW > 0;
+      generator = row.generationMW > 0;
     return {
-      r,
+      row,
       check,
       done: checked(check),
       running: `Running at ${phaseLabel(stage())} target`,
@@ -56,24 +56,24 @@ const view = computed(() =>
       summary:
         main && !generator
           ? num(rate) + (FLUIDS.has(main) ? '\u00a0m³/min' : '/min')
-          : power(r.generationMW),
-      icon: rowIcon(r),
-      flow: calcFlowModel(r),
-      setup: m,
+          : power(row.generationMW),
+      icon: rowIcon(row),
+      flow: calcFlowModel(row),
+      setup,
       // The three machine cells (SP-20), from the count and clock the row's card shows; the
       // captions keep the output per machine and the calculated clock this table used to show.
       machines: {
         counts,
         total:
-          r.machine +
-          (r.peakMW > 0
-            ? ' · peak load ' + power(r.peakMW)
-            : r.generationMW > 0
-              ? ' · generates ' + power(r.generationMW)
+          row.machine +
+          (row.peakMW > 0
+            ? ' · peak load ' + power(row.peakMW)
+            : row.generationMW > 0
+              ? ' · generates ' + power(row.generationMW)
               : ''),
-        full: counts.full ? m.fullOutput + ' each' : '',
+        full: counts.full ? setup.fullOutput + ' each' : '',
         adjustable: counts.clock
-          ? '≈ ' + num(m.clock) + '% → ≈ ' + m.lastOutput
+          ? '≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput
           : 'No underclock needed',
       },
       easy: easy
@@ -81,16 +81,16 @@ const view = computed(() =>
             clock: easy.clock,
             output:
               inputText(easy.output) ||
-              num(((r.generationMW / (r.equivalent || 1)) * easy.clock) / 100) + ' MW',
+              num(((row.generationMW / (row.equivalent || 1)) * easy.clock) / 100) + ' MW',
             inputs: inputText(easy.inputs),
             extra: inputText(easy.extraOutputs) || 'Additional generation',
           }
         : null,
       outputs:
-        (generator && main) || outputs.length > 1 || (main && main !== r.name)
-          ? inputText(r.outputs)
+        (generator && main) || outputs.length > 1 || (main && main !== row.name)
+          ? inputText(row.outputs)
           : '',
-      expansion: calcExpansion(r.id),
+      expansion: calcExpansion(row.id),
     };
   }),
 );
@@ -99,7 +99,7 @@ const view = computed(() =>
 <template>
   <DialogFrame
     v-if="view"
-    :title="view.r.name"
+    :title="view.row.name"
     :subtitle="view.subtitle"
     :summary="view.summary"
     :icon="view.icon"
@@ -159,16 +159,17 @@ const view = computed(() =>
       </thead>
       <tbody>
         <tr
-          v-for="e in view.expansion"
-          :key="e.phase"
-          :class="e.current ? 'current-phase' : undefined"
-          :aria-current="e.current ? 'true' : undefined"
+          v-for="expansionRow in view.expansion"
+          :key="expansionRow.phase"
+          :class="expansionRow.current ? 'current-phase' : undefined"
+          :aria-current="expansionRow.current ? 'true' : undefined"
         >
           <td>
-            {{ e.label }}<small v-if="e.tag" class="phase-tag">{{ e.tag }}</small>
+            {{ expansionRow.label
+            }}<small v-if="expansionRow.tag" class="phase-tag">{{ expansionRow.tag }}</small>
           </td>
-          <td>{{ e.required }}</td>
-          <td>{{ e.add }}</td>
+          <td>{{ expansionRow.required }}</td>
+          <td>{{ expansionRow.add }}</td>
         </tr>
       </tbody>
     </table>
@@ -176,6 +177,6 @@ const view = computed(() =>
       The optimizer may choose a different recipe in another phase. Keep earlier buildings until the
       replacement chain runs. Screws and wire can be made beside consumers.
     </p>
-    <DetailNote :note-key="'factory-' + view.r.id" />
+    <DetailNote :note-key="'factory-' + view.row.id" />
   </DialogFrame>
 </template>

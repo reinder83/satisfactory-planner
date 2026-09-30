@@ -18,26 +18,32 @@ import SupplyNotice from './SupplyNotice.vue';
 
 const view = computed(() =>
   legacy(() => {
-    const w = draft(),
-      p = w.preview;
-    if (!p) return null;
-    const from = Number(p.settings.phase || 1);
-    const stages = Object.entries(p.stages).filter(([ph]) => Number(ph) >= from);
+    const wizardDraft = draft(),
+      preview = wizardDraft.preview;
+    if (!preview) return null;
+    const from = Number(preview.settings.phase || 1);
+    const stages = Object.entries(preview.stages).filter(([phase]) => Number(phase) >= from);
     return {
-      name: w.name,
-      plan: p,
-      rows: stages.map(([ph, x]) => ({
-        phase: ph,
-        hours: x.hours ? num(x.hours) + ' h' : '—',
-        was: x.aheadOf !== undefined ? num(x.aheadOf) : '',
-        buildings: x.rows ? num(x.rows.reduce((a, r) => a + r.machines, 0)) : '—',
-        generation: x.generationMW !== undefined ? power(x.generationMW) : '—',
-        budget: x.feasible ? 'Within entered limits' : 'Needs adjustment',
+      name: wizardDraft.name,
+      plan: preview,
+      rows: stages.map(([phase, stageResult]) => ({
+        phase,
+        hours: stageResult.hours ? num(stageResult.hours) + ' h' : '—',
+        was: stageResult.aheadOf !== undefined ? num(stageResult.aheadOf) : '',
+        buildings: stageResult.rows
+          ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
+          : '—',
+        generation: stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—',
+        budget: stageResult.feasible ? 'Within entered limits' : 'Needs adjustment',
       })),
       drafts: stages
-        .filter(([, x]) => !x.feasible)
-        .map(([ph, x]) => ({ phase: ph, reason: x.reason, fixes: draftFixes(x, p.settings) })),
-      warnings: p.warnings,
+        .filter(([, stageResult]) => !stageResult.feasible)
+        .map(([phase, stageResult]) => ({
+          phase,
+          reason: stageResult.reason,
+          fixes: draftFixes(stageResult, preview.settings),
+        })),
+      warnings: preview.warnings,
     };
   }),
 );
@@ -59,34 +65,34 @@ const view = computed(() =>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in view.rows" :key="r.phase">
-            <td>{{ r.phase }}</td>
+          <tr v-for="row in view.rows" :key="row.phase">
+            <td>{{ row.phase }}</td>
             <td>
-              {{ r.hours
-              }}<template v-if="r.was"
-                >{{ ' ' }}<span class="badge">was {{ r.was }} h</span></template
+              {{ row.hours
+              }}<template v-if="row.was"
+                >{{ ' ' }}<span class="badge">was {{ row.was }} h</span></template
               >
             </td>
-            <td>{{ r.buildings }}</td>
-            <td>{{ r.generation }}</td>
-            <td>{{ r.budget }}</td>
+            <td>{{ row.buildings }}</td>
+            <td>{{ row.generation }}</td>
+            <td>{{ row.budget }}</td>
           </tr>
         </tbody>
       </table>
     </div>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
-    <div v-for="d in view.drafts" :key="d.phase" class="notice warn">
-      <b>Phase {{ d.phase }}:</b> {{ d.reason
-      }}<template v-if="d.fixes.length"
+    <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">
+      <b>Phase {{ phaseDraft.phase }}:</b> {{ phaseDraft.reason
+      }}<template v-if="phaseDraft.fixes.length"
         ><p><b>Options</b></p>
         <ul>
-          <li v-for="f in d.fixes" :key="f">{{ f }}</li>
+          <li v-for="fix in phaseDraft.fixes" :key="fix">{{ fix }}</li>
         </ul></template
       >
     </div>
     <details class="panel">
       <summary>Assumptions and calculation limits</summary>
-      <p v-for="(x, i) in view.warnings" :key="i" class="small">{{ x }}</p>
+      <p v-for="(warning, i) in view.warnings" :key="i" class="small">{{ warning }}</p>
     </details>
     <p class="small muted">
       You can save a plan that exceeds your budgets as a planning draft; its affected phases remain

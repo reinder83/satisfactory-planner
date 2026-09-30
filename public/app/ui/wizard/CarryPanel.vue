@@ -16,13 +16,13 @@ import { RESOLVE_WARNING } from '../../../handbook-migration.ts';
 
 const view = computed(() =>
   legacy(() => {
-    const w = wizard,
-      save = w && workspace.saves.find(s => s.id === w.saveId);
+    const wizardDraft = wizard,
+      save = wizardDraft && workspace.saves.find(s => s.id === wizardDraft.saveId);
     if (!save?.profiles.length) return null;
     // save is only found with a draft open, and has profiles (checked above).
-    const source = save.profiles.find(p => p.id === w!.carryFrom) || save.profiles[0]!;
-    const picks = w!.carry || {},
-      picked = pickedRecipeUnlocks(w!.preview).length;
+    const source = save.profiles.find(p => p.id === wizardDraft!.carryFrom) || save.profiles[0]!;
+    const picks = wizardDraft!.carry || {},
+      picked = pickedRecipeUnlocks(wizardDraft!.preview).length;
     return {
       profiles: save.profiles.map(p => ({ id: p.id, name: p.name })),
       source: source.id,
@@ -52,15 +52,17 @@ const view = computed(() =>
     <label class="field"
       >Carry progress from
       <select name="carryFrom" :value="view.source">
-        <option v-for="p in view.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+        <option v-for="profile in view.profiles" :key="profile.id" :value="profile.id">
+          {{ profile.name }}
+        </option>
       </select></label
     >
     <p v-if="view.transcribed" class="notice warn" data-resolve-warning>{{ RESOLVE_WARNING }}</p>
     <div class="carry-list">
-      <label v-for="o in view.options" :key="o.key" class="check-row"
-        ><input type="checkbox" name="carry" :value="o.key" :checked="o.on" /><span
-          ><b>{{ o.label }}</b
-          >{{ o.count }}<br /><small class="muted">{{ o.detail }}</small></span
+      <label v-for="option in view.options" :key="option.key" class="check-row"
+        ><input type="checkbox" name="carry" :value="option.key" :checked="option.on" /><span
+          ><b>{{ option.label }}</b
+          >{{ option.count }}<br /><small class="muted">{{ option.detail }}</small></span
         ></label
       >
     </div>

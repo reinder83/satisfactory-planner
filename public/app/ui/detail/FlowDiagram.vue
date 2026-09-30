@@ -18,17 +18,17 @@ const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model:
 // A destination row's caption by kind: consumer (another factory), store (protected storage),
 // ship (elevator, power fleet, augmenters…), drone (fuel contract), sink (surplus to the
 // AWESOME Sink) or more (the rows capFlowOutputs folded together).
-const caption = (o: FlowOutput) =>
+const caption = (output: FlowOutput) =>
   (
     ({
-      consumer: `consumer${o.beltTxt ? ' · ' + o.beltTxt : ''}`,
+      consumer: `consumer${output.beltTxt ? ' · ' + output.beltTxt : ''}`,
       store: 'protected module',
-      ship: o.shipSub || 'delivery',
+      ship: output.shipSub || 'delivery',
       drone: 'protected supply contract',
-      sink: o.subTxt || 'whole-machine rounding surplus',
+      sink: output.subTxt || 'whole-machine rounding surplus',
       more: 'combined smaller destinations',
     }) as Record<FlowOutput['kind'], string>
-  )[o.kind] || '';
+  )[output.kind] || '';
 
 // A unit as a rate writes it after its number: " m³/min" for a fluid, "/min" otherwise. The
 // fluid unit's leading space becomes a no-break space, as itemRate() in flow.ts writes it, so a
@@ -36,42 +36,43 @@ const caption = (o: FlowOutput) =>
 const unitText = (unit: string | undefined) => (unit || '/min').replace(/^ /, '\u00a0');
 
 const flow = computed(() => {
-  const m = props.model;
-  if (!m || (!m.inputs.length && !m.outputs.length)) return null;
+  const model = props.model;
+  if (!model || (!model.inputs.length && !model.outputs.length)) return null;
   return {
     // The model itself, for the template (non-null inside v-if="flow").
-    model: m,
-    phase: phaseLabel(m.stage),
+    model,
+    phase: phaseLabel(model.stage),
     // An input tile: lane count and mark, and how full those lanes are. 70% load or more is
     // highlighted as a line with little headroom.
-    inputs: m.inputs.map(i => {
-      const p = i.plan,
-        load = Math.round((i.rate / (p.count * p.lane.cap)) * 100);
+    inputs: model.inputs.map(input => {
+      const plan = input.plan,
+        load = Math.round((input.rate / (plan.count * plan.lane.cap)) * 100);
       return {
-        name: i.name,
-        link: i.link,
-        lanes: `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''} · ${load}% load`,
+        name: input.name,
+        link: input.link,
+        lanes: `${plan.count} × ${plan.lane.mark} ${plan.word}${plan.count > 1 ? 's' : ''} · ${load}% load`,
         hot: load >= 70,
-        rate: num(i.rate),
-        unit: unitText(p.lane.unit),
+        rate: num(input.rate),
+        unit: unitText(plan.lane.unit),
       };
     }),
     // A destination row. `mach` is how many machines' worth of output it takes, rounded up
     // per destination (under half a machine reads "<1"); absent where it cannot be split.
-    outputs: m.outputs.map(o => ({
-      ...o,
-      caption: (o.pre ? o.pre + ' · ' : '') + caption(o),
+    outputs: model.outputs.map(output => ({
+      ...output,
+      caption: (output.pre ? output.pre + ' · ' : '') + caption(output),
       machines:
-        o.mach === undefined
+        output.mach === undefined
           ? null
           : {
-              round: o.mach < 0.5 ? '<1' : num(Math.ceil(o.mach - 1e-9)),
-              exact: num(o.mach) + ' at 100% · ' + (m.local ? 'build beside it' : 'round up'),
+              round: output.mach < 0.5 ? '<1' : num(Math.ceil(output.mach - 1e-9)),
+              exact:
+                num(output.mach) + ' at 100% · ' + (model.local ? 'build beside it' : 'round up'),
             },
-      rateText: o.rateTxt ?? null,
-      rateValue: o.rateTxt == null && o.rate !== undefined ? num(o.rate) : null,
+      rateText: output.rateTxt ?? null,
+      rateValue: output.rateTxt == null && output.rate !== undefined ? num(output.rate) : null,
     })),
-    perDelivery: m.outputs.some(o => o.mach !== undefined),
+    perDelivery: model.outputs.some(o => o.mach !== undefined),
   };
 });
 </script>
@@ -90,16 +91,16 @@ const flow = computed(() => {
       </div>
       <div class="rail-grid">
         <component
-          :is="i.link ? 'button' : 'div'"
-          v-for="i in flow.inputs"
-          :key="i.name"
+          :is="input.link ? 'button' : 'div'"
+          v-for="input in flow.inputs"
+          :key="input.name"
           class="rail-tile"
-          v-bind="factoryLink(i.link)"
-          ><ItemIcon :name="i.name" /><span class="rail-main"
-            ><b>{{ i.name }}</b
-            ><small :class="i.hot ? 'hot' : null">{{ i.lanes }}</small></span
+          v-bind="factoryLink(input.link)"
+          ><ItemIcon :name="input.name" /><span class="rail-main"
+            ><b>{{ input.name }}</b
+            ><small :class="input.hot ? 'hot' : null">{{ input.lanes }}</small></span
           ><span class="rail-rate"
-            >{{ i.rate }}<small>{{ i.unit }}</small></span
+            >{{ input.rate }}<small>{{ input.unit }}</small></span
           ></component
         >
       </div></template
@@ -131,21 +132,23 @@ const flow = computed(() => {
         >
       </div>
       <div class="rail-rows">
-        <div v-for="(o, n) in flow.outputs" :key="n" :class="['rail-row', o.kind]">
-          <ItemIcon v-if="o.icon" :name="o.icon" /><span v-else class="rail-noicon"></span
+        <div v-for="(output, i) in flow.outputs" :key="i" :class="['rail-row', output.kind]">
+          <ItemIcon v-if="output.icon" :name="output.icon" /><span v-else class="rail-noicon"></span
           ><span class="rail-main"
-            ><button v-if="o.link" class="rail-link" v-bind="factoryLink(o.link)">
-              {{ o.label }} ↗</button
-            ><b v-else :class="o.kind === 'sink' || o.kind === 'more' ? 'dim' : ''">{{ o.label }}</b
-            ><small>{{ o.caption }}</small></span
-          ><span v-if="o.machines" class="rail-mach"
-            ><b>≈ {{ o.machines.round }}</b> × {{ flow.model.machineName
-            }}<small>{{ o.machines.exact }}</small></span
+            ><button v-if="output.link" class="rail-link" v-bind="factoryLink(output.link)">
+              {{ output.label }} ↗</button
+            ><b v-else :class="output.kind === 'sink' || output.kind === 'more' ? 'dim' : ''">{{
+              output.label
+            }}</b
+            ><small>{{ output.caption }}</small></span
+          ><span v-if="output.machines" class="rail-mach"
+            ><b>≈ {{ output.machines.round }}</b> × {{ flow.model.machineName
+            }}<small>{{ output.machines.exact }}</small></span
           ><span v-else class="rail-mach"></span
           ><span class="rail-rate"
-            ><template v-if="o.rateText !== null">{{ o.rateText }}</template
-            ><template v-else-if="o.rateValue !== null"
-              >{{ o.rateValue }}<small>{{ unitText(o.unit) }}</small></template
+            ><template v-if="output.rateText !== null">{{ output.rateText }}</template
+            ><template v-else-if="output.rateValue !== null"
+              >{{ output.rateValue }}<small>{{ unitText(output.unit) }}</small></template
             ></span
           >
         </div>

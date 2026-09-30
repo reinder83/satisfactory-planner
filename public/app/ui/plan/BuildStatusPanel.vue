@@ -15,44 +15,44 @@ import { factoryLink } from '../actions.ts';
 
 // At most this many held-back rows are listed; the rest are counted.
 const MAX_WAITING = 5;
-const pct = (x: number) => Math.round(x * 100);
+const percent = (share: number) => Math.round(share * 100);
 
 const view = computed(() =>
   legacy(() => {
-    const s = currentBuildStatus();
-    if (!s) return null;
+    const status = currentBuildStatus();
+    if (!status) return null;
     const name = (id: string) => calcStage()?.rows?.find(r => r.id === id)?.name || id;
-    const waiting = s.rows
+    const waiting = status.rows
       .filter(r => r.built && r.share < 1 && r.shortOf)
-      .map(r => ({
-        id: r.id,
-        name: name(r.id),
-        text: `running at ${pct(r.share)}%, short of ${r.shortOf}`,
+      .map(row => ({
+        id: row.id,
+        name: name(row.id),
+        text: `running at ${percent(row.share)}%, short of ${row.shortOf}`,
       }));
-    const next = s.next && {
-      id: s.next.id,
-      name: name(s.next.id),
+    const next = status.next && {
+      id: status.next.id,
+      name: name(status.next.id),
       why:
-        s.next.gain > 0
-          ? `adds ${Math.max(1, pct(s.next.gain))}% of the elevator delivery`
-          : s.next.unblocks > 0
-            ? `gets ${num(s.next.unblocks)} built machine${s.next.unblocks === 1 ? '' : 's'} running`
+        status.next.gain > 0
+          ? `adds ${Math.max(1, percent(status.next.gain))}% of the elevator delivery`
+          : status.next.unblocks > 0
+            ? `gets ${num(status.next.unblocks)} built machine${status.next.unblocks === 1 ? '' : 's'} running`
             : 'is the next unbuilt step in build order',
     };
     return {
-      built: s.builtCount,
-      total: s.rowCount,
-      share: pct(s.deliveryShare),
-      delivery: s.delivery.map(d => ({
-        item: d.item,
-        text: `${num(d.now)} of ${num(d.planned)} / min now`,
-        width: d.planned > 0 ? Math.min(100, (d.now / d.planned) * 100) : 0,
+      built: status.builtCount,
+      total: status.rowCount,
+      share: percent(status.deliveryShare),
+      delivery: status.delivery.map(delivery => ({
+        item: delivery.item,
+        text: `${num(delivery.now)} of ${num(delivery.planned)} / min now`,
+        width: delivery.planned > 0 ? Math.min(100, (delivery.now / delivery.planned) * 100) : 0,
       })),
       next,
       waiting: waiting.slice(0, MAX_WAITING),
       more: Math.max(0, waiting.length - MAX_WAITING),
-      power: s.power.short
-        ? `The built factories draw ${power(s.power.drawMW)}, more than the ${power(s.power.supplyMW)} from built generators and the spare power you listed.`
+      power: status.power.short
+        ? `The built factories draw ${power(status.power.drawMW)}, more than the ${power(status.power.supplyMW)} from built generators and the spare power you listed.`
         : '',
     };
   }),
@@ -66,10 +66,10 @@ const view = computed(() =>
       {{ view.built }} of {{ view.total }} factories marked running. Raw resources count as mined;
       the rest follows from what is built.
     </p>
-    <div v-for="d in view.delivery" :key="d.item" class="delivery">
-      <label>{{ d.item }}</label>
-      <div class="progress-track"><span :style="{ width: d.width + '%' }"></span></div>
-      <span class="small muted" data-build-rate>{{ d.text }}</span>
+    <div v-for="delivery in view.delivery" :key="delivery.item" class="delivery">
+      <label>{{ delivery.item }}</label>
+      <div class="progress-track"><span :style="{ width: delivery.width + '%' }"></span></div>
+      <span class="small muted" data-build-rate>{{ delivery.text }}</span>
     </div>
     <p v-if="view.built && !view.share" class="small" data-build-none>
       Nothing reaches the elevator yet.
@@ -87,9 +87,10 @@ const view = computed(() =>
     <div v-if="view.waiting.length" class="notice warn" data-build-waiting>
       <b>Built but waiting on a supplier</b>
       <ul>
-        <li v-for="w in view.waiting" :key="w.id">
-          <button class="link" v-bind="factoryLink({ calcFactory: w.id })">{{ w.name }}</button>:
-          {{ w.text }}
+        <li v-for="row in view.waiting" :key="row.id">
+          <button class="link" v-bind="factoryLink({ calcFactory: row.id })">{{ row.name }}</button
+          >:
+          {{ row.text }}
         </li>
       </ul>
       <p v-if="view.more">And {{ view.more }} more.</p>

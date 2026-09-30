@@ -26,49 +26,49 @@ const rows = computed(() =>
   legacy(() => {
     if (!wizard) return [];
     const known = new Set(items.value);
-    return [...supplyRows(wizard), { name: '', rate: '' }].map(r => {
-      const name = r.name.trim();
+    return [...supplyRows(wizard), { name: '', rate: '' }].map(row => {
+      const name = row.name.trim();
       return {
-        name: r.name,
-        rate: r.rate,
+        name: row.name,
+        rate: row.rate,
         filled: !!name,
         // Why a row does not count yet: an unknown name, or no rate.
-        hint: !name ? '' : !known.has(name) ? 'unknown' : !String(r.rate).trim() ? 'rate' : '',
+        hint: !name ? '' : !known.has(name) ? 'unknown' : !String(row.rate).trim() ? 'rate' : '',
       };
     });
   }),
 );
 
-const rowEl = (i: number) => root.value?.querySelectorAll<HTMLElement>('.supply-row')[i];
+const rowEl = (index: number) => root.value?.querySelectorAll<HTMLElement>('.supply-row')[index];
 
 // An item, once committed by leaving its field, or a rate: read the screen into the settings and
 // redraw.
-function committed(e: Event) {
-  readScreen((e.target as HTMLInputElement).form);
+function committed(event: Event) {
+  readScreen((event.target as HTMLInputElement).form);
   render();
 }
 
 // Picking a suggestion commits it and moves to the rate, which is the next thing you were
 // going to type anyway. The field already holds the name (form/ItemSearch.vue).
-async function pick(i: number, input: HTMLInputElement) {
+async function pick(index: number, input: HTMLInputElement) {
   readScreen(input.form);
   render();
   await nextTick();
-  rowEl(i)?.querySelector<HTMLInputElement>('input[name=supplyRate]')?.focus();
+  rowEl(index)?.querySelector<HTMLInputElement>('input[name=supplyRate]')?.focus();
 }
 
 // "Remove": the row goes, so focus goes to the next row's Remove, else the previous one's, else the
 // blank row's item field (ui/refocus.ts, #290). A blank row's Remove is hidden and out of the tab
 // order, so it never takes focus.
-function remove(i: number, e: Event) {
-  const button = e.currentTarget as HTMLButtonElement;
+function remove(index: number, event: Event) {
+  const button = event.currentTarget as HTMLButtonElement;
   const refocus = refocusAfterRemoval(button, {
     scope: root.value,
     row: '.supply-row',
     control: '.supply-remove:not(.is-blank)',
     fallback: ['.supply-row:last-child [name=supplyItem]'],
   });
-  removeSupplyRow(button.form, i);
+  removeSupplyRow(button.form, index);
   render();
   void refocus();
 }
@@ -77,12 +77,12 @@ function remove(i: number, e: Event) {
 <template>
   <div ref="root" class="supply-picker">
     <div class="supply-list">
-      <div v-for="(r, i) in rows" :key="i" class="supply-row" :data-supply-row="i">
+      <div v-for="(row, i) in rows" :key="i" class="supply-row" :data-supply-row="i">
         <ItemSearch
           :items="items"
           name="supplyItem"
           :list-id="'supply-options-' + i"
-          :value="r.name"
+          :value="row.name"
           label="Item"
           placeholder="Search item"
           aria-label="Search for an item you already produce"
@@ -96,24 +96,24 @@ function remove(i: number, e: Event) {
             min="0"
             max="1000000"
             step="any"
-            v-value="r.rate"
+            v-value="row.rate"
             aria-label="Rate you already produce, per minute"
             @change="committed"
         /></label>
         <button
           type="button"
-          :class="['btn quiet supply-remove', r.filled ? '' : 'is-blank']"
+          :class="['btn quiet supply-remove', row.filled ? '' : 'is-blank']"
           :data-supply-remove="i"
-          :aria-label="r.filled ? 'Remove ' + r.name : undefined"
-          :tabindex="r.filled ? undefined : -1"
-          :aria-hidden="r.filled ? undefined : 'true'"
+          :aria-label="row.filled ? 'Remove ' + row.name : undefined"
+          :tabindex="row.filled ? undefined : -1"
+          :aria-hidden="row.filled ? undefined : 'true'"
           @click="remove(i, $event)"
         >
           Remove
         </button>
-        <span v-if="r.hint === 'unknown'" class="supply-hint warn"
+        <span v-if="row.hint === 'unknown'" class="supply-hint warn"
           >No item of that name — pick one from the list.</span
-        ><span v-else-if="r.hint === 'rate'" class="supply-hint"
+        ><span v-else-if="row.hint === 'rate'" class="supply-hint"
           >Add a rate and this line is credited; leave it blank and it is not.</span
         >
       </div>

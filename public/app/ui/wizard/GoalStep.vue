@@ -18,19 +18,19 @@ const PHASE_TIME = [
 
 const view = computed(() =>
   legacy(() => {
-    const w = draft(),
-      s = w.settings;
+    const wizardDraft = draft(),
+      settings = wizardDraft.settings;
     const goals = workspace.catalog.goals;
     return {
-      timed: s.multiplier > 5,
-      goals: goals.map(g => ({ ...g, on: s.goal === g.id })),
-      recommended: s.multiplier > 5 ? 'timed' : 'balanced',
+      timed: settings.multiplier > 5,
+      goals: goals.map(g => ({ ...g, on: settings.goal === g.id })),
+      recommended: settings.multiplier > 5 ? 'timed' : 'balanced',
       // The goal is always one of the catalog's.
-      name: w.name || goals.find(g => g.id === s.goal)!.name,
-      hours: s.hours,
-      phaseTime: s.phaseTime || 'every',
-      roundRates: !!s.roundRates,
-      wholeMachines: s.wholeMachines !== false,
+      name: wizardDraft.name || goals.find(g => g.id === settings.goal)!.name,
+      hours: settings.hours,
+      phaseTime: settings.phaseTime || 'every',
+      roundRates: !!settings.roundRates,
+      wholeMachines: settings.wholeMachines !== false,
     };
   }),
 );
@@ -47,10 +47,12 @@ const view = computed(() =>
     Storage and your selected preferences apply to every option.
   </p>
   <div class="goal-grid">
-    <label v-for="g in view.goals" :key="g.id" class="goal-card"
-      ><input type="radio" name="goal" :value="g.id" :checked="g.on" /><strong>{{ g.name }}</strong
-      ><span v-if="view.recommended === g.id" class="badge orange">Suggested</span>
-      <p>{{ g.description }}</p></label
+    <label v-for="goal in view.goals" :key="goal.id" class="goal-card"
+      ><input type="radio" name="goal" :value="goal.id" :checked="goal.on" /><strong>{{
+        goal.name
+      }}</strong
+      ><span v-if="view.recommended === goal.id" class="badge orange">Suggested</span>
+      <p>{{ goal.description }}</p></label
     >
   </div>
   <div class="form-grid">

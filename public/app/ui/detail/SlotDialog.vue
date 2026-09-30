@@ -19,21 +19,21 @@ const props = defineProps<{ id: string }>();
 const view = computed(() =>
   legacy(() => {
     const id = props.id,
-      b = storageBays().find(b => b.items.some(x => x.id === id));
-    const x = b?.items.find(x => x.id === id);
-    if (!b || !x?.name) return null;
-    const name = x.name;
+      bay = storageBays().find(b => b.items.some(item => item.id === id));
+    const slot = bay?.items.find(item => item.id === id);
+    if (!bay || !slot?.name) return null;
+    const name = slot.name;
     const factory = calculated
       ? calcStage()?.rows?.find(r => r.outputs[name])
       : plan.factories.find(f => f.name === name);
-    const index = Number(id.slice(b.id.length));
+    const index = Number(id.slice(bay.id.length));
     return {
       name,
-      subtitle: `${id} · ${storageFloors().find(f => f.id === b.floor)?.label || b.floor} · Bay ${b.id}`,
-      bay: b.name,
+      subtitle: `${id} · ${storageFloors().find(f => f.id === bay.floor)?.label || bay.floor} · Bay ${bay.id}`,
+      bay: bay.name,
       where: `${index <= 4 ? 'Rear' : 'Front'} bank, position ${((index - 1) % 4) + 1} from the left on the floor plan.`,
-      steps: SLOT_STEPS.map(([k, label]) => {
-        const key = 'slot-' + id + '-' + k;
+      steps: SLOT_STEPS.map(([step, label]) => {
+        const key = 'slot-' + id + '-' + step;
         return { key, label, done: checked(key) };
       }),
       link: factory ? (calculated ? { calcFactory: factory.id } : { factory: factory.id }) : null,
@@ -49,10 +49,13 @@ const view = computed(() =>
       ><br />{{ view.where }}
     </p>
     <div class="check-columns">
-      <label v-for="s in view.steps" :key="s.key" class="check-row"
-        ><input type="checkbox" :data-check="s.key" @change="toggleCheck" :checked="s.done" />{{
-          s.label
-        }}</label
+      <label v-for="step in view.steps" :key="step.key" class="check-row"
+        ><input
+          type="checkbox"
+          :data-check="step.key"
+          @change="toggleCheck"
+          :checked="step.done"
+        />{{ step.label }}</label
       >
     </div>
     <div v-if="view.link" class="detail-actions">

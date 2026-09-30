@@ -26,32 +26,32 @@ const saved = () =>
 
 const counter = computed(() =>
   legacy(() => {
-    const d = props.delivery,
-      v = saved();
+    const delivery = props.delivery,
+      count = saved();
     return {
-      value: v,
-      width: Math.min(100, (v / d.target) * 100),
-      remaining: d.rate
-        ? `${num(d.rate)}/min net · ${num(Math.max(0, d.target - v) / d.rate)} minutes remaining`
+      value: count,
+      width: Math.min(100, (count / delivery.target) * 100),
+      remaining: delivery.rate
+        ? `${num(delivery.rate)}/min net · ${num(Math.max(0, delivery.target - count) / delivery.rate)} minutes remaining`
         : 'Phase 3 delivery already complete',
     };
   }),
 );
 
-async function change(e: Event) {
-  const el = e.target as HTMLInputElement,
-    d = props.delivery,
-    v = Number(el.value);
-  if (!Number.isInteger(v) || v < 0 || v > d.target) {
-    toast('Enter a whole number between 0 and ' + num(d.target) + '.', true);
-    el.value = String(saved());
+async function change(event: Event) {
+  const input = event.target as HTMLInputElement,
+    delivery = props.delivery,
+    count = Number(input.value);
+  if (!Number.isInteger(count) || count < 0 || count > delivery.target) {
+    toast('Enter a whole number between 0 and ' + num(delivery.target) + '.', true);
+    input.value = String(saved());
     return;
   }
   try {
-    await save({ type: 'delivery', key: d.id, value: v });
+    await save({ type: 'delivery', key: delivery.id, value: count });
     render();
   } catch {
-    el.value = String(saved());
+    input.value = String(saved());
   }
 }
 </script>

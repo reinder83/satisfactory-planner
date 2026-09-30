@@ -39,26 +39,31 @@ const COLLECTABLES = [
   ['false', 'No collectables bays'],
   ['true', 'Include leaves, wood, slugs, food, protein and DNA'],
 ];
-const FUELS = droneFuels.map(n => [n, n === 'none' ? 'No dedicated drone fuel' : n]);
+const FUELS = droneFuels.map(fuel => [fuel, fuel === 'none' ? 'No dedicated drone fuel' : fuel]);
 
-const s = computed(() => legacy(() => ({ ...draft().settings })));
+const settings = computed(() => legacy(() => ({ ...draft().settings })));
 </script>
 
 <template>
   <h2>How do you want to build?</h2>
   <div class="form-grid">
-    <SelectField label="Recipe access" name="recipes" :options="RECIPES" :value="s.recipes" />
+    <SelectField
+      label="Recipe access"
+      name="recipes"
+      :options="RECIPES"
+      :value="settings.recipes"
+    />
     <SelectField
       label="Ingot factories"
       name="pureIngots"
       :options="INGOTS"
-      :value="String(s.pureIngots)"
+      :value="String(settings.pureIngots)"
     />
-    <SelectField label="SAM resource conversion" name="sam" :options="SAM" :value="s.sam" />
+    <SelectField label="SAM resource conversion" name="sam" :options="SAM" :value="settings.sam" />
     <InputField
       label="Extra utilities power (%)"
       name="utilityPercent"
-      :value="s.utilityPercent ?? 20"
+      :value="settings.utilityPercent ?? 20"
       min="0"
       max="200"
       step="1"
@@ -68,12 +73,12 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
       label="Drone fuel"
       name="droneFuel"
       :options="FUELS"
-      :value="s.droneFuel || 'none'"
+      :value="settings.droneFuel || 'none'"
     />
     <InputField
       label="Drone fuel supply (items/min, entire fleet)"
       name="droneFuelRate"
-      :value="s.droneFuelRate ?? 10"
+      :value="settings.droneFuelRate ?? 10"
       min="0.01"
       max="10000"
       step="any"
@@ -82,7 +87,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Phase 4 battery bridge /min (ionized fuel only)"
       name="droneBridgeRate"
-      :value="s.droneBridgeRate ?? 10"
+      :value="settings.droneBridgeRate ?? 10"
       min="0.01"
       max="10000"
       step="any"
@@ -92,13 +97,13 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
       label="Preferred main power"
       name="mainPower"
       :options="powerOptions"
-      :value="s.mainPower || 'auto'"
+      :value="settings.mainPower || 'auto'"
     />
-    <SelectField label="Nuclear goal" name="nuclear" :options="NUCLEAR" :value="s.nuclear" />
+    <SelectField label="Nuclear goal" name="nuclear" :options="NUCLEAR" :value="settings.nuclear" />
     <InputField
       label="Minimum uranium reactors from Phase 4"
       name="uraniumReactors"
-      :value="s.uraniumReactors"
+      :value="settings.uraniumReactors"
       min="1"
       max="1000"
       step="1"
@@ -108,18 +113,18 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
       label="Storage supply"
       name="storage"
       :options="storageOptions"
-      :value="s.storage"
+      :value="settings.storage"
     />
     <SelectField
       label="Collectables storage"
       name="collectables"
       :options="COLLECTABLES"
-      :value="String(s.collectables ?? s.storage === 'all')"
+      :value="String(settings.collectables ?? settings.storage === 'all')"
     />
     <InputField
       label="Construction materials refill /min"
       name="buildRate"
-      :value="s.buildRate ?? s.storageRate"
+      :value="settings.buildRate ?? settings.storageRate"
       min="0"
       max="300"
       step="0.1"
@@ -128,7 +133,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Other items refill /min"
       name="storageRate"
-      :value="s.storageRate"
+      :value="settings.storageRate"
       min="0.1"
       max="300"
       step="0.1"
@@ -137,7 +142,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Extra Singularity Cells /min in Phase 5"
       name="cellsPerMinute"
-      :value="s.cellsPerMinute"
+      :value="settings.cellsPerMinute"
       min="0"
       max="1000"
       step="0.1"
@@ -146,7 +151,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Somersloops available to spend"
       name="somersloops"
-      :value="s.somersloops ?? 0"
+      :value="settings.somersloops ?? 0"
       min="0"
       max="106"
       step="1"
@@ -155,7 +160,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Alien Power Augmenters in Phase 5"
       name="augmenters"
-      :value="s.augmenters ?? 0"
+      :value="settings.augmenters ?? 0"
       min="0"
       max="10"
       step="1"
@@ -164,7 +169,7 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Of those, fueled with Alien Power Matrix"
       name="fueledAugmenters"
-      :value="s.fueledAugmenters ?? 0"
+      :value="settings.fueledAugmenters ?? 0"
       min="0"
       max="10"
       step="1"
@@ -173,14 +178,14 @@ const s = computed(() => legacy(() => ({ ...draft().settings })));
     <InputField
       label="Somersloops for production amplification"
       name="amplifySloops"
-      :value="s.amplifySloops ?? 0"
+      :value="settings.amplifySloops ?? 0"
       min="0"
       max="106"
       step="1"
       required
     />
   </div>
-  <SloopLedger /><StorageRates /><AltPicker v-if="s.recipes === 'custom'" />
+  <SloopLedger /><StorageRates /><AltPicker v-if="settings.recipes === 'custom'" />
   <div class="notice info">
     SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
     parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have
