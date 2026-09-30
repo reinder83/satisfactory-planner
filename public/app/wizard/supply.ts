@@ -41,13 +41,15 @@ export function supplyMatches(query: unknown): string[] {
 // picking a suggestion would erase what you just picked.
 // Created lazily from settings.existingSupply the first time it is needed, then
 // kept on the draft; readSupply and removeSupplyRow edit it.
-export function supplyRows(w: WizardDraft): SupplyRow[] {
-  if (!Array.isArray(w.supplyRows))
-    w.supplyRows = Object.entries(w.settings.existingSupply || {}).map(([name, rate]) => ({
-      name,
-      rate: String(rate),
-    }));
-  return w.supplyRows;
+export function supplyRows(wizardDraft: WizardDraft): SupplyRow[] {
+  if (!Array.isArray(wizardDraft.supplyRows))
+    wizardDraft.supplyRows = Object.entries(wizardDraft.settings.existingSupply || {}).map(
+      ([name, rate]) => ({
+        name,
+        rate: String(rate),
+      }),
+    );
+  return wizardDraft.supplyRows;
 }
 
 // Returns null when the form has no supply list (another step), so callers
@@ -55,23 +57,23 @@ export function supplyRows(w: WizardDraft): SupplyRow[] {
 // Side effect: replaces wizard.supplyRows with the non-empty rows as typed.
 // Name plus rate, paired by position. Every row is kept for editing; only the
 // ones naming a real item at a real rate are handed to the planner.
-export function readSupply(form: HTMLFormElement | null, f: FormData): ItemRates | null {
+export function readSupply(form: HTMLFormElement | null, formData: FormData): ItemRates | null {
   if (!form?.querySelector?.('.supply-list')) return null;
   const known = new Set(workspace.catalog.supplyItems || []);
-  const names = f.getAll('supplyItem').map(x => String(x));
-  const rates = f.getAll('supplyRate').map(x => String(x));
+  const names = formData.getAll('supplyItem').map(x => String(x));
+  const rates = formData.getAll('supplyRate').map(x => String(x));
   const rows = names
     .map((name, i) => ({ name, rate: rates[i] ?? '' }))
     .filter(r => r.name.trim() || String(r.rate).trim());
   draft().supplyRows = rows;
-  const out: ItemRates = {};
-  for (const r of rows) {
-    const name = r.name.trim(),
-      q = Number(r.rate);
-    if (known.has(name) && String(r.rate).trim() !== '' && Number.isFinite(q) && q > 0)
-      out[name] = q;
+  const credited: ItemRates = {};
+  for (const row of rows) {
+    const name = row.name.trim(),
+      rate = Number(row.rate);
+    if (known.has(name) && String(row.rate).trim() !== '' && Number.isFinite(rate) && rate > 0)
+      credited[name] = rate;
   }
-  return out;
+  return credited;
 }
 
 // Reads the screen the rows are on into the draft: the guided question or All settings
@@ -84,14 +86,14 @@ export function readScreen(form: HTMLFormElement | null) {
 // items with a rate above 0. The preview no longer matches, so it is cleared.
 export function removeSupplyRow(form: HTMLFormElement | null, index: number) {
   readScreen(form);
-  const w = draft();
-  const rows = supplyRows(w);
+  const wizardDraft = draft();
+  const rows = supplyRows(wizardDraft);
   rows.splice(index, 1);
-  w.settings.existingSupply = Object.fromEntries(
+  wizardDraft.settings.existingSupply = Object.fromEntries(
     rows
       .filter(r => Number(r.rate) > 0)
       .map((r): [string, number] => [r.name.trim(), Number(r.rate)])
-      .filter(([n]) => (workspace.catalog.supplyItems || []).includes(n)),
+      .filter(([name]) => (workspace.catalog.supplyItems || []).includes(name)),
   );
-  w.preview = null;
+  wizardDraft.preview = null;
 }

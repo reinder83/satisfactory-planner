@@ -19,8 +19,8 @@ export interface BackupAge {
 
 export function backupDays(lastBackup: string | null | undefined, now = Date.now()) {
   if (!lastBackup) return null;
-  const at = new Date(lastBackup).getTime();
-  return Number.isNaN(at) ? null : Math.max(0, Math.floor((now - at) / 86400000));
+  const backedUpAt = new Date(lastBackup).getTime();
+  return Number.isNaN(backedUpAt) ? null : Math.max(0, Math.floor((now - backedUpAt) / 86400000));
 }
 
 export function backupAge(lastBackup: string | null | undefined, now = Date.now()): BackupAge {

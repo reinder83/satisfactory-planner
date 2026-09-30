@@ -15,6 +15,7 @@ import { save } from '../../api.ts';
 import { setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { autoTaskLink, basePlanTasks } from '../../tasks.ts';
+import { refocusOn } from '../refocus.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(
@@ -30,9 +31,15 @@ const title = ref(props.step.title);
 const body = ref(props.step.body || '');
 const link = ref(props.current);
 
+// Cancel and Save step put the step back in the form's place, so focus goes back to that
+// step's Edit button (ui/refocus.ts, #562). A refused save keeps the form open, and focus in it.
+const backToEdit = (trigger: EventTarget | null) =>
+  refocusOn(trigger, `#main [data-edit-task="${CSS.escape(props.step.id)}"]`);
+
 async function submit(event: Event) {
   const id = props.step.id,
     formData = new FormData(event.target as HTMLFormElement);
+  const refocus = backToEdit(document.activeElement);
   const base = basePlanTasks().find(t => t.id === id);
   const title = String(formData.get('title') || '').trim(),
     body = String(formData.get('body') || '').trim(),
@@ -47,13 +54,16 @@ async function submit(event: Event) {
     });
     setEditingTask(null);
     render();
+    await refocus();
   } catch {}
 }
 
 // "Cancel": close the form without saving.
-function cancel() {
+async function cancel(event: Event) {
+  const refocus = backToEdit(event.currentTarget);
   setEditingTask(null);
   render();
+  await refocus();
 }
 </script>
 

@@ -8,10 +8,11 @@
   question, keeping every answer. The flow, readers and moves are in wizard/guided.ts: every
   answer is read back from the form (readGuidedForm) and redraws, since it decides what
   follows, and past the last question the plan is calculated and the five steps' Review
-  (WizardPage.vue) takes over. The form is keyed by screen, so each starts from the draft.
+  (WizardPage.vue) takes over. The form is keyed by screen, so each starts from the draft. A
+  missing Save name stops Continue with a message beside the box, not only the browser's bubble.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -20,6 +21,7 @@ import { cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
+import { vValue } from '../form/value.ts';
 import GuidedCards from '../guided/GuidedCards.vue';
 import GuidedTopics from '../guided/GuidedTopics.vue';
 import GuidedTopup from '../guided/GuidedTopup.vue';
@@ -75,6 +77,21 @@ function changed(event: Event) {
 function submit() {
   moveGuided(draft().guidedStep + 1);
 }
+
+// An empty Save name (#505), or one of spaces only (the pattern; the server refuses those):
+// Continue, Enter or Calculate plan is refused by the form's own validation, which fires
+// `invalid` on the box. Instead of the browser's bubble alone, the box is marked invalid, a
+// message under it says why (empty, so taking no space, until then) and focus goes to it.
+// Typing a name clears it; v-value keeps what was typed when that redraws.
+const nameMissing = ref(false);
+function refused(event: Event) {
+  nameMissing.value = true;
+  (event.target as HTMLInputElement).focus();
+}
+function typed(event: Event) {
+  if (nameMissing.value && (event.target as HTMLInputElement).value.trim())
+    nameMissing.value = false;
+}
 </script>
 
 <template>
@@ -108,18 +125,31 @@ function submit() {
       @change="changed"
       @submit.prevent.stop="submit"
     >
-      <label v-if="!page.topics" class="field guided-name"
-        >{{ page.adding ? 'Profile name' : 'Save name'
-        }}<input
-          :name="page.adding ? 'profileName' : 'saveName'"
-          type="text"
-          :value="page.name"
-          :required="!page.adding"
-          maxlength="80"
-          :placeholder="
-            page.adding ? 'Named after your goal if left blank' : 'My Satisfactory save'
-          "
-      /></label>
+      <div v-if="!page.topics" class="guided-name">
+        <label class="field"
+          >{{ page.adding ? 'Profile name' : 'Save name'
+          }}<input
+            :name="page.adding ? 'profileName' : 'saveName'"
+            type="text"
+            v-value="page.name"
+            :required="!page.adding"
+            :pattern="page.adding ? undefined : '.*\\S.*'"
+            maxlength="80"
+            :placeholder="
+              page.adding ? 'Named after your goal if left blank' : 'e.g. My Satisfactory save'
+            "
+            :aria-invalid="nameMissing ? 'true' : undefined"
+            :aria-describedby="nameMissing ? 'guided-name-error' : undefined"
+            @invalid.prevent="refused"
+            @input="typed"
+        /></label>
+        <p
+          id="guided-name-error"
+          class="form-error"
+          role="alert"
+          v-text="nameMissing ? 'Give the save a name to continue.' : ''"
+        ></p>
+      </div>
       <GuidedTopics v-if="page.topics" />
       <h2 v-else-if="!page.question">Ready to calculate</h2>
       <template v-else>

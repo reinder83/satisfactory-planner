@@ -107,46 +107,46 @@ export function createBrowserApi(
   catalog: Catalog,
   ranker?: Ranker,
 ): BrowserRequest {
-  const uid = () => crypto.randomUUID();
-  const cleanName = (n: unknown): string => {
-    if (typeof n !== 'string' || !n.trim() || n.length > 80)
+  const randomId = () => crypto.randomUUID();
+  const cleanName = (name: unknown): string => {
+    if (typeof name !== 'string' || !name.trim() || name.length > 80)
       throw Error('Enter a name with 1–80 characters.');
-    return n.trim();
+    return name.trim();
   };
   // Mirrors summary() in workspace.ts: profile lists without plans or progress. Adds
   // `browser: true` and `lastBackup`, the last full export, which the Backup page and ADA show.
-  const summary = (d: BrowserWorkspace): WorkspaceSummary => ({
+  const summary = (workspace: BrowserWorkspace): WorkspaceSummary => ({
     browser: true,
     accountsEnabled: false,
     user: { id: 'browser', username: 'This browser' },
-    activeSave: d.activeSave,
+    activeSave: workspace.activeSave,
     catalog,
-    lastBackup: d.lastBackup,
-    saves: d.saves.map(s => ({
-      ...s,
-      profiles: s.profiles.map(p => ({
-        id: p.id,
-        name: p.name,
-        kind: p.kind,
-        settings: p.plan?.settings,
-        ...(isTranscribed(p.plan) ? { transcribed: true as const } : {}),
-        completed: Object.values(p.state.checks).filter(Boolean).length,
-        phase: p.state.settings.phase,
-        phases: phaseProgress(p.plan, p.state.checks),
+    lastBackup: workspace.lastBackup,
+    saves: workspace.saves.map(save => ({
+      ...save,
+      profiles: save.profiles.map(profile => ({
+        id: profile.id,
+        name: profile.name,
+        kind: profile.kind,
+        settings: profile.plan?.settings,
+        ...(isTranscribed(profile.plan) ? { transcribed: true as const } : {}),
+        completed: Object.values(profile.state.checks).filter(Boolean).length,
+        phase: profile.state.settings.phase,
+        phases: phaseProgress(profile.plan, profile.state.checks),
       })),
     })),
   });
   // Mirrors scope() in workspace.ts: body ids (only for routes that pass `body`), then the
   // X-Save-Id/X-Profile-Id headers, then ?save=/?profile=, then the active save and profile.
   const scope = (
-    d: BrowserWorkspace,
+    workspace: BrowserWorkspace,
     url: URL,
     headers: Record<string, string> = {},
     body?: Record<string, unknown>,
   ): { save: BrowserSave; profile: StoredProfile } => {
     const saveId =
-      body?.saveId || headers['X-Save-Id'] || url.searchParams.get('save') || d.activeSave;
-    const save = d.saves.find(s => s.id === saveId);
+      body?.saveId || headers['X-Save-Id'] || url.searchParams.get('save') || workspace.activeSave;
+    const save = workspace.saves.find(s => s.id === saveId);
     if (!save) throw Error('Save not found.');
     const profileId =
       body?.profileId ||
@@ -177,14 +177,14 @@ export function createBrowserApi(
     const profileName = cleanName(body.name),
       saveName = body.saveId ? null : cleanName(body.saveName),
       plan = await calculator(body.settings, options.onProgress),
-      profileId = uid();
+      profileId = randomId();
     return store.transaction(data => {
       let save = data.saves.find(s => s.id === body.saveId);
       if (body.saveId && !save) throw Error('Save not found.');
       if (!save) {
         if (data.saves.length >= 50) throw Error('Save limit reached.');
         // saveName is set whenever no saveId was given; activeProfile is set below.
-        save = { id: uid(), name: saveName as string, activeProfile: '', profiles: [] };
+        save = { id: randomId(), name: saveName as string, activeProfile: '', profiles: [] };
         data.saves.push(save);
       }
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
@@ -270,7 +270,7 @@ export function createBrowserApi(
     return store.transaction(data => {
       const { save, profile } = scope(data, url, headers, body);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-      const profileId = uid();
+      const profileId = randomId();
       save.profiles.push({
         ...structuredClone(profile),
         id: profileId,
@@ -293,10 +293,10 @@ export function createBrowserApi(
         const oldActive = save.activeProfile;
         for (const importedProfile of save.profiles) {
           const previous = importedProfile.id;
-          importedProfile.id = uid();
+          importedProfile.id = randomId();
           if (previous === oldActive) save.activeProfile = importedProfile.id;
         }
-        save.id = uid();
+        save.id = randomId();
         data.saves.push(save);
         data.activeSave = save.id;
       }
@@ -316,7 +316,7 @@ export function createBrowserApi(
         { ...before.profile.plan!.settings, wholeMachines: true },
         options.onProgress,
       ),
-      profileId = uid();
+      profileId = randomId();
     return store.transaction(data => {
       const { save, profile } = scope(data, url, headers);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
@@ -511,8 +511,8 @@ export function createBrowserApi(
 }
 // The part of a Worker the calculator wrapper uses; tests pass a stand-in.
 export interface CalculatorWorker {
-  onmessage: ((e: MessageEvent) => void) | null;
-  onerror: ((e: ErrorEvent) => void) | null;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onerror: ((event: ErrorEvent) => void) | null;
   postMessage(message: unknown): void;
   terminate(): void;
 }
@@ -572,29 +572,29 @@ export function workerJobs(
   const start = () => {
     const created = spawn();
     worker = created;
-    created.onmessage = e => {
+    created.onmessage = event => {
       if (worker !== created) return;
-      const entry = pending.get(e.data.id);
+      const entry = pending.get(event.data.id);
       if (!entry) return;
-      if (e.data.phase || e.data.done !== undefined) {
+      if (event.data.phase || event.data.done !== undefined) {
         if (entry === front()) restartTimer();
         try {
-          entry.onProgress?.(e.data);
+          entry.onProgress?.(event.data);
         } catch {}
         return;
       }
       const wasRunning = entry === front();
-      pending.delete(e.data.id);
+      pending.delete(event.data.id);
       if (wasRunning) restartTimer();
-      e.data.error ? entry.reject(Error(e.data.error)) : entry.resolve(e.data.result);
+      event.data.error ? entry.reject(Error(event.data.error)) : entry.resolve(event.data.result);
     };
     // Script or WASM load failure: fail everything pending and let the next request retry.
     created.onerror = () => {
       if (worker !== created) return;
       clearTimeout(timer);
       timer = undefined;
-      for (const p of pending.values())
-        p.reject(Error('The calculator could not load. Refresh and try again.'));
+      for (const entry of pending.values())
+        entry.reject(Error('The calculator could not load. Refresh and try again.'));
       pending.clear();
       created.terminate();
       worker = null;
@@ -619,12 +619,14 @@ export function workerJobs(
     calculate: (settings, onProgress) =>
       run<CurrentCalculatedPlan>(
         { settings },
-        onProgress && (d => d.phase !== undefined && onProgress(d.phase)),
+        onProgress && (progress => progress.phase !== undefined && onProgress(progress.phase)),
       ),
     rank: (settings, phase, onProgress) =>
       run<AlternateRanking>(
         { settings, rank: { phase, budgetMs: RANK_BUDGET_MS } },
-        onProgress && (d => d.done !== undefined && onProgress(d.done, d.total ?? 0)),
+        onProgress &&
+          (progress =>
+            progress.done !== undefined && onProgress(progress.done, progress.total ?? 0)),
       ),
   };
 }

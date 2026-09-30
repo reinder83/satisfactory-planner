@@ -60,7 +60,7 @@ const COLLECTIBLES = [
 // Phase 2 and so on, with 9 in Phase 5.
 const phaseForTier = (tier: number) =>
   tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
-const fmt = (value: unknown) =>
+const formatNumber = (value: unknown) =>
   Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 // The generated guidance steps of a calculated profile for one phase, called by calcTasks in
@@ -83,13 +83,13 @@ export function progression(
   hardDrives: GuideTask[];
   retire: GuideTask[];
 } {
-  const ctx = guideContext(plan, state, data, phase);
+  const context = guideContext(plan, state, data, phase);
   return {
-    baseTasks: baseTasks(ctx),
-    powerTasks: powerTasks(ctx),
-    milestoneTasks: milestoneTasks(ctx, requiredMilestones(ctx)),
-    hardDrives: hardDriveTasks(ctx),
-    retire: retireTasks(ctx),
+    baseTasks: baseTasks(context),
+    powerTasks: powerTasks(context),
+    milestoneTasks: milestoneTasks(context, requiredMilestones(context)),
+    hardDrives: hardDriveTasks(context),
+    retire: retireTasks(context),
   };
 }
 
@@ -109,8 +109,8 @@ export function guideContext(
       .filter(([key]) => Number(key) <= stage)
       .flatMap(([key, planned]) =>
         (planned.rows || [])
-          .filter(r => r.outputs[item])
-          .map(r => ({ row: r, running: !!checks['calc-' + key + '-' + r.id] })),
+          .filter(row => row.outputs[item])
+          .map(row => ({ row, running: !!checks['calc-' + key + '-' + row.id] })),
       );
   const status = (item: string) =>
     sources(item).some(source => source.running)
@@ -130,7 +130,7 @@ export function guideContext(
     sources,
     funding: entry =>
       Object.entries(entry.cost)
-        .map(([item, quantity]) => `${fmt(quantity)} ${item}: ${status(item)}`)
+        .map(([item, quantity]) => `${formatNumber(quantity)} ${item}: ${status(item)}`)
         .join('; '),
   };
 }
@@ -138,13 +138,13 @@ export function guideContext(
 // Milestones this phase needs: those unlocking a recipe or machine its rows use, a fixed set
 // of basics, and phase-specific power and logistics unlocks, each with its prerequisites.
 // In the order they were first added; milestoneTasks decides the order shown.
-export function requiredMilestones(ctx: GuideContext): ProgressionEntry[] {
-  const { plan, data, stage, rows, byName } = ctx;
+export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
+  const { plan, data, stage, rows, byName } = context;
   const required = new Map<string, ProgressionEntry>();
   function add(entry: ProgressionEntry | undefined) {
     if (!entry || required.has(entry.id)) return;
     required.set(entry.id, entry);
-    for (const id of entry.requires) add(data.entries.find(x => x.id === id));
+    for (const id of entry.requires) add(data.entries.find(prerequisite => prerequisite.id === id));
   }
   const wanted = new Set(rows.map(r => r.id));
   for (const row of rows) {
@@ -174,8 +174,8 @@ export function requiredMilestones(ctx: GuideContext): ProgressionEntry[] {
   if (rows.some(r => Object.keys(r.inputs).some(item => /Caterium|Quickwire/.test(item))))
     for (const name of ['Caterium', 'Caterium Ingots', 'Caterium Electronics']) add(byName(name));
   if (
-    rows.some(r =>
-      Object.keys(r.inputs).some(item => /Quartz|Silica|Crystal Oscillator/.test(item)),
+    rows.some(row =>
+      Object.keys(row.inputs).some(item => /Quartz|Silica|Crystal Oscillator/.test(item)),
     )
   )
     for (const name of ['Quartz', 'Quartz Crystals', 'Silica']) add(byName(name));
@@ -213,31 +213,31 @@ function prerequisitesFirst(milestones: ProgressionEntry[]): ProgressionEntry[] 
 // One unlock step per required milestone this phase can research. Alternate recipes are left
 // out: they come from hard drives (hardDriveTasks). Prerequisites come before dependents;
 // among otherwise independent unlocks, costs with running supply come first.
-export function milestoneTasks(ctx: GuideContext, required: ProgressionEntry[]): GuideTask[] {
-  const { data, stage, sources, funding } = ctx;
+export function milestoneTasks(context: GuideContext, required: ProgressionEntry[]): GuideTask[] {
+  const { data, stage, sources, funding } = context;
   const milestones = required.filter(entry => !entry.alternate && researchable(entry, data, stage));
   const readiness = (entry: ProgressionEntry) =>
     Object.keys(entry.cost).filter(item => sources(item).some(source => source.running)).length /
     Math.max(1, Object.keys(entry.cost).length);
   milestones.sort(
-    (a, b) =>
-      Number(a.mam) - Number(b.mam) ||
-      a.tier - b.tier ||
-      readiness(b) - readiness(a) ||
-      a.name.localeCompare(b.name),
+    (first, second) =>
+      Number(first.mam) - Number(second.mam) ||
+      first.tier - second.tier ||
+      readiness(second) - readiness(first) ||
+      first.name.localeCompare(second.name),
   );
   return prerequisitesFirst(milestones).map(
     (entry): GuideTask => ({
       id: 'unlock-' + entry.id,
       title: `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`,
-      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${entry.requires.length ? 'Prerequisites: ' + entry.requires.map(id => data.entries.find(x => x.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
+      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${entry.requires.length ? 'Prerequisites: ' + entry.requires.map(id => data.entries.find(prerequisite => prerequisite.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
     }),
   );
 }
 
 // One hard-drive step plus one unlock step per alternate recipe this phase's rows use.
-export function hardDriveTasks(ctx: GuideContext): GuideTask[] {
-  const { checks, data, stage, rows } = ctx;
+export function hardDriveTasks(context: GuideContext): GuideTask[] {
+  const { checks, data, stage, rows } = context;
   const alternates = rows.filter(r => r.alternate);
   if (!alternates.length) return [];
   const missing = alternates.filter(r => !checks['recipe-unlock-' + r.id]);
@@ -263,15 +263,15 @@ export function hardDriveTasks(ctx: GuideContext): GuideTask[] {
 // The power, fuel and endgame steps of the phase. calcTasks interleaves Phase 1's lists by
 // position, so the order of the first steps (power review, biomass, Solid Biofuel, burner bank)
 // matters.
-export function powerTasks(ctx: GuideContext): GuideTask[] {
-  const power = unlockedPower(ctx);
+export function powerTasks(context: GuideContext): GuideTask[] {
+  const power = unlockedPower(context);
   return [
-    powerReviewTask(ctx.stage, power),
-    ...biomassStartupTasks(ctx, power),
-    ...generationTasks(ctx, power),
-    ...endgameTasks(ctx),
-    ...sloopTasks(ctx),
-    ...droneFuelTasks(ctx),
+    powerReviewTask(context.stage, power),
+    ...biomassStartupTasks(context, power),
+    ...generationTasks(context, power),
+    ...endgameTasks(context),
+    ...sloopTasks(context),
+    ...droneFuelTasks(context),
   ];
 }
 
@@ -338,15 +338,15 @@ function biomassStartupTasks(
     {
       id: 'startup-burner-bank-' + stage,
       title: 'Size and feed the biomass burner bank',
-      body: `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${fmt(burners)} standalone burners for ${fmt(need)} MW of planned additional load plus three fuel-processing Constructors. At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${fmt(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load. This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.`,
+      body: `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${formatNumber(burners)} standalone burners for ${formatNumber(need)} MW of planned additional load plus three fuel-processing Constructors. At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${formatNumber(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load. This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.`,
     },
   ];
 }
 
 // Moving to the generators the plan builds: coal, fuel, the preferred main power, aluminum
 // water recycling and nuclear.
-function generationTasks(ctx: GuideContext, { coal }: UnlockedPower): GuideTask[] {
-  const { stage, rows } = ctx;
+function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideTask[] {
+  const { stage, rows } = context;
   const tasks: GuideTask[] = [];
   if (stage >= 2 && !coal)
     tasks.push({
@@ -365,7 +365,7 @@ function generationTasks(ctx: GuideContext, { coal }: UnlockedPower): GuideTask[
           : '') +
         ' Confirm any fuel alternates in the hard-drive checklist. Start with an unlocked fuel recipe and upgrade only after the full new chain is ready.',
     });
-  tasks.push(...preferredPowerTasks(ctx));
+  tasks.push(...preferredPowerTasks(context));
   if (stage >= 4 && rows.some(r => r.inputs['Alumina Solution'] || r.outputs['Alumina Solution']))
     tasks.push({
       id: 'startup-aluminum-' + stage,
@@ -430,7 +430,7 @@ function endgameTasks({ plan, stage }: GuideContext): GuideTask[] {
     tasks.push({
       id: 'portal-supply',
       title: 'Protect the continuous Singularity Cell supply for portals',
-      body: `Unlock Tier 9 Spatial Energy Regulation. Each Main Portal consumes 2 Singularity Cells/min while maintaining its connection; the Satellite Portal needs no cells. Your dedicated ${fmt(cells)}/min contract supports ${Math.floor(cells / 2)} continuously connected Main Portals. The standard manufacturing recipe produces 10/min, enough for five connections. Feed portals before storage or the sink, add a buffer, and reserve their operating and startup electrical demand separately from the production calculation.`,
+      body: `Unlock Tier 9 Spatial Energy Regulation. Each Main Portal consumes 2 Singularity Cells/min while maintaining its connection; the Satellite Portal needs no cells. Your dedicated ${formatNumber(cells)}/min contract supports ${Math.floor(cells / 2)} continuously connected Main Portals. The standard manufacturing recipe produces 10/min, enough for five connections. Feed portals before storage or the sink, add a buffer, and reserve their operating and startup electrical demand separately from the production calculation.`,
     });
   // Plans frozen before the augmenter settings existed have none.
   const count = plan.settings.augmenters ?? 0;
@@ -439,7 +439,7 @@ function endgameTasks({ plan, stage }: GuideContext): GuideTask[] {
     tasks.push({
       id: 'alien-power-augmenter',
       title: `Build ${count} Alien Power Augmenter${count > 1 ? 's' : ''}`,
-      body: `Research Alien Power Augmentation in the MAM (Alien Technology), then build ${count} Augmenter${count > 1 ? 's' : ''} at ${fmt(10)} Somersloops each — ${fmt(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${fmt(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      body: `Research Alien Power Augmentation in the MAM (Alien Technology), then build ${count} Augmenter${count > 1 ? 's' : ''} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
     });
   }
   return tasks;
@@ -461,7 +461,7 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
     {
       id: 'sloop-hand-fed',
       title: 'Park somersloops in the hand-fed constructors',
-      body: `Reserve ${fmt(picked.length)} Somersloop${picked.length > 1 ? 's' : ''} for ${picked.join('; ')}. Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.`,
+      body: `Reserve ${formatNumber(picked.length)} Somersloop${picked.length > 1 ? 's' : ''} for ${picked.join('; ')}. Insert the Somersloop in the Constructor, not the Crafting Bench: hand-crafting cannot be amplified, so anything you craft by hand is worth half. These lines are fed by hand and are deliberately left out of the continuous production balance — they reserve a somersloop and nothing else.`,
     },
   ];
 }
@@ -470,7 +470,7 @@ function sloopTasks({ plan, stage }: GuideContext): GuideTask[] {
 function droneFuelTasks({ plan, stage, stageOf }: GuideContext): GuideTask[] {
   if (!(stage >= 4 && plan.settings.droneFuel && plan.settings.droneFuel !== 'none')) return [];
   const fuel = Object.entries(stageOf(stage)?.drone || {})
-    .map(([item, quantity]) => fmt(quantity) + ' ' + item + '/min')
+    .map(([item, quantity]) => formatNumber(quantity) + ' ' + item + '/min')
     .join(', ');
   return [
     {
@@ -545,7 +545,7 @@ export function retireTasks({ plan, stage, stageOf }: GuideContext): GuideTask[]
     {
       id: 'retire-' + stage,
       title: 'Retire the lines this phase no longer uses',
-      body: `Phase ${stage} does not run ${listed.map(line => `${fmt(line.machines)} × ${line.name} (${line.machine})`).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
+      body: `Phase ${stage} does not run ${listed.map(line => `${formatNumber(line.machines)} × ${line.name} (${line.machine})`).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
     },
   ];
 }

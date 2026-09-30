@@ -18,18 +18,26 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
-import { num } from '../../format.ts';
+import { num, plural } from '../../format.ts';
 import { bestLane, FLUIDS, lanePlan, rateOfItem } from '../../flow.ts';
 import {
   groupLinks,
   isSource,
   linkTransportFor,
-  MINES,
-  OUTSIDE,
+  placeName,
   sourceItem,
   UNGROUPED,
 } from '../../group-links.ts';
-import { FLUID_CAR_M3, LINK_MODES, linkLoad, transportFuel, VEHICLES } from '../../logistics.ts';
+import {
+  DEFAULT_TRIP_MIN,
+  LINK_MODES,
+  linkBeltBadge,
+  linkSiblings,
+  linkTotal,
+  linkTransportUpdate,
+  linkVehicleText,
+  transportFuel,
+} from '../../logistics.ts';
 import {
   calcStage,
   calculated,
@@ -48,120 +56,28 @@ import { legacy } from '../bridge.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
-import type {
-  ItemRates,
-  LinkMode,
-  LinkTransport,
-  StageKey,
-  UpdateOp,
-  WorkspaceSummary,
-} from '../../../types/index.ts';
-
-// Names for the places that are not factory groups.
-const PLACES: Record<string, string> = {
-  [UNGROUPED]: 'Ungrouped',
-  [OUTSIDE.storage]: 'Protected storage',
-  [OUTSIDE.drone]: 'Drone fuel',
-  [OUTSIDE.transport]: 'Vehicle fuel',
-  [OUTSIDE.delivery]: 'Space Elevator',
-  [OUTSIDE.surplus]: 'AWESOME Sink',
-};
-// What a newly picked vehicle starts with until the user says otherwise.
-const DEFAULT_TRIP_MIN = 5;
-const DEFAULT_FUEL = 'Packaged Fuel';
-const plural = (count: number, word: string) => `${num(count)} ${word}${count === 1 ? '' : 's'}`;
-
-// For a link that goes by vehicle: the lines under its Out row, and the short badge on its In row.
-function vehicleText(
-  items: { item: string; rate: number }[],
-  transport: LinkTransport,
-): { lines: string[]; badge: string } {
-  // The best belt and pipe unlocked: a freight car loads at no more than one of each (#232).
-  const belt = bestLane(false),
-    pipe = bestLane(true);
-  const catalog = workspace.catalog,
-    load = linkLoad(items, transport, catalog, FLUIDS, { belt: belt.cap, pipe: pipe.cap }),
-    vehicle = VEHICLES[transport.mode],
-    lines: string[] = [];
-  let badge = load.vehicles
-    ? plural(load.vehicles, vehicle.name.toLowerCase())
-    : `By ${vehicle.name.toLowerCase()}`;
-  if (transport.mode === 'train') {
-    const cars = [
-      load.freightCars ? plural(load.freightCars, 'freight car') : '',
-      load.fluidCars ? `${plural(load.fluidCars, 'fluid car')} (${num(FLUID_CAR_M3)} m³ each)` : '',
-    ].filter(Boolean);
-    if (load.vehicles) {
-      const locos = plural(load.locomotives, 'locomotive');
-      lines.push(
-        `1 train: ${locos}, ${cars.join(' and ')}. Electric: each locomotive draws 25–110 MW from the grid while moving.`,
-      );
-      const limits = [
-        load.beltLimited ? `one ${belt.mark} belt (${num(belt.cap)}/min)` : '',
-        load.pipeLimited ? `one ${pipe.mark} pipe (${num(pipe.cap)} m³/min)` : '',
-      ].filter(Boolean);
-      if (limits.length)
-        lines.push(
-          `A car loads and unloads at no more than ${limits.join(' or ')}, so this flow needs that many cars.`,
-        );
-      badge = `1 train: ${locos}, ${cars.join(' and ')}`;
-    }
-  } else if (load.vehicles) {
-    const fuel =
-      transport.mode === 'drone'
-        ? ' Drone fuel depends on the distance flown; see the profile’s drone-fuel supply.'
-        : load.fuelPerMin
-          ? ` Up to ${num(load.fuelPerMin)} ${transport.fuel}/min if they never stop.`
-          : '';
-    lines.push(
-      `${plural(load.vehicles, vehicle.name.toLowerCase())}, ${load.slotsUsed} of ${vehicle.slots} slots each trip.${fuel}`,
-    );
-  }
-  for (const item of load.unpackable)
-    lines.push(`${item} cannot be packaged: keep it on a pipe, or send it by train.`);
-  return { lines, badge };
-}
-
-// "3 × Mk.4 belts · 1 × Mk.2 pipe": the belts and pipes a link needs, totalled per mark.
-function beltBadge(items: { item: string; rate: number }[]): string {
-  const marks = new Map<string, { count: number; mark: string; word: string }>();
-  for (const { item, rate } of items) {
-    const plan = lanePlan(rate, FLUIDS.has(item)),
-      key = plan.lane.mark + plan.word,
-      entry = marks.get(key) ?? { count: 0, mark: plan.lane.mark, word: plan.word };
-    entry.count += plan.count;
-    marks.set(key, entry);
-  }
-  return [...marks.values()]
-    .map(m => `${m.count} × ${m.mark} ${m.word}${m.count > 1 ? 's' : ''}`)
-    .join(' · ');
-}
-
-// "215/min · 96 m³/min": items and fluids add up separately.
-function total(items: { rate: number; fluid: boolean }[]): string {
-  let solid = 0,
-    fluid = 0;
-  for (const item of items) item.fluid ? (fluid += item.rate) : (solid += item.rate);
-  return [solid ? `${num(solid)}/min` : '', fluid ? `${num(fluid)} m³/min` : '']
-    .filter(Boolean)
-    .join(' · ');
-}
+import type { ItemRates, LinkMode, StageKey, WorkspaceSummary } from '../../../types/index.ts';
 
 const view = computed(() =>
   legacy(() => {
     const stage = calcStage(),
       groupsState = factoryGroupsState();
     if (!calculated || !stage?.rows?.length || !groupsState.groups.length) return null;
-    // A source (#231) is named by its item; one the plan does not mine is existing supply.
-    const name = (id: string) =>
-      isSource(id)
-        ? sourceItem(id) + (stage.raw?.[sourceItem(id)] ? '' : ' (existing supply)')
-        : (groupsState.groups.find(group => group.id === id)?.name ?? PLACES[id] ?? id);
+    const name = (id: string) => placeName(id, groupsState.groups, stage.raw);
     const links = groupLinks(stage, groupsState).map(link => {
       const key = link.from + ':' + link.to,
         transport = linkTransportFor(groupsState.links, link.from, link.to);
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
-      const vehicle = transport ? vehicleText(link.items, transport) : null;
+      const vehicle = transport
+        ? linkVehicleText(
+            link.items,
+            transport,
+            workspace.catalog,
+            FLUIDS,
+            bestLane(false),
+            bestLane(true),
+          )
+        : null;
       const items = link.items.map(({ item, rate }) => {
         const fluid = FLUIDS.has(item),
           pack =
@@ -190,7 +106,7 @@ const view = computed(() =>
         items,
         packed: items.filter(item => item.pack),
         load: vehicle?.lines ?? [],
-        badge: vehicle?.badge ?? beltBadge(link.items),
+        badge: vehicle?.badge ?? linkBeltBadge(link.items, FLUIDS, lanePlan),
       };
     });
     type Row = (typeof links)[number];
@@ -198,7 +114,7 @@ const view = computed(() =>
       dir,
       rows,
       count: plural(rows.length, 'link'),
-      total: total(rows.flatMap(r => r.items)),
+      total: linkTotal(rows.flatMap(r => r.items)),
     });
     const places = groupsState.groups.map(group => group.id);
     if (links.some(l => l.from === UNGROUPED || l.to === UNGROUPED)) places.push(UNGROUPED);
@@ -240,50 +156,18 @@ const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []))
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 
 type Link = NonNullable<typeof view.value>['links'][number];
-// Saves a link's transport with `change` applied; the page redraws with what was saved.
+// Saves a link's transport with `change` applied (logistics.ts linkTransportUpdate); the page
+// redraws with what was saved.
 async function setTransport(
   control: HTMLInputElement | HTMLSelectElement,
   link: Link,
   change: { mode?: 'belt' | LinkMode; roundTripMin?: number; fuel?: string },
 ) {
-  const mode = change.mode ?? link.mode;
-  // A mines link with a choice saved before #231 splits on the first change to one of its items:
-  // the other sources going the same way keep that choice (state.ts factoryLinkTransport). The
-  // old entry applied in every phase, so its siblings are the sources going there in any phase of
-  // the plan, not only the one on screen (#235).
-  const groupsState = factoryGroupsState();
-  const siblings =
-    isSource(link.from) && groupsState.links?.[MINES + ':' + link.to]
-      ? [
-          ...new Set(
-            Object.values(calculated?.stages ?? {})
-              .filter(stage => stage.rows?.length)
-              .flatMap(stage => groupLinks(stage, groupsState))
-              .filter(other => isSource(other.from) && other.to === link.to)
-              .map(other => other.from),
-          ),
-        ]
-      : undefined;
-  const update: UpdateOp =
-    mode === 'belt'
-      ? {
-          type: 'factoryLinkTransport',
-          from: link.from,
-          to: link.to,
-          mode,
-          ...(siblings ? { siblings } : {}),
-        }
-      : {
-          type: 'factoryLinkTransport',
-          from: link.from,
-          to: link.to,
-          mode,
-          roundTripMin: change.roundTripMin ?? link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN,
-          ...(fuelledModes.includes(mode)
-            ? { fuel: change.fuel ?? link.transport?.fuel ?? DEFAULT_FUEL }
-            : {}),
-          ...(siblings ? { siblings } : {}),
-        };
+  const update = linkTransportUpdate(
+    link,
+    change,
+    linkSiblings(calculated?.stages, factoryGroupsState(), link),
+  );
   // Busy while it saves (app/busy.ts, #299). A select changed by a key meanwhile saves nothing and
   // shows the saved choice again.
   if (isBusy(control)) return render();

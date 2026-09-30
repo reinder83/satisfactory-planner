@@ -12,11 +12,11 @@ import type { CompletionLine, FactoryGroups, GroupAssignment } from '../../types
 // (a handbook factory id, or a calculated row id) to a list of { group, rate } memberships;
 // a null rate means the whole output, or the remainder once other groups take theirs.
 export function factoryGroupsState(): FactoryGroups {
-  const g: Partial<FactoryGroups> = state?.factoryGroups || {};
+  const saved: Partial<FactoryGroups> = state?.factoryGroups || {};
   return {
-    groups: g.groups || [],
-    assignments: g.assignments || {},
-    ...(g.links ? { links: g.links } : {}),
+    groups: saved.groups || [],
+    assignments: saved.assignments || {},
+    ...(saved.links ? { links: saved.links } : {}),
   };
 }
 
@@ -33,16 +33,16 @@ export function allocationText(
   groupId: string,
   total: number,
   machines: number,
-  rate: (q: number) => string,
+  rate: (amount: number) => string,
 ): string {
-  const ms = membershipsOf(key),
-    m = ms.find(x => x.group === groupId);
-  if (!m || (ms.length === 1 && m.rate == null)) return '';
-  const share = total > 0 ? rowShares(total, ms).get(groupId) || 0 : 0;
-  const here = total > 0 ? share * total : (m.rate ?? 0);
-  const sharing = ms.filter(x => x.rate == null).length;
+  const memberships = membershipsOf(key),
+    membership = memberships.find(m => m.group === groupId);
+  if (!membership || (memberships.length === 1 && membership.rate == null)) return '';
+  const share = total > 0 ? rowShares(total, memberships).get(groupId) || 0 : 0;
+  const here = total > 0 ? share * total : (membership.rate ?? 0);
+  const sharing = memberships.filter(m => m.rate == null).length;
   return (
-    (m.rate != null
+    (membership.rate != null
       ? 'Here: '
       : sharing > 1
         ? `Remaining here, split ${sharing} ways: `
@@ -106,12 +106,12 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
 export function statusFilter<T>(
   items: T[],
   current: string,
-  running: (x: T) => boolean,
-  extra: [StatusFilter, (x: T) => boolean][] = [],
+  running: (item: T) => boolean,
+  extra: [StatusFilter, (item: T) => boolean][] = [],
 ): { chips: FilterChip[]; active: FilterChip; list: T[] } {
-  const tests: [StatusFilter, (x: T) => boolean][] = [
+  const tests: [StatusFilter, (item: T) => boolean][] = [
     ['all', () => true],
-    ['todo', x => !running(x)],
+    ['todo', item => !running(item)],
     ['done', running],
     ...extra,
   ];
@@ -120,12 +120,12 @@ export function statusFilter<T>(
     label: FILTER_LABELS[value],
     count: items.filter(keep).length,
   }));
-  const at = Math.max(
+  const activeIndex = Math.max(
     0,
     tests.findIndex(([value]) => value === current),
   );
-  // at is an index into tests, which chips maps one to one.
-  return { chips, active: chips[at]!, list: items.filter(tests[at]![1]) };
+  // activeIndex is an index into tests, which chips maps one to one.
+  return { chips, active: chips[activeIndex]!, list: items.filter(tests[activeIndex]![1]) };
 }
 
 // The jump bar of both factories pages (SP-17, #252, ui/factories/JumpBar.vue): one entry per
@@ -156,7 +156,7 @@ export function siteEntry<T>(
   sub: string,
   members: T[],
   atSite: T[],
-  running: (x: T) => boolean,
+  running: (item: T) => boolean,
 ): (SiteEntry & { members: T[] }) | null {
   const key = 'site-' + kind,
     label = SITE_LABELS[kind];
@@ -185,23 +185,25 @@ export interface CompletionView extends CompletionLine {
 }
 export const completionView = (lines: CompletionLine[], query: string): CompletionView[] =>
   lines
-    .filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
-    .map(r => ({
-      ...r,
-      check: 'completion-' + r.id,
-      done: checked('completion-' + r.id),
+    .filter(line => line.name.toLowerCase().includes(query.toLowerCase()))
+    .map(completion => ({
+      ...completion,
+      check: 'completion-' + completion.id,
+      done: checked('completion-' + completion.id),
       // The last machine is only named when it runs below 100%.
       line:
-        `${itemRate(r.name, r.output)} · ${num(r.machines)} ${r.machine}` +
-        ((r.lastClock ?? 100) < 100 ? ` · last at ${num(r.lastClock)}%` : ''),
-      inputText: inputText(r.inputs),
-      byproductText: Object.keys(r.byproducts).length ? inputText(r.byproducts) : '',
+        `${itemRate(completion.name, completion.output)} · ${num(completion.machines)} ${completion.machine}` +
+        ((completion.lastClock ?? 100) < 100 ? ` · last at ${num(completion.lastClock)}%` : ''),
+      inputText: inputText(completion.inputs),
+      byproductText: Object.keys(completion.byproducts).length
+        ? inputText(completion.byproducts)
+        : '',
     }));
 export const jumpEntry = <T>(
   key: string,
   label: string,
   members: T[],
-  running: (x: T) => boolean,
+  running: (item: T) => boolean,
 ): JumpEntry => ({ key, label, running: members.filter(running).length, total: members.length });
 
 // The user groups' entries: `found` is what the search found and `shown` what the chip keeps, and
@@ -209,14 +211,14 @@ export const jumpEntry = <T>(
 export function groupJumps<T>(
   found: T[],
   shown: T[],
-  keyOf: (x: T) => string,
-  running: (x: T) => boolean,
+  keyOf: (item: T) => string,
+  running: (item: T) => boolean,
   editing: boolean,
 ): JumpEntry[] {
-  const inGroup = (id: string) => (x: T) => membershipsOf(keyOf(x)).some(m => m.group === id);
+  const inGroup = (id: string) => (item: T) => membershipsOf(keyOf(item)).some(m => m.group === id);
   return factoryGroupsState()
-    .groups.filter(gr => editing || shown.some(inGroup(gr.id)))
-    .map(gr => jumpEntry(gr.id, gr.name, found.filter(inGroup(gr.id)), running));
+    .groups.filter(group => editing || shown.some(inGroup(group.id)))
+    .map(group => jumpEntry(group.id, group.name, found.filter(inGroup(group.id)), running));
 }
 
 // What an empty factories page says: the search found nothing, or the chosen chip keeps none of

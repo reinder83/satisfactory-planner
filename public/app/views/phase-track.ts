@@ -16,21 +16,21 @@ export interface PhaseSegment {
 
 export function phaseTrack(): PhaseSegment[] {
   const counted = calculated ? phaseProgress(calculated, state?.checks ?? {}) : undefined;
-  return phaseOptions().map(p => {
+  return phaseOptions().map(phase => {
     let done = 0,
       total = 0;
-    if (p !== 'post' && calculated) {
-      const x = counted?.find(c => c.phase === p);
-      done = x?.done ?? 0;
-      total = x?.total ?? 0;
-    } else if (p !== 'post') {
-      const steps = plan?.phases?.[p] ?? [];
+    if (phase !== 'post' && calculated) {
+      const progress = counted?.find(c => c.phase === phase);
+      done = progress?.done ?? 0;
+      total = progress?.total ?? 0;
+    } else if (phase !== 'post') {
+      const steps = plan?.phases?.[phase] ?? [];
       done = steps.filter(t => checked(t.id)).length;
       total = steps.length;
     }
     return {
-      phase: p,
-      label: phaseLabel(p),
+      phase,
+      label: phaseLabel(phase),
       pct: total ? Math.round((done / total) * 100) : null,
     };
   });

@@ -19,7 +19,7 @@ type DroneSettings = Pick<
 >;
 // The purities a node count is kept for.
 type NodePurity = keyof NodeCounts;
-// [value, label] pairs for the storage setting (`s.storage`), shown by the wizard and the
+// [value, label] pairs for the storage setting (`settings.storage`), shown by the wizard and the
 // guided start and validated by planner.ts. wantsStorage below decides what each one covers.
 export const storageOptions: Choice[] = [
   ['none', 'No dedicated storage'],
@@ -90,14 +90,16 @@ export const elevatorParts: string[] = [
 // worth a faster guaranteed refill than items you never take out. A per-item
 // rate wins over everything; 0 keeps the container and its address without
 // reserving any production for it.
-export const storageRateFor = (s: RateSettings, name: string): number => {
-  const override = s.storageOverrides?.[name];
+export const storageRateFor = (settings: RateSettings, name: string): number => {
+  const override = settings.storageOverrides?.[name];
   if (override !== undefined) return override;
   if (elevatorParts.includes(name)) return 0;
-  return constructionItems.includes(name) ? (s.buildRate ?? s.storageRate) : s.storageRate;
+  return constructionItems.includes(name)
+    ? (settings.buildRate ?? settings.storageRate)
+    : settings.storageRate;
 };
-// World Randomization "resource distribution" choices (`s.distribution`). Only 'original' has
-// known node totals; the rest are handled by resourceDefaults and knownWorld below.
+// World Randomization "resource distribution" choices (`settings.distribution`). Only
+// 'original' has known node totals; the rest are handled by resourceDefaults and knownWorld below.
 export const distributions: Choice[] = [
   ['original', 'Default'],
   ['randomized', 'Random'],
@@ -105,7 +107,8 @@ export const distributions: Choice[] = [
   ['advanced', 'Advanced Resource Rich'],
   ['fossil', 'Fossil Fuel Rich'],
 ];
-// World Randomization "node purity" choices (`s.purity`); 'custom' means totals entered by hand.
+// World Randomization "node purity" choices (`settings.purity`); 'custom' means totals entered
+// by hand.
 export const purities: Choice[] = [
   ['vanilla', 'Default'],
   ['pure', 'All Pure'],
@@ -116,8 +119,8 @@ export const purities: Choice[] = [
   ['random', 'Random'],
   ['custom', 'Custom / manual'],
 ];
-// [value, label] pairs for the preferred main power (`s.mainPower`); progression.ts turns the
-// choice into a "power before the next production block" step.
+// [value, label] pairs for the preferred main power (`settings.mainPower`); progression.ts turns
+// the choice into a "power before the next production block" step.
 export const powerOptions: Choice[] = [
   ['auto', 'Let the planner choose'],
   ['coal', 'Coal'],
@@ -177,9 +180,11 @@ export function resourceDefaults(
                 : [1, 2, 4];
     // With remapped/default or random purity use the guaranteed all-impure floor until the actual totals are entered.
     limits[name] = counts.reduce(
-      (sum, n, i) =>
+      (sum, count, i) =>
         sum +
-        n * rate * (uncertain && !['pure', 'normal', 'impure'].includes(purity) ? 1 : weights[i]!),
+        count *
+          rate *
+          (uncertain && !['pure', 'normal', 'impure'].includes(purity) ? 1 : weights[i]!),
       0,
     );
     if (name === 'Nitrogen Gas' && distribution !== 'original') limits[name] = 0;
@@ -261,7 +266,7 @@ export const vehicleFuels: string[] = [
   'Solid Biofuel',
 ];
 
-// Drone fuel choices (`s.droneFuel`); 'none' plans no dedicated drone fuel supply.
+// Drone fuel choices (`settings.droneFuel`); 'none' plans no dedicated drone fuel supply.
 export const droneFuels: string[] = [
   'none',
   'Battery',
@@ -274,13 +279,13 @@ export const droneFuels: string[] = [
 ];
 // The protected drone fuel line planner.ts adds to a phase, as { item: items/min }. None
 // before Phase 4. With ionized fuel chosen, Phase 4 supplies batteries instead (the bridge).
-export function droneSupply(s: DroneSettings, phase: number): ItemRates {
-  if (phase < 4 || !s.droneFuel || s.droneFuel === 'none') return {};
-  const bridge = phase === 4 && s.droneFuel === 'Packaged Ionized Fuel';
+export function droneSupply(settings: DroneSettings, phase: number): ItemRates {
+  if (phase < 4 || !settings.droneFuel || settings.droneFuel === 'none') return {};
+  const bridge = phase === 4 && settings.droneFuel === 'Packaged Ionized Fuel';
   return {
-    [bridge ? 'Battery' : s.droneFuel]: bridge
-      ? (s.droneBridgeRate ?? 10)
-      : (s.droneFuelRate ?? 10),
+    [bridge ? 'Battery' : settings.droneFuel]: bridge
+      ? (settings.droneBridgeRate ?? 10)
+      : (settings.droneFuelRate ?? 10),
   };
 }
 Object.assign(helpText, {
@@ -365,18 +370,18 @@ export const guidedQuestions: GuidedQuestion[] = [
     short: 'Your phase',
     title: 'Where are you in the game right now?',
     lead: 'A plan is built for one phase. Earlier phases are behind you, so the build steps start where you are.',
-    options: [1, 2, 3, 4, 5].map(n => ({
-      value: String(n),
-      label: 'Phase ' + n,
+    options: [1, 2, 3, 4, 5].map(phase => ({
+      value: String(phase),
+      label: 'Phase ' + phase,
       detail:
-        n === 1
+        phase === 1
           ? 'The first Space Elevator delivery. Starting out.'
           : 'Delivering ' +
-            phaseParts[n]!.slice(0, 2).join(' and ') +
-            (phaseParts[n]!.length > 2 ? ', and more' : '.'),
+            phaseParts[phase]!.slice(0, 2).join(' and ') +
+            (phaseParts[phase]!.length > 2 ? ', and more' : '.'),
       // Every phase 1-5 has its parts listed above.
-      items: phaseParts[n]!,
-      set: { phase: String(n) as StageKey },
+      items: phaseParts[phase]!,
+      set: { phase: String(phase) as StageKey },
     })),
   },
   {
@@ -633,16 +638,16 @@ export function nodeYield(
   purity: string,
   { mark = 3, clock = 2.5 }: Equipment = {},
 ): number {
-  const p = purityFactor[purity];
-  if (!p) return 0;
-  if (oilNodeResources.includes(resource)) return OIL_BASE * p * clock;
-  return (MINER_BASE[mark] || MINER_BASE[3]!) * p * clock;
+  const factor = purityFactor[purity];
+  if (!factor) return 0;
+  if (oilNodeResources.includes(resource)) return OIL_BASE * factor * clock;
+  return (MINER_BASE[mark] || MINER_BASE[3]!) * factor * clock;
 }
 // One resource-well satellite's output per minute. Wells have no marks; the
 // pressurizer's clock drives every satellite it feeds.
 export function wellYield(purity: string, { clock = 2.5 }: Equipment = {}): number {
-  const p = purityFactor[purity];
-  return p ? WELL_BASE * p * clock : 0;
+  const factor = purityFactor[purity];
+  return factor ? WELL_BASE * factor * clock : 0;
 }
 // One resource's counts from a nodes/wells map, with missing purities as 0.
 const countsOf = (map: Record<string, NodeCounts> | undefined, name: string): NodeCounts => ({
@@ -651,14 +656,15 @@ const countsOf = (map: Record<string, NodeCounts> | undefined, name: string): No
 });
 // What a resource yields in total, before anything is deducted.
 export function resourcePool(extraction: Survey | null | undefined, resource: string): number {
-  const e = { ...blankExtraction(), ...(extraction || {}) };
-  const opts = { mark: e.mark, clock: e.clock };
-  const nodes = countsOf(e.nodes, resource),
-    wells = countsOf(e.wells, resource);
+  const survey = { ...blankExtraction(), ...(extraction || {}) };
+  const equipment = { mark: survey.mark, clock: survey.clock };
+  const nodes = countsOf(survey.nodes, resource),
+    wells = countsOf(survey.wells, resource);
   let total = 0;
   for (const [key] of purities3) {
-    total += (Number(nodes[key]) || 0) * nodeYield(resource, key, opts);
-    if (wellResources.includes(resource)) total += (Number(wells[key]) || 0) * wellYield(key, opts);
+    total += (Number(nodes[key]) || 0) * nodeYield(resource, key, equipment);
+    if (wellResources.includes(resource))
+      total += (Number(wells[key]) || 0) * wellYield(key, equipment);
   }
   return total;
 }
@@ -752,7 +758,7 @@ export const richShape: Record<string, string> = {
 // [id, label] for each preset purity, labelled as in `purities`.
 export const nodePresets: [id: string, label: string][] = presetPurities.map(id => [
   id,
-  (purities.find(([v]) => v === id) || [, id])[1],
+  (purities.find(([value]) => value === id) || [, id])[1],
 ]);
 // One resource's [impure, normal, pure] counts redistributed by a purity
 // setting. Mostly Pure shifts each node up one level, Mostly Impure down one.
@@ -782,15 +788,15 @@ export function presetSurvey(
   base?: Survey | null,
   distribution = 'original',
 ): Required<Survey> {
-  const e = { ...blankExtraction(), ...(base || {}) };
-  e.nodes = { ...e.nodes };
-  e.wells = { ...e.wells };
+  const survey = { ...blankExtraction(), ...(base || {}) };
+  survey.nodes = { ...survey.nodes };
+  survey.wells = { ...survey.wells };
   for (const [name, counts] of Object.entries(nodeCounts)) {
     const row = presetCounts(purity, counts);
-    if (name !== 'Nitrogen Gas') e.nodes[name] = row;
-    else if (distribution === 'original') e.wells[name] = row;
+    if (name !== 'Nitrogen Gas') survey.nodes[name] = row;
+    else if (distribution === 'original') survey.wells[name] = row;
   }
-  return e;
+  return survey;
 }
 Object.assign(helpText, {
   nodePresets:
@@ -800,16 +806,20 @@ Object.assign(helpText, {
 // Which preset, if any, the counts in a survey currently are. Used to show the
 // active preset and to say where untouched numbers came from.
 export function matchingPreset(extraction: Survey | null | undefined): string {
-  const e = { ...blankExtraction(), ...(extraction || {}) };
+  const survey = { ...blankExtraction(), ...(extraction || {}) };
   for (const [id] of nodePresets) {
-    const p = presetSurvey(id);
+    const preset = presetSurvey(id);
     const same = Object.keys(nodeCounts)
       .filter(name => name !== 'Nitrogen Gas')
       .every(name => {
-        const a = { ...blankCounts(), ...(e.nodes || {})[name] };
+        const counted = { ...blankCounts(), ...(survey.nodes || {})[name] };
         // presetSurvey fills every resource of nodeCounts but nitrogen.
-        const b = p.nodes[name]!;
-        return a.impure === b.impure && a.normal === b.normal && a.pure === b.pure;
+        const expected = preset.nodes[name]!;
+        return (
+          counted.impure === expected.impure &&
+          counted.normal === expected.normal &&
+          counted.pure === expected.pure
+        );
       });
     if (same) return id;
   }

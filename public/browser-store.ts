@@ -35,24 +35,24 @@ const NOT_MIGRATED =
 // progress state with checks and settings. Every release wrote records like this; anything
 // else is damaged and is refused (UNREADABLE) instead of failing later with a raw TypeError.
 // Deeper checks (the state's own fields) stay with validateState where the state is used.
-const object = (x: unknown): x is Record<string, unknown> =>
-  !!x && typeof x === 'object' && !Array.isArray(x);
+const object = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
 function workspaceRecord(found: unknown): found is BrowserWorkspace {
   return (
     object(found) &&
     Array.isArray(found.saves) &&
     found.saves.every(
-      (s: unknown) =>
-        object(s) &&
-        typeof s.id === 'string' &&
-        Array.isArray(s.profiles) &&
-        s.profiles.every(
-          (p: unknown) =>
-            object(p) &&
-            typeof p.id === 'string' &&
-            object(p.state) &&
-            object(p.state.checks) &&
-            object(p.state.settings),
+      (save: unknown) =>
+        object(save) &&
+        typeof save.id === 'string' &&
+        Array.isArray(save.profiles) &&
+        save.profiles.every(
+          (profile: unknown) =>
+            object(profile) &&
+            typeof profile.id === 'string' &&
+            object(profile.state) &&
+            object(profile.state.checks) &&
+            object(profile.state.settings),
         ),
     )
   );
@@ -60,8 +60,10 @@ function workspaceRecord(found: unknown): found is BrowserWorkspace {
 
 // A record this release reads: a workspace of version 1. Anything else is refused by
 // transaction() below, with the message that fits it.
-const newer = (x: unknown) => object(x) && typeof x.version === 'number' && x.version > 1;
-const current = (x: unknown): x is BrowserWorkspace => workspaceRecord(x) && !newer(x);
+const newer = (record: unknown) =>
+  object(record) && typeof record.version === 'number' && record.version > 1;
+const current = (record: unknown): record is BrowserWorkspace =>
+  workspaceRecord(record) && !newer(record);
 
 // Retiring the handbook profile type (#387, #497): every original profile becomes a calculated
 // one with its progress re-keyed (migrateOriginalProfile). In this edition an original profile
@@ -69,8 +71,10 @@ const current = (x: unknown): x is BrowserWorkspace => workspaceRecord(x) && !ne
 // import, which requires one (validateTransfer), or as a duplicate of one. A record with an
 // original profile without one was never written by a release; it is left as it is, because the
 // Pages build has no handbook to transcribe it from (its plan.json is an empty template).
-const migratable = (p: StoredProfile) => p.kind === 'original' && object(p.handbook);
-const needsMigration = (d: BrowserWorkspace) => d.saves.some(s => s.profiles.some(migratable));
+const migratable = (profile: StoredProfile) =>
+  profile.kind === 'original' && object(profile.handbook);
+const needsMigration = (workspace: BrowserWorkspace) =>
+  workspace.saves.some(s => s.profiles.some(migratable));
 // The second key (#497): the record as it was read before its first migration. Written in the
 // migration's own transaction, only when the key is empty, so it is never replaced; nothing in
 // the planner reads it. It is the pre-migration copy AGENTS.md requires, the counterpart of the
@@ -140,17 +144,20 @@ export function openBrowserStore(
   // meanwhile, and then nothing is written), keeps it under PRE_HANDBOOK unless that key already
   // holds a copy, and puts it back migrated. A throw aborts the transaction, so a failure leaves
   // both keys as they were. A record transaction() refuses (damaged, newer) is left to it.
-  const migrate = async (db: IDBDatabase, load: () => Promise<MigrationData>) => {
+  const migrate = async (database: IDBDatabase, load: () => Promise<MigrationData>) => {
     const found = await new Promise<unknown>((resolve, reject) => {
-      const r = db.transaction('workspace', 'readonly').objectStore('workspace').get('main');
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
+      const request = database
+        .transaction('workspace', 'readonly')
+        .objectStore('workspace')
+        .get('main');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
     if (!current(found) || !needsMigration(found)) return;
     const migration = await load();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('workspace', 'readwrite'),
-        store = tx.objectStore('workspace');
+      const transaction = database.transaction('workspace', 'readwrite'),
+        store = transaction.objectStore('workspace');
       let failure: unknown,
         settled = 0;
       const main = store.get('main'),
@@ -162,18 +169,18 @@ export function openBrowserStore(
           const data: unknown = main.result;
           if (!current(data) || !needsMigration(data)) return;
           migrateRecord(store, data, kept.result, migration);
-        } catch (e) {
-          failure = e;
-          tx.abort();
+        } catch (error) {
+          failure = error;
+          transaction.abort();
         }
       };
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => {
-        const why = failure || tx.error;
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => {
+        const why = failure || transaction.error;
         reject(refused(NOT_MIGRATED + (why instanceof Error ? ` (${why.message})` : '')));
       };
       // Request errors also abort the transaction, so onabort reports them.
-      tx.onerror = () => {};
+      transaction.onerror = () => {};
     });
   };
   // Opens the database at SCHEMA. Upgrading from version 1 migrates the record in the upgrade's
@@ -190,10 +197,10 @@ export function openBrowserStore(
         failure: unknown,
         settled = false;
       request.onupgradeneeded = () => {
-        const db = request.result;
+        const database = request.result;
         // A brand-new database just gets the empty store.
-        if (!db.objectStoreNames.contains('workspace')) {
-          db.createObjectStore('workspace');
+        if (!database.objectStoreNames.contains('workspace')) {
+          database.createObjectStore('workspace');
           return;
         }
         if (!loadMigration) return;
@@ -223,18 +230,18 @@ export function openBrowserStore(
         };
       };
       request.onsuccess = () => {
-        const db = request.result;
+        const database = request.result;
         // Opened after this attempt was refused as blocked: the next transaction opens again.
-        if (settled) return db.close();
+        if (settled) return database.close();
         settled = true;
         // Close when another tab asks to upgrade the schema, so a future upgrade is not blocked by
         // tabs left open. Such a tab then refuses its later transactions, saying why, until it is
         // reloaded (rather than the browser's raw "connection is closing" error).
-        db.onversionchange = () => {
+        database.onversionchange = () => {
           upgradedElsewhere = true;
-          db.close();
+          database.close();
         };
-        resolve(db);
+        resolve(database);
       };
       request.onerror = () => {
         if (settled) return;
@@ -269,28 +276,28 @@ export function openBrowserStore(
         opened = undefined;
         throw error;
       });
-      const db = await opened;
+      const database = await opened;
       if (upgradedElsewhere)
         throw Error(
           'A newer version of the planner was opened in another tab. Reload this tab to continue; nothing has been changed.',
         );
       if (loadMigration) {
-        migrated ??= migrate(db, loadMigration).catch(e => {
+        migrated ??= migrate(database, loadMigration).catch(error => {
           migrated = undefined;
-          throw e;
+          throw error;
         });
         await migrated;
       }
       return new Promise<T>((resolve, reject) => {
-        const tx = db.transaction('workspace', change ? 'readwrite' : 'readonly'),
-          store = tx.objectStore('workspace');
+        const transaction = database.transaction('workspace', change ? 'readwrite' : 'readonly'),
+          store = transaction.objectStore('workspace');
         // Without change, the answer is the record itself.
         let answer: T | undefined, failure: unknown;
-        const r = store.get('main');
-        r.onsuccess = () => {
+        const request = store.get('main');
+        request.onsuccess = () => {
           try {
             // Saved data is unknown until checked (AGENTS.md).
-            const found: unknown = r.result;
+            const found: unknown = request.result;
             // Version 1 is the only workspace format so far; a later one is refused unread.
             if (newer(found)) throw refused(NEWER);
             // Only a missing record (a new browser) starts blank; anything else not shaped like
@@ -307,18 +314,18 @@ export function openBrowserStore(
             data.lastBackup ??= null;
             answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
-          } catch (e) {
-            failure = e;
-            tx.abort();
+          } catch (error) {
+            failure = error;
+            transaction.abort();
           }
         };
         // Resolve only after the commit is durable. If `change` throws, the abort discards its
         // edits and the promise rejects with that error.
-        tx.oncomplete = () => resolve(answer as T);
-        tx.onabort = () =>
-          reject(failure || tx.error || Error('Browser storage could not be saved.'));
+        transaction.oncomplete = () => resolve(answer as T);
+        transaction.onabort = () =>
+          reject(failure || transaction.error || Error('Browser storage could not be saved.'));
         // Request errors also abort the transaction, so onabort reports them.
-        tx.onerror = () => {};
+        transaction.onerror = () => {};
       });
     },
   };
@@ -334,26 +341,29 @@ export function readStoredData(
   name = 'satisfactory-planner-browser-v1',
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open(name);
+    const request = indexedDB.open(name);
     let missing = false;
-    r.onupgradeneeded = () => {
+    request.onupgradeneeded = () => {
       missing = true;
-      r.transaction?.abort();
+      request.transaction?.abort();
     };
-    r.onerror = () => (missing ? resolve(undefined) : reject(r.error));
-    r.onsuccess = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains('workspace')) {
-        db.close();
+    request.onerror = () => (missing ? resolve(undefined) : reject(request.error));
+    request.onsuccess = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains('workspace')) {
+        database.close();
         return resolve(undefined);
       }
-      const get = db.transaction('workspace', 'readonly').objectStore('workspace').get('main');
+      const get = database
+        .transaction('workspace', 'readonly')
+        .objectStore('workspace')
+        .get('main');
       get.onsuccess = () => {
-        db.close();
+        database.close();
         resolve(get.result);
       };
       get.onerror = () => {
-        db.close();
+        database.close();
         reject(get.error);
       };
     };
