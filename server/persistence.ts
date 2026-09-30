@@ -10,7 +10,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { catalog } from '../planner.ts';
-import { migrateOriginalProfile } from '../public/handbook-migration.ts';
+import { migrateOriginalProfile, type MigrationData } from '../public/handbook-migration.ts';
 import { errorCode } from './errors.ts';
 import type {
   Handbook,
@@ -34,12 +34,17 @@ type ValidateState = (state: unknown) => ProgressState;
 // so the migration never depends on the plan.json the release happens to ship. The Docker
 // image copies migrations/; the Pages build never includes it. Read only when there is
 // something to migrate.
+const read = async (file: string) =>
+  JSON.parse(await fs.readFile(new URL(file, import.meta.url), 'utf8'));
+// The recipes and base budgets the migration uses, here and for an imported original profile
+// (save-routes.ts, #605).
+export const migrationData = async (): Promise<MigrationData> => ({
+  recipes: ((await read('../recipes.json')) as { recipes: Recipe[] }).recipes,
+  pureLimits: catalog().pureLimits,
+});
 const migrateOriginals = async (saves: Save[]) => {
-  const read = async (file: string) =>
-    JSON.parse(await fs.readFile(new URL(file, import.meta.url), 'utf8'));
   const handbook = (await read('../migrations/handbook-2026-09-13.json')) as Handbook;
-  const { recipes } = (await read('../recipes.json')) as { recipes: Recipe[] };
-  const { pureLimits } = catalog();
+  const { recipes, pureLimits } = await migrationData();
   for (const save of saves)
     save.profiles = save.profiles.map(profile =>
       migrateOriginalProfile(profile, handbook, recipes, pureLimits),
