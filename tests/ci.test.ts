@@ -77,9 +77,19 @@ const copiedInPlace = (copies: ReturnType<typeof runtimeCopies>, file: string) =
 // side-effect forms), with the ones no COPY line puts in place. `import type` and `export type`
 // are erased when Node strips the types (verbatimModuleSyntax), so the image needs no file for
 // them (public/types/).
+// A module that resolves paths against import.meta.url also reads data files at run time, e.g.
+// new URL('./recipes.json', import.meta.url) or a helper that passes '../recipes.json' to it
+// (#620): every relative path literal in it that is not a .ts module is such a file, and must
+// exist in the repository and land at the same path. The build stage writes public/ into
+// dist/web minus the module sources (build.ts), so for a data file the dist/web ./public line
+// counts as a copy of public/.
 const serverImports = (docker: string) => {
   const copies = runtimeCopies(docker);
+  const dataCopies = copies.map(
+    ([src, dest]) => [src === 'dist/web' ? 'public' : src, dest] as const,
+  );
   const seen = new Set<string>();
+  const data = new Set<string>();
   const missing: string[] = [];
   const visit = (file: string) => {
     if (seen.has(file)) return;
@@ -87,11 +97,19 @@ const serverImports = (docker: string) => {
     if (!copiedInPlace(copies, file)) missing.push(file);
     const dir = path.posix.dirname(file);
     const source = fs.readFileSync(file, 'utf8');
+    if (source.includes('import.meta.url'))
+      for (const [, spec] of source.matchAll(/['"`](\.\.?\/[^'"`\s$]+)['"`]/g)) {
+        if (spec!.endsWith('.ts')) continue;
+        const target = path.posix.normalize(path.posix.join(dir, spec!));
+        if (data.has(target)) continue;
+        data.add(target);
+        if (!fs.existsSync(target) || !copiedInPlace(dataCopies, target)) missing.push(target);
+      }
     for (const [, clause, spec] of source.matchAll(/^(?:import|export)\b([^;]*?)'(\.[^']+\.ts)'/gm))
       if (!/^\s+type\b/.test(clause!)) visit(path.posix.normalize(path.posix.join(dir, spec!)));
   };
   visit('docker-start.ts');
-  return { seen, missing };
+  return { seen, data, missing };
 };
 
 test('the Docker image copies every server module server.ts imports (#524, #585)', () => {
@@ -104,6 +122,24 @@ test('the Docker image copies every server module server.ts imports (#524, #585)
     [...seen].some(f => f.startsWith('public/state/')),
     'followed state.ts into public/state/',
   );
+});
+
+test('the Docker image copies every data file the server reads (#620)', () => {
+  const docker = fs.readFileSync('Dockerfile', 'utf8');
+  const { data, missing } = serverImports(docker);
+  assert.deepEqual(missing, [], 'files the server reads that the Dockerfile does not copy');
+  for (const file of ['recipes.json', 'migrations/handbook-2026-09-13.json', 'public/plan.json'])
+    assert.ok(data.has(file), 'found the read of ' + file + ' in ' + [...data].join(', '));
+  // Each COPY line that places one of them is needed.
+  assert.deepEqual(serverImports(docker.replace(' recipes.json ', ' ')).missing, ['recipes.json']);
+  const migrations = /^COPY \S+ migrations \.\/migrations\r?\n/m;
+  assert.match(docker, migrations);
+  assert.deepEqual(serverImports(docker.replace(migrations, '')).missing, [
+    'migrations/handbook-2026-09-13.json',
+  ]);
+  const web = /^COPY --from=build \S+ \/src\/dist\/web \.\/public\r?\n/m;
+  assert.match(docker, web);
+  assert.deepEqual(serverImports(docker.replace(web, '')).missing, ['public/plan.json']);
 });
 
 test('a Dockerfile without the public/state/ COPY line fails the import check (#585)', () => {
