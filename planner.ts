@@ -1478,391 +1478,27 @@ export function calculate(
 // for the linear solves and the other work of a slower device. On an ordinary machine the heaviest
 // phases of the test set search for about 20 seconds, so this changes no plan there.
 const PHASE_SEARCH_MS = 120000;
+// The stages while calculate() works on them, keyed by phase number; the plan's JSON keys are
+// the StageKey strings.
+type PhaseStages = Record<number, CurrentStage>;
+// run()'s result for a phase that did not fit.
+type Unsolved = Exclude<RunResult, Solved>;
+// calculate()'s steps: the settings, the stages, the adjustments to the finished stages, the
+// warnings, the plan.
 function calculatePlan(input: unknown, onPhase?: (phase: number) => void): CurrentCalculatedPlan {
   const config = settings(input);
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
-  // Keyed by phase number here; the plan's JSON keys are the StageKey strings.
-  const stages: Record<number, CurrentStage> = {};
-  const warnings: string[] = [];
-  // Solve each phase on its own. SAM conversion: 'allow' offers it to the Phase 5 solve from the
-  // start, 'needed' only when Phase 5 does not fit without it, 'avoid' never.
-  // Maximum output starts from Phase 2. Phase 1 has no generators and runs on hand-fed biomass:
-  // maximising it finds no plan on the default 0 GW of spare power, and without that limit it
-  // scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
-  for (let phase = 1; phase <= 5; phase++) {
-    onPhase?.(phase);
-    setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
-    const maximised = config.goal === 'maximum' && phase >= 2;
-    let result = run(
-      config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
-      phase,
-      {
-        maximum: maximised,
-        conversion: phase === 5 && config.sam === 'allow',
-      },
-    );
-    if (!result.feasible && phase === 5 && config.sam === 'needed')
-      result = run(config, phase, { maximum: config.goal === 'maximum', conversion: true });
-    // For maximum output, compare conversion when allowed only at a binding resource limit.
-    if (config.goal === 'maximum' && phase === 5 && config.sam === 'needed') {
-      const converted = run(config, phase, { maximum: true, conversion: true });
-      if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
-        result = converted;
-    }
-    // Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
-    // budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
-    // search stopped (no shortage proven); the recipes and power options cannot make it at all; or
-    // it is a budget problem, split into "only whole machines break it" and a real shortfall.
-    // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
-    // The diagnostics solve without production amplification (the owner's choice in #64): the
-    // exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
-    // the amounts are before amplification when somersloops are budgeted for it.
-    if (!result.feasible) {
-      const conversion = phase === 5 && config.sam !== 'avoid';
-      const plain: CurrentSettings = { ...config, amplifySloops: 0 };
-      const diagnostic = run({ ...plain, wholeMachines: false }, phase, {
-        conversion,
-        ignoreLimits: true,
-      });
-      const stage: CurrentStage = { ...diagnostic, feasible: false };
-      if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
-        stage.reason =
-          'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
-      else if (!diagnostic.feasible)
-        stage.reason =
-          'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
-      else {
-        // Does the exact LP fit the real budgets at `hours` hours for this phase?
-        const fits = (hours: number) =>
-          run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion })
-            .feasible;
-        const currentHours =
-          config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
-        const listNames = (list: string[]) =>
-          list.length > 1
-            ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]
-            : list[0];
-        if (config.goal !== 'maximum' && fits(currentHours)) {
-          // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
-          // doubled budgets to measure which resources need headroom and how much; keep bounds modest for MIP stability.
-          stage.wholeMachinesOnly = true;
-          const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
-          const rounded: RunResult = network.feasible
-            ? run(
-                {
-                  ...plain,
-                  limits: Object.fromEntries(
-                    RAW.map(resource => [resource, config.limits[resource]! * 2 + 600]),
-                  ),
-                },
-                phase,
-                // Fractional nuclear plants, as the plan itself falls back to: the shortfall
-                // is about the solid-part lines.
-                {
-                  conversion,
-                  recipeIds: new Set(network.rows.map(row => row.id)),
-                  fractionalNuclear: true,
-                },
-              )
-            : { feasible: false };
-          if (rounded.feasible)
-            stage.shortfalls = RAW.filter(
-              resource => (rounded.raw[resource] || 0) > config.limits[resource]! + 0.001,
-            ).map(resource => ({
-              name: resource,
-              needed: Math.ceil(rounded.raw[resource]!),
-              budget: config.limits[resource]!,
-            }));
-          const names = (stage.shortfalls || []).map(shortfall => shortfall.name);
-          stage.reason = names.length
-            ? `Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length > 1 ? 'those budgets' : 'that budget'} a little, or turn off whole-machine production for this profile.`
-            : 'Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
-        } else {
-          stage.shortfalls = RAW.filter(
-            resource => (diagnostic.raw[resource] || 0) > config.limits[resource]! + 0.05,
-          ).map(resource => ({
-            name: resource,
-            needed: Math.ceil(diagnostic.raw[resource]!),
-            budget: config.limits[resource]!,
-          }));
-          // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
-          // Bisection between the current hours and the 2,000-hour maximum, to a quarter hour.
-          if (config.goal !== 'maximum' && fits(2000)) {
-            let low = currentHours,
-              high = 2000;
-            for (let i = 0; i < 12 && high - low > 0.25; i++) {
-              const mid = (low + high) / 2;
-              if (fits(mid)) high = mid;
-              else low = mid;
-            }
-            stage.minHours = Math.ceil(high * 4) / 4;
-          }
-          const names = stage.shortfalls.map(shortfall => shortfall.name);
-          stage.reason =
-            (names.length
-              ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
-              : 'The goal exceeds the available resource or power budgets.') +
-            (stage.minHours
-              ? ` It fits the current budgets at about ${stage.minHours} hours for this phase.`
-              : config.goal === 'maximum'
-                ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
-                : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.');
-        }
-        if (config.amplifySloops > 0 && stage.shortfalls?.length)
-          stage.reason +=
-            ' These amounts are before production amplification; amplified machines may need somewhat less.';
-      }
-      stages[phase] = stage;
-    } else stages[phase] = result;
-  }
+  const stages = solvePhases(config, onPhase);
   // Everything below adjusts the finished stages or adds warnings. Warnings are plain sentences,
   // shown in this order as the profile's assumptions (plan page, Backup page, wizard review).
-  // With the target time on the final phase, an earlier phase may run its lines as
-  // hard as the machines a later phase already builds allow, so it finishes sooner
-  // without adding a building the plan later drops. A phase is never made slower,
-  // and nothing is pulled forward past what its own phase can unlock and power.
-  if (
-    config.phaseTime === 'final' &&
-    config.goal !== 'maximum' &&
-    Object.values(stages).every(stage => stage.feasible)
-  ) {
-    // built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
-    // are the most machines any phase from n to 5 builds, so running a line harder than its own
-    // plan asks never needs a building that is not built anyway. The re-solve maximises output
-    // under those caps, and is kept only when it finishes strictly sooner, recording the time it
-    // replaces as `aheadOf` (shown by public/app/wizard/wizard.ts). A re-solve that stopped at its
-    // limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or Phase 5's
-    // deadline) proves nothing either way: that phase keeps its own plan, and the warning says the
-    // search stopped instead of claiming it could not finish sooner (#650).
-    const built: Record<number, Record<string, number>> = {};
-    const stopped: number[] = [];
-    for (let phase = 1; phase <= 5; phase++)
-      for (const row of stages[phase]!.rows || [])
-        built[phase] = { ...built[phase], [row.id]: row.machines };
-    for (let phase = 1; phase <= 4; phase++) {
-      const caps: Record<string, number> = {};
-      for (let later = phase; later <= 5; later++)
-        for (const [id, machines] of Object.entries(built[later] || {}))
-          caps[id] = Math.max(caps[id] || 0, machines);
-      const ahead = run(config, phase, { maximum: true, caps });
-      if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
-        stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
-      else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
-        stopped.push(phase);
-    }
-    const pulled = Object.values(stages).filter(stage => stage.aheadOf !== undefined).length;
-    const sentences = ['Your target time applies to Phase 5.'];
-    if (pulled)
-      sentences.push(
-        `Earlier phases run their lines as hard as the machines a later phase already builds allow, so ${pulled === 1 ? 'one phase finishes' : pulled + ' phases finish'} sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.`,
-      );
-    else if (stopped.length < 4)
-      sentences.push(
-        `No ${stopped.length ? 'other ' : ''}earlier phase could finish sooner within the machines its later phases already build.`,
-      );
-    if (stopped.length) {
-      const many = stopped.length > 1;
-      const names = many
-        ? stopped.slice(0, -1).join(', ') + ' and ' + stopped[stopped.length - 1]
-        : String(stopped[0]);
-      sentences.push(
-        `For ${many ? 'Phases' : 'Phase'} ${names}, the search stopped before it could prove the best plan, so ${many ? 'those phases keep their' : 'that phase keeps its'} own target time; whether ${many ? 'they' : 'it'} could finish sooner has not been checked.`,
-      );
-    }
-    warnings.push(sentences.join(' '));
-  }
-  // Fueling an augmenter buys 20% more grid power in exchange for an Alien Power Matrix line.
-  // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
-  // and compare like for like: same goal, same budgets, same recipes.
-  if (config.fueledAugmenters && stages[5]?.feasible) {
-    const unfueled = (() => {
-      const options = { maximum: config.goal === 'maximum' };
-      const attempt = (conversion: boolean) =>
-        run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
-      const result = attempt(config.sam === 'allow');
-      return !result.feasible && config.sam !== 'avoid' ? attempt(true) : result;
-    })();
-    // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
-    // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
-    // Only the attempt whose result is used counts: the retry with conversion allows every recipe
-    // the first attempt could use, so the retry proving the plan does not fit is the answer even
-    // when the first attempt stopped (#665), as calculate() reads the Phase 5 solve itself.
-    const stopped =
-      !unfueled.feasible && !!unfueled.solverStatus && !/infeasible/i.test(unfueled.solverStatus);
-    // Without a proven unfueled answer there is nothing to compare (#634): no verdict, and the
-    // plan's assumptions say why, as the other stopped searches do.
-    if (!unfueled.feasible && stopped)
-      warnings.push(
-        'Fueling the augmenters could not be compared with an unfueled Phase 5: the search stopped before it could prove the best plan without the fuel, so no verdict is given on whether fueling pays off. No resource shortage has been established for the unfueled plan.',
-      );
-    // `fuelVerdict` (rendered by public/app/ui/wizard/FuelVerdict.vue) compares the
-    // fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
-    const count = (stage: Partial<StageResult>) =>
-        (stage.rows || []).reduce((total, row) => total + row.machines, 0),
-      fueled = stages[5] as Solved;
-    if (unfueled.feasible || !stopped)
-      stages[5] = {
-        ...fueled,
-        fuelVerdict: {
-          unfueledFeasible: !!unfueled.feasible,
-          buildings: count(fueled),
-          buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
-          requiredMW: fueled.requiredMW,
-          requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
-          availableMW: fueled.availableMW,
-          availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
-          hours: fueled.hours,
-          hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
-          matrixRate: fueled.matrixRate,
-          worthIt:
-            !unfueled.feasible ||
-            (config.goal === 'maximum'
-              ? fueled.hours < unfueled.hours - 1e-6
-              : count(fueled) < count(unfueled)),
-        },
-      };
-  }
-  // Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
-  // amplification budget. Warned about, never enforced: the plan is still calculated.
-  if (config.augmenters || config.amplifySloops) {
-    const committed = 10 * config.augmenters + config.sloopReserved.length + config.amplifySloops;
-    if (config.augmenters)
-      warnings.push(
-        `${config.augmenters} Alien Power Augmenter${config.augmenters > 1 ? 's' : ''}: ${500 * config.augmenters} MW of generation, plus a ${Math.round((0.1 * (config.augmenters - config.fueledAugmenters) + 0.3 * config.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
-      );
-    if (config.somersloops && committed > config.somersloops)
-      warnings.push(
-        `This plan commits ${committed} somersloops — 10 per augmenter${config.sloopReserved.length ? `, ${config.sloopReserved.length} reserved for hand-fed lines` : ''}${config.amplifySloops ? `, ${config.amplifySloops} for production amplification` : ''} — but ${config.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
-      );
-  }
-  // Amplification: the busiest phase's somersloop use, and phases whose fit fell back.
-  {
-    const used = Math.max(0, ...Object.values(stages).map(stage => stage.sloopsUsed || 0));
-    const dropped = Object.entries(stages)
-      .filter(([, stage]) => stage.amplificationDropped)
-      .map(([phase]) => phase);
-    if (config.amplifySloops > 0)
-      warnings.push(
-        `Production amplification may place up to ${config.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
-      );
-    if (dropped.length)
-      warnings.push(
-        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
-      );
-  }
-  // Existing production: which credits some phase drew on, and phases that had to drop them.
-  {
-    const supplied = [
-      ...new Set(Object.values(stages).flatMap(stage => Object.keys(stage.supplied || {}))),
-    ].sort();
-    const lost = Object.entries(stages)
-      .filter(([, stage]) => stage.supplyDropped)
-      .map(([phase]) => phase);
-    if (supplied.length)
-      warnings.push(
-        `This plan draws on production you already run: ${supplied.join(', ')}. Those lines are not planned or built again, and the chain behind them is not planned either. Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure must be entered net of them, exactly as for any other existing factory.`,
-      );
-    if (lost.length)
-      warnings.push(
-        `${lost.length > 1 ? 'Phases' : 'Phase'} ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
-      );
-  }
-  // Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
-  // cannot make yet, which is left out there.
-  {
-    const rate = (perMinute: number) => Math.round(perMinute * 100) / 100;
-    const planned = Object.entries(config.transportFuel) as [StageKey, ItemRates][];
-    if (planned.length)
-      warnings.push(
-        `Fuel for the vehicles on your factory-group links is planned as extra demand: ${planned
-          .map(
-            ([phase, fuels]) =>
-              `Phase ${phase} ${Object.entries(fuels)
-                .map(([fuel, perMinute]) => `${rate(perMinute)} ${fuel}/min`)
-                .join(', ')}`,
-          )
-          .join(
-            '; ',
-          )}. It comes from the previous revision's links, as if the vehicles never stop; the fuel chain adds a little traffic of its own, so recalculating again can raise it slightly.`,
-      );
-    const missing = planned.flatMap(([phase, fuels]) =>
-      Object.keys(fuels)
-        .filter(fuel => stages[phase]?.feasible && !stages[phase]?.transport?.[fuel])
-        .map(fuel => `${fuel} in Phase ${phase}`),
-    );
-    if (missing.length)
-      warnings.push(
-        `This plan cannot make ${missing.join(', ')} yet, so that vehicle fuel is left out there. Pick a fuel the phase can make, or plan the vehicles for a later phase.`,
-      );
-  }
-  if (config.fueledAugmenters)
-    warnings.push(
-      `Fuel for ${config.fueledAugmenters} augmenter${config.fueledAugmenters > 1 ? 's' : ''} adds ${5 * config.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`,
-    );
-  // Unsinkable solid outputs (Power Shards today), which are balanced exactly, not rounded.
-  {
-    const stuck = [
-      ...new Set(
-        Object.values(stages)
-          .flatMap(stage => (stage.rows || []).flatMap(row => Object.keys(row.outputs)))
-          .filter(
-            item =>
-              !DATA.items[item]?.fluid &&
-              !DATA.items[item]?.radioactive &&
-              !item.endsWith('Waste') &&
-              !RAW.includes(item) &&
-              !((DATA.items[item]?.sink ?? 0) > 0),
-          ),
-      ),
-    ];
-    if (stuck.length)
-      warnings.push(
-        `${stuck.join(' and ')} cannot be sent to the AWESOME Sink, so ${stuck.length > 1 ? 'those lines are' : 'that line is'} balanced exactly instead of run whole at 100%: the last machine is underclocked and nothing is left over to back the line up.`,
-      );
-  }
-  if (config.distribution !== 'original' || config.purity === 'custom')
-    warnings.push(
-      'Seed-dependent distribution: confirm resource-rich node counts, mixed purity and well totals against your save. Zero budgets mean unallocated resources.',
-    );
-  if (!config.limitsConfirmed)
-    warnings.push(
-      'Resource budgets are provisional. Confirm available extraction after reserving resources for existing factories.',
-    );
-  warnings.push(
-    'Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.',
-  );
-  warnings.push(
-    `Power includes new generators and their fuel chains, with a ${config.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
-  );
-  // Whole machines, and how the nuclear plants were rounded (#370).
-  if (config.wholeMachines) {
-    const period = stages[5]?.nuclearPeriod;
-    warnings.push(
-      'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
-    );
-    if (config.nuclear !== 'none')
-      warnings.push(
-        'Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
-          (period
-            ? `. In Phase 5, which recycles the waste, they come in multiples of ${period}, so every line of the waste chain there, the plutonium and ficsonium plants included, also runs whole at 100%; the extra plants only add generation. Other nuclear fuel and waste lines balance exactly and can retain fractional clocks.`
-            : '. Their fuel and waste lines balance exactly and can retain fractional clocks.'),
-      );
-    const fractional = Object.entries(stages)
-      .filter(([, stage]) => stage.nuclearFractional)
-      .map(([phase]) => phase);
-    if (fractional.length)
-      warnings.push(
-        `${fractional.length > 1 ? 'Phases' : 'Phase'} ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
-      );
-  }
-  warnings.push(
-    'Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum.',
-  );
-  if (config.modNotes)
-    warnings.push(
-      'Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.',
-    );
+  // The adjustments run in this order, after Phase 5 and on its search deadline, and each returns
+  // the warnings it adds; planWarnings reads the stages as they left them.
+  const warnings = [
+    ...pullFinalPhaseForward(config, stages),
+    ...judgeAugmenterFuel(config, stages),
+    ...planWarnings(config, stages),
+  ];
   return {
     engine: ENGINE,
     settings: config,
@@ -1871,6 +1507,479 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
     createdAt: new Date().toISOString(),
   };
 }
+// Solves each phase on its own, 1 to 5, each with a fresh search deadline. A phase that does not
+// fit becomes a draft that explains why (draftStage).
+function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void): PhaseStages {
+  const stages: PhaseStages = {};
+  for (let phase = 1; phase <= 5; phase++) {
+    onPhase?.(phase);
+    setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
+    const result = solvePhase(config, phase);
+    stages[phase] = result.feasible ? result : draftStage(config, phase, result);
+  }
+  return stages;
+}
+// One phase's solve under the profile's goal and SAM conversion. SAM conversion: 'allow' offers it
+// to the Phase 5 solve from the start, 'needed' only when Phase 5 does not fit without it, 'avoid'
+// never. Maximum output starts from Phase 2. Phase 1 has no generators and runs on hand-fed
+// biomass: maximising it finds no plan on the default 0 GW of spare power, and without that limit
+// it scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
+function solvePhase(config: CurrentSettings, phase: number): RunResult {
+  const maximised = config.goal === 'maximum' && phase >= 2;
+  let result = run(
+    config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
+    phase,
+    {
+      maximum: maximised,
+      conversion: phase === 5 && config.sam === 'allow',
+    },
+  );
+  if (!result.feasible && phase === 5 && config.sam === 'needed')
+    result = run(config, phase, { maximum: config.goal === 'maximum', conversion: true });
+  // For maximum output, compare conversion when allowed only at a binding resource limit.
+  if (config.goal === 'maximum' && phase === 5 && config.sam === 'needed') {
+    const converted = run(config, phase, { maximum: true, conversion: true });
+    if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
+      result = converted;
+  }
+  return result;
+}
+// What the draft of a phase that does not fit is diagnosed with: the settings without production
+// amplification (`plain`) and the phase's SAM conversion.
+interface DraftContext {
+  config: CurrentSettings;
+  phase: number;
+  plain: CurrentSettings;
+  conversion: boolean;
+}
+// Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
+// budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
+// search stopped (no shortage proven); the recipes and power options cannot make it at all; or
+// it is a budget problem, split into "only whole machines break it" and a real shortfall.
+// The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
+// The diagnostics solve without production amplification (the owner's choice in #64): the
+// exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
+// the amounts are before amplification when somersloops are budgeted for it.
+function draftStage(config: CurrentSettings, phase: number, result: Unsolved): CurrentStage {
+  const conversion = phase === 5 && config.sam !== 'avoid';
+  const plain: CurrentSettings = { ...config, amplifySloops: 0 };
+  const diagnostic = run({ ...plain, wholeMachines: false }, phase, {
+    conversion,
+    ignoreLimits: true,
+  });
+  const stage: CurrentStage = { ...diagnostic, feasible: false };
+  if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
+    stage.reason =
+      'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
+  else if (!diagnostic.feasible)
+    stage.reason =
+      'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
+  else {
+    const draft: DraftContext = { config, phase, plain, conversion };
+    const currentHours =
+      config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+    stage.reason =
+      config.goal !== 'maximum' && fitsInHours(draft, currentHours)
+        ? wholeMachinesReason(stage, draft)
+        : shortfallReason(stage, draft, diagnostic, currentHours);
+    if (config.amplifySloops > 0 && stage.shortfalls?.length)
+      stage.reason +=
+        ' These amounts are before production amplification; amplified machines may need somewhat less.';
+  }
+  return stage;
+}
+// Does the exact LP fit the real budgets at `hours` hours for this phase?
+const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
+  run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion }).feasible;
+// "A", "A and B", "A, B and C".
+const listNames = (list: string[]) =>
+  list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0];
+// Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
+// doubled budgets to measure which resources need headroom and how much; keep bounds modest for
+// MIP stability. Sets `wholeMachinesOnly` and the `shortfalls` it measured on the draft.
+function wholeMachinesReason(
+  stage: CurrentStage,
+  { config, phase, plain, conversion }: DraftContext,
+) {
+  stage.wholeMachinesOnly = true;
+  const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
+  const rounded: RunResult = network.feasible
+    ? run(
+        {
+          ...plain,
+          limits: Object.fromEntries(
+            RAW.map(resource => [resource, config.limits[resource]! * 2 + 600]),
+          ),
+        },
+        phase,
+        // Fractional nuclear plants, as the plan itself falls back to: the shortfall
+        // is about the solid-part lines.
+        {
+          conversion,
+          recipeIds: new Set(network.rows.map(row => row.id)),
+          fractionalNuclear: true,
+        },
+      )
+    : { feasible: false };
+  if (rounded.feasible)
+    stage.shortfalls = RAW.filter(
+      resource => (rounded.raw[resource] || 0) > config.limits[resource]! + 0.001,
+    ).map(resource => ({
+      name: resource,
+      needed: Math.ceil(rounded.raw[resource]!),
+      budget: config.limits[resource]!,
+    }));
+  const names = (stage.shortfalls || []).map(shortfall => shortfall.name);
+  return names.length
+    ? `Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length > 1 ? 'those budgets' : 'that budget'} a little, or turn off whole-machine production for this profile.`
+    : 'Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
+}
+// A real budget shortfall: what the diagnostic draws beyond the budgets, and the time at which
+// the phase would fit them. Sets `shortfalls` and `minHours` on the draft.
+function shortfallReason(
+  stage: CurrentStage,
+  draft: DraftContext,
+  diagnostic: Solved,
+  currentHours: number,
+) {
+  const { config } = draft;
+  const shortfalls = RAW.filter(
+    resource => (diagnostic.raw[resource] || 0) > config.limits[resource]! + 0.05,
+  ).map(resource => ({
+    name: resource,
+    needed: Math.ceil(diagnostic.raw[resource]!),
+    budget: config.limits[resource]!,
+  }));
+  stage.shortfalls = shortfalls;
+  // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
+  // Bisection between the current hours and the 2,000-hour maximum, to a quarter hour.
+  if (config.goal !== 'maximum' && fitsInHours(draft, 2000)) {
+    let low = currentHours,
+      high = 2000;
+    for (let i = 0; i < 12 && high - low > 0.25; i++) {
+      const mid = (low + high) / 2;
+      if (fitsInHours(draft, mid)) high = mid;
+      else low = mid;
+    }
+    stage.minHours = Math.ceil(high * 4) / 4;
+  }
+  const names = shortfalls.map(shortfall => shortfall.name);
+  return (
+    (names.length
+      ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
+      : 'The goal exceeds the available resource or power budgets.') +
+    (stage.minHours
+      ? ` It fits the current budgets at about ${stage.minHours} hours for this phase.`
+      : config.goal === 'maximum'
+        ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
+        : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.')
+  );
+}
+// With the target time on the final phase, an earlier phase may run its lines as
+// hard as the machines a later phase already builds allow, so it finishes sooner
+// without adding a building the plan later drops. A phase is never made slower,
+// and nothing is pulled forward past what its own phase can unlock and power.
+// Returns the warning that says what happened, or none when this does not apply.
+function pullFinalPhaseForward(config: CurrentSettings, stages: PhaseStages): string[] {
+  if (
+    config.phaseTime !== 'final' ||
+    config.goal === 'maximum' ||
+    !Object.values(stages).every(stage => stage.feasible)
+  )
+    return [];
+  const stopped = resolveEarlierPhases(config, stages);
+  return [finalPhaseWarning(stages, stopped)];
+}
+// built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
+// are the most machines any phase from n to 5 builds, so running a line harder than its own
+// plan asks never needs a building that is not built anyway. The re-solve maximises output
+// under those caps, and is kept only when it finishes strictly sooner, recording the time it
+// replaces as `aheadOf` (shown by public/app/wizard/wizard.ts). A re-solve that stopped at its
+// limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or Phase 5's
+// deadline) proves nothing either way: that phase keeps its own plan, and the warning says the
+// search stopped instead of claiming it could not finish sooner (#650). Returns those phases.
+function resolveEarlierPhases(config: CurrentSettings, stages: PhaseStages): number[] {
+  const built: Record<number, Record<string, number>> = {};
+  const stopped: number[] = [];
+  for (let phase = 1; phase <= 5; phase++)
+    for (const row of stages[phase]!.rows || [])
+      built[phase] = { ...built[phase], [row.id]: row.machines };
+  for (let phase = 1; phase <= 4; phase++) {
+    const caps: Record<string, number> = {};
+    for (let later = phase; later <= 5; later++)
+      for (const [id, machines] of Object.entries(built[later] || {}))
+        caps[id] = Math.max(caps[id] || 0, machines);
+    const ahead = run(config, phase, { maximum: true, caps });
+    if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
+      stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
+    else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
+      stopped.push(phase);
+  }
+  return stopped;
+}
+// The phaseTime 'final' warning: how many phases finish sooner, and which searches stopped.
+function finalPhaseWarning(stages: PhaseStages, stopped: number[]): string {
+  const pulled = Object.values(stages).filter(stage => stage.aheadOf !== undefined).length;
+  const sentences = ['Your target time applies to Phase 5.'];
+  if (pulled)
+    sentences.push(
+      `Earlier phases run their lines as hard as the machines a later phase already builds allow, so ${pulled === 1 ? 'one phase finishes' : pulled + ' phases finish'} sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.`,
+    );
+  else if (stopped.length < 4)
+    sentences.push(
+      `No ${stopped.length ? 'other ' : ''}earlier phase could finish sooner within the machines its later phases already build.`,
+    );
+  if (stopped.length) {
+    const many = stopped.length > 1;
+    const names = listNames(stopped.map(String));
+    sentences.push(
+      `For ${many ? 'Phases' : 'Phase'} ${names}, the search stopped before it could prove the best plan, so ${many ? 'those phases keep their' : 'that phase keeps its'} own target time; whether ${many ? 'they' : 'it'} could finish sooner has not been checked.`,
+    );
+  }
+  return sentences.join(' ');
+}
+// Fueling an augmenter buys 20% more grid power in exchange for an Alien Power Matrix line.
+// Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
+// and compare like for like: same goal, same budgets, same recipes. Records the answer as Phase
+// 5's `fuelVerdict`, or returns the warning that no answer was proven.
+function judgeAugmenterFuel(config: CurrentSettings, stages: PhaseStages): string[] {
+  if (!config.fueledAugmenters || !stages[5]?.feasible) return [];
+  const unfueled = solveUnfueled(config);
+  // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
+  // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
+  // Only the attempt whose result is used counts: the retry with conversion allows every recipe
+  // the first attempt could use, so the retry proving the plan does not fit is the answer even
+  // when the first attempt stopped (#665), as solvePhase reads the Phase 5 solve itself.
+  const stopped =
+    !unfueled.feasible && !!unfueled.solverStatus && !/infeasible/i.test(unfueled.solverStatus);
+  // Without a proven unfueled answer there is nothing to compare (#634): no verdict, and the
+  // plan's assumptions say why, as the other stopped searches do.
+  if (!unfueled.feasible && stopped)
+    return [
+      'Fueling the augmenters could not be compared with an unfueled Phase 5: the search stopped before it could prove the best plan without the fuel, so no verdict is given on whether fueling pays off. No resource shortage has been established for the unfueled plan.',
+    ];
+  const fueled = stages[5] as Solved;
+  stages[5] = { ...fueled, fuelVerdict: fuelVerdict(config, fueled, unfueled) };
+  return [];
+}
+// Phase 5 without the augmenters' fuel: first with SAM conversion only under 'allow', then,
+// if that does not fit, with it unless the profile avoids it.
+function solveUnfueled(config: CurrentSettings): RunResult {
+  const options = { maximum: config.goal === 'maximum' };
+  const attempt = (conversion: boolean) =>
+    run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
+  const result = attempt(config.sam === 'allow');
+  return !result.feasible && config.sam !== 'avoid' ? attempt(true) : result;
+}
+// `fuelVerdict` (rendered by public/app/ui/wizard/FuelVerdict.vue) compares the
+// fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
+function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResult) {
+  const count = (stage: Partial<StageResult>) =>
+    (stage.rows || []).reduce((total, row) => total + row.machines, 0);
+  return {
+    unfueledFeasible: !!unfueled.feasible,
+    buildings: count(fueled),
+    buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
+    requiredMW: fueled.requiredMW,
+    requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
+    availableMW: fueled.availableMW,
+    availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
+    hours: fueled.hours,
+    hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
+    matrixRate: fueled.matrixRate,
+    worthIt:
+      !unfueled.feasible ||
+      (config.goal === 'maximum'
+        ? fueled.hours < unfueled.hours - 1e-6
+        : count(fueled) < count(unfueled)),
+  };
+}
+// What each group of warnings reads: the settings, and the stages after the adjustments.
+interface FinishedPlan {
+  config: CurrentSettings;
+  stages: PhaseStages;
+}
+// The plan's remaining warnings, one group after another in the order the plan lists them.
+type WarningGroup = (plan: FinishedPlan) => string[];
+const planWarnings = (config: CurrentSettings, stages: PhaseStages) =>
+  WARNING_GROUPS.flatMap(group => group({ config, stages }));
+// Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
+// amplification budget. Warned about, never enforced: the plan is still calculated.
+function somersloopWarnings({ config }: FinishedPlan): string[] {
+  if (!config.augmenters && !config.amplifySloops) return [];
+  const warnings: string[] = [];
+  const committed = 10 * config.augmenters + config.sloopReserved.length + config.amplifySloops;
+  if (config.augmenters)
+    warnings.push(
+      `${config.augmenters} Alien Power Augmenter${config.augmenters > 1 ? 's' : ''}: ${500 * config.augmenters} MW of generation, plus a ${Math.round((0.1 * (config.augmenters - config.fueledAugmenters) + 0.3 * config.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
+    );
+  if (config.somersloops && committed > config.somersloops)
+    warnings.push(
+      `This plan commits ${committed} somersloops — 10 per augmenter${config.sloopReserved.length ? `, ${config.sloopReserved.length} reserved for hand-fed lines` : ''}${config.amplifySloops ? `, ${config.amplifySloops} for production amplification` : ''} — but ${config.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
+    );
+  return warnings;
+}
+// Amplification: the busiest phase's somersloop use, and phases whose fit fell back.
+function amplificationWarnings({ config, stages }: FinishedPlan): string[] {
+  const warnings: string[] = [];
+  const used = Math.max(0, ...Object.values(stages).map(stage => stage.sloopsUsed || 0));
+  const dropped = Object.entries(stages)
+    .filter(([, stage]) => stage.amplificationDropped)
+    .map(([phase]) => phase);
+  if (config.amplifySloops > 0)
+    warnings.push(
+      `Production amplification may place up to ${config.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
+    );
+  if (dropped.length)
+    warnings.push(
+      `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
+    );
+  return warnings;
+}
+// Existing production: which credits some phase drew on, and phases that had to drop them.
+function existingSupplyWarnings({ stages }: FinishedPlan): string[] {
+  const warnings: string[] = [];
+  const supplied = [
+    ...new Set(Object.values(stages).flatMap(stage => Object.keys(stage.supplied || {}))),
+  ].sort();
+  const lost = Object.entries(stages)
+    .filter(([, stage]) => stage.supplyDropped)
+    .map(([phase]) => phase);
+  if (supplied.length)
+    warnings.push(
+      `This plan draws on production you already run: ${supplied.join(', ')}. Those lines are not planned or built again, and the chain behind them is not planned either. Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure must be entered net of them, exactly as for any other existing factory.`,
+    );
+  if (lost.length)
+    warnings.push(
+      `${lost.length > 1 ? 'Phases' : 'Phase'} ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
+    );
+  return warnings;
+}
+// Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
+// cannot make yet, which is left out there.
+function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
+  const warnings: string[] = [];
+  const rate = (perMinute: number) => Math.round(perMinute * 100) / 100;
+  const planned = Object.entries(config.transportFuel) as [StageKey, ItemRates][];
+  if (planned.length)
+    warnings.push(
+      `Fuel for the vehicles on your factory-group links is planned as extra demand: ${planned
+        .map(
+          ([phase, fuels]) =>
+            `Phase ${phase} ${Object.entries(fuels)
+              .map(([fuel, perMinute]) => `${rate(perMinute)} ${fuel}/min`)
+              .join(', ')}`,
+        )
+        .join(
+          '; ',
+        )}. It comes from the previous revision's links, as if the vehicles never stop; the fuel chain adds a little traffic of its own, so recalculating again can raise it slightly.`,
+    );
+  const missing = planned.flatMap(([phase, fuels]) =>
+    Object.keys(fuels)
+      .filter(fuel => stages[phase]?.feasible && !stages[phase]?.transport?.[fuel])
+      .map(fuel => `${fuel} in Phase ${phase}`),
+  );
+  if (missing.length)
+    warnings.push(
+      `This plan cannot make ${missing.join(', ')} yet, so that vehicle fuel is left out there. Pick a fuel the phase can make, or plan the vehicles for a later phase.`,
+    );
+  return warnings;
+}
+// The fueled augmenters' Alien Power Matrix line.
+function augmenterFuelWarnings({ config }: FinishedPlan): string[] {
+  if (!config.fueledAugmenters) return [];
+  return [
+    `Fuel for ${config.fueledAugmenters} augmenter${config.fueledAugmenters > 1 ? 's' : ''} adds ${5 * config.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`,
+  ];
+}
+// Unsinkable solid outputs (Power Shards today), which are balanced exactly, not rounded.
+function unsinkableWarnings({ stages }: FinishedPlan): string[] {
+  const stuck = [
+    ...new Set(
+      Object.values(stages)
+        .flatMap(stage => (stage.rows || []).flatMap(row => Object.keys(row.outputs)))
+        .filter(
+          item =>
+            !DATA.items[item]?.fluid &&
+            !DATA.items[item]?.radioactive &&
+            !item.endsWith('Waste') &&
+            !RAW.includes(item) &&
+            !((DATA.items[item]?.sink ?? 0) > 0),
+        ),
+    ),
+  ];
+  if (!stuck.length) return [];
+  return [
+    `${stuck.join(' and ')} cannot be sent to the AWESOME Sink, so ${stuck.length > 1 ? 'those lines are' : 'that line is'} balanced exactly instead of run whole at 100%: the last machine is underclocked and nothing is left over to back the line up.`,
+  ];
+}
+// Budgets the user still has to check: a seed-dependent map, and budgets not yet confirmed.
+function budgetWarnings({ config }: FinishedPlan): string[] {
+  const warnings: string[] = [];
+  if (config.distribution !== 'original' || config.purity === 'custom')
+    warnings.push(
+      'Seed-dependent distribution: confirm resource-rich node counts, mixed purity and well totals against your save. Zero budgets mean unallocated resources.',
+    );
+  if (!config.limitsConfirmed)
+    warnings.push(
+      'Resource budgets are provisional. Confirm available extraction after reserving resources for existing factories.',
+    );
+  return warnings;
+}
+// What every plan assumes about unlocks and power.
+function assumptionWarnings({ config }: FinishedPlan): string[] {
+  return [
+    'Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.',
+    `Power includes new generators and their fuel chains, with a ${config.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
+  ];
+}
+// Whole machines, and how the nuclear plants were rounded (#370).
+function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
+  if (!config.wholeMachines) return [];
+  const warnings: string[] = [];
+  const period = stages[5]?.nuclearPeriod;
+  warnings.push(
+    'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
+  );
+  if (config.nuclear !== 'none')
+    warnings.push(
+      'Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
+        (period
+          ? `. In Phase 5, which recycles the waste, they come in multiples of ${period}, so every line of the waste chain there, the plutonium and ficsonium plants included, also runs whole at 100%; the extra plants only add generation. Other nuclear fuel and waste lines balance exactly and can retain fractional clocks.`
+          : '. Their fuel and waste lines balance exactly and can retain fractional clocks.'),
+    );
+  const fractional = Object.entries(stages)
+    .filter(([, stage]) => stage.nuclearFractional)
+    .map(([phase]) => phase);
+  if (fractional.length)
+    warnings.push(
+      `${fractional.length > 1 ? 'Phases' : 'Phase'} ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
+    );
+  return warnings;
+}
+// What the plan does not claim: a global optimum, or simulated mods.
+function scopeWarnings({ config }: FinishedPlan): string[] {
+  const warnings = [
+    'Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum.',
+  ];
+  if (config.modNotes)
+    warnings.push(
+      'Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.',
+    );
+  return warnings;
+}
+const WARNING_GROUPS: WarningGroup[] = [
+  somersloopWarnings,
+  amplificationWarnings,
+  existingSupplyWarnings,
+  vehicleFuelWarnings,
+  augmenterFuelWarnings,
+  unsinkableWarnings,
+  budgetWarnings,
+  assumptionWarnings,
+  wholeMachineWarnings,
+  scopeWarnings,
+];
 // Static data the interface needs before any calculation: recipe lists for the wizard's
 // alternate picker, storage, supply and raw-resource options, default budgets and goal labels.
 // The Docker edition sends it with the session summary (workspace.ts); build.ts writes it to
