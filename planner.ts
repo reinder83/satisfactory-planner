@@ -72,7 +72,8 @@ interface RunOptions {
   baseline?: Record<string, number> | null;
   fractionalNuclear?: boolean;
 }
-const isRecord = (x: unknown): x is Raw => !!x && typeof x === 'object' && !Array.isArray(x);
+const isRecord = (value: unknown): value is Raw =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
 // Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
 // machine, per-minute `inputs`/`outputs` for one machine at 100%, and `power` in MW per machine.
 // `items`: fluid, radioactive, `energy` (MJ per item or m³, used for fuel generators) and `sink`
@@ -173,18 +174,22 @@ export const DELIVERIES: Record<number, ItemRates> = {
 // Settings validation helpers. A rejected setting throws with status 400; server.ts sends a
 // thrown error that carries a status back with its message, so the user sees this text.
 // A function declaration, so TypeScript knows the code after a failed check is unreachable.
-function err(message: string): never {
+function fail(message: string): never {
   throw Object.assign(new Error(message), { status: 400 });
 }
 // An absent value takes the fallback; a present but invalid one is rejected, never corrected.
-const choice = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
-  v === undefined ? fallback : allowed.includes(v as T) ? (v as T) : err('Invalid profile option.');
-const number = (v: unknown, min: number, max: number, fallback: number): number =>
-  v === undefined
+const choice = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+  value === undefined
     ? fallback
-    : Number.isFinite(v) && (v as number) >= min && (v as number) <= max
-      ? (v as number)
-      : err(`Enter a number from ${min} to ${max}.`);
+    : allowed.includes(value as T)
+      ? (value as T)
+      : fail('Invalid profile option.');
+const number = (value: unknown, min: number, max: number, fallback: number): number =>
+  value === undefined
+    ? fallback
+    : Number.isFinite(value) && (value as number) >= min && (value as number) <= max
+      ? (value as number)
+      : fail(`Enter a number from ${min} to ${max}.`);
 // Per-item storage rates. Only storable item names are accepted so a stale or
 // mistyped entry cannot silently reserve production for nothing.
 const storable = (name: string) =>
@@ -199,7 +204,7 @@ const storable = (name: string) =>
 const CONTAINER_ITEMS = [
   ...new Set([
     ...Object.keys(DATA.items).filter(
-      n => !DATA.items[n]?.fluid && n !== 'Sink point' && n !== 'Power',
+      name => !DATA.items[name]?.fluid && name !== 'Sink point' && name !== 'Power',
     ),
     'Hard Drive',
   ]),
@@ -217,16 +222,16 @@ const CONTAINER_ITEMS = [
 // revision. Only vehicle fuels (preferences.ts) count; zero rates and empty phases are dropped.
 const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> => {
   if (raw === undefined) return {};
-  if (!isRecord(raw)) err('Invalid transport fuel.');
+  if (!isRecord(raw)) fail('Invalid transport fuel.');
   const out: Partial<Record<StageKey, ItemRates>> = {};
   for (const [phase, rates] of Object.entries(raw)) {
     if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(rates))
-      err('Invalid transport fuel.');
+      fail('Invalid transport fuel.');
     const clean: ItemRates = {};
     for (const [name, rate] of Object.entries(rates)) {
-      if (!vehicleFuels.includes(name)) err(`${name} is not a vehicle fuel.`);
-      const q = number(rate, 0, 100000, 0);
-      if (q > 0) clean[name] = q;
+      if (!vehicleFuels.includes(name)) fail(`${name} is not a vehicle fuel.`);
+      const perMinute = number(rate, 0, 100000, 0);
+      if (perMinute > 0) clean[name] = perMinute;
     }
     if (Object.keys(clean).length) out[phase as StageKey] = clean;
   }
@@ -235,30 +240,30 @@ const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> 
 const suppliable = (name: string) => !RAW.includes(name) && !!DATA.items[name];
 const supplyRates = (raw: unknown): ItemRates => {
   if (raw === undefined) return {};
-  if (!isRecord(raw)) err('Invalid existing production rates.');
+  if (!isRecord(raw)) fail('Invalid existing production rates.');
   const entries = Object.entries(raw);
-  if (entries.length > 200) err('Too many existing production rates.');
+  if (entries.length > 200) fail('Too many existing production rates.');
   const out: ItemRates = {};
   for (const [name, rate] of entries) {
-    if (!suppliable(name)) err(`${name} cannot be entered as existing production.`);
-    const q = number(rate, 0, 1000000, 0);
-    if (q > 0) out[name] = q;
+    if (!suppliable(name)) fail(`${name} cannot be entered as existing production.`);
+    const perMinute = number(rate, 0, 1000000, 0);
+    if (perMinute > 0) out[name] = perMinute;
   }
   return out;
 };
 // { resource: { impure, normal, pure } } node or well-satellite counts from the extraction survey.
-const counts3 = (raw: unknown): Record<string, NodeCounts> => {
+const countsByResource = (raw: unknown): Record<string, NodeCounts> => {
   const out: Record<string, NodeCounts> = {};
   if (raw === undefined) return out;
-  if (!isRecord(raw)) err('Invalid node counts.');
-  if (Object.keys(raw).length > 40) err('Invalid node counts.');
-  for (const [name, c] of Object.entries(raw)) {
-    if (!RAW.includes(name)) err(`${name} is not a raw resource.`);
-    if (!isRecord(c)) err('Invalid node counts.');
+  if (!isRecord(raw)) fail('Invalid node counts.');
+  if (Object.keys(raw).length > 40) fail('Invalid node counts.');
+  for (const [name, counts] of Object.entries(raw)) {
+    if (!RAW.includes(name)) fail(`${name} is not a raw resource.`);
+    if (!isRecord(counts)) fail('Invalid node counts.');
     const row: NodeCounts = {
-      impure: number(c.impure, 0, 10000, 0),
-      normal: number(c.normal, 0, 10000, 0),
-      pure: number(c.pure, 0, 10000, 0),
+      impure: number(counts.impure, 0, 10000, 0),
+      normal: number(counts.normal, 0, 10000, 0),
+      pure: number(counts.pure, 0, 10000, 0),
     };
     if (row.impure || row.normal || row.pure) out[name] = row;
   }
@@ -269,14 +274,14 @@ const counts3 = (raw: unknown): Record<string, NodeCounts> => {
 // so the survey can be reopened; the plan itself still runs on `limits`.
 const extractionRecord = (raw: unknown): ExtractionRecord | null => {
   if (raw === undefined || raw === null) return null;
-  if (!isRecord(raw)) err('Invalid extraction survey.');
+  if (!isRecord(raw)) fail('Invalid extraction survey.');
   const used: ItemRates = {};
   if (raw.used !== undefined) {
-    if (!isRecord(raw.used)) err('Invalid committed extraction.');
-    for (const [name, v] of Object.entries(raw.used)) {
-      if (!RAW.includes(name)) err(`${name} is not a raw resource.`);
-      const q = number(v, 0, 10000000, 0);
-      if (q > 0) used[name] = q;
+    if (!isRecord(raw.used)) fail('Invalid committed extraction.');
+    for (const [name, rate] of Object.entries(raw.used)) {
+      if (!RAW.includes(name)) fail(`${name} is not a raw resource.`);
+      const perMinute = number(rate, 0, 10000000, 0);
+      if (perMinute > 0) used[name] = perMinute;
     }
   }
   return {
@@ -285,22 +290,22 @@ const extractionRecord = (raw: unknown): ExtractionRecord | null => {
         ? 3
         : [1, 2, 3].includes(raw.mark as number)
           ? (raw.mark as 1 | 2 | 3)
-          : err('Invalid miner mark.'),
+          : fail('Invalid miner mark.'),
     clock: number(raw.clock, 0.01, 2.5, 2.5),
-    nodes: counts3(raw.nodes),
-    wells: counts3(raw.wells),
+    nodes: countsByResource(raw.nodes),
+    wells: countsByResource(raw.wells),
     used,
   };
 };
 // Per-item protected storage rates, items/min, 0 to 300. Resolved by storageRateFor.
 const rateOverrides = (raw: unknown): ItemRates => {
   if (raw === undefined) return {};
-  if (!isRecord(raw)) err('Invalid per-item storage rates.');
+  if (!isRecord(raw)) fail('Invalid per-item storage rates.');
   const entries = Object.entries(raw);
-  if (entries.length > 200) err('Too many per-item storage rates.');
+  if (entries.length > 200) fail('Too many per-item storage rates.');
   const out: ItemRates = {};
   for (const [name, rate] of entries) {
-    if (!storable(name)) err(`${name} cannot be given a storage rate.`);
+    if (!storable(name)) fail(`${name} cannot be given a storage rate.`);
     out[name] = number(rate, 0, 300, 0);
   }
   return out;
@@ -317,8 +322,10 @@ export const SLOOP_USES: [id: SloopUse, label: string][] = [
 ];
 const reservedUses = (raw: unknown): SloopUse[] => {
   if (raw === undefined) return [];
-  if (!Array.isArray(raw)) err('Invalid somersloop reservations.');
-  return [...new Set(raw.filter((x): x is SloopUse => SLOOP_USES.some(([id]) => id === x)))].sort();
+  if (!Array.isArray(raw)) fail('Invalid somersloop reservations.');
+  return [
+    ...new Set(raw.filter((use): use is SloopUse => SLOOP_USES.some(([id]) => id === use))),
+  ].sort();
 };
 // Validates and normalises a profile's settings. Every field has a default, so `settings({})` is a
 // complete profile, and a field older profiles never stored must default to the value that makes
@@ -333,7 +340,7 @@ const reservedUses = (raw: unknown): SloopUse[] => {
 // hours per phase, limits per minute, multiplier the elevator cost multiplier, powerFactor the
 // power consumption multiplier.
 export function settings(input: unknown = {}): CurrentSettings {
-  if (!isRecord(input)) err('Invalid settings.');
+  if (!isRecord(input)) fail('Invalid settings.');
   const base = {
     utilityPercent: number(input.utilityPercent, 0, 200, 20),
     droneFuel: choice(input.droneFuel, droneFuels as DroneFuel[], 'none'),
@@ -343,13 +350,17 @@ export function settings(input: unknown = {}): CurrentSettings {
       input.worldSeed === undefined || input.worldSeed === ''
         ? ''
         : String(number(Number(input.worldSeed), -2147483648, 2147483647, 1)),
-    mainPower: choice(input.mainPower, powerOptions.map(x => x[0]) as MainPower[], 'auto'),
+    mainPower: choice(
+      input.mainPower,
+      powerOptions.map(option => option[0]) as MainPower[],
+      'auto',
+    ),
     collectables: input.collectables === true,
     phase: choice<StageKey>(String(input.phase || '3'), ['1', '2', '3', '4', '5'], '3'),
-    purity: choice(input.purity, purities.map(x => x[0]) as Purity[], 'vanilla'),
+    purity: choice(input.purity, purities.map(option => option[0]) as Purity[], 'vanilla'),
     distribution: choice(
       input.distribution,
-      distributions.map(x => x[0]) as Distribution[],
+      distributions.map(option => option[0]) as Distribution[],
       'original',
     ),
     multiplier: number(input.multiplier, 0.1, 1000, 1),
@@ -362,7 +373,7 @@ export function settings(input: unknown = {}): CurrentSettings {
     uraniumReactors: number(input.uraniumReactors, 1, 1000, 1),
     storage: choice(
       input.storage,
-      storageOptions.map(x => x[0]) as StorageChoice[],
+      storageOptions.map(option => option[0]) as StorageChoice[],
       'construction',
     ),
     storageRate: number(input.storageRate, 0.1, 300, 1),
@@ -391,35 +402,45 @@ export function settings(input: unknown = {}): CurrentSettings {
     limitsConfirmed: !!input.limitsConfirmed,
     modNotes: typeof input.modNotes === 'string' ? input.modNotes.slice(0, 500) : '',
   };
-  const s: CurrentSettings = { ...base, limits: {}, alternateRecipes: [], preferredRecipes: [] };
-  if (s.droneFuel === 'Plutonium Fuel Rod' && s.nuclear === 'none')
-    err('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
-  if (s.fueledAugmenters > s.augmenters) err('More fueled Alien Power Augmenters than augmenters.');
-  if (s.installedPowerGW < s.availablePowerGW)
-    err('Total installed generation cannot be less than the spare part of it.');
+  const config: CurrentSettings = {
+    ...base,
+    limits: {},
+    alternateRecipes: [],
+    preferredRecipes: [],
+  };
+  if (config.droneFuel === 'Plutonium Fuel Rod' && config.nuclear === 'none')
+    fail('Plutonium drone fuel requires a nuclear power and waste-processing strategy.');
+  if (config.fueledAugmenters > config.augmenters)
+    fail('More fueled Alien Power Augmenters than augmenters.');
+  if (config.installedPowerGW < config.availablePowerGW)
+    fail('Total installed generation cannot be less than the spare part of it.');
   // Budgets the profile did not enter default to what its map preset gives (resourceDefaults in
   // public/preferences.ts): DEFAULT_LIMITS for the default map, zero for the resource-rich ones.
-  const defaults = resourceDefaults(s.purity, s.distribution).limits;
-  if ((s.mainPower === 'nuclear' || s.mainPower.endsWith('-nuclear')) && s.nuclear === 'none')
-    err('Choose a nuclear waste strategy for a nuclear power preference.');
+  const defaults = resourceDefaults(config.purity, config.distribution).limits;
+  if (
+    (config.mainPower === 'nuclear' || config.mainPower.endsWith('-nuclear')) &&
+    config.nuclear === 'none'
+  )
+    fail('Choose a nuclear waste strategy for a nuclear power preference.');
   // Every raw resource has a preset default, so the fallback is always a number.
   const limits = input.limits as Raw | undefined;
-  for (const r of RAW) s.limits[r] = number(limits?.[r], 0, 10000000, defaults[r] as number);
+  for (const resource of RAW)
+    config.limits[resource] = number(limits?.[resource], 0, 10000000, defaults[resource] as number);
   // Alternates only matter under recipes: 'custom'. Unknown ids are dropped and the lists sorted,
   // so equal choices always produce equal settings. Preferred recipes must be selected alternates.
-  s.alternateRecipes = Array.isArray(input.alternateRecipes)
-    ? [...new Set(input.alternateRecipes.filter((x): x is string => ALT_IDS.has(x)))].sort()
+  config.alternateRecipes = Array.isArray(input.alternateRecipes)
+    ? [...new Set(input.alternateRecipes.filter((id): id is string => ALT_IDS.has(id)))].sort()
     : [];
-  if (s.recipes === 'custom' && powerNeedsTurbofuel(s.mainPower))
-    s.alternateRecipes = [...new Set([...s.alternateRecipes, ...MAM_RECIPES])].sort();
-  s.preferredRecipes = Array.isArray(input.preferredRecipes)
+  if (config.recipes === 'custom' && powerNeedsTurbofuel(config.mainPower))
+    config.alternateRecipes = [...new Set([...config.alternateRecipes, ...MAM_RECIPES])].sort();
+  config.preferredRecipes = Array.isArray(input.preferredRecipes)
     ? [
         ...new Set(
-          input.preferredRecipes.filter((x): x is string => s.alternateRecipes.includes(x)),
+          input.preferredRecipes.filter((id): id is string => config.alternateRecipes.includes(id)),
         ),
       ].sort()
     : [];
-  return s;
+  return config;
 }
 const pureNames = [
   'Alternate: Pure Iron Ingot',
@@ -429,13 +450,13 @@ const pureNames = [
 ];
 const metals = ['Iron Ingot', 'Copper Ingot', 'Caterium Ingot', 'Aluminum Ingot'];
 // Slug for generated row ids ('power-rocket-fuel'). Row ids are progress keys, so keep it stable.
-const key = (n: string) =>
-  n
+const slug = (name: string) =>
+  name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 // The recipes a phase may choose from, before power generators are added (generators() below).
-// `s` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
+// `config` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
 // Converter recipes that make raw resources (SAM-based ore conversion) are allowed. Returns
 // recipe objects from recipes.json, MAM recipes relabelled as standard. Used only by `run`.
 // The filters, in order:
@@ -450,37 +471,43 @@ const key = (n: string) =>
 // 5. Nuclear fuel and waste-processing recipes only with a nuclear strategy, except that from
 //    Phase 4 uranium drone fuel admits the Uranium Fuel Rod and Encased Uranium Cell recipes.
 // 6. Preferred recipes (custom only) push out the competitors for their primary product.
-export function recipePool(s: CurrentSettings, phase: number, conversion: boolean): Recipe[] {
+export function recipePool(config: CurrentSettings, phase: number, conversion: boolean): Recipe[] {
   return DATA.recipes
     .filter(
-      r =>
-        !MAM_RECIPES.includes(r.id) || s.recipes !== 'custom' || s.alternateRecipes.includes(r.id),
+      recipe =>
+        !MAM_RECIPES.includes(recipe.id) ||
+        config.recipes !== 'custom' ||
+        config.alternateRecipes.includes(recipe.id),
     )
-    .map(r =>
-      MAM_RECIPES.includes(r.id)
-        ? { ...r, alternate: false, name: r.name.replace('Alternate: ', '') }
-        : r,
-    )
-    .filter(
-      r =>
-        r.phase <= phase &&
-        (s.recipes === 'all' ||
-          !r.alternate ||
-          (s.recipes === 'custom' && s.alternateRecipes.includes(r.id)) ||
-          (s.pureIngots && pureNames.includes(r.name))),
+    .map(recipe =>
+      MAM_RECIPES.includes(recipe.id)
+        ? { ...recipe, alternate: false, name: recipe.name.replace('Alternate: ', '') }
+        : recipe,
     )
     .filter(
-      r =>
+      recipe =>
+        recipe.phase <= phase &&
+        (config.recipes === 'all' ||
+          !recipe.alternate ||
+          (config.recipes === 'custom' && config.alternateRecipes.includes(recipe.id)) ||
+          (config.pureIngots && pureNames.includes(recipe.name))),
+    )
+    .filter(
+      recipe =>
         !(
-          s.pureIngots &&
+          config.pureIngots &&
           phase >= 3 &&
-          metals.some(n => r.outputs[n]) &&
-          !pureNames.includes(r.name)
+          metals.some(metal => recipe.outputs[metal]) &&
+          !pureNames.includes(recipe.name)
         ),
     )
-    .filter(r => !Object.keys(r.outputs).some(x => RAW.includes(x) && x !== 'Water') || conversion)
     .filter(
-      r =>
+      recipe =>
+        !Object.keys(recipe.outputs).some(item => RAW.includes(item) && item !== 'Water') ||
+        conversion,
+    )
+    .filter(
+      recipe =>
         ![
           'Uranium Fuel Rod',
           'Plutonium Fuel Rod',
@@ -490,19 +517,23 @@ export function recipePool(s: CurrentSettings, phase: number, conversion: boolea
           'Non-Fissile Uranium',
           'Plutonium Pellet',
           'Encased Plutonium Cell',
-        ].some(x => r.outputs[x]) ||
-        s.nuclear !== 'none' ||
+        ].some(item => recipe.outputs[item]) ||
+        config.nuclear !== 'none' ||
         (phase >= 4 &&
-          s.droneFuel === 'Uranium Fuel Rod' &&
-          ['Uranium Fuel Rod', 'Encased Uranium Cell'].some(x => r.outputs[x])),
+          config.droneFuel === 'Uranium Fuel Rod' &&
+          ['Uranium Fuel Rod', 'Encased Uranium Cell'].some(item => recipe.outputs[item])),
     )
-    .filter(r => {
+    .filter(recipe => {
       // a preferred recipe replaces competing recipes for its primary product at phases where it is available
-      const preferred = s.recipes === 'custom' ? s.preferredRecipes || [] : [];
-      if (!preferred.length || preferred.includes(r.id)) return true;
+      const preferred = config.recipes === 'custom' ? config.preferredRecipes || [] : [];
+      if (!preferred.length || preferred.includes(recipe.id)) return true;
       return !preferred.some(id => {
-        const p = DATA.recipes.find(x => x.id === id);
-        return p && p.phase <= phase && Object.keys(p.outputs)[0] === Object.keys(r.outputs)[0];
+        const other = DATA.recipes.find(r => r.id === id);
+        return (
+          other &&
+          other.phase <= phase &&
+          Object.keys(other.outputs)[0] === Object.keys(recipe.outputs)[0]
+        );
       });
     });
 }
@@ -529,16 +560,19 @@ export const AMPLIFY_SLOTS: Record<string, number> = {
   'Particle Accelerator': 4,
   'Quantum Encoder': 4,
 };
-const amplifiable = (r: PoolRecipe) => r.power > 0 && (AMPLIFY_SLOTS[r.machine] ?? 0) > 0;
+const amplifiable = (recipe: PoolRecipe) =>
+  recipe.power > 0 && (AMPLIFY_SLOTS[recipe.machine] ?? 0) > 0;
 // The amplified twin of a recipe: a separate row with an 'amp:' id (its own progress key), which
 // `run` makes an integer variable. `slots` marks it as amplified there.
-const amplified = (r: PoolRecipe): PoolRecipe => ({
-  ...r,
-  id: 'amp:' + r.id,
-  name: r.name + ' (somersloop amplified)',
-  power: r.power * 4,
-  slots: AMPLIFY_SLOTS[r.machine],
-  outputs: Object.fromEntries(Object.entries(r.outputs).map(([n, q]) => [n, q * 2])),
+const amplified = (recipe: PoolRecipe): PoolRecipe => ({
+  ...recipe,
+  id: 'amp:' + recipe.id,
+  name: recipe.name + ' (somersloop amplified)',
+  power: recipe.power * 4,
+  slots: AMPLIFY_SLOTS[recipe.machine],
+  outputs: Object.fromEntries(
+    Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * 2]),
+  ),
 });
 // The largest period nuclearPeriod accepts. A longer one would force a plan to many more uranium
 // plants than it needs, so such a chain gets whole uranium plants only (#370).
@@ -633,7 +667,7 @@ export function nuclearPeriod(pool: ChainRecipe[], demand: ItemRates = {}): numb
 // with a waste strategy, plutonium and ficsonium plants in Phase 5 when recycling. Phase 1 has no
 // generators: biomass burners are hand-fed and stay out of the model. Then `mainPower` narrows
 // the list from Phase 3 on; 'auto' leaves the choice to the solver.
-function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
+function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
   const result: PoolRecipe[] = [];
   if (phase >= 2)
     result.push({
@@ -648,7 +682,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
   if (phase >= 3)
     for (const name of ['Fuel', 'Turbofuel', ...(phase >= 4 ? ['Rocket Fuel'] : [])])
       result.push({
-        id: 'power-' + key(name),
+        id: 'power-' + slug(name),
         name: name + ' power',
         machine: 'Fuel Generator',
         phase: 3,
@@ -657,7 +691,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
         inputs: { [name]: 15000 / DATA.items[name]!.energy },
         outputs: {},
       });
-  if (phase >= 4 && s.nuclear !== 'none') {
+  if (phase >= 4 && config.nuclear !== 'none') {
     result.push({
       id: 'power-uranium',
       name: 'Uranium power',
@@ -667,7 +701,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
       inputs: { 'Uranium Fuel Rod': 0.2, Water: 240 },
       outputs: { 'Uranium Waste': 10 },
     });
-    if (phase === 5 && s.nuclear === 'recycle')
+    if (phase === 5 && config.nuclear === 'recycle')
       result.push(
         {
           id: 'power-plutonium',
@@ -692,7 +726,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
   // Nuclear plants (present only with a waste strategy) are kept under every preference. The
   // others keep one fuel: coal, 'fuel', rocket fuel from Phase 4 for the rocket options, and
   // turbofuel otherwise, which is also the Phase 3 bridge for 'nuclear' before plants unlock.
-  const preferred = s.mainPower || 'auto';
+  const preferred = config.mainPower || 'auto';
   if (preferred === 'auto' || phase < 3) return result;
   if (preferred === 'coal')
     return result.filter(r => r.id === 'power-coal' || r.machine === 'Nuclear Power Plant');
@@ -710,7 +744,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
 // Each phase is a self-contained steady state; nothing is carried over from an earlier phase's
 // solution (only calculate()'s phaseTime 'final' pass passes `caps` from later phases).
 //
-// Inputs: `s` normalised settings, `phase` a number 1 to 5, and options:
+// Inputs: `config` normalised settings, `phase` a number 1 to 5, and options:
 //   maximum       maximise simultaneous elevator delivery instead of meeting fixed delivery rates
 //   conversion    allow the Converter recipes that make raw resources (Phase 5 SAM conversion)
 //   ignoreLimits  lift every resource budget to 1e7/min (diagnostics: what would this need?)
@@ -742,7 +776,7 @@ function generators(s: CurrentSettings, phase: number): PoolRecipe[] {
 // public/app/views/calculated.ts, public/app/flow.ts and public/app/wizard/. Only calculate()
 // calls run, directly and through the two-step fit below.
 export function run(
-  s: CurrentSettings,
+  config: CurrentSettings,
   phase: number,
   {
     maximum = false,
@@ -759,56 +793,57 @@ export function run(
   // network (`recipeIds`), which keeps the integer search small enough for the solver's 3-second
   // limit. Hence the warning that the result is not a global mixed-recipe integer optimum.
   // The inner calls pass `recipeIds`, so they skip this block and build the model below.
-  if ((s.wholeMachines || s.amplifySloops > 0) && !recipeIds) {
-    const opts = { maximum, conversion, ignoreLimits, caps };
-    const exact = (t: CurrentSettings) =>
-      run({ ...t, wholeMachines: false, amplifySloops: 0 }, phase, opts);
+  if ((config.wholeMachines || config.amplifySloops > 0) && !recipeIds) {
+    const sharedOptions = { maximum, conversion, ignoreLimits, caps };
+    const exact = (variant: CurrentSettings) =>
+      run({ ...variant, wholeMachines: false, amplifySloops: 0 }, phase, sharedOptions);
     // The amplification candidates: the largest lines (at least one machine-equivalent) of an
     // exact solve, as { recipeId: equivalent }.
-    const twins = (b: Solved): Record<string, number> =>
+    const twins = (exactStage: Solved): Record<string, number> =>
       Object.fromEntries(
-        [...b.rows]
-          .filter(r => r.equivalent >= 1)
-          .sort((x, y) => y.equivalent - x.equivalent)
-          .slice(0, AMPLIFY_CANDIDATES[s.wholeMachines ? 'whole' : 'precise'])
-          .map(r => [r.id, r.equivalent]),
+        [...exactStage.rows]
+          .filter(row => row.equivalent >= 1)
+          .sort((a, b) => b.equivalent - a.equivalent)
+          .slice(0, AMPLIFY_CANDIDATES[config.wholeMachines ? 'whole' : 'precise'])
+          .map(row => [row.id, row.equivalent]),
       );
     // If even the exact LP fails, rounding cannot help; calculate() explains the failure.
-    const base = exact(s);
+    const base = exact(config);
     if (!base.feasible) return base;
-    const ids = new Set(base.rows.map(r => r.id));
+    const ids = new Set(base.rows.map(row => row.id));
     const baseline = twins(base);
     // An integer fit. Whole nuclear plants (see the model below) can need more uranium, water or
     // waste-chain inputs than the budgets allow; then fall back to fractional uranium plants,
     // exactly the fit earlier releases made, and mark the stage `nuclearFractional` (#370).
-    const fitted = (t: CurrentSettings, o: RunOptions): RunResult => {
-      const r = run(t, phase, o);
-      if (r.feasible || !t.wholeMachines || !o.recipeIds?.has('power-uranium')) return r;
-      const f = run(t, phase, { ...o, fractionalNuclear: true });
-      return f.feasible ? { ...f, nuclearFractional: true } : r;
+    const fitted = (variant: CurrentSettings, options: RunOptions): RunResult => {
+      const result = run(variant, phase, options);
+      if (result.feasible || !variant.wholeMachines || !options.recipeIds?.has('power-uranium'))
+        return result;
+      const fractional = run(variant, phase, { ...options, fractionalNuclear: true });
+      return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
     };
-    let fit = fitted(s, { ...opts, recipeIds: ids, baseline });
+    let fit = fitted(config, { ...sharedOptions, recipeIds: ids, baseline });
     // Crediting production you already run narrows the recipe network the exact solve picks, and a
     // narrower network has less room to round up to whole machines. Widen it with the recipes this
     // phase would have used without the credit before concluding anything — the supplied plan is
     // still the smaller one, it just needs the slack. If even that will not round, drop the credit:
     // telling the planner what you already built must never cost you a plan, the same rule
     // amplification follows below.
-    if (!fit.feasible && Object.keys(s.existingSupply).length) {
-      const plainBase = exact({ ...s, existingSupply: {} });
+    if (!fit.feasible && Object.keys(config.existingSupply).length) {
+      const plainBase = exact({ ...config, existingSupply: {} });
       if (plainBase.feasible) {
-        const plainIds = new Set(plainBase.rows.map(r => r.id));
-        const widened = fitted(s, {
-          ...opts,
+        const plainIds = new Set(plainBase.rows.map(row => row.id));
+        const widened = fitted(config, {
+          ...sharedOptions,
           recipeIds: new Set([...ids, ...plainIds]),
           baseline,
         });
         if (widened.feasible) fit = widened;
         else {
           const without = fitted(
-            { ...s, existingSupply: {} },
+            { ...config, existingSupply: {} },
             {
-              ...opts,
+              ...sharedOptions,
               recipeIds: plainIds,
               baseline: twins(plainBase),
             },
@@ -820,8 +855,8 @@ export function run(
     // Amplification is optional by definition: the solver may always place no somersloops at all.
     // So a failure here is the integer search running out of time, never a real shortage — never let
     // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
-    if (!fit.feasible && s.amplifySloops > 0) {
-      const plain = fitted({ ...s, amplifySloops: 0 }, { ...opts, recipeIds: ids });
+    if (!fit.feasible && config.amplifySloops > 0) {
+      const plain = fitted({ ...config, amplifySloops: 0 }, { ...sharedOptions, recipeIds: ids });
       if (plain.feasible) return { ...plain, amplificationDropped: true };
     }
     return fit;
@@ -830,55 +865,58 @@ export function run(
   // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
   // and only for the baseline's candidate lines.
   const selected: PoolRecipe[] = [
-    ...recipePool(s, phase, conversion),
-    ...generators(s, phase),
+    ...recipePool(config, phase, conversion),
+    ...generators(config, phase),
   ].filter(
-    r =>
+    recipe =>
       !recipeIds ||
-      recipeIds.has(r.id) ||
-      (conversion && Object.keys(r.outputs).some(n => RAW.includes(n) && n !== 'Water')),
+      recipeIds.has(recipe.id) ||
+      (conversion &&
+        Object.keys(recipe.outputs).some(item => RAW.includes(item) && item !== 'Water')),
   );
   const pool = [
     ...selected,
-    ...(s.amplifySloops > 0 && recipeIds
-      ? selected.filter(r => amplifiable(r) && baseline?.[r.id] !== undefined).map(amplified)
+    ...(config.amplifySloops > 0 && recipeIds
+      ? selected
+          .filter(recipe => amplifiable(recipe) && baseline?.[recipe.id] !== undefined)
+          .map(amplified)
       : []),
   ];
   // Items the pool can actually make from raw resources (and from nuclear waste, which the
   // plants themselves produce), found by repeated passes. Only reachable items are given a
   // protected storage demand, so storage never asks for something this phase cannot make.
   const reachable = new Set(RAW);
-  if (s.nuclear !== 'none' && phase >= 4) reachable.add('Uranium Waste');
-  if (s.nuclear === 'recycle' && phase === 5) reachable.add('Plutonium Waste');
+  if (config.nuclear !== 'none' && phase >= 4) reachable.add('Uranium Waste');
+  if (config.nuclear === 'recycle' && phase === 5) reachable.add('Plutonium Waste');
   for (let i = 0; i < 20; i++)
-    for (const r of pool)
-      if (Object.keys(r.inputs).every(n => reachable.has(n)))
-        Object.keys(r.outputs).forEach(n => reachable.add(n));
+    for (const recipe of pool)
+      if (Object.keys(recipe.inputs).every(item => reachable.has(item)))
+        Object.keys(recipe.outputs).forEach(item => reachable.add(item));
   const allItems = new Set(
-    pool.flatMap(r => [...Object.keys(r.inputs), ...Object.keys(r.outputs)]),
+    pool.flatMap(recipe => [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)]),
   );
   // Demands: per-minute amounts that must leave the network rather than feed another recipe.
   // They become the right-hand sides of the item balance constraints below. Four kinds: protected
   // storage, elevator deliveries, drone fuel, and Phase 5 Singularity Cells and augmenter fuel.
   const demand: ItemRates = {};
   const storage: ItemRates = {};
-  const drone = droneSupply(s, phase),
-    utilityFactor = 1 + (s.utilityPercent ?? 20) / 100;
+  const drone = droneSupply(config, phase),
+    utilityFactor = 1 + (config.utilityPercent ?? 20) / 100;
   // Protected storage: solid, sinkable, non-radioactive items the storage mode covers, each at
   // its rate from storageRateFor (per-item override, elevator parts 0, build rate, general rate).
   const candidates = [...reachable].filter(
-    n =>
-      !RAW.includes(n) &&
-      !DATA.items[n]?.fluid &&
-      !DATA.items[n]?.radioactive &&
-      (DATA.items[n]?.sink || 0) > 0 &&
-      wantsStorage(n, s.storage),
+    item =>
+      !RAW.includes(item) &&
+      !DATA.items[item]?.fluid &&
+      !DATA.items[item]?.radioactive &&
+      (DATA.items[item]?.sink || 0) > 0 &&
+      wantsStorage(item, config.storage),
   );
-  for (const n of candidates)
-    if (reachable.has(n)) {
-      const rate = storageRateFor(s, n);
-      storage[n] = rate;
-      if (rate > 0) demand[n] = rate;
+  for (const item of candidates)
+    if (reachable.has(item)) {
+      const rate = storageRateFor(config, item);
+      storage[item] = rate;
+      if (rate > 0) demand[item] = rate;
     }
   // Elevator deliveries: the phase's parts spread over its hours (24 for 'minimal', 8 for
   // 'balanced', the profile's own for 'timed'). `roundRates` rounds to readable belt rates: to
@@ -886,34 +924,36 @@ export function run(
   // nearest can round a rate down, so `hours` is recomputed from the rates at the end. Under
   // `maximum` deliveries are not a fixed demand; the goal variable below draws them instead.
   const delivery: Record<string, StageDelivery> = {};
-  const hours = s.goal === 'minimal' ? 24 : s.goal === 'balanced' ? 8 : s.hours;
-  for (const [n, amount] of Object.entries(DELIVERIES[phase]!)) {
-    let rate = (amount * s.multiplier) / (hours * 60);
-    if (s.roundRates)
+  const hours = config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+  for (const [item, amount] of Object.entries(DELIVERIES[phase]!)) {
+    let rate = (amount * config.multiplier) / (hours * 60);
+    if (config.roundRates)
       rate =
         rate >= 100
           ? Math.round(rate / 10) * 10
           : rate >= 10
             ? Math.round(rate)
             : Math.ceil(rate * 10) / 10;
-    delivery[n] = { target: Math.ceil(amount * s.multiplier), rate };
-    if (!maximum) demand[n] = (demand[n] || 0) + rate;
+    delivery[item] = { target: Math.ceil(amount * config.multiplier), rate };
+    if (!maximum) demand[item] = (demand[item] || 0) + rate;
   }
-  for (const [n, q] of Object.entries(drone)) demand[n] = (demand[n] || 0) + q;
+  for (const [item, rate] of Object.entries(drone)) demand[item] = (demand[item] || 0) + rate;
   // Vehicle fuel for the factory-group links (#206), where this phase can make it.
   const transport: ItemRates = {};
-  for (const [n, q] of Object.entries(s.transportFuel?.[String(phase) as StageKey] || {}))
-    if (reachable.has(n)) {
-      transport[n] = q;
-      demand[n] = (demand[n] || 0) + q;
+  for (const [item, rate] of Object.entries(
+    config.transportFuel?.[String(phase) as StageKey] || {},
+  ))
+    if (reachable.has(item)) {
+      transport[item] = rate;
+      demand[item] = (demand[item] || 0) + rate;
     }
-  if (phase === 5 && s.cellsPerMinute)
-    demand['Singularity Cell'] = (demand['Singularity Cell'] || 0) + s.cellsPerMinute;
+  if (phase === 5 && config.cellsPerMinute)
+    demand['Singularity Cell'] = (demand['Singularity Cell'] || 0) + config.cellsPerMinute;
   // Each fueled augmenter needs 5 Alien Power Matrix/min. The rate is derived from the augmenter
   // count rather than entered, so the fuel line can never disagree with the augmenters it feeds.
-  const matrix = phase === 5 ? 5 * s.fueledAugmenters : 0;
+  const matrix = phase === 5 ? 5 * config.fueledAugmenters : 0;
   if (matrix) demand['Alien Power Matrix'] = (demand['Alien Power Matrix'] || 0) + matrix;
-  Object.keys(demand).forEach(n => allItems.add(n));
+  Object.keys(demand).forEach(item => allItems.add(item));
   // The objective. Normally minimise `cost`: one per machine-equivalent, plus a tiny power term
   // that breaks ties towards lower consumption. Under `maximum`, maximise `gain`, the goal
   // variable's level, then re-solve for cost (see after the solve).
@@ -928,24 +968,26 @@ export function run(
   // the excess is surplus bound for the sink, which is what lets whole machines round up.
   // An item the AWESOME Sink cannot accept has nowhere to overflow: Power Shards would back a
   // Synthetic Power Shard line up and stall it. Balance those exactly, as fluids and waste are.
-  for (const n of allItems) {
+  for (const item of allItems) {
     const equality =
-      DATA.items[n]?.fluid ||
-      DATA.items[n]?.radioactive ||
-      n.endsWith('Waste') ||
-      !((DATA.items[n]?.sink ?? 0) > 0);
-    model.constraints['item:' + n] = equality ? { equal: demand[n] || 0 } : { min: demand[n] || 0 };
+      DATA.items[item]?.fluid ||
+      DATA.items[item]?.radioactive ||
+      item.endsWith('Waste') ||
+      !((DATA.items[item]?.sink ?? 0) > 0);
+    model.constraints['item:' + item] = equality
+      ? { equal: demand[item] || 0 }
+      : { min: demand[item] || 0 };
   }
   // A 20% planning allowance covers unmodelled mining, pumps and logistics; existing power is spare capacity.
   // Alien Power Augmenters generate 500 MW each and multiply the grid's base production:
   // (generators + 500 x augmenters) x (1 + 0.1 x unfueled + 0.3 x fueled). The multiplier applies to
   // installed capacity, of which the entered spare power is only a part, so both are needed here.
-  const augmenters = phase === 5 ? s.augmenters : 0,
-    fueled = phase === 5 ? s.fueledAugmenters : 0;
+  const augmenters = phase === 5 ? config.augmenters : 0,
+    fueled = phase === 5 ? config.fueledAugmenters : 0;
   const boost = 0.1 * (augmenters - fueled) + 0.3 * fueled,
-    installedMW = s.installedPowerGW * 1000;
+    installedMW = config.installedPowerGW * 1000;
   const spareMW =
-    s.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
+    config.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
   // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
   // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
   // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
@@ -954,31 +996,36 @@ export function run(
   if (phase >= 2 || maximum) model.constraints.power = { max: spareMW };
   // One variable per recipe: its level is machine-equivalents at 100% clock, and its
   // coefficients are its per-machine outputs (+) and inputs (-) in each item balance.
-  for (const r of pool) {
-    const v: Record<string, number> = {
-      cost: 1 + (r.power > 0 ? r.power / 100000 : 0),
-      power: r.power < 0 ? r.power * (1 + boost) : r.power * s.powerFactor * utilityFactor,
+  for (const recipe of pool) {
+    const coefficients: Record<string, number> = {
+      cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
+      power:
+        recipe.power < 0
+          ? recipe.power * (1 + boost)
+          : recipe.power * config.powerFactor * utilityFactor,
     };
-    for (const [n, q] of Object.entries(r.outputs)) v['item:' + n] = (v['item:' + n] || 0) + q;
-    for (const [n, q] of Object.entries(r.inputs)) v['item:' + n] = (v['item:' + n] || 0) - q;
+    for (const [item, rate] of Object.entries(recipe.outputs))
+      coefficients['item:' + item] = (coefficients['item:' + item] || 0) + rate;
+    for (const [item, rate] of Object.entries(recipe.inputs))
+      coefficients['item:' + item] = (coefficients['item:' + item] || 0) - rate;
     // At least the requested number of uranium plants (settings.uraniumReactors) when nuclear
     // power is in the pool. Whole machines round them after this loop.
-    if (r.id === 'power-uranium') {
-      v.nuclear = 1;
-      model.constraints.nuclear = { min: s.uraniumReactors };
+    if (recipe.id === 'power-uranium') {
+      coefficients.nuclear = 1;
+      model.constraints.nuclear = { min: config.uraniumReactors };
     }
-    model.variables[r.id] = v;
+    model.variables[recipe.id] = coefficients;
     // Amplified twins: integer machine counts, each using `slots` somersloops of the budget.
-    if (r.slots) {
-      (model.ints ??= {})[r.id] = 1;
-      v.sloops = r.slots;
+    if (recipe.slots) {
+      (model.ints ??= {})[recipe.id] = 1;
+      coefficients.sloops = recipe.slots;
       // One amplified machine does the work of two, so a line never wants more than half its
       // unamplified count, and the whole budget cannot buy more than it can pay slots for.
-      const need = baseline?.[r.id.slice(4)];
-      (model.bounds ??= {})[r.id] = Math.max(
+      const need = baseline?.[recipe.id.slice(4)];
+      (model.bounds ??= {})[recipe.id] = Math.max(
         1,
         Math.min(
-          Math.floor(s.amplifySloops / r.slots),
+          Math.floor(config.amplifySloops / recipe.slots),
           need === undefined ? 1e9 : Math.ceil(need / 2) + 1,
         ),
       );
@@ -989,60 +1036,65 @@ export function run(
     // (Generators have no outputs, and power-uranium outputs waste.) The uranium plants are
     // rounded separately, after this loop.
     if (
-      s.wholeMachines &&
-      Object.keys(r.outputs).some(
-        n => !DATA.items[n]?.fluid && !RAW.includes(n) && (DATA.items[n]?.sink ?? 0) > 0,
+      config.wholeMachines &&
+      Object.keys(recipe.outputs).some(
+        item =>
+          !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
       ) &&
       !/uranium|plutonium|ficsonium|waste|non-fissile/i.test(
-        [r.name, ...Object.keys(r.inputs), ...Object.keys(r.outputs)].join(' '),
+        [recipe.name, ...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].join(' '),
       )
     ) {
-      (model.ints ??= {})[r.id] = 1;
+      (model.ints ??= {})[recipe.id] = 1;
     }
   }
   // An earlier phase may run no more of a recipe than a later phase already builds, so nothing is added that the plan later drops.
   // (That comment describes the `caps` block after the next line.) First the somersloop budget:
   // amplified machines may together fill no more slots than `amplifySloops`, per phase.
-  if (s.amplifySloops > 0) model.constraints.sloops = { max: s.amplifySloops };
+  if (config.amplifySloops > 0) model.constraints.sloops = { max: config.amplifySloops };
   // Caps, for phaseTime 'final': each recipe's equivalent is at most the whole machines built
   // for it in this or a later phase. Every pool recipe gets a cap, so a recipe no such phase
   // uses is capped at 0 — including generators.
   if (caps)
-    for (const r of pool) {
-      const cap = caps[r.id] ?? 0;
-      model.constraints['cap:' + r.id] = { max: cap };
-      model.variables[r.id]!['cap:' + r.id] = 1;
+    for (const recipe of pool) {
+      const cap = caps[recipe.id] ?? 0;
+      model.constraints['cap:' + recipe.id] = { max: cap };
+      model.variables[recipe.id]!['cap:' + recipe.id] = 1;
     }
   // Raw resources: a 'raw:' source variable per extracted item the pool uses, capped by its
   // budget ('limit:') and almost free, so extraction is spent only where it saves machines.
   // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
-  for (const n of RAW) {
-    if (!allItems.has(n)) continue;
-    model.constraints['limit:' + n] = { max: ignoreLimits ? 1e7 : s.limits[n] };
-    model.variables['raw:' + n] = { cost: 0.0001, ['item:' + n]: 1, ['limit:' + n]: 1 };
+  for (const item of RAW) {
+    if (!allItems.has(item)) continue;
+    model.constraints['limit:' + item] = { max: ignoreLimits ? 1e7 : config.limits[item] };
+    model.variables['raw:' + item] = { cost: 0.0001, ['item:' + item]: 1, ['limit:' + item]: 1 };
   }
   // A line you already run is a capped, almost-free source of its product, so the
   // plan builds only the remainder and drops the whole chain behind what you
   // already make. Almost free rather than free: the solver still prefers not to
   // draw supply it has no use for. An item this phase neither makes nor consumes
   // is skipped, because crediting it would mean nothing.
-  for (const [n, rate] of Object.entries(s.existingSupply)) {
-    if (!allItems.has(n)) continue;
-    model.constraints['supply:' + n] = { max: rate };
-    model.variables['supply:' + n] = { cost: 0.0001, ['item:' + n]: 1, ['supply:' + n]: 1 };
+  for (const [item, rate] of Object.entries(config.existingSupply)) {
+    if (!allItems.has(item)) continue;
+    model.constraints['supply:' + item] = { max: rate };
+    model.variables['supply:' + item] = {
+      cost: 0.0001,
+      ['item:' + item]: 1,
+      ['supply:' + item]: 1,
+    };
   }
   // Uranium waste must balance exactly, and the 'sink' strategy (and Phase 4 under 'recycle',
   // before plutonium plants exist) ends the waste chain at Plutonium Fuel Rods: this variable
   // disposes of them in the AWESOME Sink. Reported as `plutoniumSink` (rods per minute).
-  if (s.nuclear !== 'none' && phase >= 4 && (s.nuclear === 'sink' || phase === 4))
+  if (config.nuclear !== 'none' && phase >= 4 && (config.nuclear === 'sink' || phase === 4))
     model.variables['sink-plutonium'] = { cost: 0.0001, 'item:Plutonium Fuel Rod': -1 };
   // Maximum output: the goal variable consumes every delivery part in proportion to its target,
   // at target/1000 per minute per unit of goal, so maximising it maximises the rate at which the
   // whole phase completes together (hours = 1000 / (60 x goal)).
   if (maximum) {
-    const v: Record<string, number> = { gain: 1 };
-    for (const [n, d] of Object.entries(delivery)) v['item:' + n] = -d.target / 1000;
-    model.variables.goal = v;
+    const goal: Record<string, number> = { gain: 1 };
+    for (const [item, part] of Object.entries(delivery)) goal['item:' + item] = -part.target / 1000;
+    model.variables.goal = goal;
   }
   // Whole nuclear plants (#370). Every line downstream of the uranium plants is linear in their
   // count, so rounding that count is enough. In Phase 5 under 'recycle' the count is a whole
@@ -1054,8 +1106,8 @@ export function run(
   // `fractionalNuclear` is the two-step fit's fallback when this does not fit the budgets.
   const uraniumPlants = model.variables['power-uranium'];
   const period =
-    s.wholeMachines && !fractionalNuclear && uraniumPlants
-      ? s.nuclear === 'recycle' && phase === 5
+    config.wholeMachines && !fractionalNuclear && uraniumPlants
+      ? config.nuclear === 'recycle' && phase === 5
         ? nuclearPeriod(pool, demand)
         : 1
       : 0;
@@ -1080,98 +1132,105 @@ export function run(
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   // Independently verify material, power and mining constraints before trusting a result.
-  for (const [k, b] of Object.entries(model.constraints)) {
+  for (const [constraint, bound] of Object.entries(model.constraints)) {
     let total = 0;
-    for (const [v, co] of Object.entries(model.variables))
-      total += (solved.values[v] || 0) * (co[k] || 0);
-    const tol = 0.002 + Math.abs(total) * 1e-6;
+    for (const [variable, coefficients] of Object.entries(model.variables))
+      total += (solved.values[variable] || 0) * (coefficients[constraint] || 0);
+    const tolerance = 0.002 + Math.abs(total) * 1e-6;
     if (
-      (b.min !== undefined && total < b.min - tol) ||
-      (b.max !== undefined && total > b.max + tol) ||
-      (b.equal !== undefined && Math.abs(total - b.equal) > tol)
+      (bound.min !== undefined && total < bound.min - tolerance) ||
+      (bound.max !== undefined && total > bound.max + tolerance) ||
+      (bound.equal !== undefined && Math.abs(total - bound.equal) > tolerance)
     )
       return { feasible: false };
   }
   // Post-processing. Under `maximum` the delivery rates are whatever the goal achieved.
   if (maximum)
-    for (const d of Object.values(delivery)) d.rate = ((solved.values.goal || 0) * d.target) / 1000;
+    for (const part of Object.values(delivery))
+      part.rate = ((solved.values.goal || 0) * part.target) / 1000;
   // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
   // one runs underclocked at `lastClock` % (100 for a whole-machine row). Row inputs and outputs
   // are the line's totals per minute. peakMW counts whole machines at full power without the
   // utility allowance; generationMW is a generator's output at its fractional level.
   const rows = pool
-    .filter(r => (solved.values[r.id] || 0) > 1e-6)
-    .map((r): CalcRow => {
-      const eq = solved.values[r.id]!;
-      const machines = Math.ceil(eq - 1e-6);
+    .filter(recipe => (solved.values[recipe.id] || 0) > 1e-6)
+    .map((recipe): CalcRow => {
+      const equivalent = solved.values[recipe.id]!;
+      const machines = Math.ceil(equivalent - 1e-6);
       return {
-        ...r,
-        equivalent: eq,
+        ...recipe,
+        equivalent,
         machines,
-        ...(r.slots ? { amplified: true, sloops: r.slots * machines } : {}),
-        lastClock: Math.max(0, (eq - machines + 1) * 100),
-        inputs: Object.fromEntries(Object.entries(r.inputs).map(([n, q]) => [n, q * eq])),
-        outputs: Object.fromEntries(Object.entries(r.outputs).map(([n, q]) => [n, q * eq])),
-        peakMW: r.power < 0 ? 0 : machines * r.power * s.powerFactor,
-        generationMW: r.power < 0 ? -r.power * eq : 0,
+        ...(recipe.slots ? { amplified: true, sloops: recipe.slots * machines } : {}),
+        lastClock: Math.max(0, (equivalent - machines + 1) * 100),
+        inputs: Object.fromEntries(
+          Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * equivalent]),
+        ),
+        outputs: Object.fromEntries(
+          Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * equivalent]),
+        ),
+        peakMW: recipe.power < 0 ? 0 : machines * recipe.power * config.powerFactor,
+        generationMW: recipe.power < 0 ? -recipe.power * equivalent : 0,
       };
     });
   const supplied = Object.fromEntries(
-    Object.entries(s.existingSupply)
-      .map(([n]): [string, number] => [n, solved.values['supply:' + n] || 0])
-      .filter(([, q]) => q > 0.002),
+    Object.entries(config.existingSupply)
+      .map(([item]): [string, number] => [item, solved.values['supply:' + item] || 0])
+      .filter(([, rate]) => rate > 0.002),
   );
-  const raw = Object.fromEntries(RAW.map(n => [n, solved.values['raw:' + n] || 0]));
+  const raw = Object.fromEntries(RAW.map(item => [item, solved.values['raw:' + item] || 0]));
   // Surplus: what the rows make beyond what the rows consume and every demand takes. Only solid,
   // sinkable items are listed; fluids, waste and unsinkable items are balanced exactly. `made`
   // counts rows only, so an item also drawn from existing supply or a raw budget shows the rows'
   // excess over total use, clamped at 0.
   const used: ItemRates = {},
     made: ItemRates = {};
-  for (const r of rows) {
-    for (const [n, q] of Object.entries(r.inputs)) used[n] = (used[n] || 0) + q;
-    for (const [n, q] of Object.entries(r.outputs)) made[n] = (made[n] || 0) + q;
+  for (const row of rows) {
+    for (const [item, rate] of Object.entries(row.inputs)) used[item] = (used[item] || 0) + rate;
+    for (const [item, rate] of Object.entries(row.outputs)) made[item] = (made[item] || 0) + rate;
   }
   const surplus = Object.fromEntries(
     Object.keys(made)
-      .map((n): [string, number] => [
-        n,
+      .map((item): [string, number] => [
+        item,
         Math.max(
           0,
-          made[n]! -
-            (used[n] || 0) -
-            (storage[n] || 0) -
-            (delivery[n]?.rate || 0) -
-            (drone[n] || 0) -
-            (n === 'Singularity Cell' && phase === 5 ? s.cellsPerMinute : 0) -
-            (n === 'Alien Power Matrix' ? matrix : 0),
+          made[item]! -
+            (used[item] || 0) -
+            (storage[item] || 0) -
+            (delivery[item]?.rate || 0) -
+            (drone[item] || 0) -
+            (item === 'Singularity Cell' && phase === 5 ? config.cellsPerMinute : 0) -
+            (item === 'Alien Power Matrix' ? matrix : 0),
         ),
       ])
       .filter(
-        ([n, q]) =>
-          q > 0.002 &&
-          !DATA.items[n]?.radioactive &&
-          !DATA.items[n]?.fluid &&
-          (DATA.items[n]?.sink ?? 0) > 0,
+        ([item, rate]) =>
+          rate > 0.002 &&
+          !DATA.items[item]?.radioactive &&
+          !DATA.items[item]?.fluid &&
+          (DATA.items[item]?.sink ?? 0) > 0,
       ),
   );
   // Power totals. The LP balanced power at fractional machine counts; building whole machines at
   // full power can need more, and the difference is reported as additionalHeadroomMW below.
-  const peakMW = rows.reduce((a, r) => a + r.peakMW, 0),
-    generationMW = rows.reduce((a, r) => a + r.generationMW, 0);
+  const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
+    generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
   // Order by dependency depth; recycling loops are commissioned as a connected group.
   const producers: Record<string, CalcRow[]> = {};
-  for (const r of rows) for (const n of Object.keys(r.outputs)) (producers[n] ??= []).push(r);
+  for (const row of rows)
+    for (const item of Object.keys(row.outputs)) (producers[item] ??= []).push(row);
   const seen = new Set<string>(),
     visiting = new Set<string>(),
     ordered: CalcRow[] = [];
-  function visit(r: CalcRow) {
-    if (seen.has(r.id) || visiting.has(r.id)) return;
-    visiting.add(r.id);
-    for (const n of Object.keys(r.inputs)) for (const p of producers[n] || []) visit(p);
-    visiting.delete(r.id);
-    seen.add(r.id);
-    ordered.push(r);
+  function visit(row: CalcRow) {
+    if (seen.has(row.id) || visiting.has(row.id)) return;
+    visiting.add(row.id);
+    for (const item of Object.keys(row.inputs))
+      for (const producer of producers[item] || []) visit(producer);
+    visiting.delete(row.id);
+    seen.add(row.id);
+    ordered.push(row);
   }
   rows.forEach(visit);
   return {
@@ -1188,7 +1247,7 @@ export function run(
     ...(period > 1 ? { nuclearPeriod: period } : {}),
     peakMW,
     generationMW,
-    sloopsUsed: rows.reduce((a, r) => a + (r.sloops || 0), 0),
+    sloopsUsed: rows.reduce((total, row) => total + (row.sloops || 0), 0),
     augmenters,
     fueledAugmenters: fueled,
     boost,
@@ -1204,12 +1263,12 @@ export function run(
     ),
     // The phase takes as long as its slowest delivery (Infinity if a rate is 0).
     hours: Math.max(
-      ...Object.values(delivery).map(d => (d.rate ? d.target / d.rate / 60 : Infinity)),
+      ...Object.values(delivery).map(part => (part.rate ? part.target / part.rate / 60 : Infinity)),
     ),
     // Names of the raw-resource conversion rows (Converter recipes), listed on the Resources page.
     conversions: rows
-      .filter(r => Object.keys(r.outputs).some(n => RAW.includes(n) && n !== 'Water'))
-      .map(r => r.name),
+      .filter(row => Object.keys(row.outputs).some(item => RAW.includes(item) && item !== 'Water'))
+      .map(row => row.name),
   };
 }
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
@@ -1230,9 +1289,9 @@ export function calculate(
   input: unknown,
   onPhase?: (phase: number) => void,
 ): CurrentCalculatedPlan {
-  const s = settings(input);
-  if (s.goal === 'maximum' && !s.limitsConfirmed)
-    err('Confirm your available resource budgets before maximizing output.');
+  const config = settings(input);
+  if (config.goal === 'maximum' && !config.limitsConfirmed)
+    fail('Confirm your available resource budgets before maximizing output.');
   // Keyed by phase number here; the plan's JSON keys are the StageKey strings.
   const stages: Record<number, CurrentStage> = {};
   const warnings: string[] = [];
@@ -1243,16 +1302,20 @@ export function calculate(
   // scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
-    const maximised = s.goal === 'maximum' && phase >= 2;
-    let result = run(s.goal === 'maximum' && !maximised ? { ...s, goal: 'balanced' } : s, phase, {
-      maximum: maximised,
-      conversion: phase === 5 && s.sam === 'allow',
-    });
-    if (!result.feasible && phase === 5 && s.sam === 'needed')
-      result = run(s, phase, { maximum: s.goal === 'maximum', conversion: true });
+    const maximised = config.goal === 'maximum' && phase >= 2;
+    let result = run(
+      config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
+      phase,
+      {
+        maximum: maximised,
+        conversion: phase === 5 && config.sam === 'allow',
+      },
+    );
+    if (!result.feasible && phase === 5 && config.sam === 'needed')
+      result = run(config, phase, { maximum: config.goal === 'maximum', conversion: true });
     // For maximum output, compare conversion when allowed only at a binding resource limit.
-    if (s.goal === 'maximum' && phase === 5 && s.sam === 'needed') {
-      const converted = run(s, phase, { maximum: true, conversion: true });
+    if (config.goal === 'maximum' && phase === 5 && config.sam === 'needed') {
+      const converted = run(config, phase, { maximum: true, conversion: true });
       if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
         result = converted;
     }
@@ -1265,8 +1328,8 @@ export function calculate(
     // exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
     // the amounts are before amplification when somersloops are budgeted for it.
     if (!result.feasible) {
-      const conversion = phase === 5 && s.sam !== 'avoid';
-      const plain: CurrentSettings = { ...s, amplifySloops: 0 };
+      const conversion = phase === 5 && config.sam !== 'avoid';
+      const plain: CurrentSettings = { ...config, amplifySloops: 0 };
       const diagnostic = run({ ...plain, wholeMachines: false }, phase, {
         conversion,
         ignoreLimits: true,
@@ -1279,67 +1342,83 @@ export function calculate(
         stage.reason =
           'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
       else {
-        // Does the exact LP fit the real budgets at `h` hours for this phase?
-        const fits = (h: number) =>
-          run({ ...plain, wholeMachines: false, goal: 'timed', hours: h }, phase, { conversion })
+        // Does the exact LP fit the real budgets at `hours` hours for this phase?
+        const fits = (hours: number) =>
+          run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion })
             .feasible;
-        const currentHours = s.goal === 'minimal' ? 24 : s.goal === 'balanced' ? 8 : s.hours;
-        const listNames = (a: string[]) =>
-          a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
-        if (s.goal !== 'maximum' && fits(currentHours)) {
+        const currentHours =
+          config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+        const listNames = (list: string[]) =>
+          list.length > 1
+            ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]
+            : list[0];
+        if (config.goal !== 'maximum' && fits(currentHours)) {
           // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
           // doubled budgets to measure which resources need headroom and how much; keep bounds modest for MIP stability.
           stage.wholeMachinesOnly = true;
           const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
           const rounded: RunResult = network.feasible
             ? run(
-                { ...plain, limits: Object.fromEntries(RAW.map(n => [n, s.limits[n]! * 2 + 600])) },
+                {
+                  ...plain,
+                  limits: Object.fromEntries(
+                    RAW.map(resource => [resource, config.limits[resource]! * 2 + 600]),
+                  ),
+                },
                 phase,
                 // Fractional nuclear plants, as the plan itself falls back to: the shortfall
                 // is about the solid-part lines.
                 {
                   conversion,
-                  recipeIds: new Set(network.rows.map(r => r.id)),
+                  recipeIds: new Set(network.rows.map(row => row.id)),
                   fractionalNuclear: true,
                 },
               )
             : { feasible: false };
           if (rounded.feasible)
-            stage.shortfalls = RAW.filter(n => (rounded.raw[n] || 0) > s.limits[n]! + 0.001).map(
-              n => ({ name: n, needed: Math.ceil(rounded.raw[n]!), budget: s.limits[n]! }),
-            );
-          const names = (stage.shortfalls || []).map(x => x.name);
+            stage.shortfalls = RAW.filter(
+              resource => (rounded.raw[resource] || 0) > config.limits[resource]! + 0.001,
+            ).map(resource => ({
+              name: resource,
+              needed: Math.ceil(rounded.raw[resource]!),
+              budget: config.limits[resource]!,
+            }));
+          const names = (stage.shortfalls || []).map(shortfall => shortfall.name);
           stage.reason = names.length
             ? `Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length > 1 ? 'those budgets' : 'that budget'} a little, or turn off whole-machine production for this profile.`
             : 'Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
         } else {
-          stage.shortfalls = RAW.filter(n => (diagnostic.raw[n] || 0) > s.limits[n]! + 0.05).map(
-            n => ({ name: n, needed: Math.ceil(diagnostic.raw[n]!), budget: s.limits[n]! }),
-          );
+          stage.shortfalls = RAW.filter(
+            resource => (diagnostic.raw[resource] || 0) > config.limits[resource]! + 0.05,
+          ).map(resource => ({
+            name: resource,
+            needed: Math.ceil(diagnostic.raw[resource]!),
+            budget: config.limits[resource]!,
+          }));
           // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.
           // Bisection between the current hours and the 2,000-hour maximum, to a quarter hour.
-          if (s.goal !== 'maximum' && fits(2000)) {
-            let lo = currentHours,
-              hi = 2000;
-            for (let i = 0; i < 12 && hi - lo > 0.25; i++) {
-              const mid = (lo + hi) / 2;
-              if (fits(mid)) hi = mid;
-              else lo = mid;
+          if (config.goal !== 'maximum' && fits(2000)) {
+            let low = currentHours,
+              high = 2000;
+            for (let i = 0; i < 12 && high - low > 0.25; i++) {
+              const mid = (low + high) / 2;
+              if (fits(mid)) high = mid;
+              else low = mid;
             }
-            stage.minHours = Math.ceil(hi * 4) / 4;
+            stage.minHours = Math.ceil(high * 4) / 4;
           }
-          const names = stage.shortfalls.map(x => x.name);
+          const names = stage.shortfalls.map(shortfall => shortfall.name);
           stage.reason =
             (names.length
               ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
               : 'The goal exceeds the available resource or power budgets.') +
             (stage.minHours
               ? ` It fits the current budgets at about ${stage.minHours} hours for this phase.`
-              : s.goal === 'maximum'
+              : config.goal === 'maximum'
                 ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
                 : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.');
         }
-        if (s.amplifySloops > 0 && stage.shortfalls?.length)
+        if (config.amplifySloops > 0 && stage.shortfalls?.length)
           stage.reason +=
             ' These amounts are before production amplification; amplified machines may need somewhat less.';
       }
@@ -1353,9 +1432,9 @@ export function calculate(
   // without adding a building the plan later drops. A phase is never made slower,
   // and nothing is pulled forward past what its own phase can unlock and power.
   if (
-    s.phaseTime === 'final' &&
-    s.goal !== 'maximum' &&
-    Object.values(stages).every(x => x.feasible)
+    config.phaseTime === 'final' &&
+    config.goal !== 'maximum' &&
+    Object.values(stages).every(stage => stage.feasible)
   ) {
     // built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
     // are the most machines any phase from n to 5 builds, so running a line harder than its own
@@ -1364,18 +1443,18 @@ export function calculate(
     // replaces as `aheadOf` (shown by public/app/wizard/wizard.ts).
     const built: Record<number, Record<string, number>> = {};
     for (let phase = 1; phase <= 5; phase++)
-      for (const r of stages[phase]!.rows || [])
-        built[phase] = { ...built[phase], [r.id]: r.machines };
+      for (const row of stages[phase]!.rows || [])
+        built[phase] = { ...built[phase], [row.id]: row.machines };
     for (let phase = 1; phase <= 4; phase++) {
       const caps: Record<string, number> = {};
       for (let later = phase; later <= 5; later++)
         for (const [id, machines] of Object.entries(built[later] || {}))
           caps[id] = Math.max(caps[id] || 0, machines);
-      const ahead = run(s, phase, { maximum: true, caps });
+      const ahead = run(config, phase, { maximum: true, caps });
       if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
         stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
     }
-    const pulled = Object.values(stages).filter(x => x.aheadOf !== undefined).length;
+    const pulled = Object.values(stages).filter(stage => stage.aheadOf !== undefined).length;
     warnings.push(
       pulled
         ? `Your target time applies to Phase 5. Earlier phases run their lines as hard as the machines a later phase already builds allow, so ${pulled === 1 ? 'one phase finishes' : pulled + ' phases finish'} sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.`
@@ -1385,59 +1464,65 @@ export function calculate(
   // Fueling an augmenter buys 20% more grid power in exchange for an Alien Power Matrix line.
   // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
   // and compare like for like: same goal, same budgets, same recipes.
-  if (s.fueledAugmenters && stages[5]?.feasible) {
-    const dry = (() => {
-      const opts = { maximum: s.goal === 'maximum' };
-      let r = run({ ...s, fueledAugmenters: 0 }, 5, { ...opts, conversion: s.sam === 'allow' });
-      if (!r.feasible && s.sam !== 'avoid')
-        r = run({ ...s, fueledAugmenters: 0 }, 5, { ...opts, conversion: true });
-      return r;
+  if (config.fueledAugmenters && stages[5]?.feasible) {
+    const unfueled = (() => {
+      const options = { maximum: config.goal === 'maximum' };
+      let result = run({ ...config, fueledAugmenters: 0 }, 5, {
+        ...options,
+        conversion: config.sam === 'allow',
+      });
+      if (!result.feasible && config.sam !== 'avoid')
+        result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion: true });
+      return result;
     })();
     // `fuelVerdict` (rendered by fuelVerdictHtml in public/app/wizard/review.js) compares the
     // fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
-    const count = (x: Partial<StageResult>) => (x.rows || []).reduce((a, r) => a + r.machines, 0),
-      wet = stages[5] as Solved;
+    const count = (stage: Partial<StageResult>) =>
+        (stage.rows || []).reduce((total, row) => total + row.machines, 0),
+      fueled = stages[5] as Solved;
     stages[5] = {
-      ...wet,
+      ...fueled,
       fuelVerdict: {
-        unfueledFeasible: !!dry.feasible,
-        buildings: count(wet),
-        buildingsUnfueled: dry.feasible ? count(dry) : null,
-        requiredMW: wet.requiredMW,
-        requiredMWUnfueled: dry.feasible ? dry.requiredMW : null,
-        availableMW: wet.availableMW,
-        availableMWUnfueled: dry.feasible ? dry.availableMW : null,
-        hours: wet.hours,
-        hoursUnfueled: dry.feasible ? dry.hours : null,
-        matrixRate: wet.matrixRate,
+        unfueledFeasible: !!unfueled.feasible,
+        buildings: count(fueled),
+        buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
+        requiredMW: fueled.requiredMW,
+        requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
+        availableMW: fueled.availableMW,
+        availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
+        hours: fueled.hours,
+        hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
+        matrixRate: fueled.matrixRate,
         worthIt:
-          !dry.feasible ||
-          (s.goal === 'maximum' ? wet.hours < dry.hours - 1e-6 : count(wet) < count(dry)),
+          !unfueled.feasible ||
+          (config.goal === 'maximum'
+            ? fueled.hours < unfueled.hours - 1e-6
+            : count(fueled) < count(unfueled)),
       },
     };
   }
   // Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
   // amplification budget. Warned about, never enforced: the plan is still calculated.
-  if (s.augmenters || s.amplifySloops) {
-    const committed = 10 * s.augmenters + s.sloopReserved.length + s.amplifySloops;
-    if (s.augmenters)
+  if (config.augmenters || config.amplifySloops) {
+    const committed = 10 * config.augmenters + config.sloopReserved.length + config.amplifySloops;
+    if (config.augmenters)
       warnings.push(
-        `${s.augmenters} Alien Power Augmenter${s.augmenters > 1 ? 's' : ''}: ${500 * s.augmenters} MW of generation, plus a ${Math.round((0.1 * (s.augmenters - s.fueledAugmenters) + 0.3 * s.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
+        `${config.augmenters} Alien Power Augmenter${config.augmenters > 1 ? 's' : ''}: ${500 * config.augmenters} MW of generation, plus a ${Math.round((0.1 * (config.augmenters - config.fueledAugmenters) + 0.3 * config.fueledAugmenters) * 100)}% multiplier on the Phase 5 grid's base production. That multiplier applies to installed capacity, so it is calculated from the total installed generation in your settings, not from the spare part of it. Augmenters are Phase 5 buildings; earlier phases are planned without them.`,
       );
-    if (s.somersloops && committed > s.somersloops)
+    if (config.somersloops && committed > config.somersloops)
       warnings.push(
-        `This plan commits ${committed} somersloops — 10 per augmenter${s.sloopReserved.length ? `, ${s.sloopReserved.length} reserved for hand-fed lines` : ''}${s.amplifySloops ? `, ${s.amplifySloops} for production amplification` : ''} — but ${s.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
+        `This plan commits ${committed} somersloops — 10 per augmenter${config.sloopReserved.length ? `, ${config.sloopReserved.length} reserved for hand-fed lines` : ''}${config.amplifySloops ? `, ${config.amplifySloops} for production amplification` : ''} — but ${config.somersloops} are recorded as available. Collect more, or build fewer augmenters.`,
       );
   }
   // Amplification: the busiest phase's somersloop use, and phases whose fit fell back.
   {
-    const used = Math.max(0, ...Object.values(stages).map(x => x.sloopsUsed || 0));
+    const used = Math.max(0, ...Object.values(stages).map(stage => stage.sloopsUsed || 0));
     const dropped = Object.entries(stages)
-      .filter(([, x]) => x.amplificationDropped)
-      .map(([p]) => p);
-    if (s.amplifySloops > 0)
+      .filter(([, stage]) => stage.amplificationDropped)
+      .map(([phase]) => phase);
+    if (config.amplifySloops > 0)
       warnings.push(
-        `Production amplification may place up to ${s.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
+        `Production amplification may place up to ${config.amplifySloops} somersloops in each phase's plan, and this plan uses ${used}. Each phase is a self-contained steady state, so that budget is per phase rather than a running total: the somersloops move as you rebuild. Amplified machines are whole machines at 100% — same inputs, double output, four times the power — and the recipe network is chosen before amplification is fitted to it, so the result is not a global optimum over amplified and unamplified recipes together.`,
       );
     if (dropped.length)
       warnings.push(
@@ -1447,11 +1532,11 @@ export function calculate(
   // Existing production: which credits some phase drew on, and phases that had to drop them.
   {
     const supplied = [
-      ...new Set(Object.values(stages).flatMap(x => Object.keys(x.supplied || {}))),
+      ...new Set(Object.values(stages).flatMap(stage => Object.keys(stage.supplied || {}))),
     ].sort();
     const lost = Object.entries(stages)
-      .filter(([, x]) => x.supplyDropped)
-      .map(([p]) => p);
+      .filter(([, stage]) => stage.supplyDropped)
+      .map(([phase]) => phase);
     if (supplied.length)
       warnings.push(
         `This plan draws on production you already run: ${supplied.join(', ')}. Those lines are not planned or built again, and the chain behind them is not planned either. Their ore and their power are already spent in your world, so the resource budgets and the spare-power figure must be entered net of them, exactly as for any other existing factory.`,
@@ -1464,48 +1549,48 @@ export function calculate(
   // Vehicle fuel for the factory-group links (#206): what each phase plans for, and fuel a phase
   // cannot make yet, which is left out there.
   {
-    const rate = (q: number) => Math.round(q * 100) / 100;
-    const planned = Object.entries(s.transportFuel) as [StageKey, ItemRates][];
+    const rate = (perMinute: number) => Math.round(perMinute * 100) / 100;
+    const planned = Object.entries(config.transportFuel) as [StageKey, ItemRates][];
     if (planned.length)
       warnings.push(
         `Fuel for the vehicles on your factory-group links is planned as extra demand: ${planned
           .map(
-            ([p, fuels]) =>
-              `Phase ${p} ${Object.entries(fuels)
-                .map(([n, q]) => `${rate(q)} ${n}/min`)
+            ([phase, fuels]) =>
+              `Phase ${phase} ${Object.entries(fuels)
+                .map(([fuel, perMinute]) => `${rate(perMinute)} ${fuel}/min`)
                 .join(', ')}`,
           )
           .join(
             '; ',
           )}. It comes from the previous revision's links, as if the vehicles never stop; the fuel chain adds a little traffic of its own, so recalculating again can raise it slightly.`,
       );
-    const missing = planned.flatMap(([p, fuels]) =>
+    const missing = planned.flatMap(([phase, fuels]) =>
       Object.keys(fuels)
-        .filter(n => stages[p]?.feasible && !stages[p]?.transport?.[n])
-        .map(n => `${n} in Phase ${p}`),
+        .filter(fuel => stages[phase]?.feasible && !stages[phase]?.transport?.[fuel])
+        .map(fuel => `${fuel} in Phase ${phase}`),
     );
     if (missing.length)
       warnings.push(
         `This plan cannot make ${missing.join(', ')} yet, so that vehicle fuel is left out there. Pick a fuel the phase can make, or plan the vehicles for a later phase.`,
       );
   }
-  if (s.fueledAugmenters)
+  if (config.fueledAugmenters)
     warnings.push(
-      `Fuel for ${s.fueledAugmenters} augmenter${s.fueledAugmenters > 1 ? 's' : ''} adds ${5 * s.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`,
+      `Fuel for ${config.fueledAugmenters} augmenter${config.fueledAugmenters > 1 ? 's' : ''} adds ${5 * config.fueledAugmenters} Alien Power Matrix/min to Phase 5, with the Quantum Encoder chain behind it. That rate is derived from the augmenter count, never entered separately.`,
     );
   // Unsinkable solid outputs (Power Shards today), which are balanced exactly, not rounded.
   {
     const stuck = [
       ...new Set(
         Object.values(stages)
-          .flatMap(x => (x.rows || []).flatMap(r => Object.keys(r.outputs)))
+          .flatMap(stage => (stage.rows || []).flatMap(row => Object.keys(row.outputs)))
           .filter(
-            n =>
-              !DATA.items[n]?.fluid &&
-              !DATA.items[n]?.radioactive &&
-              !n.endsWith('Waste') &&
-              !RAW.includes(n) &&
-              !((DATA.items[n]?.sink ?? 0) > 0),
+            item =>
+              !DATA.items[item]?.fluid &&
+              !DATA.items[item]?.radioactive &&
+              !item.endsWith('Waste') &&
+              !RAW.includes(item) &&
+              !((DATA.items[item]?.sink ?? 0) > 0),
           ),
       ),
     ];
@@ -1514,11 +1599,11 @@ export function calculate(
         `${stuck.join(' and ')} cannot be sent to the AWESOME Sink, so ${stuck.length > 1 ? 'those lines are' : 'that line is'} balanced exactly instead of run whole at 100%: the last machine is underclocked and nothing is left over to back the line up.`,
       );
   }
-  if (s.distribution !== 'original' || s.purity === 'custom')
+  if (config.distribution !== 'original' || config.purity === 'custom')
     warnings.push(
       'Seed-dependent distribution: confirm resource-rich node counts, mixed purity and well totals against your save. Zero budgets mean unallocated resources.',
     );
-  if (!s.limitsConfirmed)
+  if (!config.limitsConfirmed)
     warnings.push(
       'Resource budgets are provisional. Confirm available extraction after reserving resources for existing factories.',
     );
@@ -1526,15 +1611,15 @@ export function calculate(
     'Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.',
   );
   warnings.push(
-    `Power includes new generators and their fuel chains, with a ${s.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
+    `Power includes new generators and their fuel chains, with a ${config.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
   );
   // Whole machines, and how the nuclear plants were rounded (#370).
-  if (s.wholeMachines) {
+  if (config.wholeMachines) {
     const period = stages[5]?.nuclearPeriod;
     warnings.push(
       'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
     );
-    if (s.nuclear !== 'none')
+    if (config.nuclear !== 'none')
       warnings.push(
         'Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
           (period
@@ -1542,8 +1627,8 @@ export function calculate(
             : '. Their fuel and waste lines balance exactly and can retain fractional clocks.'),
       );
     const fractional = Object.entries(stages)
-      .filter(([, x]) => x.nuclearFractional)
-      .map(([p]) => p);
+      .filter(([, stage]) => stage.nuclearFractional)
+      .map(([phase]) => phase);
     if (fractional.length)
       warnings.push(
         `${fractional.length > 1 ? 'Phases' : 'Phase'} ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
@@ -1552,13 +1637,13 @@ export function calculate(
   warnings.push(
     'Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum.',
   );
-  if (s.modNotes)
+  if (config.modNotes)
     warnings.push(
       'Mod notes are recorded only. Changed recipes, output boosts and modded items are not simulated.',
     );
   return {
     engine: ENGINE,
-    settings: s,
+    settings: config,
     stages: stages as Record<StageKey, CurrentStage>,
     warnings,
     createdAt: new Date().toISOString(),
@@ -1573,32 +1658,32 @@ export const catalog = (): Catalog => ({
   engine: ENGINE,
   alternates: DATA.recipes
     .filter(r => r.alternate && r.phase <= 5)
-    .map(r => ({
-      id: r.id,
-      name: r.name.replace('Alternate: ', ''),
-      phase: r.phase,
-      machine: r.machine,
-      inputs: r.inputs,
-      outputs: r.outputs,
-      ...(MAM_RECIPES.includes(r.id) ? { mam: true } : {}),
-      ...(pureNames.includes(r.name) ? { pure: true } : {}),
+    .map(recipe => ({
+      id: recipe.id,
+      name: recipe.name.replace('Alternate: ', ''),
+      phase: recipe.phase,
+      machine: recipe.machine,
+      inputs: recipe.inputs,
+      outputs: recipe.outputs,
+      ...(MAM_RECIPES.includes(recipe.id) ? { mam: true } : {}),
+      ...(pureNames.includes(recipe.name) ? { pure: true } : {}),
     }))
     .sort((a, b) => a.name.localeCompare(b.name)),
   standardRecipes: DATA.recipes
     .filter(r => !r.alternate)
-    .map(r => ({
-      id: r.id,
-      name: r.name,
-      phase: r.phase,
-      machine: r.machine,
-      inputs: r.inputs,
-      outputs: r.outputs,
+    .map(recipe => ({
+      id: recipe.id,
+      name: recipe.name,
+      phase: recipe.phase,
+      machine: recipe.machine,
+      inputs: recipe.inputs,
+      outputs: recipe.outputs,
     })),
   storageOptions,
   supplyItems: [
     ...new Set(DATA.recipes.filter(r => r.phase <= 5).flatMap(r => Object.keys(r.outputs))),
   ]
-    .filter(n => !RAW.includes(n) && !!DATA.items[n])
+    .filter(item => !RAW.includes(item) && !!DATA.items[item])
     .sort((a, b) => a.localeCompare(b)),
   containerItems: CONTAINER_ITEMS,
   storageItems: Object.keys(DATA.items)
@@ -1618,19 +1703,19 @@ export const catalog = (): Catalog => ({
   pureLimits: PURE_LIMITS,
   stacks: Object.fromEntries(
     Object.entries(DATA.items)
-      .filter(([, i]) => !i.fluid)
-      .map(([n, i]) => [n, i.stack]),
+      .filter(([, item]) => !item.fluid)
+      .map(([name, item]) => [name, item.stack]),
   ),
   // A fluid's packaged form, from the standard Packager recipe that takes it in: the item and
   // the m³ of fluid one item holds (4 for nitrogen gas, 1 for the others).
   packaged: Object.fromEntries(
     DATA.recipes
       .filter(r => r.machine === 'Packager' && !r.alternate)
-      .flatMap(r => {
-        const fluid = Object.keys(r.inputs).find(n => DATA.items[n]?.fluid);
-        const item = Object.keys(r.outputs).find(n => !DATA.items[n]?.fluid);
-        return fluid && item && Object.keys(r.outputs).length === 1
-          ? [[fluid, { item, m3: r.inputs[fluid]! / r.outputs[item]! }]]
+      .flatMap(recipe => {
+        const fluid = Object.keys(recipe.inputs).find(name => DATA.items[name]?.fluid);
+        const item = Object.keys(recipe.outputs).find(name => !DATA.items[name]?.fluid);
+        return fluid && item && Object.keys(recipe.outputs).length === 1
+          ? [[fluid, { item, m3: recipe.inputs[fluid]! / recipe.outputs[item]! }]]
           : [];
       }),
   ),
@@ -1677,43 +1762,47 @@ export function rankAlternates(
   }: { phase: StageKey; onProgress?: (done: number, total: number) => void; budgetMs?: number },
 ): AlternateRanking {
   const started = Date.now();
-  const s = settings(input);
+  const config = settings(input);
   const owned =
-    s.recipes === 'custom' ? s.alternateRecipes : s.recipes === 'standard' ? MAM_RECIPES : null;
+    config.recipes === 'custom'
+      ? config.alternateRecipes
+      : config.recipes === 'standard'
+        ? MAM_RECIPES
+        : null;
   const phaseNumber = Number(phase);
   const candidates = owned
     ? DATA.recipes.filter(
-        r =>
-          r.alternate &&
-          r.phase <= phaseNumber &&
-          !owned.includes(r.id) &&
-          !(s.pureIngots && pureNames.includes(r.name)),
+        recipe =>
+          recipe.alternate &&
+          recipe.phase <= phaseNumber &&
+          !owned.includes(recipe.id) &&
+          !(config.pureIngots && pureNames.includes(recipe.name)),
       )
     : [];
-  const figures = (st: CurrentStage | undefined): PhaseFigures | null =>
-    st?.feasible && st.rows
+  const figures = (stage: CurrentStage | undefined): PhaseFigures | null =>
+    stage?.feasible && stage.rows
       ? {
-          buildings: st.rows.reduce((t, r) => t + r.machines, 0),
-          rawTotal: Object.values(st.raw || {}).reduce((t, v) => t + v, 0),
-          requiredMW: st.requiredMW || 0,
-          hours: Number.isFinite(st.hours) ? st.hours! : null,
+          buildings: stage.rows.reduce((total, row) => total + row.machines, 0),
+          rawTotal: Object.values(stage.raw || {}).reduce((total, rate) => total + rate, 0),
+          requiredMW: stage.requiredMW || 0,
+          hours: Number.isFinite(stage.hours) ? stage.hours! : null,
         }
       : null;
-  const baseStage = calculate(s).stages[phase];
+  const baseStage = calculate(config).stages[phase];
   const base = figures(baseStage);
-  if (!base) err('This phase has no plan to compare alternates against.');
+  if (!base) fail('This phase has no plan to compare alternates against.');
   const list: AlternatePayoff[] = [];
   let stopped = false;
-  for (const r of candidates) {
+  for (const candidate of candidates) {
     if (Date.now() - started > budgetMs) {
       stopped = true;
       break;
     }
     const entry: AlternatePayoff = {
-      id: r.id,
-      name: r.name.replace('Alternate: ', ''),
-      machine: r.machine,
-      phase: r.phase,
+      id: candidate.id,
+      name: candidate.name.replace('Alternate: ', ''),
+      machine: candidate.machine,
+      phase: candidate.phase,
       status: 'same',
       buildings: 0,
       raw: {},
@@ -1722,45 +1811,48 @@ export function rankAlternates(
       hours: 0,
     };
     try {
-      const st = calculate({
-        ...s,
+      const trial = calculate({
+        ...config,
         recipes: 'custom',
-        alternateRecipes: [...owned!, r.id],
+        alternateRecipes: [...owned!, candidate.id],
         // A preferred list only counts under 'custom'. A standard profile can still carry one
         // from when it was custom; the trial would force it where the base plan ignores it (#185).
-        preferredRecipes: s.recipes === 'custom' ? s.preferredRecipes : [],
+        preferredRecipes: config.recipes === 'custom' ? config.preferredRecipes : [],
       }).stages[phase];
-      const f = figures(st);
-      if (!f) {
+      const trialFigures = figures(trial);
+      if (!trialFigures) {
         entry.status = 'infeasible';
-        entry.error = st?.reason;
+        entry.error = trial?.reason;
       } else {
-        entry.buildings = f.buildings - base.buildings;
-        entry.rawTotal = f.rawTotal - base.rawTotal;
-        entry.powerMW = f.requiredMW - base.requiredMW;
-        entry.hours = f.hours === null || base.hours === null ? null : f.hours - base.hours;
-        for (const n of new Set([
-          ...Object.keys(st!.raw || {}),
+        entry.buildings = trialFigures.buildings - base.buildings;
+        entry.rawTotal = trialFigures.rawTotal - base.rawTotal;
+        entry.powerMW = trialFigures.requiredMW - base.requiredMW;
+        entry.hours =
+          trialFigures.hours === null || base.hours === null
+            ? null
+            : trialFigures.hours - base.hours;
+        for (const resource of new Set([
+          ...Object.keys(trial!.raw || {}),
           ...Object.keys(baseStage!.raw || {}),
         ])) {
-          const d = (st!.raw?.[n] || 0) - (baseStage!.raw?.[n] || 0);
-          if (Math.abs(d) > 1e-6) entry.raw[n] = d;
+          const difference = (trial!.raw?.[resource] || 0) - (baseStage!.raw?.[resource] || 0);
+          if (Math.abs(difference) > 1e-6) entry.raw[resource] = difference;
         }
         // Better or worse on buildings, raw and hours together; 'mixed' when they disagree.
-        const signs = [entry.buildings, entry.rawTotal, entry.hours ?? 0].map(d =>
-          Math.abs(d) < 1e-6 ? 0 : Math.sign(d),
+        const signs = [entry.buildings, entry.rawTotal, entry.hours ?? 0].map(difference =>
+          Math.abs(difference) < 1e-6 ? 0 : Math.sign(difference),
         );
-        entry.status = signs.every(x => x === 0)
+        entry.status = signs.every(sign => sign === 0)
           ? 'same'
-          : signs.every(x => x <= 0)
+          : signs.every(sign => sign <= 0)
             ? 'better'
-            : signs.every(x => x >= 0)
+            : signs.every(sign => sign >= 0)
               ? 'worse'
               : 'mixed';
       }
-    } catch (e) {
+    } catch (error) {
       entry.status = 'error';
-      entry.error = (e as Error).message;
+      entry.error = (error as Error).message;
     }
     list.push(entry);
     onProgress?.(list.length, candidates.length);

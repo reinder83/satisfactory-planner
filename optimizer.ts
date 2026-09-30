@@ -42,50 +42,55 @@ export function solve(model: LpModel): LpSolution {
   // Variables and constraints are renamed v0, v1, … and c0, c1, … because the planner's names
   // ('item:Iron Plate', 'raw:Crude Oil', 'amp:Recipe_…') are not valid LP-format names.
   const names = Object.keys(model.variables),
-    vars = names.map((_, i) => 'v' + i);
+    columns = names.map((_, i) => 'v' + i);
   // One linear expression over the coefficients stored under `key`. An expression with no terms
   // is written as '0 v0' so the LP text stays parseable.
   const expression = (key: string) =>
     names
-      .map((n, i): [number, string] => [model.variables[n]![key] || 0, vars[i]!])
-      .filter(([q]) => q !== 0)
-      .map(([q, n]) => `${q < 0 ? '-' : '+'} ${Math.abs(q)} ${n}`)
+      .map((name, i): [number, string] => [model.variables[name]![key] || 0, columns[i]!])
+      .filter(([coefficient]) => coefficient !== 0)
+      .map(
+        ([coefficient, column]) =>
+          `${coefficient < 0 ? '-' : '+'} ${Math.abs(coefficient)} ${column}`,
+      )
       .join(' ') || '0 v0';
   const lines = [
     model.opType === 'max' ? 'Maximize' : 'Minimize',
     'objective: ' + expression(model.optimize),
     'Subject To',
   ];
-  let i = 0;
-  for (const [key, b] of Object.entries(model.constraints)) {
-    const e = expression(key);
-    if (b.equal !== undefined) lines.push(`c${i++}: ${e} = ${b.equal}`);
+  let row = 0;
+  for (const [key, bound] of Object.entries(model.constraints)) {
+    const terms = expression(key);
+    if (bound.equal !== undefined) lines.push(`c${row++}: ${terms} = ${bound.equal}`);
     else {
-      if (b.min !== undefined) lines.push(`c${i++}: ${e} >= ${b.min}`);
-      if (b.max !== undefined) lines.push(`c${i++}: ${e} <= ${b.max}`);
+      if (bound.min !== undefined) lines.push(`c${row++}: ${terms} >= ${bound.min}`);
+      if (bound.max !== undefined) lines.push(`c${row++}: ${terms} <= ${bound.max}`);
     }
   }
   lines.push(
     'Bounds',
-    ...names.map((n, i) =>
-      model.bounds?.[n] !== undefined ? `0 <= ${vars[i]} <= ${model.bounds[n]}` : vars[i] + ' >= 0',
+    ...names.map((name, i) =>
+      model.bounds?.[name] !== undefined
+        ? `0 <= ${columns[i]} <= ${model.bounds[name]}`
+        : columns[i] + ' >= 0',
     ),
   );
-  const integers = names.map((n, i) => (model.ints?.[n] ? vars[i] : null)).filter(Boolean);
+  const integers = names.map((name, i) => (model.ints?.[name] ? columns[i] : null)).filter(Boolean);
   if (integers.length) lines.push('Generals', integers.join(' '));
   lines.push('End');
   // Three seconds per solve, not per plan: `calculate` makes several solves per phase. The
   // integer searches are the ones that can hit it (see AMPLIFY_CANDIDATES in planner.ts).
-  const r = highs.solve(lines.join('\n'), { output_flag: false, time_limit: 3 });
+  const result = highs.solve(lines.join('\n'), { output_flag: false, time_limit: 3 });
   // A column of an infeasible solution carries no value; it, and a missing one, read as 0.
   const primal = (name: string) => {
-    const c = r.Columns?.[name];
-    return (c && 'Primal' in c && c.Primal) || 0;
+    const column = result.Columns?.[name];
+    return (column && 'Primal' in column && column.Primal) || 0;
   };
   return {
-    solverStatus: r.Status,
-    feasible: r.Status === 'Optimal',
-    bounded: r.Status === 'Optimal',
-    values: Object.fromEntries(names.map((n, i) => [n, primal(vars[i]!)])),
+    solverStatus: result.Status,
+    feasible: result.Status === 'Optimal',
+    bounded: result.Status === 'Optimal',
+    values: Object.fromEntries(names.map((name, i) => [name, primal(columns[i]!)])),
   };
 }
