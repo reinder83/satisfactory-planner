@@ -1497,8 +1497,8 @@ export function calculate(
     }
     // Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
     // budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
-    // solver timed out (no shortage proven); the recipes and power options cannot make it at all;
-    // or it is a budget problem, split into "only whole machines break it" and a real shortfall.
+    // search stopped (no shortage proven); the recipes and power options cannot make it at all; or
+    // it is a budget problem, split into "only whole machines break it" and a real shortfall.
     // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
     // The diagnostics solve without production amplification (the owner's choice in #64): the
     // exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
@@ -1513,7 +1513,7 @@ export function calculate(
       const stage: CurrentStage = { ...diagnostic, feasible: false };
       if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
         stage.reason =
-          'The whole-machine solver could not finish this combination within its time limit. Try fewer alternates or precise balancing; no resource shortage has been established.';
+          'The whole-machine search stopped before it could prove the best plan for this combination. Try fewer alternates or precise balancing; no resource shortage has been established.';
       else if (!diagnostic.feasible)
         stage.reason =
           'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
@@ -1702,7 +1702,7 @@ export function calculate(
       );
     if (dropped.length)
       warnings.push(
-        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification within the solver's time limit, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
+        `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
       );
   }
   // Existing production: which credits some phase drew on, and phases that had to drop them.

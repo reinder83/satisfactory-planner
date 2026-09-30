@@ -176,7 +176,7 @@ Alien Power Augmenters are Phase 5 buildings. Available power is `(new generator
 
 Items the AWESOME Sink cannot accept — Power Shards among them — are balanced exactly rather than run whole at 100%: they have nowhere to overflow, so a rounded-up line would back up and stall. Their last machine is underclocked, and they are never listed as sinkable surplus.
 
-Production amplification is fitted to the recipe network the unamplified solve chooses, and only the largest lines are offered a somersloop, so the result is not a global optimum over amplified and unamplified recipes together. Amplified machines are planned as whole machines at 100%. If a phase cannot fit amplification inside the solver's time limit it is planned without it and says so, rather than losing a plan that fits.
+Production amplification is fitted to the recipe network the unamplified solve chooses, and only the largest lines are offered a somersloop, so the result is not a global optimum over amplified and unamplified recipes together. Amplified machines are planned as whole machines at 100%. If the search for a phase's amplified plan stops before it can prove the best plan, the phase is planned without amplification and says so, rather than losing a plan that fits.
 
 New power plants and their fuel inputs are included. Existing power is entered as **spare** capacity; its resource use must already be deducted from the entered budgets. A 20% utility allowance covers unmodelled mining, pumps and transport. Whole-building peak headroom is shown separately when needed. Phase 1 requires biomass or existing power. This is a steady-state estimate, not a simulation of startup, variable demand or your actual game grid.
 
