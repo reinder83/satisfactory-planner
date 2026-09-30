@@ -3860,7 +3860,16 @@ button.rail-tile:hover {
 }
 @media (max-width: 1100px) {
   .layout {
-    grid-template-columns: 204px 1fr;
+    grid-template-columns: 204px minmax(0, 1fr);
+  }
+  /* Between the phone layout and 1100px the page column is too narrow for the save name and
+     the phase track side by side: the track drops under the name, and its segments wrap
+     rather than push the page wider than the window (#658). */
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .phase-track {
+    flex-wrap: wrap;
   }
   .workspace {
     padding: 22px 18px 60px;
