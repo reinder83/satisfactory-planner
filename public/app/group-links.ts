@@ -43,6 +43,27 @@ export const OUTSIDE = {
   surplus: 'sink',
 } as const;
 
+// Names for the places that are not factory groups, as the Logistics page shows them.
+export const PLACE_NAMES: Record<string, string> = {
+  [UNGROUPED]: 'Ungrouped',
+  [OUTSIDE.storage]: 'Protected storage',
+  [OUTSIDE.drone]: 'Drone fuel',
+  [OUTSIDE.transport]: 'Vehicle fuel',
+  [OUTSIDE.delivery]: 'Space Elevator',
+  [OUTSIDE.surplus]: 'AWESOME Sink',
+};
+// The name of place `id` in a phase that mines `raw`: a group's own name, a source (#231) named
+// by its item (one the phase does not mine is existing supply), or one of PLACE_NAMES.
+export function placeName(
+  id: string,
+  groups: FactoryGroups['groups'],
+  raw: ItemRates | undefined,
+): string {
+  return isSource(id)
+    ? sourceItem(id) + (raw?.[sourceItem(id)] ? '' : ' (existing supply)')
+    : (groups.find(group => group.id === id)?.name ?? PLACE_NAMES[id] ?? id);
+}
+
 export interface GroupLink {
   from: string;
   to: string;
