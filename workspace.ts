@@ -125,8 +125,15 @@ export async function openWorkspace({
     const request: RouteRequest = {
       req,
       url,
-      // Every route that reads a body expects a JSON object; its fields are checked where used.
-      body: async () => (await readBody(req)) as Body,
+      // Every route that reads a body expects a JSON object, so any other JSON value (null, a
+      // list, a string or a number) is refused here with 400 before a route reads a field of
+      // it (#541); the fields themselves are checked where used.
+      body: async () => {
+        const input = await readBody(req);
+        if (input === null || typeof input !== 'object' || Array.isArray(input))
+          fail('Expected a JSON object.');
+        return input as Body;
+      },
       user: userFor(current(), req),
     };
     const publicRoute = publicRoutes[endpoint];
