@@ -157,8 +157,8 @@ const COLLAPSED_MAX = 500;
 const collapsedSections = new Set(collapsedStored());
 function collapsedStored(): string[] {
   try {
-    const v: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const stored: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]');
+    return Array.isArray(stored) ? stored.filter((x): x is string => typeof x === 'string') : [];
   } catch {
     return [];
   }
@@ -196,15 +196,15 @@ export const startPhase = (): StageKey =>
 
 // The phase being worked on: the saved setting, raised to the profile's start phase.
 export const phase = (): Phase => {
-  const p = state.settings.phase;
-  return p !== 'post' && Number(p) < Number(startPhase()) ? startPhase() : p;
+  const saved = state.settings.phase;
+  return saved !== 'post' && Number(saved) < Number(startPhase()) ? startPhase() : saved;
 };
 
 // The data key for the phase: post-game has no stage of its own and uses Phase 5's
 // factories and calculated stage. Checklist ids like factory-<stage>-<id> use this.
 export const stage = (): StageKey => {
-  const p = phase();
-  return p === 'post' ? '5' : p;
+  const current = phase();
+  return current === 'post' ? '5' : current;
 };
 
 // Choices for the phase picker in the header. Without an open save (fresh start) every
@@ -218,13 +218,14 @@ export const phaseOptions = (): Phase[] =>
 // [phase, data] entries of a per-phase object, from the profile's start phase on.
 export const fromStart = <T>(stages: Partial<Record<string, T>> | undefined): [string, T][] =>
   (Object.entries(stages || {}) as [string, T][]).filter(
-    ([ph]) => Number(ph) >= Number(startPhase()),
+    ([phaseKey]) => Number(phaseKey) >= Number(startPhase()),
   );
 
 // Checklist lookups. The id is a stable saved key (e.g. factory-<stage>-<id>,
 // calc-<stage>-<rowId>, slot-<address>-<step>) and must not change between releases.
 export const checked = (id: string) => !!state.checks[id];
-export const phaseLabel = (p: string) => (p === 'post' ? 'Post Phase 5' : 'Phase ' + p);
+export const phaseLabel = (phaseKey: string) =>
+  phaseKey === 'post' ? 'Post Phase 5' : 'Phase ' + phaseKey;
 
 // Opens a save/profile: fetches its state and plan from /api/context and resets the
 // per-page UI state and the factory dialog. Does not render; callers render or navigate.
@@ -245,14 +246,14 @@ export async function loadContext(saveId: string, profileId: string) {
 // Makes an /api/context reply the open save and profile ({ save, profile, state, plan,
 // handbook }): its state, its calculated plan (null for the handbook) and the handbook it
 // reads, and resets the per-page UI state. Also used by the component tests.
-export function setContext(c: ContextReply) {
-  currentSave = c.save;
-  currentProfile = c.profile;
-  state = c.state;
+export function setContext(reply: ContextReply) {
+  currentSave = reply.save;
+  currentProfile = reply.profile;
+  state = reply.state;
   stateLoaded = true;
-  calculated = c.plan;
-  payoff = c.payoff ?? null;
-  plan = c.handbook || basePlan || plan;
+  calculated = reply.plan;
+  payoff = reply.payoff ?? null;
+  plan = reply.handbook || basePlan || plan;
   query = '';
   endEditing();
 }
@@ -324,18 +325,19 @@ export async function boot() {
       endEditing();
       startWizard();
     }
-  } catch (e) {
+  } catch (error) {
     // Any failure while opening replaces the page with an error and a retry button.
     unmountShell();
     // The markup is fixed; the message goes in as text.
     required('#app').innerHTML =
       '<section class="loading"><h1>Could not open the planner</h1><p></p>' +
       '<button class="btn" id="retry">Try again</button></section>';
-    required('#app .loading p').textContent = e instanceof Error ? e.message : String(e);
+    required('#app .loading p').textContent =
+      error instanceof Error ? error.message : String(error);
     required('#retry').onclick = boot;
     // The browser edition refused its own stored data (damaged, or from a newer release): offer
     // that data as a file, since nothing in this browser can open or restore it (#142).
-    if ((e as { storedData?: boolean } | null)?.storedData) {
+    if ((error as { storedData?: boolean } | null)?.storedData) {
       const button = document.createElement('button');
       button.className = 'btn';
       button.id = 'download-stored-data';

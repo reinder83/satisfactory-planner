@@ -49,46 +49,46 @@ export function openCalculatedFactory(id: string) {
 }
 
 // The build-order dialog for a factory group (ui/detail/GroupChainDialog.vue).
-export function openGroupChain(gid: string) {
-  if (!factoryGroupsState().groups.some(g => g.id === gid)) return;
-  showDetail({ kind: 'group', id: gid });
+export function openGroupChain(groupId: string) {
+  if (!factoryGroupsState().groups.some(g => g.id === groupId)) return;
+  showDetail({ kind: 'group', id: groupId });
 }
 
-// The factories assigned to group `gid` that run in the current phase, in one shape for both
+// The factories assigned to group `groupId` that run in the current phase, in one shape for both
 // profile kinds: { id, link, name, machine, machines, inputs, outputs } with total rates.
 // Calculated rows also carry generationMW as `mw`; a handbook factory has a single output,
 // its own item.
-function groupChainNodes(gid: string): ChainNode[] {
+function groupChainNodes(groupId: string): ChainNode[] {
   if (calculated) {
-    const x = calcStage();
-    return (x?.rows || [])
-      .filter(r => membershipsOf(r.id).some(m => m.group === gid))
-      .map(r => ({
-        id: r.id,
-        link: { calcFactory: r.id },
-        name: r.name,
-        machine: r.machine,
-        machines: r.machines,
-        inputs: r.inputs || {},
-        outputs: r.outputs || {},
-        mw: r.generationMW,
+    const storedStage = calcStage();
+    return (storedStage?.rows || [])
+      .filter(r => membershipsOf(r.id).some(m => m.group === groupId))
+      .map(row => ({
+        id: row.id,
+        link: { calcFactory: row.id },
+        name: row.name,
+        machine: row.machine,
+        machines: row.machines,
+        inputs: row.inputs || {},
+        outputs: row.outputs || {},
+        mw: row.generationMW,
       }));
   }
-  const st = stage();
+  const stageKey = stage();
   return plan.factories
-    .filter(f => f.stages[st] && membershipsOf(f.id).some(m => m.group === gid))
-    .map(f => {
+    .filter(f => f.stages[stageKey] && membershipsOf(f.id).some(m => m.group === groupId))
+    .map(factory => {
       // The filter above keeps only factories with this stage.
-      const r = f.stages[st]!;
+      const factoryStage = factory.stages[stageKey]!;
       return {
-        id: f.id,
-        link: { factory: f.id },
-        name: f.name,
-        machine: r.machine,
-        machines: r.machines,
-        inputs: r.inputs || {},
-        outputs: { [f.name]: r.output },
-        recipe: r.recipe,
+        id: factory.id,
+        link: { factory: factory.id },
+        name: factory.name,
+        machine: factoryStage.machine,
+        machines: factoryStage.machines,
+        inputs: factoryStage.inputs || {},
+        outputs: { [factory.name]: factoryStage.output },
+        recipe: factoryStage.recipe,
       };
     });
 }
@@ -99,96 +99,105 @@ function groupChainNodes(gid: string): ChainNode[] {
 // no factory of the group produces anything in this phase. Each stage is { no, link, name,
 // machines, needs: [{ text, from, loop }], feeds: [text], power }.
 export function groupChain(
-  gid: string,
+  groupId: string,
 ): { name: string; stages: ChainStage[]; split: boolean } | null {
-  const gr = factoryGroupsState().groups.find(g => g.id === gid);
-  if (!gr) return null;
-  const nodes = groupChainNodes(gid);
+  const group = factoryGroupsState().groups.find(g => g.id === groupId);
+  if (!group) return null;
+  const nodes = groupChainNodes(groupId);
   // Topological ordering. Each round places the first pending node whose in-group suppliers are
   // all placed (making its own input does not count). When none qualifies there is a loop: place
   // the node with the fewest unplaced suppliers and record those inputs in loopSeeds, which the
   // stage text shows as "seed a starter batch".
-  const makers = (n: string) => nodes.filter(o => o.outputs[n]);
+  const makers = (item: string) => nodes.filter(node => node.outputs[item]);
   const placed: ChainNode[] = [],
     placedSet = new Set<string>(),
     loopSeeds = new Map<string, string[]>(),
     pending = [...nodes];
   while (pending.length) {
-    let idx = pending.findIndex(nd =>
-      Object.keys(nd.inputs).every(n => makers(n).every(m => placedSet.has(m.id) || m === nd)),
+    let index = pending.findIndex(node =>
+      Object.keys(node.inputs).every(item =>
+        makers(item).every(maker => placedSet.has(maker.id) || maker === node),
+      ),
     );
     let loop = false;
-    if (idx < 0) {
+    if (index < 0) {
       let bestCount = Infinity;
-      idx = 0;
-      pending.forEach((nd, i) => {
-        const c = Object.keys(nd.inputs).filter(n =>
-          makers(n).some(m => !placedSet.has(m.id) && m !== nd),
+      index = 0;
+      pending.forEach((node, i) => {
+        const unplaced = Object.keys(node.inputs).filter(item =>
+          makers(item).some(maker => !placedSet.has(maker.id) && maker !== node),
         ).length;
-        if (c < bestCount) {
-          bestCount = c;
-          idx = i;
+        if (unplaced < bestCount) {
+          bestCount = unplaced;
+          index = i;
         }
       });
       loop = true;
     }
     // pending is not empty inside the loop, and idx is one of its indexes.
-    const nd = pending.splice(idx, 1)[0]!;
+    const node = pending.splice(index, 1)[0]!;
     if (loop)
       loopSeeds.set(
-        nd.id,
-        Object.keys(nd.inputs).filter(n => makers(n).some(m => !placedSet.has(m.id) && m !== nd)),
+        node.id,
+        Object.keys(node.inputs).filter(item =>
+          makers(item).some(maker => !placedSet.has(maker.id) && maker !== node),
+        ),
       );
-    placed.push(nd);
-    placedSet.add(nd.id);
+    placed.push(node);
+    placedSet.add(node.id);
   }
   // Stage numbers by node id (every node is placed, so each has one), and every factory in the
   // phase, to count consumers outside the group.
-  const stageNo = new Map(placed.map((nd, i) => [nd.id, i + 1]));
+  const stageNo = new Map(placed.map((node, i) => [node.id, i + 1]));
   const others: { id: string; inputs?: ItemRates }[] = calculated
     ? calcStage()?.rows || []
     : plan.factories
         .filter(f => f.stages[stage()])
         .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()]!.inputs || {} }));
-  const stages = placed.map((nd, i): ChainStage => {
+  const stages = placed.map((node, i): ChainStage => {
     // Needs: each input with the earliest in-group stage making it, "outside the group" when
     // none does, or the loop marker.
-    const loopIns = loopSeeds.get(nd.id) || [];
-    const needs = Object.entries(nd.inputs).map(([n, q]) => {
-      const from = makers(n).filter(m => m !== nd);
+    const loopIns = loopSeeds.get(node.id) || [];
+    const needs = Object.entries(node.inputs).map(([item, rate]) => {
+      const from = makers(item).filter(maker => maker !== node);
       return {
-        text: `${n} ${itemRate(n, q)}`,
-        loop: loopIns.includes(n),
+        text: `${item} ${itemRate(item, rate)}`,
+        loop: loopIns.includes(item),
         from: from.length
-          ? 'stage ' + Math.min(...from.map(m => stageNo.get(m.id)!))
+          ? 'stage ' + Math.min(...from.map(maker => stageNo.get(maker.id)!))
           : 'outside the group',
       };
     });
     // Feeds: in-group consumers by stage, plus a count of consuming factories outside the group.
-    const feeds = Object.keys(nd.outputs).map(n => {
+    const feeds = Object.keys(node.outputs).map(item => {
       const inGroup = nodes
-        .filter(o => o !== nd && o.inputs[n])
-        .map(o => `stage ${stageNo.get(o.id)} · ${o.name}`);
+        .filter(consumer => consumer !== node && consumer.inputs[item])
+        .map(consumer => `stage ${stageNo.get(consumer.id)} · ${consumer.name}`);
       const outside = others.filter(
-        o => o.id !== nd.id && o.inputs?.[n] && !nodes.some(g => g.id === o.id),
+        other =>
+          other.id !== node.id &&
+          other.inputs?.[item] &&
+          !nodes.some(member => member.id === other.id),
       ).length;
       const parts = [...inGroup];
       if (outside)
         parts.push(`${outside} ${outside === 1 ? 'factory' : 'factories'} outside the group`);
-      return `${n} → ${parts.join(' · ') || 'storage, export or sink'}`;
+      return `${item} → ${parts.join(' · ') || 'storage, export or sink'}`;
     });
     return {
       no: String(i + 1).padStart(2, '0'),
-      id: nd.id,
-      link: nd.link,
-      name: nd.name,
-      machines: `${num(nd.machines)} × ${nd.machine}`,
+      id: node.id,
+      link: node.link,
+      name: node.name,
+      machines: `${num(node.machines)} × ${node.machine}`,
       needs,
       feeds,
-      power: !!nd.mw,
+      power: !!node.mw,
     };
   });
   // A membership with an explicit rate is a production split; the chain still shows full totals.
-  const split = nodes.some(nd => membershipsOf(nd.id).some(m => m.group === gid && m.rate != null));
-  return { name: gr.name, stages, split };
+  const split = nodes.some(node =>
+    membershipsOf(node.id).some(m => m.group === groupId && m.rate != null),
+  );
+  return { name: group.name, stages, split };
 }

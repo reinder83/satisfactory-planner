@@ -65,24 +65,24 @@ export interface LinkLoad {
   unpackable: string[];
 }
 
-// The load for items [{ item, rate }] (items/min, or m³/min for a fluid) on transport `t`.
+// The load for items [{ item, rate }] (items/min, or m³/min for a fluid) on `transport`.
 // Road vehicles and drones carry fluids packaged (catalog.packaged: the item and the m³ one
 // holds); a slot holds one item type, so every item takes whole slots, and the vehicle count is
 // the smallest that fits each vehicle's share of a round trip's load into its slots. `lanes` is
 // the best belt (items/min) and pipe (m³/min) unlocked, which cap what one freight car moves.
 export function linkLoad(
   items: { item: string; rate: number }[],
-  t: LinkTransport,
+  transport: LinkTransport,
   catalog: Pick<Catalog, 'stacks' | 'packaged' | 'vehicleFuels'>,
   fluids: Set<string>,
   lanes?: { belt: number; pipe: number },
 ): LinkLoad {
-  const v = VEHICLES[t.mode],
-    trip = t.roundTripMin;
+  const vehicle = VEHICLES[transport.mode],
+    trip = transport.roundTripMin;
   const load: LinkLoad = {
     vehicles: 0,
     slotsUsed: 0,
-    slots: v.slots,
+    slots: vehicle.slots,
     freightCars: 0,
     fluidCars: 0,
     beltLimited: false,
@@ -97,7 +97,7 @@ export function linkLoad(
   for (const { item, rate } of items) {
     if (rate <= 0) continue;
     const fluid = fluids.has(item);
-    if (t.mode === 'train' && fluid) {
+    if (transport.mode === 'train' && fluid) {
       const held = Math.ceil((rate * trip) / FLUID_CAR_M3),
         piped = lanes ? Math.ceil(rate / lanes.pipe - 1e-9) : 0;
       load.fluidCars += Math.max(held, piped);
@@ -116,10 +116,11 @@ export function linkLoad(
       : catalog.stacks?.[item] || 100;
     perTrip.push([rate * trip, perSlot]);
   }
-  const slotsFor = (n: number) => perTrip.reduce((t, [q, s]) => t + Math.ceil(q / n / s), 0);
-  if (t.mode === 'train') {
+  const slotsFor = (vehicleCount: number) =>
+    perTrip.reduce((sum, [amount, perSlot]) => sum + Math.ceil(amount / vehicleCount / perSlot), 0);
+  if (transport.mode === 'train') {
     const slots = slotsFor(1),
-      held = Math.ceil(slots / v.slots),
+      held = Math.ceil(slots / vehicle.slots),
       belted = lanes && perTrip.length ? Math.ceil(solidRate / lanes.belt - 1e-9) : 0;
     load.freightCars = Math.max(held, belted);
     if (belted > held) load.beltLimited = true;
@@ -127,26 +128,34 @@ export function linkLoad(
     load.vehicles = cars ? 1 : 0;
     load.locomotives = cars ? Math.ceil(cars / CARS_PER_LOCOMOTIVE) : 0;
     load.slotsUsed = slots;
-    load.slots = load.freightCars * v.slots;
+    load.slots = load.freightCars * vehicle.slots;
     return load;
   }
   if (!perTrip.length) return load;
-  if (perTrip.length <= v.slots) {
+  if (perTrip.length <= vehicle.slots) {
     // Mixed loads: every vehicle carries its share of each item. The slots a vehicle needs
     // only fall as vehicles are added, so counting up from the bound without whole slots
     // finds the fewest that fit.
-    let n = Math.max(1, Math.ceil(perTrip.reduce((t, [q, s]) => t + q / s, 0) / v.slots));
-    while (slotsFor(n) > v.slots) n++;
-    load.vehicles = n;
-    load.slotsUsed = slotsFor(n);
+    let vehicleCount = Math.max(
+      1,
+      Math.ceil(
+        perTrip.reduce((sum, [amount, perSlot]) => sum + amount / perSlot, 0) / vehicle.slots,
+      ),
+    );
+    while (slotsFor(vehicleCount) > vehicle.slots) vehicleCount++;
+    load.vehicles = vehicleCount;
+    load.slotsUsed = slotsFor(vehicleCount);
   } else {
     // More item types than slots: each item gets vehicles of its own.
-    load.vehicles = perTrip.reduce((t, [q, s]) => t + Math.ceil(q / s / v.slots), 0);
-    load.slotsUsed = v.slots;
+    load.vehicles = perTrip.reduce(
+      (sum, [amount, perSlot]) => sum + Math.ceil(amount / perSlot / vehicle.slots),
+      0,
+    );
+    load.slotsUsed = vehicle.slots;
   }
-  const n = load.vehicles;
-  const mj = catalog.vehicleFuels?.find(f => f.name === t.fuel)?.mj || 0;
-  if (v.burnMW && mj) load.fuelPerMin = (n * v.burnMW * 60) / mj;
+  const vehicles = load.vehicles;
+  const energyMJ = catalog.vehicleFuels?.find(f => f.name === transport.fuel)?.mj || 0;
+  if (vehicle.burnMW && energyMJ) load.fuelPerMin = (vehicles * vehicle.burnMW * 60) / energyMJ;
   return load;
 }
 
@@ -167,13 +176,13 @@ export function transportFuel(
   ][]) {
     if (Number(phase) < Number(plan.settings.phase || 1) || !stage.rows?.length) continue;
     const fuels: ItemRates = {};
-    for (const l of groupLinks(stage, groups)) {
-      const t = linkTransportFor(groups.links, l.from, l.to);
-      if (!t?.fuel) continue;
-      const burn = linkLoad(l.items, t, catalog, fluids).fuelPerMin;
-      if (burn > 0) fuels[t.fuel] = (fuels[t.fuel] || 0) + burn;
+    for (const link of groupLinks(stage, groups)) {
+      const transport = linkTransportFor(groups.links, link.from, link.to);
+      if (!transport?.fuel) continue;
+      const burn = linkLoad(link.items, transport, catalog, fluids).fuelPerMin;
+      if (burn > 0) fuels[transport.fuel] = (fuels[transport.fuel] || 0) + burn;
     }
-    for (const n of Object.keys(fuels)) fuels[n] = Math.ceil(fuels[n]! * 100 - 1e-9) / 100;
+    for (const fuel of Object.keys(fuels)) fuels[fuel] = Math.ceil(fuels[fuel]! * 100 - 1e-9) / 100;
     if (Object.keys(fuels).length) out[phase] = fuels;
   }
   return out;

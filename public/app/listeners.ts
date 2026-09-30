@@ -18,10 +18,10 @@ import { noteWizardEdit } from './wizard/wizard.ts';
 // Registered for the capture phase (the final true), since error events do not bubble.
 document.addEventListener(
   'error',
-  e => {
-    const t = e.target;
-    if (t instanceof HTMLImageElement && t.classList.contains('item-icon'))
-      t.style.visibility = 'hidden';
+  event => {
+    const target = event.target;
+    if (target instanceof HTMLImageElement && target.classList.contains('item-icon'))
+      target.style.visibility = 'hidden';
   },
   true,
 );
@@ -48,11 +48,11 @@ required('#detail').addEventListener('cancel', cancelDetail);
 // Ask before closing or reloading the tab while a save is still in flight (pending in
 // api.ts) or a notes box holds unsaved text. A note still waiting for its pause in typing is
 // sent first, so staying on the page lets it finish.
-window.addEventListener('beforeunload', e => {
+window.addEventListener('beforeunload', event => {
   flushNotes();
   if (pending || hasUnsavedNotes()) {
-    e.preventDefault();
-    e.returnValue = '';
+    event.preventDefault();
+    event.returnValue = '';
   }
 });
 
@@ -62,8 +62,8 @@ window.addEventListener('beforeunload', e => {
 for (const type of ['input', 'change'])
   document.addEventListener(
     type,
-    e => {
-      if ((e.target as Element | null)?.closest?.('#wizard-form')) noteWizardEdit();
+    event => {
+      if ((event.target as Element | null)?.closest?.('#wizard-form')) noteWizardEdit();
     },
     true,
   );

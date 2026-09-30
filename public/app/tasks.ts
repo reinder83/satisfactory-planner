@@ -57,13 +57,13 @@ export interface RemovedStepView {
 // The profile's step edits with every part defaulted, so callers can read them freely.
 // order is per phase; titles, bodies and links are keyed by step id.
 export function taskEditsState(): TaskEdits {
-  const e: Partial<TaskEdits> = state?.taskEdits || {};
+  const edits: Partial<TaskEdits> = state?.taskEdits || {};
   return {
-    order: e.order || {},
-    removed: e.removed || [],
-    titles: e.titles || {},
-    bodies: e.bodies || {},
-    links: e.links || {},
+    order: edits.order || {},
+    removed: edits.removed || [],
+    titles: edits.titles || {},
+    bodies: edits.bodies || {},
+    links: edits.links || {},
   };
 }
 
@@ -71,17 +71,19 @@ export function taskEditsState(): TaskEdits {
 // wording and sorts by the saved order for this phase. Steps missing from the saved
 // order (new in a later release, or added since) keep their place after the ordered ones.
 function applyTaskEdits(base: Step[]): Step[] {
-  const e = taskEditsState(),
-    removed = new Set(e.removed);
+  const edits = taskEditsState(),
+    removed = new Set(edits.removed);
   const visible = base
     .filter(t => !removed.has(t.id))
-    .map(t => ({ ...t, title: e.titles[t.id] || t.title, body: e.bodies[t.id] || t.body }));
-  const ord = e.order[phase()];
-  if (!ord?.length) return visible;
-  const pos = new Map(ord.map((id, i) => [id, i]));
+    .map(t => ({ ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body }));
+  const savedOrder = edits.order[phase()];
+  if (!savedOrder?.length) return visible;
+  const position = new Map(savedOrder.map((id, i) => [id, i]));
   return [
-    ...visible.filter(t => pos.has(t.id)).sort((a, b) => pos.get(a.id)! - pos.get(b.id)!),
-    ...visible.filter(t => !pos.has(t.id)),
+    ...visible
+      .filter(t => position.has(t.id))
+      .sort((a, b) => position.get(a.id)! - position.get(b.id)!),
+    ...visible.filter(t => !position.has(t.id)),
   ];
 }
 
@@ -130,20 +132,20 @@ export const stepLink = (id: string) => {
 // (calc: a calculated row, opened by data-calc-factory, otherwise a handbook factory,
 // opened by data-factory), or null when the step has no link or the linked factory is not
 // part of the current phase.
-export function taskLink(t: Step): StepLink | null {
-  const linked = stepLink(t.id);
+export function taskLink(step: Step): StepLink | null {
+  const linked = stepLink(step.id);
   if (!linked) return null;
   if (calculated) {
     const row = (calcStage()?.rows || []).find(r => r.id === linked);
     return row ? { calc: true, id: row.id, name: row.name } : null;
   }
-  const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
-  return f ? { calc: false, id: f.id, name: f.name } : null;
+  const factory = plan.factories.find(x => x.id === linked && x.stages[stage()]);
+  return factory ? { calc: false, id: factory.id, name: factory.name } : null;
 }
 
 // What a step's edit form offers: the factories of this phase as [id, name], and the one
 // the step links to now (its saved link, or the automatic one).
-export function taskLinkChoices(t: Step): {
+export function taskLinkChoices(step: Step): {
   options: [id: string, name: string][];
   current: string;
 } {
@@ -151,7 +153,7 @@ export function taskLinkChoices(t: Step): {
     options: calculated
       ? (calcStage()?.rows || []).map((r): [string, string] => [r.id, r.name])
       : plan.factories.filter(f => f.stages[stage()]).map((f): [string, string] => [f.id, f.name]),
-    current: stepLink(t.id),
+    current: stepLink(step.id),
   };
 }
 
@@ -222,43 +224,43 @@ const TASK_TEXT_KINDS: [RegExp, string][] = [
 
 // The TASK_GLYPHS key for a step. Unlock steps are MAM research when titled "MAM: ...",
 // otherwise HUB milestones; anything unmatched counts as production.
-export function taskKind(t: Step): string {
-  const id = t.id || '';
-  if (id.startsWith('unlock-')) return /^mam:/i.test(t.title || '') ? 'research' : 'milestone';
-  for (const [re, kind] of TASK_ID_KINDS) if (re.test(id)) return kind;
-  const text = (id + ' ' + (t.title || '')).toLowerCase();
-  for (const [re, kind] of TASK_TEXT_KINDS) if (re.test(text)) return kind;
+export function taskKind(step: Step): string {
+  const id = step.id || '';
+  if (id.startsWith('unlock-')) return /^mam:/i.test(step.title || '') ? 'research' : 'milestone';
+  for (const [pattern, kind] of TASK_ID_KINDS) if (pattern.test(id)) return kind;
+  const text = (id + ' ' + (step.title || '')).toLowerCase();
+  for (const [pattern, kind] of TASK_TEXT_KINDS) if (pattern.test(text)) return kind;
   return 'production';
 }
 
 // The part a step makes, taken from its linked factory: calculated production
 // steps link themselves (a generator shows its building, rowIcon), a handbook or
 // personal step uses the chosen link.
-function taskIconItem(t: Step): string {
-  const linked = stepLink(t.id);
+function taskIconItem(step: Step): string {
+  const linked = stepLink(step.id);
   if (!linked) return '';
   if (calculated) {
     const row = (calcStage()?.rows || []).find(r => r.id === linked);
     return row ? rowIcon(row) : '';
   }
-  const f = plan.factories.find(x => x.id === linked && x.stages[stage()]);
-  return f ? f.name : '';
+  const factory = plan.factories.find(x => x.id === linked && x.stages[stage()]);
+  return factory ? factory.name : '';
 }
 
 // A step's icon: { item } for the made item's bundled icon, otherwise { kind } for its
 // TASK_GLYPHS category glyph (ui/plan/StepIcon.vue draws it).
-export function taskIcon(t: Step): StepIconData {
-  const item = taskIconItem(t);
-  return item ? { item } : { kind: taskKind(t) };
+export function taskIcon(step: Step): StepIconData {
+  const item = taskIconItem(step);
+  return item ? { item } : { kind: taskKind(step) };
 }
 
 // Applies the "Hide completed" toggle and the step search to a list of steps.
-export function filteredPlanTasks(ts: Step[]): Step[] {
-  const q = query.trim().toLowerCase();
-  return ts.filter(
-    t =>
-      (!hideDone || !checked(t.id)) &&
-      (!q || (t.title + ' ' + (t.body || '')).toLowerCase().includes(q)),
+export function filteredPlanTasks(steps: Step[]): Step[] {
+  const search = query.trim().toLowerCase();
+  return steps.filter(
+    step =>
+      (!hideDone || !checked(step.id)) &&
+      (!search || (step.title + ' ' + (step.body || '')).toLowerCase().includes(search)),
   );
 }
 

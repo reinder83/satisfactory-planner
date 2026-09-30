@@ -115,7 +115,7 @@ export interface FlowModel {
     outSub: string;
   } | null;
   bankNote?: { shared: boolean } | null;
-  sameItemConsumers: (n: string) => SameItemConsumer[];
+  sameItemConsumers: (item: string) => SameItemConsumer[];
 }
 
 // Belt/pipe logistics. Capacities are game constants; the unlocking milestone (tier, name) comes from progression.json.
@@ -146,14 +146,14 @@ export const rateUnit = (item: string): string => (FLUIDS.has(item) ? 'm³/min' 
 // An item's rate with that unit, as the rate lists write it after the item's name: "120 m³/min"
 // for a fluid, "45/min" for a solid. A no-break space keeps a fluid's rate on one line, as the
 // dialogs' summary line does.
-export const itemRate = (item: string, q: number): string =>
-  num(q) + (FLUIDS.has(item) ? '\u00a0' : '') + rateUnit(item);
+export const itemRate = (item: string, rate: number): string =>
+  num(rate) + (FLUIDS.has(item) ? '\u00a0' : '') + rateUnit(item);
 
 // A rate that leads with the amount and names the item in between: "60 m³ Fuel/min" for a
-// fluid, as the oil campus writes it, "45 Iron Plate/min" for a solid. `fmt` formats the number
+// fluid, as the oil campus writes it, "45 Iron Plate/min" for a solid. `formatNumber` formats the number
 // (num3 for a per-machine rate).
-export const rateOfItem = (item: string, q: number, fmt = num): string =>
-  `${fmt(q)}${FLUIDS.has(item) ? '\u00a0m³' : ''} ${item}/min`;
+export const rateOfItem = (item: string, rate: number, formatNumber = num): string =>
+  `${formatNumber(rate)}${FLUIDS.has(item) ? '\u00a0m³' : ''} ${item}/min`;
 
 // Conveyor belt marks in unlock order. cap is items/min per belt; entry is the progression.json
 // milestone id that unlocks the mark.
@@ -191,37 +191,38 @@ export const OIL_RECIPES: Record<string, { in: ItemRates; out: ItemRates }> = {
 
 // The planner phase in which a milestone tier becomes available: Tiers 1–2 are Phase 1, 3–4
 // Phase 2, 5–6 Phase 3, 7–8 Phase 4 and 9 Phase 5.
-const phaseForLaneTier = (t: number) => (t <= 2 ? 1 : t <= 4 ? 2 : t <= 6 ? 3 : t <= 8 ? 4 : 5);
+const phaseForLaneTier = (tier: number) =>
+  tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
 
 // The milestone that unlocks a belt or pipe mark: its name, tier, the phase it belongs to and
 // whether the user has ticked its `unlock-<id>` step. Null when progression.json lacks the entry.
-function laneMilestone(l: Lane): LaneMilestone | null {
-  const e = progressionData?.entries.find(x => x.id === l.entry);
-  return e
+function laneMilestone(lane: Lane): LaneMilestone | null {
+  const entry = progressionData?.entries.find(x => x.id === lane.entry);
+  return entry
     ? {
-        name: e.name,
-        tier: e.tier,
-        phase: phaseForLaneTier(e.tier),
-        marked: checked('unlock-' + e.id),
+        name: entry.name,
+        tier: entry.tier,
+        phase: phaseForLaneTier(entry.tier),
+        marked: checked('unlock-' + entry.id),
       }
     : null;
 }
 
-// The highest belt (or pipe) mark available at phase `st` (default: the current stage). A mark
+// The highest belt (or pipe) mark available at phase `stageKey` (default: the current stage). A mark
 // counts as available when its milestone is ticked, belongs to this phase or earlier, or is
 // unknown; Mk.1 is the fallback. Returns the lane with its display unit, its milestone and the
 // next mark up (with that mark's milestone), which LaneAdvice.vue mentions as the next upgrade.
-export function bestLane(fluid: boolean, st?: string): BestLane {
+export function bestLane(fluid: boolean, stageKey?: string): BestLane {
   const lanes = fluid ? PIPE_LANES : BELT_LANES;
-  const stageNo = Number(st ?? stage());
+  const stageNo = Number(stageKey ?? stage());
   // Both lists start with Mk.1.
   let best = lanes[0]!,
-    ms = laneMilestone(best);
-  for (const l of lanes) {
-    const m = laneMilestone(l);
-    if (!m || m.marked || m.phase <= stageNo) {
-      best = l;
-      ms = m;
+    bestMilestone = laneMilestone(best);
+  for (const lane of lanes) {
+    const milestone = laneMilestone(lane);
+    if (!milestone || milestone.marked || milestone.phase <= stageNo) {
+      best = lane;
+      bestMilestone = milestone;
     }
   }
   const next = lanes[lanes.indexOf(best) + 1];
@@ -229,7 +230,7 @@ export function bestLane(fluid: boolean, st?: string): BestLane {
     ...best,
     fluid,
     unit: fluid ? ' m³/min' : '/min',
-    milestone: ms,
+    milestone: bestMilestone,
     next: next ? { ...next, milestone: laneMilestone(next) } : null,
   };
 }
@@ -239,8 +240,8 @@ export function bestLane(fluid: boolean, st?: string): BestLane {
 // (all of it on the last lane) and the word to print. The 1e-9, a fraction of one lane in both
 // places, keeps a rate within floating-point noise of an exact multiple of the capacity from
 // counting an extra lane or a partly filled last one.
-export function lanePlan(rate: number, fluid: boolean, st?: string): LanePlan {
-  const lane = bestLane(fluid, st);
+export function lanePlan(rate: number, fluid: boolean, stageKey?: string): LanePlan {
+  const lane = bestLane(fluid, stageKey);
   const count = Math.max(1, Math.ceil(rate / lane.cap - 1e-9));
   const last = rate - (count - 1) * lane.cap;
   return {
@@ -264,16 +265,17 @@ export const machinesLabel = (count: number, machine: string) =>
 function capFlowOutputs(list: FlowOutput[], unit = '/min'): FlowOutput[] {
   if (list.length <= 10) return list;
   const rest = list.slice(9),
-    sum = rest.reduce((s, x) => s + (x.rate || 0), 0);
+    sum = rest.reduce((total, output) => total + (output.rate || 0), 0);
   return [
     ...list.slice(0, 9),
     { kind: 'more', label: `+ ${rest.length} more destinations`, rate: sum, unit },
   ];
 }
 
-// Flow model for an original-handbook factory (plan.json). `f` is the factory, `st` the phase key,
-// `r` its stage record (output, demand, storage, delivery, inputs, machines, lastClock, machine,
-// recipe) and `localInput(name)` returns the local factory that makes that input on site, if any.
+// Flow model for an original-handbook factory (plan.json). `factory` is the factory, `stageKey`
+// the phase key, `factoryStage` its stage record (output, demand, storage, delivery, inputs,
+// machines, lastClock, machine, recipe) and `localInput(name)` returns the local factory that
+// makes that input on site, if any.
 // A handbook factory makes one item; its destinations are the other handbook factories that list
 // it as an input in the same phase, plus its storage refill, elevator delivery and any surplus.
 // `bankOnly` (the oil campus products) keeps only the destinations: no inputs, recipe panel, bar
@@ -281,92 +283,99 @@ function capFlowOutputs(list: FlowOutput[], unit = '/min'): FlowOutput[] {
 // Returns { stage, inputs, outputs, equivalent, machineCount, machineName, local, recipe, bar,
 // sameItemConsumers }; links are { factory: <handbook id> }.
 export function handbookFlowModel(
-  f: HandbookFactory,
-  st: string,
-  r: HandbookFactoryStage,
+  factory: HandbookFactory,
+  stageKey: string,
+  factoryStage: HandbookFactoryStage,
   localInput: (name: string) => HandbookFactory | undefined,
   bankOnly = false,
 ): FlowModel {
-  const fluidOut = FLUIDS.has(f.name);
+  const fluidOut = FLUIDS.has(factory.name);
   const unit = fluidOut ? ' m³/min' : '/min';
   // Machine equivalents: all at 100% except the last at lastClock. The floor keeps perOut finite
   // for the oil products, which record 0 machines.
-  const eq = Math.max(r.machines - 1 + (r.lastClock ?? 100) / 100, 0.01);
-  const perOut = r.output / eq;
-  const beltTxt = (p: LanePlan) => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
-  const mach = (q: number) => (bankOnly ? undefined : q / perOut);
+  const equivalent = Math.max(
+    factoryStage.machines - 1 + (factoryStage.lastClock ?? 100) / 100,
+    0.01,
+  );
+  const perOut = factoryStage.output / equivalent;
+  const beltTxt = (lanes: LanePlan) =>
+    `${lanes.count} × ${lanes.lane.mark} ${lanes.word}${lanes.count > 1 ? 's' : ''}`;
+  const mach = (rate: number) => (bankOnly ? undefined : rate / perOut);
   // Destinations: every other factory consuming this item in this phase, largest first.
   const consumers = plan.factories
-    .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[f.name])
-    .map((o): FlowOutput & { rate: number } => {
+    .filter(
+      consumer => consumer.id !== factory.id && consumer.stages[stageKey]?.inputs?.[factory.name],
+    )
+    .map((consumer): FlowOutput & { rate: number } => {
       // The filter above keeps only factories consuming the item at this stage.
-      const q = o.stages[st]!.inputs[f.name]!;
+      const rate = consumer.stages[stageKey]!.inputs[factory.name]!;
       return {
         kind: 'consumer',
-        label: o.name,
-        icon: o.name,
-        link: { factory: o.id },
-        rate: q,
+        label: consumer.name,
+        icon: consumer.name,
+        link: { factory: consumer.id },
+        rate,
         unit,
-        mach: mach(q),
-        beltTxt: f.local ? 'made on site' : beltTxt(lanePlan(q, fluidOut, st)),
+        mach: mach(rate),
+        beltTxt: factory.local ? 'made on site' : beltTxt(lanePlan(rate, fluidOut, stageKey)),
       };
     })
     .sort((a, b) => b.rate - a.rate);
   // Then the non-factory destinations. Nuclear parts nobody else consumes go to the power fleet,
   // which the handbook plans on the resources page rather than as a factory.
   const outputs: FlowOutput[] = [...consumers];
-  if (f.nuclear && !consumers.length)
+  if (factory.nuclear && !consumers.length)
     outputs.push({
       kind: 'ship',
       label: 'Nuclear power fleet',
       shipSub: 'planned in Power & resources',
-      icon: f.name,
+      icon: factory.name,
       rateTxt: '',
     });
-  if (r.storage)
+  if (factoryStage.storage)
     outputs.push({
       kind: 'store',
       label: 'Storage refill',
-      icon: f.name,
-      rate: r.storage,
+      icon: factory.name,
+      rate: factoryStage.storage,
       unit,
-      mach: mach(r.storage),
+      mach: mach(factoryStage.storage),
     });
-  if (r.delivery)
+  if (factoryStage.delivery)
     outputs.push({
       kind: 'ship',
       label: 'Space Elevator delivery',
-      icon: f.name,
-      rate: r.delivery,
+      icon: factory.name,
+      rate: factoryStage.delivery,
       unit,
-      mach: mach(r.delivery),
+      mach: mach(factoryStage.delivery),
     });
   // Output above the stage's recorded demand is whole-machine rounding surplus, bound for the
   // sink. The 0.002/min threshold hides floating-point leftovers.
-  const surplus = Math.max(0, r.output - (r.demand ?? r.output));
+  const surplus = Math.max(0, factoryStage.output - (factoryStage.demand ?? factoryStage.output));
   if (surplus > 0.002)
-    outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: f.name, rate: surplus, unit });
+    outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: factory.name, rate: surplus, unit });
   // Inputs, each with its lane plan. The link prefers a local factory making it on site, otherwise
   // the handbook factory producing the item in this phase; local ones also get a button with the
   // machines to build beside this factory (stage `rate` is one local machine's output).
   const inputs: FlowInput[] = bankOnly
     ? []
-    : Object.entries(r.inputs || {}).map(([n, q]) => {
-        const lp = localInput(n);
-        const src = lp || plan.factories.find(x => x.name === n && x.stages[st]);
+    : Object.entries(factoryStage.inputs || {}).map(([item, rate]) => {
+        const localFactory = localInput(item);
+        const source =
+          localFactory || plan.factories.find(x => x.name === item && x.stages[stageKey]);
         return {
-          name: n,
-          rate: q,
-          link: src ? { factory: src.id } : null,
-          plan: lanePlan(q, FLUIDS.has(n), st),
+          name: item,
+          rate,
+          link: source ? { factory: source.id } : null,
+          plan: lanePlan(rate, FLUIDS.has(item), stageKey),
           // A local input: the button to its factory, with the machines to build here.
-          local: lp
+          local: localFactory
             ? {
-                id: lp.id,
+                id: localFactory.id,
                 // localInput only returns factories with this stage.
-                count: num(Math.ceil(q / lp.stages[st]!.rate!)),
-                machine: lp.stages[st]!.machine,
+                count: num(Math.ceil(rate / localFactory.stages[stageKey]!.rate!)),
+                machine: localFactory.stages[stageKey]!.machine,
               }
             : null,
         };
@@ -380,45 +389,47 @@ export function handbookFlowModel(
       : '';
   // The handbook records the last machine's clock, so it is printed as a figure.
   const clock =
-    (r.lastClock ?? 100) < 100 ? `@ 100% except the last at ${num(r.lastClock)}%` : '@ 100%';
+    (factoryStage.lastClock ?? 100) < 100
+      ? `@ 100% except the last at ${num(factoryStage.lastClock)}%`
+      : '@ 100%';
   return {
-    stage: st,
+    stage: stageKey,
     inputs,
     outputs: capped,
-    equivalent: eq,
-    machineCount: r.machines,
-    machineName: r.machine,
-    local: !!f.local,
+    equivalent,
+    machineCount: factoryStage.machines,
+    machineName: factoryStage.machine,
+    local: !!factory.local,
     recipe: bankOnly
       ? null
       : {
-          name: String(r.recipe || '').replace('Alternate: ', ''),
-          machine: r.machine,
-          ins: inputs.map(i => [i.name, i.rate / eq, i.link]),
-          outs: [[f.name, perOut]],
+          name: String(factoryStage.recipe || '').replace('Alternate: ', ''),
+          machine: factoryStage.machine,
+          ins: inputs.map(i => [i.name, i.rate / equivalent, i.link]),
+          outs: [[factory.name, perOut]],
         },
     bar: bankOnly
       ? null
       : {
-          sub: `${String(r.recipe || '').replace('Alternate: ', '')} · ${clock} · ${rateOfItem(f.name, perOut, num3)} out per machine${splitTxt}${f.local ? ' · built beside the consumers' : ''}`,
-          out: { rate: num(r.output), unit },
-          outSub: f.local
+          sub: `${String(factoryStage.recipe || '').replace('Alternate: ', '')} · ${clock} · ${rateOfItem(factory.name, perOut, num3)} out per machine${splitTxt}${factory.local ? ' · built beside the consumers' : ''}`,
+          out: { rate: num(factoryStage.output), unit },
+          outSub: factory.local
             ? 'out · distributed'
-            : 'out · ' + beltTxt(lanePlan(r.output, fluidOut, st)),
+            : 'out · ' + beltTxt(lanePlan(factoryStage.output, fluidOut, stageKey)),
         },
-    // Other factories consuming item `n` this phase, for LaneAdvice.vue's spare-lane suggestion.
-    sameItemConsumers: n =>
+    // Other factories consuming `item` this phase, for LaneAdvice.vue's spare-lane suggestion.
+    sameItemConsumers: item =>
       plan.factories
-        .filter(o => o.id !== f.id && o.stages[st]?.inputs?.[n])
-        .map(o => ({
-          label: o.name,
-          rate: o.stages[st]!.inputs[n]!,
-          link: { factory: o.id },
+        .filter(consumer => consumer.id !== factory.id && consumer.stages[stageKey]?.inputs?.[item])
+        .map(consumer => ({
+          label: consumer.name,
+          rate: consumer.stages[stageKey]!.inputs[item]!,
+          link: { factory: consumer.id },
         })),
   };
 }
 
-// Flow model for a row of a calculated plan, at the current phase. `r` is a row of
+// Flow model for a row of a calculated plan, at the current phase. `row` is a row of
 // calcStage().rows from planner.ts: inputs and outputs are totals for the whole row (per-machine
 // rate × equivalent), and a row may have several outputs (byproducts) or none (a generator, with
 // generationMW). Unlike the handbook, destinations come from the phase's plan-wide books:
@@ -426,47 +437,53 @@ export function handbookFlowModel(
 // surplus sinks. Those are totals for the item, not this row's share, when several rows make it
 // (bankNote says so). Same return shape as handbookFlowModel plus bankNote; links are
 // { calcFactory: <row id> }.
-export function calcFlowModel(r: CalcRow): FlowModel {
+export function calcFlowModel(row: CalcRow): FlowModel {
   // A dialog of the profile just left can be drawn once more; it then shows no destinations.
-  const x: StoredStage = calcStage() ?? { feasible: false },
-    st = stage(),
+  const storedStage: StoredStage = calcStage() ?? { feasible: false },
+    stageKey = stage(),
     settings = calculated?.settings,
-    multi = Object.keys(r.outputs || {}).length > 1,
-    generator = r.generationMW > 0;
-  const eq = Math.max(r.equivalent || r.machines - 1 + (r.lastClock ?? 100) / 100 || 1, 0.01);
-  const beltTxt = (p: LanePlan) => `${p.count} × ${p.lane.mark} ${p.word}${p.count > 1 ? 's' : ''}`;
+    multi = Object.keys(row.outputs || {}).length > 1,
+    generator = row.generationMW > 0;
+  const equivalent = Math.max(
+    row.equivalent || row.machines - 1 + (row.lastClock ?? 100) / 100 || 1,
+    0.01,
+  );
+  const beltTxt = (lanes: LanePlan) =>
+    `${lanes.count} × ${lanes.lane.mark} ${lanes.word}${lanes.count > 1 ? 's' : ''}`;
   const outputs: FlowOutput[] = [];
   // One pass per output item. With byproducts, every row is prefixed with its item name and no
   // machine counts are given, since the same machines make all the outputs at once.
-  for (const n of Object.keys(r.outputs || {})) {
-    const fluid = FLUIDS.has(n),
+  for (const item of Object.keys(row.outputs || {})) {
+    const fluid = FLUIDS.has(item),
       unit = fluid ? ' m³/min' : '/min',
-      pre = multi ? n : '',
-      perOut = r.outputs[n]! / eq;
-    const mach = (q: number) => (multi ? undefined : q / perOut);
-    // The filter keeps only rows consuming n.
-    for (const o of (x.rows || []).filter(o => o.id !== r.id && o.inputs?.[n])) {
-      const q = o.inputs[n]!;
+      pre = multi ? item : '',
+      perOut = row.outputs[item]! / equivalent;
+    const mach = (rate: number) => (multi ? undefined : rate / perOut);
+    // The filter keeps only rows consuming the item.
+    for (const consumer of (storedStage.rows || []).filter(
+      consumer => consumer.id !== row.id && consumer.inputs?.[item],
+    )) {
+      const rate = consumer.inputs[item]!;
       outputs.push({
         kind: 'consumer',
-        label: o.name,
-        icon: Object.keys(o.outputs || {})[0] || n,
-        link: { calcFactory: o.id },
-        rate: q,
+        label: consumer.name,
+        icon: Object.keys(consumer.outputs || {})[0] || item,
+        link: { calcFactory: consumer.id },
+        rate,
         unit,
         pre,
-        mach: mach(q),
-        beltTxt: beltTxt(lanePlan(q, fluid, st)),
+        mach: mach(rate),
+        beltTxt: beltTxt(lanePlan(rate, fluid, stageKey)),
       });
     }
-    const stored = x.storage?.[n],
-      delivered = x.delivery?.[n]?.rate,
-      drone = x.drone?.[n];
+    const stored = storedStage.storage?.[item],
+      delivered = storedStage.delivery?.[item]?.rate,
+      drone = storedStage.drone?.[item];
     if (stored)
       outputs.push({
         kind: 'store',
         label: 'Protected storage',
-        icon: n,
+        icon: item,
         rate: stored,
         unit,
         pre,
@@ -476,7 +493,7 @@ export function calcFlowModel(r: CalcRow): FlowModel {
       outputs.push({
         kind: 'ship',
         label: 'Space Elevator delivery',
-        icon: n,
+        icon: item,
         rate: delivered,
         unit,
         pre,
@@ -486,7 +503,7 @@ export function calcFlowModel(r: CalcRow): FlowModel {
       outputs.push({
         kind: 'drone',
         label: 'Drone fuel contract',
-        icon: n,
+        icon: item,
         rate: drone,
         unit,
         pre,
@@ -494,7 +511,7 @@ export function calcFlowModel(r: CalcRow): FlowModel {
       });
     // Phase 5 extras the planner reserves on top of factory demand: matrix for fueled Alien Power
     // Augmenters, and the configured extra Singularity Cells.
-    if (st === '5' && n === 'Alien Power Matrix' && x.matrixRate)
+    if (stageKey === '5' && item === 'Alien Power Matrix' && storedStage.matrixRate)
       outputs.push({
         kind: 'ship',
         label: 'Alien Power Augmenter fuel',
@@ -502,19 +519,19 @@ export function calcFlowModel(r: CalcRow): FlowModel {
           num(settings?.fueledAugmenters) +
           ' fueled augmenter' +
           ((settings?.fueledAugmenters ?? 0) > 1 ? 's' : ''),
-        icon: n,
-        rate: x.matrixRate,
+        icon: item,
+        rate: storedStage.matrixRate,
         unit,
         pre,
-        mach: mach(x.matrixRate),
+        mach: mach(storedStage.matrixRate),
       });
     const cells = settings?.cellsPerMinute;
-    if (st === '5' && n === 'Singularity Cell' && cells)
+    if (stageKey === '5' && item === 'Singularity Cell' && cells)
       outputs.push({
         kind: 'ship',
         label: 'Extra Singularity Cells',
         shipSub: 'configured portal supply',
-        icon: n,
+        icon: item,
         rate: cells,
         unit,
         pre,
@@ -522,19 +539,19 @@ export function calcFlowModel(r: CalcRow): FlowModel {
       });
     // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
     // leaves fluids, radioactive and unsinkable items out of `surplus`, so they never show here.
-    if (n === 'Plutonium Fuel Rod' && x.plutoniumSink)
+    if (item === 'Plutonium Fuel Rod' && storedStage.plutoniumSink)
       outputs.push({
         kind: 'sink',
         label: 'AWESOME Sink',
         subTxt: 'waste strategy — sink these rods',
-        icon: n,
-        rate: x.plutoniumSink,
+        icon: item,
+        rate: storedStage.plutoniumSink,
         unit,
         pre,
       });
-    const surplus = x.surplus?.[n] ?? 0;
+    const surplus = storedStage.surplus?.[item] ?? 0;
     if (surplus > 0.002)
-      outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: n, rate: surplus, unit, pre });
+      outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: item, rate: surplus, unit, pre });
   }
   // A generator feeds the power grid, listed first; a nuclear plant also belts its waste to the
   // destinations above, which stay (#373). A coal or fuel plant has the grid alone.
@@ -544,19 +561,19 @@ export function calcFlowModel(r: CalcRow): FlowModel {
       kind: 'ship',
       label: 'Power grid',
       shipSub: 'generation',
-      rateTxt: power(r.generationMW),
+      rateTxt: power(row.generationMW),
     });
   // Inputs link to the first other row producing the item; there may be more than one.
-  const inputs: FlowInput[] = Object.entries(r.inputs || {}).map(([n, q]) => {
-    const src = (x.rows || []).find(o => o.id !== r.id && o.outputs?.[n]);
+  const inputs: FlowInput[] = Object.entries(row.inputs || {}).map(([item, rate]) => {
+    const source = (storedStage.rows || []).find(o => o.id !== row.id && o.outputs?.[item]);
     return {
-      name: n,
-      rate: q,
-      link: src ? { calcFactory: src.id } : null,
-      plan: lanePlan(q, FLUIDS.has(n), st),
+      name: item,
+      rate,
+      link: source ? { calcFactory: source.id } : null,
+      plan: lanePlan(rate, FLUIDS.has(item), stageKey),
     };
   });
-  const outName = Object.keys(r.outputs || {})[0];
+  const outName = Object.keys(row.outputs || {})[0];
   const capped = capFlowOutputs(outputs);
   const splits = capped.filter(o => o.mach !== undefined && o.kind !== 'sink');
   const splitTxt =
@@ -566,51 +583,60 @@ export function calcFlowModel(r: CalcRow): FlowModel {
   // A calculated row is whole machines at 100% plus, when the equivalent is fractional, one
   // adjustable machine; its clock is in the dialog's Machine setup table. `shared` is true when
   // another row makes one of the same items, which the bank note mentions.
-  const clock = r.machines - eq > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%';
-  const shared = Object.keys(r.outputs || {}).some(n =>
-    (x.rows || []).some(o => o.id !== r.id && o.outputs?.[n]),
+  const clock = row.machines - equivalent > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%';
+  const shared = Object.keys(row.outputs || {}).some(item =>
+    (storedStage.rows || []).some(o => o.id !== row.id && o.outputs?.[item]),
   );
   return {
-    stage: st,
+    stage: stageKey,
     inputs,
     outputs: capped,
-    equivalent: eq,
-    machineCount: r.machines,
-    machineName: r.machine,
+    equivalent,
+    machineCount: row.machines,
+    machineName: row.machine,
     local: false,
     // Per-machine rates for the recipe panel; a generator's power is its first cell, before any
     // waste it makes.
     recipe: {
-      name: r.name,
-      machine: r.machine,
-      ins: inputs.map(i => [i.name, i.rate / eq, i.link]),
+      name: row.name,
+      machine: row.machine,
+      ins: inputs.map(i => [i.name, i.rate / equivalent, i.link]),
       outs: [
-        ...(generator || !outName ? [['MW', r.generationMW / eq] as [string, number]] : []),
-        ...Object.entries(r.outputs || {}).map(([n, q]): [string, number] => [n, q / eq]),
+        ...(generator || !outName
+          ? [['MW', row.generationMW / equivalent] as [string, number]]
+          : []),
+        ...Object.entries(row.outputs || {}).map(([item, rate]): [string, number] => [
+          item,
+          rate / equivalent,
+        ]),
       ],
     },
     bar: {
-      sub: `${r.name} · ${clock}${outName && !multi ? ` · ${generator ? num3(r.generationMW / eq) + '\u00a0MW + ' : ''}${rateOfItem(outName, r.outputs[outName]! / eq, num3)} out per machine` : ''}${splitTxt}`,
+      sub: `${row.name} · ${clock}${outName && !multi ? ` · ${generator ? num3(row.generationMW / equivalent) + '\u00a0MW + ' : ''}${rateOfItem(outName, row.outputs[outName]! / equivalent, num3)} out per machine` : ''}${splitTxt}`,
       // A generator's bar leads with its power; a nuclear plant's waste follows in the line under
       // it, with the belts that carry it (#373).
       out:
         outName && !generator
-          ? { rate: num(r.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
-          : { text: power(r.generationMW) },
+          ? { rate: num(row.outputs[outName]), unit: FLUIDS.has(outName) ? ' m³/min' : '/min' }
+          : { text: power(row.generationMW) },
       outSub: outName
         ? (generator ? 'generation + ' : 'out · ') +
           (multi
             ? outName + ' + byproducts'
-            : (generator ? rateOfItem(outName, r.outputs[outName]!) + ' · ' : '') +
-              beltTxt(lanePlan(r.outputs[outName]!, FLUIDS.has(outName), st)))
+            : (generator ? rateOfItem(outName, row.outputs[outName]!) + ' · ' : '') +
+              beltTxt(lanePlan(row.outputs[outName]!, FLUIDS.has(outName), stageKey)))
         : 'generation',
     },
     // Consumer, storage and delivery rates are the item's plan-wide demand, not this row's share.
     // The note under the destinations; `shared` adds that other recipes supply the item too.
     bankNote: outputs.length ? { shared } : null,
-    sameItemConsumers: n =>
-      (x.rows || [])
-        .filter(o => o.id !== r.id && o.inputs?.[n])
-        .map(o => ({ label: o.name, rate: o.inputs[n]!, link: { calcFactory: o.id } })),
+    sameItemConsumers: item =>
+      (storedStage.rows || [])
+        .filter(consumer => consumer.id !== row.id && consumer.inputs?.[item])
+        .map(consumer => ({
+          label: consumer.name,
+          rate: consumer.inputs[item]!,
+          link: { calcFactory: consumer.id },
+        })),
   };
 }

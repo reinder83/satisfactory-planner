@@ -23,9 +23,9 @@ export const isBusy = (el: EventTarget | null): boolean =>
 
 // A click on a busy control does nothing: no default action and no other listener on it.
 // Capture, so it runs before the component's own.
-function swallowClick(e: Event) {
-  e.preventDefault();
-  e.stopImmediatePropagation();
+function swallowClick(event: Event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }
 
 const typedField = (el: Element): el is HTMLInputElement | HTMLTextAreaElement =>
@@ -37,9 +37,9 @@ const typedField = (el: Element): el is HTMLInputElement | HTMLTextAreaElement =
 const readOnlyBefore = new WeakMap<Element, boolean>();
 
 // Marks `el` busy (on) or ready again (off).
-export function markBusy(el: HTMLElement, on: boolean) {
-  if (on === isBusy(el)) return;
-  if (on) {
+export function markBusy(el: HTMLElement, busy: boolean) {
+  if (busy === isBusy(el)) return;
+  if (busy) {
     el.setAttribute('aria-disabled', 'true');
     el.addEventListener('click', swallowClick, true);
   } else {
@@ -47,8 +47,8 @@ export function markBusy(el: HTMLElement, on: boolean) {
     el.removeEventListener('click', swallowClick, true);
   }
   if (typedField(el)) {
-    if (on) readOnlyBefore.set(el, el.readOnly);
-    el.readOnly = on || !!readOnlyBefore.get(el);
+    if (busy) readOnlyBefore.set(el, el.readOnly);
+    el.readOnly = busy || !!readOnlyBefore.get(el);
   }
 }
 

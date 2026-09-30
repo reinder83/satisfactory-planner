@@ -35,22 +35,24 @@ export const payoffDefaultSort = (goal: Goal | undefined): PayoffColumn =>
   goal === 'timed' || goal === 'maximum' ? 'hours' : 'buildings';
 
 // The rows worth a line (everything but 'same', which is only counted), sorted by `column`,
-// most negative first for dir 1 and the reverse for -1. A missing figure (hours of a phase that
-// never finishes) sorts last either way, and so do alternates that failed or do not fit.
+// most negative first for direction 1 and the reverse for -1. A missing figure (hours of a phase
+// that never finishes) sorts last either way, and so do alternates that failed or do not fit.
 export function payoffTable(
   ranking: AlternateRanking,
   column: PayoffColumn,
-  dir: 1 | -1 = 1,
+  direction: 1 | -1 = 1,
 ): { rows: AlternatePayoff[]; same: number } {
-  const failed = (p: AlternatePayoff) => p.status === 'infeasible' || p.status === 'error';
+  const failed = (candidate: AlternatePayoff) =>
+    candidate.status === 'infeasible' || candidate.status === 'error';
   const rows = ranking.candidates
     .filter(p => p.status !== 'same')
     .sort((a, b) => {
       if (failed(a) !== failed(b)) return failed(a) ? 1 : -1;
-      const x = a[column],
-        y = b[column];
-      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
-      return (x - y) * dir || a.name.localeCompare(b.name);
+      const valueA = a[column],
+        valueB = b[column];
+      if (valueA === null || valueB === null)
+        return valueA === valueB ? 0 : valueA === null ? 1 : -1;
+      return (valueA - valueB) * direction || a.name.localeCompare(b.name);
     });
   return { rows, same: ranking.candidates.length - rows.length };
 }
@@ -61,12 +63,13 @@ export const payoffBest = (ranking: AlternateRanking, column: PayoffColumn) =>
   null;
 
 // A delta as the table shows it: signed, with its unit; "–" when the figure is missing.
-export function payoffDelta(p: AlternatePayoff, column: PayoffColumn): string {
-  const x = p[column];
-  if (p.status === 'infeasible' || p.status === 'error' || x === null) return '–';
-  if (Math.abs(x) < 0.005) return '0';
-  const sign = x > 0 ? '+' : '−';
-  const size = Math.abs(x);
+export function payoffDelta(alternate: AlternatePayoff, column: PayoffColumn): string {
+  const delta = alternate[column];
+  if (alternate.status === 'infeasible' || alternate.status === 'error' || delta === null)
+    return '–';
+  if (Math.abs(delta) < 0.005) return '0';
+  const sign = delta > 0 ? '+' : '−';
+  const size = Math.abs(delta);
   return (
     sign +
     (column === 'powerMW'
