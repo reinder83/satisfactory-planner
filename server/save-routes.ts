@@ -1,0 +1,262 @@
+// The routes over the signed-in user's saves and profiles: full-save export and import,
+// creating, copying, selecting, removing and renaming profiles, and the calculator preview.
+import fs from 'node:fs/promises';
+import { validateTransfer, transferFormat } from '../public/transfer.ts';
+import { shareState, newProfileState, carryGuide } from '../public/state.ts';
+import { calculate } from '../planner.ts';
+import { randomId } from './accounts.ts';
+import { fail } from './errors.ts';
+import type { Save } from './persistence.ts';
+import { response } from './routing.ts';
+import type { UserRequest, WorkspaceContext } from './routing.ts';
+
+// A save or profile name from a request, trimmed.
+const name = (value: unknown): string =>
+  typeof value === 'string' && value.trim() && value.length <= 80
+    ? value.trim()
+    : fail('Enter a name with 1–80 characters.');
+
+export function saveRoutes({
+  current,
+  commit,
+  limits,
+  currentSummary,
+  scope,
+  scopeNamed,
+}: WorkspaceContext) {
+  // Full-save export (public/transfer.ts format) of all the user's saves, of the saves listed
+  // in ?saves=<id>,<id> (the Backup page's selection, #160), or of one save with ?save=, or
+  // one profile with ?profile=. share=1 strips progress with shareState.
+  // An original profile without its own handbook is exported with the current plan.json,
+  // so the export can be imported where that default differs. Read-only.
+  async function exportSaves({ url, user }: UserRequest) {
+    const handbook = JSON.parse(
+      await fs.readFile(new URL('../public/plan.json', import.meta.url), 'utf8'),
+    );
+    const saveId = url.searchParams.get('save'),
+      profileId = url.searchParams.get('profile'),
+      share = url.searchParams.get('share') === '1';
+    let saves = current().saves.filter(s => s.userId === user.id);
+    const chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
+    if (chosen) {
+      saves = saves.filter(s => chosen.includes(s.id));
+      if (saves.length !== new Set(chosen).size) fail('Save not found.', 404);
+    }
+    if (saveId) {
+      saves = saves.filter(s => s.id === saveId);
+      if (!saves.length) fail('Save not found.', 404);
+    }
+    if (profileId) {
+      saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
+      if (!saves.length) fail('Profile not found.', 404);
+    }
+    const exported = saves.map(save => {
+      const profiles = profileId ? save.profiles.filter(p => p.id === profileId) : save.profiles;
+      return {
+        id: save.id,
+        name: save.name,
+        activeProfile: profiles.some(p => p.id === save.activeProfile)
+          ? save.activeProfile
+          : profiles[0]!.id,
+        profiles: profiles.map(profile => ({
+          id: profile.id,
+          name: profile.name,
+          kind: profile.kind,
+          plan: profile.plan || null,
+          state: share ? shareState(profile.state) : profile.state,
+          ...(profile.kind === 'original' ? { handbook: profile.handbook || handbook } : {}),
+        })),
+      };
+    });
+    return response({
+      format: transferFormat,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      saves: exported,
+    });
+  }
+  // Copies a profile of one of the user's saves, plan and progress included, into the same
+  // save under a new id and makes the copy active. The source is not changed.
+  async function duplicateProfile({ url, user, body }: UserRequest) {
+    const input = await body();
+    if (!input.saveId || !input.profileId) fail('Choose a profile to copy.');
+    const { save, profile } = scopeNamed(input, url, user);
+    const profileId = randomId();
+    await commit(draft => {
+      const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+      const source = draftSave?.profiles.find(p => p.id === profile.id);
+      if (!draftSave || !source) fail('Profile not found.', 404);
+      if (draftSave.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
+      draftSave.profiles.push({
+        ...structuredClone(source),
+        id: profileId,
+        name: (source.name + ' · copy').slice(0, 80),
+      });
+      draftSave.activeProfile = profileId;
+      draft.users.find(account => account.id === user.id)!.activeSave = draftSave.id;
+    });
+    return response({ saveId: save.id, profileId, workspace: currentSummary(user) }, 201);
+  }
+  // Imports a full-save export as new saves owned by this user, with fresh save and
+  // profile ids, so nothing existing is overwritten. Validated completely before the
+  // single commit, so a bad file adds nothing. The last imported save becomes active.
+  async function importSaves({ user, body }: UserRequest) {
+    const imported = validateTransfer(await body());
+    await commit(draft => {
+      if (draft.saves.filter(s => s.userId === user.id).length + imported.saves.length > 50)
+        fail('Import would exceed the save limit.');
+      // validateTransfer ran every profile's progress through validateState; the owner is
+      // added below.
+      for (const save of imported.saves as Save[]) {
+        const oldActive = save.activeProfile;
+        for (const importedProfile of save.profiles) {
+          const previous = importedProfile.id;
+          importedProfile.id = randomId();
+          if (previous === oldActive) save.activeProfile = importedProfile.id;
+        }
+        save.id = randomId();
+        save.userId = user.id;
+        draft.saves.push(save);
+        draft.users.find(account => account.id === user.id)!.activeSave = save.id;
+      }
+    });
+    return response(currentSummary(user));
+  }
+  // Runs the calculator for the wizard without storing anything; throttled because a
+  // solve is expensive. A live estimate (`?estimate=1`) counts against its own allowance and
+  // solving-time budget (limits.ts). Both checks run before the body is read.
+  async function preview({ req, url, body }: UserRequest) {
+    const budget = url.searchParams.get('estimate') === '1' ? limits.estimateBudget(req) : null;
+    if (budget) limits.throttleEstimate(req);
+    else limits.throttle(req);
+    const input = await body();
+    const start = performance.now();
+    try {
+      return response(calculate(input.settings));
+    } finally {
+      if (budget) budget.count += performance.now() - start;
+    }
+  }
+  // Creates a profile in one of the user's saves (saveId) or in a new save (saveName). It is
+  // calculated now and the snapshot stored; kind 'original' is refused, since the handbook
+  // profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
+  // (copied, never moved) and built lists finished work; see newProfileState. The plan is
+  // calculated before the commit; the save lookup and limits are checked inside it.
+  async function createProfile({ req, user, body }: UserRequest) {
+    limits.throttle(req);
+    const input = await body();
+    if (input.kind === 'original')
+      fail('Handbook profiles can no longer be created. Create a calculated profile instead.');
+    const saveName = input.saveId ? null : name(input.saveName),
+      profileName = name(input.name);
+    const plan = calculate(input.settings);
+    const profileId = randomId();
+    // A saveId that is not one of the user's save ids is refused inside the commit.
+    let saveId = (input.saveId || randomId()) as string;
+    const carried = await commit(draft => {
+      let save = draft.saves.find(s => s.id === saveId && s.userId === user.id);
+      if (input.saveId && !save) fail('Save not found.', 404);
+      if (!save) {
+        if (draft.saves.filter(s => s.userId === user.id).length >= 50)
+          fail('You can create up to 50 saves.');
+        save = {
+          id: saveId,
+          // Only null when saveId named an existing save.
+          name: saveName as string,
+          userId: user.id,
+          activeProfile: profileId,
+          profiles: [],
+        };
+        draft.saves.push(save);
+      }
+      if (save.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
+      const source = input.carryFrom ? save.profiles.find(p => p.id === input.carryFrom) : null;
+      if (input.carryFrom && !source)
+        fail('The profile to carry progress from was not found.', 404);
+      const started = newProfileState(
+        plan,
+        source?.state || null,
+        source?.plan || null,
+        input.carry,
+        input.built,
+      );
+      save.profiles.push({
+        id: profileId,
+        name: profileName,
+        kind: 'calculated',
+        // A recalculation of a guided plan keeps its guide (#472).
+        plan: carryGuide(plan, source?.plan),
+        state: started.state,
+      });
+      save.activeProfile = profileId;
+      draft.users.find(account => account.id === user.id)!.activeSave = saveId;
+      return started;
+    });
+    return response(
+      {
+        saveId,
+        profileId,
+        reviewCount: carried.reviewCount,
+        carriedChecks: carried.carried,
+        workspace: currentSummary(user),
+      },
+      201,
+    );
+  }
+  // Remembers the save and profile the user last opened; scope() checks both are theirs.
+  async function selectProfile({ url, user, body }: UserRequest) {
+    const { save, profile } = scopeNamed(await body(), url, user);
+    await commit(draft => {
+      draft.users.find(account => account.id === user.id)!.activeSave = save.id;
+      draft.saves.find(s => s.id === save.id)!.activeProfile = profile.id;
+    });
+    return response(currentSummary(user));
+  }
+  // Permanently deletes one profile and its progress; needs confirmed: true. Removing a
+  // save's last profile deletes the save too. The active save and profile are moved to
+  // one that still exists.
+  async function removeProfile({ url, user, body }: UserRequest) {
+    const input = await body();
+    if (input.confirmed !== true) fail('Confirm profile removal first.');
+    if (!input.saveId || !input.profileId) fail('Choose a profile to remove.');
+    const { save, profile } = scopeNamed(input, url, user);
+    await commit(draft => {
+      const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+      if (!draftSave || !draftSave.profiles.some(p => p.id === profile.id))
+        fail('Profile not found.', 404);
+      draftSave.profiles = draftSave.profiles.filter(p => p.id !== profile.id);
+      if (!draftSave.profiles.length) draft.saves = draft.saves.filter(s => s.id !== draftSave.id);
+      else if (draftSave.activeProfile === profile.id)
+        draftSave.activeProfile = draftSave.profiles[0]!.id;
+      const owner = draft.users.find(account => account.id === user.id)!;
+      if (!draft.saves.some(s => s.id === owner.activeSave && s.userId === user.id))
+        owner.activeSave = draft.saves.find(s => s.userId === user.id)?.id || null;
+    });
+    return response(currentSummary(user));
+  }
+  // Renames the scoped save or profile (target 'save' or 'profile'). Only the display
+  // name changes; ids, which progress hangs on, stay. The name is checked before the scope.
+  async function rename({ req, url, user, body }: UserRequest) {
+    const input = await body();
+    const title = name(input.name);
+    const { save, profile } = scope(req, url, user);
+    await commit(draft => {
+      const draftSave = draft.saves.find(s => s.id === save.id)!;
+      if (input.target === 'save') draftSave.name = title;
+      else if (input.target === 'profile')
+        draftSave.profiles.find(p => p.id === profile.id)!.name = title;
+      else fail('Unknown rename target.');
+    });
+    return response(currentSummary(user));
+  }
+  return {
+    exportSaves,
+    duplicateProfile,
+    importSaves,
+    preview,
+    createProfile,
+    selectProfile,
+    removeProfile,
+    rename,
+  };
+}
