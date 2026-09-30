@@ -472,6 +472,13 @@ export function migrateOriginalProfile<P extends StoredProfile>(
     state: migrateHandbookState(state, handbook, conversion),
   };
 }
+// What migrateOriginalProfile needs besides the handbook: recipes.json's recipes and the
+// catalog's pureLimits (the base budgets). Each edition loads them only when there is something
+// to migrate: the server from its files, the browser edition by fetching them.
+export interface MigrationData {
+  recipes: Recipe[];
+  pureLimits: Record<string, number>;
+}
 // A migrated original profile: the profile's other fields, as a calculated profile with no handbook.
 export type MigratedProfile<P extends StoredProfile> = Omit<P, 'handbook' | 'state'> & {
   kind: 'calculated';

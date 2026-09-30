@@ -3,8 +3,8 @@
 // hand createBrowserApi a stand-in store instead). The name, store `workspace` and key `main`
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI. A
 // second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497).
-import { migrateOriginalProfile } from './handbook-migration.ts';
-import type { BrowserWorkspace, Recipe, StoredProfile } from './types/index.ts';
+import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
+import type { BrowserWorkspace, StoredProfile } from './types/index.ts';
 
 // What an older planner says about saves a newer one wrote, whether the database itself or the
 // workspace record is newer. Neither is read or written: AGENTS.md forbids downgrading them.
@@ -80,13 +80,9 @@ const needsMigration = (workspace: BrowserWorkspace) =>
 // the planner reads it. It is the pre-migration copy AGENTS.md requires, the counterpart of the
 // server's workspace.json.pre-handbook.
 export const PRE_HANDBOOK = 'pre-handbook';
-// What the migration needs: recipes.json's recipes and the catalog's pureLimits (the base
-// budgets, as on the server). browser-api.ts loads them, and only when there is something to
-// migrate.
-export interface MigrationData {
-  recipes: Recipe[];
-  pureLimits: Record<string, number>;
-}
+// What the migration needs (MigrationData): browser-api.ts loads it, and only when there is
+// something to migrate. The same loader converts an imported original profile (#605).
+export type { MigrationData };
 
 // Schema version 2 (#518) marks a database whose record went through the handbook migration. The
 // migration runs in the upgrade to it, so every tab of an earlier release (schema version 1)
@@ -136,9 +132,10 @@ export function openBrowserStore(
   // The migration's run on this connection: shared by the transactions that wait for it, and
   // cleared when it fails, so the next one tries again.
   let migrated: Promise<void> | undefined;
-  // The record can gain original profiles after the upgrade: an import still stores them as they
-  // are until #498. No earlier release opens a database at SCHEMA, so these are migrated here, on
-  // the first transaction of the next connection, without the upgrade's notice to older tabs.
+  // The record can have gained original profiles after the upgrade: an import stored them as they
+  // were until #605, which converts them on import. No earlier release opens a database at
+  // SCHEMA, so these are migrated here, on the first transaction of the next connection,
+  // without the upgrade's notice to older tabs.
   // A readonly look first, so recipes.json is only fetched when there is something to migrate.
   // Then one readwrite transaction reads the record again (another tab may have migrated it
   // meanwhile, and then nothing is written), keeps it under PRE_HANDBOOK unless that key already

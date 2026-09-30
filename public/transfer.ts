@@ -1,4 +1,5 @@
 import { safeKey, validateState } from './state.ts';
+import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
 import type {
   Handbook,
   PlanGuide,
@@ -241,4 +242,35 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
     };
   });
   return { format: transferFormat, version: 1, saves };
+}
+
+// What /api/import-saves stores, in both editions: the export checked by validateTransfer, with
+// every original profile converted into a calculated one with its own handbook (#387, #605),
+// the same conversion the stores run on the profiles they already hold (migrateOriginalProfile).
+// Every record is kept, re-keyed or kept for review in handbookOrigin.unmapped; calculated
+// profiles, an already migrated export's among them, are left exactly as validateTransfer
+// returns them. `load` (the recipes and the catalog's pure-node limits) is only called when there
+// is an original profile to convert; without it (tests of other behaviour) none is. The imported
+// file is the user's own copy of the unconverted data. Throws before anything is written, like
+// validateTransfer.
+export async function importableTransfer(
+  data: unknown,
+  load?: () => Promise<MigrationData>,
+): Promise<Omit<SaveExport, 'exportedAt'>> {
+  const transfer = validateTransfer(data);
+  const original = transfer.saves.some(save => save.profiles.some(p => p.kind === 'original'));
+  if (!load || !original) return transfer;
+  const { recipes, pureLimits } = await load();
+  for (const save of transfer.saves)
+    save.profiles = save.profiles.map(profile => {
+      if (profile.kind !== 'original') return profile;
+      try {
+        // validateTransfer requires an original profile to carry its own handbook.
+        return migrateOriginalProfile(profile, profile.handbook!, recipes, pureLimits);
+      } catch {
+        // Only a handbook no release exported (#609) fails to convert.
+        return invalid('This original profile’s handbook could not be converted.');
+      }
+    });
+  return transfer;
 }

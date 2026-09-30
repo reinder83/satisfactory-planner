@@ -1,12 +1,12 @@
 // The routes over the signed-in user's saves and profiles: full-save export and import,
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
 import fs from 'node:fs/promises';
-import { validateTransfer, transferFormat } from '../public/transfer.ts';
+import { importableTransfer, transferFormat } from '../public/transfer.ts';
 import { shareState, newProfileState, carryGuide } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
-import type { Save } from './persistence.ts';
+import { migrationData, type Save } from './persistence.ts';
 import { response } from './routing.ts';
 import type { UserRequest, WorkspaceContext } from './routing.ts';
 
@@ -99,13 +99,14 @@ export function saveRoutes({
   }
   // Imports a full-save export as new saves owned by this user, with fresh save and
   // profile ids, so nothing existing is overwritten. Validated completely before the
-  // single commit, so a bad file adds nothing. The last imported save becomes active.
+  // single commit, so a bad file adds nothing. The last imported save becomes active. An
+  // original profile is stored already converted into a calculated one (importableTransfer).
   async function importSaves({ user, body }: UserRequest) {
-    const imported = validateTransfer(await body());
+    const imported = await importableTransfer(await body(), migrationData);
     await commit(draft => {
       if (draft.saves.filter(s => s.userId === user.id).length + imported.saves.length > 50)
         fail('Import would exceed the save limit.');
-      // validateTransfer ran every profile's progress through validateState; the owner is
+      // importableTransfer ran every profile's progress through validateState; the owner is
       // added below.
       for (const save of imported.saves as Save[]) {
         const oldActive = save.activeProfile;
