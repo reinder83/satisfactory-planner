@@ -207,12 +207,20 @@ export function readGuidedForm(form: HTMLFormElement, { topics = false } = {}) {
 // Switching to All settings keeps every answer: both modes write the same
 // settings object, so nothing is recalculated or lost either way.
 // Lands on `step`, clamped to 1-4: Review is only reached by calculating.
+// The five steps check the Save name only when leaving step 1 (#622): landing past it with an
+// empty or spaces-only name stays here instead, with the message under the box and focus on it
+// (form/NameField.vue), as Continue does. Step 1 shows the box, so landing there is not refused.
 export function toAdvanced(step?: number) {
   const wizardDraft = draft();
   const form = $<HTMLFormElement>('#wizard-form');
-  if (form && wizardDraft.mode === 'guided') readGuidedForm(form, { topics: true });
+  const target = Math.min(Math.max(step || 1, 1), 4);
+  if (form && wizardDraft.mode === 'guided') {
+    const name = form.querySelector<HTMLInputElement>('input[name=saveName]');
+    if (target > 1 && name && !name.reportValidity()) return;
+    readGuidedForm(form, { topics: true });
+  }
   wizardDraft.mode = 'advanced';
-  wizardDraft.step = Math.min(Math.max(step || 1, 1), 4);
+  wizardDraft.step = target;
   render();
 }
 
