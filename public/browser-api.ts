@@ -115,7 +115,7 @@ export function createBrowserApi(
       throw Error('Enter a name with 1–80 characters.');
     return name.trim();
   };
-  // Mirrors summary() in workspace.ts: profile lists without plans or progress. Adds
+  // Mirrors summary() in server/scope.ts: profile lists without plans or progress. Adds
   // `browser: true` and `lastBackup`, the last full export, which the Backup page and ADA show.
   const summary = (workspace: BrowserWorkspace): WorkspaceSummary => ({
     browser: true,
@@ -138,7 +138,7 @@ export function createBrowserApi(
       })),
     })),
   });
-  // Mirrors scope() in workspace.ts: body ids (only for routes that pass `body`), then the
+  // Mirrors scope() in server/scope.ts: body ids (only for routes that pass `body`), then the
   // X-Save-Id/X-Profile-Id headers, then ?save=/?profile=, then the active save and profile.
   const scope = (
     workspace: BrowserWorkspace,

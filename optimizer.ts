@@ -38,7 +38,7 @@ const highs = await loadHighs();
 // phase's searches, the phase's deadline below applies as well.
 const SEARCH_LIMITS = { output_flag: false, mip_max_nodes: 5000, time_limit: 30 };
 // When the integer searches of the current phase must all have ended (a Date.now() value), set by
-// `calculate` in planner.ts at the start of each phase (#592). One phase can chain dozens of
+// `solvePhases` in planner.ts at the start of each phase (#592). One phase can chain dozens of
 // searches (the fallbacks of its two-step fit, SAM conversion, and after Phase 5 the re-solves of
 // phaseTime 'final' and fueled augmenters), and each may run up to the backstop above, which
 // could take one phase past the browser worker's time limit. A search that would run past the

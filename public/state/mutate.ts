@@ -469,7 +469,7 @@ function moveBay(_state: SavedState, layout: StorageEdits, update: Raw) {
   dropFromOrder(layout, update.id);
 }
 // The order of the bays on one floor (#191), sent whole by Move left / Move right. Only bays on
-// that floor; one left out keeps its default place (views/storage.ts orderBays).
+// that floor; one left out keeps its default place (floorOrder in app/views/storage.ts).
 function orderBays(_state: SavedState, layout: StorageEdits, update: Raw) {
   if (!knownFloor(layout, update.floor)) fail('Unknown floor.');
   const list = update.order;
