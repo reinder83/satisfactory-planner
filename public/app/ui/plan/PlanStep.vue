@@ -14,7 +14,7 @@ import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
-import { refocusAfterRemoval } from '../refocus.ts';
+import { refocusAfterRemoval, refocusOn } from '../refocus.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(
@@ -92,10 +92,16 @@ async function move(direction: number) {
   } catch {}
 }
 
-// "Edit": swap the step for its edit form (StepEditForm.vue).
-function edit() {
+// "Edit": swap the step for its edit form (StepEditForm.vue). The button goes with the step, so
+// focus goes to the form's Step title field (ui/refocus.ts, #562).
+async function edit(event: Event) {
+  const refocus = refocusOn(
+    event.currentTarget,
+    `#main [data-task-edit="${CSS.escape(props.step.id)}"] [name=title]`,
+  );
   setEditingTask(props.step.id);
   render();
+  await refocus();
 }
 
 // Where focus goes once a step is removed (ui/refocus.ts, #286): `control` on the next step,

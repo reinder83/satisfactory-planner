@@ -93,6 +93,19 @@ export function focusOpenedPage() {
   if (lost()) focusHeading();
 }
 
+// For a control that swaps its row for another view of it and back: a build-plan step's Edit
+// opens its form in the step's place, and the form's Cancel and Save step put the step back
+// (#562). The pressed control goes with the redraw, so focus goes to the named control of the
+// view that took its place (the form's Step title field, the step's Edit). Call it before the
+// work, like refocusAfterRemoval(), and the function it returns after the redraw; that moves
+// focus only when it was lost (on <body>, or still on the trigger's element).
+export function refocusOn(trigger: EventTarget | null, selector: string): () => Promise<void> {
+  return async () => {
+    await nextTick();
+    if (lost(trigger)) document.querySelector<HTMLElement>(selector)?.focus();
+  };
+}
+
 // For an action that opens another profile on the page already shown (Round up production,
 // Recalculate with transport fuel): the page is redrawn rather than replaced, so its button
 // just disappears. Call it before the work, like refocusAfterRemoval(), and the function it
