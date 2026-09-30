@@ -1025,7 +1025,10 @@ test('a handbook dialog says output and storage under its title instead of in ti
   openFactory('iron-ingot');
   noTiles();
   assert.equal(summary(), `${num(5850)}/min · storage${noBreakSpace}${num(10)}/min`);
-  assert.match(card.querySelector('.output')!.textContent!, new RegExp(num(5850)));
+  // Escaped: on nl-NL the thousands separator is a dot, a regex wildcard (#576).
+  const rate = new RegExp(num(5850).replace(/[.,]/g, '\\$&'));
+  assert.match(card.querySelector('.output')!.textContent!, rate);
+  assert.doesNotMatch(num(5850).replace(/[.,]/, 'X'), rate, 'a wrong separator does not pass');
   assert.match(card.textContent!, /storage 10\/min/, 'the card says the same');
   assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Handbook page 54');
   // The recipe badge stays, and the flow follows it; the handbook note comes after the flow.
