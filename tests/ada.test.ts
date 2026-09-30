@@ -215,6 +215,16 @@ test('ADA notices the states that are not just a number', () => {
   );
 });
 
+// A profile opened on an earlier phase than its saved one, which still has open checks (#570).
+test('ADA says why the build plan opened on an earlier phase', () => {
+  const line = adaRemarks(facts({ phaseLabel: 'Phase 1', openedFrom: 'Phase 3' })).find(
+    r => r.id === 'opened-earlier',
+  )!;
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /working on Phase 3, but Phase 1 still has open steps/);
+  assert.ok(!ids(facts({ openedFrom: '' })).includes('opened-earlier'), 'not on the saved phase');
+});
+
 test('a full lap of the remarks is answered, and the badge can be prodded', () => {
   assert.match(adaEncore(1, facts()).text, /everything I hold on this save/);
   assert.match(adaEncore(2, facts()).text, /twice/);

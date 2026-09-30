@@ -17,6 +17,7 @@ import {
   checked,
   currentProfile,
   currentSave,
+  openedFrom,
   payoff,
   phase,
   phaseLabel,
@@ -177,6 +178,7 @@ function adaFacts(): AdaFacts {
   const headroom = calculated ? storedStage.additionalHeadroomMW || 0 : 0;
   // What the stage's power is balanced against, as build-status.ts measures it (#334).
   const supply = stageSupply(storedStage, spareMW);
+  const savedPhase = openedFrom();
   // Plain data only; ada.ts decides which remarks apply.
   return {
     view,
@@ -238,6 +240,7 @@ function adaFacts(): AdaFacts {
     backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',
     startPhase: startPhase(),
+    openedFrom: savedPhase ? phaseLabel(savedPhase) : '',
     assumptions: calculated ? (calculated.warnings || []).length : 0,
     build: buildFacts(storedStage),
     payoff: payoffFacts(),

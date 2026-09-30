@@ -37,6 +37,7 @@ import {
   phase,
   phaseLabel,
   phaseOptions,
+  setOpenedPhase,
   setQuery,
   view,
   workspace,
@@ -228,7 +229,8 @@ function profileFooter() {
   return ['Create or select a profile'];
 }
 
-// The "Working on" select: save the profile's selected phase, clear the search and redraw;
+// The "Working on" select: save the profile's selected phase, show it rather than the phase the
+// profile opened on (#570), clear the search and redraw;
 // on failure it shows the saved phase again. The redraw shows the new phase's notes, so an
 // unsaved note is asked about first; kept, the select goes back to the saved phase.
 // Busy while it saves (app/busy.ts, #299): a key pressed on it meanwhile shows the saved phase again.
@@ -242,6 +244,7 @@ async function pickPhase(event: Event) {
     try {
       // The options are phaseOptions(), so the value is a phase.
       await save({ type: 'phase', value: el.value as Phase });
+      setOpenedPhase(null);
       setQuery('');
       render();
     } catch {
@@ -267,6 +270,7 @@ async function pickTrack(event: Event) {
   try {
     if (!(await allowSwitch())) return checkSavedPhase();
     await save({ type: 'phase', value: el.value as Phase });
+    setOpenedPhase(null);
     setQuery('');
     render();
   } catch {
