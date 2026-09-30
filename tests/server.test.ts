@@ -175,7 +175,7 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
             },
           ],
         },
-        'Invalid handbook sources.',
+        'This save file has damaged source links, so it cannot be imported. Export it again from the planner that made it.',
       ]),
     ] as [unknown, string][]) {
       const response = await post(app.url, '/api/import-saves', data);

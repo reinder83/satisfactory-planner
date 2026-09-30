@@ -198,7 +198,8 @@ test('an original profile whose handbook is incomplete is refused with 400', asy
     importableTransfer(data, async () => migration),
     {
       status: 400,
-      message: 'This original profile is incomplete or damaged, so it cannot be imported.',
+      message:
+        'This save file comes from an older planner and is incomplete or damaged, so it cannot be imported. Export it again from the planner that made it.',
     },
   );
 });
@@ -238,7 +239,7 @@ test('Docker edition: /api/import-saves stores the converted profile, and a rest
     assert.equal(refused.status, 400);
     assert.equal(
       (await refused.json()).error,
-      'This original profile is incomplete or damaged, so it cannot be imported.',
+      'This save file comes from an older planner and is incomplete or damaged, so it cannot be imported. Export it again from the planner that made it.',
     );
     // Exporting and importing the migrated save again adds an identical copy.
     const exported = await (await fetch(app.url + '/api/export-saves')).json();

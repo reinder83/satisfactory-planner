@@ -162,7 +162,8 @@ test('an import refuses an original profile with parts of its handbook missing',
   for (const handbook of [bare(), broken()])
     assert.throws(() => validateTransfer(transfer(handbook)), {
       status: 400,
-      message: 'This original profile is incomplete or damaged, so it cannot be imported.',
+      message:
+        'This save file comes from an older planner and is incomplete or damaged, so it cannot be imported. Export it again from the planner that made it.',
     });
   assert.equal(validateTransfer(transfer(structuredClone(frozen))).saves.length, 1);
 });
