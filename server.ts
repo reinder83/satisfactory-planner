@@ -1,6 +1,7 @@
 import http from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { openWorkspace } from './workspace.ts';
+import type { Route } from './workspace.ts';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -39,6 +40,114 @@ export const contentTypes: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.woff2': 'font/woff2',
 };
+const hash = (text: string) => createHash('sha256').update(text).digest();
+// JSON replies are never cached, so a browser never shows stale progress.
+const send = (
+  res: ServerResponse,
+  status: number,
+  value: unknown,
+  headers: Record<string, string> = {},
+) => {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    ...headers,
+  });
+  res.end(JSON.stringify(value));
+};
+// Reads a JSON request body, stopping at 2 MB (50 MB for a full-save import, which carries
+// whole plans and handbooks) so a huge upload cannot exhaust memory. The error names the
+// limit that applied. Passed to workspace routes, which call it only when they need a body.
+const readBody = async (req: IncomingMessage): Promise<unknown> => {
+  let chunks: Buffer[] = [],
+    length = 0;
+  const limit = req.url?.split('?')[0] === '/api/import-saves' ? 50 : 2;
+  for await (const chunk of req) {
+    length += chunk.length;
+    if (length > limit * 1024 * 1024) fail(`Backup or update exceeds ${limit} MB.`, 413);
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString());
+  } catch {
+    fail('Invalid JSON.');
+  }
+};
+// nosniff stops browsers treating a JSON or data file as script or HTML. The CSP allows
+// only this origin's own scripts and requests, so injected markup cannot load or send
+// anything elsewhere; inline styles and data: images are allowed because the interface
+// uses them. frame-ancestors 'none' prevents embedding the planner to trick clicks.
+// In development only, Vite's client starts a blob: SharedWorker to wait for a restarted
+// dev server and then reload the page; the production server never allows blob: workers.
+function securityHeaders(res: ServerResponse, dev: boolean) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; " +
+      (dev ? "worker-src 'self' blob:; " : '') +
+      "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  );
+}
+// Whether the request's HTTP Basic credential is `expected` (APP_USER:APP_PASSWORD). Both sides
+// are hashed first so timingSafeEqual compares equal lengths and the time taken does not
+// reveal how much of the credential matched.
+function authorized(req: IncomingMessage, expected: string) {
+  let credential = '';
+  if (req.headers.authorization?.startsWith('Basic '))
+    credential = Buffer.from(req.headers.authorization.slice(6), 'base64').toString('utf8');
+  return timingSafeEqual(hash(credential), hash(expected));
+}
+// Every write is a POST, and every POST must prove it came from the planner's own page.
+// Another site can submit a form or a simple fetch, but cannot add a custom header or
+// a JSON content type without a CORS preflight this server never approves; a browser's
+// Origin header, when sent, must also match the host. Together with the SameSite
+// cookie this blocks cross-site request forgery. GET routes only read.
+function verifyPost(req: IncomingMessage) {
+  if (req.headers['x-planner-request'] !== '1') fail('Missing request verification.', 403);
+  if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
+    fail('Cross-origin updates are not allowed.', 403);
+  if (!req.headers['content-type']?.startsWith('application/json')) fail('Expected JSON.', 415);
+}
+// An /api/ request: the workspace's route answers it (see workspace.ts).
+async function serveApi(workspace: Route, req: IncomingMessage, res: ServerResponse, url: URL) {
+  const reply = await workspace(req, url, readBody);
+  return send(res, reply.status, reply.data, reply.headers);
+}
+// Static files come from public/ (built by build.ts in the Docker image). A path that
+// resolves outside it, such as one with ../, is refused, so data/ is never served.
+async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const publicDir = path.join(root, 'public');
+  const relative = decodeURIComponent(url.pathname);
+  const file = path.resolve(publicDir, '.' + (relative === '/' ? '/index.html' : relative));
+  if (!file.startsWith(publicDir + path.sep)) return send(res, 403, { error: 'Not allowed.' });
+  // The image keeps the shared TypeScript sources beside the build for this server to
+  // import; browsers load the built .js files, so the sources are not served.
+  if (file.endsWith('.ts')) return send(res, 404, { error: 'Not found.' });
+  let content: Buffer;
+  try {
+    content = await fs.readFile(file);
+  } catch (error) {
+    if (['ENOENT', 'EISDIR'].includes((error as Failure)?.code ?? ''))
+      return send(res, 404, { error: 'Not found.' });
+    throw error;
+  }
+  const type = contentTypes[path.extname(file)] || 'application/octet-stream';
+  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+  res.end(req.method === 'HEAD' ? undefined : content);
+}
+// Errors thrown with a status are meant for the user; anything else is unexpected and
+// gets a generic message, since commit() never writes a half-applied change.
+function sendFailure(res: ServerResponse, thrown: unknown) {
+  const failure = thrown as Failure;
+  if (!res.headersSent)
+    send(res, failure?.status || 500, {
+      error: failure?.status
+        ? failure.message
+        : 'Could not save or load data. Please retry; your previous progress is retained.',
+    });
+  else res.end();
+}
 // Builds the Docker edition's HTTP server (not yet listening) around the workspace in
 // dataDir. APP_PASSWORD adds an optional HTTP Basic login in front of everything, separate
 // from the in-app accounts in workspace.ts. Tests call this with a temporary dataDir.
@@ -61,128 +170,34 @@ export async function createApp({
     rankBudgetMs,
     estimateBudgetMs,
   });
-  const hash = (text: string) => createHash('sha256').update(text).digest();
-  // JSON replies are never cached, so a browser never shows stale progress.
-  const send = (
-    res: ServerResponse,
-    status: number,
-    value: unknown,
-    headers: Record<string, string> = {},
-  ) => {
-    res.writeHead(status, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      ...headers,
-    });
-    res.end(JSON.stringify(value));
-  };
-  // Reads a JSON request body, stopping at 2 MB (50 MB for a full-save import, which carries
-  // whole plans and handbooks) so a huge upload cannot exhaust memory. The error names the
-  // limit that applied. Passed to workspace routes, which call it only when they need a body.
-  const body = async (req: IncomingMessage): Promise<unknown> => {
-    let chunks: Buffer[] = [],
-      length = 0;
-    const limit = req.url?.split('?')[0] === '/api/import-saves' ? 50 : 2;
-    for await (const chunk of req) {
-      length += chunk.length;
-      if (length > limit * 1024 * 1024) fail(`Backup or update exceeds ${limit} MB.`, 413);
-      chunks.push(chunk);
-    }
-    try {
-      return JSON.parse(Buffer.concat(chunks).toString());
-    } catch {
-      fail('Invalid JSON.');
-    }
-  };
+  // Security headers on every response; then the health check, the optional Basic login, the
+  // POST checks, the API, the development frontend and the static files, in that order.
   const server = http.createServer(async (req, res) => {
-    // nosniff stops browsers treating a JSON or data file as script or HTML. The CSP allows
-    // only this origin's own scripts and requests, so injected markup cannot load or send
-    // anything elsewhere; inline styles and data: images are allowed because the interface
-    // uses them. frame-ancestors 'none' prevents embedding the planner to trick clicks.
-    // In development only, Vite's client starts a blob: SharedWorker to wait for a restarted
-    // dev server and then reload the page; the production server never allows blob: workers.
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; " +
-        (dev ? "worker-src 'self' blob:; " : '') +
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-    );
+    securityHeaders(res, dev);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       // Open without a password so container health checks work.
       if (url.pathname === '/health' && req.method === 'GET') return send(res, 200, { ok: true });
-      // Both sides are hashed first so timingSafeEqual compares equal lengths and the time
-      // taken does not reveal how much of the credential matched.
-      if (password) {
-        let credential = '';
-        if (req.headers.authorization?.startsWith('Basic '))
-          credential = Buffer.from(req.headers.authorization.slice(6), 'base64').toString('utf8');
-        if (!timingSafeEqual(hash(credential), hash(user + ':' + password)))
-          return send(
-            res,
-            401,
-            { error: 'Sign in to the planner.' },
-            { 'WWW-Authenticate': 'Basic realm="Satisfactory Planner", charset="UTF-8"' },
-          );
-      }
-      // Every write is a POST, and every POST must prove it came from the planner's own page.
-      // Another site can submit a form or a simple fetch, but cannot add a custom header or
-      // a JSON content type without a CORS preflight this server never approves; a browser's
-      // Origin header, when sent, must also match the host. Together with the SameSite
-      // cookie this blocks cross-site request forgery. GET routes only read.
+      if (password && !authorized(req, user + ':' + password))
+        return send(
+          res,
+          401,
+          { error: 'Sign in to the planner.' },
+          { 'WWW-Authenticate': 'Basic realm="Satisfactory Planner", charset="UTF-8"' },
+        );
       if (req.method === 'POST') {
-        if (req.headers['x-planner-request'] !== '1') fail('Missing request verification.', 403);
-        if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
-          fail('Cross-origin updates are not allowed.', 403);
-        if (!req.headers['content-type']?.startsWith('application/json'))
-          fail('Expected JSON.', 415);
-        if (url.pathname.startsWith('/api/')) {
-          const reply = await workspace(req, url, body);
-          return send(res, reply.status, reply.data, reply.headers);
-        }
+        verifyPost(req);
+        if (url.pathname.startsWith('/api/')) return await serveApi(workspace, req, res, url);
         return send(res, 404, { error: 'Not found.' });
       }
       if (!['GET', 'HEAD'].includes(req.method ?? ''))
         return send(res, 405, { error: 'Method not allowed.' }, { Allow: 'GET, HEAD, POST' });
-      if (url.pathname.startsWith('/api/')) {
-        const reply = await workspace(req, url, body);
-        return send(res, reply.status, reply.data, reply.headers);
-      }
+      if (url.pathname.startsWith('/api/')) return await serveApi(workspace, req, res, url);
       // In development Vite serves the page and its modules, compiling .vue files.
       if (vite && (await vite.handle(req, res, url))) return;
-      // Static files come from public/ (built by build.ts in the Docker image). A path that
-      // resolves outside it, such as one with ../, is refused, so data/ is never served.
-      const publicDir = path.join(root, 'public');
-      const relative = decodeURIComponent(url.pathname);
-      const file = path.resolve(publicDir, '.' + (relative === '/' ? '/index.html' : relative));
-      if (!file.startsWith(publicDir + path.sep)) return send(res, 403, { error: 'Not allowed.' });
-      // The image keeps the shared TypeScript sources beside the build for this server to
-      // import; browsers load the built .js files, so the sources are not served.
-      if (file.endsWith('.ts')) return send(res, 404, { error: 'Not found.' });
-      let content: Buffer;
-      try {
-        content = await fs.readFile(file);
-      } catch (error) {
-        if (['ENOENT', 'EISDIR'].includes((error as Failure)?.code ?? ''))
-          return send(res, 404, { error: 'Not found.' });
-        throw error;
-      }
-      const type = contentTypes[path.extname(file)] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
-      res.end(req.method === 'HEAD' ? undefined : content);
+      return await serveStatic(req, res, url);
     } catch (thrown) {
-      // Errors thrown with a status are meant for the user; anything else is unexpected and
-      // gets a generic message, since commit() never writes a half-applied change.
-      const failure = thrown as Failure;
-      if (!res.headersSent)
-        send(res, failure?.status || 500, {
-          error: failure?.status
-            ? failure.message
-            : 'Could not save or load data. Please retry; your previous progress is retained.',
-        });
-      else res.end();
+      sendFailure(res, thrown);
     }
   });
   const vite = dev ? await devFrontend(server) : null;

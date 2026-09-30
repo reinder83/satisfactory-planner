@@ -473,3 +473,66 @@ test('a fresh data folder has no saves, and a handbook profile cannot be created
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+test('a request no route answers is checked like any other before it gets "Not found."', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-routes-'));
+  const fresh = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-routes-fresh-'));
+  const app = await start(dir);
+  const empty = await createApp({ dataDir: fresh });
+  await new Promise<void>(r => empty.listen(0, '127.0.0.1', r));
+  const emptyUrl = 'http://127.0.0.1:' + (empty.address() as AddressInfo).port;
+  const answer = async (reply: Response) => [reply.status, (await reply.json()).error];
+  try {
+    // An unknown path, or a known path with another method, is resolved against the scoped save
+    // and profile first, like the scoped routes, then answered 404 'Not found.'.
+    assert.deepEqual(await answer(await fetch(app.url + '/api/nothing')), [404, 'Not found.']);
+    assert.deepEqual(await answer(await post(app.url, '/api/nothing', {})), [404, 'Not found.']);
+    assert.deepEqual(await answer(await fetch(app.url + '/api/login')), [404, 'Not found.']);
+    assert.deepEqual(await answer(await post(app.url, '/api/state', {})), [404, 'Not found.']);
+    const head = await fetch(app.url + '/api/state', { method: 'HEAD' });
+    assert.equal(head.status, 404);
+    const missingSave = await fetch(app.url + '/api/nothing', { headers: { 'X-Save-Id': 'gone' } });
+    assert.deepEqual(await answer(missingSave), [404, 'Save not found.']);
+    const missingProfile = await fetch(app.url + '/api/nothing?profile=gone');
+    assert.deepEqual(await answer(missingProfile), [404, 'Profile not found.']);
+    // A route that needs no scope never reports a missing save, even for a save id that is gone.
+    const exported = await fetch(app.url + '/api/export-saves', {
+      headers: { 'X-Save-Id': 'gone' },
+    });
+    assert.equal(exported.status, 200);
+    // Outside /api/ a POST is 'Not found.' and another method is not allowed.
+    assert.deepEqual(await answer(await post(app.url, '/nothing', {})), [404, 'Not found.']);
+    const put = await fetch(app.url + '/api/state', { method: 'PUT' });
+    assert.deepEqual(await answer(put), [405, 'Method not allowed.']);
+    assert.equal(put.headers.get('allow'), 'GET, HEAD, POST');
+    // With no saves the scope is missing, so an unknown route reports that first.
+    assert.deepEqual(await answer(await fetch(emptyUrl + '/api/nothing')), [
+      404,
+      'Save not found.',
+    ]);
+    // Signed out, only the account routes answer; an unknown route asks to sign in.
+    const setupToken = (
+      await fs.readFile(path.join(fresh, 'account-setup-token.txt'), 'utf8')
+    ).trim();
+    const setup = await post(emptyUrl, '/api/setup', {
+      setupToken,
+      username: 'pioneer',
+      password: 'a long password',
+    });
+    assert.equal(setup.status, 200);
+    assert.match(setup.headers.get('set-cookie') ?? '', /^planner_session=\w+; Path=\/; HttpOnly/);
+    assert.equal((await fetch(emptyUrl + '/api/workspace')).status, 200);
+    assert.deepEqual(await answer(await fetch(emptyUrl + '/api/nothing')), [
+      401,
+      'Sign in to continue.',
+    ]);
+    assert.deepEqual(await answer(await post(emptyUrl, '/api/logout', {})), [
+      401,
+      'Sign in to continue.',
+    ]);
+  } finally {
+    await close(app.server);
+    await close(empty);
+    await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(fresh, { recursive: true, force: true });
+  }
+});
