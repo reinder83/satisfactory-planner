@@ -1,6 +1,7 @@
 <!-- "Removed steps in this phase", shown while editing the build plan, with a Restore button
      per step. Removed steps keep their checklist key and checkmark, so restoring loses
-     nothing. `steps` are { id, title, icon }. -->
+     nothing. `steps` are { id, title, icon }. Restore is announced as "Restore: <step title>"
+     (#612), like the checklist's "Edit: <step title>" and "Remove: <step title>". -->
 <script setup lang="ts">
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
@@ -32,7 +33,12 @@ async function restore(event: Event, id: string) {
     <summary>Removed steps in this phase ({{ steps.length }})</summary>
     <div v-for="step in steps" :key="step.id" class="removed-step">
       <span><StepIcon :icon="step.icon" />{{ step.title }}</span
-      ><button class="btn quiet" :data-restore-task="step.id" @click="restore($event, step.id)">
+      ><button
+        class="btn quiet"
+        :data-restore-task="step.id"
+        :aria-label="'Restore: ' + step.title"
+        @click="restore($event, step.id)"
+      >
         Restore
       </button>
     </div>
