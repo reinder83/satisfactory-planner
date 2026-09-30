@@ -30,6 +30,30 @@ test('a new saved value replaces an untouched draft and keeps a typed one (#664)
   assert.equal(draft.value, '7');
 });
 
+test('a draft typed back to the value saved before is kept (#678)', async () => {
+  const saved = ref('4'),
+    draft = useDraft(() => saved.value);
+  // Committed 9, then the 4 typed back while that save is in flight.
+  draft.value = '9';
+  draft.value = '4';
+  saved.value = '9';
+  await nextTick();
+  assert.equal(draft.value, '4', 'typed after the commit: kept, though it equals the value before');
+  assert.equal(settle(draft, '9', saved.value), false, 'the commit of 9 leaves the 4');
+  assert.equal(draft.value, '4');
+  // Typed but not committed: another tab's value leaves it too.
+  saved.value = '6';
+  await nextTick();
+  assert.equal(draft.value, '4');
+  // Once its commit settles, the draft is untouched again and follows the saved value.
+  saved.value = '4';
+  await nextTick();
+  assert.equal(settle(draft, '4', saved.value), true);
+  saved.value = '2';
+  await nextTick();
+  assert.equal(draft.value, '2', 'untouched after the commit: another tab’s value is shown');
+});
+
 test('a list’s drafts: untouched keys follow the saved values, typed ones stay, new keys fill in', async () => {
   const saved = reactive<Record<string, string>>({ a: 'A', b: 'B' }),
     drafts = useDrafts(() => ({ ...saved }));
