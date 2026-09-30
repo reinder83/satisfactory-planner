@@ -26,6 +26,6 @@
     // An import or local nothing reads fails the type check, so dead code cannot pile up.
     "noUnusedLocals": true
   },
-  "include": ["public/**/*", "tests/**/*", "*.ts"],
+  "include": ["public/**/*", "tests/**/*", "server/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", "public/icons"]
 }
