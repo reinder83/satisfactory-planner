@@ -34,8 +34,30 @@ const highs = await loadHighs();
 // half as much again as the most nodes any search of the test set's plans or of #558's settings
 // needs (about 3300); a search that would need more ends as 'Unknown' and falls back exactly as
 // a time-out did (see AMPLIFY_CANDIDATES and twoStepFit in planner.ts). The clock stays only as
-// a backstop far above any search the node limit allows on an ordinary machine.
+// a backstop far above any search the node limit allows on an ordinary machine. Across one
+// phase's searches, the phase's deadline below applies as well.
 const SEARCH_LIMITS = { output_flag: false, mip_max_nodes: 5000, time_limit: 30 };
+// When the integer searches of the current phase must all have ended (a Date.now() value), set by
+// `calculate` in planner.ts at the start of each phase (#592). One phase can chain dozens of
+// searches (the fallbacks of its two-step fit, SAM conversion, and after Phase 5 the re-solves of
+// phaseTime 'final' and fueled augmenters), and each may run up to the backstop above, which
+// could take one phase past the browser worker's time limit. A search that would run past the
+// deadline gets only the time left, and one that starts after it is not run at all; both end as
+// 'Time limit reached', exactly as at the backstop. A search that starts well before the
+// deadline gets SEARCH_LIMITS unchanged, so on an ordinary machine nothing changes.
+let searchDeadline = Infinity;
+export function setSearchDeadline(at: number): void {
+  searchDeadline = at;
+}
+// The limits for the next integer search, or null when the phase's deadline has passed. The
+// deadline is wall time by Date.now; HiGHS times its searches by performance.now, which the
+// ticking-clock tests (tests/amplified-supply-fallback.test.ts) move on their own.
+function integerLimits(): typeof SEARCH_LIMITS | null {
+  if (searchDeadline === Infinity) return SEARCH_LIMITS;
+  const left = (searchDeadline - Date.now()) / 1000;
+  if (left <= 0) return null;
+  return left < SEARCH_LIMITS.time_limit ? { ...SEARCH_LIMITS, time_limit: left } : SEARCH_LIMITS;
+}
 // Solves one model and returns every variable's value by name.
 //
 // The model shape is the planner's own:
@@ -48,7 +70,8 @@ const SEARCH_LIMITS = { output_flag: false, mip_max_nodes: 5000, time_limit: 30 
 //
 // Returns { solverStatus, feasible, bounded, values }, with a variable HiGHS reports no value
 // for read as 0. `feasible` and `bounded` are both simply "HiGHS said Optimal": a MIP stopped by
-// the node or time limit ('Unknown' or 'Time limit reached'), even with a usable incumbent,
+// the node or time limit ('Unknown' or 'Time limit reached', also for one not run because the
+// phase's deadline had passed), even with a usable incumbent,
 // counts as not feasible, and `run`/`calculate` tell that case apart from a real shortage by
 // `solverStatus`.
 export function solve(model: LpModel): LpSolution {
@@ -92,7 +115,16 @@ export function solve(model: LpModel): LpSolution {
   const integers = names.map((name, i) => (model.ints?.[name] ? columns[i] : null)).filter(Boolean);
   if (integers.length) lines.push('Generals', integers.join(' '));
   lines.push('End');
-  const result = highs.solve(lines.join('\n'), SEARCH_LIMITS);
+  // Linear models (no integers) are not searched and always get SEARCH_LIMITS.
+  const limits = integers.length ? integerLimits() : SEARCH_LIMITS;
+  if (!limits)
+    return {
+      solverStatus: 'Time limit reached',
+      feasible: false,
+      bounded: false,
+      values: Object.fromEntries(names.map(name => [name, 0])),
+    };
+  const result = highs.solve(lines.join('\n'), limits);
   // A column of an infeasible solution carries no value; it, and a missing one, read as 0.
   const primal = (name: string) => {
     const column = result.Columns?.[name];
