@@ -17,12 +17,12 @@ async function leave() {
   await nextTick();
   document.querySelector<HTMLElement>(props.toggle)?.focus();
 }
-function key(e: KeyboardEvent) {
-  if (e.key !== 'Escape' || e.defaultPrevented) return;
-  const t = e.target as HTMLElement | null;
-  if (t?.closest('input, textarea, select, [contenteditable], dialog, [role="menu"]')) return;
+function key(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input, textarea, select, [contenteditable], dialog, [role="menu"]')) return;
   if (document.querySelector('dialog[open]')) return;
-  e.preventDefault();
+  event.preventDefault();
   void leave();
 }
 onMounted(() => document.addEventListener('keydown', key));

@@ -42,51 +42,53 @@ const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
 
 const page = computed(() =>
   legacy(() => {
-    const w = wizard;
-    if (!w) return { draft: false as const };
+    const wizardDraft = wizard;
+    if (!wizardDraft) return { draft: false as const };
     return {
       draft: true as const,
-      step: w.step,
-      title: w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
-      submit: submitLabel(w),
+      step: wizardDraft.step,
+      title: wizardDraft.saveId
+        ? 'Add a profile to ' + wizardDraft.saveName
+        : 'Create your factory plan',
+      submit: submitLabel(wizardDraft),
     };
   }),
 );
 
 // Settings whose answer changes what the step shows: read the step and redraw.
-function changed(e: Event) {
-  if (['recipes', 'mainPower', 'pureIngots'].includes((e.target as HTMLInputElement).name)) {
-    readWizard(e.currentTarget as HTMLFormElement);
+function changed(event: Event) {
+  if (['recipes', 'mainPower', 'pureIngots'].includes((event.target as HTMLInputElement).name)) {
+    readWizard(event.currentTarget as HTMLFormElement);
     render();
   }
-  edited(e);
+  edited(event);
 }
 
 // Goals and Resources estimate as they are edited (SP-33, wizard/estimate.ts).
 const estimating = computed(() => page.value.draft && [3, 4].includes(page.value.step));
-function edited(e: Event) {
-  if (estimating.value) scheduleEstimate(e.currentTarget as HTMLFormElement);
+function edited(event: Event) {
+  if (estimating.value) scheduleEstimate(event.currentTarget as HTMLFormElement);
 }
 
-async function submit(e: Event) {
-  const w = draft(),
-    form = e.currentTarget as HTMLFormElement,
+async function submit(event: Event) {
+  const wizardDraft = draft(),
+    form = event.currentTarget as HTMLFormElement,
     // Every step's form has its submit button.
-    b = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-  if (w.step < 5) {
-    await moveWizard(w.step + 1);
+    button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  if (wizardDraft.step < 5) {
+    await moveWizard(wizardDraft.step + 1);
     return;
   }
   // Busy while it calculates (app/busy.ts): it keeps focus (#299), and Enter in a field submits
   // nothing more meanwhile, since the browser presses the busy button for it.
-  if (isBusy(b)) return;
-  await whileBusy(b, async () => {
+  if (isBusy(button)) return;
+  await whileBusy(button, async () => {
     try {
-      await createProfile(form, b);
-    } catch (err) {
-      wizardError(form, err as Error);
+      await createProfile(form, button);
+    } catch (error) {
+      wizardError(form, error as Error);
       // calcProgress rewrote the button's label, so give it the right one back.
-      b.textContent = submitLabel(w);
+      button.textContent = submitLabel(wizardDraft);
     }
   });
 }
@@ -103,15 +105,15 @@ async function submit(e: Event) {
     <PageHeader eyebrow="NEW PROFILE" :title="page.title" />
     <div class="wizard-progress">
       <button
-        v-for="(n, i) in STEPS"
-        :key="n"
+        v-for="(title, i) in STEPS"
+        :key="title"
         type="button"
         :class="page.step === i + 1 ? 'current' : ''"
         :data-wizard-step="i + 1"
         :aria-current="page.step === i + 1 ? 'step' : undefined"
         @click="moveWizard(i + 1)"
       >
-        {{ i + 1 }}. {{ n }}
+        {{ i + 1 }}. {{ title }}
       </button>
     </div>
     <div :class="['wizard-body', estimating ? 'with-estimate' : '']">

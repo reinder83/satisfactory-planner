@@ -37,19 +37,22 @@ interface Part {
 // spare figure, as planner.ts sums them into requiredMW and availableMW. The headline is the
 // share of that available power left over, or the shortfall. The somersloop and augmenter
 // counts are legend captions.
-function headroom(x: StoredStage, s: StoredCalculatedPlan['settings']) {
-  const peak = x.peakMW || 0,
-    utility = Math.max(0, (x.requiredMW ?? peak) - peak),
-    generation = x.generationMW || 0,
-    spare = s.availablePowerGW * 1000,
+function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settings']) {
+  const peak = stagePlan.peakMW || 0,
+    utility = Math.max(0, (stagePlan.requiredMW ?? peak) - peak),
+    generation = stagePlan.generationMW || 0,
+    spare = settings.availablePowerGW * 1000,
     // What the augmenters add: their 500 MW each and the boost on new and installed
     // generation, which planner.ts counts into availableMW.
-    boost = (x.augmenters ?? 0) > 0 ? Math.max(0, (x.availableMW ?? 0) - generation - spare) : 0,
+    boost =
+      (stagePlan.augmenters ?? 0) > 0
+        ? Math.max(0, (stagePlan.availableMW ?? 0) - generation - spare)
+        : 0,
     required = peak + utility,
     available = generation + boost + spare,
     short = required - available > 0.01 ? required - available : 0;
-  const sloops = x.sloopsUsed ?? 0,
-    augmenters = x.augmenters ?? 0;
+  const sloops = stagePlan.sloopsUsed ?? 0,
+    augmenters = stagePlan.augmenters ?? 0;
   const demand: Part[] = [
     {
       key: 'peak',
@@ -65,7 +68,8 @@ function headroom(x: StoredStage, s: StoredCalculatedPlan['settings']) {
       key: 'utility',
       label: 'Utility allowance',
       mw: utility,
-      caption: (s.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
+      caption:
+        (settings.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
     },
   ];
   const supply: Part[] = [
@@ -81,7 +85,7 @@ function headroom(x: StoredStage, s: StoredCalculatedPlan['settings']) {
             key: 'boost',
             label: 'Augmenter boost',
             mw: boost,
-            caption: `${num(augmenters)} augmenter${augmenters > 1 ? 's' : ''} · ${num(x.augmenterMW)} MW plus ${Math.round((x.boost || 0) * 100)}% of base production`,
+            caption: `${num(augmenters)} augmenter${augmenters > 1 ? 's' : ''} · ${num(stagePlan.augmenterMW)} MW plus ${Math.round((stagePlan.boost || 0) * 100)}% of base production`,
           },
         ]
       : []),
@@ -121,39 +125,39 @@ function headroom(x: StoredStage, s: StoredCalculatedPlan['settings']) {
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
-    const x = calcStage();
-    if (!calculated || !x) return null;
-    const s = calculated.settings;
-    const g = calculated.guide?.power;
+    const stagePlan = calcStage();
+    if (!calculated || !stagePlan) return null;
+    const settings = calculated.settings;
+    const powerGuide = calculated.guide?.power;
     return {
       // The guide's commissioning checks and blocks, each block's text a paragraph per blank line.
-      guidePower: g
+      guidePower: powerGuide
         ? {
-            checks: g.checks.map(c => ({ ...c, done: checked(c.id) })),
-            blocks: g.blocks.map((b, i) => ({
+            checks: powerGuide.checks.map(c => ({ ...c, done: checked(c.id) })),
+            blocks: powerGuide.blocks.map((block, i) => ({
               key: i,
-              title: b.title,
-              paragraphs: b.body.split(/\n\s*\n/).filter(p => p.trim()),
+              title: block.title,
+              paragraphs: block.body.split(/\n\s*\n/).filter(p => p.trim()),
             })),
           }
         : null,
-      power: headroom(x, s),
+      power: headroom(stagePlan, settings),
       // Tightest first (SP-27): over budget, then by use, and resources this phase does not
       // draw on last; the catalogue order breaks ties.
       rows: (workspace.catalog.raw || [])
-        .map(n => {
+        .map(name => {
           // The plan's limits hold every raw resource.
-          const required = x.raw?.[n] || 0,
-            budget = s.limits[n]!,
+          const required = stagePlan.raw?.[name] || 0,
+            budget = settings.limits[name]!,
             use = resourceUse(required, budget);
           // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore.
           return {
             ...use,
-            name: n,
-            required: itemRate(n, required),
-            budget: itemRate(n, budget),
-            remaining: itemRate(n, budget - required),
-            overBy: use.over ? itemRate(n, Math.max(0, required) - Math.max(0, budget)) : '',
+            name,
+            required: itemRate(name, required),
+            budget: itemRate(name, budget),
+            remaining: itemRate(name, budget - required),
+            overBy: use.over ? itemRate(name, Math.max(0, required) - Math.max(0, budget)) : '',
           };
         })
         .sort(tightestFirst),
@@ -163,37 +167,37 @@ const page = computed(() =>
         {
           id: 'drone',
           title: 'Dedicated drone fuel',
-          rows: itemRateRows(x.drone || {}),
+          rows: itemRateRows(stagePlan.drone || {}),
           empty: 'No dedicated drone fuel in this phase.',
         },
         {
           id: 'transport',
           title: 'Vehicle fuel for group links',
-          rows: itemRateRows(x.transport || {}),
+          rows: itemRateRows(stagePlan.transport || {}),
           empty: '',
         },
         {
           id: 'storage',
           title: 'Protected storage',
-          rows: itemRateRows(x.storage || {}),
+          rows: itemRateRows(stagePlan.storage || {}),
           empty: 'No storage production requested.',
         },
         {
           id: 'supplied',
           title: 'From production you already run',
-          rows: itemRateRows(x.supplied || {}),
+          rows: itemRateRows(stagePlan.supplied || {}),
           empty: 'None credited in this phase.',
         },
         {
           id: 'surplus',
           title: 'Surplus solids',
-          rows: itemRateRows(x.surplus || {}),
+          rows: itemRateRows(stagePlan.surplus || {}),
           empty: 'None',
         },
-      ].filter(l => l.rows.length || l.empty),
-      credited: Object.keys(x.supplied || {}).length > 0,
-      conversions: x.conversions || [],
-      plutonium: num(x.plutoniumSink),
+      ].filter(list => list.rows.length || list.empty),
+      credited: Object.keys(stagePlan.supplied || {}).length > 0,
+      conversions: stagePlan.conversions || [],
+      plutonium: num(stagePlan.plutoniumSink),
     };
   }),
 );
@@ -220,19 +224,19 @@ const page = computed(() =>
         <span class="eyebrow" aria-hidden="true">Needed</span>
         <div class="power-bar" data-power-bar="demand">
           <span
-            v-for="p in page.power.demand"
-            :key="p.key"
-            :class="'seg-' + p.key"
-            :style="{ width: p.width }"
+            v-for="part in page.power.demand"
+            :key="part.key"
+            :class="'seg-' + part.key"
+            :style="{ width: part.width }"
           ></span>
         </div>
         <span class="eyebrow" aria-hidden="true">Available</span>
         <div class="power-bar" data-power-bar="supply">
           <span
-            v-for="p in page.power.supply"
-            :key="p.key"
-            :class="'seg-' + p.key"
-            :style="{ width: p.width }"
+            v-for="part in page.power.supply"
+            :key="part.key"
+            :class="'seg-' + part.key"
+            :style="{ width: part.width }"
           ></span>
           <span
             v-if="page.power.short"
@@ -243,14 +247,14 @@ const page = computed(() =>
       </div>
       <ul class="power-legend">
         <li
-          v-for="p in [...page.power.demand, ...page.power.supply]"
-          :key="p.key"
-          :data-power-part="p.key"
+          v-for="part in [...page.power.demand, ...page.power.supply]"
+          :key="part.key"
+          :data-power-part="part.key"
         >
-          <i :class="'seg-' + p.key" aria-hidden="true"></i
-          ><span class="eyebrow">{{ p.label }}</span
-          ><b>{{ p.value }}</b
-          ><small>{{ p.caption }}</small>
+          <i :class="'seg-' + part.key" aria-hidden="true"></i
+          ><span class="eyebrow">{{ part.label }}</span
+          ><b>{{ part.value }}</b
+          ><small>{{ part.caption }}</small>
         </li>
       </ul>
     </section>
@@ -266,25 +270,25 @@ const page = computed(() =>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in page.rows" :key="r.name" :class="r.idle ? 'muted' : undefined">
+          <tr v-for="row in page.rows" :key="row.name" :class="row.idle ? 'muted' : undefined">
             <td class="resource-cell">
               <div class="resource-name">
-                <ItemIcon :name="r.name" /><span>{{ r.name }}</span>
+                <ItemIcon :name="row.name" /><span>{{ row.name }}</span>
               </div>
             </td>
-            <td class="number">{{ r.required }}</td>
-            <td class="number">{{ r.budget }}</td>
-            <td :class="['number', r.over ? 'warn' : '']">{{ r.remaining }}</td>
-            <td :class="r.over ? 'warn' : undefined" data-use>
-              {{ r.use }}
+            <td class="number">{{ row.required }}</td>
+            <td class="number">{{ row.budget }}</td>
+            <td :class="['number', row.over ? 'warn' : '']">{{ row.remaining }}</td>
+            <td :class="row.over ? 'warn' : undefined" data-use>
+              {{ row.use }}
               <div
-                :class="['resource-bar', r.over ? 'over' : r.tight ? 'tight' : '']"
+                :class="['resource-bar', row.over ? 'over' : row.tight ? 'tight' : '']"
                 aria-hidden="true"
               >
-                <span :style="{ width: r.bar + '%' }"></span>
+                <span :style="{ width: row.bar + '%' }"></span>
               </div>
-              <div v-if="r.over" class="small" data-over>
-                <span aria-hidden="true">⚠ </span>Over by {{ r.overBy }}
+              <div v-if="row.over" class="small" data-over>
+                <span aria-hidden="true">⚠ </span>Over by {{ row.overBy }}
               </div>
             </td>
           </tr>
@@ -295,21 +299,21 @@ const page = computed(() =>
       Sorted by use, tightest first. Resources this phase does not draw on are listed last.
     </p>
     <div class="backup-grid">
-      <section v-for="l in page.lists" :key="l.id" class="panel" :data-rate-list="l.id">
-        <h2>{{ l.title }}</h2>
+      <section v-for="list in page.lists" :key="list.id" class="panel" :data-rate-list="list.id">
+        <h2>{{ list.title }}</h2>
         <ul
-          v-if="l.rows.length"
+          v-if="list.rows.length"
           class="supply-summary"
-          :data-transport-fuel="l.id === 'transport' || undefined"
+          :data-transport-fuel="list.id === 'transport' || undefined"
         >
-          <li v-for="r in l.rows" :key="r.name">
-            <ItemIcon :name="r.name" aria-hidden="true" /><span
-              ><b>{{ r.name }}</b> {{ r.rate }}</span
+          <li v-for="row in list.rows" :key="row.name">
+            <ItemIcon :name="row.name" aria-hidden="true" /><span
+              ><b>{{ row.name }}</b> {{ row.rate }}</span
             >
           </li>
         </ul>
-        <p v-else>{{ l.empty }}</p>
-        <p v-if="l.id === 'supplied' && page.credited" class="small muted">
+        <p v-else>{{ list.empty }}</p>
+        <p v-if="list.id === 'supplied' && page.credited" class="small muted">
           The plan does not build these lines or the chain behind them. Their extraction is assumed
           to be outside the budgets above.
         </p>
@@ -318,8 +322,8 @@ const page = computed(() =>
         <h2>Conversion and byproducts</h2>
         <p>
           <template v-if="page.conversions.length"
-            ><template v-for="(c, i) in page.conversions" :key="i"
-              ><br v-if="i" />{{ c }}</template
+            ><template v-for="(conversion, i) in page.conversions" :key="i"
+              ><br v-if="i" />{{ conversion }}</template
             ></template
           ><template v-else>No raw-resource conversion required.</template>
         </p>
@@ -334,16 +338,24 @@ const page = computed(() =>
       <section v-if="page.guidePower.checks.length" class="panel">
         <h2>Power commissioning</h2>
         <div class="checklist">
-          <label v-for="c in page.guidePower.checks" :key="c.id" class="check-row"
-            ><input type="checkbox" :data-check="c.id" @change="toggleCheck" :checked="c.done" />{{
-              c.label
-            }}</label
+          <label v-for="check in page.guidePower.checks" :key="check.id" class="check-row"
+            ><input
+              type="checkbox"
+              :data-check="check.id"
+              @change="toggleCheck"
+              :checked="check.done"
+            />{{ check.label }}</label
           >
         </div>
       </section>
-      <section v-for="b in page.guidePower.blocks" :key="b.key" class="panel" data-guide-block>
-        <h2>{{ b.title }}</h2>
-        <p v-for="(para, i) in b.paragraphs" :key="i">{{ para }}</p>
+      <section
+        v-for="block in page.guidePower.blocks"
+        :key="block.key"
+        class="panel"
+        data-guide-block
+      >
+        <h2>{{ block.title }}</h2>
+        <p v-for="(para, i) in block.paragraphs" :key="i">{{ para }}</p>
       </section>
     </div>
   </template>

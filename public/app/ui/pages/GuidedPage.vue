@@ -30,40 +30,42 @@ import SupplyRows from '../wizard/SupplyRows.vue';
 // draws nothing.
 const page = computed(() =>
   legacy(() => {
-    const w = wizard;
-    if (w?.mode !== 'guided') return null;
+    const wizardDraft = wizard;
+    if (wizardDraft?.mode !== 'guided') return null;
     const flow = guidedFlow();
-    const topics = !!w.saveId && w.guidedAsk === null;
-    const index = topics ? -1 : Math.min(w.guidedStep - 1, flow.length - 1);
-    const q = topics ? null : flow[index];
+    const topics = !!wizardDraft.saveId && wizardDraft.guidedAsk === null;
+    const index = topics ? -1 : Math.min(wizardDraft.guidedStep - 1, flow.length - 1);
+    const question = topics ? null : flow[index];
     return {
-      key: topics ? 'topics' : String(w.guidedStep),
-      title: w.saveId ? 'Add a profile to ' + w.saveName : 'Create your factory plan',
+      key: topics ? 'topics' : String(wizardDraft.guidedStep),
+      title: wizardDraft.saveId
+        ? 'Add a profile to ' + wizardDraft.saveName
+        : 'Create your factory plan',
       topics,
       index,
-      progress: flow.map((x, i) => ({
-        id: x.id,
-        label: x.short || x.title.replace(/\?$/, ''),
+      progress: flow.map((step, i) => ({
+        id: step.id,
+        label: step.short || step.title.replace(/\?$/, ''),
         state: i === index ? 'current' : i < index ? 'done' : '',
       })),
-      question: q,
-      timed: q?.id === 'goal' && w.settings.goal === 'timed',
-      hours: w.settings.hours ?? 8,
-      adding: !!w.saveId,
-      name: w.saveId ? w.name : w.saveName,
+      question,
+      timed: question?.id === 'goal' && wizardDraft.settings.goal === 'timed',
+      hours: wizardDraft.settings.hours ?? 8,
+      adding: !!wizardDraft.saveId,
+      name: wizardDraft.saveId ? wizardDraft.name : wizardDraft.saveName,
       last: topics ? false : index >= flow.length - 1,
-      first: topics || w.guidedStep <= 1,
-      advancedStep: q?.step || 1,
+      first: topics || wizardDraft.guidedStep <= 1,
+      advancedStep: question?.step || 1,
     };
   }),
 );
 
 // A question's answer, a top-up chip or a topic decides what follows: read and redraw. A topic
 // is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
-function changed(e: Event) {
-  const name = String((e.target as HTMLInputElement).name);
+function changed(event: Event) {
+  const name = String((event.target as HTMLInputElement).name);
   if (name.startsWith('guided:') || name === 'topup' || name === 'topic') {
-    readGuidedForm(e.currentTarget as HTMLFormElement);
+    readGuidedForm(event.currentTarget as HTMLFormElement);
     render();
   }
 }
@@ -86,13 +88,13 @@ function submit() {
     <div v-if="!page.topics" class="guided-stepper">
       <div class="guided-progress" role="list">
         <span
-          v-for="(p, i) in page.progress"
-          :key="p.id"
+          v-for="(step, i) in page.progress"
+          :key="step.id"
           role="listitem"
-          :class="p.state"
-          :aria-current="p.state === 'current' ? 'step' : undefined"
+          :class="step.state"
+          :aria-current="step.state === 'current' ? 'step' : undefined"
           ><i aria-hidden="true">{{ i + 1 }}</i
-          ><b class="guided-step-label">{{ p.label }}</b></span
+          ><b class="guided-step-label">{{ step.label }}</b></span
         >
       </div>
       <span class="guided-count" data-guided-count

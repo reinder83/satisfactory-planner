@@ -55,20 +55,20 @@ onMounted(async () => {
 const page = computed(() =>
   legacy(() => ({
     accountsEnabled: workspace.accountsEnabled,
-    saves: workspace.saves.map(s => ({
-      id: s.id,
-      name: s.name,
-      profiles: s.profiles.map(p => ({
-        id: p.id,
-        name: p.name,
-        open: s.id === currentSave.id && p.id === currentProfile.id,
-        kind: p.kind === 'original' ? 'PRESERVED HANDBOOK' : 'CALCULATED PROFILE',
-        summary: p.settings
-          ? `${p.settings.purity} purity · ${num(p.settings.multiplier)}× elevator · ${num(p.settings.powerFactor)}× power`
+    saves: workspace.saves.map(save => ({
+      id: save.id,
+      name: save.name,
+      profiles: save.profiles.map(profile => ({
+        id: profile.id,
+        name: profile.name,
+        open: save.id === currentSave.id && profile.id === currentProfile.id,
+        kind: profile.kind === 'original' ? 'PRESERVED HANDBOOK' : 'CALCULATED PROFILE',
+        summary: profile.settings
+          ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
           : '50× elevator · pure ingots · nuclear recycling',
         // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
-        progress: `${p.completed ? plural(p.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(p.phase)}`,
-        bar: phaseBar(p),
+        progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
+        bar: phaseBar(profile),
       })),
     })),
   })),
@@ -77,20 +77,20 @@ const page = computed(() =>
 // one worked on read as done, that one fills with its share of production lines ticked Running,
 // later ones are empty; Post Phase 5 works on Phase 5's lines. The label says it without colour:
 // "Phase 3 of 5, 22%". None without per-phase counts (a handbook profile).
-function phaseBar(p: ProfileSummary) {
-  if (!p.phases?.length) return null;
-  const at = p.phase === 'post' ? 5 : Number(p.phase);
-  const current = p.phases.find(x => Number(x.phase) === at);
-  const pct = current?.total ? Math.round((current.done / current.total) * 100) : 0;
+function phaseBar(profile: ProfileSummary) {
+  if (!profile.phases?.length) return null;
+  const at = profile.phase === 'post' ? 5 : Number(profile.phase);
+  const current = profile.phases.find(entry => Number(entry.phase) === at);
+  const percent = current?.total ? Math.round((current.done / current.total) * 100) : 0;
   return {
-    label: `${p.phase === 'post' ? phaseLabel('post') : `Phase ${at} of 5`}, ${pct}%`,
-    segments: p.phases.map(x => {
-      const n = Number(x.phase);
-      const state = n < at ? 'done' : n === at ? 'current' : 'later';
+    label: `${profile.phase === 'post' ? phaseLabel('post') : `Phase ${at} of 5`}, ${percent}%`,
+    segments: profile.phases.map(entry => {
+      const phaseNumber = Number(entry.phase);
+      const state = phaseNumber < at ? 'done' : phaseNumber === at ? 'current' : 'later';
       return {
-        phase: x.phase,
+        phase: entry.phase,
         state,
-        fill: state === 'done' ? 100 : state === 'current' ? pct : 0,
+        fill: state === 'done' ? 100 : state === 'current' ? percent : 0,
       };
     }),
   };
@@ -103,30 +103,31 @@ type ProfileCard = SaveCard['profiles'][number];
 // That button is busy meanwhile (bound aria-disabled, app/busy.ts: it keeps focus, #299) and its
 // handler does nothing more.
 const busy = ref('');
-const key = (action: string, s: SaveCard, p: ProfileCard) => `${action}:${s.id}:${p.id}`;
+const key = (action: string, save: SaveCard, profile: ProfileCard) =>
+  `${action}:${save.id}:${profile.id}`;
 // A card's ⋯ menu (ui/ActionMenu.vue) holds Duplicate, Share and Remove (#238). It is busy while
 // one of them runs, and says "Copying…" for Duplicate, since the menu has closed by then.
-const menuId = (s: SaveCard, p: ProfileCard) => `profile-menu-${s.id}-${p.id}`;
-const menuBusy = (s: SaveCard, p: ProfileCard) =>
-  ['duplicate', 'share', 'remove'].some(a => busy.value === key(a, s, p));
+const menuId = (save: SaveCard, profile: ProfileCard) => `profile-menu-${save.id}-${profile.id}`;
+const menuBusy = (save: SaveCard, profile: ProfileCard) =>
+  ['duplicate', 'share', 'remove'].some(action => busy.value === key(action, save, profile));
 
 // "Duplicate": copy the profile with its progress and open the copy.
-async function duplicate(s: SaveCard, p: ProfileCard) {
-  if (busy.value === key('duplicate', s, p)) return;
+async function duplicate(save: SaveCard, profile: ProfileCard) {
+  if (busy.value === key('duplicate', save, profile)) return;
   if (!(await allowSwitch())) return;
-  busy.value = key('duplicate', s, p);
+  busy.value = key('duplicate', save, profile);
   try {
     await writeQueue;
-    const r = await post<{ workspace: WorkspaceSummary; saveId: string; profileId: string }>(
+    const reply = await post<{ workspace: WorkspaceSummary; saveId: string; profileId: string }>(
       '/api/duplicate-profile',
-      { saveId: s.id, profileId: p.id },
+      { saveId: save.id, profileId: profile.id },
     );
-    setWorkspace(r.workspace);
-    await loadContext(r.saveId, r.profileId);
+    setWorkspace(reply.workspace);
+    await loadContext(reply.saveId, reply.profileId);
     navigate('plan');
     toast('Copy created and opened. Changes here leave the original profile untouched.');
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -134,24 +135,24 @@ async function duplicate(s: SaveCard, p: ProfileCard) {
 
 // "Share": download that profile as a full-save file with its progress stripped (share=1),
 // for someone else to import.
-async function share(s: SaveCard, p: ProfileCard) {
-  if (busy.value === key('share', s, p)) return;
-  busy.value = key('share', s, p);
+async function share(save: SaveCard, profile: ProfileCard) {
+  if (busy.value === key('share', save, profile)) return;
+  busy.value = key('share', save, profile);
   try {
     await writeQueue;
     const data = await request(
       '/api/export-saves?save=' +
-        encodeURIComponent(s.id) +
+        encodeURIComponent(save.id) +
         '&profile=' +
-        encodeURIComponent(p.id) +
+        encodeURIComponent(profile.id) +
         '&share=1',
     );
-    downloadJson(data, (slug(p.name || 'profile') || 'profile') + '-share.json');
+    downloadJson(data, (slug(profile.name || 'profile') || 'profile') + '-share.json');
     toast(
       'Share file downloaded: the plan without your progress. Others import it under Backup → Import saves.',
     );
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -162,9 +163,9 @@ async function share(s: SaveCard, p: ProfileCard) {
 // profiles keep their progress. Remove is in the card's ⋯ menu, which has closed and given focus
 // to ⋯ by now, so ⋯ is the control that asked: focus then goes to the next profile's ⋯, else the
 // previous one's, else "Create a save" (ui/refocus.ts, #286).
-async function remove(e: Event, s: SaveCard, p: ProfileCard) {
-  if (busy.value === key('remove', s, p)) return;
-  const item = e.currentTarget instanceof Element ? e.currentTarget : null;
+async function remove(event: Event, save: SaveCard, profile: ProfileCard) {
+  if (busy.value === key('remove', save, profile)) return;
+  const item = event.currentTarget instanceof Element ? event.currentTarget : null;
   const menu = item?.closest('.profile-card')?.querySelector('[data-profile-menu]') ?? item;
   const refocus = refocusAfterRemoval(menu, {
     row: '#main .profile-card',
@@ -177,9 +178,9 @@ async function remove(e: Event, s: SaveCard, p: ProfileCard) {
       title: 'Remove this profile?',
       body:
         'Are you sure? Remove "' +
-        p.name +
+        profile.name +
         '" and its progress and notes?' +
-        (s.profiles.length === 1
+        (save.profiles.length === 1
           ? ' This also removes the empty save.'
           : ' Other profiles keep their progress.'),
       confirmLabel: 'Remove profile',
@@ -187,16 +188,16 @@ async function remove(e: Event, s: SaveCard, p: ProfileCard) {
     }))
   )
     return;
-  busy.value = key('remove', s, p);
+  busy.value = key('remove', save, profile);
   try {
     await writeQueue;
-    await post('/api/remove-profile', { saveId: s.id, profileId: p.id, confirmed: true });
+    await post('/api/remove-profile', { saveId: save.id, profileId: profile.id, confirmed: true });
     await boot();
     if (workspace.saves.length) navigate('profiles');
     toast('Profile removed.');
     await refocus();
-  } catch (err) {
-    toast((err as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -205,30 +206,43 @@ async function remove(e: Event, s: SaveCard, p: ProfileCard) {
 // "Open profile" / "Continue current profile": make it the active profile on the server,
 // load it and show its plan (openProfile in ui/actions.ts, which the sidebar's profile switcher
 // uses too).
-function openCard(s: SaveCard, p: ProfileCard) {
-  if (busy.value === key('open', s, p)) return;
-  return openProfile(s.id, p.id, on => (busy.value = on ? key('open', s, p) : ''));
+function openCard(save: SaveCard, profile: ProfileCard) {
+  if (busy.value === key('open', save, profile)) return;
+  return openProfile(
+    save.id,
+    profile.id,
+    on => (busy.value = on ? key('open', save, profile) : ''),
+  );
 }
 
 // Renames any save or profile in place (SP-31, ui/InlineName.vue), naming it in the request's
 // scope headers; a save is scoped with any one of its profiles. The new names are copied into
 // the session's currentSave and currentProfile, so the sidebar footer and the breadcrumb follow.
 // A failure is toasted and rethrown, so the input stays open.
-async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }, name: string) {
+async function rename(
+  target: 'save' | 'profile',
+  save: SaveCard,
+  profile: { id: string },
+  name: string,
+) {
   try {
     setWorkspace(
-      await post<WorkspaceSummary>('/api/rename', { target, name }, { save: s.id, profile: p.id }),
+      await post<WorkspaceSummary>(
+        '/api/rename',
+        { target, name },
+        { save: save.id, profile: profile.id },
+      ),
     );
-    const open = workspace.saves.find(x => x.id === currentSave.id);
+    const open = workspace.saves.find(entry => entry.id === currentSave.id);
     if (open) {
       currentSave.name = open.name;
       currentProfile.name =
-        open.profiles.find(x => x.id === currentProfile.id)?.name ?? currentProfile.name;
+        open.profiles.find(entry => entry.id === currentProfile.id)?.name ?? currentProfile.name;
     }
     render();
-  } catch (err) {
-    toast((err as Error).message, true);
-    throw err;
+  } catch (error) {
+    toast((error as Error).message, true);
+    throw error;
   }
 }
 </script>
@@ -247,89 +261,89 @@ async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'
     }}</a>
   </div>
-  <section v-for="s in page.saves" :key="s.id" class="panel save-panel">
+  <section v-for="save in page.saves" :key="save.id" class="panel save-panel">
     <div class="section-head">
       <InlineName
-        :name="s.name"
+        :name="save.name"
         what="save"
         tag="h2"
-        :hook="{ 'data-rename-save': s.id }"
-        :save="n => rename('save', s, s.profiles[0]!, n)"
+        :hook="{ 'data-rename-save': save.id }"
+        :save="name => rename('save', save, save.profiles[0]!, name)"
       />
-      <button class="btn" :data-new-profile="s.id" @click="startWizard(s.id)">
+      <button class="btn" :data-new-profile="save.id" @click="startWizard(save.id)">
         Try another profile
       </button>
     </div>
     <div class="profile-cards">
       <article
-        v-for="p in s.profiles"
-        :key="p.id"
-        :class="['profile-card', p.open ? 'selected' : '']"
+        v-for="profile in save.profiles"
+        :key="profile.id"
+        :class="['profile-card', profile.open ? 'selected' : '']"
       >
-        <div class="eyebrow">{{ p.kind }}</div>
+        <div class="eyebrow">{{ profile.kind }}</div>
         <InlineName
-          :name="p.name"
+          :name="profile.name"
           what="profile"
           tag="h3"
-          :hook="{ 'data-rename-profile': p.id, 'data-rename-profile-save': s.id }"
-          :save="n => rename('profile', s, p, n)"
+          :hook="{ 'data-rename-profile': profile.id, 'data-rename-profile-save': save.id }"
+          :save="name => rename('profile', save, profile, name)"
         />
-        <p>{{ p.summary }}</p>
-        <p class="small">{{ p.progress }}</p>
+        <p>{{ profile.summary }}</p>
+        <p class="small">{{ profile.progress }}</p>
         <div
-          v-if="p.bar"
+          v-if="profile.bar"
           class="phase-bar"
           role="img"
-          :aria-label="p.bar.label"
-          :data-phase-bar="p.id"
+          :aria-label="profile.bar.label"
+          :data-phase-bar="profile.id"
         >
           <span
-            v-for="seg in p.bar.segments"
-            :key="seg.phase"
-            :class="['phase-seg', seg.state]"
-            :data-phase-seg="seg.phase"
-            ><span :style="{ width: seg.fill + '%' }"></span
+            v-for="segment in profile.bar.segments"
+            :key="segment.phase"
+            :class="['phase-seg', segment.state]"
+            :data-phase-seg="segment.phase"
+            ><span :style="{ width: segment.fill + '%' }"></span
           ></span>
         </div>
         <div class="profile-actions">
           <button
-            :class="['btn', p.open ? '' : 'primary']"
-            :data-open-save="s.id"
-            :data-open-profile="p.id"
-            :aria-disabled="busy === key('open', s, p) || undefined"
-            @click="openCard(s, p)"
+            :class="['btn', profile.open ? '' : 'primary']"
+            :data-open-save="save.id"
+            :data-open-profile="profile.id"
+            :aria-disabled="busy === key('open', save, profile) || undefined"
+            @click="openCard(save, profile)"
           >
-            {{ p.open ? 'Continue current profile' : 'Open profile' }}
+            {{ profile.open ? 'Continue current profile' : 'Open profile' }}
           </button>
           <ActionMenu
-            :id="menuId(s, p)"
-            :label="'More actions for ' + p.name"
-            :busy="menuBusy(s, p)"
-            :busy-text="busy === key('duplicate', s, p) ? 'Copying…' : undefined"
-            :data-profile-menu="p.id"
-            :data-profile-menu-save="s.id"
+            :id="menuId(save, profile)"
+            :label="'More actions for ' + profile.name"
+            :busy="menuBusy(save, profile)"
+            :busy-text="busy === key('duplicate', save, profile) ? 'Copying…' : undefined"
+            :data-profile-menu="profile.id"
+            :data-profile-menu-save="save.id"
           >
             <button
               type="button"
               role="menuitem"
               tabindex="-1"
               class="btn"
-              :data-duplicate-profile="p.id"
-              :data-duplicate-save="s.id"
-              :aria-disabled="busy === key('duplicate', s, p) || undefined"
-              @click="duplicate(s, p)"
+              :data-duplicate-profile="profile.id"
+              :data-duplicate-save="save.id"
+              :aria-disabled="busy === key('duplicate', save, profile) || undefined"
+              @click="duplicate(save, profile)"
             >
-              {{ busy === key('duplicate', s, p) ? 'Copying…' : 'Duplicate' }}
+              {{ busy === key('duplicate', save, profile) ? 'Copying…' : 'Duplicate' }}
             </button>
             <button
               type="button"
               role="menuitem"
               tabindex="-1"
               class="btn"
-              :data-share-profile="p.id"
-              :data-share-save="s.id"
-              :aria-disabled="busy === key('share', s, p) || undefined"
-              @click="share(s, p)"
+              :data-share-profile="profile.id"
+              :data-share-save="save.id"
+              :aria-disabled="busy === key('share', save, profile) || undefined"
+              @click="share(save, profile)"
             >
               Share (without progress)
             </button>
@@ -338,10 +352,10 @@ async function rename(target: 'save' | 'profile', s: SaveCard, p: { id: string }
               role="menuitem"
               tabindex="-1"
               class="btn danger"
-              :data-remove-profile="p.id"
-              :data-remove-save="s.id"
-              :aria-disabled="busy === key('remove', s, p) || undefined"
-              @click="remove($event, s, p)"
+              :data-remove-profile="profile.id"
+              :data-remove-save="save.id"
+              :aria-disabled="busy === key('remove', save, profile) || undefined"
+              @click="remove($event, save, profile)"
             >
               Remove profile…
             </button>

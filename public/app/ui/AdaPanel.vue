@@ -34,8 +34,8 @@ function next() {
 
 // "Mute" / "Unmute": remembered in localStorage (adaStore), never in a saved profile. The panel is
 // swapped for the other one, so focus goes to its Unmute / Mute (ui/refocus.ts, #290).
-function mute(on: boolean, e: Event) {
-  const refocus = refocusAfterRemoval(e.currentTarget, {
+function mute(on: boolean, event: Event) {
+  const refocus = refocusAfterRemoval(event.currentTarget, {
     fallback: [`[data-ada-mute="${on ? 'off' : 'on'}"]`],
   });
   setAdaMuted(on);

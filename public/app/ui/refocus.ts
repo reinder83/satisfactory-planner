@@ -46,7 +46,7 @@ export function refocusAfterRemoval(
       .map(r => (control ? r.querySelector<HTMLElement>(control) : (r as HTMLElement)))
       .find(el => el);
     const first = (root: ParentNode) =>
-      fallback.map(s => root.querySelector<HTMLElement>(s)).find(el => el);
+      fallback.map(selector => root.querySelector<HTMLElement>(selector)).find(el => el);
     const target =
       inRows ?? first(within()) ?? first(document) ?? document.querySelector<HTMLElement>('#main');
     target?.focus();

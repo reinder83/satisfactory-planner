@@ -51,8 +51,8 @@ const list = ref<HTMLElement>();
 const items = () =>
   list.value ? [...list.value.querySelectorAll<HTMLElement>('[role^="menuitem"]')] : [];
 
-function outside(e: Event) {
-  if (!(e.target instanceof Node) || !root.value?.contains(e.target)) hide(false);
+function outside(event: Event) {
+  if (!(event.target instanceof Node) || !root.value?.contains(event.target)) hide(false);
 }
 
 async function show(at: 'first' | 'last') {
@@ -81,39 +81,39 @@ function toggle() {
   else void show('first');
 }
 
-function triggerKey(e: KeyboardEvent) {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  e.preventDefault();
-  void show(e.key === 'ArrowUp' ? 'last' : 'first');
+function triggerKey(event: KeyboardEvent) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  void show(event.key === 'ArrowUp' ? 'last' : 'first');
 }
 
-function menuKey(e: KeyboardEvent) {
+function menuKey(event: KeyboardEvent) {
   const all = items();
   const at = all.indexOf(document.activeElement as HTMLElement);
-  const to = (i: number) => {
-    e.preventDefault();
-    all[(i + all.length) % all.length]?.focus();
+  const focusItem = (index: number) => {
+    event.preventDefault();
+    all[(index + all.length) % all.length]?.focus();
   };
-  if (e.key === 'ArrowDown') to(at + 1);
-  else if (e.key === 'ArrowUp') to(at < 0 ? -1 : at - 1);
-  else if (e.key === 'Home') to(0);
-  else if (e.key === 'End') to(-1);
-  else if (e.key === 'Escape') {
+  if (event.key === 'ArrowDown') focusItem(at + 1);
+  else if (event.key === 'ArrowUp') focusItem(at < 0 ? -1 : at - 1);
+  else if (event.key === 'Home') focusItem(0);
+  else if (event.key === 'End') focusItem(-1);
+  else if (event.key === 'Escape') {
     // Not the Escape of a dialog the menu may be in.
-    e.preventDefault();
-    e.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     hide(true);
-  } else if (e.key === 'Tab') hide(false);
+  } else if (event.key === 'Tab') hide(false);
 }
 
 // Capture: before the item's own handler, which then finds focus on ⋯.
-function chosen(e: Event) {
-  if (e.target instanceof Element && e.target.closest('[role^="menuitem"]')) hide(true);
+function chosen(event: Event) {
+  if (event.target instanceof Element && event.target.closest('[role^="menuitem"]')) hide(true);
 }
 
 // Focus that leaves the menu for another control (Shift+Tab, a click elsewhere) closes it.
-function left(e: FocusEvent) {
-  const to = e.relatedTarget;
+function left(event: FocusEvent) {
+  const to = event.relatedTarget;
   if (to instanceof Node && !root.value?.contains(to)) hide(false);
 }
 

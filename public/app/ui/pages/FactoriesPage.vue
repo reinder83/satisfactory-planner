@@ -45,24 +45,26 @@ import { pickFactoryFilter } from '../actions.ts';
 import type { HandbookFactory } from '../../../types/index.ts';
 
 // Which shared site a factory is drawn under; null means a card of its own.
-const siteOf = (f: HandbookFactory) =>
-  ['Plastic', 'Rubber'].includes(f.name) ? 'oil' : f.nuclear ? 'nuclear' : null;
+const siteOf = (factory: HandbookFactory) =>
+  ['Plastic', 'Rubber'].includes(factory.name) ? 'oil' : factory.nuclear ? 'nuclear' : null;
 
 // null for a stage the handbook has no plan for (Phase 1 or 2, which only a calculated profile
 // can be at, or any phase of the browser edition's empty handbook): until render() swaps this
 // page out, it draws nothing rather than throwing (#356).
 const page = computed(() =>
   legacy(() => {
-    const p = plan.plans[stage()];
-    if (!p) return null;
-    const running = (f: HandbookFactory) => checked('factory-' + stage() + '-' + f.id);
+    const stagePlan = plan.plans[stage()];
+    if (!stagePlan) return null;
+    const running = (factory: HandbookFactory) => checked('factory-' + stage() + '-' + factory.id);
     // Factories at this stage that match the search text, then those the status chip keeps. The
     // chips count what the search found.
     const found = plan.factories
       .filter(f => f.stages[stage()])
-      .filter(f =>
+      .filter(factory =>
         // The filter above keeps only factories with this stage.
-        (f.name + ' ' + f.stages[stage()]!.recipe).toLowerCase().includes(query.toLowerCase()),
+        (factory.name + ' ' + factory.stages[stage()]!.recipe)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
       );
     const status = statusFilter(found, factoryFilter, running, [['local', f => !!f.local]]);
     const list = status.list;
@@ -78,7 +80,7 @@ const page = computed(() =>
     const sites = [
       site(
         'oil',
-        `One shared machine set produces these outputs together: ${num(p.oil.reduce((a, x) => a + x.machines, 0))} buildings · crude ${num(p.oilTotals.crude)}/min · water ${num(p.oilTotals.water)}/min. Open a card for the shared recipe table.`,
+        `One shared machine set produces these outputs together: ${num(stagePlan.oil.reduce((total, line) => total + line.machines, 0))} buildings · crude ${num(stagePlan.oilTotals.crude)}/min · water ${num(stagePlan.oilTotals.water)}/min. Open a card for the shared recipe table.`,
       ),
       site(
         'nuclear',
@@ -88,7 +90,8 @@ const page = computed(() =>
     const singles = ungrouped.filter(f => !siteOf(f));
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
-      gr => factoryEditing || list.some(f => membershipsOf(f.id).some(m => m.group === gr.id)),
+      group =>
+        factoryEditing || list.some(f => membershipsOf(f.id).some(m => m.group === group.id)),
     );
     return {
       post: phase() === 'post',
@@ -111,8 +114,8 @@ const page = computed(() =>
   }),
 );
 
-function search(e: Event) {
-  setQuery((e.target as HTMLInputElement).value);
+function search(event: Event) {
+  setQuery((event.target as HTMLInputElement).value);
   render();
 }
 </script>
@@ -140,7 +143,7 @@ function search(e: Event) {
       /><FilterChips
         :chips="page.chips"
         :active="page.active.value"
-        @pick="v => pickFactoryFilter(v)"
+        @pick="value => pickFactoryFilter(value)"
       /><span class="small muted">{{ page.list.length }} targets</span><EditGroupsToggle />
     </div>
     <JumpBar :entries="page.jumps" />
@@ -148,13 +151,13 @@ function search(e: Event) {
     <GroupSections :items="page.list" :key-of="f => f.id">
       <template #card="{ item, group }"><FactoryCard :factory="item" :group="group" /></template>
     </GroupSections>
-    <SiteSection v-for="s in page.sites" :key="s.kind" :site="s"
-      ><FactoryCard v-for="f in s.members" :key="f.id" :factory="f"
+    <SiteSection v-for="site in page.sites" :key="site.kind" :site="site"
+      ><FactoryCard v-for="factory in site.members" :key="factory.id" :factory="factory"
     /></SiteSection>
     <p v-if="page.label" class="eyebrow">UNGROUPED FACTORIES</p>
     <div class="cards">
       <template v-if="page.singles.length"
-        ><FactoryCard v-for="f in page.singles" :key="f.id" :factory="f"
+        ><FactoryCard v-for="factory in page.singles" :key="factory.id" :factory="factory"
       /></template>
       <div v-else-if="!page.list.length" class="empty-state" data-filter-empty>
         {{ page.empty }}
