@@ -49,9 +49,9 @@ const server = http.createServer(async (req, res) => {
     res.end('Missing');
   }
 });
-await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 // Listening on a TCP port, so the address is an AddressInfo.
-const port = (s: http.Server) => (s.address() as AddressInfo).port;
+const port = (listener: http.Server) => (listener.address() as AddressInfo).port;
 const base = 'http://127.0.0.1:' + port(server) + '/satisfactory-planner/';
 let browser: import('playwright').Browser | undefined, backend: http.Server | undefined;
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-browser-check-'));
@@ -65,15 +65,16 @@ try {
   const context = await browser.newContext(),
     page = await context.newPage();
   const errors: string[] = [];
-  page.on('response', r => {
-    if (r.status() >= 400) errors.push('HTTP ' + r.status() + ': ' + new URL(r.url()).pathname);
+  page.on('response', response => {
+    if (response.status() >= 400)
+      errors.push('HTTP ' + response.status() + ': ' + new URL(response.url()).pathname);
   });
-  page.on('pageerror', e => {
-    errors.push(e.message);
-    console.log('Browser error:', e.message);
+  page.on('pageerror', error => {
+    errors.push(error.message);
+    console.log('Browser error:', error.message);
   });
-  page.on('console', m => {
-    if (m.type() === 'error') console.log('Console:', m.text());
+  page.on('console', message => {
+    if (message.type() === 'error') console.log('Console:', message.text());
   });
   await page.goto(base);
   await page.locator('#wizard-form').waitFor();
@@ -142,10 +143,10 @@ try {
     .waitFor();
   // A folded phase opens from the keyboard.
   const later = page.locator('[data-phase-notes="2"]');
-  assert.equal(await later.evaluate(d => (d as HTMLDetailsElement).open), false);
+  assert.equal(await later.evaluate(details => (details as HTMLDetailsElement).open), false);
   await later.locator('summary').focus();
   await page.keyboard.press('Enter');
-  assert.equal(await later.evaluate(d => (d as HTMLDetailsElement).open), true);
+  assert.equal(await later.evaluate(details => (details as HTMLDetailsElement).open), true);
   await page.reload();
   await page.locator('#phase-note-1').waitFor();
   assert.equal(await page.locator('#phase-note-1').inputValue(), 'Remember my iron site');
@@ -170,13 +171,14 @@ try {
   await page.goto(base + '#factories');
   await page.locator('[data-calc-factory]').first().click();
   await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
-  const topOfDialog = await page.locator('#detail').evaluate((d: HTMLDialogElement) => {
-    d.scrollTop = d.scrollHeight;
-    const box = d.getBoundingClientRect();
-    const at = (dy: number) => document.elementFromPoint(box.left + box.width / 2, box.top + dy);
+  const topOfDialog = await page.locator('#detail').evaluate((dialog: HTMLDialogElement) => {
+    dialog.scrollTop = dialog.scrollHeight;
+    const box = dialog.getBoundingClientRect();
+    const at = (fromTop: number) =>
+      document.elementFromPoint(box.left + box.width / 2, box.top + fromTop);
     return {
-      scrolled: d.scrollTop > 0,
-      stripe: at(3) === d,
+      scrolled: dialog.scrollTop > 0,
+      stripe: at(3) === dialog,
       head: !!at(10)?.closest('.dialog-head'),
     };
   });
@@ -208,11 +210,12 @@ try {
   assert.deepEqual((await api<ContextReply>('/api/context')).payoff, payoff);
   // Every dialog opens at the top (#316): the <dialog> is the scroll container and kept its
   // offset while closed, and while a link inside it put another factory in its place.
-  const detailTop = () => page.locator('#detail').evaluate((d: HTMLDialogElement) => d.scrollTop);
+  const detailTop = () =>
+    page.locator('#detail').evaluate((dialog: HTMLDialogElement) => dialog.scrollTop);
   const scrollDetail = () =>
-    page.locator('#detail').evaluate((d: HTMLDialogElement) => {
-      d.scrollTop = d.scrollHeight;
-      return d.scrollTop;
+    page.locator('#detail').evaluate((dialog: HTMLDialogElement) => {
+      dialog.scrollTop = dialog.scrollHeight;
+      return dialog.scrollTop;
     });
   await page.goto(base + '#factories');
   await page.locator('[data-calc-factory]').first().click();
@@ -227,7 +230,10 @@ try {
   const from = await page.locator('#detail h2').textContent();
   assert.ok((await scrollDetail()) > 0);
   await inner.click();
-  await page.waitForFunction(t => document.querySelector('#detail h2')?.textContent !== t, from);
+  await page.waitForFunction(
+    previous => document.querySelector('#detail h2')?.textContent !== previous,
+    from,
+  );
   assert.equal(await detailTop(), 0, 'a factory opened from the dialog starts at the top');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
@@ -240,14 +246,17 @@ try {
   await page.waitForFunction(() => document.querySelector<HTMLDialogElement>('#detail')!.open);
   const firstControl = () =>
     page.evaluate(() => {
-      const a = document.activeElement;
-      return a?.matches('#detail .dialog-head [data-check]') ? 'running' : a?.tagName;
+      const focused = document.activeElement;
+      return focused?.matches('#detail .dialog-head [data-check]') ? 'running' : focused?.tagName;
     });
   assert.equal(await firstControl(), 'running', 'opening focuses the Running box');
   const shown = await page.locator('#detail h2').textContent();
   await page.locator('#detail [data-calc-factory]').last().focus();
   await page.keyboard.press('Enter');
-  await page.waitForFunction(t => document.querySelector('#detail h2')?.textContent !== t, shown);
+  await page.waitForFunction(
+    previous => document.querySelector('#detail h2')?.textContent !== previous,
+    shown,
+  );
   assert.equal(await firstControl(), 'running', 'the dialog put in its place takes focus');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
@@ -263,21 +272,24 @@ try {
       .locator('.bay')
       .filter({ has: page.locator('[data-complete-bay="A"]') })
       .locator('[data-complete-slot]')
-      .evaluateAll(xs => xs.map(x => x.dataset.completeSlot ?? ''));
+      .evaluateAll(slots => slots.map(slot => slot.dataset.completeSlot ?? ''));
     await page.locator('[data-complete-bay="A"]').click();
     // These functions run in the page, which has the button and the dialog.
     await page.waitForFunction(
       () => document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
     );
-    let s = await api<ProgressState>('/api/state');
+    const progress = await api<ProgressState>('/api/state');
     for (const id of shown)
-      for (const k of ['built', 'labelled', 'connected', 'verified'])
-        assert.equal(s.checks['slot-' + id + '-' + k], true);
+      for (const step of ['built', 'labelled', 'connected', 'verified'])
+        assert.equal(progress.checks['slot-' + id + '-' + step], true);
     await page.locator('[data-complete-slot="A01"]').uncheck();
     await page.waitForFunction(
       () => !document.querySelector<HTMLButtonElement>('[data-complete-bay="A"]')!.disabled,
     );
-    assert.equal(await page.locator('#detail').evaluate((x: HTMLDialogElement) => x.open), false);
+    assert.equal(
+      await page.locator('#detail').evaluate((dialog: HTMLDialogElement) => dialog.open),
+      false,
+    );
     await page.locator('[data-slot="A01"]').click();
     await page.locator('#detail [data-save-note]').fill('Storage test note');
     await page
@@ -285,7 +297,10 @@ try {
       .getByText(/^Saved · /)
       .waitFor();
     assert.equal((await api<ProgressState>('/api/state')).notes['slot-A01'], 'Storage test note');
-    assert.equal(await page.locator('#detail').evaluate((x: HTMLDialogElement) => x.open), true);
+    assert.equal(
+      await page.locator('#detail').evaluate((dialog: HTMLDialogElement) => dialog.open),
+      true,
+    );
     await page.locator('#detail [data-close]').click();
     await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#detail')!.open);
     await page.locator('[data-slot="A01"]').click();
@@ -335,7 +350,9 @@ try {
       .locator('.bay')
       .filter({ has: page.locator('[data-complete-bay="A"]') })
       .locator('[data-drag-slot]')
-      .evaluateAll(xs => xs.map(x => (x as HTMLElement).dataset.dragSlot ?? ''));
+      .evaluateAll(handles =>
+        handles.map(handle => (handle as HTMLElement).dataset.dragSlot ?? ''),
+      );
     const [first, second] = filled.slice(-2);
     assert.ok(first && second, 'bay A has two containers to move');
     const names = await Promise.all(
@@ -352,10 +369,10 @@ try {
       reserved: await page.locator(`[data-drop="${first}"], [data-drop="${second}"]`).count(),
     });
     assert.deepEqual(await shown(), { a09: names[0], a10: names[1], left: 0, reserved: 2 });
-    const s = await api<ProgressState>('/api/state');
-    assert.equal(s.checks['slot-A09-verified'], true, 'the checks went along');
-    assert.equal(s.checks['slot-A10-verified'], true);
-    assert.equal(s.checks[`slot-${first}-verified`], undefined);
+    const progress = await api<ProgressState>('/api/state');
+    assert.equal(progress.checks['slot-A09-verified'], true, 'the checks went along');
+    assert.equal(progress.checks['slot-A10-verified'], true);
+    assert.equal(progress.checks[`slot-${first}-verified`], undefined);
     await page.reload();
     await page.locator('[data-slot="A10"]').waitFor();
     // The reload leaves edit mode; reserved positions are drawn outside it too.
@@ -370,8 +387,8 @@ try {
     const bayA = page.locator('.bay').filter({ has: page.locator('[data-complete-bay="A"]') });
     const from = (await bayA.locator('[data-drag-slot]').first().getAttribute('data-drag-slot'))!;
     const saved = async () => {
-      const s = await api<ProgressState>('/api/state');
-      return JSON.stringify([s.checks, s.notes, s.storageEdits]);
+      const progress = await api<ProgressState>('/api/state');
+      return JSON.stringify([progress.checks, progress.notes, progress.storageEdits]);
     };
     const before = await saved();
     const strayDrop = async (where: 'aisle' | 'below') => {
@@ -412,7 +429,9 @@ try {
     // Two positions of bay A, one above the other (a row holds four), neither the one picked up.
     const ids = await bayA
       .locator('[data-drop]')
-      .evaluateAll(xs => xs.map(x => (x as HTMLElement).dataset.drop ?? ''));
+      .evaluateAll(positions =>
+        positions.map(position => (position as HTMLElement).dataset.drop ?? ''),
+      );
     const column = [1, 2, 3].find(i => ids[i] !== from && ids[i + 4] && ids[i + 4] !== from)!;
     const [upper, lower] = [ids[column]!, ids[column + 4]!];
     await page
@@ -429,18 +448,20 @@ try {
     });
     await page.mouse.move(x, y, { steps: 20 });
     await page.locator(`[data-drop="${upper}"].drop-over`).waitFor();
-    const dy = (await page.locator(`[data-drop="${lower}"]`).boundingBox())!.y - cell.y;
-    await page.evaluate(dy => scrollBy(0, dy), dy);
+    const distance = (await page.locator(`[data-drop="${lower}"]`).boundingBox())!.y - cell.y;
+    await page.evaluate(distance => scrollBy(0, distance), distance);
     await page.waitForTimeout(300);
     const shown = await page.evaluate(
       ({ x, y }) => ({
         under: [...document.querySelectorAll<HTMLElement>('[data-drop]:not(.dragging)')]
-          .filter(c => {
-            const r = c.getBoundingClientRect();
-            return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+          .filter(position => {
+            const rect = position.getBoundingClientRect();
+            return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
           })
-          .map(c => c.dataset.drop),
-        over: [...document.querySelectorAll<HTMLElement>('.drop-over')].map(c => c.dataset.drop),
+          .map(position => position.dataset.drop),
+        over: [...document.querySelectorAll<HTMLElement>('.drop-over')].map(
+          position => position.dataset.drop,
+        ),
       }),
       { x, y },
     );
@@ -488,13 +509,13 @@ try {
   const tab = await context.newPage();
   await tab.goto(base);
   await tab.locator('#main').waitFor();
-  const write = (p: Page, k: string) =>
-    p.evaluate(
-      async k =>
+  const write = (target: Page, checkKey: string) =>
+    target.evaluate(
+      async checkKey =>
         ((await import('./browser-api.js' as string)) as BrowserApi).browserRequest('/api/update', {
-          body: JSON.stringify({ type: 'check', key: k, value: true }),
+          body: JSON.stringify({ type: 'check', key: checkKey, value: true }),
         }),
-      k,
+      checkKey,
     );
   await Promise.all([write(page, 'parallel-one'), write(tab, 'parallel-two')]);
   const state = await api<ProgressState>('/api/state');
@@ -508,7 +529,7 @@ try {
   const upgradedContext = await browser.newContext(),
     upgradedPage = await upgradedContext.newPage(),
     earlierTab = await upgradedContext.newPage();
-  upgradedPage.on('pageerror', e => errors.push('Upgraded browser: ' + e.message));
+  upgradedPage.on('pageerror', error => errors.push('Upgraded browser: ' + error.message));
   const handbook = JSON.parse(
     await fs.readFile(path.join(source, 'public', 'plan.json'), 'utf8'),
   ) as Handbook;
@@ -544,26 +565,29 @@ try {
       },
     ],
   };
-  // The page's own IndexedDB, the database and key the planner uses; `key` undefined writes.
-  const idb = (p: Page, key: string, record?: unknown) =>
-    p.evaluate(
+  // The page's own IndexedDB, the database and key the planner uses; with `record`, writes it.
+  const storedRecord = (target: Page, key: string, record?: unknown) =>
+    target.evaluate(
       async ({ key, record }) => {
-        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
           // At the version it has: 2 once the planner has opened it.
-          const r = indexedDB.open('satisfactory-planner-browser-v1');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
+          const request = indexedDB.open('satisfactory-planner-browser-v1');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
         });
         try {
           return await new Promise<unknown>((resolve, reject) => {
-            const tx = db.transaction('workspace', record ? 'readwrite' : 'readonly');
-            const store = tx.objectStore('workspace');
-            const r = record ? store.put(record, key) : store.get(key);
-            tx.oncomplete = () => resolve(record ? undefined : r.result);
-            tx.onabort = () => reject(tx.error);
+            const transaction = database.transaction(
+              'workspace',
+              record ? 'readwrite' : 'readonly',
+            );
+            const store = transaction.objectStore('workspace');
+            const request = record ? store.put(record, key) : store.get(key);
+            transaction.oncomplete = () => resolve(record ? undefined : request.result);
+            transaction.onabort = () => reject(transaction.error);
           });
         } finally {
-          db.close();
+          database.close();
         }
       },
       { key, record },
@@ -576,18 +600,18 @@ try {
         const request = indexedDB.open('satisfactory-planner-browser-v1', 1);
         request.onupgradeneeded = () => request.result.createObjectStore('workspace');
         request.onsuccess = () => {
-          const db = request.result,
+          const database = request.result,
             earlier = { closed: false };
           Object.assign(window, { earlier });
           // As every release since 2026-09-26 does.
-          db.onversionchange = () => {
+          database.onversionchange = () => {
             earlier.closed = true;
-            db.close();
+            database.close();
           };
-          const tx = db.transaction('workspace', 'readwrite');
-          tx.objectStore('workspace').put(record, 'main');
-          tx.oncomplete = () => resolve();
-          tx.onabort = () => reject(tx.error);
+          const transaction = database.transaction('workspace', 'readwrite');
+          transaction.objectStore('workspace').put(record, 'main');
+          transaction.oncomplete = () => resolve();
+          transaction.onabort = () => reject(transaction.error);
         };
         request.onerror = () => reject(request.error);
       }),
@@ -598,18 +622,22 @@ try {
   assert.equal(
     await upgradedPage
       .locator('#main [data-check="phase-3-survey"]')
-      .evaluate(x => (x as HTMLInputElement).checked),
+      .evaluate(checkbox => (checkbox as HTMLInputElement).checked),
     true,
     'the guide step is still ticked after the upgrade',
   );
-  const upgraded = (await idb(upgradedPage, 'main')) as BrowserWorkspace;
+  const upgraded = (await storedRecord(upgradedPage, 'main')) as BrowserWorkspace;
   const migratedOriginal = upgraded.saves[0]!.profiles[0]!;
   assert.equal(migratedOriginal.kind, 'calculated');
   assert.equal(migratedOriginal.handbook, undefined);
   assert.equal(migratedOriginal.plan?.engine, 'handbook-' + handbook.version);
   assert.equal(migratedOriginal.state.checks['calc-3-' + factoryRow], true, 'the factory tick');
   assert.equal(migratedOriginal.state.notes.global, 'Kept through the upgrade');
-  assert.deepEqual(await idb(upgradedPage, 'pre-handbook'), seeded, 'the pre-migration copy');
+  assert.deepEqual(
+    await storedRecord(upgradedPage, 'pre-handbook'),
+    seeded,
+    'the pre-migration copy',
+  );
   // The tab of the previous release heard of the upgrade and closed, so it cannot file a tick
   // under a handbook key on the migrated profile; on a reload it cannot open the database.
   assert.equal(
@@ -637,7 +665,7 @@ try {
   // Opening it again changes nothing.
   await upgradedPage.reload();
   await upgradedPage.locator('#main [data-check="phase-3-survey"]').waitFor({ state: 'attached' });
-  assert.deepEqual(await idb(upgradedPage, 'main'), upgraded);
+  assert.deepEqual(await storedRecord(upgradedPage, 'main'), upgraded);
   await upgradedContext.close();
   // The Docker edition, upgraded from an early release: its single-profile progress.json is
   // handbook progress, which migrates into a calculated profile with the guide (#495). A
@@ -646,7 +674,7 @@ try {
   await fs.writeFile(path.join(temp, 'progress.json'), JSON.stringify(initialState()));
   backend = await createApp({ dataDir: temp, password: '' });
   const listening = backend;
-  await new Promise<void>(r => listening.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => listening.listen(0, '127.0.0.1', resolve));
   const backendURL = 'http://127.0.0.1:' + port(listening);
   const updateServer = async (body: unknown) =>
     fetch(backendURL + '/api/update', {
@@ -710,7 +738,7 @@ try {
 } finally {
   await browser?.close();
   const opened = backend;
-  if (opened) await new Promise<void>(r => opened.close(() => r()));
-  await new Promise<void>(r => server.close(() => r()));
+  if (opened) await new Promise<void>(resolve => opened.close(() => resolve()));
+  await new Promise<void>(resolve => server.close(() => resolve()));
   await fs.rm(temp, { recursive: true, force: true });
 }
