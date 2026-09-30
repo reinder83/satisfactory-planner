@@ -23,11 +23,11 @@ import {
   validateState,
   mutate,
   shareState,
-  newProfileState,
+  calculatedProfile,
   checkBase,
-  carryGuide,
   currentPayoff,
   phaseProgress,
+  wholeMachineProfile,
 } from './state.ts';
 import {
   importableTransfer,
@@ -41,7 +41,6 @@ import type {
   BrowserWorkspace,
   Catalog,
   CurrentCalculatedPlan,
-  CurrentStage,
   ProgressState,
   Recipe,
   StageKey,
@@ -194,21 +193,16 @@ export function createBrowserApi(
       const source = body.carryFrom ? save.profiles.find(p => p.id === body.carryFrom) : null;
       if (body.carryFrom && !source)
         throw Error('The profile to carry progress from was not found.');
-      const started = newProfileState(
+      // A recalculation of a guided plan keeps its guide (#472).
+      const started = calculatedProfile(
+        profileId,
+        profileName,
         plan,
-        source?.state || null,
-        source?.plan || null,
+        source,
         body.carry,
         body.built,
       );
-      save.profiles.push({
-        id: profileId,
-        name: profileName,
-        kind: 'calculated',
-        // A recalculation of a guided plan keeps its guide (#472).
-        plan: carryGuide(plan, source?.plan),
-        state: started.state,
-      });
+      save.profiles.push(started.profile);
       save.activeProfile = profileId;
       data.activeSave = save.id;
       return {
@@ -324,32 +318,8 @@ export function createBrowserApi(
     return store.transaction(data => {
       const { save, profile } = scope(data, url, headers);
       if (save.profiles.length >= 30) throw Error('Profile limit reached.');
-      const state = structuredClone(profile.state);
-      let reviewCount = 0;
-      for (const [phase, stage] of Object.entries(rounded.stages) as [StageKey, CurrentStage][])
-        for (const row of stage.rows || []) {
-          const old = profile.plan?.stages[phase]?.rows?.find(r => r.id === row.id);
-          if (
-            !old ||
-            row.machines > old.machines ||
-            Object.entries(row.inputs).some(
-              ([item, rate]) => rate > (old.inputs[item] || 0) + 0.001,
-            )
-          ) {
-            const checkKey = 'calc-' + phase + '-' + row.id;
-            if (state.checks[checkKey]) {
-              state.checks[checkKey] = false;
-              reviewCount++;
-            }
-          }
-        }
-      save.profiles.push({
-        id: profileId,
-        name: (profile.name + ' · whole machines').slice(0, 80),
-        kind: 'calculated',
-        plan: carryGuide(rounded, profile.plan),
-        state,
-      });
+      const { profile: copy, reviewCount } = wholeMachineProfile(profileId, profile, rounded);
+      save.profiles.push(copy);
       save.activeProfile = profileId;
       data.activeSave = save.id;
       return { saveId: save.id, profileId, reviewCount, workspace: summary(data) };
