@@ -47,6 +47,10 @@ jobs:
           # so the line count is not a usable signal).
           curl --fail --silent http://127.0.0.1:18080/app.js | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(s.includes('./app/')||/^\s*\/\/ /m.test(s))process.exit(1)})"
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/app/session.js)" = 404
+          # A brand-new server has no saves and opens the guided start (#496): check that, then
+          # create the first profile, whose progress the update and the restart below go through.
+          curl --fail --silent http://127.0.0.1:18080/api/workspace | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{if(JSON.parse(s).saves.length!==0)process.exit(1)})"
+          curl --fail --silent -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"saveName":"Smoke","name":"Balanced","settings":{}}' http://127.0.0.1:18080/api/profiles > /dev/null
           curl --fail -H 'Content-Type: application/json' -H 'X-Planner-Request: 1' -d '{"type":"check","key":"docker-smoke","value":true}' http://127.0.0.1:18080/api/update
           docker restart planner-smoke
           for i in $(seq 1 30); do
