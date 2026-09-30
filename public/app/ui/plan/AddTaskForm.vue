@@ -11,8 +11,8 @@ defineProps<{ placeholder: string }>();
 
 const saving = ref(false);
 
-async function submit(e: Event) {
-  const form = e.target as HTMLFormElement;
+async function submit(event: Event) {
+  const form = event.target as HTMLFormElement;
   const title = String(new FormData(form).get('title') || '').trim();
   if (!title || saving.value) return;
   saving.value = true;
@@ -21,8 +21,8 @@ async function submit(e: Event) {
       type: 'addTask',
       id:
         'custom-' +
-        Array.from(crypto.getRandomValues(new Uint8Array(16)), b =>
-          b.toString(16).padStart(2, '0'),
+        Array.from(crypto.getRandomValues(new Uint8Array(16)), byte =>
+          byte.toString(16).padStart(2, '0'),
         ).join(''),
       phase: phase(),
       title,

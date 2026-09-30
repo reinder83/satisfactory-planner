@@ -40,28 +40,28 @@ import type { PlanStepView, RemovedStepView } from '../../tasks.ts';
 
 const list = computed(() =>
   legacy(() => {
-    const ts = planTasks(),
-      shown = filteredPlanTasks(ts);
+    const tasks = planTasks(),
+      shown = filteredPlanTasks(tasks);
     const removed = new Set(taskEditsState().removed);
     const steps = shown.map(
-      (t): PlanStepView => ({
-        id: t.id,
-        title: t.title,
-        body: t.body,
-        done: checked(t.id),
-        icon: taskIcon(t),
-        link: taskLink(t),
-        custom: t.id.startsWith('custom-'),
-        form: planEditing && editingTask === t.id ? taskLinkChoices(t) : null,
+      (task): PlanStepView => ({
+        id: task.id,
+        title: task.title,
+        body: task.body,
+        done: checked(task.id),
+        icon: taskIcon(task),
+        link: taskLink(task),
+        custom: task.id.startsWith('custom-'),
+        form: planEditing && editingTask === task.id ? taskLinkChoices(task) : null,
       }),
     );
     return {
-      total: ts.length,
+      total: tasks.length,
       query,
       hideDone,
       editing: planEditing,
-      count: shown.length !== ts.length ? shown.length + ' of ' + ts.length + ' steps' : '',
-      empty: !ts.length
+      count: shown.length !== tasks.length ? shown.length + ' of ' + tasks.length + ' steps' : '',
+      empty: !tasks.length
         ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
         : query.trim()
           ? 'No steps match this search.'
@@ -71,24 +71,26 @@ const list = computed(() =>
       open: steps.filter(s => !s.done),
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
-      complete: ts.length > 0 && ts.every(t => checked(t.id)),
+      complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       removed: planEditing
         ? basePlanTasks()
             .filter(t => removed.has(t.id))
-            .map((t): RemovedStepView => ({ id: t.id, title: t.title, icon: taskIcon(t) }))
+            .map(
+              (task): RemovedStepView => ({ id: task.id, title: task.title, icon: taskIcon(task) }),
+            )
         : [],
     };
   }),
 );
 
 // The step search, as you type.
-function search(e: Event) {
-  setQuery((e.target as HTMLInputElement).value);
+function search(event: Event) {
+  setQuery((event.target as HTMLInputElement).value);
   render();
 }
 
-function toggleHideDone(e: Event) {
-  setHideDone((e.target as HTMLInputElement).checked);
+function toggleHideDone(event: Event) {
+  setHideDone((event.target as HTMLInputElement).checked);
   render();
 }
 </script>
@@ -113,16 +115,21 @@ function toggleHideDone(e: Event) {
   </div>
   <div v-if="list.editing" class="checklist">
     <template v-if="list.steps.length">
-      <template v-for="s in list.steps" :key="s.id">
-        <StepEditForm v-if="s.form" :step="s" :options="s.form.options" :current="s.form.current" />
-        <PlanStep v-else :step="s" :editing="list.editing" />
+      <template v-for="step in list.steps" :key="step.id">
+        <StepEditForm
+          v-if="step.form"
+          :step="step"
+          :options="step.form.options"
+          :current="step.form.current"
+        />
+        <PlanStep v-else :step="step" :editing="list.editing" />
       </template>
     </template>
     <div v-else class="empty-state">{{ list.empty }}</div>
   </div>
   <template v-else>
     <div v-if="list.open.length" class="checklist" data-open-steps>
-      <PlanStep v-for="(s, i) in list.open" :key="s.id" :step="s" :lead="i === 0" />
+      <PlanStep v-for="(step, i) in list.open" :key="step.id" :step="step" :lead="i === 0" />
     </div>
     <div v-else-if="list.complete && !list.query.trim()" class="checklist">
       <div class="task lead is-complete" data-phase-complete>
@@ -140,7 +147,7 @@ function toggleHideDone(e: Event) {
     <details v-if="list.done.length" class="done-group">
       <summary>Done ({{ list.done.length }})</summary>
       <div class="checklist">
-        <PlanStep v-for="s in list.done" :key="s.id" :step="s" />
+        <PlanStep v-for="step in list.done" :key="step.id" :step="step" />
       </div>
     </details>
   </template>

@@ -13,46 +13,47 @@ import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
 const props = defineProps<{ plan: StoredCalculatedPlan }>();
 
-const v = computed(() => {
-  const x = props.plan.stages?.['5']?.fuelVerdict;
-  if (!x) return null;
+const verdict = computed(() => {
+  const fuelVerdict = props.plan.stages?.['5']?.fuelVerdict;
+  if (!fuelVerdict) return null;
   // Without an unfueled plan the count is compared with nothing (null counts as 0).
-  const delta = x.buildings - (x.buildingsUnfueled ?? 0);
+  const delta = fuelVerdict.buildings - (fuelVerdict.buildingsUnfueled ?? 0);
   return {
-    carrying: !x.unfueledFeasible,
-    worth: x.worthIt,
-    matrix: num(x.matrixRate),
-    before: num(x.buildingsUnfueled),
-    after: num(x.buildings),
+    carrying: !fuelVerdict.unfueledFeasible,
+    worth: fuelVerdict.worthIt,
+    matrix: num(fuelVerdict.matrixRate),
+    before: num(fuelVerdict.buildingsUnfueled),
+    after: num(fuelVerdict.buildings),
     delta: (delta > 0 ? '+' : '') + num(delta),
-    demandBefore: power(x.requiredMWUnfueled),
-    demandAfter: power(x.requiredMW),
-    availableBefore: power(x.availableMWUnfueled),
-    availableAfter: power(x.availableMW),
+    demandBefore: power(fuelVerdict.requiredMWUnfueled),
+    demandAfter: power(fuelVerdict.requiredMW),
+    availableBefore: power(fuelVerdict.availableMWUnfueled),
+    availableAfter: power(fuelVerdict.availableMW),
     plural: (props.plan.settings.augmenters ?? 0) > 1 ? 's' : '',
   };
 });
 </script>
 
 <template>
-  <template v-if="v">
-    <div v-if="v.carrying" class="notice info">
+  <template v-if="verdict">
+    <div v-if="verdict.carrying" class="notice info">
       <b>Fueled augmenters are carrying this plan.</b> Phase 5 does not fit its budgets without
-      them, so the {{ v.matrix }} Alien Power Matrix/min is doing real work.
+      them, so the {{ verdict.matrix }} Alien Power Matrix/min is doing real work.
     </div>
-    <div v-else class="notice" :class="v.worth ? 'info' : 'warn'">
+    <div v-else class="notice" :class="verdict.worth ? 'info' : 'warn'">
       <b>{{
-        v.worth
+        verdict.worth
           ? 'Fueling these augmenters pays off.'
           : 'Fueling these augmenters costs more than it returns.'
       }}</b>
-      Producing {{ v.matrix }} Alien Power Matrix/min takes Phase 5 from {{ v.before }} buildings to
-      {{ v.after }} ({{ v.delta }}) and from {{ v.demandBefore }} to {{ v.demandAfter }} of demand,
-      while the boost raises available power from {{ v.availableBefore }} to {{ v.availableAfter }}.
+      Producing {{ verdict.matrix }} Alien Power Matrix/min takes Phase 5 from
+      {{ verdict.before }} buildings to {{ verdict.after }} ({{ verdict.delta }}) and from
+      {{ verdict.demandBefore }} to {{ verdict.demandAfter }} of demand, while the boost raises
+      available power from {{ verdict.availableBefore }} to {{ verdict.availableAfter }}.
       {{
-        v.worth
+        verdict.worth
           ? 'The extra 20% is worth more than the fuel line costs at this scale.'
-          : `At this scale the fuel line costs more than the extra 20% returns. Build the augmenter${v.plural} unfueled, or put 4 somersloops in the Alien Power Matrix encoder — that halves the whole chain behind it and moves the break-even down.`
+          : `At this scale the fuel line costs more than the extra 20% returns. Build the augmenter${verdict.plural} unfueled, or put 4 somersloops in the Alien Power Matrix encoder — that halves the whole chain behind it and moves the break-even down.`
       }}
     </div>
   </template>

@@ -36,26 +36,26 @@ function focusStep(id: string, control: string) {
     const current = document.activeElement;
     if (current && current !== document.body && current.isConnected) return;
     [...document.querySelectorAll<HTMLElement>('#main .task')]
-      .find(t => t.querySelector<HTMLElement>(`[data-check]`)?.dataset.check === id)
+      .find(row => row.querySelector<HTMLElement>(`[data-check]`)?.dataset.check === id)
       ?.querySelector<HTMLElement>(control)
       ?.focus();
   };
 }
-async function check(e: Event) {
-  const el = e.target as HTMLInputElement;
-  const refocus = el.checked
-    ? refocusAfterRemoval(el, { ...openRows, control: 'input[data-check]' })
+async function check(event: Event) {
+  const checkbox = event.target as HTMLInputElement;
+  const refocus = checkbox.checked
+    ? refocusAfterRemoval(checkbox, { ...openRows, control: 'input[data-check]' })
     : focusStep(props.step.id, 'input[data-check]');
-  await toggleCheck(e);
+  await toggleCheck(event);
   await refocus();
 }
 
 // "Mark done" on the lead step: the same saved checklist key as its checkbox. Focus goes on to
 // the next lead step's Mark done.
 const marking = ref(false);
-async function markDone(e: Event) {
+async function markDone(event: Event) {
   if (marking.value) return;
-  const refocus = refocusAfterRemoval(e.currentTarget, {
+  const refocus = refocusAfterRemoval(event.currentTarget, {
     ...openRows,
     control: '[data-mark-done]',
   });
@@ -75,14 +75,14 @@ async function markDone(e: Event) {
 // never trades places with one the user cannot see. Nothing happens at either end of the
 // visible list. Removed steps and saved places of steps not in the plan now keep their slots
 // (taskOrderSlots), so restoring a step puts it back where it was.
-async function move(dir: number) {
-  const ts = planTasks(),
-    ids = ts.map(t => t.id),
-    shown = filteredPlanTasks(ts).map(t => t.id),
-    past = shown[shown.indexOf(props.step.id) + dir];
+async function move(direction: number) {
+  const tasks = planTasks(),
+    ids = tasks.map(t => t.id),
+    shown = filteredPlanTasks(tasks).map(t => t.id),
+    past = shown[shown.indexOf(props.step.id) + direction];
   if (!shown.includes(props.step.id) || !past) return;
   ids.splice(ids.indexOf(props.step.id), 1);
-  ids.splice(ids.indexOf(past) + (dir > 0 ? 1 : 0), 0, props.step.id);
+  ids.splice(ids.indexOf(past) + (direction > 0 ? 1 : 0), 0, props.step.id);
   const listed = new Set(ids);
   let next = 0;
   const order = taskOrderSlots().map(id => (listed.has(id) ? ids[next++]! : id));
@@ -109,10 +109,10 @@ const stepList = (control: string) => ({
 // "Remove", after a confirmation. A personal task (id custom-…) is deleted; a plan step is
 // only hidden (taskRemove) and keeps its checkmark, so it can be put back from "Removed
 // steps in this phase".
-async function remove(e: Event) {
+async function remove(event: Event) {
   const id = props.step.id;
-  if (id.startsWith('custom-')) return deletePersonal(e);
-  const refocus = refocusAfterRemoval(e.currentTarget, stepList('[data-remove-step]'));
+  if (id.startsWith('custom-')) return deletePersonal(event);
+  const refocus = refocusAfterRemoval(event.currentTarget, stepList('[data-remove-step]'));
   if (
     !(await confirmAction({
       title: 'Remove this step?',
@@ -132,9 +132,9 @@ async function remove(e: Event) {
 // "Delete personal task" (inside a personal task's details outside edit mode, or Remove on
 // one while editing), after a confirmation. Outside edit mode the next step's Delete is inside
 // its closed details, so focus goes to that step's summary instead.
-async function deletePersonal(e: Event) {
+async function deletePersonal(event: Event) {
   const refocus = refocusAfterRemoval(
-    e.currentTarget,
+    event.currentTarget,
     stepList(props.editing ? '[data-remove-step]' : 'summary'),
   );
   if (

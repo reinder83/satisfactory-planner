@@ -14,25 +14,25 @@ import type { CatalogRecipe } from '../../../types/index.ts';
 
 const props = defineProps<{ id: string }>();
 
-const panel = (rc: CatalogRecipe): RecipeView => ({
-  name: rc.name.replace('Alternate: ', ''),
-  machine: rc.machine,
-  ins: Object.entries(rc.inputs || {}),
-  outs: Object.entries(rc.outputs || {}),
+const panel = (recipe: CatalogRecipe): RecipeView => ({
+  name: recipe.name.replace('Alternate: ', ''),
+  machine: recipe.machine,
+  ins: Object.entries(recipe.inputs || {}),
+  outs: Object.entries(recipe.outputs || {}),
 });
 
 const view = computed(() =>
   legacy(() => {
-    const a = (workspace.catalog.alternates || []).find(x => x.id === props.id);
-    if (!a) return null;
-    const primary = Object.keys(a.outputs)[0];
+    const alternate = (workspace.catalog.alternates || []).find(a => a.id === props.id);
+    if (!alternate) return null;
+    const primary = Object.keys(alternate.outputs)[0];
     return {
-      name: a.name,
-      subtitle: a.mam
-        ? `MAM research · unlocked in the MAM, not from hard drives · ${a.machine}`
-        : `Alternate recipe · available from Phase ${a.phase} · ${a.machine}`,
+      name: alternate.name,
+      subtitle: alternate.mam
+        ? `MAM research · unlocked in the MAM, not from hard drives · ${alternate.machine}`
+        : `Alternate recipe · available from Phase ${alternate.phase} · ${alternate.machine}`,
       primary,
-      recipe: panel(a),
+      recipe: panel(alternate),
       standards: (workspace.catalog.standardRecipes || [])
         .filter(r => r.outputs[primary ?? ''])
         .map(panel),
@@ -48,7 +48,7 @@ const view = computed(() =>
       ><h3>
         Standard {{ view.standards.length > 1 ? 'recipes' : 'recipe' }} for {{ view.primary }}
       </h3>
-      <RecipePanel v-for="(r, i) in view.standards" :key="i" :recipe="r"
+      <RecipePanel v-for="(standard, i) in view.standards" :key="i" :recipe="standard"
     /></template>
     <p v-else class="small muted">No standard recipe produces {{ view.primary }}.</p>
     <p class="small muted">

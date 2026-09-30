@@ -13,12 +13,12 @@ import InputField from '../form/InputField.vue';
 
 const view = computed(() =>
   legacy(() => {
-    const s = draft().settings;
+    const settings = draft().settings;
     return {
-      description: resourceDefaults(s.purity, s.distribution).description,
-      seed: s.worldSeed ? 'Recorded seed: ' + s.worldSeed + '. ' : '',
-      limits: workspace.catalog.raw.map(n => ({ name: n, value: s.limits[n] })),
-      confirmed: !!s.limitsConfirmed,
+      description: resourceDefaults(settings.purity, settings.distribution).description,
+      seed: settings.worldSeed ? 'Recorded seed: ' + settings.worldSeed + '. ' : '',
+      limits: workspace.catalog.raw.map(name => ({ name, value: settings.limits[name] })),
+      confirmed: !!settings.limitsConfirmed,
     };
   }),
 );
@@ -53,11 +53,11 @@ const view = computed(() =>
   </div>
   <div class="resource-inputs">
     <InputField
-      v-for="l in view.limits"
-      :key="l.name"
-      :label="l.name"
-      :name="'limit:' + l.name"
-      :value="l.value"
+      v-for="limit in view.limits"
+      :key="limit.name"
+      :label="limit.name"
+      :name="'limit:' + limit.name"
+      :value="limit.value"
       min="0"
       max="10000000"
       step="any"

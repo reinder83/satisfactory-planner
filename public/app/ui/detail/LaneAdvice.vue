@@ -43,67 +43,71 @@ interface AdviceRow {
 
 // The last lane's rate as printed. A remainder that rounds to 0 at two decimals (a rate a hair
 // over a multiple) says so, rather than a lane carrying "0/min".
-const lastRate = (r: number) => (num(r) === '0' ? 'under 0.01' : num(r));
+const lastRate = (rate: number) => (num(rate) === '0' ? 'under 0.01' : num(rate));
 
 const advice = computed(() => {
-  const m = props.model;
-  if (!m || !m.inputs.length) return null;
-  const belts = bestLane(false, m.stage),
-    pipes = bestLane(true, m.stage);
+  const model = props.model;
+  if (!model || !model.inputs.length) return null;
+  const belts = bestLane(false, model.stage),
+    pipes = bestLane(true, model.stage);
   return {
     intro:
-      `${phaseLabel(m.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ` +
+      `${phaseLabel(model.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ` +
       `${pipes.mark} pipes (${num(pipes.cap)} m³/min).` +
       (belts.next?.milestone
         ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`
         : ''),
-    rows: m.inputs.map(i => {
-      // per: what one machine at 100% draws; fed: how many such machines one full lane feeds.
-      const p = i.plan,
-        l = p.lane,
-        per = i.rate / m.equivalent,
-        fed = Math.floor(l.cap / per + 1e-9);
+    rows: model.inputs.map(input => {
+      // perMachine: what one machine at 100% draws; fed: how many such machines one full lane
+      // feeds.
+      const plan = input.plan,
+        lane = plan.lane,
+        perMachine = input.rate / model.equivalent,
+        fed = Math.floor(lane.cap / perMachine + 1e-9);
       const row: AdviceRow = {
-        name: i.name,
-        rate: num(i.rate) + l.unit,
-        lanes: `${p.count} × ${l.mark} ${p.word}${p.count > 1 ? 's' : ''}`,
+        name: input.name,
+        rate: num(input.rate) + lane.unit,
+        lanes: `${plan.count} × ${lane.mark} ${plan.word}${plan.count > 1 ? 's' : ''}`,
         split:
-          p.count > 1
-            ? p.full === p.count
-              ? ` — all ${p.count} full`
-              : ` — ${p.full} full + 1 carrying ${lastRate(p.last)}${l.unit}`
-            : ` (${Math.round((i.rate / l.cap) * 100)}% of ${num(l.cap)}${l.unit})`,
+          plan.count > 1
+            ? plan.full === plan.count
+              ? ` — all ${plan.count} full`
+              : ` — ${plan.full} full + 1 carrying ${lastRate(plan.last)}${lane.unit}`
+            : ` (${Math.round((input.rate / lane.cap) * 100)}% of ${num(lane.cap)}${lane.unit})`,
         feed: null,
         spare: null,
-        local: i.local,
+        local: input.local,
       };
-      if (m.machineCount > 1)
+      if (model.machineCount > 1)
         row.feed =
           fed < 1
             ? {
-                text: `Each machine takes ${num(per)}${l.unit} — more than one ${l.mark} ${p.word} carries, so give machines dedicated feeds.`,
+                text: `Each machine takes ${num(perMachine)}${lane.unit} — more than one ${lane.mark} ${plan.word} carries, so give machines dedicated feeds.`,
               }
-            : m.machineCount > fed
+            : model.machineCount > fed
               ? {
-                  lane: `${l.mark} ${p.word}`,
-                  share: `${fed} of the ${num(m.machineCount)} machines`,
-                  each: `${num(per)}${l.unit}`,
+                  lane: `${lane.mark} ${plan.word}`,
+                  share: `${fed} of the ${num(model.machineCount)} machines`,
+                  each: `${num(perMachine)}${lane.unit}`,
                   fed,
                 }
               : {
-                  text: `One ${l.mark} ${p.word} feeds all ${num(m.machineCount)} machines (${num(per)}${l.unit} each).`,
+                  text: `One ${lane.mark} ${plan.word} feeds all ${num(model.machineCount)} machines (${num(perMachine)}${lane.unit} each).`,
                 };
       // Other factories whose whole demand for this item fits in the spare capacity; at most
       // two are offered, joined by " or ".
-      if (p.count > 1 && p.spare > 0.01)
+      if (plan.count > 1 && plan.spare > 0.01)
         row.spare = {
-          word: p.word,
-          amount: num(p.spare) + l.unit,
-          merge: m
-            .sameItemConsumers(i.name)
-            .filter(x => x.rate <= p.spare + 0.01)
+          word: plan.word,
+          amount: num(plan.spare) + lane.unit,
+          merge: model
+            .sameItemConsumers(input.name)
+            .filter(consumer => consumer.rate <= plan.spare + 0.01)
             .slice(0, 2)
-            .map(x => ({ link: x.link, text: `${x.label} (${num(x.rate)}${l.unit}) ↗` })),
+            .map(consumer => ({
+              link: consumer.link,
+              text: `${consumer.label} (${num(consumer.rate)}${lane.unit}) ↗`,
+            })),
         };
       return row;
     }),
@@ -119,35 +123,37 @@ const advice = computed(() => {
       mark.
     </p>
     <div class="logi">
-      <div v-for="r in advice.rows" :key="r.name" class="logi-row">
-        <ItemIcon :name="r.name" />
+      <div v-for="row in advice.rows" :key="row.name" class="logi-row">
+        <ItemIcon :name="row.name" />
         <div>
-          <b>{{ r.name }}</b>
+          <b>{{ row.name }}</b>
           <p>
-            <b>{{ r.rate }}</b> → <b>{{ r.lanes }}</b
-            >{{ r.split }}.
+            <b>{{ row.rate }}</b> → <b>{{ row.lanes }}</b
+            >{{ row.split }}.
           </p>
-          <p v-if="r.feed?.text">{{ r.feed.text }}</p>
-          <p v-else-if="r.feed">
-            One full {{ r.feed.lane }} feeds <b>{{ r.feed.share }}</b> ({{ r.feed.each }} each) —
-            plan manifold rows of {{ r.feed.fed }}.
+          <p v-if="row.feed?.text">{{ row.feed.text }}</p>
+          <p v-else-if="row.feed">
+            One full {{ row.feed.lane }} feeds <b>{{ row.feed.share }}</b> ({{
+              row.feed.each
+            }}
+            each) — plan manifold rows of {{ row.feed.fed }}.
           </p>
-          <p v-if="r.spare">
-            The last {{ r.spare.word }} has <b>{{ r.spare.amount }} spare</b> —
-            <template v-if="r.spare.merge.length"
+          <p v-if="row.spare">
+            The last {{ row.spare.word }} has <b>{{ row.spare.amount }} spare</b> —
+            <template v-if="row.spare.merge.length"
               >enough to also carry
-              <template v-for="(x, n) in r.spare.merge" :key="n"
-                >{{ n ? ' or ' : ''
-                }}<button class="btn quiet" v-bind="factoryLink(x.link)">
-                  {{ x.text }}
+              <template v-for="(merge, i) in row.spare.merge" :key="i"
+                >{{ i ? ' or ' : ''
+                }}<button class="btn quiet" v-bind="factoryLink(merge.link)">
+                  {{ merge.text }}
                 </button></template
               >
               from the same bus</template
             ><template v-else>keep it as expansion headroom on this manifold</template>.
           </p>
-          <p v-if="r.local">
-            <button class="btn quiet" v-bind="factoryLink({ factory: r.local.id })">
-              Local: ≈ {{ r.local.count }} × {{ r.local.machine }} at this site ↗
+          <p v-if="row.local">
+            <button class="btn quiet" v-bind="factoryLink({ factory: row.local.id })">
+              Local: ≈ {{ row.local.count }} × {{ row.local.machine }} at this site ↗
             </button>
           </p>
         </div>

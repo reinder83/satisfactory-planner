@@ -18,7 +18,7 @@ withDefaults(defineProps<{ recipe: RecipeView; machines?: number }>(), { machine
     <div class="rail-recipe-body">
       <div class="rail-recipe-ins">
         <template v-if="recipe.ins.length"
-          ><RecipeCell v-for="c in recipe.ins" :key="c[0]" :cell="c"
+          ><RecipeCell v-for="cell in recipe.ins" :key="cell[0]" :cell="cell"
         /></template>
         <div v-else class="rail-cell">
           <span class="rail-main"><small>No belt or pipe inputs</small></span>
@@ -26,7 +26,7 @@ withDefaults(defineProps<{ recipe: RecipeView; machines?: number }>(), { machine
       </div>
       <span class="rail-recipe-arrow">→</span>
       <div class="rail-recipe-outs">
-        <RecipeCell v-for="c in recipe.outs" :key="c[0]" :cell="c" out />
+        <RecipeCell v-for="cell in recipe.outs" :key="cell[0]" :cell="cell" out />
       </div>
     </div>
   </div>

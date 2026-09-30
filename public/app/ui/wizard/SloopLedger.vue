@@ -14,10 +14,10 @@ import { legacy } from '../bridge.ts';
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
-    const s = wizard.settings,
-      reserved: string[] = s.sloopReserved || [];
-    const augmenters = s.augmenters || 0,
-      fueled = s.fueledAugmenters || 0;
+    const settings = wizard.settings,
+      reserved: string[] = settings.sloopReserved || [];
+    const augmenters = settings.augmenters || 0,
+      fueled = settings.fueledAugmenters || 0;
     return {
       augmenters,
       fueled,
@@ -25,9 +25,9 @@ const view = computed(() =>
       mw: num(500 * augmenters),
       boost: Math.round((0.1 * (augmenters - fueled) + 0.3 * fueled) * 100),
       matrix: num(5 * fueled),
-      committed: 10 * augmenters + reserved.length + (s.amplifySloops || 0),
-      have: s.somersloops || 0,
-      amplify: s.amplifySloops || 0,
+      committed: 10 * augmenters + reserved.length + (settings.amplifySloops || 0),
+      have: settings.somersloops || 0,
+      amplify: settings.amplifySloops || 0,
       uses: (workspace.catalog.sloopUses || []).map(([id, label]) => ({
         id,
         label,
@@ -70,8 +70,10 @@ const view = computed(() =>
     </p>
     <p class="eyebrow">SOMERSLOOPS PARKED IN HAND-FED LINES</p>
     <div>
-      <label v-for="u in view.uses" :key="u.id" class="check-row"
-        ><input type="checkbox" name="sloop" :value="u.id" :checked="u.on" />{{ u.label }}</label
+      <label v-for="use in view.uses" :key="use.id" class="check-row"
+        ><input type="checkbox" name="sloop" :value="use.id" :checked="use.on" />{{
+          use.label
+        }}</label
       >
     </div>
     <p class="small muted">

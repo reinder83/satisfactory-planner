@@ -21,80 +21,92 @@ const props = defineProps<{ phase: string }>();
 const campus = computed(() =>
   legacy(() => {
     // Drawn only for the oil products, whose phases all have a campus plan.
-    const st = props.phase,
-      p = plan.plans[st]!;
+    const phaseKey = props.phase,
+      phasePlan = plan.plans[phaseKey]!;
     // Each stage with its per-machine recipe; an unknown recipe name gets empty in/out.
-    const stages = p.oil.map(x => ({ ...x, rc: OIL_RECIPES[x.recipe] || { in: {}, out: {} } }));
-    const pipes = (q: number) => {
-      const pl = lanePlan(q, true, st);
-      return `${pl.count} × ${pl.lane.mark} pipe${pl.count > 1 ? 's' : ''}`;
+    const stages = phasePlan.oil.map(stage => ({
+      ...stage,
+      rates: OIL_RECIPES[stage.recipe] || { in: {}, out: {} },
+    }));
+    const pipes = (rate: number) => {
+      const lanes = lanePlan(rate, true, phaseKey);
+      return `${lanes.count} × ${lanes.lane.mark} pipe${lanes.count > 1 ? 's' : ''}`;
     };
     // The first factory other than the polymers that takes Fuel, linked from exported fuel.
     const fuelConsumer = plan.factories.find(
-      ff => !['plastic', 'rubber'].includes(ff.id) && ff.stages[st]?.inputs?.Fuel,
+      factory =>
+        !['plastic', 'rubber'].includes(factory.id) && factory.stages[phaseKey]?.inputs?.Fuel,
     );
     return {
-      label: phaseLabel(st),
-      first: st === '3',
+      label: phaseLabel(phaseKey),
+      first: phaseKey === '3',
       // Raw campus inputs (crude oil and water), skipping any the phase does not use.
       inputs: (
         [
-          ['Crude Oil', p.oilTotals.crude],
-          ['Water', p.oilTotals.water],
+          ['Crude Oil', phasePlan.oilTotals.crude],
+          ['Water', phasePlan.oilTotals.water],
         ] as [string, number][]
       )
-        .filter(([, q]) => q > 0.01)
-        .map(([name, q]) => ({ name, pipes: pipes(q), rate: num(q) })),
-      stages: stages.map(x => {
+        .filter(([, rate]) => rate > 0.01)
+        .map(([name, rate]) => ({ name, pipes: pipes(rate), rate: num(rate) })),
+      stages: stages.map(stage => {
         // Whole-stage flow: per-machine recipe rate × machine equivalents.
         const total = (side: 'in' | 'out') =>
-          Object.entries(x.rc[side])
-            .map(([n, q]) => `${num(q * x.equivalent)}${FLUIDS.has(n) ? ' m³' : ''} ${n}`)
+          Object.entries(stage.rates[side])
+            .map(
+              ([item, rate]) =>
+                `${num(rate * stage.equivalent)}${FLUIDS.has(item) ? ' m³' : ''} ${item}`,
+            )
             .join(' + ');
         // Full-speed machines plus the underclocked last one; the epsilon keeps an exact
         // whole equivalent from reading as one machine short.
-        const whole = Math.floor(x.equivalent + 1e-7),
-          frac = x.equivalent - whole;
+        const whole = Math.floor(stage.equivalent + 1e-7),
+          fraction = stage.equivalent - whole;
         const clock =
-          frac > 1e-7 ? `${num(whole)} at 100% + 1 at ≈ ${num(frac * 100)}%` : `all at 100%`;
+          fraction > 1e-7
+            ? `${num(whole)} at 100% + 1 at ≈ ${num(fraction * 100)}%`
+            : `all at 100%`;
         // Where each output goes: other campus stages that consume it, the polymer export,
         // and Fuel either burned in generators (Phase 3) or exported.
-        const dest = Object.keys(x.rc.out)
-          .map(n => {
+        const destinations = Object.keys(stage.rates.out)
+          .map(item => {
             const parts: { text: string; to?: HandbookFactory }[] = stages
-              .filter(o => o !== x && o.rc.in[n])
-              .map(o => ({
-                text: `the ${o.recipe.replace('Alternate: ', '')} ${o.machine.replace(/y$/, 'ie')}s`,
+              .filter(other => other !== stage && other.rates.in[item])
+              .map(other => ({
+                text: `the ${other.recipe.replace('Alternate: ', '')} ${other.machine.replace(/y$/, 'ie')}s`,
               }));
-            if (n === 'Plastic' || n === 'Rubber') parts.push({ text: 'campus export' });
-            if (n === 'Fuel') {
-              if (Number(p.oilTotals.generators) > 0)
+            if (item === 'Plastic' || item === 'Rubber') parts.push({ text: 'campus export' });
+            if (item === 'Fuel') {
+              if (Number(phasePlan.oilTotals.generators) > 0)
                 parts.push({
-                  text: `${num(p.oilTotals.generators)} Fuel Generators (${num(p.oilTotals.grossGW)} GW gross)`,
+                  text: `${num(phasePlan.oilTotals.generators)} Fuel Generators (${num(phasePlan.oilTotals.grossGW)} GW gross)`,
                 });
-              else if (p.oilTotals.fuel > 0.01)
-                parts.push({ text: `export ${itemRate(n, p.oilTotals.fuel)}`, to: fuelConsumer });
+              else if (phasePlan.oilTotals.fuel > 0.01)
+                parts.push({
+                  text: `export ${itemRate(item, phasePlan.oilTotals.fuel)}`,
+                  to: fuelConsumer,
+                });
             }
-            return parts.length ? { item: n, parts } : null;
+            return parts.length ? { item, parts } : null;
           })
           .filter(d => d !== null);
         return {
-          key: x.recipe,
-          head: `${num(x.machines)} × ${x.machine}`,
-          sub: `${x.recipe} · ${clock} · in ${total('in') || '—'} · out ${total('out')}`,
+          key: stage.recipe,
+          head: `${num(stage.machines)} × ${stage.machine}`,
+          sub: `${stage.recipe} · ${clock} · in ${total('in') || '—'} · out ${total('out')}`,
           recipe: {
-            name: x.recipe.replace('Alternate: ', ''),
-            machine: x.machine,
-            ins: Object.entries(x.rc.in),
-            outs: Object.entries(x.rc.out),
+            name: stage.recipe.replace('Alternate: ', ''),
+            machine: stage.machine,
+            ins: Object.entries(stage.rates.in),
+            outs: Object.entries(stage.rates.out),
           },
-          machines: x.machines,
-          dest,
+          machines: stage.machines,
+          destinations,
         };
       }),
-      fuel: num(p.oilTotals.fuel),
-      generators: p.oilTotals.generators,
-      grossGW: num(p.oilTotals.grossGW),
+      fuel: num(phasePlan.oilTotals.fuel),
+      generators: phasePlan.oilTotals.generators,
+      grossGW: num(phasePlan.oilTotals.grossGW),
     };
   }),
 );
@@ -117,27 +129,27 @@ const campus = computed(() =>
   </p>
   <div class="rail-cap">Campus inputs</div>
   <div class="rail-grid">
-    <div v-for="i in campus.inputs" :key="i.name" class="rail-tile">
-      <ItemIcon :name="i.name" /><span class="rail-main"
-        ><b>{{ i.name }}</b
-        ><small>{{ i.pipes }}</small></span
-      ><span class="rail-rate">{{ i.rate }}<small> m³/min</small></span>
+    <div v-for="input in campus.inputs" :key="input.name" class="rail-tile">
+      <ItemIcon :name="input.name" /><span class="rail-main"
+        ><b>{{ input.name }}</b
+        ><small>{{ input.pipes }}</small></span
+      ><span class="rail-rate">{{ input.rate }}<small> m³/min</small></span>
     </div>
   </div>
-  <template v-for="x in campus.stages" :key="x.key"
+  <template v-for="stage in campus.stages" :key="stage.key"
     ><div class="rail-arrow">↓</div>
     <div class="rail-machine">
       <div class="rail-machine-main">
-        <b>{{ x.head }}</b
-        ><small>{{ x.sub }}</small>
+        <b>{{ stage.head }}</b
+        ><small>{{ stage.sub }}</small>
       </div>
     </div>
-    <RecipePanel :recipe="x.recipe" :machines="x.machines" />
-    <p v-if="x.dest.length" class="small muted">
-      <template v-for="(d, n) in x.dest" :key="d.item"
-        ><br v-if="n" />{{ d.item }} →
-        <template v-for="(part, k) in d.parts" :key="k"
-          >{{ k ? ' + ' : '' }}{{ part.text
+    <RecipePanel :recipe="stage.recipe" :machines="stage.machines" />
+    <p v-if="stage.destinations.length" class="small muted">
+      <template v-for="(destination, i) in stage.destinations" :key="destination.item"
+        ><br v-if="i" />{{ destination.item }} →
+        <template v-for="(part, j) in destination.parts" :key="j"
+          >{{ j ? ' + ' : '' }}{{ part.text
           }}<template v-if="part.to">
             to
             <button class="btn quiet" v-bind="factoryLink({ factory: part.to.id })">

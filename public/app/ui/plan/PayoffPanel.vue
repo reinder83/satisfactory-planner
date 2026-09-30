@@ -36,7 +36,7 @@ import type { StoredPayoff } from '../../../types/index.ts';
 
 // The chosen sort; null follows the profile's goal.
 const sortBy = ref<PayoffColumn | null>(null);
-const dir = ref<1 | -1>(1);
+const direction = ref<1 | -1>(1);
 // "Checking 23 of 67 alternates…" while a ranking runs; empty otherwise.
 const running = ref('');
 
@@ -47,12 +47,14 @@ const view = computed(() =>
     const column = sortBy.value ?? payoffDefaultSort(calculated.settings.goal);
     const stored = payoff;
     const ranking = stored?.ranking.phase === stage() ? stored.ranking : null;
-    const table = ranking && payoffTable(ranking, column, dir.value);
+    const table = ranking && payoffTable(ranking, column, direction.value);
     // A column no alternate changes (delivery time under fixed-hour goals) is left out and
     // named below the table instead; the sorted column always stays.
-    const moves = (c: PayoffColumn) =>
-      (table?.rows || []).some(p => payoffDelta(p, c) !== '0' && payoffDelta(p, c) !== '–');
-    const columns = PAYOFF_COLUMNS.filter(([c]) => c === column || moves(c));
+    const moves = (key: PayoffColumn) =>
+      (table?.rows || []).some(
+        row => payoffDelta(row, key) !== '0' && payoffDelta(row, key) !== '–',
+      );
+    const columns = PAYOFF_COLUMNS.filter(([key]) => key === column || moves(key));
     return {
       phase: phaseLabel(stage()),
       column,
@@ -60,18 +62,18 @@ const view = computed(() =>
       // A ranking kept from another phase, named so the button's meaning is clear.
       otherPhase: stored && !ranking ? phaseLabel(stored.ranking.phase) : '',
       when: stored?.rankedAt ? new Date(stored.rankedAt).toLocaleString() : '',
-      rows: (table?.rows || []).map(p => ({
-        id: p.id,
-        name: p.name,
-        machine: p.machine,
-        status: p.status,
-        label: PAYOFF_STATUS[p.status],
-        error: p.error || '',
-        cells: columns.map(([c]) => payoffDelta(p, c)),
+      rows: (table?.rows || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        machine: row.machine,
+        status: row.status,
+        label: PAYOFF_STATUS[row.status],
+        error: row.error || '',
+        cells: columns.map(([key]) => payoffDelta(row, key)),
       })),
       columns,
-      unchanged: PAYOFF_COLUMNS.filter(([c]) => !columns.some(([x]) => x === c)).map(
-        ([c]) => PAYOFF_WORDS[c],
+      unchanged: PAYOFF_COLUMNS.filter(([key]) => !columns.some(([shown]) => shown === key)).map(
+        ([key]) => PAYOFF_WORDS[key],
       ),
       same: table?.same || 0,
     };
@@ -80,11 +82,11 @@ const view = computed(() =>
 
 function sort(column: PayoffColumn) {
   const current = sortBy.value ?? view.value?.column;
-  dir.value = current === column ? (dir.value === 1 ? -1 : 1) : 1;
+  direction.value = current === column ? (direction.value === 1 ? -1 : 1) : 1;
   sortBy.value = column;
 }
 const ariaSort = (column: PayoffColumn) =>
-  view.value?.column === column ? (dir.value === 1 ? 'ascending' : 'descending') : 'none';
+  view.value?.column === column ? (direction.value === 1 ? 'ascending' : 'descending') : 'none';
 
 // Runs the ranking for the phase on screen and shows it, unless another profile was opened
 // meanwhile (the result is stored with the profile it was run for either way). The button is
@@ -101,8 +103,8 @@ async function rank() {
     if (currentProfile.id !== profileId) return;
     setPayoff(result);
     render();
-  } catch (e) {
-    toast((e as Error).message, true);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     running.value = '';
   }
@@ -156,23 +158,23 @@ async function rank() {
             <tr>
               <th>Alternate</th>
               <th>Effect</th>
-              <th v-for="[c, label] in view.columns" :key="c" :aria-sort="ariaSort(c)">
-                <button class="link" :data-payoff-sort="c" @click="sort(c)">
-                  {{ label }}{{ view.column === c ? (dir === 1 ? ' ▲' : ' ▼') : '' }}
+              <th v-for="[key, label] in view.columns" :key="key" :aria-sort="ariaSort(key)">
+                <button class="link" :data-payoff-sort="key" @click="sort(key)">
+                  {{ label }}{{ view.column === key ? (direction === 1 ? ' ▲' : ' ▼') : '' }}
                 </button>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="r in view.rows" :key="r.id" :data-payoff-row="r.id">
+            <tr v-for="row in view.rows" :key="row.id" :data-payoff-row="row.id">
               <td>
-                <button class="link" :data-payoff-recipe="r.id" @click="openAltRecipe(r.id)">
-                  {{ r.name }}
+                <button class="link" :data-payoff-recipe="row.id" @click="openAltRecipe(row.id)">
+                  {{ row.name }}
                 </button>
-                <span class="small muted">{{ r.machine }}</span>
+                <span class="small muted">{{ row.machine }}</span>
               </td>
-              <td :class="'payoff-' + r.status" :title="r.error">{{ r.label }}</td>
-              <td v-for="(cell, i) in r.cells" :key="i" class="number">{{ cell }}</td>
+              <td :class="'payoff-' + row.status" :title="row.error">{{ row.label }}</td>
+              <td v-for="(cell, i) in row.cells" :key="i" class="number">{{ cell }}</td>
             </tr>
           </tbody>
         </table>
