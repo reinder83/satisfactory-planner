@@ -1,8 +1,9 @@
 <!--
   All settings step 1, game settings: the save name (read-only when adding to a save), phase,
   world settings, multipliers, power in MW (stored as GW by readWizard) and the production you
-  already run. Changing purity or distribution replaces the budgets on step 4 with that
-  world's starting estimates when the step is read.
+  already run. An empty Save name, or one of spaces, stops Continue with a message beside the
+  box (form/NameField.vue), as in the guided start. Changing purity or distribution replaces
+  the budgets on step 4 with that world's starting estimates when the step is read.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -11,6 +12,7 @@ import { draft } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import HelpTip from '../form/HelpTip.vue';
 import InputField from '../form/InputField.vue';
+import NameField from '../form/NameField.vue';
 import SelectField from '../form/SelectField.vue';
 import SupplyRows from './SupplyRows.vue';
 
@@ -41,15 +43,17 @@ const view = computed(() =>
   <h2>Your save and game settings</h2>
   <p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p>
   <div class="form-grid">
-    <InputField
-      label="Save name"
-      name="saveName"
-      :value="view.saveName"
-      type="text"
-      required
-      maxlength="80"
-      :readonly="view.adding"
-    />
+    <div class="settings-name">
+      <NameField
+        label="Save name"
+        name="saveName"
+        :value="view.saveName"
+        error-id="settings-name-error"
+        check
+        maxlength="80"
+        :readonly="view.adding"
+      />
+    </div>
     <SelectField label="Currently working on" name="phase" :options="PHASES" :value="view.phase" />
     <SelectField label="Resource purity" name="purity" :options="purities" :value="view.purity" />
     <SelectField
