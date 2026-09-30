@@ -29,16 +29,17 @@ const counter = computed(() =>
     const delivery = props.delivery,
       count = saved(),
       left = Math.max(0, delivery.target - count);
-    // Without a rate there are no minutes to give: the text follows the saved count, so a
-    // lowered count no longer reads as complete (#590).
+    // The text follows the saved count: at the target it reads complete, with or without a
+    // rate (#596), and a lowered count no longer does (#590). Without a rate there are no
+    // minutes to give. It names no phase, as the calculated plan draws every phase's (#595).
     return {
       value: count,
       width: Math.min(100, (count / delivery.target) * 100),
-      remaining: delivery.rate
-        ? `${num(delivery.rate)}/min net · ${num(left / delivery.rate)} minutes remaining`
-        : left
-          ? `${num(left)} remaining`
-          : 'Phase 3 delivery already complete',
+      remaining: !left
+        ? 'Delivery complete'
+        : delivery.rate
+          ? `${num(delivery.rate)}/min net · ${num(left / delivery.rate)} minutes remaining`
+          : `${num(left)} remaining`,
     };
   }),
 );
