@@ -25,6 +25,7 @@ import {
   storageFloors,
 } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
+import { useDraft } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -140,8 +141,12 @@ function completeSlot(event: Event, id: string) {
   });
 }
 
-// The bay's name field, read-only while it saves (app/busy.ts). Redrawn whether or not the save
-// worked, so a failed rename shows the saved name again.
+// The bay's name field shows the saved name, then what the user types, so a redraw while another
+// control saves keeps a name typed but not yet committed (#654, ui/draft.ts).
+const name = useDraft(() => props.bay.name);
+
+// The bay's name field, read-only while it saves (app/busy.ts). Redrawn with the saved name
+// whether or not the save worked, so a failed rename shows the saved name again.
 function rename(event: Event) {
   const input = event.target as HTMLInputElement;
   return whileBusy(input, async () => {
@@ -150,6 +155,7 @@ function rename(event: Event) {
     } catch {
     } finally {
       render();
+      name.value = props.bay.name;
     }
   });
 }
@@ -316,9 +322,10 @@ async function addContainer(event: Event) {
         :id="'bay-name-' + bay.id"
         class="bay-rename"
         :data-bay-rename="bay.id"
-        :value="bay.name"
+        :value="name"
         maxlength="80"
         :aria-label="'Rename bay ' + bay.id"
+        @input="name = ($event.target as HTMLInputElement).value"
         @change="rename"
       />
       <h3 v-else>{{ bay.name }}</h3>

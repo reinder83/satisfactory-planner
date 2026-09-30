@@ -53,6 +53,7 @@ import { fuelledModes } from '../../../state.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { useDrafts } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -180,15 +181,30 @@ async function setTransport(
     }
   });
 }
-function setTrip(event: Event, link: Link) {
+// The round trip fields show the saved minutes, then what the user types, so a redraw while
+// another control saves keeps minutes typed but not yet committed (#654, ui/draft.ts).
+const savedTrips = (): Record<string, string> =>
+  Object.fromEntries(
+    (view.value?.links ?? []).flatMap(link =>
+      link.transport ? [[link.key, String(link.transport.roundTripMin)]] : [],
+    ),
+  );
+const trips = useDrafts(savedTrips);
+// Then the saved minutes again, after a refused entry or a save (failed or not).
+const savedTrip = (link: Link) =>
+  (trips[link.key] =
+    savedTrips()[link.key] ?? String(link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN));
+
+async function setTrip(event: Event, link: Link) {
   const input = event.target as HTMLInputElement,
     minutes = Number(input.value);
   if (!Number.isFinite(minutes) || minutes < 0.1 || minutes > 1440) {
     toast('Enter a round trip between 0.1 and 1,440 minutes.', true);
-    input.value = String(link.transport?.roundTripMin ?? DEFAULT_TRIP_MIN);
+    input.value = savedTrip(link);
     return;
   }
-  setTransport(input, link, { roundTripMin: minutes });
+  await setTransport(input, link, { roundTripMin: minutes });
+  savedTrip(link);
 }
 
 // The fuel the links' vehicles burn per phase (#206), and whether this plan already plans for
@@ -359,7 +375,8 @@ async function recalculate(event: Event) {
                       max="1440"
                       step="0.1"
                       :data-link-trip="link.key"
-                      :value="link.transport.roundTripMin"
+                      :value="trips[link.key]"
+                      @input="trips[link.key] = ($event.target as HTMLInputElement).value"
                       @change="setTrip($event, link)"
                     />
                     min</label
