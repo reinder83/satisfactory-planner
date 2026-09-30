@@ -2,7 +2,7 @@
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
 import fs from 'node:fs/promises';
 import { importableTransfer, transferFormat } from '../public/transfer.ts';
-import { shareState, newProfileState, carryGuide } from '../public/state.ts';
+import { shareState, calculatedProfile } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -174,21 +174,16 @@ export function saveRoutes({
       const source = input.carryFrom ? save.profiles.find(p => p.id === input.carryFrom) : null;
       if (input.carryFrom && !source)
         fail('The profile to carry progress from was not found.', 404);
-      const started = newProfileState(
+      // A recalculation of a guided plan keeps its guide (#472).
+      const started = calculatedProfile(
+        profileId,
+        profileName,
         plan,
-        source?.state || null,
-        source?.plan || null,
+        source,
         input.carry,
         input.built,
       );
-      save.profiles.push({
-        id: profileId,
-        name: profileName,
-        kind: 'calculated',
-        // A recalculation of a guided plan keeps its guide (#472).
-        plan: carryGuide(plan, source?.plan),
-        state: started.state,
-      });
+      save.profiles.push(started.profile);
       save.activeProfile = profileId;
       draft.users.find(account => account.id === user.id)!.activeSave = saveId;
       return started;

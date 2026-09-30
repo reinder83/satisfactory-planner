@@ -1,6 +1,6 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
-import { checkBase, carryGuide, currentPayoff } from '../public/state.ts';
+import { checkBase, currentPayoff, wholeMachineProfile } from '../public/state.ts';
 import { calculate, rankAlternates } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -19,7 +19,8 @@ export function profileRoutes({
   // Adds a whole-machine version of a calculated profile as a new profile in the same
   // save; the original profile is untouched. Its progress is copied, and a ticked
   // 'calc-' row is unticked for review where the rounded plan needs more machines or more
-  // of any input. The same rule newProfileState uses when carrying factory progress.
+  // of any input (wholeMachineProfile and roundUpState in public/state/carry.ts, shared with
+  // browser-api.ts). The same rule newProfileState uses when carrying factory progress.
   async function roundUp({ req, user, save, profile }: ScopedRequest) {
     if (profile.kind !== 'calculated')
       fail(
@@ -36,31 +37,9 @@ export function profileRoutes({
       const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id)!;
       if (draftSave.profiles.length >= 30) fail('Profile limit reached.');
       const previous = draftSave.profiles.find(p => p.id === profile.id)!;
-      const state = structuredClone(previous.state);
-      for (const [phase, stage] of Object.entries(rounded.stages))
-        for (const row of stage.rows || []) {
-          const old = previous.plan!.stages[phase as StageKey]?.rows?.find(r => r.id === row.id);
-          if (
-            !old ||
-            Object.entries(row.inputs).some(
-              ([item, rate]) => rate > (old.inputs[item] || 0) + 0.001,
-            ) ||
-            row.machines > old.machines
-          ) {
-            const checkKey = 'calc-' + phase + '-' + row.id;
-            if (state.checks[checkKey]) {
-              state.checks[checkKey] = false;
-              reviewCount++;
-            }
-          }
-        }
-      draftSave.profiles.push({
-        id: profileId,
-        name: (previous.name + ' · whole machines').slice(0, 80),
-        kind: 'calculated',
-        plan: carryGuide(rounded, previous.plan),
-        state,
-      });
+      const copy = wholeMachineProfile(profileId, previous, rounded);
+      reviewCount = copy.reviewCount;
+      draftSave.profiles.push(copy.profile);
       draftSave.activeProfile = profileId;
       draft.users.find(account => account.id === user.id)!.activeSave = draftSave.id;
     });

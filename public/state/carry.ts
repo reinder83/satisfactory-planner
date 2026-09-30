@@ -1,12 +1,16 @@
-// Carrying progress into a new profile (newProfileState, the carry options, carryGuide) and
-// sharing a profile without its progress (shareState). Re-exported by ../state.ts.
+// Carrying progress into a new profile (newProfileState, the carry options, carryGuide), the
+// profiles /api/profiles and /api/round-up add in both editions (calculatedProfile,
+// roundUpState, wholeMachineProfile) and sharing a profile without its progress (shareState).
+// Re-exported by ../state.ts.
 import type {
   CalcRow,
   FactoryGroups,
   GroupAssignment,
   ProgressState,
   SavedState,
+  StageKey,
   StoredCalculatedPlan,
+  StoredProfile,
 } from '../types/index.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
 import {
@@ -133,8 +137,8 @@ const builtKeys = (raw: unknown, plan: RowsPlan | null): string[] => {
 // sourcePlan the sibling profile's state and plan to carry from, raw the carry choices and
 // built the guided start's finished-work keys. Returns { state, reviewCount, carried }: the
 // validated state, how many carried 'calc-' ticks were unticked for review, and how many
-// checks start ticked. The source is only read. Called by /api/profiles in workspace.ts and
-// by the matching route in browser-api.ts.
+// checks start ticked. The source is only read. Called by calculatedProfile below, which
+// /api/profiles uses in save-routes.ts and in browser-api.ts.
 export function newProfileState(
   plan: RowsPlan | null,
   source: SavedState | null | undefined,
@@ -264,6 +268,84 @@ export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>
     );
   }
   return { ...plan, guide: copy };
+}
+// The calculated profile /api/profiles adds in both editions (save-routes.ts createProfile and
+// browser-api.ts createProfile): its progress starts from newProfileState, carried from
+// `source` (a sibling profile, or null) with the carry choices `raw` and the guided start's
+// `built` keys, and its plan keeps the source plan's guide (#472). Returns the profile to push,
+// with newProfileState's reviewCount and carried count. Limits, ids and selection stay with
+// the callers.
+export function calculatedProfile<P extends RowsPlan>(
+  id: string,
+  name: string,
+  plan: P,
+  source: Pick<StoredProfile, 'state' | 'plan'> | null | undefined,
+  raw: unknown,
+  built: unknown,
+) {
+  const started = newProfileState(plan, source?.state || null, source?.plan || null, raw, built);
+  return {
+    profile: {
+      id,
+      name,
+      kind: 'calculated' as const,
+      plan: carryGuide(plan, source?.plan),
+      state: started.state,
+    },
+    reviewCount: started.reviewCount,
+    carried: started.carried,
+  };
+}
+// Round-up (/api/round-up, profile-routes.ts roundUp and browser-api.ts roundUp): the progress
+// of the whole-machine copy. The previous state is cloned, never changed, and a ticked
+// 'calc-<phase>-<row>' check is unticked for review where the rounded plan has a row the
+// previous plan lacks, or needs more machines or more of any input (tolerance 0.001) than it;
+// reviewCount counts those. The same rule newProfileState applies when carrying factory
+// progress. Rows the previous state never ticked are left alone.
+export function roundUpState<S extends SavedState>(
+  previousState: S,
+  previousPlan: RowsPlan | null | undefined,
+  roundedPlan: RowsPlan,
+): { state: S; reviewCount: number } {
+  const state = structuredClone(previousState);
+  let reviewCount = 0;
+  for (const [phase, stage] of Object.entries(roundedPlan.stages))
+    for (const row of stage.rows || []) {
+      const old = previousPlan?.stages[phase as StageKey]?.rows?.find(r => r.id === row.id);
+      if (
+        !old ||
+        row.machines > old.machines ||
+        Object.entries(row.inputs).some(([item, rate]) => rate > (old.inputs[item] || 0) + 0.001)
+      ) {
+        const checkKey = 'calc-' + phase + '-' + row.id;
+        if (state.checks[checkKey]) {
+          state.checks[checkKey] = false;
+          reviewCount++;
+        }
+      }
+    }
+  return { state, reviewCount };
+}
+// The whole-machine copy /api/round-up adds in both editions: `<name> · whole machines` (at
+// most 80 characters), the rounded plan with the previous plan's guide, and roundUpState's
+// progress. Returns the profile to push and reviewCount; limits, ids and selection stay with
+// the callers.
+export function wholeMachineProfile<P extends RowsPlan, S extends SavedState>(
+  id: string,
+  previous: Pick<StoredProfile, 'name' | 'plan'> & { state: S },
+  roundedPlan: P,
+) {
+  const { state, reviewCount } = roundUpState(previous.state, previous.plan, roundedPlan);
+  return {
+    profile: {
+      id,
+      name: (previous.name + ' · whole machines').slice(0, 80),
+      kind: 'calculated' as const,
+      plan: carryGuide(roundedPlan, previous.plan),
+      state,
+    },
+    reviewCount,
+  };
 }
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.

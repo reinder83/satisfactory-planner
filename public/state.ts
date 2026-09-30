@@ -24,7 +24,9 @@
 // every importer, test and the server use, so none of them names a file under public/state/.
 //   state/validate.ts        blank state, validateState and the record rules
 //   state/mutate.ts          mutate (the /api/update operations) and checkBase
-//   state/carry.ts           newProfileState, carry options, carryGuide and shareState
+//   state/carry.ts           newProfileState, carry options, carryGuide, shareState and the
+//                            profiles /api/profiles and /api/round-up add (calculatedProfile,
+//                            roundUpState, wholeMachineProfile)
 //   state/summary.ts         phaseProgress and currentPayoff
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 export {
@@ -42,12 +44,15 @@ export {
 } from './state/validate.ts';
 export { checkBase, mutate, staleWrite } from './state/mutate.ts';
 export {
+  calculatedProfile,
   carryGuide,
   carryOptions,
   carryPicks,
   newProfileState,
   pickedRecipeUnlocks,
+  roundUpState,
   shareState,
+  wholeMachineProfile,
 } from './state/carry.ts';
 export { currentPayoff, phaseProgress } from './state/summary.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
