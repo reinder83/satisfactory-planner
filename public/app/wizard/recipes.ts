@@ -13,8 +13,8 @@ export const alternatesUsed = (plan: StoredCalculatedPlan | null | undefined): s
   const altIds = new Set((workspace?.catalog?.alternates || []).map(a => a.id));
   return [
     ...new Set(
-      Object.values(plan?.stages || {}).flatMap(st =>
-        (st.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
+      Object.values(plan?.stages || {}).flatMap(snapshot =>
+        (snapshot.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
       ),
     ),
   ].sort();

@@ -60,13 +60,13 @@ export const GUIDED_GLYPHS: Record<string, string> = {
 // and the screens compare guidedStep with this length to know when the questions
 // are finished; ada-panel.ts reads it too.
 export function guidedFlow(): GuidedQuestion[] {
-  const w = draft(),
-    ask = w.guidedAsk,
+  const wizardDraft = draft(),
+    ask = wizardDraft.guidedAsk,
     list: GuidedQuestion[] = [];
-  for (const q of guidedQuestions) {
-    list.push(q);
-    if (q.id === 'phase' && !w.saveId)
-      list.push(guidedStandingQuestion(String(w.settings.phase || '3')));
+  for (const question of guidedQuestions) {
+    list.push(question);
+    if (question.id === 'phase' && !wizardDraft.saveId)
+      list.push(guidedStandingQuestion(String(wizardDraft.settings.phase || '3')));
   }
   return ask ? list.filter(q => ask.includes(q.id)) : list;
 }
@@ -74,23 +74,25 @@ export function guidedFlow(): GuidedQuestion[] {
 // The option value currently chosen for a question, derived from the settings
 // (so a change made in All settings shows up here). 'tutorial' lives on the
 // draft rather than the settings.
-export const guidedAnswer = (q: GuidedQuestion): string => {
-  const w = draft(),
-    s = w.settings;
-  if (q.id === 'tutorial') return w.tutorial || 'doing';
-  if (q.id === 'exact') return s.wholeMachines === false ? 'precise' : 'whole';
-  if (q.id === 'stock')
-    return q.options?.some(o => o.value === s.storage) ? s.storage : 'construction';
-  const byName: Record<string, unknown> = s;
-  return String(byName[q.id] ?? '');
+export const guidedAnswer = (question: GuidedQuestion): string => {
+  const wizardDraft = draft(),
+    settings = wizardDraft.settings;
+  if (question.id === 'tutorial') return wizardDraft.tutorial || 'doing';
+  if (question.id === 'exact') return settings.wholeMachines === false ? 'precise' : 'whole';
+  if (question.id === 'stock')
+    return question.options?.some(o => o.value === settings.storage)
+      ? settings.storage
+      : 'construction';
+  const byName: Record<string, unknown> = settings;
+  return String(byName[question.id] ?? '');
 };
 
 // The checklist keys a new profile should start with. The Phase 1 HUB steps are
 // the only ones a guided answer can tick: everything else it learns is a rate,
 // which changes the plan rather than its progress.
 // Sent as `built` by createProfile (wizard.ts).
-export function guidedBuiltKeys(w: WizardDraft): string[] {
-  return w.tutorial === 'done' ? [...tutorialKeys] : [];
+export function guidedBuiltKeys(wizardDraft: WizardDraft): string[] {
+  return wizardDraft.tutorial === 'done' ? [...tutorialKeys] : [];
 }
 
 // Copy the current guided screen into the draft. The mapping from answer to
@@ -102,62 +104,62 @@ export function guidedBuiltKeys(w: WizardDraft): string[] {
 // so a redraw keeps them; only `topics` (leaving the screen) makes them
 // guidedAsk, which ends that screen and narrows guidedFlow().
 function readGuided(form: HTMLFormElement, topics: boolean) {
-  const w = draft(),
-    s = w.settings,
-    f = new FormData(form);
+  const wizardDraft = draft(),
+    settings = wizardDraft.settings,
+    formData = new FormData(form);
   if (form.querySelector?.('.guided-topics')) {
-    const on = f.getAll('topic').map(String);
-    w.guidedTopics = guidedQuestions.filter(q => on.includes(q.id)).map(q => q.id);
-    if (topics) w.guidedAsk = w.guidedTopics;
+    const ticked = formData.getAll('topic').map(String);
+    wizardDraft.guidedTopics = guidedQuestions.filter(q => ticked.includes(q.id)).map(q => q.id);
+    if (topics) wizardDraft.guidedAsk = wizardDraft.guidedTopics;
   }
-  for (const q of guidedFlow()) {
-    if (!q.options) continue;
-    const value = f.get('guided:' + q.id);
+  for (const question of guidedFlow()) {
+    if (!question.options) continue;
+    const value = formData.get('guided:' + question.id);
     if (value === null) continue;
-    const option = q.options.find(o => o.value === String(value));
+    const option = question.options.find(o => o.value === String(value));
     if (!option) continue;
-    if (q.id === 'tutorial') w.tutorial = option.value;
-    Object.assign(s, option.set);
+    if (question.id === 'tutorial') wizardDraft.tutorial = option.value;
+    Object.assign(settings, option.set);
   }
   {
-    const supply = readSupply(form, f);
-    if (supply) s.existingSupply = supply;
+    const supply = readSupply(form, formData);
+    if (supply) settings.existingSupply = supply;
   }
-  if (f.has('hours')) s.hours = Number(f.get('hours'));
+  if (formData.has('hours')) settings.hours = Number(formData.get('hours'));
   // A guided plan never raises the general construction rate: it is the single
   // most expensive control in the app and the per-item floors below do the same
   // job for a fortieth of the buildings.
   if (form.querySelector?.('.guided-topup')) {
-    s.storageRate = 1;
-    s.buildRate = 1;
-    const chosen = f
+    settings.storageRate = 1;
+    settings.buildRate = 1;
+    const chosen = formData
       .getAll('topup')
       .map(String)
-      .filter(n => guidedTopupItems.includes(n));
-    const over: ItemRates = {};
-    for (const n of chosen) over[n] = GUIDED_TOPUP_RATE;
-    s.storageOverrides = over;
+      .filter(item => guidedTopupItems.includes(item));
+    const overrides: ItemRates = {};
+    for (const item of chosen) overrides[item] = GUIDED_TOPUP_RATE;
+    settings.storageOverrides = overrides;
   }
-  if (s.goal !== 'timed') s.phaseTime = 'every';
-  if (s.storage === 'none') s.storageOverrides = {};
-  w.preview = null;
+  if (settings.goal !== 'timed') settings.phaseTime = 'every';
+  if (settings.storage === 'none') settings.storageOverrides = {};
+  wizardDraft.preview = null;
 }
 
 // Go to question `target` (1-based): read the screen, then re-render, hand over
 // to All settings, or, past the last question, calculate and show Review.
 // Forward moves must pass the form's own validation first.
 export async function moveGuided(target: number) {
-  const w = wizard,
+  const wizardDraft = wizard,
     form = $<HTMLFormElement>('#wizard-form');
-  if (wizardBusy || !w) return;
-  if (target > w.guidedStep && form && !form.reportValidity()) return;
+  if (wizardBusy || !wizardDraft) return;
+  if (target > wizardDraft.guidedStep && form && !form.reportValidity()) return;
   // "What is different this time?" chooses which questions follow, so leaving it
   // starts that list at the beginning rather than stepping past it.
-  const wasTopics = !!w.saveId && w.guidedAsk === null;
+  const wasTopics = !!wizardDraft.saveId && wizardDraft.guidedAsk === null;
   if (form) readGuidedForm(form, { topics: true });
   const flow = guidedFlow();
   if (wasTopics && flow.length) {
-    w.guidedStep = 1;
+    wizardDraft.guidedStep = 1;
     render();
     return;
   }
@@ -165,26 +167,26 @@ export async function moveGuided(target: number) {
   // would hand the page to the five steps, so the topics screen stays (guidedAsk null) while
   // calculating and if the calculation fails; success moves on to Review as usual.
   if (wasTopics) {
-    w.guidedAsk = null;
+    wizardDraft.guidedAsk = null;
     await calculateWizard(form);
     return;
   }
   if (target < 1) {
-    w.guidedStep = 1;
+    wizardDraft.guidedStep = 1;
     render();
     return;
   }
   // A choice that only All settings can answer hands over rather than pretending
   // to ask it here: picking recipes one by one, or confirming resource budgets
   // before maximum output.
-  const previous = flow[Math.min(w.guidedStep - 1, flow.length - 1)];
+  const previous = flow[Math.min(wizardDraft.guidedStep - 1, flow.length - 1)];
   const handoff = previous?.options?.find(o => o.value === guidedAnswer(previous))?.handoff;
-  if (handoff && target > w.guidedStep) {
+  if (handoff && target > wizardDraft.guidedStep) {
     toAdvanced(handoff);
     return;
   }
   if (target <= flow.length) {
-    w.guidedStep = target;
+    wizardDraft.guidedStep = target;
     render();
     return;
   }
@@ -195,10 +197,10 @@ export async function moveGuided(target: number) {
 // Also used by the survey and supply code before they re-render. `topics` applies
 // the ticked topics (see readGuided): Continue and All settings do, a change does not.
 export function readGuidedForm(form: HTMLFormElement, { topics = false } = {}) {
-  const w = draft(),
-    f = new FormData(form);
-  if (f.has('saveName')) w.saveName = String(f.get('saveName'));
-  if (f.has('profileName')) w.name = String(f.get('profileName'));
+  const wizardDraft = draft(),
+    formData = new FormData(form);
+  if (formData.has('saveName')) wizardDraft.saveName = String(formData.get('saveName'));
+  if (formData.has('profileName')) wizardDraft.name = String(formData.get('profileName'));
   readGuided(form, topics);
 }
 
@@ -206,26 +208,26 @@ export function readGuidedForm(form: HTMLFormElement, { topics = false } = {}) {
 // settings object, so nothing is recalculated or lost either way.
 // Lands on `step`, clamped to 1-4: Review is only reached by calculating.
 export function toAdvanced(step?: number) {
-  const w = draft();
+  const wizardDraft = draft();
   const form = $<HTMLFormElement>('#wizard-form');
-  if (form && w.mode === 'guided') readGuidedForm(form, { topics: true });
-  w.mode = 'advanced';
-  w.step = Math.min(Math.max(step || 1, 1), 4);
+  if (form && wizardDraft.mode === 'guided') readGuidedForm(form, { topics: true });
+  wizardDraft.mode = 'advanced';
+  wizardDraft.step = Math.min(Math.max(step || 1, 1), 4);
   render();
 }
 
 // "← Guided start" from the five-step wizard: read that form, then resume the
 // questions at the last guided step, clamped to the current flow.
 export function toGuided() {
-  const w = draft();
+  const wizardDraft = draft();
   const form = $<HTMLFormElement>('#wizard-form');
-  if (form && w.mode !== 'guided') readWizard(form);
-  w.mode = 'guided';
+  if (form && wizardDraft.mode !== 'guided') readWizard(form);
+  wizardDraft.mode = 'guided';
   // No topics ticked on "What is different" leaves no questions, and an empty flow would keep
   // the five steps on screen: go back to that screen instead, with its ticks as they were.
-  if (w.guidedAsk && !w.guidedAsk.length) w.guidedAsk = null;
+  if (wizardDraft.guidedAsk && !wizardDraft.guidedAsk.length) wizardDraft.guidedAsk = null;
   const flow = guidedFlow();
-  if (!(w.guidedStep >= 1)) w.guidedStep = 1;
-  w.guidedStep = Math.min(w.guidedStep, Math.max(flow.length, 1));
+  if (!(wizardDraft.guidedStep >= 1)) wizardDraft.guidedStep = 1;
+  wizardDraft.guidedStep = Math.min(wizardDraft.guidedStep, Math.max(flow.length, 1));
   render();
 }

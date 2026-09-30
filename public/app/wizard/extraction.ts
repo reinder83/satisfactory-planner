@@ -39,10 +39,10 @@ export const EXTRACTION_STEPS = ['How you mine', 'Ore nodes', 'Resource wells', 
 // settings, or a starting survey for the chosen world settings. Its shape is
 // { mark, clock, nodes: { ore: { impure, normal, pure } }, wells: {...}, used }.
 // Cached on the draft, so an unapplied survey is still there when reopened.
-export function extractionOf(w: WizardDraft): Survey {
-  return (w.extraction ??= w.settings.extraction
-    ? structuredClone(w.settings.extraction)
-    : startingSurvey(w.settings));
+export function extractionOf(wizardDraft: WizardDraft): Survey {
+  return (wizardDraft.extraction ??= wizardDraft.settings.extraction
+    ? structuredClone(wizardDraft.settings.extraction)
+    : startingSurvey(wizardDraft.settings));
 }
 
 // Back to an empty survey. Every count goes, including what was already
@@ -50,12 +50,12 @@ export function extractionOf(w: WizardDraft): Survey {
 // than counts and have no meaningful zero. The old counts are kept aside so the
 // clearing can be undone, which is why no confirmation is asked for.
 export function resetExtraction() {
-  const w = draft();
+  const wizardDraft = draft();
   noteWizardEdit();
-  const previous = extractionOf(w);
-  w.extractionUndo = JSON.parse(JSON.stringify(previous));
-  w.extractionUndoKind = 'reset';
-  w.extraction = { ...blankExtraction(), mark: previous.mark, clock: previous.clock };
+  const previous = extractionOf(wizardDraft);
+  wizardDraft.extractionUndo = JSON.parse(JSON.stringify(previous));
+  wizardDraft.extractionUndoKind = 'reset';
+  wizardDraft.extraction = { ...blankExtraction(), mark: previous.mark, clock: previous.clock };
 }
 
 // The survey's purity or distribution changed to a fully known world: every count is refilled
@@ -65,34 +65,36 @@ export function resetExtraction() {
 // recoverable through several refills in a row (arrowing through the select changes it once
 // per step).
 export function refillExtraction() {
-  const w = draft(),
-    s = w.settings;
-  const previous = extractionOf(w);
+  const wizardDraft = draft(),
+    settings = wizardDraft.settings;
+  const previous = extractionOf(wizardDraft);
   const counted = [previous.nodes, previous.wells].some(map =>
     Object.values(map || {}).some(c => c.impure || c.normal || c.pure),
   );
   // matchingPreset compares the ordinary nodes only. On the default distribution the refill also
   // replaces nitrogen, so a nitrogen row that differs from the matched preset's was typed too.
   const preset = matchingPreset(previous);
-  const row = (c?: NodeCounts) => [c?.impure || 0, c?.normal || 0, c?.pure || 0].join();
+  const countsKey = (counts?: NodeCounts) =>
+    [counts?.impure || 0, counts?.normal || 0, counts?.pure || 0].join();
   const nitrogenTyped =
     !!preset &&
-    s.distribution === 'original' &&
-    row(previous.wells?.['Nitrogen Gas']) !== row(presetSurvey(preset).wells['Nitrogen Gas']);
+    settings.distribution === 'original' &&
+    countsKey(previous.wells?.['Nitrogen Gas']) !==
+      countsKey(presetSurvey(preset).wells['Nitrogen Gas']);
   if (counted && (!preset || nitrogenTyped)) {
-    w.extractionUndo = JSON.parse(JSON.stringify(previous));
-    w.extractionUndoKind = 'refill';
+    wizardDraft.extractionUndo = JSON.parse(JSON.stringify(previous));
+    wizardDraft.extractionUndoKind = 'refill';
   }
-  w.extraction = presetSurvey(s.purity, previous, s.distribution);
+  wizardDraft.extraction = presetSurvey(settings.purity, previous, settings.distribution);
 }
 
 // Put back the counts resetExtraction or refillExtraction set aside; offered until the survey
 // closes.
 export function undoExtractionReset() {
-  const w = draft();
-  if (!w.extractionUndo) return;
-  w.extraction = w.extractionUndo;
-  w.extractionUndo = null;
+  const wizardDraft = draft();
+  if (!wizardDraft.extractionUndo) return;
+  wizardDraft.extraction = wizardDraft.extractionUndo;
+  wizardDraft.extractionUndo = null;
 }
 
 // Every screen writes straight into the survey, so moving between them keeps
@@ -101,30 +103,32 @@ export function undoExtractionReset() {
 // are written to wizard.settings at once, even if the survey is left unapplied.
 // Counts are whole and non-negative; an all-zero row is dropped from the map.
 export function readExtraction(form: HTMLFormElement) {
-  const w = draft(),
-    e = extractionOf(w),
-    f = new FormData(form);
+  const wizardDraft = draft(),
+    survey = extractionOf(wizardDraft),
+    formData = new FormData(form);
   const raw = new Set(workspace.catalog.raw || []);
-  for (const [k, v] of f) {
+  for (const [field, value] of formData) {
     // The two selects offer only the presets' own values; calculate() checks them again.
-    if (k === 'purity') w.settings.purity = String(v) as Purity;
-    else if (k === 'distribution') w.settings.distribution = String(v) as Distribution;
-    else if (k === 'mark') e.mark = Number(v);
-    else if (k === 'clock') e.clock = Number(v);
-    else if (k.startsWith('node:') || k.startsWith('well:')) {
-      const [kind = '', name = '', purity = ''] = k.split(':');
+    if (field === 'purity') wizardDraft.settings.purity = String(value) as Purity;
+    else if (field === 'distribution')
+      wizardDraft.settings.distribution = String(value) as Distribution;
+    else if (field === 'mark') survey.mark = Number(value);
+    else if (field === 'clock') survey.clock = Number(value);
+    else if (field.startsWith('node:') || field.startsWith('well:')) {
+      const [kind = '', name = '', purity = ''] = field.split(':');
       if (!raw.has(name) || !purities3.some(([p]) => p === purity)) continue;
-      const map = kind === 'well' ? (e.wells ??= {}) : (e.nodes ??= {});
+      const map = kind === 'well' ? (survey.wells ??= {}) : (survey.nodes ??= {});
       const row: NodeCounts = map[name] || blankCounts();
-      row[purity as keyof NodeCounts] = Math.max(0, Math.floor(Number(v) || 0));
+      row[purity as keyof NodeCounts] = Math.max(0, Math.floor(Number(value) || 0));
       if (row.impure || row.normal || row.pure) map[name] = row;
       else delete map[name];
-    } else if (k.startsWith('used:')) {
-      const name = k.slice(5);
+    } else if (field.startsWith('used:')) {
+      const name = field.slice(5);
       if (!raw.has(name)) continue;
-      const q = Number(v);
-      if (String(v).trim() !== '' && Number.isFinite(q) && q > 0) (e.used ??= {})[name] = q;
-      else delete e.used?.[name];
+      const rate = Number(value);
+      if (String(value).trim() !== '' && Number.isFinite(rate) && rate > 0)
+        (survey.used ??= {})[name] = rate;
+      else delete survey.used?.[name];
     }
   }
 }
@@ -132,50 +136,58 @@ export function readExtraction(form: HTMLFormElement) {
 // Go to survey screen `target`. Below 1 leaves without applying; past the last
 // screen applies the survey to settings.limits and leaves.
 export async function moveExtraction(target: number) {
-  const w = wizard,
+  const wizardDraft = wizard,
     form = $<HTMLFormElement>('#wizard-form');
-  if (wizardBusy || !w || target === w.extractionStep) return;
-  if (form && target > (w.extractionStep ?? 1) && !form.reportValidity()) return;
+  if (wizardBusy || !wizardDraft || target === wizardDraft.extractionStep) return;
+  if (form && target > (wizardDraft.extractionStep ?? 1) && !form.reportValidity()) return;
   if (form) readExtraction(form);
   if (target < 1) {
     leaveExtraction();
     return;
   }
   if (target <= EXTRACTION_STEPS.length) {
-    w.extractionStep = target;
+    wizardDraft.extractionStep = target;
     render();
     return;
   }
   // Applying the survey replaces the budgets and the confirmation that went with
   // them: these are counted numbers now, not the starting estimates.
-  w.settings.limits = extractionLimits(w.extraction, w.settings.limits);
-  w.settings.extraction = structuredClone(w.extraction);
-  w.settings.limitsConfirmed = true;
+  wizardDraft.settings.limits = extractionLimits(
+    wizardDraft.extraction,
+    wizardDraft.settings.limits,
+  );
+  wizardDraft.settings.extraction = structuredClone(wizardDraft.extraction);
+  wizardDraft.settings.limitsConfirmed = true;
   noteWizardEdit();
-  w.preview = null;
+  wizardDraft.preview = null;
   leaveExtraction();
   toast('Resource budgets set from your nodes. You can still edit any of them in All settings.');
 }
 
 // Back to whatever opened the survey, with the five-step wizard as the default.
 export function leaveExtraction() {
-  const w = draft();
-  w.mode = w.extractionReturn?.mode || 'advanced';
-  w.step = w.extractionReturn?.step || 4;
-  if (w.extractionReturn?.guidedStep) w.guidedStep = w.extractionReturn.guidedStep;
-  w.extractionReturn = null;
-  w.extractionUndo = null;
+  const wizardDraft = draft();
+  wizardDraft.mode = wizardDraft.extractionReturn?.mode || 'advanced';
+  wizardDraft.step = wizardDraft.extractionReturn?.step || 4;
+  if (wizardDraft.extractionReturn?.guidedStep)
+    wizardDraft.guidedStep = wizardDraft.extractionReturn.guidedStep;
+  wizardDraft.extractionReturn = null;
+  wizardDraft.extractionUndo = null;
   render();
 }
 
 // Start the survey: read the current form into the draft first, and remember
 // where we came from so leaveExtraction can return there.
 export function openExtraction() {
-  const w = draft(),
+  const wizardDraft = draft(),
     form = $<HTMLFormElement>('#wizard-form');
-  if (form) w.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
-  w.extractionReturn = { mode: w.mode, step: w.step, guidedStep: w.guidedStep };
-  w.mode = 'extraction';
-  w.extractionStep = 1;
+  if (form) wizardDraft.mode === 'guided' ? readGuidedForm(form) : readWizard(form);
+  wizardDraft.extractionReturn = {
+    mode: wizardDraft.mode,
+    step: wizardDraft.step,
+    guidedStep: wizardDraft.guidedStep,
+  };
+  wizardDraft.mode = 'extraction';
+  wizardDraft.extractionStep = 1;
   render();
 }
