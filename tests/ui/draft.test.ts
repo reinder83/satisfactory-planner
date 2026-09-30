@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { nextTick, reactive, ref } from 'vue';
-import { settle, useDraft, useDrafts } from '../../public/app/ui/draft.ts';
+import { resetDraft, settle, useDraft, useDrafts } from '../../public/app/ui/draft.ts';
 
 test('a new saved value replaces an untouched draft and keeps a typed one (#664)', async () => {
   const saved = ref('0'),
@@ -68,4 +68,38 @@ test('a list’s drafts: untouched keys follow the saved values, typed ones stay
   saved.a = 'A3';
   await nextTick();
   assert.equal(drafts.a, 'A3');
+});
+
+test('a list’s draft typed back to the value saved before is kept (#683)', async () => {
+  const saved = reactive<Record<string, string>>({ a: 'A', b: 'B' }),
+    drafts = useDrafts(() => ({ ...saved }));
+  // Typed in and back to the saved name, not committed: another tab's rename leaves it.
+  drafts.a = 'Ax';
+  drafts.a = 'A';
+  saved.a = 'A2';
+  saved.b = 'B2';
+  await nextTick();
+  assert.deepEqual(
+    { ...drafts },
+    { a: 'A', b: 'B2' },
+    'typed: kept, though it equals the value before',
+  );
+  // After its commit, the handler puts the saved value back, untouched: it follows again.
+  saved.a = 'A';
+  await nextTick();
+  resetDraft(drafts, 'a', saved.a!);
+  saved.a = 'A3';
+  await nextTick();
+  assert.equal(drafts.a, 'A3', 'untouched after the commit: another tab’s value is shown');
+  // A key that goes after being typed in comes back untouched, with its saved value.
+  drafts.b = 'typed';
+  delete saved.b;
+  await nextTick();
+  assert.equal('b' in drafts, false, 'the key goes');
+  saved.b = 'B3';
+  await nextTick();
+  assert.equal(drafts.b, 'B3');
+  saved.b = 'B4';
+  await nextTick();
+  assert.equal(drafts.b, 'B4');
 });

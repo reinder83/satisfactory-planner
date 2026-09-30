@@ -11,7 +11,8 @@ import { groupLinks } from '../../public/app/group-links.ts';
 import { setFactoryEditing, setLayoutEditing, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { storageBays } from '../../public/app/views/storage.ts';
-import { $, catalog, generated, go, open, page } from './setup.ts';
+import { $, applyUpdate, catalog, generated, go, open, page } from './setup.ts';
+import type { ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -30,6 +31,14 @@ export interface Race {
   // The first and second field's stored values, and what they should read in the end.
   stored: () => [unknown, unknown];
   expected: [unknown, unknown];
+  // For a field of a list (ui/draft.ts useDrafts, #683): `set` writes the second field's value,
+  // saved in another tab, into a save's reply; `commits` are committed in the first field, one
+  // per save, and `others` are what the other tab saves meanwhile.
+  elsewhere?: {
+    set: (reply: ProgressState, value: string) => void;
+    commits: [string, string, string];
+    others: [string, string, string];
+  };
 }
 
 const bayName = (id: string) => storageBays().find(bay => bay.id === id)?.name;
@@ -88,6 +97,13 @@ export const races: Record<string, Race> = {
     typed: ['Pla', 'Plates'],
     stored: () => [groupName('fg-cable01'), groupName('fg-plates1')],
     expected: ['Cables', 'Plates'],
+    elsewhere: {
+      set(reply, value) {
+        reply.factoryGroups!.groups.find(g => g.id === 'fg-plates1')!.name = value;
+      },
+      commits: ['Cables', 'Wires', 'Cords'],
+      others: ['Plates elsewhere', 'Plates again', 'Plates at last'],
+    },
   },
   'round trip': (() => {
     const plan = generated(),
@@ -125,6 +141,13 @@ export const races: Record<string, Race> = {
       typed: ['3', '34'],
       stored: () => [trip(one!), trip(two!)],
       expected: [9, 34],
+      elsewhere: {
+        set(reply: ProgressState, value: string) {
+          reply.factoryGroups!.links![two!]!.roundTripMin = Number(value);
+        },
+        commits: ['9', '8', '7'] as [string, string, string],
+        others: ['12', '15', '20'] as [string, string, string],
+      },
     };
   })(),
 };
@@ -201,4 +224,47 @@ export async function typedDuringOwnSave(stub: Stub, typed = '7') {
   await settle();
   assert.equal(stored(), Number(typed), 'the typed count is saved');
   assert.equal(input.value, typed);
+}
+
+// A field of a list whose value another tab saves, arriving with the reply to a save of another
+// field (#683). Untouched, the field shows it. Typed in and then typed back to the value saved
+// before, but not committed, it keeps what is typed: a draft compared with the value saved
+// before took it for untouched. Committed, it saves that, and is untouched again. `answer`
+// makes the edition's saves reply with what answer(update) returns.
+export async function typedBackWhileAnotherTabSaves(
+  race: Race,
+  answer: (reply: (update: UpdateOp) => ProgressState) => void,
+) {
+  const elsewhere = race.elsewhere!;
+  page();
+  await race.open();
+  let other: string | null = null;
+  answer(update => {
+    const reply = applyUpdate(update);
+    if (other !== null) elsewhere.set(reply, other);
+    return reply;
+  });
+  const one = $<HTMLInputElement>(race.first)!,
+    two = () => $<HTMLInputElement>(race.second)!;
+  assert.ok(one && two(), 'both fields are drawn');
+  const commitFirst = async (value: string, saved: string | null) => {
+    other = saved;
+    type(one, value);
+    one.dispatchEvent(new Event('change'));
+    await settle();
+    assert.equal(String(race.stored()[0]), value);
+  };
+  await commitFirst(elsewhere.commits[0], elsewhere.others[0]);
+  assert.equal(two().value, elsewhere.others[0], 'untouched: another tab’s value is shown');
+  type(two(), race.typed[1]);
+  type(two(), elsewhere.others[0]);
+  await commitFirst(elsewhere.commits[1], elsewhere.others[1]);
+  assert.equal(two().value, elsewhere.others[0], 'typed back to the value saved before: kept');
+  other = null;
+  two().dispatchEvent(new Event('change'));
+  await settle();
+  assert.equal(String(race.stored()[1]), elsewhere.others[0], 'the typed value is saved');
+  assert.equal(two().value, elsewhere.others[0]);
+  await commitFirst(elsewhere.commits[2], elsewhere.others[2]);
+  assert.equal(two().value, elsewhere.others[2], 'untouched after its commit: follows again');
 }
