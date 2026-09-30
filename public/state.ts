@@ -897,168 +897,232 @@ export function checkBase(current: SavedState, update: unknown, base: string | n
 export function mutate(s: SavedState, update: UpdateOp): ProgressState {
   const op: unknown = update;
   if (!plain(op)) fail('Invalid update.');
+  // A type that is not a string is refused here, before any lookup.
   if (typeof op.type !== 'string') fail('Unknown update.');
-  if (op.type === 'check' || op.type === 'note' || op.type === 'delivery') {
-    if (!safeKey(op.key)) fail('Invalid record address.');
-    const kind = ({ check: 'checks', note: 'notes', delivery: 'deliveries' } as const)[op.type];
-    if (op.type === 'note' && typeof op.value === 'string' && !op.value.trim())
-      delete s.notes[op.key];
-    else (s[kind] as Raw)[op.key] = op.value;
-  } else if (op.type === 'checks') {
-    if (
-      !Array.isArray(op.keys) ||
-      !op.keys.length ||
-      op.keys.length > 1000 ||
-      op.keys.some((k: unknown) => !safeKey(k)) ||
-      typeof op.value !== 'boolean'
-    )
-      fail('Invalid checklist update.');
-    for (const key of op.keys as string[]) s.checks[key] = op.value;
-  } else if (op.type === 'phase') {
-    s.settings.phase = op.value as Phase;
-  } else if (op.type === 'addTask') {
-    s.customTasks.push({ id: op.id, title: op.title, phase: op.phase } as CustomTask);
-  } else if (op.type === 'removeTask') {
-    // Deleting a personal task also removes its tick and any step edits naming it. The id is
-    // not checked: an unknown one matches nothing.
-    const id = op.id as string;
-    s.customTasks = s.customTasks.filter(t => t.id !== id);
-    delete s.checks[id];
-    const e = (s.taskEdits = validateTaskEdits(s.taskEdits));
-    delete e.titles[id];
-    delete e.bodies[id];
-    delete e.links[id];
-    e.removed = e.removed.filter(k => k !== id);
-    for (const ph of Object.keys(e.order) as Phase[])
-      e.order[ph] = e.order[ph]!.filter(k => k !== id);
-    // A type that is not a string throws here, as it always has (see the bug backlog).
-  } else if ((op.type as string).startsWith('task')) {
-    mutateTasks(s, op);
-  } else if ((op.type as string).startsWith('factory')) {
-    mutateGroups(s, op);
-  } else if ((op.type as string).startsWith('storage')) {
-    mutateLayout(s, op);
-  } else fail('Unknown update.');
+  stateEditFor(op.type)(s, op);
   return validateState(s);
 }
-// Build-plan step edits: taskEdit (title, body, link; an empty value restores the
-// original), taskRemove / taskRestore (hide or show a step, its tick is kept) and taskOrder.
-function mutateTasks(s: SavedState, op: Raw) {
-  const e = (s.taskEdits = validateTaskEdits(s.taskEdits));
-  if (op.type === 'taskEdit') {
-    if (!safeKey(op.id)) fail('Invalid step.');
-    const id = op.id;
-    const texts: ['titles' | 'bodies', unknown, number][] = [
-      ['titles', op.title, 240],
-      ['bodies', op.body, 6000],
-    ];
-    for (const [kind, value, max] of texts) {
-      if (value === undefined) continue;
-      if (typeof value !== 'string' || value.length > max) fail('Invalid step text.');
-      if (value.trim()) e[kind][id] = value.trim();
-      else delete e[kind][id];
-    }
-    if (op.link !== undefined) {
-      if (op.link === '' || op.link === null) delete e.links[id];
-      else {
-        if (!safeKey(op.link)) fail('Invalid linked factory.');
-        e.links[id] = op.link;
-      }
-    }
-  } else if (op.type === 'taskRemove') {
-    if (!safeKey(op.id)) fail('Invalid step.');
-    const id = op.id;
-    if (!e.removed.includes(id)) e.removed.push(id);
-  } else if (op.type === 'taskRestore') {
-    if (!safeKey(op.id)) fail('Invalid step.');
-    e.removed = e.removed.filter(k => k !== op.id);
-  } else if (op.type === 'taskOrder') {
-    if (
-      !isPhase(op.phase) ||
-      !Array.isArray(op.ids) ||
-      op.ids.length > 600 ||
-      op.ids.some((k: unknown) => !safeKey(k)) ||
-      new Set(op.ids).size !== op.ids.length
-    )
-      fail('Invalid step order.');
-    if (op.ids.length) e.order[op.phase] = [...op.ids];
-    else delete e.order[op.phase];
-  } else fail('Unknown update.');
+// One update applied to s (see mutate).
+type StateEdit = (s: SavedState, op: Raw) => void;
+// The edit for update `type`: a progress record's own (recordEdits), else the one of its family,
+// which looks up its own table: mutateTasks, mutateGroups or mutateLayout.
+function stateEditFor(type: string): StateEdit {
+  // Own keys only: 'toString' and the other Object.prototype keys are unknown updates.
+  if (Object.hasOwn(recordEdits, type)) return recordEdits[type]!;
+  if (type.startsWith('task')) return mutateTasks;
+  if (type.startsWith('factory')) return mutateGroups;
+  if (type.startsWith('storage')) return mutateLayout;
+  fail('Unknown update.');
 }
-// Factory group edits. Removing a group also drops it from every row's assignment list.
-function mutateGroups(s: SavedState, op: Raw) {
-  const g = (s.factoryGroups = validateGroups(s.factoryGroups));
-  if (op.type === 'factoryGroupAdd') {
-    if (!groupId(op.id) || g.groups.some(x => x.id === op.id) || !label(op.name))
-      fail('Invalid factory group.');
-    if (g.groups.length >= 60) fail('You can keep up to 60 factory groups.');
-    g.groups.push({ id: op.id, name: op.name.trim() });
-  } else if (op.type === 'factoryGroupRename') {
-    if (!g.groups.some(x => x.id === op.id)) fail('Unknown factory group.');
-    if (!label(op.name)) fail('Invalid group name.');
-    // The check above found it.
-    g.groups.find(x => x.id === op.id)!.name = op.name.trim();
-  } else if (op.type === 'factoryGroupRemove') {
-    if (!g.groups.some(x => x.id === op.id)) fail('Unknown factory group.');
-    g.groups = g.groups.filter(x => x.id !== op.id);
-    for (const [k, list] of Object.entries(g.assignments)) {
-      const kept = list.filter(m => m.group !== op.id);
-      if (kept.length) g.assignments[k] = kept;
-      else delete g.assignments[k];
-    }
-    // Its links go too; they joined a place that no longer exists.
-    for (const k of Object.keys(g.links || {}))
-      if (k.split(':').includes(op.id as string)) delete g.links![k];
-    if (g.links && !Object.keys(g.links).length) delete g.links;
-  } else if (op.type === 'factoryLinkTransport') {
-    if (!linkKey(op.from, op.to, new Set(g.groups.map(x => x.id))))
-      fail('Unknown factory group link.');
-    const key = op.from + ':' + op.to;
-    const links = { ...g.links };
-    // The first choice for one item of a mines link saved before #231 splits that link: the
-    // other items on it (`siblings`, the sources the page shows going the same way) keep the
-    // old choice as their own, and the old entry goes, so nothing chosen is lost.
-    const legacy = MINES_PLACE + ':' + op.to;
-    if (sourcePlace(op.from) && links[legacy]) {
-      const siblings = op.siblings ?? [];
-      if (!Array.isArray(siblings) || siblings.length > 200 || !siblings.every(sourcePlace))
-        fail('Invalid factory group link.');
-      for (const sib of siblings as string[])
-        if (sib !== op.from) links[sib + ':' + op.to] ??= links[legacy]!;
-      delete links[legacy];
-    }
-    if (op.mode === 'belt') delete links[key];
-    else
-      links[key] = linkTransport({
-        mode: op.mode,
-        roundTripMin: op.roundTripMin,
-        ...(op.fuel === undefined ? {} : { fuel: op.fuel }),
-      });
-    if (Object.keys(links).length > 500) fail('You can set up to 500 group links.');
-    if (Object.keys(links).length) g.links = links;
-    else delete g.links;
-  } else if (op.type === 'factoryAssign') {
-    if (!safeKey(op.key) || !Array.isArray(op.groups) || op.groups.length > 12)
-      fail('Invalid factory group assignment.');
-    const known = new Set(g.groups.map(x => x.id)),
-      used = new Set<string>();
-    const list = op.groups.map((m: unknown): GroupAssignment => {
-      if (!plain(m) || !known.has(m.group as string) || used.has(m.group as string))
-        fail('Invalid factory group assignment.');
-      // known holds only group ids, so the check above leaves a string.
-      const group = m.group as string;
-      used.add(group);
-      const rate = m.rate ?? null;
-      if (
-        rate !== null &&
-        (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 10000000)
-      )
-        fail('Enter a production rate above 0.');
-      return { group, rate };
+// check, note and delivery: one record under its address. A blank note is deleted.
+function setRecord(s: SavedState, op: Raw) {
+  if (!safeKey(op.key)) fail('Invalid record address.');
+  const type = op.type as 'check' | 'note' | 'delivery';
+  const kind = ({ check: 'checks', note: 'notes', delivery: 'deliveries' } as const)[type];
+  if (type === 'note' && typeof op.value === 'string' && !op.value.trim()) delete s.notes[op.key];
+  else (s[kind] as Raw)[op.key] = op.value;
+}
+// Ticks or clears many checklist keys at once.
+function setChecks(s: SavedState, op: Raw) {
+  if (
+    !Array.isArray(op.keys) ||
+    !op.keys.length ||
+    op.keys.length > 1000 ||
+    op.keys.some((key: unknown) => !safeKey(key)) ||
+    typeof op.value !== 'boolean'
+  )
+    fail('Invalid checklist update.');
+  for (const key of op.keys as string[]) s.checks[key] = op.value;
+}
+function setPhase(s: SavedState, op: Raw) {
+  s.settings.phase = op.value as Phase;
+}
+function addTask(s: SavedState, op: Raw) {
+  s.customTasks.push({ id: op.id, title: op.title, phase: op.phase } as CustomTask);
+}
+// Deleting a personal task also removes its tick and any step edits naming it. The id is not
+// checked: an unknown one matches nothing.
+function removeTask(s: SavedState, op: Raw) {
+  const id = op.id as string;
+  s.customTasks = s.customTasks.filter(t => t.id !== id);
+  delete s.checks[id];
+  const edits = (s.taskEdits = validateTaskEdits(s.taskEdits));
+  delete edits.titles[id];
+  delete edits.bodies[id];
+  delete edits.links[id];
+  edits.removed = edits.removed.filter(k => k !== id);
+  for (const phase of Object.keys(edits.order) as Phase[])
+    edits.order[phase] = edits.order[phase]!.filter(k => k !== id);
+}
+const recordEdits: Record<string, StateEdit> = {
+  check: setRecord,
+  note: setRecord,
+  delivery: setRecord,
+  checks: setChecks,
+  phase: setPhase,
+  addTask,
+  removeTask,
+};
+
+// One build-plan step edit, applied to the normalised step edits (see mutateTasks).
+type TaskEdit = (edits: TaskEdits, op: Raw) => void;
+
+// Title, body and link of a step; an empty value restores the original.
+function editTask(edits: TaskEdits, op: Raw) {
+  if (!safeKey(op.id)) fail('Invalid step.');
+  const id = op.id;
+  const texts: ['titles' | 'bodies', unknown, number][] = [
+    ['titles', op.title, 240],
+    ['bodies', op.body, 6000],
+  ];
+  for (const [kind, value, max] of texts) {
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || value.length > max) fail('Invalid step text.');
+    if (value.trim()) edits[kind][id] = value.trim();
+    else delete edits[kind][id];
+  }
+  if (op.link === undefined) return;
+  if (op.link === '' || op.link === null) delete edits.links[id];
+  else {
+    if (!safeKey(op.link)) fail('Invalid linked factory.');
+    edits.links[id] = op.link;
+  }
+}
+// Hides a step; its tick is kept.
+function removeTaskStep(edits: TaskEdits, op: Raw) {
+  if (!safeKey(op.id)) fail('Invalid step.');
+  const id = op.id;
+  if (!edits.removed.includes(id)) edits.removed.push(id);
+}
+function restoreTaskStep(edits: TaskEdits, op: Raw) {
+  if (!safeKey(op.id)) fail('Invalid step.');
+  edits.removed = edits.removed.filter(k => k !== op.id);
+}
+// The order of one phase's steps, sent whole; an empty list restores the original order.
+function orderTasks(edits: TaskEdits, op: Raw) {
+  if (
+    !isPhase(op.phase) ||
+    !Array.isArray(op.ids) ||
+    op.ids.length > 600 ||
+    op.ids.some((key: unknown) => !safeKey(key)) ||
+    new Set(op.ids).size !== op.ids.length
+  )
+    fail('Invalid step order.');
+  if (op.ids.length) edits.order[op.phase] = [...op.ids];
+  else delete edits.order[op.phase];
+}
+const taskEdits: Record<string, TaskEdit> = {
+  taskEdit: editTask,
+  taskRemove: removeTaskStep,
+  taskRestore: restoreTaskStep,
+  taskOrder: orderTasks,
+};
+// Build-plan step edits, one function per update type above.
+function mutateTasks(s: SavedState, op: Raw) {
+  const edits = (s.taskEdits = validateTaskEdits(s.taskEdits));
+  // mutate only sends types starting with 'task', which no Object.prototype key does.
+  const edit = taskEdits[op.type as string];
+  if (!edit) fail('Unknown update.');
+  edit(edits, op);
+}
+
+// One factory group edit, applied to the normalised groups (see mutateGroups).
+type GroupEdit = (factory: FactoryGroups, op: Raw) => void;
+
+function addGroup(factory: FactoryGroups, op: Raw) {
+  if (!groupId(op.id) || factory.groups.some(group => group.id === op.id) || !label(op.name))
+    fail('Invalid factory group.');
+  if (factory.groups.length >= 60) fail('You can keep up to 60 factory groups.');
+  factory.groups.push({ id: op.id, name: op.name.trim() });
+}
+function renameGroup(factory: FactoryGroups, op: Raw) {
+  if (!factory.groups.some(group => group.id === op.id)) fail('Unknown factory group.');
+  if (!label(op.name)) fail('Invalid group name.');
+  // The check above found it.
+  factory.groups.find(group => group.id === op.id)!.name = op.name.trim();
+}
+// Removing a group also drops it from every row's assignment list.
+function removeGroup(factory: FactoryGroups, op: Raw) {
+  if (!factory.groups.some(group => group.id === op.id)) fail('Unknown factory group.');
+  factory.groups = factory.groups.filter(group => group.id !== op.id);
+  for (const [rowKey, list] of Object.entries(factory.assignments)) {
+    const kept = list.filter(member => member.group !== op.id);
+    if (kept.length) factory.assignments[rowKey] = kept;
+    else delete factory.assignments[rowKey];
+  }
+  // Its links go too; they joined a place that no longer exists.
+  for (const link of Object.keys(factory.links || {}))
+    if (link.split(':').includes(op.id as string)) delete factory.links![link];
+  if (factory.links && !Object.keys(factory.links).length) delete factory.links;
+}
+// The first choice for one item of a mines link saved before #231 splits that link: the other
+// items on it (`siblings`, the sources the page shows going the same way) keep the old choice as
+// their own, and the old entry goes, so nothing chosen is lost.
+function splitLegacyMinesLink(links: Record<string, LinkTransport>, op: Raw) {
+  const legacy = MINES_PLACE + ':' + op.to;
+  if (!sourcePlace(op.from) || !links[legacy]) return;
+  const siblings = op.siblings ?? [];
+  if (!Array.isArray(siblings) || siblings.length > 200 || !siblings.every(sourcePlace))
+    fail('Invalid factory group link.');
+  for (const sibling of siblings as string[])
+    if (sibling !== op.from) links[sibling + ':' + op.to] ??= links[legacy]!;
+  delete links[legacy];
+}
+// The transport on the link from one place to another; belts, the default, are not stored.
+function setLinkTransport(factory: FactoryGroups, op: Raw) {
+  if (!linkKey(op.from, op.to, new Set(factory.groups.map(group => group.id))))
+    fail('Unknown factory group link.');
+  const key = op.from + ':' + op.to;
+  const links = { ...factory.links };
+  splitLegacyMinesLink(links, op);
+  if (op.mode === 'belt') delete links[key];
+  else
+    links[key] = linkTransport({
+      mode: op.mode,
+      roundTripMin: op.roundTripMin,
+      ...(op.fuel === undefined ? {} : { fuel: op.fuel }),
     });
-    if (list.length) g.assignments[op.key] = list;
-    else delete g.assignments[op.key];
-  } else fail('Unknown update.');
+  if (Object.keys(links).length > 500) fail('You can set up to 500 group links.');
+  if (Object.keys(links).length) factory.links = links;
+  else delete factory.links;
+}
+// The groups a row's machines work in, each with an optional production rate.
+function assignGroups(factory: FactoryGroups, op: Raw) {
+  if (!safeKey(op.key) || !Array.isArray(op.groups) || op.groups.length > 12)
+    fail('Invalid factory group assignment.');
+  const known = new Set(factory.groups.map(group => group.id)),
+    used = new Set<string>();
+  const list = op.groups.map((member: unknown): GroupAssignment => {
+    if (!plain(member) || !known.has(member.group as string) || used.has(member.group as string))
+      fail('Invalid factory group assignment.');
+    // known holds only group ids, so the check above leaves a string.
+    const group = member.group as string;
+    used.add(group);
+    const rate = member.rate ?? null;
+    if (
+      rate !== null &&
+      (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 10000000)
+    )
+      fail('Enter a production rate above 0.');
+    return { group, rate };
+  });
+  if (list.length) factory.assignments[op.key] = list;
+  else delete factory.assignments[op.key];
+}
+const groupEdits: Record<string, GroupEdit> = {
+  factoryGroupAdd: addGroup,
+  factoryGroupRename: renameGroup,
+  factoryGroupRemove: removeGroup,
+  factoryLinkTransport: setLinkTransport,
+  factoryAssign: assignGroups,
+};
+// Factory group edits, one function per update type above.
+function mutateGroups(s: SavedState, op: Raw) {
+  const factory = (s.factoryGroups = validateGroups(s.factoryGroups));
+  // mutate only sends types starting with 'factory', which no Object.prototype key does.
+  const edit = groupEdits[op.type as string];
+  if (!edit) fail('Unknown update.');
+  edit(factory, op);
 }
 // Deletes everything recorded for bay `id`'s addresses: its name, container names and cleared
 // positions, and its 'slot-<address>' notes and 'slot-<address>-<step>' checks.
