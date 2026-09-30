@@ -74,13 +74,19 @@ async function markDone(event: Event) {
 // (taskOrder). Steps hidden by "Hide completed" or the search keep their places, so a step
 // never trades places with one the user cannot see. Nothing happens at either end of the
 // visible list. Removed steps and saved places of steps not in the plan now keep their slots
-// (taskOrderSlots), so restoring a step puts it back where it was.
-async function move(direction: number) {
+// (taskOrderSlots), so restoring a step puts it back where it was. The moved step's row is
+// re-inserted in its new place, which takes focus from the pressed arrow, so focus goes back to
+// the same arrow on the moved step (ui/refocus.ts, #656), and a second press moves it again.
+async function move(event: Event, direction: number) {
   const tasks = planTasks(),
     ids = tasks.map(t => t.id),
     shown = filteredPlanTasks(tasks).map(t => t.id),
     past = shown[shown.indexOf(props.step.id) + direction];
   if (!shown.includes(props.step.id) || !past) return;
+  const refocus = refocusOn(
+    event.currentTarget,
+    `#main [data-move-task="${CSS.escape(props.step.id)}"][data-dir="${direction}"]`,
+  );
   ids.splice(ids.indexOf(props.step.id), 1);
   ids.splice(ids.indexOf(past) + (direction > 0 ? 1 : 0), 0, props.step.id);
   const listed = new Set(ids);
@@ -89,6 +95,7 @@ async function move(direction: number) {
   try {
     await save({ type: 'taskOrder', phase: phase(), ids: order });
     render();
+    await refocus();
   } catch {}
 }
 
@@ -205,7 +212,7 @@ async function deletePersonal(event: Event) {
         :data-move-task="step.id"
         data-dir="-1"
         :aria-label="'Move up: ' + step.title"
-        @click="move(-1)"
+        @click="move($event, -1)"
       >
         ↑</button
       ><button
@@ -213,7 +220,7 @@ async function deletePersonal(event: Event) {
         :data-move-task="step.id"
         data-dir="1"
         :aria-label="'Move down: ' + step.title"
-        @click="move(1)"
+        @click="move($event, 1)"
       >
         ↓</button
       ><button
