@@ -788,82 +788,143 @@ export function run(
     fractionalNuclear = false,
   }: RunOptions = {},
 ): RunResult {
-  // Two-step fit for whole machines and amplification. First the exact LP (fractional machines,
-  // no amplification) chooses the recipe network; then the integer fit re-solves over only that
-  // network (`recipeIds`), which keeps the integer search small enough for the solver's 3-second
-  // limit. Hence the warning that the result is not a global mixed-recipe integer optimum.
-  // The inner calls pass `recipeIds`, so they skip this block and build the model below.
-  if ((config.wholeMachines || config.amplifySloops > 0) && !recipeIds) {
-    const sharedOptions = { maximum, conversion, ignoreLimits, caps };
-    const exact = (variant: CurrentSettings) =>
-      run({ ...variant, wholeMachines: false, amplifySloops: 0 }, phase, sharedOptions);
-    // The amplification candidates: the largest lines (at least one machine-equivalent) of an
-    // exact solve, as { recipeId: equivalent }.
-    const twins = (exactStage: Solved): Record<string, number> =>
-      Object.fromEntries(
-        [...exactStage.rows]
-          .filter(row => row.equivalent >= 1)
-          .sort((a, b) => b.equivalent - a.equivalent)
-          .slice(0, AMPLIFY_CANDIDATES[config.wholeMachines ? 'whole' : 'precise'])
-          .map(row => [row.id, row.equivalent]),
-      );
-    // If even the exact LP fails, rounding cannot help; calculate() explains the failure.
-    const base = exact(config);
-    if (!base.feasible) return base;
-    const ids = new Set(base.rows.map(row => row.id));
-    const baseline = twins(base);
-    // An integer fit. Whole nuclear plants (see the model below) can need more uranium, water or
-    // waste-chain inputs than the budgets allow; then fall back to fractional uranium plants,
-    // exactly the fit earlier releases made, and mark the stage `nuclearFractional` (#370).
-    const fitted = (variant: CurrentSettings, options: RunOptions): RunResult => {
-      const result = run(variant, phase, options);
-      if (result.feasible || !variant.wholeMachines || !options.recipeIds?.has('power-uranium'))
-        return result;
-      const fractional = run(variant, phase, { ...options, fractionalNuclear: true });
-      return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
-    };
-    let fit = fitted(config, { ...sharedOptions, recipeIds: ids, baseline });
-    // Crediting production you already run narrows the recipe network the exact solve picks, and a
-    // narrower network has less room to round up to whole machines. Widen it with the recipes this
-    // phase would have used without the credit before concluding anything — the supplied plan is
-    // still the smaller one, it just needs the slack. If even that will not round, drop the credit:
-    // telling the planner what you already built must never cost you a plan, the same rule
-    // amplification follows below.
-    if (!fit.feasible && Object.keys(config.existingSupply).length) {
-      const plainBase = exact({ ...config, existingSupply: {} });
-      if (plainBase.feasible) {
-        const plainIds = new Set(plainBase.rows.map(row => row.id));
-        const widened = fitted(config, {
-          ...sharedOptions,
-          recipeIds: new Set([...ids, ...plainIds]),
-          baseline,
-        });
-        if (widened.feasible) fit = widened;
-        else {
-          const without = fitted(
-            { ...config, existingSupply: {} },
-            {
-              ...sharedOptions,
-              recipeIds: plainIds,
-              baseline: twins(plainBase),
-            },
-          );
-          if (without.feasible) return { ...without, supplyDropped: true };
-        }
-      }
-    }
-    // Amplification is optional by definition: the solver may always place no somersloops at all.
-    // So a failure here is the integer search running out of time, never a real shortage — never let
-    // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
-    if (!fit.feasible && config.amplifySloops > 0) {
-      const plain = fitted({ ...config, amplifySloops: 0 }, { ...sharedOptions, recipeIds: ids });
-      if (plain.feasible) return { ...plain, amplificationDropped: true };
-    }
-    return fit;
+  const context: PhaseContext = {
+    config,
+    phase,
+    maximum,
+    conversion,
+    ignoreLimits,
+    recipeIds,
+    caps,
+    baseline,
+    fractionalNuclear,
+    power: phasePower(config, phase),
+  };
+  // The inner calls of the two-step fit pass `recipeIds`, so they skip it and plan the phase.
+  if ((config.wholeMachines || config.amplifySloops > 0) && !recipeIds) return twoStepFit(context);
+  const pool = phasePool(context);
+  const demands = phaseDemands(context, reachableItems(context, pool));
+  const { model, period } = buildModel(context, pool, demands);
+  const solved = solveModel(model, maximum);
+  // solverStatus lets calculate() tell a time-out ('Time limit reached') from a real shortage.
+  if (!solved.feasible || !solved.bounded)
+    return { feasible: false, solverStatus: solved.solverStatus };
+  if (!satisfiesModel(model, solved)) return { feasible: false };
+  return readStage(context, pool, demands, solved, period);
+}
+// What every step of one phase's solve shares: the normalised settings, the phase (1 to 5),
+// run()'s options with their defaults filled in, and the phase's power figures.
+interface PhaseContext extends Required<RunOptions> {
+  config: CurrentSettings;
+  phase: number;
+  power: PhasePower;
+}
+// The phase's power figures (see phasePower).
+interface PhasePower {
+  utilityFactor: number;
+  augmenters: number;
+  fueled: number;
+  boost: number;
+  spareMW: number;
+}
+// The per-minute amounts that must leave the phase's network (see phaseDemands): `demand` in
+// total per item, and the parts it is made of that the stage reports.
+interface PhaseDemands {
+  demand: ItemRates;
+  storage: ItemRates;
+  delivery: Record<string, StageDelivery>;
+  drone: ItemRates;
+  transport: ItemRates;
+  matrix: number;
+}
+type Solution = ReturnType<typeof solve>;
+// The options the two-step fit passes on to each of its solves unchanged.
+type FitOptions = Pick<RunOptions, 'maximum' | 'conversion' | 'ignoreLimits' | 'caps'>;
+// Two-step fit for whole machines and amplification. First the exact LP (fractional machines,
+// no amplification) chooses the recipe network; then the integer fit re-solves over only that
+// network (`recipeIds`), which keeps the integer search small enough for the solver's 3-second
+// limit. Hence the warning that the result is not a global mixed-recipe integer optimum.
+function twoStepFit(context: PhaseContext): RunResult {
+  const { config, phase, maximum, conversion, ignoreLimits, caps } = context;
+  const sharedOptions: FitOptions = { maximum, conversion, ignoreLimits, caps };
+  // If even the exact LP fails, rounding cannot help; calculate() explains the failure.
+  const base = exactFit(config, phase, sharedOptions);
+  if (!base.feasible) return base;
+  const ids = new Set(base.rows.map(row => row.id));
+  const baseline = amplifyCandidates(config, base);
+  const fit = integerFit(config, phase, { ...sharedOptions, recipeIds: ids, baseline });
+  if (!fit.feasible && Object.keys(config.existingSupply).length) {
+    const retried = supplyFallback(context, sharedOptions, ids, baseline);
+    if (retried) return retried;
   }
-  // Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
-  // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
-  // and only for the baseline's candidate lines.
+  // Amplification is optional by definition: the solver may always place no somersloops at all.
+  // So a failure here is the integer search running out of time, never a real shortage — never let
+  // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
+  if (!fit.feasible && config.amplifySloops > 0) {
+    const plain = integerFit({ ...config, amplifySloops: 0 }, phase, {
+      ...sharedOptions,
+      recipeIds: ids,
+    });
+    if (plain.feasible) return { ...plain, amplificationDropped: true };
+  }
+  return fit;
+}
+// The two-step fit's first step: the exact LP, with fractional machines and no amplification.
+const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) =>
+  run({ ...variant, wholeMachines: false, amplifySloops: 0 }, phase, options);
+// The amplification candidates: the largest lines (at least one machine-equivalent) of an
+// exact solve, as { recipeId: equivalent }.
+const amplifyCandidates = (config: CurrentSettings, exactStage: Solved): Record<string, number> =>
+  Object.fromEntries(
+    [...exactStage.rows]
+      .filter(row => row.equivalent >= 1)
+      .sort((a, b) => b.equivalent - a.equivalent)
+      .slice(0, AMPLIFY_CANDIDATES[config.wholeMachines ? 'whole' : 'precise'])
+      .map(row => [row.id, row.equivalent]),
+  );
+// An integer fit. Whole nuclear plants (see roundNuclear) can need more uranium, water or
+// waste-chain inputs than the budgets allow; then fall back to fractional uranium plants,
+// exactly the fit earlier releases made, and mark the stage `nuclearFractional` (#370).
+function integerFit(variant: CurrentSettings, phase: number, options: RunOptions): RunResult {
+  const result = run(variant, phase, options);
+  if (result.feasible || !variant.wholeMachines || !options.recipeIds?.has('power-uranium'))
+    return result;
+  const fractional = run(variant, phase, { ...options, fractionalNuclear: true });
+  return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
+}
+// Crediting production you already run narrows the recipe network the exact solve picks, and a
+// narrower network has less room to round up to whole machines. Widen it with the recipes this
+// phase would have used without the credit before concluding anything — the supplied plan is
+// still the smaller one, it just needs the slack. If even that will not round, drop the credit:
+// telling the planner what you already built must never cost you a plan, the same rule
+// amplification follows in twoStepFit. Returns null when neither fits.
+function supplyFallback(
+  context: PhaseContext,
+  sharedOptions: FitOptions,
+  ids: Set<string>,
+  baseline: Record<string, number>,
+): RunResult | null {
+  const { config, phase } = context;
+  const plainBase = exactFit({ ...config, existingSupply: {} }, phase, sharedOptions);
+  if (!plainBase.feasible) return null;
+  const plainIds = new Set(plainBase.rows.map(row => row.id));
+  const widened = integerFit(config, phase, {
+    ...sharedOptions,
+    recipeIds: new Set([...ids, ...plainIds]),
+    baseline,
+  });
+  if (widened.feasible) return widened;
+  const without = integerFit({ ...config, existingSupply: {} }, phase, {
+    ...sharedOptions,
+    recipeIds: plainIds,
+    baseline: amplifyCandidates(config, plainBase),
+  });
+  return without.feasible ? { ...without, supplyDropped: true } : null;
+}
+// Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
+// conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
+// and only for the baseline's candidate lines.
+function phasePool({ config, phase, conversion, recipeIds, baseline }: PhaseContext): PoolRecipe[] {
   const selected: PoolRecipe[] = [
     ...recipePool(config, phase, conversion),
     ...generators(config, phase),
@@ -874,7 +935,7 @@ export function run(
       (conversion &&
         Object.keys(recipe.outputs).some(item => RAW.includes(item) && item !== 'Water')),
   );
-  const pool = [
+  return [
     ...selected,
     ...(config.amplifySloops > 0 && recipeIds
       ? selected
@@ -882,9 +943,11 @@ export function run(
           .map(amplified)
       : []),
   ];
-  // Items the pool can actually make from raw resources (and from nuclear waste, which the
-  // plants themselves produce), found by repeated passes. Only reachable items are given a
-  // protected storage demand, so storage never asks for something this phase cannot make.
+}
+// Items the pool can actually make from raw resources (and from nuclear waste, which the
+// plants themselves produce), found by repeated passes. Only reachable items are given a
+// protected storage demand, so storage never asks for something this phase cannot make.
+function reachableItems({ config, phase }: PhaseContext, pool: PoolRecipe[]): Set<string> {
   const reachable = new Set(RAW);
   if (config.nuclear !== 'none' && phase >= 4) reachable.add('Uranium Waste');
   if (config.nuclear === 'recycle' && phase === 5) reachable.add('Plutonium Waste');
@@ -892,37 +955,60 @@ export function run(
     for (const recipe of pool)
       if (Object.keys(recipe.inputs).every(item => reachable.has(item)))
         Object.keys(recipe.outputs).forEach(item => reachable.add(item));
-  const allItems = new Set(
-    pool.flatMap(recipe => [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)]),
-  );
-  // Demands: per-minute amounts that must leave the network rather than feed another recipe.
-  // They become the right-hand sides of the item balance constraints below. Four kinds: protected
-  // storage, elevator deliveries, drone fuel, and Phase 5 Singularity Cells and augmenter fuel.
+  return reachable;
+}
+// Demands: per-minute amounts that must leave the network rather than feed another recipe.
+// They become the right-hand sides of the item balance constraints (addBalances). Four kinds:
+// protected storage, elevator deliveries, drone and vehicle fuel, and Phase 5 Singularity Cells
+// and augmenter fuel.
+function phaseDemands(context: PhaseContext, reachable: Set<string>): PhaseDemands {
+  const { config, phase, maximum } = context;
   const demand: ItemRates = {};
+  const add = (item: string, rate: number) => (demand[item] = (demand[item] || 0) + rate);
+  const storage = storageDemand(config, reachable);
+  for (const [item, rate] of Object.entries(storage)) if (rate > 0) demand[item] = rate;
+  // Under `maximum` deliveries are not a fixed demand; the goal variable (addSources) draws them.
+  const delivery = deliveryDemand(context);
+  if (!maximum) for (const [item, part] of Object.entries(delivery)) add(item, part.rate);
+  const drone = droneSupply(config, phase);
+  for (const [item, rate] of Object.entries(drone)) add(item, rate);
+  // Vehicle fuel for the factory-group links (#206), where this phase can make it.
+  const transport: ItemRates = {};
+  for (const [item, rate] of Object.entries(
+    config.transportFuel?.[String(phase) as StageKey] || {},
+  ))
+    if (reachable.has(item)) {
+      transport[item] = rate;
+      add(item, rate);
+    }
+  if (phase === 5 && config.cellsPerMinute) add('Singularity Cell', config.cellsPerMinute);
+  // Each fueled augmenter needs 5 Alien Power Matrix/min. The rate is derived from the augmenter
+  // count rather than entered, so the fuel line can never disagree with the augmenters it feeds.
+  const matrix = phase === 5 ? 5 * config.fueledAugmenters : 0;
+  if (matrix) add('Alien Power Matrix', matrix);
+  return { demand, storage, delivery, drone, transport, matrix };
+}
+// Protected storage: solid, sinkable, non-radioactive reachable items the storage mode covers,
+// each at its rate from storageRateFor (per-item override, elevator parts 0, build rate, general
+// rate). A rate of 0 keeps the item's container but reserves nothing.
+function storageDemand(config: CurrentSettings, reachable: Set<string>): ItemRates {
   const storage: ItemRates = {};
-  const drone = droneSupply(config, phase),
-    utilityFactor = 1 + (config.utilityPercent ?? 20) / 100;
-  // Protected storage: solid, sinkable, non-radioactive items the storage mode covers, each at
-  // its rate from storageRateFor (per-item override, elevator parts 0, build rate, general rate).
-  const candidates = [...reachable].filter(
-    item =>
+  for (const item of reachable)
+    if (
       !RAW.includes(item) &&
       !DATA.items[item]?.fluid &&
       !DATA.items[item]?.radioactive &&
       (DATA.items[item]?.sink || 0) > 0 &&
-      wantsStorage(item, config.storage),
-  );
-  for (const item of candidates)
-    if (reachable.has(item)) {
-      const rate = storageRateFor(config, item);
-      storage[item] = rate;
-      if (rate > 0) demand[item] = rate;
-    }
-  // Elevator deliveries: the phase's parts spread over its hours (24 for 'minimal', 8 for
-  // 'balanced', the profile's own for 'timed'). `roundRates` rounds to readable belt rates: to
-  // tens from 100/min, whole numbers from 10/min, and up to a tenth below that. Rounding to the
-  // nearest can round a rate down, so `hours` is recomputed from the rates at the end. Under
-  // `maximum` deliveries are not a fixed demand; the goal variable below draws them instead.
+      wantsStorage(item, config.storage)
+    )
+      storage[item] = storageRateFor(config, item);
+  return storage;
+}
+// Elevator deliveries: the phase's parts spread over its hours (24 for 'minimal', 8 for
+// 'balanced', the profile's own for 'timed'). `roundRates` rounds to readable belt rates: to
+// tens from 100/min, whole numbers from 10/min, and up to a tenth below that. Rounding to the
+// nearest can round a rate down, so `hours` is recomputed from the rates in readStage.
+function deliveryDemand({ config, phase }: PhaseContext): Record<string, StageDelivery> {
   const delivery: Record<string, StageDelivery> = {};
   const hours = config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
   for (const [item, amount] of Object.entries(DELIVERIES[phase]!)) {
@@ -935,39 +1021,58 @@ export function run(
             ? Math.round(rate)
             : Math.ceil(rate * 10) / 10;
     delivery[item] = { target: Math.ceil(amount * config.multiplier), rate };
-    if (!maximum) demand[item] = (demand[item] || 0) + rate;
   }
-  for (const [item, rate] of Object.entries(drone)) demand[item] = (demand[item] || 0) + rate;
-  // Vehicle fuel for the factory-group links (#206), where this phase can make it.
-  const transport: ItemRates = {};
-  for (const [item, rate] of Object.entries(
-    config.transportFuel?.[String(phase) as StageKey] || {},
-  ))
-    if (reachable.has(item)) {
-      transport[item] = rate;
-      demand[item] = (demand[item] || 0) + rate;
-    }
-  if (phase === 5 && config.cellsPerMinute)
-    demand['Singularity Cell'] = (demand['Singularity Cell'] || 0) + config.cellsPerMinute;
-  // Each fueled augmenter needs 5 Alien Power Matrix/min. The rate is derived from the augmenter
-  // count rather than entered, so the fuel line can never disagree with the augmenters it feeds.
-  const matrix = phase === 5 ? 5 * config.fueledAugmenters : 0;
-  if (matrix) demand['Alien Power Matrix'] = (demand['Alien Power Matrix'] || 0) + matrix;
-  Object.keys(demand).forEach(item => allItems.add(item));
+  return delivery;
+}
+// A 20% planning allowance covers unmodelled mining, pumps and logistics; existing power is spare capacity.
+// Alien Power Augmenters generate 500 MW each and multiply the grid's base production:
+// (generators + 500 x augmenters) x (1 + 0.1 x unfueled + 0.3 x fueled). The multiplier applies to
+// installed capacity, of which the entered spare power is only a part, so both are needed here.
+function phasePower(config: CurrentSettings, phase: number): PhasePower {
+  const utilityFactor = 1 + (config.utilityPercent ?? 20) / 100;
+  const augmenters = phase === 5 ? config.augmenters : 0,
+    fueled = phase === 5 ? config.fueledAugmenters : 0;
+  const boost = 0.1 * (augmenters - fueled) + 0.3 * fueled,
+    installedMW = config.installedPowerGW * 1000;
+  const spareMW =
+    config.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
+  return { utilityFactor, augmenters, fueled, boost, spareMW };
+}
+// The phase's LP (or MIP), in the order its constraints and variables are added: item balances,
+// power, recipe variables with the somersloop budget and caps, raw resources, existing supply,
+// the plutonium sink, the goal, then whole nuclear plants. The solver's result can depend on
+// that order, so keep it. `period` is the nuclear rounding (see roundNuclear).
+function buildModel(
+  context: PhaseContext,
+  pool: PoolRecipe[],
+  demands: PhaseDemands,
+): { model: LpModel; period: number } {
+  const allItems = new Set(
+    pool.flatMap(recipe => [...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)]),
+  );
+  Object.keys(demands.demand).forEach(item => allItems.add(item));
   // The objective. Normally minimise `cost`: one per machine-equivalent, plus a tiny power term
   // that breaks ties towards lower consumption. Under `maximum`, maximise `gain`, the goal
-  // variable's level, then re-solve for cost (see after the solve).
+  // variable's level, then re-solve for cost (see solveModel).
   const model: LpModel = {
-    optimize: maximum ? 'gain' : 'cost',
-    opType: maximum ? 'max' : 'min',
+    optimize: context.maximum ? 'gain' : 'cost',
+    opType: context.maximum ? 'max' : 'min',
     constraints: {},
     variables: {},
   };
-  // One balance constraint per item, 'item:<name>': production minus consumption (including the
-  // raw, supply and goal variables) must be at least the item's demand. Solids may overshoot;
-  // the excess is surplus bound for the sink, which is what lets whole machines round up.
-  // An item the AWESOME Sink cannot accept has nowhere to overflow: Power Shards would back a
-  // Synthetic Power Shard line up and stall it. Balance those exactly, as fluids and waste are.
+  addBalances(model, allItems, demands.demand);
+  addPower(model, context);
+  addRecipes(model, context, pool);
+  addSources(model, context, allItems, demands.delivery);
+  const period = roundNuclear(model, context, pool, demands.demand);
+  return { model, period };
+}
+// One balance constraint per item, 'item:<name>': production minus consumption (including the
+// raw, supply and goal variables) must be at least the item's demand. Solids may overshoot;
+// the excess is surplus bound for the sink, which is what lets whole machines round up.
+// An item the AWESOME Sink cannot accept has nowhere to overflow: Power Shards would back a
+// Synthetic Power Shard line up and stall it. Balance those exactly, as fluids and waste are.
+function addBalances(model: LpModel, allItems: Set<string>, demand: ItemRates) {
   for (const item of allItems) {
     const equality =
       DATA.items[item]?.fluid ||
@@ -978,38 +1083,23 @@ export function run(
       ? { equal: demand[item] || 0 }
       : { min: demand[item] || 0 };
   }
-  // A 20% planning allowance covers unmodelled mining, pumps and logistics; existing power is spare capacity.
-  // Alien Power Augmenters generate 500 MW each and multiply the grid's base production:
-  // (generators + 500 x augmenters) x (1 + 0.1 x unfueled + 0.3 x fueled). The multiplier applies to
-  // installed capacity, of which the entered spare power is only a part, so both are needed here.
-  const augmenters = phase === 5 ? config.augmenters : 0,
-    fueled = phase === 5 ? config.fueledAugmenters : 0;
-  const boost = 0.1 * (augmenters - fueled) + 0.3 * fueled,
-    installedMW = config.installedPowerGW * 1000;
-  const spareMW =
-    config.availablePowerGW * 1000 + (installedMW + 500 * augmenters) * (1 + boost) - installedMW;
-  // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
-  // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
-  // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
-  // no generators, so only the entered spare power can run that phase harder. calculate() never
-  // maximises Phase 1 for maximum output; only the `phaseTime: 'final'` re-solve does.
-  if (phase >= 2 || maximum) model.constraints.power = { max: spareMW };
-  // One variable per recipe: its level is machine-equivalents at 100% clock, and its
-  // coefficients are its per-machine outputs (+) and inputs (-) in each item balance.
+}
+// The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
+// generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
+// constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
+// no generators, so only the entered spare power can run that phase harder. calculate() never
+// maximises Phase 1 for maximum output; only the `phaseTime: 'final'` re-solve does.
+function addPower(model: LpModel, { phase, maximum, power }: PhaseContext) {
+  if (phase >= 2 || maximum) model.constraints.power = { max: power.spareMW };
+}
+// One variable per recipe: its level is machine-equivalents at 100% clock (see
+// recipeCoefficients). Then the somersloop budget and, for phaseTime 'final', the caps.
+function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[]) {
+  const { config, caps, baseline } = context;
   for (const recipe of pool) {
-    const coefficients: Record<string, number> = {
-      cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
-      power:
-        recipe.power < 0
-          ? recipe.power * (1 + boost)
-          : recipe.power * config.powerFactor * utilityFactor,
-    };
-    for (const [item, rate] of Object.entries(recipe.outputs))
-      coefficients['item:' + item] = (coefficients['item:' + item] || 0) + rate;
-    for (const [item, rate] of Object.entries(recipe.inputs))
-      coefficients['item:' + item] = (coefficients['item:' + item] || 0) - rate;
+    const coefficients = recipeCoefficients(recipe, context);
     // At least the requested number of uranium plants (settings.uraniumReactors) when nuclear
-    // power is in the pool. Whole machines round them after this loop.
+    // power is in the pool. Whole machines round them in roundNuclear.
     if (recipe.id === 'power-uranium') {
       coefficients.nuclear = 1;
       model.constraints.nuclear = { min: config.uraniumReactors };
@@ -1030,37 +1120,57 @@ export function run(
         ),
       );
     }
-    // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
-    // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
-    // generators and anything nuclear keep fractional clocks, because their balances are exact.
-    // (Generators have no outputs, and power-uranium outputs waste.) The uranium plants are
-    // rounded separately, after this loop.
-    if (
-      config.wholeMachines &&
-      Object.keys(recipe.outputs).some(
-        item =>
-          !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
-      ) &&
-      !/uranium|plutonium|ficsonium|waste|non-fissile/i.test(
-        [recipe.name, ...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].join(' '),
-      )
-    ) {
-      (model.ints ??= {})[recipe.id] = 1;
-    }
+    if (config.wholeMachines && roundsToWholeMachines(recipe)) (model.ints ??= {})[recipe.id] = 1;
   }
-  // An earlier phase may run no more of a recipe than a later phase already builds, so nothing is added that the plan later drops.
-  // (That comment describes the `caps` block after the next line.) First the somersloop budget:
-  // amplified machines may together fill no more slots than `amplifySloops`, per phase.
+  // The somersloop budget: amplified machines may together fill no more slots than
+  // `amplifySloops`, per phase.
   if (config.amplifySloops > 0) model.constraints.sloops = { max: config.amplifySloops };
-  // Caps, for phaseTime 'final': each recipe's equivalent is at most the whole machines built
-  // for it in this or a later phase. Every pool recipe gets a cap, so a recipe no such phase
-  // uses is capped at 0 — including generators.
+  // Caps, for phaseTime 'final': an earlier phase may run no more of a recipe than a later phase
+  // already builds, so nothing is added that the plan later drops. Each recipe's equivalent is at
+  // most the whole machines built for it in this or a later phase. Every pool recipe gets a cap,
+  // so a recipe no such phase uses is capped at 0 — including generators.
   if (caps)
     for (const recipe of pool) {
       const cap = caps[recipe.id] ?? 0;
       model.constraints['cap:' + recipe.id] = { max: cap };
       model.variables[recipe.id]!['cap:' + recipe.id] = 1;
     }
+}
+// A recipe variable's coefficients: its cost, its power, and its per-machine outputs (+) and
+// inputs (-) in each item balance.
+function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext) {
+  const coefficients: Record<string, number> = {
+    cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
+    power:
+      recipe.power < 0
+        ? recipe.power * (1 + power.boost)
+        : recipe.power * config.powerFactor * power.utilityFactor,
+  };
+  for (const [item, rate] of Object.entries(recipe.outputs))
+    coefficients['item:' + item] = (coefficients['item:' + item] || 0) + rate;
+  for (const [item, rate] of Object.entries(recipe.inputs))
+    coefficients['item:' + item] = (coefficients['item:' + item] || 0) - rate;
+  return coefficients;
+}
+// Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes
+// a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
+// generators and anything nuclear keep fractional clocks, because their balances are exact.
+// (Generators have no outputs, and power-uranium outputs waste.) The uranium plants are
+// rounded separately, in roundNuclear.
+const roundsToWholeMachines = (recipe: PoolRecipe) =>
+  Object.keys(recipe.outputs).some(
+    item => !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
+  ) &&
+  !/uranium|plutonium|ficsonium|waste|non-fissile/i.test(
+    [recipe.name, ...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].join(' '),
+  );
+// The sources that feed the item balances besides the recipes, and the goal that draws on them.
+function addSources(
+  model: LpModel,
+  { config, phase, maximum, ignoreLimits }: PhaseContext,
+  allItems: Set<string>,
+  delivery: Record<string, StageDelivery>,
+) {
   // Raw resources: a 'raw:' source variable per extracted item the pool uses, capped by its
   // budget ('limit:') and almost free, so extraction is spent only where it saves machines.
   // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
@@ -1096,14 +1206,23 @@ export function run(
     for (const [item, part] of Object.entries(delivery)) goal['item:' + item] = -part.target / 1000;
     model.variables.goal = goal;
   }
-  // Whole nuclear plants (#370). Every line downstream of the uranium plants is linear in their
-  // count, so rounding that count is enough. In Phase 5 under 'recycle' the count is a whole
-  // multiple of the chain's period (nuclearPeriod), which makes the whole waste chain, plutonium
-  // and ficsonium plants included, whole machines at 100%: 'nuclear-block' is the number of
-  // periods. Elsewhere ('sink', and Phase 4 under 'recycle', whose chain ends in the sink) the
-  // uranium plants are simply whole. Extra plants only add generation, which the power constraint
-  // allows. The fuel feed stays fractional: its items are radioactive and balance exactly.
-  // `fractionalNuclear` is the two-step fit's fallback when this does not fit the budgets.
+}
+// Whole nuclear plants (#370). Every line downstream of the uranium plants is linear in their
+// count, so rounding that count is enough. In Phase 5 under 'recycle' the count is a whole
+// multiple of the chain's period (nuclearPeriod), which makes the whole waste chain, plutonium
+// and ficsonium plants included, whole machines at 100%: 'nuclear-block' is the number of
+// periods. Elsewhere ('sink', and Phase 4 under 'recycle', whose chain ends in the sink) the
+// uranium plants are simply whole. Extra plants only add generation, which the power constraint
+// allows. The fuel feed stays fractional: its items are radioactive and balance exactly.
+// `fractionalNuclear` is the two-step fit's fallback when this does not fit the budgets.
+// Returns the period: 0 when the plants stay fractional (or are not in the pool), 1 when they
+// are simply whole.
+function roundNuclear(
+  model: LpModel,
+  { config, phase, fractionalNuclear }: PhaseContext,
+  pool: PoolRecipe[],
+  demand: ItemRates,
+): number {
   const uraniumPlants = model.variables['power-uranium'];
   const period =
     config.wholeMachines && !fractionalNuclear && uraniumPlants
@@ -1117,21 +1236,22 @@ export function run(
     model.constraints.nuclearBlock = { equal: 0 };
     (model.ints ??= {})['nuclear-block'] = 1;
   } else if (period === 1) (model.ints ??= {})['power-uranium'] = 1;
-  // Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
-  // numerical slack) and minimises machines, so the fastest plan is also the leanest one.
-  let solved = solve(model);
-  if (maximum && solved.feasible) {
-    model.constraints.keepGoal = { min: solved.values.goal! * (1 - 1e-8) };
-    model.variables.goal!.keepGoal = 1;
-    model.optimize = 'cost';
-    model.opType = 'min';
-    const economical = solve(model);
-    if (economical.feasible) solved = economical;
-  }
-  // solverStatus lets calculate() tell a time-out ('Time limit reached') from a real shortage.
-  if (!solved.feasible || !solved.bounded)
-    return { feasible: false, solverStatus: solved.solverStatus };
-  // Independently verify material, power and mining constraints before trusting a result.
+  return period;
+}
+// Solve. Under `maximum`, a second solve fixes the goal at its optimum (less a hair for
+// numerical slack) and minimises machines, so the fastest plan is also the leanest one.
+function solveModel(model: LpModel, maximum: boolean): Solution {
+  const solved = solve(model);
+  if (!maximum || !solved.feasible) return solved;
+  model.constraints.keepGoal = { min: solved.values.goal! * (1 - 1e-8) };
+  model.variables.goal!.keepGoal = 1;
+  model.optimize = 'cost';
+  model.opType = 'min';
+  const economical = solve(model);
+  return economical.feasible ? economical : solved;
+}
+// Independently verify material, power and mining constraints before trusting a result.
+function satisfiesModel(model: LpModel, solved: Solution): boolean {
   for (const [constraint, bound] of Object.entries(model.constraints)) {
     let total = 0;
     for (const [variable, coefficients] of Object.entries(model.variables))
@@ -1142,107 +1262,46 @@ export function run(
       (bound.max !== undefined && total > bound.max + tolerance) ||
       (bound.equal !== undefined && Math.abs(total - bound.equal) > tolerance)
     )
-      return { feasible: false };
+      return false;
   }
-  // Post-processing. Under `maximum` the delivery rates are whatever the goal achieved.
+  return true;
+}
+// Reads the solution back into a stage (see run for its fields).
+function readStage(
+  context: PhaseContext,
+  pool: PoolRecipe[],
+  demands: PhaseDemands,
+  solved: Solution,
+  period: number,
+): Solved {
+  const { config, maximum, power } = context;
+  const { storage, delivery, drone, transport, matrix } = demands;
+  const { utilityFactor, augmenters, fueled, boost, spareMW } = power;
+  // Under `maximum` the delivery rates are whatever the goal achieved.
   if (maximum)
     for (const part of Object.values(delivery))
       part.rate = ((solved.values.goal || 0) * part.target) / 1000;
-  // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
-  // one runs underclocked at `lastClock` % (100 for a whole-machine row). Row inputs and outputs
-  // are the line's totals per minute. peakMW counts whole machines at full power without the
-  // utility allowance; generationMW is a generator's output at its fractional level.
-  const rows = pool
-    .filter(recipe => (solved.values[recipe.id] || 0) > 1e-6)
-    .map((recipe): CalcRow => {
-      const equivalent = solved.values[recipe.id]!;
-      const machines = Math.ceil(equivalent - 1e-6);
-      return {
-        ...recipe,
-        equivalent,
-        machines,
-        ...(recipe.slots ? { amplified: true, sloops: recipe.slots * machines } : {}),
-        lastClock: Math.max(0, (equivalent - machines + 1) * 100),
-        inputs: Object.fromEntries(
-          Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * equivalent]),
-        ),
-        outputs: Object.fromEntries(
-          Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * equivalent]),
-        ),
-        peakMW: recipe.power < 0 ? 0 : machines * recipe.power * config.powerFactor,
-        generationMW: recipe.power < 0 ? -recipe.power * equivalent : 0,
-      };
-    });
+  const rows = stageRows(config, pool, solved);
   const supplied = Object.fromEntries(
     Object.entries(config.existingSupply)
       .map(([item]): [string, number] => [item, solved.values['supply:' + item] || 0])
       .filter(([, rate]) => rate > 0.002),
   );
   const raw = Object.fromEntries(RAW.map(item => [item, solved.values['raw:' + item] || 0]));
-  // Surplus: what the rows make beyond what the rows consume and every demand takes. Only solid,
-  // sinkable items are listed; fluids, waste and unsinkable items are balanced exactly. `made`
-  // counts rows only, so an item also drawn from existing supply or a raw budget shows the rows'
-  // excess over total use, clamped at 0.
-  const used: ItemRates = {},
-    made: ItemRates = {};
-  for (const row of rows) {
-    for (const [item, rate] of Object.entries(row.inputs)) used[item] = (used[item] || 0) + rate;
-    for (const [item, rate] of Object.entries(row.outputs)) made[item] = (made[item] || 0) + rate;
-  }
-  const surplus = Object.fromEntries(
-    Object.keys(made)
-      .map((item): [string, number] => [
-        item,
-        Math.max(
-          0,
-          made[item]! -
-            (used[item] || 0) -
-            (storage[item] || 0) -
-            (delivery[item]?.rate || 0) -
-            (drone[item] || 0) -
-            (item === 'Singularity Cell' && phase === 5 ? config.cellsPerMinute : 0) -
-            (item === 'Alien Power Matrix' ? matrix : 0),
-        ),
-      ])
-      .filter(
-        ([item, rate]) =>
-          rate > 0.002 &&
-          !DATA.items[item]?.radioactive &&
-          !DATA.items[item]?.fluid &&
-          (DATA.items[item]?.sink ?? 0) > 0,
-      ),
-  );
   // Power totals. The LP balanced power at fractional machine counts; building whole machines at
   // full power can need more, and the difference is reported as additionalHeadroomMW below.
   const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
     generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
-  // Order by dependency depth; recycling loops are commissioned as a connected group.
-  const producers: Record<string, CalcRow[]> = {};
-  for (const row of rows)
-    for (const item of Object.keys(row.outputs)) (producers[item] ??= []).push(row);
-  const seen = new Set<string>(),
-    visiting = new Set<string>(),
-    ordered: CalcRow[] = [];
-  function visit(row: CalcRow) {
-    if (seen.has(row.id) || visiting.has(row.id)) return;
-    visiting.add(row.id);
-    for (const item of Object.keys(row.inputs))
-      for (const producer of producers[item] || []) visit(producer);
-    visiting.delete(row.id);
-    seen.add(row.id);
-    ordered.push(row);
-  }
-  rows.forEach(visit);
   return {
     feasible: true,
-    rows: ordered,
+    rows: buildOrder(rows),
     raw,
     supplied,
     storage,
     drone,
     transport,
     delivery,
-    surplus,
+    surplus: stageSurplus(context, rows, demands),
     plutoniumSink: solved.values['sink-plutonium'] || 0,
     ...(period > 1 ? { nuclearPeriod: period } : {}),
     peakMW,
@@ -1270,6 +1329,93 @@ export function run(
       .filter(row => Object.keys(row.outputs).some(item => RAW.includes(item) && item !== 'Water'))
       .map(row => row.name),
   };
+}
+// Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
+// one runs underclocked at `lastClock` % (100 for a whole-machine row). Row inputs and outputs
+// are the line's totals per minute. peakMW counts whole machines at full power without the
+// utility allowance; generationMW is a generator's output at its fractional level.
+function stageRows(config: CurrentSettings, pool: PoolRecipe[], solved: Solution): CalcRow[] {
+  return pool
+    .filter(recipe => (solved.values[recipe.id] || 0) > 1e-6)
+    .map((recipe): CalcRow => {
+      const equivalent = solved.values[recipe.id]!;
+      const machines = Math.ceil(equivalent - 1e-6);
+      return {
+        ...recipe,
+        equivalent,
+        machines,
+        ...(recipe.slots ? { amplified: true, sloops: recipe.slots * machines } : {}),
+        lastClock: Math.max(0, (equivalent - machines + 1) * 100),
+        inputs: Object.fromEntries(
+          Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * equivalent]),
+        ),
+        outputs: Object.fromEntries(
+          Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * equivalent]),
+        ),
+        peakMW: recipe.power < 0 ? 0 : machines * recipe.power * config.powerFactor,
+        generationMW: recipe.power < 0 ? -recipe.power * equivalent : 0,
+      };
+    });
+}
+// Surplus: what the rows make beyond what the rows consume and every demand takes. Only solid,
+// sinkable items are listed; fluids, waste and unsinkable items are balanced exactly. `made`
+// counts rows only, so an item also drawn from existing supply or a raw budget shows the rows'
+// excess over total use, clamped at 0.
+function stageSurplus(
+  { config, phase }: PhaseContext,
+  rows: CalcRow[],
+  { storage, delivery, drone, matrix }: PhaseDemands,
+): ItemRates {
+  const used: ItemRates = {},
+    made: ItemRates = {};
+  for (const row of rows) {
+    for (const [item, rate] of Object.entries(row.inputs)) used[item] = (used[item] || 0) + rate;
+    for (const [item, rate] of Object.entries(row.outputs)) made[item] = (made[item] || 0) + rate;
+  }
+  return Object.fromEntries(
+    Object.keys(made)
+      .map((item): [string, number] => [
+        item,
+        Math.max(
+          0,
+          made[item]! -
+            (used[item] || 0) -
+            (storage[item] || 0) -
+            (delivery[item]?.rate || 0) -
+            (drone[item] || 0) -
+            (item === 'Singularity Cell' && phase === 5 ? config.cellsPerMinute : 0) -
+            (item === 'Alien Power Matrix' ? matrix : 0),
+        ),
+      ])
+      .filter(
+        ([item, rate]) =>
+          rate > 0.002 &&
+          !DATA.items[item]?.radioactive &&
+          !DATA.items[item]?.fluid &&
+          (DATA.items[item]?.sink ?? 0) > 0,
+      ),
+  );
+}
+// Build order: by dependency depth, suppliers before consumers; recycling loops are
+// commissioned as a connected group.
+function buildOrder(rows: CalcRow[]): CalcRow[] {
+  const producers: Record<string, CalcRow[]> = {};
+  for (const row of rows)
+    for (const item of Object.keys(row.outputs)) (producers[item] ??= []).push(row);
+  const seen = new Set<string>(),
+    visiting = new Set<string>(),
+    ordered: CalcRow[] = [];
+  function visit(row: CalcRow) {
+    if (seen.has(row.id) || visiting.has(row.id)) return;
+    visiting.add(row.id);
+    for (const item of Object.keys(row.inputs))
+      for (const producer of producers[item] || []) visit(producer);
+    visiting.delete(row.id);
+    seen.add(row.id);
+    ordered.push(row);
+  }
+  rows.forEach(visit);
+  return ordered;
 }
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
 // interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
