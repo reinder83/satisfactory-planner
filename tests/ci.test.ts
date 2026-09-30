@@ -37,27 +37,89 @@ test('vitest gives each test at least 20 s, for the NAS runner (#400)', () => {
 });
 
 // The runtime image lists the server files by name, so a server module it lacks only fails the
-// Docker smoke test in CI (#524). Every module server.ts reaches, other than the shared
-// public/ sources the image copies separately, must be on a COPY line.
-test('the Docker image copies every server module server.ts imports (#524)', () => {
-  const docker = fs.readFileSync('Dockerfile', 'utf8');
-  assert.match(docker, /^COPY --chown=node:node server \.\/server$/m);
-  const copied = /^COPY --chown=node:node (.*) \.\/$/m.exec(docker)![1]!.split(' ');
+// Docker smoke test in CI (#524). Every module docker-start.ts reaches, including the shared
+// public/ sources and their subfolders such as public/state/ (#585), must land at the same path
+// in /app through a COPY line. A glob such as /src/public/*.ts does not match subfolders.
+
+// Where each COPY line of the runtime stage puts a repository file: [source, destination], with
+// the build stage's /src/ prefix and the leading ./ of the destination removed.
+const runtimeCopies = (docker: string) => {
+  const runtime = docker.slice(docker.lastIndexOf('\nFROM '));
+  return [...runtime.matchAll(/^COPY ((?:--\S+ )*)(.+) (\S+)\r?$/gm)].flatMap(
+    ([, flags, srcs, dest]) => {
+      const fromBuild = flags!.includes('--from=build');
+      const to = dest!.replace(/^\.\/?/, '').replace(/\/$/, '');
+      return srcs!
+        .split(' ')
+        .filter(src => !fromBuild || src.startsWith('/src/'))
+        .map(src => [fromBuild ? src.slice('/src/'.length) : src, to] as const);
+    },
+  );
+};
+
+// Whether a COPY line puts `file` at the same relative path in the image: a single file or a
+// glob (whose * stops at a slash) into its own folder, or a whole folder under the same name.
+const copiedInPlace = (copies: ReturnType<typeof runtimeCopies>, file: string) =>
+  copies.some(([src, dest]) => {
+    const glob = new RegExp(
+      '^' +
+        src
+          .split('*')
+          .map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('[^/]*') +
+        '$',
+    );
+    if (glob.test(file)) return path.posix.join(dest, path.posix.basename(file)) === file;
+    return file.startsWith(src + '/') && path.posix.join(dest, file.slice(src.length)) === file;
+  });
+
+// The files docker-start.ts reaches through relative .ts imports (import, export and
+// side-effect forms), with the ones no COPY line puts in place. `import type` and `export type`
+// are erased when Node strips the types (verbatimModuleSyntax), so the image needs no file for
+// them (public/types/).
+const serverImports = (docker: string) => {
+  const copies = runtimeCopies(docker);
   const seen = new Set<string>();
+  const missing: string[] = [];
   const visit = (file: string) => {
     if (seen.has(file)) return;
     seen.add(file);
+    if (!copiedInPlace(copies, file)) missing.push(file);
     const dir = path.posix.dirname(file);
-    for (const [, spec] of fs.readFileSync(file, 'utf8').matchAll(/from '(\.[^']+\.ts)'/g)) {
-      const target = path.posix.normalize(path.posix.join(dir, spec!));
-      if (target.startsWith('public/')) continue;
-      assert.ok(
-        target.startsWith('server/') || copied.includes(target),
-        `${file} imports ${target}, which the Dockerfile does not copy`,
-      );
-      visit(target);
-    }
+    const source = fs.readFileSync(file, 'utf8');
+    for (const [, clause, spec] of source.matchAll(/^(?:import|export)\b([^;]*?)'(\.[^']+\.ts)'/gm))
+      if (!/^\s+type\b/.test(clause!)) visit(path.posix.normalize(path.posix.join(dir, spec!)));
   };
-  visit('server.ts');
+  visit('docker-start.ts');
+  return { seen, missing };
+};
+
+test('the Docker image copies every server module server.ts imports (#524, #585)', () => {
+  const { seen, missing } = serverImports(fs.readFileSync('Dockerfile', 'utf8'));
+  assert.deepEqual(missing, [], 'modules the server imports that the Dockerfile does not copy');
+  assert.ok(seen.has('server.ts'), 'followed docker-start.ts into server.ts');
   assert.ok(seen.has('server/persistence.ts'), 'followed workspace.ts into server/');
+  assert.ok(seen.has('public/state.ts'), 'followed the server into public/');
+  assert.ok(
+    [...seen].some(f => f.startsWith('public/state/')),
+    'followed state.ts into public/state/',
+  );
+});
+
+test('a Dockerfile without the public/state/ COPY line fails the import check (#585)', () => {
+  const docker = fs.readFileSync('Dockerfile', 'utf8');
+  const line = /^COPY --from=build \S+ \/src\/public\/state\/\*\.ts \.\/public\/state\/\r?\n/m;
+  assert.match(docker, line);
+  const { missing } = serverImports(docker.replace(line, ''));
+  assert.ok(missing.length > 0, 'something is missing');
+  assert.ok(
+    missing.every(f => f.startsWith('public/state/')),
+    'only public/state/ is missing: ' + missing.join(', '),
+  );
+  // The root public/*.ts line does not stand in for the subfolder, and without it the root
+  // modules go missing too.
+  const root = /^COPY --from=build \S+ \/src\/public\/\*\.ts \.\/public\/\r?\n/m;
+  assert.ok(serverImports(docker.replace(root, '')).missing.includes('public/state.ts'));
+  // A root module left off the list of names is still caught (#524).
+  assert.deepEqual(serverImports(docker.replace(' planner.ts ', ' ')).missing, ['planner.ts']);
 });
