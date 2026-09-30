@@ -9,7 +9,8 @@
   answer is read back from the form (readGuidedForm) and redraws, since it decides what
   follows, and past the last question the plan is calculated and the five steps' Review
   (WizardPage.vue) takes over. The form is keyed by screen, so each starts from the draft. A
-  missing Save name stops Continue with a message beside the box (form/NameField.vue).
+  missing Save name stops Continue and All settings with a message beside the box
+  (form/NameField.vue, #622).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
