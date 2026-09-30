@@ -1,7 +1,8 @@
 // The Space Elevator delivery counter's text (public/app/ui/plan/DeliveryCounter.vue) follows
 // the saved count against the target, also for a delivery without a rate (#590). At the target it
 // reads complete, with or without a rate (#596), and names no phase: the calculated plan draws
-// the deliveries of every phase (#595). A count typed while another counter saves stays (#627).
+// the deliveries of every phase (#595). A count typed while another counter saves stays (#627):
+// input-race.test.ts and input-race-browser.test.ts.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -9,7 +10,6 @@ import { num, slug } from '../../public/app/format.ts';
 import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
-import { typedDuringSave } from './delivery-race.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const id = '3-versatile-framework';
@@ -104,16 +104,4 @@ test('a complete delivery of a later phase does not read as Phase 3', async () =
   render();
   await nextTick();
   assert.equal(text(later), '1 remaining');
-});
-
-test('a count typed while another counter saves is kept and saved (#627)', async () => {
-  // The server edition: every save is a fetch, and the first is held until the second counter
-  // has been typed in.
-  await typedDuringSave(held => {
-    globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
-      await held();
-      const update = JSON.parse(String(options.body)) as UpdateOp;
-      return new Response(JSON.stringify(applyUpdate(update)), { status: 200 });
-    }) as typeof fetch;
-  });
 });

@@ -7,12 +7,13 @@
   failed write, puts the saved count back.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { duration, num } from '../../format.ts';
 import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
+import { useDraft } from '../draft.ts';
 
 // A delivery of the current phase: a handbook one (with the amount handed in when the
 // handbook was written) or a calculated plan's.
@@ -44,16 +45,10 @@ const counter = computed(() =>
   }),
 );
 
-// What the input shows: the saved count, then what the user types. Vue writes a bound value back
-// into the input on every redraw of this counter, and saving any control redraws it (the Saving
-// indicator, then render()). Bound to the saved count, that put it back over a number typed but
-// not yet committed, and the change event that followed saved the old count (#627). A new saved
-// count (this counter's own save, a reload from another tab) still replaces what is shown.
-const draft = ref(String(saved()));
-watch(
-  () => counter.value.value,
-  count => (draft.value = String(count)),
-);
+// What the input shows: the saved count, then what the user types, so a redraw while another
+// control saves keeps a number typed but not yet committed (#627, ui/draft.ts). A new saved count
+// (this counter's own save, a reload from another tab) still replaces what is shown.
+const draft = useDraft(() => String(counter.value.value));
 
 async function change(event: Event) {
   const input = event.target as HTMLInputElement,

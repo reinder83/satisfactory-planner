@@ -15,6 +15,7 @@ import { factoryEditing, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
+import { useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
@@ -39,7 +40,14 @@ const sections = computed(() =>
 );
 const editing = computed(() => legacy(() => factoryEditing));
 
-// A group's name field, read-only while it saves (app/busy.ts, #299).
+// The groups' name fields show the saved names, then what the user types, so a redraw while
+// another control saves keeps a name typed but not yet committed (#654, ui/draft.ts).
+const savedNames = () =>
+  Object.fromEntries(sections.value.map(section => [section.id, section.name]));
+const names = useDrafts(savedNames);
+
+// A group's name field, read-only while it saves (app/busy.ts, #299), then redrawn with the saved
+// name whether or not the save worked.
 function rename(event: Event, id: string) {
   const input = event.target as HTMLInputElement;
   return whileBusy(input, async () => {
@@ -48,6 +56,8 @@ function rename(event: Event, id: string) {
     } catch {
     } finally {
       render();
+      const name = savedNames()[id];
+      if (name !== undefined) names[id] = name;
     }
   });
 }
@@ -97,9 +107,10 @@ async function remove(event: Event, id: string) {
             class="bay-rename"
             :data-group-rename="section.id"
             data-section-heading
-            :value="section.name"
+            :value="names[section.id]"
             maxlength="80"
             :aria-label="'Rename group ' + section.name"
+            @input="names[section.id] = ($event.target as HTMLInputElement).value"
             @change="rename($event, section.id)"
           />
           <h2 v-else tabindex="-1" data-section-heading>{{ section.name }}</h2>
