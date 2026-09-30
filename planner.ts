@@ -1676,21 +1676,20 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
   // and compare like for like: same goal, same budgets, same recipes.
   if (config.fueledAugmenters && stages[5]?.feasible) {
-    // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
-    // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
-    let stopped = false;
     const unfueled = (() => {
       const options = { maximum: config.goal === 'maximum' };
-      const attempt = (conversion: boolean) => {
-        const result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
-        if (!result.feasible && result.solverStatus && !/infeasible/i.test(result.solverStatus))
-          stopped = true;
-        return result;
-      };
-      let result = attempt(config.sam === 'allow');
-      if (!result.feasible && config.sam !== 'avoid') result = attempt(true);
-      return result;
+      const attempt = (conversion: boolean) =>
+        run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
+      const result = attempt(config.sam === 'allow');
+      return !result.feasible && config.sam !== 'avoid' ? attempt(true) : result;
     })();
+    // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
+    // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
+    // Only the attempt whose result is used counts: the retry with conversion allows every recipe
+    // the first attempt could use, so the retry proving the plan does not fit is the answer even
+    // when the first attempt stopped (#665), as calculate() reads the Phase 5 solve itself.
+    const stopped =
+      !unfueled.feasible && !!unfueled.solverStatus && !/infeasible/i.test(unfueled.solverStatus);
     // Without a proven unfueled answer there is nothing to compare (#634): no verdict, and the
     // plan's assumptions say why, as the other stopped searches do.
     if (!unfueled.feasible && stopped)
