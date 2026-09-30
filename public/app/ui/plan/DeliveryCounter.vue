@@ -13,7 +13,7 @@ import { duration, num } from '../../format.ts';
 import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
-import { useDraft } from '../draft.ts';
+import { settle, useDraft } from '../draft.ts';
 
 // A delivery of the current phase: a handbook one (with the amount handed in when the
 // handbook was written) or a calculated plan's.
@@ -47,8 +47,16 @@ const counter = computed(() =>
 
 // What the input shows: the saved count, then what the user types, so a redraw while another
 // control saves keeps a number typed but not yet committed (#627, ui/draft.ts). A new saved count
-// (this counter's own save, a reload from another tab) still replaces what is shown.
+// (a reload from another tab) replaces what is shown while nothing has been typed. The counter
+// stays editable while it saves, so a number typed meanwhile is kept when that save returns, and
+// saved when it is committed in turn (#664).
 const draft = useDraft(() => String(counter.value.value));
+
+// A refused entry shows the saved count again at once; a save, done or failed, does so unless
+// another number has been typed since it started (`shown` is the draft then).
+function putBack(input: HTMLInputElement, shown = draft.value) {
+  if (settle(draft, shown, String(saved()))) input.value = draft.value;
+}
 
 async function change(event: Event) {
   const input = event.target as HTMLInputElement,
@@ -56,15 +64,15 @@ async function change(event: Event) {
     count = Number(input.value);
   if (!Number.isInteger(count) || count < 0 || count > delivery.target) {
     toast('Enter a whole number between 0 and ' + num(delivery.target) + '.', true);
-    input.value = draft.value = String(saved());
+    putBack(input);
     return;
   }
+  const shown = draft.value;
   try {
     await save({ type: 'delivery', key: delivery.id, value: count });
     render();
-  } catch {
-    input.value = draft.value = String(saved());
-  }
+  } catch {}
+  putBack(input, shown);
 }
 </script>
 
