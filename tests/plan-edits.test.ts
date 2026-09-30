@@ -162,3 +162,108 @@ test('a shared profile keeps plan-shaped content but starts with fresh progress'
     'a share without edits stays importable by older planners',
   );
 });
+
+test('an update type no table knows is refused, Object.prototype keys included (#520)', () => {
+  for (const type of [
+    'toString',
+    'constructor',
+    '__proto__',
+    'hasOwnProperty',
+    'Check',
+    'checks ',
+    '',
+    'task',
+    'taskRename',
+    'factory',
+    'factoryGroupPaint',
+  ]) {
+    assert.throws(
+      () => {
+        // @ts-expect-error: an update type no release sends
+        mutate(initialState(), { type, key: 'a', id: 'a' });
+      },
+      /Unknown update/,
+      type,
+    );
+  }
+  for (const type of [undefined, null, 3, ['check'], { toString: () => 'check' }])
+    assert.throws(() => {
+      // @ts-expect-error: a type that is not a string
+      mutate(initialState(), { type, key: 'a' });
+    }, /Unknown update/);
+  for (const op of [null, [], 'check', 3])
+    assert.throws(() => {
+      // @ts-expect-error: an update that is not an object
+      mutate(initialState(), op);
+    }, /Invalid update/);
+});
+
+test('the first choice on a source splits a mines link saved before #231, keeping every choice (#520)', () => {
+  const truck = { mode: 'truck' as const, roundTripMin: 4, fuel: 'Packaged Fuel' };
+  const train = { mode: 'train' as const, roundTripMin: 9 };
+  const ore = 'supply/Iron Ore',
+    coal = 'supply/Coal',
+    water = 'supply/Water';
+  let legacy = mutate(initialState(), {
+    type: 'factoryGroupAdd',
+    id: 'fg-plates1',
+    name: 'Plates',
+  });
+  legacy = mutate(legacy, { type: 'factoryGroupAdd', id: 'fg-motors1', name: 'Motors' });
+  legacy.factoryGroups.links = { 'mines:fg-plates1': truck, [coal + ':fg-plates1']: train };
+  // A sibling with a choice of its own keeps it; the others take the old mines choice.
+  const split = mutate(structuredClone(legacy), {
+    type: 'factoryLinkTransport',
+    from: ore,
+    to: 'fg-plates1',
+    mode: 'train',
+    roundTripMin: 12,
+    siblings: [ore, coal, water],
+  });
+  assert.deepEqual(split.factoryGroups.links, {
+    [ore + ':fg-plates1']: { mode: 'train', roundTripMin: 12 },
+    [coal + ':fg-plates1']: train,
+    [water + ':fg-plates1']: truck,
+  });
+  // Without siblings the old entry still goes.
+  const alone = mutate(structuredClone(legacy), {
+    type: 'factoryLinkTransport',
+    from: ore,
+    to: 'fg-plates1',
+    mode: 'belt',
+  });
+  assert.deepEqual(alone.factoryGroups.links, { [coal + ':fg-plates1']: train });
+  // A link between two groups, or to another place, leaves the mines link as it is.
+  const between = mutate(structuredClone(legacy), {
+    type: 'factoryLinkTransport',
+    from: 'fg-motors1',
+    to: 'fg-plates1',
+    mode: 'train',
+    roundTripMin: 9,
+    siblings: [ore],
+  });
+  assert.deepEqual(between.factoryGroups.links?.['mines:fg-plates1'], truck);
+  assert.deepEqual(between.factoryGroups.links?.[ore + ':fg-plates1'], undefined);
+  const elsewhere = mutate(structuredClone(legacy), {
+    type: 'factoryLinkTransport',
+    from: ore,
+    to: 'fg-motors1',
+    mode: 'train',
+    roundTripMin: 9,
+  });
+  assert.deepEqual(elsewhere.factoryGroups.links?.['mines:fg-plates1'], truck);
+  // Too many or malformed siblings are refused.
+  for (const siblings of [Array(201).fill(ore), [ore, 'fg-plates1'], 'supply/Coal'])
+    assert.throws(
+      () =>
+        mutate(structuredClone(legacy), {
+          type: 'factoryLinkTransport',
+          from: ore,
+          to: 'fg-plates1',
+          mode: 'belt',
+          // @ts-expect-error: a sibling list the page never sends
+          siblings,
+        }),
+      /Invalid factory group link/,
+    );
+});
