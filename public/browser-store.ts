@@ -1,8 +1,10 @@
 // A single record lets each IndexedDB transaction atomically change selection and progress.
 // Opens the browser edition's database; browserRequest in browser-api.ts is the caller (tests
 // hand createBrowserApi a stand-in store instead). The name, store `workspace` and key `main`
-// hold existing users' saves: renaming any of them makes those saves disappear from the UI.
-import type { BrowserWorkspace } from './types/index.ts';
+// hold existing users' saves: renaming any of them makes those saves disappear from the UI. A
+// second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497).
+import { migrateOriginalProfile } from './handbook-migration.ts';
+import type { BrowserWorkspace, Recipe, StoredProfile } from './types/index.ts';
 
 // What an older planner says about saves a newer one wrote, whether the database itself or the
 // workspace record is newer. Neither is read or written: AGENTS.md forbids downgrading them.
@@ -22,6 +24,11 @@ const UNREADABLE =
 // Errors about the stored data itself carry storedData, so the start-up error page (boot() in
 // app/session.ts) offers readStoredData's download next to the message.
 const refused = (message: string) => Object.assign(Error(message), { storedData: true });
+// A migration that failed (#497). Its transaction was aborted, so the record is as it was.
+const NOT_MIGRATED =
+  'The saves in this browser could not be updated for this version of the planner. Nothing ' +
+  "has been changed: reload to try again, and keep this browser's site data. Download the " +
+  'stored data below to keep a copy.';
 
 // Whether a stored record has the shape browser-api.ts reads without checking: a saves list
 // whose saves each have an id and a profiles list, and whose profiles each have an id and a
@@ -51,18 +58,98 @@ function workspaceRecord(found: unknown): found is BrowserWorkspace {
   );
 }
 
+// A record this release reads: a workspace of version 1. Anything else is refused by
+// transaction() below, with the message that fits it.
+const newer = (x: unknown) => object(x) && typeof x.version === 'number' && x.version > 1;
+const current = (x: unknown): x is BrowserWorkspace => workspaceRecord(x) && !newer(x);
+
+// Retiring the handbook profile type (#387, #497): every original profile becomes a calculated
+// one with its progress re-keyed (migrateOriginalProfile). In this edition an original profile
+// always carries its own handbook, the one it migrates with: it only ever arrived through an
+// import, which requires one (validateTransfer), or as a duplicate of one. A record with an
+// original profile without one was never written by a release; it is left as it is, because the
+// Pages build has no handbook to transcribe it from (its plan.json is an empty template).
+const migratable = (p: StoredProfile) => p.kind === 'original' && object(p.handbook);
+const needsMigration = (d: BrowserWorkspace) => d.saves.some(s => s.profiles.some(migratable));
+// The second key (#497): the record as it was read before its first migration. Written in the
+// migration's own transaction, only when the key is empty, so it is never replaced; nothing in
+// the planner reads it. It is the pre-migration copy AGENTS.md requires, the counterpart of the
+// server's workspace.json.pre-handbook.
+export const PRE_HANDBOOK = 'pre-handbook';
+// What the migration needs: recipes.json's recipes and the catalog's pureLimits (the base
+// budgets, as on the server). browser-api.ts loads them, and only when there is something to
+// migrate.
+export interface MigrationData {
+  recipes: Recipe[];
+  pureLimits: Record<string, number>;
+}
+
 // The store browser-api.ts works through (tests pass a stand-in with the same method).
 export interface BrowserStore {
   transaction(): Promise<BrowserWorkspace>;
   transaction<T>(change: (data: BrowserWorkspace) => T): Promise<T>;
 }
 
+// With `loadMigration`, the first transaction on this connection first migrates the original
+// profiles the record holds (migrate below); without it (tests of other behaviour), none is.
 export function openBrowserStore(
   indexedDB: IDBFactory,
   name = 'satisfactory-planner-browser-v1',
+  loadMigration?: () => Promise<MigrationData>,
 ): BrowserStore {
   // Set once another tab upgrades the schema and this connection closes for it.
   let upgradedElsewhere = false;
+  // The migration's run on this connection: shared by the transactions that wait for it, and
+  // cleared when it fails, so the next one tries again.
+  let migrated: Promise<void> | undefined;
+  // A readonly look first, so recipes.json is only fetched when there is something to migrate.
+  // Then one readwrite transaction reads the record again (another tab may have migrated it
+  // meanwhile, and then nothing is written), keeps it under PRE_HANDBOOK unless that key already
+  // holds a copy, and puts it back migrated. A throw aborts the transaction, so a failure leaves
+  // both keys as they were. A record transaction() refuses (damaged, newer) is left to it.
+  const migrate = async (db: IDBDatabase, load: () => Promise<MigrationData>) => {
+    const found = await new Promise<unknown>((resolve, reject) => {
+      const r = db.transaction('workspace', 'readonly').objectStore('workspace').get('main');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    if (!current(found) || !needsMigration(found)) return;
+    const { recipes, pureLimits } = await load();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('workspace', 'readwrite'),
+        store = tx.objectStore('workspace');
+      let failure: unknown,
+        settled = 0;
+      const main = store.get('main'),
+        kept = store.get(PRE_HANDBOOK);
+      main.onsuccess = kept.onsuccess = () => {
+        if (++settled < 2) return;
+        try {
+          // Saved data is unknown until checked (AGENTS.md).
+          const data: unknown = main.result;
+          if (!current(data) || !needsMigration(data)) return;
+          // put() copies the value when it is called, so this is the record as it was read.
+          if (kept.result === undefined) store.put(data, PRE_HANDBOOK);
+          for (const save of data.saves)
+            save.profiles = save.profiles.map(p =>
+              // migratable() checked that it carries a handbook.
+              migratable(p) ? migrateOriginalProfile(p, p.handbook!, recipes, pureLimits) : p,
+            );
+          store.put(data, 'main');
+        } catch (e) {
+          failure = e;
+          tx.abort();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => {
+        const why = failure || tx.error;
+        reject(refused(NOT_MIGRATED + (why instanceof Error ? ` (${why.message})` : '')));
+      };
+      // Request errors also abort the transaction, so onabort reports them.
+      tx.onerror = () => {};
+    });
+  };
   const opened = new Promise<IDBDatabase>((resolve, reject) => {
     const r = indexedDB.open(name, 1);
     // Schema version 1 is the only one so far: a brand-new database just gets the empty store.
@@ -93,6 +180,13 @@ export function openBrowserStore(
         throw Error(
           'A newer version of the planner was opened in another tab. Reload this tab to continue; nothing has been changed.',
         );
+      if (loadMigration) {
+        migrated ??= migrate(db, loadMigration).catch(e => {
+          migrated = undefined;
+          throw e;
+        });
+        await migrated;
+      }
       return new Promise<T>((resolve, reject) => {
         const tx = db.transaction('workspace', change ? 'readwrite' : 'readonly'),
           store = tx.objectStore('workspace');
@@ -104,8 +198,7 @@ export function openBrowserStore(
             // Saved data is unknown until checked (AGENTS.md).
             const found: unknown = r.result;
             // Version 1 is the only workspace format so far; a later one is refused unread.
-            if (object(found) && typeof found.version === 'number' && found.version > 1)
-              throw refused(NEWER);
+            if (newer(found)) throw refused(NEWER);
             // Only a missing record (a new browser) starts blank; anything else not shaped like
             // a workspace, falsy values included, is refused unread.
             if (found !== undefined && !workspaceRecord(found)) throw refused(UNREADABLE);

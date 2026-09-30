@@ -6,11 +6,22 @@ import {
   workerCalculator,
   type CalculatorWorker,
 } from '../public/browser-api.ts';
-import { calculate } from '../planner.ts';
+import { calculate, catalog } from '../planner.ts';
+import { openBrowserStore, PRE_HANDBOOK } from '../public/browser-store.ts';
+import { handbookToPlan } from '../public/handbook-migration.ts';
+import { initialState } from '../public/state.ts';
+import { validateTransfer } from '../public/transfer.ts';
+import handbookJson from '../public/plan.json' with { type: 'json' };
+import recipesJson from '../recipes.json' with { type: 'json' };
+import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
 import type {
   BrowserWorkspace,
   Catalog,
+  ContextReply,
+  Handbook,
   ProgressState,
+  Recipe,
+  SaveExport,
   WorkspaceSummary,
 } from '../public/types/index.ts';
 
@@ -393,4 +404,95 @@ test("POST /api/profiles refuses kind 'original'", async () => {
   );
   assert.equal(solved, 0, 'nothing is calculated');
   assert.deepEqual(data.saves, []);
+});
+
+// Retiring the handbook, part 4c (#497), through browserRequest as the Pages edition starts it:
+// the store it opens migrates an original profile with its own handbook before the first
+// request is answered, loading recipes.json only for that. Runs last in this file, because the
+// API it starts stays cached for the tab (the failed-start test above needs none cached).
+test('the Pages edition opens an upgraded browser with its original profile migrated', async () => {
+  const handbook = handbookJson as unknown as Handbook;
+  const recipesText = JSON.stringify(recipesJson);
+  const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
+  const conversion = handbookToPlan(handbook, recipes, catalog().pureLimits);
+  const factory = handbook.factories.find(f => conversion.rows['3']![f.id])!;
+  const row = conversion.rows['3']![factory.id]!;
+  const seeded = {
+    version: 1,
+    activeSave: 's',
+    lastBackup: null,
+    saves: [
+      {
+        id: 's',
+        name: 'Imported world',
+        activeProfile: 'p',
+        profiles: [
+          {
+            id: 'p',
+            name: 'Original · 50× complete automation',
+            kind: 'original',
+            handbook,
+            state: {
+              ...initialState(),
+              revision: 4,
+              checks: { ['factory-3-' + factory.id]: true, 'storage-ground-shell': true },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
+  const fetched: string[] = [];
+  const saved = { indexedDB: globalThis.indexedDB, fetch: globalThis.fetch };
+  Object.assign(globalThis, {
+    indexedDB: fakeIndexedDB(1, records),
+    fetch: async (url: URL) => {
+      const name = url.pathname.split('/').pop()!;
+      fetched.push(name);
+      if (name === 'catalog.json') return new Response(JSON.stringify(catalog()));
+      if (name === 'recipes.json') return new Response(recipesText);
+      return new Response('', { status: 404 });
+    },
+  });
+  try {
+    const summary = (await browserRequest('/api/workspace')) as WorkspaceSummary;
+    assert.deepEqual(fetched, ['catalog.json', 'recipes.json']);
+    const listed = summary.saves[0]!.profiles[0]!;
+    assert.equal(listed.kind, 'calculated');
+    assert.equal(listed.transcribed, true);
+    assert.equal(listed.name, 'Original · 50× complete automation');
+    const context = (await browserRequest('/api/context')) as ContextReply;
+    assert.equal(context.handbook, undefined);
+    assert.equal(context.plan!.engine, 'handbook-' + handbook.version);
+    assert.equal(context.state.checks['calc-3-' + row], true, 'the factory tick, re-keyed');
+    assert.equal(context.state.checks['storage-ground-shell'], true);
+    // The migrated profile takes progress like any calculated one.
+    await browserRequest('/api/update', {
+      body: JSON.stringify({ type: 'check', key: 'phase-3-survey', value: true }),
+    });
+    assert.equal(((await browserRequest('/api/state')) as ProgressState).revision, 5);
+    // And it exports as a calculated profile that imports again.
+    const exported = (await browserRequest('/api/export-saves')) as SaveExport;
+    const [p] = validateTransfer(exported).saves[0]!.profiles;
+    assert.equal(p!.kind, 'calculated');
+    assert.equal('handbook' in p!, false);
+    assert.deepEqual(records.get(PRE_HANDBOOK), seeded, 'the pre-migration copy');
+    // A reload opens the store again: nothing is migrated or copied again.
+    const before = structuredClone(records);
+    const again = createBrowserApi(
+      openBrowserStore(fakeIndexedDB(1, records), undefined, async () => {
+        throw Error('not needed');
+      }),
+      calculate,
+      catalog(),
+    );
+    assert.equal(
+      ((await again('/api/workspace')) as WorkspaceSummary).saves[0]!.profiles[0]!.kind,
+      'calculated',
+    );
+    assert.deepEqual(records, before);
+  } finally {
+    Object.assign(globalThis, saved);
+  }
 });

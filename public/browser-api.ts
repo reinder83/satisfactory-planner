@@ -42,6 +42,7 @@ import type {
   Catalog,
   CurrentCalculatedPlan,
   CurrentStage,
+  Recipe,
   StageKey,
   StoredProfile,
   UpdateOp,
@@ -581,10 +582,24 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
       );
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
+      const catalog = (await response.json()) as Catalog;
+      // The handbook migration's recipes (#497), fetched only when the record holds an original
+      // profile. A failed fetch fails that request and changes nothing; the next one tries again.
+      const loadMigration = async () => {
+        const recipes = await fetch(new URL('./recipes.json', import.meta.url));
+        if (!recipes.ok)
+          throw Error(
+            'Could not load the recipes needed to update the saves in this browser. Nothing has been changed; reload to try again.',
+          );
+        return {
+          recipes: ((await recipes.json()) as { recipes: Recipe[] }).recipes,
+          pureLimits: catalog.pureLimits,
+        };
+      };
       return createBrowserApi(
-        openBrowserStore(indexedDB),
+        openBrowserStore(indexedDB, undefined, loadMigration),
         jobs.calculate,
-        (await response.json()) as Catalog,
+        catalog,
         jobs.rank,
       );
     })());
