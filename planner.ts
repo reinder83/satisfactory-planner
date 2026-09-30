@@ -855,22 +855,34 @@ function twoStepFit(context: PhaseContext): RunResult {
   if (!base.feasible) return base;
   const ids = new Set(base.rows.map(row => row.id));
   const baseline = amplifyCandidates(config, base);
-  const fit = integerFit(config, phase, { ...sharedOptions, recipeIds: ids, baseline });
-  if (!fit.feasible && Object.keys(config.existingSupply).length) {
-    const retried = supplyFallback(context, sharedOptions, ids, baseline);
-    if (retried) return retried;
-  }
+  const supply = Object.keys(config.existingSupply).length
+    ? supplyFallback(context, sharedOptions, ids, baseline)
+    : null;
   // Amplification is optional by definition: the solver may always place no somersloops at all.
   // So a failure here is the integer search running out of time, never a real shortage — never let
-  // it cost the user a plan that fits. Fall back to the unamplified fit and say so.
-  if (!fit.feasible && config.amplifySloops > 0) {
-    const plain = integerFit({ ...config, amplifySloops: 0 }, phase, {
-      ...sharedOptions,
-      recipeIds: ids,
-    });
-    if (plain.feasible) return { ...plain, amplificationDropped: true };
+  // it cost the user a plan that fits. Every step below is tried amplified first, then without
+  // amplification (marked `amplificationDropped`), and the credit for existing production is kept
+  // as long as either fits before it is dropped: the same steps in the same order as with
+  // `amplifySloops` 0, so turning amplification on never gives a worse plan than turning it off
+  // (#597).
+  const variants = config.amplifySloops > 0 ? [config, { ...config, amplifySloops: 0 }] : [config];
+  const marked = (variant: CurrentSettings, result: Solved): Solved =>
+    variant === config ? result : { ...result, amplificationDropped: true };
+  let fit: RunResult | null = null;
+  for (const variant of variants) {
+    const credited = integerFit(variant, phase, { ...sharedOptions, recipeIds: ids, baseline });
+    if (credited.feasible) return marked(variant, credited);
+    // The amplified fit's failure is the one calculate() explains when nothing fits.
+    fit ??= credited;
+    const widened = supply?.widened(variant);
+    if (widened?.feasible) return marked(variant, widened);
   }
-  return fit;
+  if (supply)
+    for (const variant of variants) {
+      const without = supply.without(variant);
+      if (without?.feasible) return marked(variant, { ...without, supplyDropped: true });
+    }
+  return fit!;
 }
 // The two-step fit's first step: the exact LP, with fractional machines and no amplification.
 const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) =>
@@ -900,29 +912,44 @@ function integerFit(variant: CurrentSettings, phase: number, options: RunOptions
 // phase would have used without the credit before concluding anything — the supplied plan is
 // still the smaller one, it just needs the slack. If even that will not round, drop the credit:
 // telling the planner what you already built must never cost you a plan, the same rule
-// amplification follows in twoStepFit. Returns null when neither fits.
+// amplification follows in twoStepFit. twoStepFit calls both steps once per variant (amplified
+// and not); the exact solve without the credit is the same for both, so it is solved once, and
+// only when a fit has failed. Each step returns null when that exact solve fails too.
 function supplyFallback(
-  context: PhaseContext,
+  { config, phase }: PhaseContext,
   sharedOptions: FitOptions,
   ids: Set<string>,
   baseline: Record<string, number>,
-): RunResult | null {
-  const { config, phase } = context;
-  const plainBase = exactFit({ ...config, existingSupply: {} }, phase, sharedOptions);
-  if (!plainBase.feasible) return null;
-  const plainIds = new Set(plainBase.rows.map(row => row.id));
-  const widened = integerFit(config, phase, {
-    ...sharedOptions,
-    recipeIds: new Set([...ids, ...plainIds]),
-    baseline,
-  });
-  if (widened.feasible) return widened;
-  const without = integerFit({ ...config, existingSupply: {} }, phase, {
-    ...sharedOptions,
-    recipeIds: plainIds,
-    baseline: amplifyCandidates(config, plainBase),
-  });
-  return without.feasible ? { ...without, supplyDropped: true } : null;
+) {
+  let plainBase: RunResult | null = null;
+  const plain = () => {
+    plainBase ??= exactFit({ ...config, existingSupply: {} }, phase, sharedOptions);
+    return plainBase.feasible ? plainBase : null;
+  };
+  return {
+    // The credited fit over the network widened with the recipes of the plan without the credit.
+    widened(variant: CurrentSettings): RunResult | null {
+      const uncredited = plain();
+      return uncredited
+        ? integerFit(variant, phase, {
+            ...sharedOptions,
+            recipeIds: new Set([...ids, ...uncredited.rows.map(row => row.id)]),
+            baseline,
+          })
+        : null;
+    },
+    // The fit without the credit, over the network of the exact plan without it.
+    without(variant: CurrentSettings): RunResult | null {
+      const uncredited = plain();
+      return uncredited
+        ? integerFit({ ...variant, existingSupply: {} }, phase, {
+            ...sharedOptions,
+            recipeIds: new Set(uncredited.rows.map(row => row.id)),
+            baseline: amplifyCandidates(config, uncredited),
+          })
+        : null;
+    },
+  };
 }
 // Recipe pool. With `recipeIds` (the inner integer fit) only the chosen network, plus the
 // conversion recipes when those are allowed. Amplified twins are added only in that inner fit,
