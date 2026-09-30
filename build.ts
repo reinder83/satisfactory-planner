@@ -228,6 +228,7 @@ self.onmessage = async ({ data }) => {
             phase: data.rank.phase,
             budgetMs: data.rank.budgetMs,
             onProgress: (done, total) => self.postMessage({ id: data.id, done, total }),
+            onPhase: phase => self.postMessage({ id: data.id, phase }),
           })
         : calculate(data.settings, phase => self.postMessage({ id: data.id, phase })),
     });
