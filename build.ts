@@ -218,8 +218,8 @@ self.onmessage = async ({ data }) => {
           })
         : calculate(data.settings, phase => self.postMessage({ id: data.id, phase })),
     });
-  } catch (e) {
-    self.postMessage({ id: data.id, error: e.message });
+  } catch (error) {
+    self.postMessage({ id: data.id, error: error.message });
   }
 };`),
   );
