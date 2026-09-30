@@ -27,13 +27,18 @@ const saved = () =>
 const counter = computed(() =>
   legacy(() => {
     const delivery = props.delivery,
-      count = saved();
+      count = saved(),
+      left = Math.max(0, delivery.target - count);
+    // Without a rate there are no minutes to give: the text follows the saved count, so a
+    // lowered count no longer reads as complete (#590).
     return {
       value: count,
       width: Math.min(100, (count / delivery.target) * 100),
       remaining: delivery.rate
-        ? `${num(delivery.rate)}/min net · ${num(Math.max(0, delivery.target - count) / delivery.rate)} minutes remaining`
-        : 'Phase 3 delivery already complete',
+        ? `${num(delivery.rate)}/min net · ${num(left / delivery.rate)} minutes remaining`
+        : left
+          ? `${num(left)} remaining`
+          : 'Phase 3 delivery already complete',
     };
   }),
 );
