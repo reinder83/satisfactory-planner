@@ -18,61 +18,62 @@ const data: Progression = JSON.parse(
 );
 test('Phase 1 has construction stock and biomass guidance, without later power instructions', () => {
   const plan = calculate({ recipes: 'all' }),
-    g = progression(plan, { checks: {} }, data, '1');
-  const power = g.powerTasks.map(t => t.body).join(' ');
+    guidance = progression(plan, { checks: {} }, data, '1');
+  const power = guidance.powerTasks.map(t => t.body).join(' ');
   assert.doesNotMatch(power, /nuclear|aluminum|packaging|rocket fuel/i);
   assert.match(power, /120 Leaves\/min/);
   assert.match(power, /60 Wood\/min/);
   assert.match(power, /120 Biomass\/min/);
-  const base = g.baseTasks.map(t => t.body).join(' ');
+  const base = guidance.baseTasks.map(t => t.body).join(' ');
   for (const name of ['Iron Plates', 'Iron Rods', 'Concrete', 'Wire', 'Cable'])
     assert.ok(base.includes(name));
-  assert.ok(g.milestoneTasks.some(t => t.title.includes('Obstacle Clearing')));
-  assert.ok(g.milestoneTasks.some(t => t.title.includes('Overclock Production')));
-  assert.ok(g.hardDrives.some(t => t.body.includes('Choices are random')));
+  assert.ok(guidance.milestoneTasks.some(t => t.title.includes('Obstacle Clearing')));
+  assert.ok(guidance.milestoneTasks.some(t => t.title.includes('Overclock Production')));
+  assert.ok(guidance.hardDrives.some(t => t.body.includes('Choices are random')));
 });
 test('milestone material advice uses actual running checkmarks and unlocks change power advice', () => {
   const plan = calculate({}),
     rows = plan.stages['1'].rows!;
   const iron = rows.find(r => r.outputs['Iron Plate'])!;
   const checks: Record<string, boolean> = { ['calc-1-' + iron.id]: true };
-  let g = progression(plan, { checks }, data, '2');
-  assert.ok(g.milestoneTasks.some(t => t.body.includes('Iron Plate: already producing')));
-  assert.match(g.powerTasks[0]!.body, /Biomass/);
+  let guidance = progression(plan, { checks }, data, '2');
+  assert.ok(guidance.milestoneTasks.some(t => t.body.includes('Iron Plate: already producing')));
+  assert.match(guidance.powerTasks[0]!.body, /Biomass/);
   checks['unlock-' + data.entries.find(s => s.name === 'Coal Power')!.id] = true;
-  g = progression(plan, { checks }, data, '2');
-  assert.match(g.powerTasks[0]!.body, /Coal Power is marked unlocked/);
-  assert.ok(!g.powerTasks.some(t => t.id === 'startup-biomass'));
+  guidance = progression(plan, { checks }, data, '2');
+  assert.match(guidance.powerTasks[0]!.body, /Coal Power is marked unlocked/);
+  assert.ok(!guidance.powerTasks.some(t => t.id === 'startup-biomass'));
 });
 
 test('a phase says which of the previous phase’s lines it stops using', () => {
   const plan = calculate({ phase: '1', recipes: 'all', goal: 'timed', hours: 10, multiplier: 5 });
-  const at = (ph: number) => progression(plan, { checks: {} }, data, String(ph)).retire;
-  assert.deepEqual(at(1), [], 'the first phase of a plan has nothing behind it to retire');
+  const retiredAt = (phase: number) =>
+    progression(plan, { checks: {} }, data, String(phase)).retire;
+  assert.deepEqual(retiredAt(1), [], 'the first phase of a plan has nothing behind it to retire');
 
-  const dropped = (ph: number): CalcRow[] => {
-    const now = new Set((plan.stages[String(ph) as StageKey].rows || []).map(r => r.id));
+  const dropped = (phase: number): CalcRow[] => {
+    const now = new Set((plan.stages[String(phase) as StageKey].rows || []).map(r => r.id));
     const later = new Set(
       (['1', '2', '3', '4', '5'] as const)
-        .filter(p => Number(p) > Number(ph))
+        .filter(p => Number(p) > Number(phase))
         .flatMap(p => (plan.stages[p].rows || []).map(r => r.id)),
     );
-    return (plan.stages[String(ph - 1) as StageKey].rows || []).filter(
+    return (plan.stages[String(phase - 1) as StageKey].rows || []).filter(
       r => !now.has(r.id) && !later.has(r.id),
     );
   };
-  for (const ph of [2, 3, 4, 5]) {
-    const expected = dropped(ph),
-      step = at(ph);
+  for (const phase of [2, 3, 4, 5]) {
+    const expected = dropped(phase),
+      step = retiredAt(phase);
     if (!expected.length) {
-      assert.deepEqual(step, [], 'phase ' + ph + ' keeps every line, so it says nothing');
+      assert.deepEqual(step, [], 'phase ' + phase + ' keeps every line, so it says nothing');
       continue;
     }
-    assert.equal(step.length, 1, 'phase ' + ph + ' raises one retirement step');
-    assert.equal(step[0]!.id, 'retire-' + ph, 'the step keeps a stable checklist key');
+    assert.equal(step.length, 1, 'phase ' + phase + ' raises one retirement step');
+    assert.equal(step[0]!.id, 'retire-' + phase, 'the step keeps a stable checklist key');
     assert.match(
       step[0]!.body,
-      new RegExp('last needed in Phase ' + (ph - 1)),
+      new RegExp('last needed in Phase ' + (phase - 1)),
       'it says when the lines were last needed',
     );
     assert.match(
@@ -90,7 +91,7 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
     assert.deepEqual(
       listed,
       expectedNames,
-      'phase ' + ph + ' lists the lines it drops, biggest first',
+      'phase ' + phase + ' lists the lines it drops, biggest first',
     );
     if (expected.length > 10)
       assert.match(
@@ -107,10 +108,10 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
     [],
     'the starting phase retires nothing',
   );
-  const p4 = progression(late, { checks: {} }, data, '4').retire;
-  if (p4.length)
+  const phase4Retired = progression(late, { checks: {} }, data, '4').retire;
+  if (phase4Retired.length)
     assert.match(
-      p4[0]!.body,
+      phase4Retired[0]!.body,
       /last needed in Phase 3/,
       'later phases still retire what the plan did build',
     );
@@ -119,44 +120,44 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
 test('guideContext plans the post-game as Phase 5 and reads only ticked checks', () => {
   const plan = calculate({}),
     coal = data.entries.find(entry => entry.name === 'Coal Power')!;
-  const ctx = guideContext(plan, { checks: { ['unlock-' + coal.id]: true } }, data, 'post');
-  assert.equal(ctx.stage, 5);
-  assert.deepEqual(ctx.rows, plan.stages['5'].rows || []);
-  assert.equal(ctx.byName('Coal Power'), coal);
-  assert.ok(ctx.unlocked(coal));
-  assert.ok(!ctx.unlocked(ctx.byName('Nuclear Power')!));
-  assert.match(ctx.funding(coal), /production planned|gather, handcraft/);
+  const context = guideContext(plan, { checks: { ['unlock-' + coal.id]: true } }, data, 'post');
+  assert.equal(context.stage, 5);
+  assert.deepEqual(context.rows, plan.stages['5'].rows || []);
+  assert.equal(context.byName('Coal Power'), coal);
+  assert.ok(context.unlocked(coal));
+  assert.ok(!context.unlocked(context.byName('Nuclear Power')!));
+  assert.match(context.funding(coal), /production planned|gather, handcraft/);
 });
 
 test('requiredMilestones brings every prerequisite, and milestoneTasks lists it first', () => {
   const plan = calculate({ recipes: 'all' });
   for (const phase of ['1', '2', '3', '4', '5']) {
-    const ctx = guideContext(plan, { checks: {} }, data, phase),
-      required = requiredMilestones(ctx),
+    const context = guideContext(plan, { checks: {} }, data, phase),
+      required = requiredMilestones(context),
       ids = new Set(required.map(entry => entry.id));
     // A prerequisite progression.json does not list (the HUB tutorial) cannot be added.
     for (const entry of required)
       for (const id of entry.requires.filter(id => data.entries.some(x => x.id === id)))
         assert.ok(ids.has(id), `phase ${phase}: ${entry.name} needs ${id}`);
-    const tasks = milestoneTasks(ctx, required),
+    const tasks = milestoneTasks(context, required),
       position = new Map(tasks.map((task, i) => [task.id, i]));
     for (const entry of required) {
-      const at = position.get('unlock-' + entry.id);
-      if (at === undefined) continue;
+      const stepIndex = position.get('unlock-' + entry.id);
+      if (stepIndex === undefined) continue;
       assert.ok(!entry.alternate, 'alternates come from hard drives, not milestone steps');
       for (const id of entry.requires) {
         const before = position.get('unlock-' + id);
         if (before !== undefined)
-          assert.ok(before < at, `phase ${phase}: ${id} before ${entry.name}`);
+          assert.ok(before < stepIndex, `phase ${phase}: ${id} before ${entry.name}`);
       }
     }
   }
 });
 
 test('milestoneTasks leaves out what cannot be researched yet', () => {
-  const ctx = guideContext(calculate({}), { checks: {} }, data, '1');
+  const context = guideContext(calculate({}), { checks: {} }, data, '1');
   const late = data.entries.filter(entry => !entry.mam && !entry.alternate && entry.tier >= 3);
-  const tasks = milestoneTasks(ctx, late);
+  const tasks = milestoneTasks(context, late);
   assert.deepEqual(tasks, [], 'Phase 1 only researches tiers 1 and 2');
 });
 
@@ -184,9 +185,9 @@ test('hardDriveTasks counts the alternates not yet confirmed', () => {
 });
 
 test('powerTasks keeps the Phase 1 start-up order calcTasks interleaves', () => {
-  const ctx = guideContext(calculate({}), { checks: {} }, data, '1');
+  const context = guideContext(calculate({}), { checks: {} }, data, '1');
   assert.deepEqual(
-    powerTasks(ctx)
+    powerTasks(context)
       .slice(0, 4)
       .map(task => task.id),
     ['startup-1-power-review', 'startup-biomass', 'startup-solid-biofuel', 'startup-burner-bank-1'],

@@ -34,8 +34,8 @@ const stage = (rows: CalcRow[], rest: Partial<StoredStage> = {}): StoredStage =>
   ...rest,
 });
 const ticked = (...ids: string[]) => Object.fromEntries(ids.map(id => ['calc-1-' + id, true]));
-const close = (a: number, b: number, what: string) =>
-  assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a} is not ${b}`);
+const close = (actual: number, expected: number, what: string) =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} is not ${expected}`);
 
 // Ore (raw) -> ingot -> plate, and the plates go to the elevator.
 const chain = stage(
@@ -44,38 +44,38 @@ const chain = stage(
 );
 
 test('nothing built delivers nothing, and the next step is the first that helps', () => {
-  const s = buildStatus(chain, {}, '1');
+  const status = buildStatus(chain, {}, '1');
   assert.deepEqual(
-    s.rows.map(r => [r.id, r.built, r.share]),
+    status.rows.map(r => [r.id, r.built, r.share]),
     [
       ['ingot', false, 0],
       ['plate', false, 0],
     ],
   );
-  assert.equal(s.deliveryShare, 0);
-  assert.equal(s.delivery[0]!.now, 0);
-  assert.equal(s.builtCount, 0);
-  assert.equal(s.rowCount, 2);
+  assert.equal(status.deliveryShare, 0);
+  assert.equal(status.delivery[0]!.now, 0);
+  assert.equal(status.builtCount, 0);
+  assert.equal(status.rowCount, 2);
   // Neither row alone delivers, and nothing is built to unblock: build order decides.
-  assert.deepEqual(s.next, { id: 'ingot', gain: 0, unblocks: 0 });
+  assert.deepEqual(status.next, { id: 'ingot', gain: 0, unblocks: 0 });
 });
 
 test('a built row without its supplier is starved and says what it is short of', () => {
-  const s = buildStatus(chain, ticked('plate'), '1');
-  assert.deepEqual(s.rows[1], { id: 'plate', built: true, share: 0, shortOf: 'Ingot' });
-  assert.equal(s.deliveryShare, 0);
+  const status = buildStatus(chain, ticked('plate'), '1');
+  assert.deepEqual(status.rows[1], { id: 'plate', built: true, share: 0, shortOf: 'Ingot' });
+  assert.equal(status.deliveryShare, 0);
   // Building the ingot line lets the plates flow: the whole delivery.
-  assert.equal(s.next!.id, 'ingot');
-  close(s.next!.gain, 1, 'gain');
+  assert.equal(status.next!.id, 'ingot');
+  close(status.next!.gain, 1, 'gain');
 });
 
 test('everything built delivers the plan in full, with nothing left to build', () => {
-  const s = buildStatus(chain, ticked('ingot', 'plate'), '1');
-  assert.ok(s.rows.every(r => r.built && r.share === 1 && !r.shortOf));
-  close(s.delivery[0]!.now, 20, 'plates now');
-  assert.equal(s.deliveryShare, 1);
-  assert.equal(s.next, null);
-  close(s.produced.Plate!, 20, 'plates made');
+  const status = buildStatus(chain, ticked('ingot', 'plate'), '1');
+  assert.ok(status.rows.every(r => r.built && r.share === 1 && !r.shortOf));
+  close(status.delivery[0]!.now, 20, 'plates now');
+  assert.equal(status.deliveryShare, 1);
+  assert.equal(status.next, null);
+  close(status.produced.Plate!, 20, 'plates made');
 });
 
 test('a short item is shared in proportion to what the plan gives each use', () => {
@@ -84,11 +84,11 @@ test('a short item is shared in proportion to what the plan gives each use', () 
     [row('ingot', { Ore: 30 }, { Ingot: 10 }), row('plate', { Ingot: 10 }, { Plate: 5 })],
     { storage: { Ingot: 10 }, delivery: { Plate: { target: 100, rate: 5 } } },
   );
-  const s = buildStatus(shared, ticked('ingot', 'plate'), '1');
-  close(s.rows[1]!.share, 0.5, 'plate share');
-  assert.equal(s.rows[1]!.shortOf, 'Ingot');
-  close(s.delivery[0]!.now, 2.5, 'plates now');
-  close(s.deliveryShare, 0.5, 'delivery share');
+  const status = buildStatus(shared, ticked('ingot', 'plate'), '1');
+  close(status.rows[1]!.share, 0.5, 'plate share');
+  assert.equal(status.rows[1]!.shortOf, 'Ingot');
+  close(status.delivery[0]!.now, 2.5, 'plates now');
+  close(status.deliveryShare, 0.5, 'delivery share');
 });
 
 test('the input a row is short of counts what competes for it, not only its own need', () => {
@@ -98,9 +98,9 @@ test('the input a row is short of counts what competes for it, not only its own 
     storage: { B: 950 },
     delivery: { P: { target: 100, rate: 10 } },
   });
-  const s = buildStatus(competing, ticked('x'), '1');
-  close(s.rows[0]!.share, 0.1, 'share');
-  assert.equal(s.rows[0]!.shortOf, 'B', 'B holds the row at 0.1, not A at 0.5');
+  const status = buildStatus(competing, ticked('x'), '1');
+  close(status.rows[0]!.share, 0.1, 'share');
+  assert.equal(status.rows[0]!.shortOf, 'B', 'B holds the row at 0.1, not A at 0.5');
 });
 
 test('with no single step adding delivery, the next one frees the most built machines', () => {
@@ -113,10 +113,10 @@ test('with no single step adding delivery, the next one frees the most built mac
     ],
     { delivery: { Frame: { target: 100, rate: 5 } } },
   );
-  const s = buildStatus(long, ticked('plate'), '1');
-  assert.equal(s.next!.id, 'ingot');
-  assert.equal(s.next!.gain, 0);
-  close(s.next!.unblocks, 3, 'machine-equivalents freed');
+  const status = buildStatus(long, ticked('plate'), '1');
+  assert.equal(status.next!.id, 'ingot');
+  assert.equal(status.next!.gain, 0);
+  close(status.next!.unblocks, 3, 'machine-equivalents freed');
 });
 
 test('power is measured as the planner balances it, and Phase 1 is never flagged', () => {
@@ -134,20 +134,25 @@ test('power is measured as the planner balances it, and Phase 1 is never flagged
     ],
     { peakMW: 100, requiredMW: 120, boost: 0.1, generationMW: 60, availableMW: 60 * 1.1 + 30 },
   );
-  const at = (...ids: string[]) => Object.fromEntries(ids.map(id => ['calc-2-' + id, true]));
+  const builtInPhase2 = (...ids: string[]) =>
+    Object.fromEntries(ids.map(id => ['calc-2-' + id, true]));
   // Only the factory: 120 MW against the 30 MW spare part of availableMW.
-  const alone = buildStatus(powered, at('ingot'), '2').power;
+  const alone = buildStatus(powered, builtInPhase2('ingot'), '2').power;
   close(alone.drawMW, 120, 'draw');
   close(alone.supplyMW, 30, 'supply');
   assert.equal(alone.short, true);
   // With its generator: 30 + 66 = 96 MW, still short of 120.
-  const both = buildStatus(powered, at('ingot', 'power-coal'), '2').power;
+  const both = buildStatus(powered, builtInPhase2('ingot', 'power-coal'), '2').power;
   close(both.supplyMW, 96, 'supply with the generator');
   assert.equal(both.short, true);
   // A plan saved without availableMW falls back to the spare power passed in.
   const old = { ...powered, availableMW: undefined };
-  close(buildStatus(old, at('ingot', 'power-coal'), '2', 60).power.supplyMW, 126, 'fallback');
-  assert.equal(buildStatus(old, at('ingot', 'power-coal'), '2', 60).power.short, false);
+  close(
+    buildStatus(old, builtInPhase2('ingot', 'power-coal'), '2', 60).power.supplyMW,
+    126,
+    'fallback',
+  );
+  assert.equal(buildStatus(old, builtInPhase2('ingot', 'power-coal'), '2', 60).power.short, false);
   // Phase 1 runs on hand-fed biomass: no power constraint, so never short.
   assert.equal(buildStatus(powered, ticked('ingot'), '1').power.short, false);
 });
@@ -162,10 +167,10 @@ test('no fully built stage is flagged short of power, whatever the power setting
     { availablePowerGW: 5, installedPowerGW: 5 },
   ]) {
     const plan = calculate(settings);
-    for (const [key, st] of Object.entries(plan.stages) as [string, StoredStage][]) {
-      if (!st.feasible || !st.rows?.length) continue;
-      const all = Object.fromEntries(st.rows.map(r => [`calc-${key}-${r.id}`, true]));
-      const { power } = buildStatus(st, all, key);
+    for (const [key, stage] of Object.entries(plan.stages) as [string, StoredStage][]) {
+      if (!stage.feasible || !stage.rows?.length) continue;
+      const all = Object.fromEntries(stage.rows.map(r => [`calc-${key}-${r.id}`, true]));
+      const { power } = buildStatus(stage, all, key);
       assert.equal(
         power.short,
         false,
@@ -181,19 +186,20 @@ test('real plans, current and saved: nothing built delivers nothing, fully built
     fs.readFileSync('tests/fixtures/calculated-plan-2026-09-12.json', 'utf8'),
   ) as StoredCalculatedPlan;
   for (const plan of [calculate({}), saved])
-    for (const [key, st] of Object.entries(plan.stages) as [string, StoredStage][]) {
-      if (!st.feasible || !st.rows?.length) continue;
-      const none = buildStatus(st, {}, key);
+    for (const [key, stage] of Object.entries(plan.stages) as [string, StoredStage][]) {
+      if (!stage.feasible || !stage.rows?.length) continue;
+      const none = buildStatus(stage, {}, key);
       assert.equal(none.deliveryShare, 0, 'phase ' + key);
       assert.ok(none.next, 'phase ' + key + ' has a next step');
-      const all = Object.fromEntries(st.rows.map(r => [`calc-${key}-${r.id}`, true]));
-      const full = buildStatus(st, all, key);
-      assert.equal(full.builtCount, st.rows.length);
+      const all = Object.fromEntries(stage.rows.map(r => [`calc-${key}-${r.id}`, true]));
+      const full = buildStatus(stage, all, key);
+      assert.equal(full.builtCount, stage.rows.length);
       assert.ok(
         full.rows.every(r => r.share === 1),
         'phase ' + key + ': ' + JSON.stringify(full.rows.filter(r => r.share < 1)),
       );
-      for (const d of full.delivery) close(d.now, d.planned, `phase ${key} ${d.item}`);
+      for (const delivery of full.delivery)
+        close(delivery.now, delivery.planned, `phase ${key} ${delivery.item}`);
       assert.equal(full.next, null);
       assert.ok(full.deliveryShare === 1 || !full.delivery.length);
     }

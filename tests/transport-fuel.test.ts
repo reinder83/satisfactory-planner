@@ -18,11 +18,11 @@ import type { ContextReply, FactoryGroups, StoredCalculatedPlan } from '../publi
 // The items that travel by pipe, as flow.ts lists them (it cannot load outside the page).
 const FLUIDS = new Set(
   Object.entries(recipes.items)
-    .filter(([, i]) => i.fluid)
-    .map(([n]) => n),
+    .filter(([, item]) => item.fluid)
+    .map(([name]) => name),
 );
 const made = (plan: StoredCalculatedPlan, phase: '3', item: string) =>
-  (plan.stages[phase].rows || []).reduce((t, r) => t + (r.outputs[item] || 0), 0);
+  (plan.stages[phase].rows || []).reduce((total, r) => total + (r.outputs[item] || 0), 0);
 
 test('the transport fuel setting is normalised and planned as extra demand where it can be made', () => {
   assert.deepEqual(settings({}).transportFuel, {}, 'plans without it are unchanged');
@@ -68,68 +68,72 @@ test("transportFuel adds up each phase's fuelled links from the start phase on",
   const links = groupLinks(plan.stages['3'], state.factoryGroups).filter(
     l => l.from.startsWith('fg-') && l.to.startsWith('fg-'),
   );
-  const [a, b] = links;
+  const [first, second] = links;
   state = mutate(state, {
     type: 'factoryLinkTransport',
-    from: a!.from,
-    to: a!.to,
+    from: first!.from,
+    to: first!.to,
     mode: 'truck',
     roundTripMin: 6,
     fuel: 'Packaged Fuel',
   });
   state = mutate(state, {
     type: 'factoryLinkTransport',
-    from: b!.from,
-    to: b!.to,
+    from: second!.from,
+    to: second!.to,
     mode: 'train',
     roundTripMin: 6,
   });
-  const c = catalog();
-  const fuel = transportFuel(plan, state.factoryGroups, c, FLUIDS);
+  const gameCatalog = catalog();
+  const fuel = transportFuel(plan, state.factoryGroups, gameCatalog, FLUIDS);
   assert.deepEqual(Object.keys(fuel).sort(), ['3', '4', '5'], 'from the start phase on');
   // Only the truck burns: its trucks × 75 MW × 60 ÷ 750 MJ, rounded up to hundredths.
   assert.deepEqual(Object.keys(fuel['3']!), ['Packaged Fuel']);
   assert.ok(fuel['3']!['Packaged Fuel']! >= 6, JSON.stringify(fuel));
   const none: FactoryGroups = { groups: state.factoryGroups.groups, assignments: {} };
-  assert.deepEqual(transportFuel(plan, none, c, FLUIDS), {});
+  assert.deepEqual(transportFuel(plan, none, gameCatalog, FLUIDS), {});
 });
 
 test('a revision with transport fuel carries it and the progress, and the old profile is untouched', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-transport-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   const post = async (endpoint: string, body: unknown, headers: Record<string, string> = {}) => {
-    const r = await fetch(url + endpoint, {
+    const response = await fetch(url + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
       body: JSON.stringify(body),
     });
-    assert.ok(r.ok, await r.clone().text());
-    return r.json();
+    assert.ok(response.ok, await response.clone().text());
+    return response.json();
   };
-  const context = async (h: Record<string, string>): Promise<ContextReply> =>
-    (await fetch(url + '/api/context', { headers: h })).json();
+  const context = async (headers: Record<string, string>): Promise<ContextReply> =>
+    (await fetch(url + '/api/context', { headers })).json();
   try {
-    const a = await post('/api/profiles', { saveName: 'Trucks', name: 'Base', settings: {} });
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
-    await post('/api/update', { type: 'check', key: 'unlock-Schematic_1-1_C', value: true }, ah);
-    const before = await context(ah);
-    const b = await post('/api/profiles', {
-      saveId: a.saveId,
+    const created = await post('/api/profiles', { saveName: 'Trucks', name: 'Base', settings: {} });
+    const createdHeaders = { 'X-Save-Id': created.saveId, 'X-Profile-Id': created.profileId };
+    await post(
+      '/api/update',
+      { type: 'check', key: 'unlock-Schematic_1-1_C', value: true },
+      createdHeaders,
+    );
+    const before = await context(createdHeaders);
+    const revised = await post('/api/profiles', {
+      saveId: created.saveId,
       name: 'Base · transport fuel',
       settings: { ...before.plan!.settings, transportFuel: { '3': { 'Packaged Fuel': 8 } } },
-      carryFrom: a.profileId,
+      carryFrom: created.profileId,
     });
-    const next = await context({ 'X-Save-Id': b.saveId, 'X-Profile-Id': b.profileId });
+    const next = await context({ 'X-Save-Id': revised.saveId, 'X-Profile-Id': revised.profileId });
     assert.deepEqual(next.plan!.settings.transportFuel, { '3': { 'Packaged Fuel': 8 } });
     assert.deepEqual(next.plan!.stages['3'].transport, { 'Packaged Fuel': 8 });
     assert.equal(next.state.checks['unlock-Schematic_1-1_C'], true, 'progress carried');
-    const after = await context(ah);
+    const after = await context(createdHeaders);
     assert.deepEqual(after.plan, before.plan, 'the previous profile is untouched');
     assert.deepEqual(after.state, before.state);
   } finally {
-    await new Promise(r => server.close(r));
+    await new Promise(resolve => server.close(resolve));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });

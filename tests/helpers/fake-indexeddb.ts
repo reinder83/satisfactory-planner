@@ -28,7 +28,7 @@ interface FakeTransaction {
     put(value: unknown, key: string): void;
   };
 }
-const later = (fn: () => void) => setTimeout(fn, 0);
+const later = (callback: () => void) => setTimeout(callback, 0);
 
 export interface FakeDatabase {
   onversionchange: unknown;
@@ -64,21 +64,23 @@ export function fakeIndexedDB(
       if (done || pending) return;
       done = true;
       if (aborted) {
-        tx.onabort();
+        fakeTransaction.onabort();
         return onDone(false);
       }
       if (mode !== 'readonly' && puts.size && controls.failNextCommit) {
         controls.failNextCommit = false;
-        tx.error = Object.assign(new Error('The disk is full.'), { name: 'QuotaExceededError' });
-        tx.onabort();
+        fakeTransaction.error = Object.assign(new Error('The disk is full.'), {
+          name: 'QuotaExceededError',
+        });
+        fakeTransaction.onabort();
         return onDone(false);
       }
       if (mode !== 'readonly') for (const [key, value] of puts) records.set(key, value);
       if (mode !== 'readonly' && puts.size) controls.writes++;
-      tx.oncomplete();
+      fakeTransaction.oncomplete();
       onDone(true);
     };
-    const tx: FakeTransaction = {
+    const fakeTransaction: FakeTransaction = {
       oncomplete: () => {},
       onabort: () => {},
       onerror: () => {},
@@ -110,7 +112,7 @@ export function fakeIndexedDB(
     };
     // A transaction that makes no request commits on its own.
     later(finish);
-    return tx;
+    return fakeTransaction;
   };
   const connect = () => {
     const db = {

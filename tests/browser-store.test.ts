@@ -129,7 +129,7 @@ test('a refused record carries storedData, and readStoredData hands it back exac
     .transaction()
     .then(
       () => null,
-      (e: Error & { storedData?: boolean }) => e,
+      (error: Error & { storedData?: boolean }) => error,
     );
   assert.equal(refusal?.storedData, true);
   assert.match(refusal!.message, /another browser or the Docker edition/);
@@ -140,7 +140,7 @@ test('a refused record carries storedData, and readStoredData hands it back exac
   const newer = new Map<string, unknown>([['main', { version: 2, saves: [] }]]);
   const newerRefusal = await openBrowserStore(fakeIndexedDB(3, newer))
     .transaction()
-    .catch((e: Error & { storedData?: boolean }) => e);
+    .catch((error: Error & { storedData?: boolean }) => error);
   assert.equal((newerRefusal as { storedData?: boolean }).storedData, true);
   assert.deepEqual(await readStoredData(fakeIndexedDB(3, newer)), { version: 2, saves: [] });
   // No database at all: nothing to hand back, and no empty database is created.
@@ -200,29 +200,29 @@ const main = (records: Map<string, unknown>) => records.get('main') as BrowserWo
 test('a direct upgrade migrates original profiles and keeps the record under the second key', async () => {
   const seeded = record([original('p'), calculated]);
   const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
-  const c = controls(),
+  const fakeControls = controls(),
     load = loader();
-  const store = openBrowserStore(fakeIndexedDB(1, records, c), undefined, load);
+  const store = openBrowserStore(fakeIndexedDB(1, records, fakeControls), undefined, load);
   const read = await store.transaction();
   assert.equal(load.calls, 1);
-  assert.equal(c.writes, 1, 'one transaction wrote both keys');
+  assert.equal(fakeControls.writes, 1, 'one transaction wrote both keys');
   assert.deepEqual(records.get(PRE_HANDBOOK), seeded, 'the pre-migration copy, as it was');
   assert.deepEqual(read, main(records));
-  const [p, other] = main(records).saves[0]!.profiles;
-  assert.equal(p!.id, 'p');
-  assert.equal(p!.name, 'Original · p');
-  assert.equal(p!.kind, 'calculated');
-  assert.equal('handbook' in p!, false);
-  assert.deepEqual(p!.plan, conversion.plan);
+  const [profile, other] = main(records).saves[0]!.profiles;
+  assert.equal(profile!.id, 'p');
+  assert.equal(profile!.name, 'Original · p');
+  assert.equal(profile!.kind, 'calculated');
+  assert.equal('handbook' in profile!, false);
+  assert.deepEqual(profile!.plan, conversion.plan);
   assert.deepEqual(
-    p!.state,
+    profile!.state,
     migrateHandbookState(seeded.saves[0]!.profiles[0]!.state, handbook, conversion),
   );
-  assert.equal(p!.state.checks['calc-3-' + row], true);
-  assert.equal(p!.state.checks['phase-3-survey'], true);
-  assert.equal(p!.state.notes['factory-' + row], 'By the lake');
-  assert.equal(p!.state.notes.global, 'My world');
-  assert.equal(p!.state.deliveries['3-versatile-framework'], 4000);
+  assert.equal(profile!.state.checks['calc-3-' + row], true);
+  assert.equal(profile!.state.checks['phase-3-survey'], true);
+  assert.equal(profile!.state.notes['factory-' + row], 'By the lake');
+  assert.equal(profile!.state.notes.global, 'My world');
+  assert.equal(profile!.state.deliveries['3-versatile-framework'], 4000);
   assert.deepEqual(other, calculated, 'a calculated profile is untouched');
   // The rest of the record is kept: the selection and the last backup.
   assert.equal(main(records).activeSave, 's');
@@ -271,16 +271,16 @@ test('a skipped-version upgrade: a first-release record with an older handbook a
   const store = openBrowserStore(fakeIndexedDB(1, records), undefined, loader());
   const read = await store.transaction();
   assert.deepEqual(records.get(PRE_HANDBOOK), old);
-  const p = read.saves[0]!.profiles[0]!;
-  assert.equal(p.kind, 'calculated');
-  assert.equal('handbook' in p, false);
-  assert.equal(p.plan!.engine, 'handbook-2026-08-01', 'transcribed from its own handbook');
-  assert.equal(p.state.checks['calc-3-' + row], true, 'its own factory id');
-  assert.equal(p.state.notes['factory-' + row], 'Old note');
-  assert.equal(p.state.settings.phase, '4');
-  assert.equal(p.state.revision, 3);
+  const profile = read.saves[0]!.profiles[0]!;
+  assert.equal(profile.kind, 'calculated');
+  assert.equal('handbook' in profile, false);
+  assert.equal(profile.plan!.engine, 'handbook-2026-08-01', 'transcribed from its own handbook');
+  assert.equal(profile.state.checks['calc-3-' + row], true, 'its own factory id');
+  assert.equal(profile.state.notes['factory-' + row], 'Old note');
+  assert.equal(profile.state.settings.phase, '4');
+  assert.equal(profile.state.revision, 3);
   // Today's id is no factory of that handbook, so its tick is kept for review.
-  assert.equal(p.state.handbookOrigin!.unmapped.checks['factory-3-' + factory.id], true);
+  assert.equal(profile.state.handbookOrigin!.unmapped.checks['factory-3-' + factory.id], true);
   assert.equal(read.lastBackup, null);
 });
 
@@ -288,17 +288,17 @@ test('opening again changes nothing, and a record without original profiles is n
   const records = new Map<string, unknown>([['main', record([original('p'), calculated])]]);
   await openBrowserStore(fakeIndexedDB(1, records), undefined, loader()).transaction();
   const once = structuredClone(records);
-  const c = controls(),
+  const fakeControls = controls(),
     load = loader();
-  await openBrowserStore(fakeIndexedDB(1, records, c), undefined, load).transaction();
+  await openBrowserStore(fakeIndexedDB(1, records, fakeControls), undefined, load).transaction();
   assert.equal(load.calls, 0, 'nothing to migrate, so the recipes are not even loaded');
-  assert.equal(c.writes, 0);
+  assert.equal(fakeControls.writes, 0);
   assert.deepEqual(records, once);
   const plain = record([calculated]);
   const other = new Map<string, unknown>([['main', structuredClone(plain)]]);
-  const d = controls();
-  await openBrowserStore(fakeIndexedDB(1, other, d), undefined, loader()).transaction();
-  assert.equal(d.writes, 0);
+  const plainControls = controls();
+  await openBrowserStore(fakeIndexedDB(1, other, plainControls), undefined, loader()).transaction();
+  assert.equal(plainControls.writes, 0);
   assert.equal(other.has(PRE_HANDBOOK), false);
   assert.deepEqual(main(other), plain);
   // A new browser has nothing to migrate either.
@@ -319,23 +319,23 @@ test('an original profile without its own handbook is left as it is', async () =
   assert.deepEqual(records.get(PRE_HANDBOOK), seeded);
   // Alone, it is nothing to migrate: no copy, no write.
   const alone = new Map<string, unknown>([['main', record([bare])]]);
-  const c = controls(),
+  const fakeControls = controls(),
     load = loader();
-  await openBrowserStore(fakeIndexedDB(1, alone, c), undefined, load).transaction();
+  await openBrowserStore(fakeIndexedDB(1, alone, fakeControls), undefined, load).transaction();
   assert.equal(load.calls, 0);
-  assert.equal(c.writes, 0);
+  assert.equal(fakeControls.writes, 0);
   assert.equal(alone.has(PRE_HANDBOOK), false);
 });
 
 test('an interrupted migration leaves the record as it was, and the next transaction finishes it', async () => {
   const seeded = record([original('p'), calculated]);
   const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
-  const c = controls();
-  c.failNextCommit = true;
-  const store = openBrowserStore(fakeIndexedDB(1, records, c), undefined, loader());
+  const fakeControls = controls();
+  fakeControls.failNextCommit = true;
+  const store = openBrowserStore(fakeIndexedDB(1, records, fakeControls), undefined, loader());
   const failure = await store.transaction().then(
     () => null,
-    (e: Error & { storedData?: boolean }) => e,
+    (error: Error & { storedData?: boolean }) => error,
   );
   assert.match(String(failure), /could not be updated.*Nothing has been changed.*disk is full/s);
   assert.equal(failure?.storedData, true, 'the error page offers the download');
@@ -360,15 +360,15 @@ test('a failure mid-migration writes nothing, and an earlier copy under the seco
     ['main', structuredClone(seeded)],
     [PRE_HANDBOOK, earlier],
   ]);
-  const c = controls(),
+  const fakeControls = controls(),
     load = loader();
-  const store = openBrowserStore(fakeIndexedDB(1, records, c), undefined, load);
+  const store = openBrowserStore(fakeIndexedDB(1, records, fakeControls), undefined, load);
   await assert.rejects(store.transaction(), /could not be updated.*newer planner/s);
   await assert.rejects(
     store.transaction(d => (d.activeSave = null)),
     /could not be updated/,
   );
-  assert.equal(c.writes, 0);
+  assert.equal(fakeControls.writes, 0);
   assert.deepEqual(main(records), seeded, 'the record is unchanged');
   assert.deepEqual(records.get(PRE_HANDBOOK), earlier, 'the earlier copy is never replaced');
   assert.equal(load.calls, 2, 'each transaction tried again');
@@ -419,7 +419,7 @@ const earlierTab = (indexedDB: IDBFactory, closes = true) =>
   new Promise<{
     closed: boolean;
     close(): void;
-    write(change: (d: BrowserWorkspace) => void): Promise<void>;
+    write(change: (workspace: BrowserWorkspace) => void): Promise<void>;
   }>((resolve, reject) => {
     const request = indexedDB.open('satisfactory-planner-browser-v1', 1);
     request.onsuccess = () => {
@@ -430,19 +430,19 @@ const earlierTab = (indexedDB: IDBFactory, closes = true) =>
           tab.closed = true;
           db.close();
         },
-        write: (change: (d: BrowserWorkspace) => void) =>
+        write: (change: (workspace: BrowserWorkspace) => void) =>
           new Promise<void>((done, fail) => {
             if (tab.closed) return fail(Error('Reload this tab to continue.'));
-            const tx = db.transaction('workspace', 'readwrite'),
-              store = tx.objectStore('workspace'),
+            const transaction = db.transaction('workspace', 'readwrite'),
+              store = transaction.objectStore('workspace'),
               get = store.get('main');
             get.onsuccess = () => {
               const data = get.result as BrowserWorkspace;
               change(data);
               store.put(data, 'main');
             };
-            tx.oncomplete = () => done();
-            tx.onabort = () => fail(tx.error);
+            transaction.oncomplete = () => done();
+            transaction.onabort = () => fail(transaction.error);
           }),
       };
       if (closes) db.onversionchange = () => tab.close();
@@ -464,8 +464,8 @@ test('a tab of the previous release still open is closed by the migration, so it
   const handbookCheck = 'factory-3-' + factory.id,
     handbookNote = 'factory-' + factory.id;
   const tick = await earlier
-    .write(d => {
-      const state = d.saves[0]!.profiles[0]!.state;
+    .write(workspace => {
+      const state = workspace.saves[0]!.profiles[0]!.state;
       state.checks[handbookCheck] = false;
       state.notes[handbookNote] = 'Moved to the hill';
     })
@@ -503,9 +503,9 @@ test('a tab of a release that does not close for an upgrade blocks it, until it 
 test('a failed migration keeps schema version 1, so the previous release still opens the saves', async () => {
   const seeded = record([original('p')]);
   const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
-  const c = controls();
-  c.failNextCommit = true;
-  const indexedDB = fakeIndexedDB(1, records, c);
+  const fakeControls = controls();
+  fakeControls.failNextCommit = true;
+  const indexedDB = fakeIndexedDB(1, records, fakeControls);
   await assert.rejects(
     openBrowserStore(indexedDB, undefined, loader()).transaction(),
     /could not be updated/,
@@ -521,11 +521,15 @@ test('an original profile stored after the upgrade (an import) is migrated on th
   // Schema version 2 already: no earlier release can have this database open.
   const seeded = record([original('p'), calculated]);
   const records = new Map<string, unknown>([['main', structuredClone(seeded)]]);
-  const c = controls(),
+  const fakeControls = controls(),
     load = loader();
-  const read = await openBrowserStore(fakeIndexedDB(2, records, c), undefined, load).transaction();
+  const read = await openBrowserStore(
+    fakeIndexedDB(2, records, fakeControls),
+    undefined,
+    load,
+  ).transaction();
   assert.equal(load.calls, 1);
-  assert.equal(c.writes, 1);
+  assert.equal(fakeControls.writes, 1);
   assert.equal(read.saves[0]!.profiles[0]!.kind, 'calculated');
   assert.equal(read.saves[0]!.profiles[0]!.state.checks['calc-3-' + row], true);
   assert.deepEqual(records.get(PRE_HANDBOOK), seeded);

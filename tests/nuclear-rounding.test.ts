@@ -26,17 +26,17 @@ const WASTE_CHAIN = [
   'Ficsonium Fuel Rod',
   'Ficsonium power',
 ];
-const whole = (x: number) => Math.abs(x - Math.round(x)) < 1e-6;
-const row = (st: CurrentStage, name: string) => {
-  const r = (st.rows || []).find(x => x.name === name);
-  assert.ok(r, name + ' is planned');
-  return r;
+const whole = (value: number) => Math.abs(value - Math.round(value)) < 1e-6;
+const row = (stage: CurrentStage, name: string) => {
+  const found = (stage.rows || []).find(x => x.name === name);
+  assert.ok(found, name + ' is planned');
+  return found;
 };
-const uranium = (st: CurrentStage) => row(st, 'Uranium power').equivalent;
+const uranium = (stage: CurrentStage) => row(stage, 'Uranium power').equivalent;
 const recipe = (name: string) => {
-  const r = DATA.recipes.find(x => x.name === name && !x.alternate);
-  assert.ok(r, name);
-  return r;
+  const found = DATA.recipes.find(x => x.name === name && !x.alternate);
+  assert.ok(found, name);
+  return found;
 };
 // The default recycle chain, with the three kinds of plant as run() models them.
 type Chain = Parameters<typeof nuclearPeriod>[0];
@@ -82,29 +82,29 @@ test('a chain with no unique whole period gets whole uranium plants only', () =>
 
 test('Phase 5 recycling rounds the uranium plants to the chain period and the waste chain to whole machines', () => {
   const plan = calculate(recycle);
-  const st = plan.stages[5];
-  assert.equal(st.feasible, true);
-  assert.equal(st.nuclearPeriod, 20);
-  assert.ok(!st.nuclearFractional);
-  const count = uranium(st);
+  const stage = plan.stages[5];
+  assert.equal(stage.feasible, true);
+  assert.equal(stage.nuclearPeriod, 20);
+  assert.ok(!stage.nuclearFractional);
+  const count = uranium(stage);
   assert.ok(whole(count / 20), `${count} uranium plants is a multiple of 20`);
   // The exact solve needs about 135.3 plants; the next multiple of 20 is 140.
   assert.equal(Math.round(count), 140);
   for (const name of WASTE_CHAIN) {
-    const r = row(st, name);
-    assert.ok(whole(r.equivalent), `${name}: ${r.equivalent} is whole`);
-    assert.equal(r.machines, Math.round(r.equivalent), name);
-    assert.ok(r.lastClock > 99.999, `${name} runs its last machine at 100%`);
+    const chainRow = row(stage, name);
+    assert.ok(whole(chainRow.equivalent), `${name}: ${chainRow.equivalent} is whole`);
+    assert.equal(chainRow.machines, Math.round(chainRow.equivalent), name);
+    assert.ok(chainRow.lastClock > 99.999, `${name} runs its last machine at 100%`);
   }
   // Waste still balances exactly, and the extra plants only add generation.
   for (const waste of ['Uranium Waste', 'Plutonium Waste']) {
-    const balance = (st.rows || []).reduce(
-      (a, r) => a + (r.outputs[waste] || 0) - (r.inputs[waste] || 0),
+    const balance = (stage.rows || []).reduce(
+      (total, r) => total + (r.outputs[waste] || 0) - (r.inputs[waste] || 0),
       0,
     );
     assert.ok(Math.abs(balance) < 1e-5, waste);
   }
-  assert.ok(st.additionalHeadroomMW === 0 || st.availableMW! >= st.requiredMW! - 1);
+  assert.ok(stage.additionalHeadroomMW === 0 || stage.availableMW! >= stage.requiredMW! - 1);
   const warning =
     plan.warnings.find(w => w.startsWith('Uranium-fuelled Nuclear Power Plants')) || '';
   assert.ok(warning.includes('multiples of 20'), warning);
@@ -119,11 +119,11 @@ test('the sink strategy and Phase 4 recycling give a whole uranium plant count',
     uraniumReactors: 3,
     multiplier: 5,
   });
-  for (const p of [4, 5] as const) {
-    const st = sink.stages[p];
-    assert.equal(st.feasible, true);
-    assert.ok(whole(uranium(st)), `sink, Phase ${p}: ${uranium(st)}`);
-    assert.equal(st.nuclearPeriod, undefined);
+  for (const phase of [4, 5] as const) {
+    const stage = sink.stages[phase];
+    assert.equal(stage.feasible, true);
+    assert.ok(whole(uranium(stage)), `sink, Phase ${phase}: ${uranium(stage)}`);
+    assert.equal(stage.nuclearPeriod, undefined);
   }
   const phase4 = calculate({ ...recycle, phase: '4', uraniumReactors: 1, multiplier: 20 })
     .stages[4];
@@ -139,15 +139,17 @@ test('whole nuclear plants fall back to a fractional count when they do not fit 
     mainPower: 'nuclear',
     limits: { ...PURE_LIMITS, Uranium: 1810 },
   });
-  const st = plan.stages[5];
-  assert.equal(st.feasible, true);
-  assert.equal(st.nuclearFractional, true);
-  assert.equal(st.nuclearPeriod, undefined);
-  assert.ok(!whole(uranium(st)), `${uranium(st)} stays fractional`);
-  assert.ok(st.raw!.Uranium! <= 1810.01);
+  const stage = plan.stages[5];
+  assert.equal(stage.feasible, true);
+  assert.equal(stage.nuclearFractional, true);
+  assert.equal(stage.nuclearPeriod, undefined);
+  assert.ok(!whole(uranium(stage)), `${uranium(stage)} stays fractional`);
+  assert.ok(stage.raw!.Uranium! <= 1810.01);
   assert.ok(
-    plan.warnings.some(w =>
-      w.startsWith('Phase 5 could not fit whole Nuclear Power Plants within the resource budgets'),
+    plan.warnings.some(warning =>
+      warning.startsWith(
+        'Phase 5 could not fit whole Nuclear Power Plants within the resource budgets',
+      ),
     ),
     plan.warnings.join('\n'),
   );
@@ -155,12 +157,12 @@ test('whole nuclear plants fall back to a fractional count when they do not fit 
 
 test('precise balancing keeps the fractional nuclear plants', () => {
   const plan = calculate({ ...recycle, wholeMachines: false });
-  const st = plan.stages[5];
-  assert.equal(st.feasible, true);
-  assert.equal(st.nuclearPeriod, undefined);
-  assert.equal(st.nuclearFractional, undefined);
-  assert.ok(!whole(uranium(st)), `${uranium(st)}`);
-  assert.ok(!whole(row(st, 'Ficsonium').equivalent));
+  const stage = plan.stages[5];
+  assert.equal(stage.feasible, true);
+  assert.equal(stage.nuclearPeriod, undefined);
+  assert.equal(stage.nuclearFractional, undefined);
+  assert.ok(!whole(uranium(stage)), `${uranium(stage)}`);
+  assert.ok(!whole(row(stage, 'Ficsonium').equivalent));
   assert.ok(!plan.warnings.some(w => w.startsWith('Solid-part production')));
   assert.ok(!plan.warnings.some(w => w.startsWith('Uranium-fuelled')));
 });

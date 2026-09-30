@@ -15,8 +15,8 @@ import {
 import { calculate } from '../planner.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../public/types/index.ts';
 
-const close = (a: number, b: number, what: string) =>
-  assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a} is not ${b}`);
+const close = (actual: number, expected: number, what: string) =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} is not ${expected}`);
 // A complete row; groupLinks reads its id, inputs, outputs and generationMW.
 const row = (id: string, inputs: CalcRow['inputs'], outputs: CalcRow['outputs']): CalcRow => ({
   id,
@@ -123,25 +123,25 @@ test('a row split between groups splits its inputs and outputs the same way', ()
 
 test('on a real plan the flows add up to its rows, its mining and its deliveries', () => {
   const plan = calculate({});
-  const st = plan.stages['3'];
-  const rows = st.rows!;
+  const stage = plan.stages['3'];
+  const rows = stage.rows!;
   // Alternate rows between two groups.
   const assignments = Object.fromEntries(
     rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
   );
-  const links = groupLinks(st, groups(assignments));
-  for (const [item, d] of Object.entries(st.delivery!)) {
+  const links = groupLinks(stage, groups(assignments));
+  for (const [item, delivery] of Object.entries(stage.delivery!)) {
     const delivered = links
       .filter(l => l.to === OUTSIDE.delivery)
-      .reduce((t, l) => t + (l.items.find(x => x.item === item)?.rate ?? 0), 0);
-    close(delivered, d.rate, 'delivered ' + item);
+      .reduce((total, link) => total + (link.items.find(x => x.item === item)?.rate ?? 0), 0);
+    close(delivered, delivery.rate, 'delivered ' + item);
   }
-  for (const [item, q] of Object.entries(st.raw!)) {
-    if (q < 1e-6) continue;
+  for (const [item, rawRate] of Object.entries(stage.raw!)) {
+    if (rawRate < 1e-6) continue;
     const mined = links
       .filter(l => l.from === sourceOf(item))
-      .reduce((t, l) => t + (l.items.find(x => x.item === item)?.rate ?? 0), 0);
-    close(mined, q, 'mined ' + item);
+      .reduce((total, link) => total + (link.items.find(x => x.item === item)?.rate ?? 0), 0);
+    close(mined, rawRate, 'mined ' + item);
   }
   assert.ok(links.some(l => l.from === 'fg-smelt1' && l.to === 'fg-parts1'));
 });
@@ -170,7 +170,7 @@ test('memberships without a rate split what is left evenly (#197)', () => {
   close(mixed.get('b')!, 0.2, 'b');
   close(mixed.get('c')!, 0.4, 'c');
   close(
-    [...mixed.values()].reduce((x, y) => x + y, 0),
+    [...mixed.values()].reduce((total, share) => total + share, 0),
     1,
     'the shares add up to one',
   );
@@ -190,23 +190,23 @@ test('memberships without a rate split what is left evenly (#197)', () => {
 });
 
 test('each raw resource and existing-supply item is a source of its own (#231)', () => {
-  const st = {
+  const stage = {
     ...chain,
     raw: { ...chain.raw, Coal: 12 },
     supplied: { Ingot: 5 },
   } as typeof chain;
   const links = groupLinks(
-    st,
+    stage,
     groups({
       ingot: [{ group: 'fg-smelt1', rate: null }],
       plate: [{ group: 'fg-parts1', rate: null }],
     }),
   );
   // One link per source item and destination, never a mixed mines link.
-  for (const l of links.filter(l => isSource(l.from)))
+  for (const link of links.filter(l => isSource(l.from)))
     assert.deepEqual(
-      l.items.map(x => sourceOf(x.item)),
-      [l.from],
+      link.items.map(x => sourceOf(x.item)),
+      [link.from],
     );
   assert.ok(!links.some(l => l.from === MINES));
   assert.ok(links.some(l => l.from === sourceOf('Ingot') && l.to === 'fg-parts1'));

@@ -27,10 +27,10 @@ const guide: PlanGuide = {
   ],
 };
 
-const withGuide = (g: unknown): SaveExport => {
-  const x = structuredClone(saveExport);
-  (x.saves[0]!.profiles[0]!.plan as unknown as { guide: unknown }).guide = g;
-  return x;
+const withGuide = (planGuide: unknown): SaveExport => {
+  const exported = structuredClone(saveExport);
+  (exported.saves[0]!.profiles[0]!.plan as unknown as { guide: unknown }).guide = planGuide;
+  return exported;
 };
 
 test('an export keeps a plan guide, with only its https sources', () => {

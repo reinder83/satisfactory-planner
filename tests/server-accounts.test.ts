@@ -102,11 +102,14 @@ test('sign-in input needs a 3-32 character username and a 12-128 character passw
 });
 
 test('the setup token is created once, kept and compared by value', async () => {
-  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-accounts-'));
-  const token = await readSetupToken(d);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-accounts-'));
+  const token = await readSetupToken(dir);
   assert.match(token, /^[0-9a-f]{48}$/);
-  assert.equal(await readSetupToken(d), token);
-  assert.equal((await fs.readFile(path.join(d, 'account-setup-token.txt'), 'utf8')).trim(), token);
+  assert.equal(await readSetupToken(dir), token);
+  assert.equal(
+    (await fs.readFile(path.join(dir, 'account-setup-token.txt'), 'utf8')).trim(),
+    token,
+  );
   assert.equal(setupTokenMatches(token, token), true);
   assert.equal(setupTokenMatches('nope', token), false);
   assert.equal(setupTokenMatches(undefined, token), false);

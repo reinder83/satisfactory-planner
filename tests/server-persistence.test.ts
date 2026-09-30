@@ -12,16 +12,16 @@ import { validateState } from '../public/state.ts';
 import { seedLegacy } from './helpers/seed.ts';
 
 const dir = () => fs.mkdtemp(path.join(os.tmpdir(), 'planner-persistence-'));
-const read = (d: string, name: string) => fs.readFile(path.join(d, name), 'utf8');
-const exists = (d: string, name: string) =>
-  fs.stat(path.join(d, name)).then(
+const read = (dataDir: string, name: string) => fs.readFile(path.join(dataDir, name), 'utf8');
+const exists = (dataDir: string, name: string) =>
+  fs.stat(path.join(dataDir, name)).then(
     () => true,
     () => false,
   );
 
 test('a fresh data folder gets an empty workspace, written once', async () => {
-  const d = await dir();
-  const workspace = await loadWorkspace(d, validateState);
+  const dataDir = await dir();
+  const workspace = await loadWorkspace(dataDir, validateState);
   assert.equal(workspace.version, 2);
   assert.equal(workspace.revision, 0);
   assert.equal(workspace.accountsEnabled, false);
@@ -30,26 +30,26 @@ test('a fresh data folder gets an empty workspace, written once', async () => {
     workspace.users.map(u => [u.id, u.activeSave]),
     [['owner', null]],
   );
-  assert.deepEqual(JSON.parse(await read(d, 'workspace.json')), workspace);
+  assert.deepEqual(JSON.parse(await read(dataDir, 'workspace.json')), workspace);
   // Opening it again changes nothing.
-  const raw = await read(d, 'workspace.json');
-  assert.deepEqual(await loadWorkspace(d, validateState), workspace);
-  assert.equal(await read(d, 'workspace.json'), raw);
+  const raw = await read(dataDir, 'workspace.json');
+  assert.deepEqual(await loadWorkspace(dataDir, validateState), workspace);
+  assert.equal(await read(dataDir, 'workspace.json'), raw);
 });
 
 test('a legacy progress.json becomes the migrated profile of one save and stays untouched', async () => {
-  const d = await dir();
-  await seedLegacy(d);
-  const legacy = await read(d, 'progress.json');
-  const workspace = await loadWorkspace(d, validateState);
+  const dataDir = await dir();
+  await seedLegacy(dataDir);
+  const legacy = await read(dataDir, 'progress.json');
+  const workspace = await loadWorkspace(dataDir, validateState);
   assert.equal(workspace.users[0]!.activeSave, 'original-save');
   const [save] = workspace.saves;
   assert.equal(save!.id, 'original-save');
   assert.equal(save!.activeProfile, 'original');
   assert.equal(save!.profiles[0]!.kind, 'calculated', 'the handbook profile migrated (#495)');
-  assert.equal(await read(d, 'progress.json'), legacy);
+  assert.equal(await read(dataDir, 'progress.json'), legacy);
   // progress.json is its pre-migration copy; no pre-handbook copy of a file that never held one.
-  assert.equal(await exists(d, 'workspace.json.pre-handbook'), false);
+  assert.equal(await exists(dataDir, 'workspace.json.pre-handbook'), false);
 });
 
 test('an unreadable, invalid or newer workspace.json stops loading and is left as it was', async () => {
@@ -59,24 +59,27 @@ test('an unreadable, invalid or newer workspace.json stops loading and is left a
     [JSON.stringify({ version: 3, users: [], saves: [], sessions: [] }), /newer version/],
   ];
   for (const [raw, message] of cases) {
-    const d = await dir();
-    await fs.writeFile(path.join(d, 'workspace.json'), raw);
-    await assert.rejects(loadWorkspace(d, validateState), message);
-    assert.equal(await read(d, 'workspace.json'), raw);
+    const dataDir = await dir();
+    await fs.writeFile(path.join(dataDir, 'workspace.json'), raw);
+    await assert.rejects(loadWorkspace(dataDir, validateState), message);
+    assert.equal(await read(dataDir, 'workspace.json'), raw);
   }
 });
 
 test('a missing workspace.json with a .bak beside it is refused, nothing written', async () => {
-  const d = await dir();
-  await fs.writeFile(path.join(d, 'workspace.json.bak'), '{}');
-  await assert.rejects(loadWorkspace(d, validateState), /workspace\.json\.bak exists/);
-  assert.equal(await exists(d, 'workspace.json'), false);
-  assert.equal(await read(d, 'workspace.json.bak'), '{}');
+  const dataDir = await dir();
+  await fs.writeFile(path.join(dataDir, 'workspace.json.bak'), '{}');
+  await assert.rejects(loadWorkspace(dataDir, validateState), /workspace\.json\.bak exists/);
+  assert.equal(await exists(dataDir, 'workspace.json'), false);
+  assert.equal(await read(dataDir, 'workspace.json.bak'), '{}');
 });
 
 test('commits run one at a time, keep the previous workspace as .bak and survive a failed one', async () => {
-  const d = await dir();
-  const { current, commit } = createCommitQueue(d, await loadWorkspace(d, validateState));
+  const dataDir = await dir();
+  const { current, commit } = createCommitQueue(
+    dataDir,
+    await loadWorkspace(dataDir, validateState),
+  );
   const results = await Promise.allSettled([
     commit(draft => {
       draft.registration = true;
@@ -97,17 +100,20 @@ test('commits run one at a time, keep the previous workspace as .bak and survive
   // The failed change wrote nothing, so two revisions.
   assert.equal(current().revision, 2);
   assert.equal(current().registration && current().accountsEnabled, true);
-  assert.deepEqual(JSON.parse(await read(d, 'workspace.json')), current());
-  const backup = JSON.parse(await read(d, 'workspace.json.bak'));
+  assert.deepEqual(JSON.parse(await read(dataDir, 'workspace.json')), current());
+  const backup = JSON.parse(await read(dataDir, 'workspace.json.bak'));
   assert.equal(backup.revision, 1);
   assert.equal(backup.accountsEnabled, false);
-  assert.equal(await exists(d, 'workspace.json.tmp'), false);
+  assert.equal(await exists(dataDir, 'workspace.json.tmp'), false);
 });
 
 test('a change that throws leaves the workspace in memory and on disk as it was', async () => {
-  const d = await dir();
-  const { current, commit } = createCommitQueue(d, await loadWorkspace(d, validateState));
-  const before = await read(d, 'workspace.json');
+  const dataDir = await dir();
+  const { current, commit } = createCommitQueue(
+    dataDir,
+    await loadWorkspace(dataDir, validateState),
+  );
+  const before = await read(dataDir, 'workspace.json');
   const held = current();
   await assert.rejects(
     commit(draft => {
@@ -118,6 +124,6 @@ test('a change that throws leaves the workspace in memory and on disk as it was'
   );
   assert.equal(current(), held);
   assert.equal(current().registration, false);
-  assert.equal(await read(d, 'workspace.json'), before);
-  assert.equal(await exists(d, 'workspace.json.bak'), false);
+  assert.equal(await read(dataDir, 'workspace.json'), before);
+  assert.equal(await exists(dataDir, 'workspace.json.bak'), false);
 });
