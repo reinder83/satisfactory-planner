@@ -1955,14 +1955,22 @@ export const catalog = (): Catalog => ({
 // the pure ingot alternates are skipped while `pureIngots` brings them in anyway. Each trial runs
 // under recipes: 'custom' with the owned list plus the candidate, so nothing else changes.
 // A trial that throws or does not fit is reported, not thrown. `onProgress(done, total)` runs
-// after each trial; past `budgetMs` the rest are skipped and `stopped` is set.
+// after each trial; past `budgetMs` the rest are skipped and `stopped` is set. `onPhase(phase)`
+// is called as each phase of the base plan and of every trial starts, which the browser worker
+// forwards as progress so its timeout restarts per phase, as for a calculation (#633).
 export function rankAlternates(
   input: unknown,
   {
     phase,
     onProgress,
+    onPhase,
     budgetMs = Infinity,
-  }: { phase: StageKey; onProgress?: (done: number, total: number) => void; budgetMs?: number },
+  }: {
+    phase: StageKey;
+    onProgress?: (done: number, total: number) => void;
+    onPhase?: (phase: number) => void;
+    budgetMs?: number;
+  },
 ): AlternateRanking {
   const started = Date.now();
   const config = settings(input);
@@ -1991,7 +1999,7 @@ export function rankAlternates(
           hours: Number.isFinite(stage.hours) ? stage.hours! : null,
         }
       : null;
-  const baseStage = calculate(config).stages[phase];
+  const baseStage = calculate(config, onPhase).stages[phase];
   const base = figures(baseStage);
   if (!base) fail('This phase has no plan to compare alternates against.');
   const list: AlternatePayoff[] = [];
@@ -2014,14 +2022,17 @@ export function rankAlternates(
       hours: 0,
     };
     try {
-      const trial = calculate({
-        ...config,
-        recipes: 'custom',
-        alternateRecipes: [...owned!, candidate.id],
-        // A preferred list only counts under 'custom'. A standard profile can still carry one
-        // from when it was custom; the trial would force it where the base plan ignores it (#185).
-        preferredRecipes: config.recipes === 'custom' ? config.preferredRecipes : [],
-      }).stages[phase];
+      const trial = calculate(
+        {
+          ...config,
+          recipes: 'custom',
+          alternateRecipes: [...owned!, candidate.id],
+          // A preferred list only counts under 'custom'. A standard profile can still carry one
+          // from when it was custom; the trial would force it where the base plan ignores it (#185).
+          preferredRecipes: config.recipes === 'custom' ? config.preferredRecipes : [],
+        },
+        onPhase,
+      ).stages[phase];
       const trialFigures = figures(trial);
       if (!trialFigures) {
         entry.status = 'infeasible';

@@ -509,7 +509,8 @@ export interface CalculatorWorker {
 // terminates it and fails only the running request; the ones queued behind it are posted again
 // to a fresh worker (#158).
 // A payoff ranking (#203) is a job on the same worker: it posts { id, settings, rank: { phase,
-// budgetMs } } and gets { id, done, total } after each candidate, which restarts the timer too.
+// budgetMs } } and gets { id, done, total } after each candidate and { id, phase } as each phase
+// of its calculations starts (#633); both restart the timer, and only the first is progress.
 export function workerCalculator(spawn: () => CalculatorWorker, limit = 180000): Calculator {
   return workerJobs(spawn, limit).calculate;
 }
