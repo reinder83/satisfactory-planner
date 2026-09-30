@@ -156,27 +156,27 @@ const GROUP_BY_ITEM: Record<string, string> = {
 export function defaultFactoryGroups(plan: RowsPlan | null | undefined): FactoryGroups {
   const assignments: Record<string, GroupAssignment[]> = {};
   for (const stage of Object.values(plan?.stages || {}))
-    for (const r of stage.rows || []) {
-      if (assignments[r.id]) continue;
+    for (const row of stage.rows || []) {
+      if (assignments[row.id]) continue;
       let group;
-      if (String(r.id).startsWith('power-'))
-        group = /uranium|plutonium|ficsonium/.test(r.id) ? 'fg-nuclr1' : 'fg-power1';
+      if (String(row.id).startsWith('power-'))
+        group = /uranium|plutonium|ficsonium/.test(row.id) ? 'fg-nuclr1' : 'fg-power1';
       else {
-        const out = Object.keys(r.outputs || {})[0];
-        group = out
-          ? out.startsWith('Packaged')
+        const output = Object.keys(row.outputs || {})[0];
+        group = output
+          ? output.startsWith('Packaged')
             ? 'fg-pack01'
-            : GROUP_BY_ITEM[out] || 'fg-other1'
+            : GROUP_BY_ITEM[output] || 'fg-other1'
           : 'fg-power1';
       }
-      assignments[r.id] = [{ group, rate: null }];
+      assignments[row.id] = [{ group, rate: null }];
     }
   // Every list above has exactly one entry.
-  const used = new Set(Object.values(assignments).map(a => a[0]!.group));
+  const used = new Set(Object.values(assignments).map(list => list[0]!.group));
   return {
-    groups: GROUP_NAMES.filter(([gid]) => used.has(gid)).map(([gid, label]) => ({
-      id: gid,
-      name: label,
+    groups: GROUP_NAMES.filter(([id]) => used.has(id)).map(([id, name]) => ({
+      id,
+      name,
     })),
     assignments,
   };
