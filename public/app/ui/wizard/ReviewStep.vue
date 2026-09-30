@@ -9,7 +9,7 @@
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { draft } from '../../session.ts';
-import { draftFixes, draftHeading } from '../../views/calculated.ts';
+import { budgetMeasured, draftFixes, draftHeading } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
@@ -34,7 +34,12 @@ const view = computed(() =>
           ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
           : '—',
         generation: stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—',
-        budget: stageResult.feasible ? 'Within entered limits' : 'Needs adjustment',
+        // A stopped search or an older saved plan measured no budget: a neutral draft (#632).
+        budget: stageResult.feasible
+          ? 'Within entered limits'
+          : budgetMeasured(stageResult)
+            ? 'Needs adjustment'
+            : 'Planning draft',
       })),
       drafts: stages
         .filter(([, stageResult]) => !stageResult.feasible)
