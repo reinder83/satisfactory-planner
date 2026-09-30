@@ -22,13 +22,14 @@ const settings = {
 // Runs calculate while counting the Date.now calls from Phase 5's start: the phase's deadline and
 // every integer search's time left are read through it. After `jumpAfter` calls the clock jumps
 // far past the deadline, so every later search of the phase stops as 'Time limit reached' without
-// running. The count is exact because the searches stop at a node count, not at the clock.
-function calculateCounted(input: object, jumpAfter = Infinity) {
+// running. The count is exact because the searches stop at a node count, not at the clock. With
+// `jumpUntil` the clock is back after that many calls, so the searches after it run as usual.
+function calculateCounted(input: object, jumpAfter = Infinity, jumpUntil = Infinity) {
   const dateNow = Date.now;
   let counting = false,
     calls = 0;
   Date.now = () => {
-    if (counting && ++calls > jumpAfter) return dateNow() + 1e9;
+    if (counting && ++calls > jumpAfter && calls <= jumpUntil) return dateNow() + 1e9;
     return dateNow();
   };
   try {
@@ -56,6 +57,63 @@ test('an unfueled Phase 5 search that stopped is not reported as "does not fit" 
   assert.equal(stage.fuelVerdict, undefined, 'no verdict claims the unfueled plan does not fit');
   assert.ok(
     cut.plan.warnings.some(warning =>
+      /could not be compared.*search stopped before it could prove the best plan/.test(warning),
+    ),
+    'the plan says the comparison stopped',
+  );
+});
+
+// A large installed grid makes the fuel's multiplier worth 40 GW: whole machines fit Phase 5 with
+// the fuel but not without it, with or without SAM conversion, and that is proven, not a stop.
+const shortOfPower = {
+  ...settings,
+  sam: 'needed',
+  multiplier: 20,
+  powerFactor: 2,
+  installedPowerGW: 200,
+};
+
+test('a stopped first unfueled attempt does not hide a proven "does not fit" (#665)', () => {
+  const full = calculateCounted(shortOfPower);
+  const verdict = full.plan.stages[5].fuelVerdict;
+  assert.ok(verdict, 'on an ordinary machine the verdict is recorded');
+  assert.equal(verdict.unfueledFeasible, false, 'and the unfueled plan does not fit');
+  // Under 'avoid' the comparison makes one attempt, the same solve as the first of the two
+  // 'needed' makes (without conversion). The fueled Phase 5 solve before it makes `fueled`
+  // calls: the fewest after which a jump still leaves the fueled phase planned.
+  const avoid = { ...shortOfPower, sam: 'avoid' };
+  let low = 0,
+    high = calculateCounted(avoid).calls;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (calculateCounted(avoid, middle).plan.stages[5].feasible) high = middle;
+    else low = middle + 1;
+  }
+  const fueled = low;
+  // A jump right after the fueled solve stops that one attempt, and drops the verdict.
+  const avoidCut = calculateCounted(avoid, fueled);
+  assert.equal(avoidCut.plan.stages[5].feasible, true, 'the fueled Phase 5 is still planned');
+  assert.equal(
+    avoidCut.plan.stages[5].fuelVerdict,
+    undefined,
+    'a stopped attempt gives no verdict',
+  );
+  const stoppedFirst = avoidCut.calls - fueled;
+  // Stop only the first of the two attempts under 'needed': the retry with conversion allows
+  // every recipe the first could use, and it proves the plan does not fit, so the verdict stands
+  // as on an ordinary machine and the plan does not say the comparison stopped.
+  const firstCut = calculateCounted(shortOfPower, fueled, fueled + stoppedFirst).plan;
+  assert.deepEqual(firstCut.stages[5].fuelVerdict, verdict, 'the proven verdict is kept');
+  assert.ok(
+    !firstCut.warnings.some(warning => /could not be compared/.test(warning)),
+    'and the plan does not say the comparison stopped',
+  );
+  // A retry that stops too proves nothing: no verdict, and the plan says the search stopped.
+  const bothCut = calculateCounted(shortOfPower, fueled).plan;
+  assert.equal(bothCut.stages[5].feasible, true, 'the fueled Phase 5 is still planned');
+  assert.equal(bothCut.stages[5].fuelVerdict, undefined, 'a stopped retry gives no verdict');
+  assert.ok(
+    bothCut.warnings.some(warning =>
       /could not be compared.*search stopped before it could prove the best plan/.test(warning),
     ),
     'the plan says the comparison stopped',
