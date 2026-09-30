@@ -2807,6 +2807,13 @@ button.rail-tile:hover {
   background: var(--panel2);
   border: 1px dashed var(--line2);
 }
+/* The power grid row's blank icon cell: no frame, but as wide as an icon so its label lines up
+   with the other destinations when the rows fall back to flex (#599). */
+.rail-noframe {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
 .rail-main {
   flex: 1;
   min-width: 0;

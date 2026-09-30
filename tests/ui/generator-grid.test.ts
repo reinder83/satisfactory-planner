@@ -1,7 +1,9 @@
 // A generator's factory dialog (#560): the Power grid destination takes no item, so its row has
 // no icon and no empty icon frame, and a grid-only plant gets no "Demand for the item" note. A
-// nuclear plant, whose waste goes on to other rows, keeps the note for those.
+// nuclear plant, whose waste goes on to other rows, keeps the note for those. The blank icon cell
+// still reserves an icon's width, so the label lines up in the flex rows at 640px and below (#599).
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { render } from '../../public/app/shell.ts';
@@ -65,4 +67,22 @@ test('a nuclear plant keeps the demand note for its waste, and the grid row stay
   assert.deepEqual(drawn[0], { label: 'Power grid', icon: false, frame: false });
   assert.deepEqual(drawn.slice(1), [{ label: 'Non-Fissile Uranium ↗', icon: true, frame: false }]);
   assert.equal(note, "Demand for the item across this phase's whole plan.");
+});
+
+test("the grid row's blank icon cell is icon-wide without a frame, so the labels line up", () => {
+  const plan = generated();
+  const plant = plan.stages['3'].rows!.find(
+    r => r.generationMW > 0 && !Object.keys(r.outputs).length,
+  )!;
+  open({ calculated: plan, state: { settings: { phase: '3' } } });
+  render();
+  openCalculatedFactory(plant.id);
+  const cell = $('#detail .rail-row')!.firstElementChild!;
+  assert.equal(cell.className, 'rail-noframe');
+  // The rule sizes the cell like an icon (.rail-row .item-icon, .rail-noicon) and draws nothing.
+  const css = readFileSync('public/style.css', 'utf8').replace(/\r\n/g, '\n');
+  const rule = /\n\.rail-noframe \{([^}]*)\}/.exec(css);
+  assert.ok(rule, 'style.css has a .rail-noframe rule');
+  const decls = rule[1]!.trim().split(/;\s*/).filter(Boolean).sort();
+  assert.deepEqual(decls, ['flex: none', 'height: 26px', 'width: 26px']);
 });

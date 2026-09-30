@@ -4,7 +4,8 @@
   nothing when the model has neither inputs nor outputs. Links open other factory dialogs
   through factoryLink() in ui/actions.ts. A destination without an icon draws an empty icon
   frame, except the power grid (noItem), whose icon cell stays blank but keeps the rows'
-  columns lined up (#560).
+  columns lined up (#560): the blank cell is icon-wide, also in the flex rows at 640px and
+  below (#599).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -135,7 +136,10 @@ const flow = computed(() => {
       </div>
       <div class="rail-rows">
         <div v-for="(output, i) in flow.outputs" :key="i" :class="['rail-row', output.kind]">
-          <ItemIcon v-if="output.icon" :name="output.icon" /><span v-else-if="output.noItem"></span
+          <ItemIcon v-if="output.icon" :name="output.icon" /><span
+            v-else-if="output.noItem"
+            class="rail-noframe"
+          ></span
           ><span v-else class="rail-noicon"></span
           ><span class="rail-main"
             ><button v-if="output.link" class="rail-link" v-bind="factoryLink(output.link)">

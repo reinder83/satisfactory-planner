@@ -1773,9 +1773,12 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
       assert.ok(row.classList.contains('rail-row'), `${where}: only rows in the grid`);
       const kids = [...row.children];
       assert.equal(kids.length, 4, `${where}: ${row.textContent} has four cells`);
-      // An icon or an empty frame, or the power grid's blank cell: it takes no item (#560).
+      // An icon or an empty frame, or the power grid's blank, icon-wide cell: it takes no item
+      // (#560, #599).
       const blank =
-        kids[0]!.tagName === 'SPAN' && !kids[0]!.className && !kids[0]!.childNodes.length;
+        kids[0]!.tagName === 'SPAN' &&
+        kids[0]!.className === 'rail-noframe' &&
+        !kids[0]!.childNodes.length;
       assert.ok(
         /\b(item-icon|rail-noicon)\b/.test(kids[0]!.className) ||
           (blank && /Power grid/.test(row.textContent!)),
