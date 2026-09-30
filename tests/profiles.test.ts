@@ -29,65 +29,73 @@ import type {
 async function start(dir: string) {
   await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   // Listening on a TCP port, so address() is an AddressInfo.
   return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = (s: Server) => new Promise(r => s.close(r));
-const post = (url: string, endpoint: string, b: unknown, headers: Record<string, string> = {}) =>
+const close = (server: Server) => new Promise(resolve => server.close(resolve));
+const post = (url: string, endpoint: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
-    body: JSON.stringify(b),
+    body: JSON.stringify(body),
   });
-const json = async (r: Response) => {
-  assert.ok(r.ok, await r.clone().text());
-  return r.json();
+const json = async (response: Response) => {
+  assert.ok(response.ok, await response.clone().text());
+  return response.json();
 };
 test('profile removal requires confirmation, preserves other progress and survives an empty workspace', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-removal-'));
   let app = await start(dir);
   try {
-    const a = await json(
+    const profileA = await json(
       await post(app.url, '/api/profiles', {
         saveName: 'Delete test',
         name: 'A',
         settings: {},
       }),
     );
-    const b = await json(
-      await post(app.url, '/api/profiles', { saveId: a.saveId, name: 'B', settings: {} }),
+    const profileB = await json(
+      await post(app.url, '/api/profiles', { saveId: profileA.saveId, name: 'B', settings: {} }),
     );
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
+    const headersA = { 'X-Save-Id': profileA.saveId, 'X-Profile-Id': profileA.profileId };
     await json(
-      await post(app.url, '/api/update', { type: 'note', key: 'global', value: 'Keep this' }, ah),
+      await post(
+        app.url,
+        '/api/update',
+        { type: 'note', key: 'global', value: 'Keep this' },
+        headersA,
+      ),
     );
-    const remove = { saveId: b.saveId, profileId: b.profileId };
+    const remove = { saveId: profileB.saveId, profileId: profileB.profileId };
     assert.equal((await post(app.url, '/api/remove-profile', remove)).status, 400);
-    let w: WorkspaceSummary = await json(
+    let workspace: WorkspaceSummary = await json(
       await post(app.url, '/api/remove-profile', { ...remove, confirmed: true }),
     );
-    assert.equal(w.saves.find(s => s.id === a.saveId)!.activeProfile, a.profileId);
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: ah }))).notes.global,
+      workspace.saves.find(s => s.id === profileA.saveId)!.activeProfile,
+      profileA.profileId,
+    );
+    assert.equal(
+      (await json(await fetch(app.url + '/api/state', { headers: headersA }))).notes.global,
       'Keep this',
     );
     await json(
       await post(app.url, '/api/remove-profile', {
-        saveId: a.saveId,
-        profileId: a.profileId,
+        saveId: profileA.saveId,
+        profileId: profileA.profileId,
         confirmed: true,
       }),
     );
-    w = await json(
+    workspace = await json(
       await post(app.url, '/api/remove-profile', {
         saveId: 'original-save',
         profileId: 'original',
         confirmed: true,
       }),
     );
-    assert.equal(w.saves.length, 0);
-    assert.equal(w.activeSave, null);
+    assert.equal(workspace.saves.length, 0);
+    assert.equal(workspace.activeSave, null);
     await close(app.server);
     app = await start(dir);
     assert.equal((await json(await fetch(app.url + '/api/workspace'))).saves.length, 0);
@@ -112,47 +120,54 @@ test('migration, separate saves and profiles, explicit scope across tabs, durabl
   await fs.writeFile(path.join(dir, 'progress.json'), old);
   let app = await start(dir);
   try {
-    const a = await json(
+    const profileA = await json(
       await post(app.url, '/api/profiles', {
         saveName: 'Second world',
         name: 'Balanced',
         settings: {},
       }),
     );
-    const b = await json(
+    const profileB = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: profileA.saveId,
         name: 'Minimal',
         settings: { goal: 'minimal' },
       }),
     );
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId },
-      bh = { 'X-Save-Id': b.saveId, 'X-Profile-Id': b.profileId };
-    let fresh = await json(await fetch(app.url + '/api/state', { headers: ah }));
+    const headersA = { 'X-Save-Id': profileA.saveId, 'X-Profile-Id': profileA.profileId },
+      headersB = { 'X-Save-Id': profileB.saveId, 'X-Profile-Id': profileB.profileId };
+    let fresh = await json(await fetch(app.url + '/api/state', { headers: headersA }));
     assert.deepEqual(fresh.checks, {});
     assert.deepEqual(fresh.deliveries, {});
-    await post(app.url, '/api/update', { type: 'check', key: 'factory-one', value: true }, ah);
-    await post(app.url, '/api/update', { type: 'note', key: 'global', value: 'Only A' }, ah);
-    fresh = await json(await fetch(app.url + '/api/state', { headers: bh }));
+    await post(
+      app.url,
+      '/api/update',
+      { type: 'check', key: 'factory-one', value: true },
+      headersA,
+    );
+    await post(app.url, '/api/update', { type: 'note', key: 'global', value: 'Only A' }, headersA);
+    fresh = await json(await fetch(app.url + '/api/state', { headers: headersB }));
     assert.equal(fresh.checks['factory-one'], undefined);
     assert.equal(fresh.notes.global, undefined);
-    await post(app.url, '/api/select', { saveId: a.saveId, profileId: a.profileId });
-    await post(app.url, '/api/select', { saveId: b.saveId, profileId: b.profileId });
+    await post(app.url, '/api/select', { saveId: profileA.saveId, profileId: profileA.profileId });
+    await post(app.url, '/api/select', { saveId: profileB.saveId, profileId: profileB.profileId });
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: ah }))).checks['factory-one'],
+      (await json(await fetch(app.url + '/api/state', { headers: headersA }))).checks[
+        'factory-one'
+      ],
       true,
     );
-    const backup = await json(await fetch(app.url + '/api/export', { headers: ah }));
-    assert.equal((await post(app.url, '/api/import', backup, bh)).status, 400);
+    const backup = await json(await fetch(app.url + '/api/export', { headers: headersA }));
+    assert.equal((await post(app.url, '/api/import', backup, headersB)).status, 400);
     assert.equal(
-      (await fetch(app.url + '/api/state', { headers: { ...ah, 'X-Profile-Id': 'missing' } }))
+      (await fetch(app.url + '/api/state', { headers: { ...headersA, 'X-Profile-Id': 'missing' } }))
         .status,
       404,
     );
     await close(app.server);
     app = await start(dir);
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: ah }))).notes.global,
+      (await json(await fetch(app.url + '/api/state', { headers: headersA }))).notes.global,
       'Only A',
     );
     const restored = await json(
@@ -253,9 +268,9 @@ test('account setup requires host token; sessions and all data routes enforce ow
       ).status,
       404,
     );
-    const ws = await json(await fetch(app.url + '/api/workspace', { headers: other }));
-    assert.deepEqual(ws.saves, []);
-    assert.equal(JSON.stringify(ws).includes('password'), false);
+    const workspace = await json(await fetch(app.url + '/api/workspace', { headers: other }));
+    assert.deepEqual(workspace.saves, []);
+    assert.equal(JSON.stringify(workspace).includes('password'), false);
     const otherSave = await json(
       await post(
         app.url,
@@ -310,19 +325,20 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
   assert.equal(large.stages[5].feasible, true);
   assert.ok(large.stages[3].rows!.some(r => r.name === 'Alternate: Pure Iron Ingot'));
   assert.ok(!large.stages[3].rows!.some(r => r.name === 'Iron Ingot'));
-  for (const ph of Object.values(large.stages)) {
-    if (!ph.feasible) continue;
-    for (const n of RAW) assert.ok(ph.raw[n]! <= large.settings.limits[n]! + 0.01);
-    for (const [n, rate] of Object.entries(ph.storage)) {
-      const made = ph.rows.reduce((a, r) => a + (r.outputs[n] || 0), 0),
-        used = ph.rows.reduce((a, r) => a + (r.inputs[n] || 0), 0);
-      assert.ok(made - used >= rate + (ph.delivery[n]?.rate || 0) - 0.01, n);
+  for (const stage of Object.values(large.stages)) {
+    if (!stage.feasible) continue;
+    for (const resource of RAW)
+      assert.ok(stage.raw[resource]! <= large.settings.limits[resource]! + 0.01);
+    for (const [item, rate] of Object.entries(stage.storage)) {
+      const made = stage.rows.reduce((total, r) => total + (r.outputs[item] || 0), 0),
+        used = stage.rows.reduce((total, r) => total + (r.inputs[item] || 0), 0);
+      assert.ok(made - used >= rate + (stage.delivery[item]?.rate || 0) - 0.01, item);
     }
   }
   const final = large.stages[5];
   for (const waste of ['Uranium Waste', 'Plutonium Waste']) {
     const balance = final.rows.reduce(
-      (a, r) => a + (r.outputs[waste] || 0) - (r.inputs[waste] || 0),
+      (total, r) => total + (r.outputs[waste] || 0) - (r.inputs[waste] || 0),
       0,
     );
     assert.ok(Math.abs(balance) < 1e-5);
@@ -337,11 +353,14 @@ test('calculator applies settings, protects storage, balances nuclear waste and 
   // balanced plan: maximising it found no plan on 0 GW spare power, and without a power limit it
   // grew to thousands of machines and over 100 GW of biomass.
   const maxDefault = calculate({ goal: 'maximum', limitsConfirmed: true });
-  for (const ph of ['1', '2', '3', '4', '5'] as const)
-    assert.ok(maxDefault.stages[ph].feasible, `Phase ${ph} has a maximum-output plan by default`);
+  for (const phase of ['1', '2', '3', '4', '5'] as const)
+    assert.ok(
+      maxDefault.stages[phase].feasible,
+      `Phase ${phase} has a maximum-output plan by default`,
+    );
   const balanced = calculate({ limitsConfirmed: true });
-  const machines = (st: (typeof balanced.stages)['1']) =>
-    (st.rows || []).map(r => `${r.id}:${r.machines}`).sort();
+  const machines = (stage: (typeof balanced.stages)['1']) =>
+    (stage.rows || []).map(r => `${r.id}:${r.machines}`).sort();
   assert.deepEqual(machines(maxDefault.stages[1]), machines(balanced.stages[1]));
   assert.equal(maxDefault.stages[1].hours, balanced.stages[1].hours);
   // phaseTime 'final' re-solves Phase 1 for maximum output under caps; that re-solve keeps
@@ -358,14 +377,14 @@ test('whole production recalculates upstream inputs and makes surplus without ch
   assert.equal(rounded.stages[3].feasible, true);
   const rubber = rounded.stages[3].rows.find(r => r.name === 'Rubber')!;
   assert.equal(rubber.equivalent, rubber.machines);
-  assert.ok(Object.values(rounded.stages[3].surplus).some(q => q > 0));
+  assert.ok(Object.values(rounded.stages[3].surplus).some(rate => rate > 0));
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-rounded-'));
   const app = await start(dir);
   try {
-    const a = await json(
+    const precise = await json(
       await post(app.url, '/api/profiles', { saveName: 'World', name: 'Precise', settings: {} }),
     );
-    const headers = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
+    const headers = { 'X-Save-Id': precise.saveId, 'X-Profile-Id': precise.profileId };
     await post(
       app.url,
       '/api/update',
@@ -379,11 +398,11 @@ test('whole production recalculates upstream inputs and makes surplus without ch
       headers,
     );
     const old = await json(await fetch(app.url + '/api/context', { headers }));
-    const b = await json(await post(app.url, '/api/round-up', {}, headers));
-    assert.notEqual(b.profileId, a.profileId);
+    const revised = await json(await post(app.url, '/api/round-up', {}, headers));
+    assert.notEqual(revised.profileId, precise.profileId);
     const newer = await json(
       await fetch(app.url + '/api/context', {
-        headers: { ...headers, 'X-Profile-Id': b.profileId },
+        headers: { ...headers, 'X-Profile-Id': revised.profileId },
       }),
     );
     assert.equal(newer.plan.settings.wholeMachines, true);
@@ -420,12 +439,14 @@ test('new calculated profiles start with default factory groups covering every p
     const groups = state.factoryGroups;
     assert.ok(groups?.groups?.length > 3, 'several default groups exist');
     const plan = calculate({});
-    const ids = new Set(Object.values(plan.stages).flatMap(p => (p.rows || []).map(r => r.id)));
+    const ids = new Set(
+      Object.values(plan.stages).flatMap(stage => (stage.rows || []).map(r => r.id)),
+    );
     for (const id of ids)
       assert.ok(groups.assignments[id]?.length, 'row ' + id + ' is assigned to a group');
-    for (const a of Object.values(groups.assignments))
+    for (const rowAssignments of Object.values(groups.assignments))
       assert.ok(
-        groups.groups.some(g => g.id === a[0]!.group),
+        groups.groups.some(g => g.id === rowAssignments[0]!.group),
         'assignments point at existing groups',
       );
     // Handbook profiles are retired: /api/profiles refuses to create one (#496).
@@ -453,25 +474,25 @@ test('custom recipe access limits alternates to the picked list', () => {
     'unknown ids are dropped',
   );
   for (const stagePlan of Object.values(plan.stages))
-    for (const r of stagePlan.rows || [])
-      if (r.alternate)
+    for (const row of stagePlan.rows || [])
+      if (row.alternate)
         assert.equal(
-          r.id,
+          row.id,
           'Recipe_Alternate_ReinforcedIronPlate_2_C',
           'only picked alternates appear',
         );
   const none = calculate({ recipes: 'custom' });
   for (const stagePlan of Object.values(none.stages))
-    for (const r of stagePlan.rows || [])
-      assert.ok(!r.alternate, 'empty selection behaves like standard recipes');
+    for (const row of stagePlan.rows || [])
+      assert.ok(!row.alternate, 'empty selection behaves like standard recipes');
 });
 
 test('a turbofuel-burning all-recipes optimum round-trips through Planner’s choice into equivalent custom picks', () => {
   const MAM = ['Recipe_Alternate_Turbofuel_C', 'Recipe_Alternate_EnrichedCoal_C'];
   const input = { recipes: 'all', mainPower: 'fuel', goal: 'maximum', limitsConfirmed: true };
   const all = calculate(input);
-  const mamRows = Object.values(all.stages).flatMap(st =>
-    (st.rows || []).filter(r => MAM.includes(r.id)),
+  const mamRows = Object.values(all.stages).flatMap(stage =>
+    (stage.rows || []).filter(r => MAM.includes(r.id)),
   );
   assert.ok(mamRows.length, 'this scenario’s all-recipes optimum burns turbofuel');
   assert.ok(
@@ -482,8 +503,8 @@ test('a turbofuel-burning all-recipes optimum round-trips through Planner’s ch
   const altIds = new Set(catalog().alternates.map(a => a.id));
   const used = [
     ...new Set(
-      Object.values(all.stages).flatMap(st =>
-        (st.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
+      Object.values(all.stages).flatMap(stage =>
+        (stage.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
       ),
     ),
   ].sort();
@@ -509,10 +530,10 @@ test('preferred recipes replace competing recipes for their product', () => {
     alternateRecipes: ['Recipe_Alternate_IngotSteel_1_C'],
     phase: '3',
   };
-  const steel = (p: CurrentCalculatedPlan) => [
+  const steel = (plan: CurrentCalculatedPlan) => [
     ...new Set(
-      Object.values(p.stages).flatMap(s =>
-        (s.rows || []).filter(r => r.outputs['Steel Ingot']).map(r => r.name),
+      Object.values(plan.stages).flatMap(stage =>
+        (stage.rows || []).filter(r => r.outputs['Steel Ingot']).map(r => r.name),
       ),
     ),
   ];
@@ -579,21 +600,24 @@ test('over-budget plans finish quickly with an explained draft instead of hangin
     'calculate reports each phase to the progress callback',
   );
   assert.ok(Date.now() - started < 120000, 'calculation completes without hanging');
-  const infeasible = Object.entries(plan.stages).filter(([, st]) => !st.feasible);
-  for (const [ph, st] of infeasible) {
-    assert.ok(st.reason, 'infeasible phase ' + ph + ' explains itself');
-    assert.ok(st.rows?.length, 'infeasible phase ' + ph + ' still offers a planning draft');
-    for (const f of st.shortfalls || []) {
+  const infeasible = Object.entries(plan.stages).filter(([, stage]) => !stage.feasible);
+  for (const [phase, stage] of infeasible) {
+    assert.ok(stage.reason, 'infeasible phase ' + phase + ' explains itself');
+    assert.ok(stage.rows?.length, 'infeasible phase ' + phase + ' still offers a planning draft');
+    for (const shortfall of stage.shortfalls || []) {
       assert.ok(
-        f.needed > f.budget,
-        'phase ' + ph + ' shortfall ' + f.name + ' exceeds its budget',
+        shortfall.needed > shortfall.budget,
+        'phase ' + phase + ' shortfall ' + shortfall.name + ' exceeds its budget',
       );
-      assert.ok(st.reason.includes(f.name), 'phase ' + ph + ' reason names ' + f.name);
-    }
-    if (st.minHours)
       assert.ok(
-        st.minHours > 8 && st.minHours <= 2000,
-        'phase ' + ph + ' suggests a longer feasible phase time',
+        stage.reason.includes(shortfall.name),
+        'phase ' + phase + ' reason names ' + shortfall.name,
+      );
+    }
+    if (stage.minHours)
+      assert.ok(
+        stage.minHours > 8 && stage.minHours <= 2000,
+        'phase ' + phase + ' suggests a longer feasible phase time',
       );
   }
 });
@@ -607,21 +631,21 @@ test('over-budget phases name the short resources and a phase time that fits', (
     storage: 'none',
     limits: { ...DEFAULT_LIMITS, 'Iron Ore': 300 },
   };
-  const st = calculate(input).stages[1];
-  assert.equal(st.feasible, false, 'the squeezed budget makes phase 1 a draft');
+  const stage = calculate(input).stages[1];
+  assert.equal(stage.feasible, false, 'the squeezed budget makes phase 1 a draft');
   assert.deepEqual(
-    st.shortfalls!.map(f => f.name),
+    stage.shortfalls!.map(f => f.name),
     ['Iron Ore'],
     'the short resource is identified',
   );
   assert.ok(
-    st.shortfalls![0]!.needed > 300 && st.shortfalls![0]!.budget === 300,
+    stage.shortfalls![0]!.needed > 300 && stage.shortfalls![0]!.budget === 300,
     'needed and entered rates are reported',
   );
-  assert.ok(st.reason!.includes('Iron Ore'), 'the explanation names the resource');
-  assert.ok(st.minHours! > 0.25 && st.minHours! <= 2000, 'a longer phase time is suggested');
+  assert.ok(stage.reason!.includes('Iron Ore'), 'the explanation names the resource');
+  assert.ok(stage.minHours! > 0.25 && stage.minHours! <= 2000, 'a longer phase time is suggested');
   assert.equal(
-    calculate({ ...input, hours: st.minHours }).stages[1].feasible,
+    calculate({ ...input, hours: stage.minHours }).stages[1].feasible,
     true,
     'the suggested phase time fits the budgets',
   );
@@ -632,33 +656,36 @@ test('a budget only whole machines exceed names the rounding headroom', () => {
   const precise = calculate(base).stages[1];
   assert.equal(precise.feasible, true, 'precise balancing fits the default budgets');
   const limit = precise.raw['Iron Ore']! + 0.001; // just above the exact mixed-recipe need
-  const st = calculate({
+  const stage = calculate({
     ...base,
     wholeMachines: true,
     limits: { ...DEFAULT_LIMITS, 'Iron Ore': limit },
   }).stages[1];
   assert.equal(
-    st.feasible,
+    stage.feasible,
     false,
     'whole machines cannot fit a budget cut to the exact precise need',
   );
   assert.equal(
-    st.wholeMachinesOnly,
+    stage.wholeMachinesOnly,
     true,
     'the draft records that only whole-machine production fails',
   );
   assert.deepEqual(
-    st.shortfalls!.map(f => f.name),
+    stage.shortfalls!.map(f => f.name),
     ['Iron Ore'],
     'the budget short only for whole machines is identified',
   );
-  assert.ok(st.shortfalls![0]!.needed > limit, 'the whole-machine need exceeds the entered budget');
-  assert.match(st.reason!, /Iron Ore/, 'the explanation names the resource');
+  assert.ok(
+    stage.shortfalls![0]!.needed > limit,
+    'the whole-machine need exceeds the entered budget',
+  );
+  assert.match(stage.reason!, /Iron Ore/, 'the explanation names the resource');
   assert.equal(
     calculate({
       ...base,
       wholeMachines: true,
-      limits: { ...DEFAULT_LIMITS, 'Iron Ore': st.shortfalls![0]!.needed },
+      limits: { ...DEFAULT_LIMITS, 'Iron Ore': stage.shortfalls![0]!.needed },
     }).stages[1].feasible,
     true,
     'the suggested budget fits whole machines',
@@ -670,13 +697,13 @@ test('a new profile for the same save carries the world progress its plan still 
   const app = await start(dir);
   try {
     const settings = { phase: '1', goal: 'timed', hours: 8, multiplier: 1, storage: 'none' };
-    const a = await json(
+    const created = await json(
       await post(app.url, '/api/profiles', { saveName: 'One world', name: 'First plan', settings }),
     );
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
-    const state = await json(await fetch(app.url + '/api/state', { headers: ah }));
-    const rows = Object.entries(calculate(settings).stages).flatMap(([ph, st]) =>
-      (st.rows || []).map(r => 'calc-' + ph + '-' + r.id),
+    const headers = { 'X-Save-Id': created.saveId, 'X-Profile-Id': created.profileId };
+    const state = await json(await fetch(app.url + '/api/state', { headers: headers }));
+    const rows = Object.entries(calculate(settings).stages).flatMap(([phase, stage]) =>
+      (stage.rows || []).map(r => 'calc-' + phase + '-' + r.id),
     );
     assert.ok(rows.includes('calc-1-Recipe_IngotIron_C'), 'the first plan smelts iron in phase 1');
     assert.deepEqual(state.checks, {}, 'a first profile still starts empty');
@@ -690,14 +717,14 @@ test('a new profile for the same save carries the world progress its plan still 
       ...rows,
     ];
     await json(
-      await post(app.url, '/api/update', { type: 'checks', keys: ticks, value: true }, ah),
+      await post(app.url, '/api/update', { type: 'checks', keys: ticks, value: true }, headers),
     );
     await json(
       await post(
         app.url,
         '/api/update',
         { type: 'check', key: 'unlock-Schematic_1-2_C', value: false },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -705,7 +732,7 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'delivery', key: '1-smart-plating', value: 400 },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -713,7 +740,7 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'note', key: 'global', value: 'Seed and routes' },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -721,7 +748,7 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'note', key: 'slot-A01', value: 'Left of the ramp' },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -729,18 +756,23 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'addTask', id: 'custom-lights', title: 'Hang lights', phase: '1' },
-        ah,
+        headers,
       ),
     );
     await json(
-      await post(app.url, '/api/update', { type: 'check', key: 'custom-lights', value: true }, ah),
+      await post(
+        app.url,
+        '/api/update',
+        { type: 'check', key: 'custom-lights', value: true },
+        headers,
+      ),
     );
     await json(
       await post(
         app.url,
         '/api/update',
         { type: 'storageSlotAssign', key: 'A01', name: 'Iron Plate' },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -748,7 +780,7 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'taskEdit', id: 'startup-biomass', title: 'Leaves first' },
-        ah,
+        headers,
       ),
     );
     await json(
@@ -756,16 +788,16 @@ test('a new profile for the same save carries the world progress its plan still 
         app.url,
         '/api/update',
         { type: 'factoryGroupRename', id: 'fg-iron01', name: 'North iron' },
-        ah,
+        headers,
       ),
     );
 
     const same = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: created.saveId,
         name: 'Same settings',
         settings,
-        carryFrom: a.profileId,
+        carryFrom: created.profileId,
       }),
     );
     const sameState: ProgressState = await json(
@@ -812,10 +844,10 @@ test('a new profile for the same save carries the world progress its plan still 
 
     const bigger = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: created.saveId,
         name: 'Twice the elevator',
         settings: { ...settings, multiplier: 2 },
-        carryFrom: a.profileId,
+        carryFrom: created.profileId,
       }),
     );
     const biggerState = await json(
@@ -837,10 +869,10 @@ test('a new profile for the same save carries the world progress its plan still 
 
     const none = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: created.saveId,
         name: 'Clean sheet',
         settings,
-        carryFrom: a.profileId,
+        carryFrom: created.profileId,
         carry: {},
       }),
     );
@@ -854,7 +886,7 @@ test('a new profile for the same save carries the world progress its plan still 
     assert.deepEqual(noneState.notes, {}, 'clearing every option keeps notes out');
 
     const plain = await json(
-      await post(app.url, '/api/profiles', { saveId: a.saveId, name: 'No source', settings }),
+      await post(app.url, '/api/profiles', { saveId: created.saveId, name: 'No source', settings }),
     );
     const plainState = await json(
       await fetch(app.url + '/api/state', {
@@ -870,7 +902,7 @@ test('a new profile for the same save carries the world progress its plan still 
     assert.equal(
       (
         await post(app.url, '/api/profiles', {
-          saveId: a.saveId,
+          saveId: created.saveId,
           name: 'Missing source',
           settings,
           carryFrom: 'nope',
@@ -878,7 +910,7 @@ test('a new profile for the same save carries the world progress its plan still 
       ).status,
       404,
     );
-    const original = await json(await fetch(app.url + '/api/state', { headers: ah }));
+    const original = await json(await fetch(app.url + '/api/state', { headers: headers }));
     assert.equal(
       original.checks['calc-1-Recipe_IngotIron_C'],
       true,
@@ -907,26 +939,26 @@ test('hand-picked alternate recipes start their unlock steps ticked, and only wh
       recipes: 'custom',
       alternateRecipes: ['Recipe_Alternate_Screw_C', 'Recipe_Alternate_ReinforcedIronPlate_1_C'],
     };
-    const a = await json(
+    const firstProfile = await json(
       await post(app.url, '/api/profiles', { saveName: 'Picked world', name: 'First', settings }),
     );
     const first = await json(
       await fetch(app.url + '/api/state', {
-        headers: { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId },
+        headers: { 'X-Save-Id': firstProfile.saveId, 'X-Profile-Id': firstProfile.profileId },
       }),
     );
     assert.deepEqual(first.checks, {}, 'a brand new save claims no in-game unlocks');
-    const b = await json(
+    const secondProfile = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: firstProfile.saveId,
         name: 'Second',
         settings,
-        carryFrom: a.profileId,
+        carryFrom: firstProfile.profileId,
       }),
     );
     const second = await json(
       await fetch(app.url + '/api/state', {
-        headers: { 'X-Save-Id': b.saveId, 'X-Profile-Id': b.profileId },
+        headers: { 'X-Save-Id': secondProfile.saveId, 'X-Profile-Id': secondProfile.profileId },
       }),
     );
     assert.equal(
@@ -939,18 +971,18 @@ test('hand-picked alternate recipes start their unlock steps ticked, and only wh
       true,
       'every pick is marked',
     );
-    const c = await json(
+    const thirdProfile = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: firstProfile.saveId,
         name: 'Third',
         settings,
-        carryFrom: a.profileId,
+        carryFrom: firstProfile.profileId,
         carry: { unlocks: true },
       }),
     );
     const third = await json(
       await fetch(app.url + '/api/state', {
-        headers: { 'X-Save-Id': c.saveId, 'X-Profile-Id': c.profileId },
+        headers: { 'X-Save-Id': thirdProfile.saveId, 'X-Profile-Id': thirdProfile.profileId },
       }),
     );
     assert.deepEqual(third.checks, {}, 'without the option the picks claim nothing');
@@ -975,27 +1007,27 @@ test('recipes a plan locks in for you are claimed alongside the picked ones', as
       recipes: 'custom',
       alternateRecipes: ['Recipe_Alternate_Screw_C'],
     };
-    const used = Object.values(calculate(settings).stages).flatMap(st =>
-      (st.rows || []).filter(r => r.alternate).map(r => r.id),
+    const used = Object.values(calculate(settings).stages).flatMap(stage =>
+      (stage.rows || []).filter(r => r.alternate).map(r => r.id),
     );
     assert.ok(
       used.includes('Recipe_Alternate_PureIronIngot_C'),
       'requiring pure ingots puts the pure recipe in the plan without picking it',
     );
-    const a = await json(
+    const firstProfile = await json(
       await post(app.url, '/api/profiles', { saveName: 'Pure world', name: 'First', settings }),
     );
-    const b = await json(
+    const secondProfile = await json(
       await post(app.url, '/api/profiles', {
-        saveId: a.saveId,
+        saveId: firstProfile.saveId,
         name: 'Second',
         settings,
-        carryFrom: a.profileId,
+        carryFrom: firstProfile.profileId,
       }),
     );
     const state = await json(
       await fetch(app.url + '/api/state', {
-        headers: { 'X-Save-Id': b.saveId, 'X-Profile-Id': b.profileId },
+        headers: { 'X-Save-Id': secondProfile.saveId, 'X-Profile-Id': secondProfile.profileId },
       }),
     );
     assert.equal(
@@ -1058,9 +1090,10 @@ test('construction materials get their own storage rate, with per-item overrides
     'a zero-rate item keeps its container and address',
   );
 
-  const machines = (p: CurrentCalculatedPlan) =>
-    Object.values(p.stages).reduce(
-      (a, x) => a + (x.rows || []).reduce((b, r) => b + r.machines, 0),
+  const machines = (plan: CurrentCalculatedPlan) =>
+    Object.values(plan.stages).reduce(
+      (total, stage) =>
+        total + (stage.rows || []).reduce((stageTotal, r) => stageTotal + r.machines, 0),
       0,
     );
   assert.ok(
@@ -1114,22 +1147,25 @@ test('Space Elevator parts keep a container but no standing storage contract', (
   );
 
   const base = { phase: '5', goal: 'timed', hours: 10, storage: 'all', storageRate: 4 };
-  const p5 = calculate(base).stages[5];
+  const phase5 = calculate(base).stages[5];
   for (const name of elevatorParts) {
-    if (p5.storage![name] === undefined) continue;
-    assert.equal(p5.storage![name], 0, name + ' reserves no production');
+    if (phase5.storage![name] === undefined) continue;
+    assert.equal(phase5.storage![name], 0, name + ' reserves no production');
   }
   assert.ok(
-    Object.keys(p5.storage!).includes('Nuclear Pasta'),
+    Object.keys(phase5.storage!).includes('Nuclear Pasta'),
     'a delivered part still holds its container and address',
   );
-  assert.equal(p5.storage!.Concrete, 4, 'other items are unaffected');
-  assert.ok(p5.delivery!['Nuclear Pasta']!.rate > 0, 'the elevator delivery itself is untouched');
-  const pasta = (p5.rows || [])
-    .filter(r => r.outputs['Nuclear Pasta'])
-    .reduce((a, r) => a + r.outputs['Nuclear Pasta']!, 0);
+  assert.equal(phase5.storage!.Concrete, 4, 'other items are unaffected');
   assert.ok(
-    pasta >= p5.delivery!['Nuclear Pasta']!.rate - 0.001,
+    phase5.delivery!['Nuclear Pasta']!.rate > 0,
+    'the elevator delivery itself is untouched',
+  );
+  const pasta = (phase5.rows || [])
+    .filter(r => r.outputs['Nuclear Pasta'])
+    .reduce((total, r) => total + r.outputs['Nuclear Pasta']!, 0);
+  assert.ok(
+    pasta >= phase5.delivery!['Nuclear Pasta']!.rate - 0.001,
     'production still covers the delivery rate',
   );
 
@@ -1140,12 +1176,13 @@ test('Space Elevator parts keep a container but no standing storage contract', (
     'a per-item rate still buys a buffer for anyone who wants one',
   );
 
-  const machines = (p: CurrentCalculatedPlan) =>
-    Object.values(p.stages).reduce(
-      (a, x) => a + (x.rows || []).reduce((b, r) => b + r.machines, 0),
+  const machines = (plan: CurrentCalculatedPlan) =>
+    Object.values(plan.stages).reduce(
+      (total, stage) =>
+        total + (stage.rows || []).reduce((stageTotal, r) => stageTotal + r.machines, 0),
       0,
     );
-  const all = Object.fromEntries(elevatorParts.map(n => [n, 4]));
+  const all = Object.fromEntries(elevatorParts.map(part => [part, 4]));
   assert.ok(
     machines(calculate({ ...base, storageOverrides: all })) > machines(calculate(base)),
     'stocking them again costs machines',
@@ -1171,10 +1208,10 @@ test('a final-phase target lets earlier phases use the machines later phases alr
     'every',
     'settings saved before this existed keep one target per phase',
   );
-  for (const ph of ['1', '2', '3', '4', '5'] as const)
+  for (const phase of ['1', '2', '3', '4', '5'] as const)
     assert.equal(
-      every.stages[ph].hours,
-      calculate(base).stages[ph].hours,
+      every.stages[phase].hours,
+      calculate(base).stages[phase].hours,
       'the default plan is unchanged',
     );
   assert.equal(
@@ -1183,18 +1220,19 @@ test('a final-phase target lets earlier phases use the machines later phases alr
     'the final phase still hits the target',
   );
 
-  const machines = (st: CurrentStage) => (st.rows || []).reduce((a, r) => a + r.machines, 0);
+  const machines = (stage: CurrentStage) =>
+    (stage.rows || []).reduce((total, r) => total + r.machines, 0);
   let pulled = 0;
-  for (const ph of ['1', '2', '3', '4'] as const) {
-    const before = every.stages[ph],
-      after = final.stages[ph];
-    assert.ok(after.hours! <= before.hours! + 1e-6, 'phase ' + ph + ' is never made slower');
+  for (const phase of ['1', '2', '3', '4'] as const) {
+    const before = every.stages[phase],
+      after = final.stages[phase];
+    assert.ok(after.hours! <= before.hours! + 1e-6, 'phase ' + phase + ' is never made slower');
     if (after.aheadOf === undefined) {
       assert.equal(after.hours, before.hours, 'an unchanged phase keeps its plan');
       continue;
     }
     pulled++;
-    assert.equal(after.aheadOf, before.hours, 'phase ' + ph + ' records what it used to take');
+    assert.equal(after.aheadOf, before.hours, 'phase ' + phase + ' records what it used to take');
     assert.ok(
       after.hours! < before.hours! - 1e-6,
       'a phase is only replaced when it finishes sooner',
@@ -1204,13 +1242,13 @@ test('a final-phase target lets earlier phases use the machines later phases alr
       const kept = Math.max(
         0,
         ...(['1', '2', '3', '4', '5'] as const)
-          .filter(p => p >= ph)
-          .map(p => (every.stages[p].rows || []).find(r => r.id === row.id)?.machines || 0),
+          .filter(later => later >= phase)
+          .map(later => (every.stages[later].rows || []).find(r => r.id === row.id)?.machines || 0),
       );
       assert.ok(
         row.machines <= kept,
         'phase ' +
-          ph +
+          phase +
           ' runs no more ' +
           row.name +
           ' than a later phase builds (' +
@@ -1237,9 +1275,9 @@ test('a final-phase target lets earlier phases use the machines later phases alr
   );
 
   const maxed = calculate({ ...base, goal: 'maximum', limitsConfirmed: true, phaseTime: 'final' });
-  for (const ph of ['1', '2', '3', '4', '5'] as const)
+  for (const phase of ['1', '2', '3', '4', '5'] as const)
     assert.equal(
-      maxed.stages[ph].aheadOf,
+      maxed.stages[phase].aheadOf,
       undefined,
       'maximum output already maximizes every phase',
     );

@@ -31,11 +31,11 @@ const screenCss = () => splitCss().screen;
 // Innermost rules: selector and declarations, with the line they start on.
 function rules(css: string) {
   const out: { selector: string; body: string; line: number }[] = [];
-  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
     out.push({
-      selector: m[1]!.trim().replace(/\s+/g, ' '),
-      body: m[2]!,
-      line: css.slice(0, m.index).split('\n').length,
+      selector: match[1]!.trim().replace(/\s+/g, ' '),
+      body: match[2]!,
+      line: css.slice(0, match.index).split('\n').length,
     });
   return out;
 }
@@ -45,37 +45,44 @@ const decls = (body: string, prop: string) =>
 
 // Every length in a font-size value, in px (clamp() and similar are checked argument by argument).
 function sizesPx(value: string): number[] {
-  return [...value.matchAll(/(\d*\.?\d+)(px|rem)\b/g)].map(m =>
-    m[2] === 'rem' ? Number(m[1]) * ROOT_PX : Number(m[1]),
+  return [...value.matchAll(/(\d*\.?\d+)(px|rem)\b/g)].map(match =>
+    match[2] === 'rem' ? Number(match[1]) * ROOT_PX : Number(match[1]),
   );
 }
 
 test(`no font-size in style.css is below ${FLOOR_PX}px`, () => {
   const small: string[] = [];
-  for (const r of rules(screenCss()))
-    for (const v of decls(r.body, 'font-size')) {
-      assert.ok(!/\d(em|%)\b|smaller|x-small|xx-small/.test(v), `${r.selector}: use px, not ${v}`);
+  for (const rule of rules(screenCss()))
+    for (const value of decls(rule.body, 'font-size')) {
+      assert.ok(
+        !/\d(em|%)\b|smaller|x-small|xx-small/.test(value),
+        `${rule.selector}: use px, not ${value}`,
+      );
       // font-size: 0 hides a text node whose label a pseudo-element draws (.navicon).
-      for (const px of sizesPx(v)) if (px > 0 && px < FLOOR_PX) small.push(`${r.selector}: ${v}`);
+      for (const px of sizesPx(value))
+        if (px > 0 && px < FLOOR_PX) small.push(`${rule.selector}: ${value}`);
     }
   assert.deepEqual(small, []);
 });
 
-const hex = (h: string): [number, number, number] => {
-  let s = h.slice(1);
-  if (s.length === 3) s = [...s].map(c => c + c).join('');
-  return [0, 2, 4].map(i => parseInt(s.slice(i, i + 2), 16)) as [number, number, number];
+const hex = (color: string): [number, number, number] => {
+  let digits = color.slice(1);
+  if (digits.length === 3) digits = [...digits].map(c => c + c).join('');
+  return [0, 2, 4].map(i => parseInt(digits.slice(i, i + 2), 16)) as [number, number, number];
 };
-const luminance = (h: string) => {
-  const [r, g, b] = hex(h).map(v => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const luminance = (color: string) => {
+  const [red, green, blue] = hex(color).map(channel => {
+    const linear = channel / 255;
+    return linear <= 0.03928 ? linear / 12.92 : ((linear + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 };
-const contrast = (a: string, b: string) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
+const contrast = (colorA: string, colorB: string) => {
+  const [lighter, darker] = [luminance(colorA), luminance(colorB)].sort((x, y) => y - x) as [
+    number,
+    number,
+  ];
+  return (lighter + 0.05) / (darker + 0.05);
 };
 
 function tokens(css: string): Record<string, string> {
@@ -85,10 +92,10 @@ function tokens(css: string): Record<string, string> {
   );
 }
 // A colour value as a hex string, or null for inherit, currentColor, gradients and the like.
-const resolve = (value: string, tok: Record<string, string>): string | null => {
-  const v = /^var\(--([\w-]+)/.exec(value);
-  const h = v ? tok[v[1]!] : value;
-  return h && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(h) ? h : null;
+const resolve = (value: string, palette: Record<string, string>): string | null => {
+  const reference = /^var\(--([\w-]+)/.exec(value);
+  const color = reference ? palette[reference[1]!] : value;
+  return color && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color) ? color : null;
 };
 
 const TEXT_TOKENS = [
@@ -107,35 +114,37 @@ const TEXT_TOKENS = [
 const BACKGROUNDS = ['bg', 'bg2', 'panel', 'panel2'];
 
 test(`text colour tokens reach ${MIN_CONTRAST}:1 on every page background`, () => {
-  const tok = tokens(screenCss());
+  const palette = tokens(screenCss());
   const low: string[] = [];
-  for (const t of TEXT_TOKENS)
-    for (const b of BACKGROUNDS) {
-      const r = contrast(tok[t]!, tok[b]!);
-      if (r < MIN_CONTRAST) low.push(`--${t} on --${b}: ${r.toFixed(2)}`);
+  for (const token of TEXT_TOKENS)
+    for (const background of BACKGROUNDS) {
+      const ratio = contrast(palette[token]!, palette[background]!);
+      if (ratio < MIN_CONTRAST) low.push(`--${token} on --${background}: ${ratio.toFixed(2)}`);
     }
   assert.deepEqual(low, []);
 });
 
 test(`every text colour in style.css reaches ${MIN_CONTRAST}:1 on its background`, () => {
   const css = screenCss(),
-    tok = tokens(css);
+    palette = tokens(css);
   const low: string[] = [];
-  for (const r of rules(css)) {
+  for (const rule of rules(css)) {
     // The step icons are aria-hidden decoration beside the step's own title.
-    if (/\.task-icon\b/.test(r.selector)) continue;
-    for (const value of decls(r.body, 'color')) {
-      const fg = resolve(value, tok);
-      if (!fg) continue;
+    if (/\.task-icon\b/.test(rule.selector)) continue;
+    for (const value of decls(rule.body, 'color')) {
+      const textHex = resolve(value, palette);
+      if (!textHex) continue;
       // A rule that paints its own solid background is read against that one.
-      const own = decls(r.body, 'background(?:-color)?')
-        .map(v => resolve(v, tok))
+      const own = decls(rule.body, 'background(?:-color)?')
+        .map(v => resolve(v, palette))
         .find(Boolean);
-      const backs = own ? [own] : BACKGROUNDS.map(b => tok[b]!);
-      for (const bg of backs) {
-        const ratio = contrast(fg, bg);
+      const backs = own ? [own] : BACKGROUNDS.map(b => palette[b]!);
+      for (const backgroundHex of backs) {
+        const ratio = contrast(textHex, backgroundHex);
         if (ratio < MIN_CONTRAST)
-          low.push(`${r.selector} (line ${r.line}): ${value} on ${bg} is ${ratio.toFixed(2)}`);
+          low.push(
+            `${rule.selector} (line ${rule.line}): ${value} on ${backgroundHex} is ${ratio.toFixed(2)}`,
+          );
       }
     }
   }
@@ -148,13 +157,13 @@ test(`every text colour in style.css reaches ${MIN_CONTRAST}:1 on its background
 // every text colour is checked on white paper as well as on the background it prints with.
 function printView() {
   const { screen, print } = splitCss();
-  const tok = { ...tokens(screen), ...tokens(print) };
+  const palette = { ...tokens(screen), ...tokens(print) };
   const printRules = rules(print);
   const override = (selector: string, prop: string) => {
     let found: string | undefined;
-    for (const r of printRules)
-      if (r.selector.split(/\s*,\s*/).includes(selector))
-        found = decls(r.body, prop).at(-1) ?? found;
+    for (const rule of printRules)
+      if (rule.selector.split(/\s*,\s*/).includes(selector))
+        found = decls(rule.body, prop).at(-1) ?? found;
     return found;
   };
   // Elements the print block hides, and states that never occur on paper.
@@ -164,11 +173,11 @@ function printView() {
   const skip = (selector: string) =>
     /:hover|:focus|:active|::placeholder|::selection|\.task-icon\b/.test(selector) ||
     hidden.some(h => new RegExp(`${h.replace(/[.#]/g, '\\$&')}(?![\\w-])`).test(selector));
-  return { screen, tok, override, skip, printRules };
+  return { screen, palette, override, skip, printRules };
 }
 
 test(`printed text reaches ${MIN_CONTRAST}:1 on paper (#330)`, () => {
-  const { screen, tok, override, skip, printRules } = printView();
+  const { screen, palette, override, skip, printRules } = printView();
   const low: string[] = [];
   const check = (
     selector: string,
@@ -176,49 +185,49 @@ test(`printed text reaches ${MIN_CONTRAST}:1 on paper (#330)`, () => {
     background: string | undefined,
     where: string,
   ) => {
-    const fg = resolve(color, tok);
-    if (!fg) return;
-    const bg = background && resolve(background, tok);
-    for (const paper of bg ? ['#ffffff', bg] : ['#ffffff']) {
-      const ratio = contrast(fg, paper);
+    const textHex = resolve(color, palette);
+    if (!textHex) return;
+    const backgroundHex = background && resolve(background, palette);
+    for (const paper of backgroundHex ? ['#ffffff', backgroundHex] : ['#ffffff']) {
+      const ratio = contrast(textHex, paper);
       if (ratio < MIN_CONTRAST)
         low.push(`${selector} (${where}): ${color} on ${paper} is ${ratio.toFixed(2)}`);
     }
   };
   const background = (body: string) => decls(body, 'background(?:-color)?').at(-1);
-  for (const r of rules(screen))
-    for (const selector of r.selector.split(/\s*,\s*/)) {
+  for (const rule of rules(screen))
+    for (const selector of rule.selector.split(/\s*,\s*/)) {
       if (skip(selector)) continue;
-      const color = override(selector, 'color') ?? decls(r.body, 'color').at(-1);
+      const color = override(selector, 'color') ?? decls(rule.body, 'color').at(-1);
       if (!color) continue;
-      const bg = override(selector, 'background(?:-color)?') ?? background(r.body);
-      check(selector, color, bg, `line ${r.line}`);
+      const backgroundValue = override(selector, 'background(?:-color)?') ?? background(rule.body);
+      check(selector, color, backgroundValue, `line ${rule.line}`);
     }
-  for (const r of printRules)
-    for (const selector of r.selector.split(/\s*,\s*/))
-      for (const color of decls(r.body, 'color'))
-        check(selector, color, background(r.body), 'print');
+  for (const rule of printRules)
+    for (const selector of rule.selector.split(/\s*,\s*/))
+      for (const color of decls(rule.body, 'color'))
+        check(selector, color, background(rule.body), 'print');
   assert.deepEqual(low, []);
 });
 
 // A background the print block leaves dark would sit behind text that is now dark too (a ticked
 // step kept its near-black screen background).
 test('no text sits on a dark background in print (#330)', () => {
-  const { screen, tok, override, skip } = printView();
+  const { screen, palette, override, skip } = printView();
   // Fills that carry no text: bars, dots and the progress squares, and the power headroom bar's
   // segments and legend swatches (SP-29).
   const fills =
     /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight|\.over)? span$|^\.guided-progress \.\w+ i$|^\.seg-(peak|utility|generation|boost|spare|short)$|^\.phase-seg\.(done|current) > span$/;
   const dark: string[] = [];
-  for (const r of rules(screen))
-    for (const selector of r.selector.split(/\s*,\s*/)) {
+  for (const rule of rules(screen))
+    for (const selector of rule.selector.split(/\s*,\s*/)) {
       if (skip(selector) || fills.test(selector)) continue;
       const value =
         override(selector, 'background(?:-color)?') ??
-        decls(r.body, 'background(?:-color)?').at(-1);
-      const bg = value && resolve(value, tok);
-      if (bg && contrast(bg, '#1c2328') < MIN_CONTRAST)
-        dark.push(`${selector} (line ${r.line}): ${value} is ${bg}`);
+        decls(rule.body, 'background(?:-color)?').at(-1);
+      const backgroundHex = value && resolve(value, palette);
+      if (backgroundHex && contrast(backgroundHex, '#1c2328') < MIN_CONTRAST)
+        dark.push(`${selector} (line ${rule.line}): ${value} is ${backgroundHex}`);
     }
   assert.deepEqual(dark, []);
 });
@@ -226,9 +235,9 @@ test('no text sits on a dark background in print (#330)', () => {
 test('every notice colour has its own print colour, so bold text and links print dark (#330)', () => {
   const { screen, override } = printView();
   const missing: string[] = [];
-  for (const r of rules(screen))
-    if (decls(r.body, 'color').length)
-      for (const selector of r.selector.split(/\s*,\s*/))
+  for (const rule of rules(screen))
+    if (decls(rule.body, 'color').length)
+      for (const selector of rule.selector.split(/\s*,\s*/))
         if (
           /\.notice\b/.test(selector) &&
           !/:hover|:focus/.test(selector) &&
@@ -267,7 +276,7 @@ test('the navigation shows its glyphs, the open page in the accent colour (SP-10
 // the group editor, and the card shows the name's keyboard focus.
 test('a factory card opens from anywhere but its Running box (SP-19)', () => {
   const all = rules(screenCss());
-  const body = (sel: string) => all.find(r => r.selector === sel)?.body ?? '';
+  const body = (selector: string) => all.find(r => r.selector === selector)?.body ?? '';
   assert.match(body('.factory-card'), /position:\s*relative/);
   const hit = body('.factory-card .name::after');
   assert.match(hit, /position:\s*absolute/);
@@ -282,7 +291,7 @@ test('a factory card opens from anywhere but its Running box (SP-19)', () => {
 
 test('the guided stepper is legible: 13px numbered steps, the current one in the accent (SP-35)', () => {
   const css = screenCss();
-  const body = (sel: string) => rules(css).find(r => r.selector === sel)?.body ?? '';
+  const body = (selector: string) => rules(css).find(r => r.selector === selector)?.body ?? '';
   assert.match(body('.guided-stepper'), /font-size: 13px/);
   assert.match(body('.guided-progress .current'), /color: var\(--accent\)/);
   assert.doesNotMatch(body('.guided-progress'), /var\(--dim\)/);
@@ -349,11 +358,11 @@ test('the resource column sticks on a solid background, and prints as a plain ce
   assert.deepEqual(decls(head.body, 'background'), ['var(--panel2)']);
   assert.ok(
     rules(print).some(
-      r =>
-        r.selector
+      rule =>
+        rule.selector
           .split(',')
           .map(x => x.trim())
-          .includes('.resource-cell') && decls(r.body, 'background').includes('white'),
+          .includes('.resource-cell') && decls(rule.body, 'background').includes('white'),
     ),
   );
 });
@@ -412,8 +421,8 @@ test('a save name wraps between words on a phone, above its button (#452)', () =
 
 // A name with no bundled icon gets an empty dashed square in the line colour (#463).
 test('the missing-icon placeholder is a dashed square in the line colour (#463)', () => {
-  const r = rules(screenCss()).find(x => x.selector === '.item-icon-missing')!;
-  assert.deepEqual(decls(r.body, 'stroke'), ['var(--line)']);
-  assert.equal(decls(r.body, 'stroke-dasharray').length, 1);
-  assert.deepEqual(decls(r.body, 'fill'), ['none']);
+  const placeholder = rules(screenCss()).find(x => x.selector === '.item-icon-missing')!;
+  assert.deepEqual(decls(placeholder.body, 'stroke'), ['var(--line)']);
+  assert.equal(decls(placeholder.body, 'stroke-dasharray').length, 1);
+  assert.deepEqual(decls(placeholder.body, 'fill'), ['none']);
 });

@@ -31,8 +31,8 @@ const facts = (over: Partial<AdaFacts> = {}) => ({
   ...over,
 });
 // Every set of facts yields at least one remark (the idle lines), so the first one is there.
-const first = (f: Partial<AdaFacts>) => adaRemarks(f)[0]!;
-const ids = (f: Partial<AdaFacts>) => adaRemarks(f).map(r => r.id);
+const first = (given: Partial<AdaFacts>) => adaRemarks(given)[0]!;
+const ids = (given: Partial<AdaFacts>) => adaRemarks(given).map(r => r.id);
 
 test('ADA leads with the thing that is actually wrong', () => {
   const draft = first(facts({ feasible: false, reason: 'Iron Ore budget exceeded.' }));
@@ -236,11 +236,11 @@ test('a full lap of the remarks is answered, and the badge can be prodded', () =
   );
   const seen = new Set();
   for (let poke = 1; poke <= 8; poke++) {
-    const f = adaFault(poke);
-    assert.equal(f.tone, 'fault');
-    assert.equal(f.name, '???', 'a corrupted transmission is not signed ADA');
-    assert.ok(!/[<>]/.test(f.text), 'no markup of its own: ' + f.text);
-    seen.add(f.text);
+    const fault = adaFault(poke);
+    assert.equal(fault.tone, 'fault');
+    assert.equal(fault.name, '???', 'a corrupted transmission is not signed ADA');
+    assert.ok(!/[<>]/.test(fault.text), 'no markup of its own: ' + fault.text);
+    seen.add(fault.text);
   }
   assert.ok(seen.size >= 6, 'prodding again gives a different transmission');
   assert.match(adaFault(9).text, /Normal service resumes/, 'the last one hands the terminal back');
@@ -278,14 +278,16 @@ test('ADA always has something to say, and never throws', () => {
       Array.isArray(out) && out.length,
       'garbage facts still produce remarks: ' + JSON.stringify(bad),
     );
-    for (const r of out) assert.equal(typeof r.text, 'string');
+    for (const remark of out) assert.equal(typeof remark.text, 'string');
   }
 });
 
 test('remarks stay plain text for the caller to escape', () => {
-  for (const r of adaRemarks(facts({ steps: { done: 0, total: 3 }, retireOpen: 1, profiles: 1 }))) {
-    assert.ok(!/[<>]/.test(r.text), 'ADA writes no markup of its own: ' + r.text);
-    assert.ok(['calm', 'warn', 'praise'].includes(r.tone), 'known tone: ' + r.tone);
+  for (const remark of adaRemarks(
+    facts({ steps: { done: 0, total: 3 }, retireOpen: 1, profiles: 1 }),
+  )) {
+    assert.ok(!/[<>]/.test(remark.text), 'ADA writes no markup of its own: ' + remark.text);
+    assert.ok(['calm', 'warn', 'praise'].includes(remark.tone), 'known tone: ' + remark.tone);
   }
   // Names and step titles are the user’s text: ADA passes them through
   // unchanged and app.ts escapes them at the point of rendering.
@@ -341,8 +343,8 @@ test('ADA reads the build-so-far status: held-back rows, nothing flowing, the ne
     /40% of Phase 3's elevator delivery is flowing\. Build Steel Beam next: on its own it adds 20%/,
   );
   // Nothing to say without a status (the handbook) or with everything built.
-  for (const f of [facts({ build: null }), facts({ build: build({ next: '', share: 100 }) })])
-    assert.ok(!ids(f).some(id => id.startsWith('build-')));
+  for (const given of [facts({ build: null }), facts({ build: build({ next: '', share: 100 }) })])
+    assert.ok(!ids(given).some(id => id.startsWith('build-')));
 });
 
 test('ADA points at the records the original plan could not place (#499)', () => {
@@ -411,8 +413,8 @@ test('the storage and account pages have a line of their own, and there is more 
   assert.equal(new Set(faults).size, 9);
   assert.ok(faults.every(t => t.startsWith('— ') && t.endsWith(' — end —')));
   // Lines that name the save or phase say it as given, and carry no markup of their own.
-  for (const r of adaRemarks(facts({ save: 'My World', phaseLabel: 'Phase 4' })))
-    assert.ok(!/[<>]/.test(r.text), r.text);
+  for (const remark of adaRemarks(facts({ save: 'My World', phaseLabel: 'Phase 4' })))
+    assert.ok(!/[<>]/.test(remark.text), remark.text);
 });
 
 test('ADA names the best hard-drive payoff once a ranking exists (#204)', () => {
@@ -465,9 +467,9 @@ test("ADA names a plan guide's open commissioning, storage tasks and completion 
     storageTasks: { done: 5, total: 5 },
     completion: { done: 1, total: 1 },
   };
-  for (const g of [done, null])
+  for (const finishedGuide of [done, null])
     assert.deepEqual(
-      ids(facts({ post: true, guide: g })).filter(id => id.startsWith('guide-')),
+      ids(facts({ post: true, guide: finishedGuide })).filter(id => id.startsWith('guide-')),
       [],
     );
 });
