@@ -4696,6 +4696,11 @@ button.rail-tile:hover {
 .guided-name .form-error:not(:empty) {
   margin: 6px 0 0;
 }
+/* All settings step 1's Save name (#578, SettingsStep.vue): the same message, under the box in
+   its grid cell. */
+.settings-name .form-error:not(:empty) {
+  margin: 0 0 6px;
+}
 /* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
    accent, and "3 of 6" beside them. */
 .guided-stepper {
