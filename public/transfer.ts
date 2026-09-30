@@ -51,93 +51,99 @@ function invalid(message: string): never {
   throw Object.assign(new Error(message), { status: 400 });
 }
 // Save and profile names are checked but kept exactly as exported, untrimmed.
-const title = (x: unknown): string => {
-  if (typeof x !== 'string' || !x.trim() || x.length > 80) invalid('Invalid save or profile name.');
-  return x;
+const title = (name: unknown): string => {
+  if (typeof name !== 'string' || !name.trim() || name.length > 80)
+    invalid('Invalid save or profile name.');
+  return name;
 };
-const record = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x);
+const record = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
 // Only https links survive, in a handbook's or a plan guide's sources.
-const httpsOnly = <T extends { url: string }>(xs: T[]) =>
-  xs.filter(x => {
+const httpsOnly = <T extends { url: string }>(sources: T[]) =>
+  sources.filter(source => {
     try {
-      return new URL(x.url).protocol === 'https:';
+      return new URL(source.url).protocol === 'https:';
     } catch {
       return false;
     }
   });
 // A calculated plan's optional guide (#393, #466): its shape is checked, since pages render it,
 // and its source links keep only https ones. Returns a clean copy, or throws.
-function checkGuide(g: unknown): PlanGuide {
+function checkGuide(input: unknown): PlanGuide {
   const bad = (): never => invalid('Invalid plan guide.');
-  const text = (x: unknown): x is string => typeof x === 'string';
-  const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
-  const rates = (x: unknown) => record(x) && Object.values(x as object).every(num);
+  const text = (value: unknown): value is string => typeof value === 'string';
+  const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
+  const rates = (value: unknown) => record(value) && Object.values(value as object).every(finite);
   // Every id a guide gives is a saved check key: it must pass state.ts's key rule and be unique
   // across the guide, or its step could never be ticked, or would tick with its twin (#471).
   const ids = new Set<string>();
-  const id = (x: unknown) => {
-    if (!safeKey(x) || ids.has(x)) bad();
-    ids.add(x as string);
+  const id = (value: unknown) => {
+    if (!safeKey(value) || ids.has(value)) bad();
+    ids.add(value as string);
   };
-  const steps = (x: unknown) => {
-    if (!Array.isArray(x)) bad();
-    for (const s of x as GuideShape[]) {
-      if (!record(s) || !text(s.title) || !text(s.body)) bad();
-      id(s.id);
+  const steps = (list: unknown) => {
+    if (!Array.isArray(list)) bad();
+    for (const step of list as GuideShape[]) {
+      if (!record(step) || !text(step.title) || !text(step.body)) bad();
+      id(step.id);
     }
   };
-  if (!record(g)) bad();
-  const guide = structuredClone(g) as PlanGuide & Record<string, unknown>;
+  if (!record(input)) bad();
+  const guide = structuredClone(input) as PlanGuide & Record<string, unknown>;
   if (!record(guide.phases)) bad();
   Object.values(guide.phases).forEach(steps);
   if (guide.storageTasks !== undefined) steps(guide.storageTasks);
   if (guide.completion !== undefined) {
     if (!Array.isArray(guide.completion)) bad();
-    for (const c of guide.completion as unknown as Record<string, unknown>[]) {
+    for (const module of guide.completion as unknown as Record<string, unknown>[]) {
       if (
-        !record(c) ||
-        ![c.id, c.name, c.recipe, c.machine].every(text) ||
-        ![c.output, c.machines, c.lastClock].every(num) ||
-        !rates(c.inputs) ||
-        !rates(c.byproducts)
+        !record(module) ||
+        ![module.id, module.name, module.recipe, module.machine].every(text) ||
+        ![module.output, module.machines, module.lastClock].every(finite) ||
+        !rates(module.inputs) ||
+        !rates(module.byproducts)
       )
         bad();
       // A module is ticked as completion-<id> (#468), so that key is held to the same rule (#477).
-      id('completion-' + c.id);
+      id('completion-' + module.id);
     }
   }
   if (guide.power !== undefined) {
-    const p = guide.power as unknown as Record<string, unknown>;
-    if (!record(p) || !Array.isArray(p.checks) || !Array.isArray(p.blocks)) bad();
-    for (const c of p.checks as Record<string, unknown>[]) {
-      if (!record(c) || !text(c.label)) bad();
-      id(c.id);
+    const power = guide.power as unknown as Record<string, unknown>;
+    if (!record(power) || !Array.isArray(power.checks) || !Array.isArray(power.blocks)) bad();
+    for (const check of power.checks as Record<string, unknown>[]) {
+      if (!record(check) || !text(check.label)) bad();
+      id(check.id);
     }
     if (
-      !(p.blocks as unknown[]).every(
-        x => record(x) && text((x as GuideShape).title) && text((x as GuideShape).body),
+      !(power.blocks as unknown[]).every(
+        block =>
+          record(block) && text((block as GuideShape).title) && text((block as GuideShape).body),
       )
     )
       bad();
   }
   if (guide.factories !== undefined) {
     if (!record(guide.factories)) bad();
-    for (const [row, x] of Object.entries(
+    for (const [row, factory] of Object.entries(
       guide.factories as Record<string, Record<string, unknown>>,
     ))
       if (
         !safeKey(row) ||
-        !record(x) ||
-        (x.note !== undefined && !text(x.note)) ||
-        (x.page !== undefined && !num(x.page)) ||
-        (x.local !== undefined && typeof x.local !== 'boolean') ||
-        (x.nuclear !== undefined && typeof x.nuclear !== 'boolean') ||
-        (x.site !== undefined && x.site !== 'oil' && x.site !== 'nuclear')
+        !record(factory) ||
+        (factory.note !== undefined && !text(factory.note)) ||
+        (factory.page !== undefined && !finite(factory.page)) ||
+        (factory.local !== undefined && typeof factory.local !== 'boolean') ||
+        (factory.nuclear !== undefined && typeof factory.nuclear !== 'boolean') ||
+        (factory.site !== undefined && factory.site !== 'oil' && factory.site !== 'nuclear')
       )
         bad();
   }
   if (guide.sources !== undefined) {
-    if (!Array.isArray(guide.sources) || !guide.sources.every(x => record(x) && text(x.url))) bad();
+    if (
+      !Array.isArray(guide.sources) ||
+      !guide.sources.every(source => record(source) && text(source.url))
+    )
+      bad();
     guide.sources = httpsOnly(guide.sources);
   }
   return guide;
@@ -151,68 +157,82 @@ type GuideShape = { id?: unknown; title?: unknown; body?: unknown };
 // Every field kept is checked or validated on the way out; plans and handbooks are checked for
 // shape only, as above, and then treated as the stored types.
 export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> {
-  const d = data as Record<string, unknown> | null | undefined;
+  const input = data as Record<string, unknown> | null | undefined;
   if (
-    d?.format !== transferFormat ||
-    d.version !== 1 ||
-    !Array.isArray(d.saves) ||
-    d.saves.length > 50
+    input?.format !== transferFormat ||
+    input.version !== 1 ||
+    !Array.isArray(input.saves) ||
+    input.saves.length > 50
   )
     invalid('Choose a full planner save export.');
   // Only accept data objects; executable links never belong in a portable handbook.
   const text = JSON.stringify(data);
   if (text.length > transferImportLimit || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))
     invalid('Invalid or oversized save export.');
-  const saves = (d.saves as IncomingSave[]).map(s => {
-    if (!record(s) || !Array.isArray(s.profiles) || !s.profiles.length || s.profiles.length > 30)
+  const saves = (input.saves as IncomingSave[]).map(save => {
+    if (
+      !record(save) ||
+      !Array.isArray(save.profiles) ||
+      !save.profiles.length ||
+      save.profiles.length > 30
+    )
       invalid('Invalid profiles in export.');
-    const profiles = (s.profiles as IncomingProfile[]).map(p => {
+    const profiles = (save.profiles as IncomingProfile[]).map(profile => {
       if (
-        !record(p) ||
-        !['calculated', 'original'].includes(p.kind as string) ||
-        typeof p.id !== 'string'
+        !record(profile) ||
+        !['calculated', 'original'].includes(profile.kind as string) ||
+        typeof profile.id !== 'string'
       )
         invalid('Invalid profile.');
-      const kind = p.kind as ProfileKind;
+      const kind = profile.kind as ProfileKind;
       // A calculated profile must bring its calculation snapshot, since profiles are never
       // silently recalculated, with a stage for each of phases 1–5. An original profile must
       // bring its own handbook rather than fall back to the current default.
       if (kind === 'calculated') {
-        if (!p.plan?.settings || !p.plan?.stages || !Array.isArray(p.plan.warnings))
+        if (
+          !profile.plan?.settings ||
+          !profile.plan?.stages ||
+          !Array.isArray(profile.plan.warnings)
+        )
           invalid('Missing calculation snapshot.');
         for (const phase of ['1', '2', '3', '4', '5']) {
-          const stage = p.plan.stages[phase];
+          const stage = profile.plan.stages[phase];
           if (!stage || !Array.isArray(stage.rows || []) || typeof stage.feasible !== 'boolean')
             invalid('Invalid calculation stage.');
         }
-      } else if (!p.handbook?.factories || !p.handbook?.phases || !p.handbook?.storage)
+      } else if (
+        !profile.handbook?.factories ||
+        !profile.handbook?.phases ||
+        !profile.handbook?.storage
+      )
         invalid('This original profile needs its full handbook export.');
       // Handbook source links survive only as https URLs.
-      const handbook = kind === 'original' ? structuredClone(p.handbook) : undefined;
+      const handbook = kind === 'original' ? structuredClone(profile.handbook) : undefined;
       if (handbook && handbook.sources !== undefined && !Array.isArray(handbook.sources))
         invalid('Invalid handbook sources.');
       if (handbook) handbook.sources = httpsOnly(handbook.sources || []);
-      const plan = kind === 'calculated' ? (structuredClone(p.plan) as StoredCalculatedPlan) : null;
-      if (plan && p.plan!.guide !== undefined) plan.guide = checkGuide(p.plan!.guide);
+      const plan =
+        kind === 'calculated' ? (structuredClone(profile.plan) as StoredCalculatedPlan) : null;
+      if (plan && profile.plan!.guide !== undefined) plan.guide = checkGuide(profile.plan!.guide);
       return {
-        id: p.id,
-        name: title(p.name),
+        id: profile.id,
+        name: title(profile.name),
         kind,
         plan,
         ...(handbook ? { handbook: handbook as Handbook } : {}),
-        state: validateState(p.state),
+        state: validateState(profile.state),
       };
     });
     if (
       new Set(profiles.map(p => p.id)).size !== profiles.length ||
-      !profiles.some(p => p.id === s.activeProfile)
+      !profiles.some(p => p.id === save.activeProfile)
     )
       invalid('Invalid active profile.');
     // The check above matched it against the (string) profile ids.
     return {
-      id: String(s.id),
-      name: title(s.name),
-      activeProfile: s.activeProfile as string,
+      id: String(save.id),
+      name: title(save.name),
+      activeProfile: save.activeProfile as string,
       profiles,
     };
   });
