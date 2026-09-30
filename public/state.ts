@@ -1099,182 +1099,217 @@ function dropFromOrder(e: StorageEdits, id: string) {
   if (Object.keys(order).length) e.bayOrder = order;
   else delete e.bayOrder;
 }
-// Storage layout edits. Only added floors and bays can be removed; built-in floors can only be
-// renamed, and handbook bays hidden and restored (storageBayHide/Restore, #166), which keeps
-// every record of theirs. These edits change names and addresses only, with one exception: removing an added
-// bay also deletes the 'slot-' checks and notes of its addresses (the owner's decision in #51),
-// so a bay that later reuses the letter starts clean. A removed floor has no records of its own.
+// Sets e.bayOrder to `order`, or drops the field when no floor has an order left.
+function setBayOrder(e: StorageEdits, order: Record<string, string[]>) {
+  if (Object.keys(order).length) e.bayOrder = order;
+  else delete e.bayOrder;
+}
+// Empties container position k the way storageSlotClear does: an added position disappears
+// with its container; a handbook one stays as a reserved address so its printed label keeps
+// meaning something.
+function emptySlot(e: StorageEdits, k: string) {
+  delete e.slots[k];
+  if (!addedSlot(k) && !e.clearedSlots.includes(k)) e.clearedSlots.push(k);
+}
+// Puts the container `name` at position k, which is then no longer a cleared one.
+function fillSlot(e: StorageEdits, k: string, name: string) {
+  e.slots[k] = name.trim();
+  e.clearedSlots = e.clearedSlots.filter(x => x !== k);
+}
+// One storage layout edit, applied to s and its normalised layout e (see mutateLayout).
+type LayoutEdit = (s: SavedState, e: StorageEdits, op: Raw) => void;
+
+function addFloor(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!addedFloorId(op.id) || e.floors.some(f => f.id === op.id) || !label(op.label))
+    fail('Invalid floor.');
+  e.floors.push({ id: op.id as string, label: op.label.trim() });
+}
+function renameFloor(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!floorId(op.id) || !knownFloor(e, op.id)) fail('Unknown floor.');
+  if (typeof op.label === 'string' && !op.label.trim()) delete e.floorNames[op.id];
+  else {
+    if (!label(op.label)) fail('Invalid floor name.');
+    e.floorNames[op.id] = op.label.trim();
+  }
+}
+// storageFloorHide and storageFloorRestore. Built-in floors are hidden, never removed (#168);
+// an added floor is removed instead.
+function hideOrRestoreFloor(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!builtinFloors.some(([id]) => id === op.id))
+    fail('Only built-in floors can be hidden. Remove an added floor instead.');
+  const id = op.id as string;
+  if (op.type === 'storageFloorRestore') e.hiddenFloors = e.hiddenFloors.filter(f => f !== id);
+  else {
+    if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
+    const hidden = new Set([...e.hiddenFloors, id]);
+    if (hidden.size === builtinFloors.length && !e.floors.length)
+      fail('Keep at least one floor in the storage room.');
+    e.hiddenFloors = builtinFloors.map(([f]) => f).filter(f => hidden.has(f));
+  }
+}
+function removeFloor(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!e.floors.some(f => f.id === op.id)) fail('Only added floors can be removed.');
+  // The check above matched an added floor, so the id is a string.
+  const id = op.id as string;
+  if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
+  if (e.hiddenFloors.length === builtinFloors.length && e.floors.length === 1)
+    fail('Keep at least one floor in the storage room.');
+  e.floors = e.floors.filter(f => f.id !== id);
+  delete e.floorNames[id];
+  if (e.bayOrder?.[id]) {
+    const { [id]: _gone, ...rest } = e.bayOrder;
+    setBayOrder(e, rest);
+  }
+}
+function addBay(s: SavedState, e: StorageEdits, op: Raw) {
+  if (!bayId(op.id) || !label(op.name) || !floorId(op.floor)) fail('Invalid bay.');
+  if (e.bays.some(b => b.id === op.id)) fail(`Bay ${op.id} already exists. Choose another letter.`);
+  // Any free letter, the owner's choice on #167. A handbook letter is free only while that
+  // bay is hidden, and taking it needs `replace`: the hidden bay's kept records are cleared
+  // first (as removing an added bay does, #51), so the new bay starts clean.
+  if (handbookBay(op.id)) {
+    if (!e.hiddenBays.includes(op.id))
+      fail(`Bay ${op.id} is in the room. Hide that handbook bay first, or choose another letter.`);
+    if (op.replace !== true)
+      fail(`Bay ${op.id} still has saved progress from the handbook bay. Confirm to replace it.`);
+  }
+  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
+  if (handbookBay(op.id)) clearBayRecords(s, e, op.id);
+  e.bays.push({ id: op.id, name: op.name.trim(), floor: op.floor });
+}
+function renameBay(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!bayId(op.id)) fail('Invalid bay.');
+  if (typeof op.name === 'string' && !op.name.trim()) delete e.bayNames[op.id];
+  else {
+    if (!label(op.name)) fail('Invalid bay name.');
+    e.bayNames[op.id] = op.name.trim();
+  }
+}
+// Any bay can move to another floor (#190), keeping its letter and so every address, check,
+// note and name. An added bay (also one holding a hidden handbook letter, #167) changes its own
+// floor; a handbook bay is recorded in bayFloors. Only to a floor in the tabs: a hidden
+// built-in floor is restored first.
+function moveBay(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!bayId(op.id)) fail('Invalid bay.');
+  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
+  if (e.hiddenFloors.includes(op.floor)) fail('Restore that floor before moving a bay onto it.');
+  const added = e.bays.find(b => b.id === op.id);
+  if (added) added.floor = op.floor;
+  else if (handbookBay(op.id)) {
+    const { [op.id]: _old, ...moved } = e.bayFloors || {};
+    if (op.floor !== handbookFloor(op.id)) moved[op.id] = op.floor;
+    if (Object.keys(moved).length) e.bayFloors = moved;
+    else delete e.bayFloors;
+  } else fail('Unknown bay.');
+  // It joins the new floor at its default place and leaves the old floor's order.
+  dropFromOrder(e, op.id);
+}
+// The order of the bays on one floor (#191), sent whole by Move left / Move right. Only bays on
+// that floor; one left out keeps its default place (views/storage.ts orderBays).
+function orderBays(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!knownFloor(e, op.floor)) fail('Unknown floor.');
+  const list = op.order;
+  if (
+    !Array.isArray(list) ||
+    list.length > 60 ||
+    list.some((id: unknown) => !bayId(id)) ||
+    new Set(list).size !== list.length
+  )
+    fail('Invalid bay order.');
+  if (list.some((id: string) => bayFloor(e, id) !== op.floor))
+    fail('Only bays on this floor can be put in order.');
+  const { [op.floor]: _old, ...rest } = e.bayOrder || {};
+  if (list.length) rest[op.floor] = [...list];
+  setBayOrder(e, rest);
+}
+// storageBayHide and storageBayRestore, for handbook bays only.
+function hideOrRestoreBay(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (typeof op.id !== 'string' || !handbookBay(op.id))
+    fail('Only handbook bays can be hidden. Remove an added bay instead.');
+  const hidden = new Set(e.hiddenBays);
+  // An added bay under a handbook letter still in the room predates #91 and shares that bay's
+  // addresses and records. Hiding the handbook bay would make removing the added one clear
+  // them (storageBayRemove treats a hidden letter's records as the added bay's own), so the
+  // added bay has to go first. A letter an added bay took with `replace` is already hidden.
+  if (op.type === 'storageBayHide' && !hidden.has(op.id) && e.bays.some(b => b.id === op.id))
+    fail(`An added bay uses the letter ${op.id}. Remove it before hiding the handbook bay.`);
+  if (op.type === 'storageBayHide') hidden.add(op.id);
+  else if (e.bays.some(b => b.id === op.id))
+    fail(`An added bay uses the letter ${op.id}. Remove it before restoring the handbook bay.`);
+  else hidden.delete(op.id);
+  e.hiddenBays = [...hidden].sort();
+}
+function removeBay(s: SavedState, e: StorageEdits, op: Raw) {
+  if (!e.bays.some(b => b.id === op.id))
+    fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
+  e.bays = e.bays.filter(b => b.id !== op.id);
+  // The check above matched an added bay, so the id is a string.
+  const id = op.id as string;
+  // An added bay under the letter of a handbook bay that is still in the room predates
+  // storageBayAdd refusing one (only a direct request or an edited import could make it). Its
+  // addresses, name, checks and notes are the handbook bay's too, so removing it removes the
+  // entry and nothing else. Under a hidden handbook letter (#167) the records are its own.
+  if (handbookBay(id) && !e.hiddenBays.includes(id)) return;
+  clearBayRecords(s, e, id);
+}
+function assignSlot(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!slotAddr(op.key) || !label(op.name, 120)) fail('Invalid container.');
+  fillSlot(e, op.key, op.name);
+}
+function clearSlot(_s: SavedState, e: StorageEdits, op: Raw) {
+  if (!slotAddr(op.key)) fail('Invalid container address.');
+  emptySlot(e, op.key);
+}
+// A container dragged to another position (#208), in its bay or another. The page sends the
+// items it shows at both addresses (the server does not know the handbook's), `toName` null for
+// an empty position: a move, else a swap. The owner's choice on #208: progress moves with the
+// container, so the two addresses' 'slot-' checks and notes always trade places; an empty
+// position's leftover records go to the address left behind, never deleted.
+function moveSlot(s: SavedState, e: StorageEdits, op: Raw) {
+  const { from, to } = op;
+  if (!slotAddr(from) || !slotAddr(to) || from === to) fail('Invalid container move.');
+  for (const k of [from, to])
+    if (!handbookBay(bayOfSlot(k)) && !e.bays.some(b => b.id === bayOfSlot(k)))
+      fail('Unknown bay.');
+  if (!label(op.fromName, 120) || (op.toName !== null && !label(op.toName, 120)))
+    fail('Invalid container.');
+  const put = (k: string, name: string | null) =>
+    name === null ? emptySlot(e, k) : fillSlot(e, k, name);
+  put(to, op.fromName);
+  put(from, op.toName as string | null);
+  swapSlotRecords(s, from, to);
+}
+const layoutEdits: Record<string, LayoutEdit> = {
+  storageFloorAdd: addFloor,
+  storageFloorRename: renameFloor,
+  storageFloorHide: hideOrRestoreFloor,
+  storageFloorRestore: hideOrRestoreFloor,
+  storageFloorRemove: removeFloor,
+  storageBayAdd: addBay,
+  storageBayRename: renameBay,
+  storageBayMove: moveBay,
+  storageBayOrder: orderBays,
+  storageBayHide: hideOrRestoreBay,
+  storageBayRestore: hideOrRestoreBay,
+  storageBayRemove: removeBay,
+  storageSlotAssign: assignSlot,
+  storageSlotClear: clearSlot,
+  storageSlotMove: moveSlot,
+};
+// Storage layout edits, one function per update type above. Only added floors and bays can be
+// removed; built-in floors can only be renamed, and handbook bays hidden and restored
+// (storageBayHide/Restore, #166), which keeps every record of theirs. These edits change names
+// and addresses only, with one exception: removing an added bay also deletes the 'slot-' checks
+// and notes of its addresses (the owner's decision in #51), so a bay that later reuses the
+// letter starts clean. A removed floor has no records of its own.
 function mutateLayout(s: SavedState, op: Raw) {
   const e = (s.storageEdits = validateEdits(
     s.storageEdits === undefined ? undefined : s.storageEdits,
   ));
-  if (op.type === 'storageFloorAdd') {
-    if (!addedFloorId(op.id) || e.floors.some(f => f.id === op.id) || !label(op.label))
-      fail('Invalid floor.');
-    e.floors.push({ id: op.id as string, label: op.label.trim() });
-  } else if (op.type === 'storageFloorRename') {
-    if (
-      !floorId(op.id) ||
-      !(builtinFloors.some(([id]) => id === op.id) || e.floors.some(f => f.id === op.id))
-    )
-      fail('Unknown floor.');
-    if (typeof op.label === 'string' && !op.label.trim()) delete e.floorNames[op.id];
-    else {
-      if (!label(op.label)) fail('Invalid floor name.');
-      e.floorNames[op.id] = op.label.trim();
-    }
-  } else if (op.type === 'storageFloorHide' || op.type === 'storageFloorRestore') {
-    // Built-in floors are hidden, never removed (#168); an added floor is removed instead.
-    if (!builtinFloors.some(([id]) => id === op.id))
-      fail('Only built-in floors can be hidden. Remove an added floor instead.');
-    const id = op.id as string;
-    if (op.type === 'storageFloorRestore') e.hiddenFloors = e.hiddenFloors.filter(f => f !== id);
-    else {
-      if (baysOn(e, id)) fail('Remove or move the bays on this floor first.');
-      const hidden = new Set([...e.hiddenFloors, id]);
-      if (hidden.size === builtinFloors.length && !e.floors.length)
-        fail('Keep at least one floor in the storage room.');
-      e.hiddenFloors = builtinFloors.map(([f]) => f).filter(f => hidden.has(f));
-    }
-  } else if (op.type === 'storageFloorRemove') {
-    if (!e.floors.some(f => f.id === op.id)) fail('Only added floors can be removed.');
-    if (baysOn(e, op.id as string)) fail('Remove or move the bays on this floor first.');
-    if (e.hiddenFloors.length === builtinFloors.length && e.floors.length === 1)
-      fail('Keep at least one floor in the storage room.');
-    e.floors = e.floors.filter(f => f.id !== op.id);
-    // The first check above matched an added floor, so the id is a string.
-    delete e.floorNames[op.id as string];
-    if (e.bayOrder?.[op.id as string]) {
-      const { [op.id as string]: _gone, ...rest } = e.bayOrder;
-      if (Object.keys(rest).length) e.bayOrder = rest;
-      else delete e.bayOrder;
-    }
-  } else if (op.type === 'storageBayAdd') {
-    if (!bayId(op.id) || !label(op.name) || !floorId(op.floor)) fail('Invalid bay.');
-    if (e.bays.some(b => b.id === op.id))
-      fail(`Bay ${op.id} already exists. Choose another letter.`);
-    // Any free letter, the owner's choice on #167. A handbook letter is free only while that
-    // bay is hidden, and taking it needs `replace`: the hidden bay's kept records are cleared
-    // first (as removing an added bay does, #51), so the new bay starts clean.
-    if (handbookBay(op.id)) {
-      if (!e.hiddenBays.includes(op.id))
-        fail(
-          `Bay ${op.id} is in the room. Hide that handbook bay first, or choose another letter.`,
-        );
-      if (op.replace !== true)
-        fail(`Bay ${op.id} still has saved progress from the handbook bay. Confirm to replace it.`);
-    }
-    if (!(builtinFloors.some(([id]) => id === op.floor) || e.floors.some(f => f.id === op.floor)))
-      fail('Unknown floor.');
-    if (handbookBay(op.id)) clearBayRecords(s, e, op.id);
-    e.bays.push({ id: op.id, name: op.name.trim(), floor: op.floor });
-  } else if (op.type === 'storageBayRename') {
-    if (!bayId(op.id)) fail('Invalid bay.');
-    if (typeof op.name === 'string' && !op.name.trim()) delete e.bayNames[op.id];
-    else {
-      if (!label(op.name)) fail('Invalid bay name.');
-      e.bayNames[op.id] = op.name.trim();
-    }
-  } else if (op.type === 'storageBayMove') {
-    // Any bay can move to another floor (#190), keeping its letter and so every address,
-    // check, note and name. An added bay (also one holding a hidden handbook letter, #167)
-    // changes its own floor; a handbook bay is recorded in bayFloors. Only to a floor in the
-    // tabs: a hidden built-in floor is restored first.
-    if (!bayId(op.id)) fail('Invalid bay.');
-    if (!knownFloor(e, op.floor)) fail('Unknown floor.');
-    if (e.hiddenFloors.includes(op.floor)) fail('Restore that floor before moving a bay onto it.');
-    const added = e.bays.find(b => b.id === op.id);
-    if (added) added.floor = op.floor;
-    else if (handbookBay(op.id)) {
-      const { [op.id]: _old, ...moved } = e.bayFloors || {};
-      if (op.floor !== handbookFloor(op.id)) moved[op.id] = op.floor;
-      if (Object.keys(moved).length) e.bayFloors = moved;
-      else delete e.bayFloors;
-    } else fail('Unknown bay.');
-    // It joins the new floor at its default place and leaves the old floor's order.
-    dropFromOrder(e, op.id);
-  } else if (op.type === 'storageBayOrder') {
-    // The order of the bays on one floor (#191), sent whole by Move left / Move right. Only bays
-    // on that floor; one left out keeps its default place (views/storage.ts orderBays).
-    if (!knownFloor(e, op.floor)) fail('Unknown floor.');
-    const list = op.order;
-    if (
-      !Array.isArray(list) ||
-      list.length > 60 ||
-      list.some((id: unknown) => !bayId(id)) ||
-      new Set(list).size !== list.length
-    )
-      fail('Invalid bay order.');
-    if (list.some((id: string) => bayFloor(e, id) !== op.floor))
-      fail('Only bays on this floor can be put in order.');
-    const { [op.floor]: _old, ...rest } = e.bayOrder || {};
-    if (list.length) rest[op.floor] = [...list];
-    if (Object.keys(rest).length) e.bayOrder = rest;
-    else delete e.bayOrder;
-  } else if (op.type === 'storageBayHide' || op.type === 'storageBayRestore') {
-    if (typeof op.id !== 'string' || !handbookBay(op.id))
-      fail('Only handbook bays can be hidden. Remove an added bay instead.');
-    const hidden = new Set(e.hiddenBays);
-    // An added bay under a handbook letter still in the room predates #91 and shares that bay's
-    // addresses and records. Hiding the handbook bay would make removing the added one clear
-    // them (storageBayRemove treats a hidden letter's records as the added bay's own), so the
-    // added bay has to go first. A letter an added bay took with `replace` is already hidden.
-    if (op.type === 'storageBayHide' && !hidden.has(op.id) && e.bays.some(b => b.id === op.id))
-      fail(`An added bay uses the letter ${op.id}. Remove it before hiding the handbook bay.`);
-    if (op.type === 'storageBayHide') hidden.add(op.id);
-    else if (e.bays.some(b => b.id === op.id))
-      fail(`An added bay uses the letter ${op.id}. Remove it before restoring the handbook bay.`);
-    else hidden.delete(op.id);
-    e.hiddenBays = [...hidden].sort();
-  } else if (op.type === 'storageBayRemove') {
-    if (!e.bays.some(b => b.id === op.id))
-      fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
-    e.bays = e.bays.filter(b => b.id !== op.id);
-    // The check above matched an added bay, so the id is a string.
-    const id = op.id as string;
-    // An added bay under the letter of a handbook bay that is still in the room predates
-    // storageBayAdd refusing one (only a direct request or an edited import could make it). Its
-    // addresses, name, checks and notes are the handbook bay's too, so removing it removes the
-    // entry and nothing else. Under a hidden handbook letter (#167) the records are its own.
-    if (handbookBay(id) && !e.hiddenBays.includes(id)) return;
-    clearBayRecords(s, e, id);
-  } else if (op.type === 'storageSlotAssign') {
-    if (!slotAddr(op.key) || !label(op.name, 120)) fail('Invalid container.');
-    e.slots[op.key] = op.name.trim();
-    e.clearedSlots = e.clearedSlots.filter(k => k !== op.key);
-  } else if (op.type === 'storageSlotClear') {
-    if (!slotAddr(op.key)) fail('Invalid container address.');
-    delete e.slots[op.key];
-    // An added position disappears with its container; a handbook one stays as a
-    // reserved address so its printed label keeps meaning something.
-    if (!addedSlot(op.key) && !e.clearedSlots.includes(op.key)) e.clearedSlots.push(op.key);
-  } else if (op.type === 'storageSlotMove') {
-    // A container dragged to another position (#208), in its bay or another. The page sends the
-    // items it shows at both addresses (the server does not know the handbook's), `toName` null
-    // for an empty position: a move, else a swap. The owner's choice on #208: progress moves
-    // with the container, so the two addresses' 'slot-' checks and notes always trade places;
-    // an empty position's leftover records go to the address left behind, never deleted.
-    const { from, to } = op;
-    if (!slotAddr(from) || !slotAddr(to) || from === to) fail('Invalid container move.');
-    for (const k of [from, to])
-      if (!handbookBay(bayOfSlot(k)) && !e.bays.some(b => b.id === bayOfSlot(k)))
-        fail('Unknown bay.');
-    if (!label(op.fromName, 120) || (op.toName !== null && !label(op.toName, 120)))
-      fail('Invalid container.');
-    const put = (k: string, name: string | null) => {
-      if (name === null) {
-        // Emptied the way storageSlotClear empties a position.
-        delete e.slots[k];
-        if (!addedSlot(k) && !e.clearedSlots.includes(k)) e.clearedSlots.push(k);
-      } else {
-        e.slots[k] = name.trim();
-        e.clearedSlots = e.clearedSlots.filter(x => x !== k);
-      }
-    };
-    put(to, op.fromName);
-    put(from, op.toName as string | null);
-    swapSlotRecords(s, from, to);
-  } else fail('Unknown update.');
+  // mutate only sends types starting with 'storage', which no Object.prototype key does.
+  const edit = layoutEdits[op.type as string];
+  if (!edit) fail('Unknown update.');
+  edit(s, e, op);
 }
 // Trades every 'slot-<a>' note and 'slot-<a>-<step>' check with those of address b.
 function swapSlotRecords(s: SavedState, a: string, b: string) {

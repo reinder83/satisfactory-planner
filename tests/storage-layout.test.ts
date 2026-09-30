@@ -629,3 +629,11 @@ test('a container move to the same, an unknown or a malformed address is refused
   assert.throws(() => checkBase({ ...s, revision: 3 }, op, '2'), /changed in another tab/);
   assert.doesNotThrow(() => checkBase({ ...s, revision: 3 }, op, '3'));
 });
+
+test('a storage update type the layout edits do not know is refused as before', () => {
+  for (const type of ['storageBayPaint', 'storage', 'storageFloorAdd ']) {
+    const s = initialState();
+    // @ts-expect-error: an update type no release sends
+    assert.throws(() => mutate(s, { type, id: 'A' }), /Unknown update/, type);
+  }
+});
