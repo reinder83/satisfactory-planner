@@ -4373,6 +4373,23 @@ button.rail-tile:hover {
   border-bottom-color: rgba(224, 85, 58, 0.5);
   background: transparent;
 }
+/* On a phone the step tools take their own row under the title, so the title keeps the row's
+   full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
+   keep their order, and their buttons grow to 44px touch targets. */
+@media (max-width: 720px) {
+  .task.is-editing {
+    grid-template-columns: 20px 26px minmax(0, 1fr);
+  }
+  .task.is-editing .task-tools {
+    grid-column: 3;
+    justify-content: flex-start;
+    margin-top: -8px;
+  }
+  .task-tools .btn.quiet {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .task-link {
   display: inline-block;
   margin-top: 8px;
