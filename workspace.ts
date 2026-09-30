@@ -48,15 +48,15 @@ export type Route = (
   body: (req: IncomingMessage) => Promise<unknown>,
 ) => Promise<RouteReply>;
 // The error code of a failed file read, if it has one.
-const code = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code;
+const errorCode = (error: unknown) => (error as NodeJS.ErrnoException | null)?.code;
 
 const scrypt = promisify(scryptCallback) as (
     password: string,
     salt: string,
     keylen: number,
   ) => Promise<Buffer>,
-  id = () => randomBytes(16).toString('hex'),
-  digest = (s: string) => createHash('sha256').update(s).digest('hex');
+  randomId = () => randomBytes(16).toString('hex'),
+  digest = (text: string) => createHash('sha256').update(text).digest('hex');
 // A function declaration, so TypeScript knows the code after a failed check is unreachable.
 function fail(message: string, status = 400): never {
   throw Object.assign(new Error(message), { status });
@@ -67,8 +67,8 @@ const name = (value: unknown): string =>
     ? value.trim()
     : fail('Enter a name with 1–80 characters.');
 // The part of a user record the browser may see; never the password hash.
-const publicUser = (u: StoredUser | null | undefined) =>
-  u ? { id: u.id, username: u.username, owner: u.id === 'owner' } : null;
+const publicUser = (user: StoredUser | null | undefined) =>
+  user ? { id: user.id, username: user.username, owner: user.id === 'owner' } : null;
 // The session cookie: HttpOnly so scripts cannot read it, SameSite=Strict so other sites
 // cannot send it, 30 days (an empty token expires it). Secure only when COOKIE_SECURE=true
 // (behind HTTPS), because browsers never send a Secure cookie back over plain http.
@@ -87,8 +87,8 @@ const migrateOriginals = async (saves: Save[]) => {
   const { recipes } = (await read('./recipes.json')) as { recipes: Recipe[] };
   const { pureLimits } = catalog();
   for (const save of saves)
-    save.profiles = save.profiles.map(p =>
-      migrateOriginalProfile(p, handbook, recipes, pureLimits),
+    save.profiles = save.profiles.map(profile =>
+      migrateOriginalProfile(profile, handbook, recipes, pureLimits),
     );
 };
 // Opens (or creates) the Docker edition's workspace in dataDir and returns route(req, url,
@@ -121,8 +121,8 @@ export async function openWorkspace({
   estimateBudgetMs = 20000,
 }: {
   dataDir: string;
-  validateState: (s: unknown) => ProgressState;
-  mutate: (s: ProgressState, update: UpdateOp) => ProgressState;
+  validateState: (state: unknown) => ProgressState;
+  mutate: (state: ProgressState, update: UpdateOp) => ProgressState;
   // A ranking recalculates the plan once per candidate recipe on the request, holding up every
   // other request meanwhile, so it stops after this long and reports `stopped`.
   rankBudgetMs?: number | undefined;
@@ -130,7 +130,7 @@ export async function openWorkspace({
   estimateBudgetMs?: number | undefined;
 }): Promise<Route> {
   const file = path.join(dataDir, 'workspace.json');
-  let db: Workspace;
+  let workspace: Workspace;
   const original = (state: ProgressState): Profile => ({
     id: 'original',
     name: 'Original · 50× complete automation',
@@ -138,7 +138,7 @@ export async function openWorkspace({
     state,
   });
   // Load workspace.json and validate every profile's progress. Any failure other than a
-  // missing file (unreadable JSON, an unknown or newer db.version, a broken save, a state
+  // missing file (unreadable JSON, an unknown or newer workspace.version, a broken save, a state
   // validateState refuses) stops start-up and leaves the file untouched, so a damaged or
   // newer workspace never turns into an empty one. Normalised states are only held in
   // memory until the next write.
@@ -155,33 +155,33 @@ export async function openWorkspace({
   let raw: string | null = null;
   try {
     raw = await fs.readFile(file, 'utf8');
-    db = JSON.parse(raw);
-    if (typeof db.version === 'number' && db.version > 2) throw newer();
+    workspace = JSON.parse(raw);
+    if (typeof workspace.version === 'number' && workspace.version > 2) throw newer();
     if (
-      db.version !== 2 ||
-      !Array.isArray(db.users) ||
-      !Array.isArray(db.saves) ||
-      !Array.isArray(db.sessions) ||
-      !db.users.some(u => u.id === 'owner')
+      workspace.version !== 2 ||
+      !Array.isArray(workspace.users) ||
+      !Array.isArray(workspace.saves) ||
+      !Array.isArray(workspace.sessions) ||
+      !workspace.users.some(u => u.id === 'owner')
     )
       throw Error();
-    for (const save of db.saves) {
+    for (const save of workspace.saves) {
       if (
-        !db.users.some(u => u.id === save.userId) ||
+        !workspace.users.some(u => u.id === save.userId) ||
         !Array.isArray(save.profiles) ||
         !save.profiles.some(p => p.id === save.activeProfile)
       )
         throw Error();
-      for (const p of save.profiles)
+      for (const profile of save.profiles)
         try {
-          p.state = validateState(p.state);
-        } catch (e) {
-          throw /newer planner version/.test((e as Error).message) ? newer() : e;
+          profile.state = validateState(profile.state);
+        } catch (error) {
+          throw /newer planner version/.test((error as Error).message) ? newer() : error;
         }
     }
-  } catch (e) {
-    if ((e as { newer?: boolean })?.newer) throw e;
-    if (code(e) !== 'ENOENT')
+  } catch (error) {
+    if ((error as { newer?: boolean })?.newer) throw error;
+    if (errorCode(error) !== 'ENOENT')
       throw new Error('Workspace could not be read; existing data has not been overwritten.');
     // workspace.json is missing but its backup is not: starting fresh would overwrite that
     // backup on the first save, so stop and say how to recover instead. Only a backup that is
@@ -189,7 +189,7 @@ export async function openWorkspace({
     // so it stops too, but says the backup could not be checked rather than that it exists.
     const backup = await fs.stat(file + '.bak').then(
       () => 'exists',
-      e => (code(e) === 'ENOENT' ? 'absent' : code(e) || 'unknown error'),
+      error => (errorCode(error) === 'ENOENT' ? 'absent' : errorCode(error) || 'unknown error'),
     );
     if (backup === 'exists')
       throw new Error(
@@ -212,11 +212,11 @@ export async function openWorkspace({
       legacy = validateState(
         JSON.parse(await fs.readFile(path.join(dataDir, 'progress.json'), 'utf8')),
       );
-    } catch (e) {
-      if (code(e) === 'ENOENT') legacy = null;
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') legacy = null;
       else throw new Error('Progress could not be read; existing data has not been overwritten.');
     }
-    db = {
+    workspace = {
       version: 2,
       revision: 0,
       accountsEnabled: false,
@@ -237,8 +237,8 @@ export async function openWorkspace({
     };
     // Progress from progress.json is handbook progress: it migrates before it is first written
     // (#495), and progress.json itself is its pre-migration copy.
-    await migrateOriginals(db.saves);
-    await fs.writeFile(file, JSON.stringify(db), { flag: 'wx', mode: 0o600 });
+    await migrateOriginals(workspace.saves);
+    await fs.writeFile(file, JSON.stringify(workspace), { flag: 'wx', mode: 0o600 });
   }
   // A workspace.json with original profiles (#495): first keep it as it was read in
   // workspace.json.pre-handbook, written once and never replaced, so a later start cannot
@@ -246,16 +246,16 @@ export async function openWorkspace({
   // write, through .tmp and a rename like commit's, so a crash leaves the unmigrated file and the
   // next start finishes. A workspace without any is left as it is, so starting again changes
   // nothing.
-  if (raw !== null && db.saves.some(s => s.profiles.some(p => p.kind === 'original'))) {
-    await fs.writeFile(file + '.pre-handbook', raw, { flag: 'wx', mode: 0o600 }).catch(e => {
-      if (code(e) !== 'EEXIST') throw e;
+  if (raw !== null && workspace.saves.some(s => s.profiles.some(p => p.kind === 'original'))) {
+    await fs.writeFile(file + '.pre-handbook', raw, { flag: 'wx', mode: 0o600 }).catch(error => {
+      if (errorCode(error) !== 'EEXIST') throw error;
     });
-    const next = structuredClone(db);
+    const next = structuredClone(workspace);
     await migrateOriginals(next.saves);
-    next.revision = db.revision + 1;
+    next.revision = workspace.revision + 1;
     await fs.writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
     await fs.rename(file + '.tmp', file);
-    db = next;
+    workspace = next;
   }
   // The one-time token /api/setup asks for before it enables accounts, so only someone with
   // access to the data folder can claim the owner account. Created once and kept.
@@ -263,27 +263,27 @@ export async function openWorkspace({
   let setupToken: string;
   try {
     setupToken = (await fs.readFile(tokenFile, 'utf8')).trim();
-  } catch (e) {
-    if (code(e) !== 'ENOENT') throw e;
+  } catch (error) {
+    if (errorCode(error) !== 'ENOENT') throw error;
     setupToken = randomBytes(24).toString('hex');
     await fs.writeFile(tokenFile, setupToken, { mode: 0o600, flag: 'wx' });
   }
-  // Every write goes through commit, one at a time in queue order. fn changes a deep copy of
-  // the workspace; if it throws, nothing is written and db stays as it was. Otherwise the
+  // Every write goes through commit, one at a time in queue order. change edits a deep copy of
+  // the workspace; if it throws, nothing is written and workspace stays as it was. Otherwise the
   // previous in-memory workspace is kept as workspace.json.bak, the new one goes to .tmp and
-  // renamed over workspace.json, and only then does db become the copy. So a crash leaves
-  // either the old or the new workspace, never a half-written one. Returns fn's result; a
+  // renamed over workspace.json, and only then does workspace become the copy. So a crash leaves
+  // either the old or the new workspace, never a half-written one. Returns change's result; a
   // failed commit does not block the ones queued after it.
   let queue: Promise<unknown> = Promise.resolve();
-  const commit = <T>(fn: (d: Workspace) => T): Promise<T> => {
+  const commit = <T>(change: (draft: Workspace) => T): Promise<T> => {
     const run = queue.then(async () => {
-      const next = structuredClone(db);
-      const result = fn(next);
-      next.revision = db.revision + 1;
-      await fs.writeFile(file + '.bak', JSON.stringify(db), { mode: 0o600 });
+      const next = structuredClone(workspace);
+      const result = change(next);
+      next.revision = workspace.revision + 1;
+      await fs.writeFile(file + '.bak', JSON.stringify(workspace), { mode: 0o600 });
       await fs.writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
       await fs.rename(file + '.tmp', file);
-      db = next;
+      workspace = next;
       return result;
     });
     queue = run.catch(() => {});
@@ -292,39 +292,39 @@ export async function openWorkspace({
   // The requesting user: the owner while accounts are off, otherwise the user of an
   // unexpired session whose token hash matches the cookie, or null when signed out.
   const userFor = (req: IncomingMessage) => {
-    if (!db.accountsEnabled) return db.users.find(u => u.id === 'owner');
+    if (!workspace.accountsEnabled) return workspace.users.find(u => u.id === 'owner');
     const token = (req.headers.cookie || '')
       .split(';')
-      .map(x => x.trim())
-      .find(x => x.startsWith('planner_session='))
+      .map(part => part.trim())
+      .find(part => part.startsWith('planner_session='))
       ?.split('=')[1];
     const session =
-      token && db.sessions.find(s => s.hash === digest(token) && s.expires > Date.now());
-    return session ? db.users.find(u => u.id === session.userId) : null;
+      token && workspace.sessions.find(s => s.hash === digest(token) && s.expires > Date.now());
+    return session ? workspace.users.find(u => u.id === session.userId) : null;
   };
   // What the interface needs to list saves: only this user's saves, and per profile its
   // settings and tick count rather than the full state.
-  const summary = (u: StoredUser | null | undefined): WorkspaceSummary => ({
-    accountsEnabled: db.accountsEnabled,
-    registration: db.registration,
-    user: publicUser(u),
-    activeSave: u?.activeSave,
+  const summary = (user: StoredUser | null | undefined): WorkspaceSummary => ({
+    accountsEnabled: workspace.accountsEnabled,
+    registration: workspace.registration,
+    user: publicUser(user),
+    activeSave: user?.activeSave,
     catalog: catalog(),
-    saves: db.saves
-      .filter(s => s.userId === u?.id)
-      .map(s => ({
-        id: s.id,
-        name: s.name,
-        activeProfile: s.activeProfile,
-        profiles: s.profiles.map(p => ({
-          id: p.id,
-          name: p.name,
-          kind: p.kind,
-          settings: p.plan?.settings,
-          ...(isTranscribed(p.plan) ? { transcribed: true as const } : {}),
-          completed: Object.values(p.state.checks).filter(Boolean).length,
-          phase: p.state.settings.phase,
-          phases: phaseProgress(p.plan, p.state.checks),
+    saves: workspace.saves
+      .filter(s => s.userId === user?.id)
+      .map(save => ({
+        id: save.id,
+        name: save.name,
+        activeProfile: save.activeProfile,
+        profiles: save.profiles.map(profile => ({
+          id: profile.id,
+          name: profile.name,
+          kind: profile.kind,
+          settings: profile.plan?.settings,
+          ...(isTranscribed(profile.plan) ? { transcribed: true as const } : {}),
+          completed: Object.values(profile.state.checks).filter(Boolean).length,
+          phase: profile.state.settings.phase,
+          phases: phaseProgress(profile.plan, profile.state.checks),
         })),
       })),
   });
@@ -332,9 +332,9 @@ export async function openWorkspace({
   // headers, then ?save= / ?profile=, then the user's active save and its active profile.
   // Each browser tab sends its own headers, so tabs on different profiles never write into
   // each other. A save that belongs to another user is reported as not found.
-  const scope = (req: { headers: Record<string, unknown> }, url: URL, u: StoredUser) => {
-    const saveId = req.headers['x-save-id'] || url.searchParams.get('save') || u.activeSave;
-    const save = db.saves.find(s => s.id === saveId && s.userId === u.id);
+  const scope = (req: { headers: Record<string, unknown> }, url: URL, user: StoredUser) => {
+    const saveId = req.headers['x-save-id'] || url.searchParams.get('save') || user.activeSave;
+    const save = workspace.saves.find(s => s.id === saveId && s.userId === user.id);
     if (!save) fail('Save not found.', 404);
     const profileId =
       req.headers['x-profile-id'] || url.searchParams.get('profile') || save.activeProfile;
@@ -358,53 +358,55 @@ export async function openWorkspace({
   function estimateBudget(req: IncomingMessage) {
     const key = req.socket.remoteAddress,
       now = Date.now();
-    let v = estimateTime.get(key);
-    if (!v || v.until < now) {
-      v = { count: 0, until: now + 60000 };
-      estimateTime.set(key, v);
+    let entry = estimateTime.get(key);
+    if (!entry || entry.until < now) {
+      entry = { count: 0, until: now + 60000 };
+      estimateTime.set(key, entry);
     }
-    if (v.count >= estimateBudgetMs)
+    if (entry.count >= estimateBudgetMs)
       fail('Live estimates are paused for a minute. Calculate plan still works.', 429);
     if (estimateTime.size > 2000)
-      for (const [k, e] of estimateTime) if (e.until < now) estimateTime.delete(k);
-    return v;
+      for (const [address, { until }] of estimateTime)
+        if (until < now) estimateTime.delete(address);
+    return entry;
   }
   function throttle(req: IncomingMessage, cost = 1, bucket = throttles, limit = 20) {
     const key = req.socket.remoteAddress,
       now = Date.now();
-    let v = bucket.get(key);
-    if (!v || v.until < now) {
-      v = { count: 0, until: now + 60000 };
-      bucket.set(key, v);
+    let entry = bucket.get(key);
+    if (!entry || entry.until < now) {
+      entry = { count: 0, until: now + 60000 };
+      bucket.set(key, entry);
     }
-    if ((v.count += cost) > limit) fail('Too many attempts. Wait a minute and try again.', 429);
-    if (bucket.size > 2000) for (const [k, v] of bucket) if (v.until < now) bucket.delete(k);
+    if ((entry.count += cost) > limit) fail('Too many attempts. Wait a minute and try again.', 429);
+    if (bucket.size > 2000)
+      for (const [address, { until }] of bucket) if (until < now) bucket.delete(address);
   }
   // Validates sign-in input and returns the lower-cased username.
-  const authValues = (b: Body) => {
-    const username = String(b.username || '')
+  const authValues = (input: Body) => {
+    const username = String(input.username || '')
       .trim()
       .toLowerCase();
     if (
       !/^[a-z0-9_-]{3,32}$/.test(username) ||
-      typeof b.password !== 'string' ||
-      b.password.length < 12 ||
-      b.password.length > 128
+      typeof input.password !== 'string' ||
+      input.password.length < 12 ||
+      input.password.length > 128
     )
       fail('Use a 3–32 character username and a password of 12–128 characters.');
     return username;
   };
   // Adds a 30-day session to a commit draft. Only the token's hash is stored, expired
   // sessions are dropped, and past 5000 the oldest is signed out.
-  const makeSession = (d: Workspace, userId: string, token: string) => {
-    d.sessions = d.sessions.filter(s => s.expires > Date.now());
-    d.sessions.push({ hash: digest(token), userId, expires: Date.now() + 2592000000 });
-    if (d.sessions.length > 5000) d.sessions.shift();
+  const makeSession = (draft: Workspace, userId: string, token: string) => {
+    draft.sessions = draft.sessions.filter(s => s.expires > Date.now());
+    draft.sessions.push({ hash: digest(token), userId, expires: Date.now() + 2592000000 });
+    if (draft.sessions.length > 5000) draft.sessions.shift();
   };
   // body(req) reads the JSON body (server.ts enforces the size limit). Returns
   // { data, status, headers }; errors are thrown with a status for server.ts to send.
   return async function route(req, url, readBody) {
-    let u = userFor(req);
+    let user = userFor(req);
     const endpoint = url.pathname;
     const response = (
       data: unknown,
@@ -412,10 +414,10 @@ export async function openWorkspace({
       headers: Record<string, string> = {},
     ): RouteReply => ({ data, status, headers });
     // Every route that reads a body expects a JSON object; its fields are checked where used.
-    const body = async (r: IncomingMessage) => (await readBody(r)) as Body;
+    const body = async (request: IncomingMessage) => (await readBody(request)) as Body;
     // Answered even when signed out (user null, no saves), so the interface can show the
     // sign-in or setup screen.
-    if (endpoint === '/api/workspace' && req.method === 'GET') return response(summary(u));
+    if (endpoint === '/api/workspace' && req.method === 'GET') return response(summary(user));
     // Setup turns accounts on: the owner record, which keeps all existing saves, gets the
     // chosen username and password, if the setup token matches. Register adds a user while
     // registration is open. Login checks a password. All three are throttled and start a
@@ -424,13 +426,13 @@ export async function openWorkspace({
     // it takes as long as a wrong password.
     if (req.method === 'POST' && ['/api/setup', '/api/login', '/api/register'].includes(endpoint)) {
       throttle(req);
-      const b = await body(req),
-        username = authValues(b),
-        password = b.password as string, // authValues checked it
+      const input = await body(req),
+        username = authValues(input),
+        password = input.password as string, // authValues checked it
         token = randomBytes(32).toString('hex');
       if (endpoint === '/api/login') {
-        if (!db.accountsEnabled) fail('Accounts are not enabled.');
-        const found = db.users.find(x => x.username === username);
+        if (!workspace.accountsEnabled) fail('Accounts are not enabled.');
+        const found = workspace.users.find(account => account.username === username);
         const [salt, hash] = (found?.password || 'missing:' + '0'.repeat(128)).split(':') as [
           string,
           string,
@@ -440,52 +442,60 @@ export async function openWorkspace({
           fail('Incorrect username or password.', 401);
         // Only a found user can match: the dummy hash is all zeros.
         const userId = found!.id;
-        await commit(d => makeSession(d, userId, token));
-        u = db.users.find(x => x.id === userId);
+        await commit(draft => makeSession(draft, userId, token));
+        user = workspace.users.find(account => account.id === userId);
       } else {
         if (endpoint === '/api/setup') {
-          if (db.accountsEnabled) fail('Accounts are already enabled.', 409);
-          if (typeof b.setupToken !== 'string' || digest(b.setupToken) !== digest(setupToken))
+          if (workspace.accountsEnabled) fail('Accounts are already enabled.', 409);
+          if (
+            typeof input.setupToken !== 'string' ||
+            digest(input.setupToken) !== digest(setupToken)
+          )
             fail('Enter the setup token from the server data folder.', 403);
-        } else if (!db.accountsEnabled || !db.registration)
+        } else if (!workspace.accountsEnabled || !workspace.registration)
           fail('New accounts are not enabled on this server.', 403);
-        const salt = id(),
+        const salt = randomId(),
           hash = Buffer.from(await scrypt(password, salt, 64)).toString('hex');
         let userId = '';
-        await commit(d => {
-          if (d.users.some(x => x.username === username))
+        await commit(draft => {
+          if (draft.users.some(account => account.username === username))
             fail('That username is already in use.', 409);
           if (endpoint === '/api/setup') {
-            if (d.accountsEnabled) fail('Accounts are already enabled.', 409);
-            const owner = d.users.find(x => x.id === 'owner')!;
+            if (draft.accountsEnabled) fail('Accounts are already enabled.', 409);
+            const owner = draft.users.find(account => account.id === 'owner')!;
             owner.username = username;
             owner.password = salt + ':' + hash;
             userId = owner.id;
-            d.accountsEnabled = true;
-            d.registration = !!b.registration;
+            draft.accountsEnabled = true;
+            draft.registration = !!input.registration;
           } else {
-            if (d.users.length >= 500) fail('This server has reached its account limit.');
-            userId = id();
-            d.users.push({ id: userId, username, password: salt + ':' + hash, activeSave: null });
+            if (draft.users.length >= 500) fail('This server has reached its account limit.');
+            userId = randomId();
+            draft.users.push({
+              id: userId,
+              username,
+              password: salt + ':' + hash,
+              activeSave: null,
+            });
           }
-          makeSession(d, userId, token);
+          makeSession(draft, userId, token);
         });
-        u = db.users.find(x => x.id === userId);
+        user = workspace.users.find(account => account.id === userId);
       }
-      return response(summary(u), 200, { 'Set-Cookie': authCookie(token) });
+      return response(summary(user), 200, { 'Set-Cookie': authCookie(token) });
     }
     // Everything below needs a user and only ever touches saves whose userId is theirs.
-    if (!u) fail('Sign in to continue.', 401);
+    if (!user) fail('Sign in to continue.', 401);
     // Deletes this browser's session and expires its cookie.
     if (endpoint === '/api/logout' && req.method === 'POST') {
       const token = (req.headers.cookie || '')
         .split(';')
-        .map(x => x.trim())
-        .find(x => x.startsWith('planner_session='))
+        .map(part => part.trim())
+        .find(part => part.startsWith('planner_session='))
         ?.split('=')[1];
       if (token)
-        await commit(d => {
-          d.sessions = d.sessions.filter(s => s.hash !== digest(token));
+        await commit(draft => {
+          draft.sessions = draft.sessions.filter(s => s.hash !== digest(token));
         });
       return response({ ok: true }, 200, { 'Set-Cookie': authCookie('') });
     }
@@ -501,7 +511,7 @@ export async function openWorkspace({
       const saveId = url.searchParams.get('save'),
         profileId = url.searchParams.get('profile'),
         share = url.searchParams.get('share') === '1';
-      let saves = db.saves.filter(s => s.userId === u.id);
+      let saves = workspace.saves.filter(s => s.userId === user.id);
       const chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
       if (chosen) {
         saves = saves.filter(s => chosen.includes(s.id));
@@ -515,21 +525,21 @@ export async function openWorkspace({
         saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
         if (!saves.length) fail('Profile not found.', 404);
       }
-      const exported = saves.map(s => {
-        const profiles = profileId ? s.profiles.filter(p => p.id === profileId) : s.profiles;
+      const exported = saves.map(save => {
+        const profiles = profileId ? save.profiles.filter(p => p.id === profileId) : save.profiles;
         return {
-          id: s.id,
-          name: s.name,
-          activeProfile: profiles.some(p => p.id === s.activeProfile)
-            ? s.activeProfile
+          id: save.id,
+          name: save.name,
+          activeProfile: profiles.some(p => p.id === save.activeProfile)
+            ? save.activeProfile
             : profiles[0]!.id,
-          profiles: profiles.map(p => ({
-            id: p.id,
-            name: p.name,
-            kind: p.kind,
-            plan: p.plan || null,
-            state: share ? shareState(p.state) : p.state,
-            ...(p.kind === 'original' ? { handbook: p.handbook || handbook } : {}),
+          profiles: profiles.map(profile => ({
+            id: profile.id,
+            name: profile.name,
+            kind: profile.kind,
+            plan: profile.plan || null,
+            state: share ? shareState(profile.state) : profile.state,
+            ...(profile.kind === 'original' ? { handbook: profile.handbook || handbook } : {}),
           })),
         };
       });
@@ -543,29 +553,33 @@ export async function openWorkspace({
     // Copies a profile of one of the user's saves, plan and progress included, into the same
     // save under a new id and makes the copy active. The source is not changed.
     if (endpoint === '/api/duplicate-profile' && req.method === 'POST') {
-      const b = await body(req);
-      if (!b.saveId || !b.profileId) fail('Choose a profile to copy.');
+      const input = await body(req);
+      if (!input.saveId || !input.profileId) fail('Choose a profile to copy.');
       const { save, profile } = scope(
-        { headers: { 'x-save-id': b.saveId, 'x-profile-id': b.profileId } },
+        { headers: { 'x-save-id': input.saveId, 'x-profile-id': input.profileId } },
         url,
-        u,
+        user,
       );
-      const profileId = id();
-      await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id && s.userId === u.id);
-        const source = sv?.profiles.find(p => p.id === profile.id);
-        if (!sv || !source) fail('Profile not found.', 404);
-        if (sv.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
-        sv.profiles.push({
+      const profileId = randomId();
+      await commit(draft => {
+        const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+        const source = draftSave?.profiles.find(p => p.id === profile.id);
+        if (!draftSave || !source) fail('Profile not found.', 404);
+        if (draftSave.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
+        draftSave.profiles.push({
           ...structuredClone(source),
           id: profileId,
           name: (source.name + ' · copy').slice(0, 80),
         });
-        sv.activeProfile = profileId;
-        d.users.find(x => x.id === u.id)!.activeSave = sv.id;
+        draftSave.activeProfile = profileId;
+        draft.users.find(account => account.id === user.id)!.activeSave = draftSave.id;
       });
       return response(
-        { saveId: save.id, profileId, workspace: summary(db.users.find(x => x.id === u.id)) },
+        {
+          saveId: save.id,
+          profileId,
+          workspace: summary(workspace.users.find(account => account.id === user.id)),
+        },
         201,
       );
     }
@@ -574,25 +588,25 @@ export async function openWorkspace({
     // single commit, so a bad file adds nothing. The last imported save becomes active.
     if (endpoint === '/api/import-saves' && req.method === 'POST') {
       const imported = validateTransfer(await body(req));
-      await commit(d => {
-        if (d.saves.filter(s => s.userId === u.id).length + imported.saves.length > 50)
+      await commit(draft => {
+        if (draft.saves.filter(s => s.userId === user.id).length + imported.saves.length > 50)
           fail('Import would exceed the save limit.');
         // validateTransfer ran every profile's progress through validateState; the owner is
         // added below.
         for (const save of imported.saves as Save[]) {
-          const old = save.activeProfile;
-          for (const p of save.profiles) {
-            const previous = p.id;
-            p.id = id();
-            if (previous === old) save.activeProfile = p.id;
+          const oldActive = save.activeProfile;
+          for (const importedProfile of save.profiles) {
+            const previous = importedProfile.id;
+            importedProfile.id = randomId();
+            if (previous === oldActive) save.activeProfile = importedProfile.id;
           }
-          save.id = id();
-          save.userId = u.id;
-          d.saves.push(save);
-          d.users.find(x => x.id === u.id)!.activeSave = save.id;
+          save.id = randomId();
+          save.userId = user.id;
+          draft.saves.push(save);
+          draft.users.find(account => account.id === user.id)!.activeSave = save.id;
         }
       });
-      return response(summary(db.users.find(x => x.id === u.id)));
+      return response(summary(workspace.users.find(account => account.id === user.id)));
     }
     // Runs the calculator for the wizard without storing anything; throttled because a
     // solve is expensive. A live estimate (`?estimate=1`) counts against its own allowance and
@@ -601,10 +615,10 @@ export async function openWorkspace({
       const budget = url.searchParams.get('estimate') === '1' ? estimateBudget(req) : null;
       if (budget) throttle(req, 1, estimates, 120);
       else throttle(req);
-      const b = await body(req);
+      const input = await body(req);
       const start = performance.now();
       try {
-        return response(calculate(b.settings));
+        return response(calculate(input.settings));
       } finally {
         if (budget) budget.count += performance.now() - start;
       }
@@ -616,40 +630,41 @@ export async function openWorkspace({
     // calculated before the commit; the save lookup and limits are checked inside it.
     if (endpoint === '/api/profiles' && req.method === 'POST') {
       throttle(req);
-      const b = await body(req);
-      if (b.kind === 'original')
+      const input = await body(req);
+      if (input.kind === 'original')
         fail('Handbook profiles can no longer be created. Create a calculated profile instead.');
-      const saveName = b.saveId ? null : name(b.saveName),
-        profileName = name(b.name);
-      const plan = calculate(b.settings);
-      const profileId = id();
+      const saveName = input.saveId ? null : name(input.saveName),
+        profileName = name(input.name);
+      const plan = calculate(input.settings);
+      const profileId = randomId();
       // A saveId that is not one of the user's save ids is refused inside the commit.
-      let saveId = (b.saveId || id()) as string;
-      const carried = await commit(d => {
-        let save = d.saves.find(s => s.id === saveId && s.userId === u.id);
-        if (b.saveId && !save) fail('Save not found.', 404);
+      let saveId = (input.saveId || randomId()) as string;
+      const carried = await commit(draft => {
+        let save = draft.saves.find(s => s.id === saveId && s.userId === user.id);
+        if (input.saveId && !save) fail('Save not found.', 404);
         if (!save) {
-          if (d.saves.filter(s => s.userId === u.id).length >= 50)
+          if (draft.saves.filter(s => s.userId === user.id).length >= 50)
             fail('You can create up to 50 saves.');
           save = {
             id: saveId,
             // Only null when saveId named an existing save.
             name: saveName as string,
-            userId: u.id,
+            userId: user.id,
             activeProfile: profileId,
             profiles: [],
           };
-          d.saves.push(save);
+          draft.saves.push(save);
         }
         if (save.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
-        const source = b.carryFrom ? save.profiles.find(p => p.id === b.carryFrom) : null;
-        if (b.carryFrom && !source) fail('The profile to carry progress from was not found.', 404);
+        const source = input.carryFrom ? save.profiles.find(p => p.id === input.carryFrom) : null;
+        if (input.carryFrom && !source)
+          fail('The profile to carry progress from was not found.', 404);
         const started = newProfileState(
           plan,
           source?.state || null,
           source?.plan || null,
-          b.carry,
-          b.built,
+          input.carry,
+          input.built,
         );
         save.profiles.push({
           id: profileId,
@@ -660,7 +675,7 @@ export async function openWorkspace({
           state: started.state,
         });
         save.activeProfile = profileId;
-        d.users.find(x => x.id === u.id)!.activeSave = saveId;
+        draft.users.find(account => account.id === user.id)!.activeSave = saveId;
         return started;
       });
       return response(
@@ -669,65 +684,69 @@ export async function openWorkspace({
           profileId,
           reviewCount: carried.reviewCount,
           carriedChecks: carried.carried,
-          workspace: summary(db.users.find(x => x.id === u.id)),
+          workspace: summary(workspace.users.find(account => account.id === user.id)),
         },
         201,
       );
     }
     // Remembers the save and profile the user last opened; scope() checks both are theirs.
     if (endpoint === '/api/select' && req.method === 'POST') {
-      const b = await body(req);
+      const input = await body(req);
       const { save, profile } = scope(
-        { headers: { 'x-save-id': b.saveId, 'x-profile-id': b.profileId } },
+        { headers: { 'x-save-id': input.saveId, 'x-profile-id': input.profileId } },
         url,
-        u,
+        user,
       );
-      await commit(d => {
-        d.users.find(x => x.id === u.id)!.activeSave = save.id;
-        d.saves.find(s => s.id === save.id)!.activeProfile = profile.id;
+      await commit(draft => {
+        draft.users.find(account => account.id === user.id)!.activeSave = save.id;
+        draft.saves.find(s => s.id === save.id)!.activeProfile = profile.id;
       });
-      return response(summary(db.users.find(x => x.id === u.id)));
+      return response(summary(workspace.users.find(account => account.id === user.id)));
     }
     // Permanently deletes one profile and its progress; needs confirmed: true. Removing a
     // save's last profile deletes the save too. The active save and profile are moved to
     // one that still exists.
     if (endpoint === '/api/remove-profile' && req.method === 'POST') {
-      const b = await body(req);
-      if (b.confirmed !== true) fail('Confirm profile removal first.');
-      if (!b.saveId || !b.profileId) fail('Choose a profile to remove.');
+      const input = await body(req);
+      if (input.confirmed !== true) fail('Confirm profile removal first.');
+      if (!input.saveId || !input.profileId) fail('Choose a profile to remove.');
       const { save, profile } = scope(
-        { headers: { 'x-save-id': b.saveId, 'x-profile-id': b.profileId } },
+        { headers: { 'x-save-id': input.saveId, 'x-profile-id': input.profileId } },
         url,
-        u,
+        user,
       );
-      await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id && s.userId === u.id);
-        if (!sv || !sv.profiles.some(p => p.id === profile.id)) fail('Profile not found.', 404);
-        sv.profiles = sv.profiles.filter(p => p.id !== profile.id);
-        if (!sv.profiles.length) d.saves = d.saves.filter(s => s.id !== sv.id);
-        else if (sv.activeProfile === profile.id) sv.activeProfile = sv.profiles[0]!.id;
-        const owner = d.users.find(x => x.id === u.id)!;
-        if (!d.saves.some(s => s.id === owner.activeSave && s.userId === u.id))
-          owner.activeSave = d.saves.find(s => s.userId === u.id)?.id || null;
+      await commit(draft => {
+        const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+        if (!draftSave || !draftSave.profiles.some(p => p.id === profile.id))
+          fail('Profile not found.', 404);
+        draftSave.profiles = draftSave.profiles.filter(p => p.id !== profile.id);
+        if (!draftSave.profiles.length)
+          draft.saves = draft.saves.filter(s => s.id !== draftSave.id);
+        else if (draftSave.activeProfile === profile.id)
+          draftSave.activeProfile = draftSave.profiles[0]!.id;
+        const owner = draft.users.find(account => account.id === user.id)!;
+        if (!draft.saves.some(s => s.id === owner.activeSave && s.userId === user.id))
+          owner.activeSave = draft.saves.find(s => s.userId === user.id)?.id || null;
       });
-      return response(summary(db.users.find(x => x.id === u.id)));
+      return response(summary(workspace.users.find(account => account.id === user.id)));
     }
     // Renames the scoped save or profile (target 'save' or 'profile'). Only the display
     // name changes; ids, which progress hangs on, stay.
     if (endpoint === '/api/rename' && req.method === 'POST') {
-      const b = await body(req);
-      const title = name(b.name);
-      const { save, profile } = scope(req, url, u);
-      await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id)!;
-        if (b.target === 'save') sv.name = title;
-        else if (b.target === 'profile') sv.profiles.find(p => p.id === profile.id)!.name = title;
+      const input = await body(req);
+      const title = name(input.name);
+      const { save, profile } = scope(req, url, user);
+      await commit(draft => {
+        const draftSave = draft.saves.find(s => s.id === save.id)!;
+        if (input.target === 'save') draftSave.name = title;
+        else if (input.target === 'profile')
+          draftSave.profiles.find(p => p.id === profile.id)!.name = title;
         else fail('Unknown rename target.');
       });
-      return response(summary(db.users.find(x => x.id === u.id)));
+      return response(summary(workspace.users.find(account => account.id === user.id)));
     }
     // The remaining routes act on the scoped save and profile (see scope above).
-    const { save, profile } = scope(req, url, u);
+    const { save, profile } = scope(req, url, user);
     // Adds a whole-machine version of a calculated profile as a new profile in the same
     // save; the original profile is untouched. Its progress is copied, and a ticked
     // 'calc-' row is unticked for review where the rounded plan needs more machines or more
@@ -742,44 +761,46 @@ export async function openWorkspace({
       if (plan.settings.wholeMachines) fail('This profile already uses whole-machine planning.');
       throttle(req);
       const rounded = calculate({ ...plan.settings, wholeMachines: true }),
-        profileId = id();
+        profileId = randomId();
       let reviewCount = 0;
-      await commit(d => {
-        const sv = d.saves.find(s => s.id === save.id && s.userId === u.id)!;
-        if (sv.profiles.length >= 30) fail('Profile limit reached.');
-        const previous = sv.profiles.find(p => p.id === profile.id)!;
+      await commit(draft => {
+        const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id)!;
+        if (draftSave.profiles.length >= 30) fail('Profile limit reached.');
+        const previous = draftSave.profiles.find(p => p.id === profile.id)!;
         const state = structuredClone(previous.state);
-        for (const [ph, stage] of Object.entries(rounded.stages))
+        for (const [phase, stage] of Object.entries(rounded.stages))
           for (const row of stage.rows || []) {
-            const old = previous.plan!.stages[ph as StageKey]?.rows?.find(r => r.id === row.id);
+            const old = previous.plan!.stages[phase as StageKey]?.rows?.find(r => r.id === row.id);
             if (
               !old ||
-              Object.entries(row.inputs).some(([n, q]) => q > (old.inputs[n] || 0) + 0.001) ||
+              Object.entries(row.inputs).some(
+                ([item, rate]) => rate > (old.inputs[item] || 0) + 0.001,
+              ) ||
               row.machines > old.machines
             ) {
-              const k = 'calc-' + ph + '-' + row.id;
-              if (state.checks[k]) {
-                state.checks[k] = false;
+              const checkKey = 'calc-' + phase + '-' + row.id;
+              if (state.checks[checkKey]) {
+                state.checks[checkKey] = false;
                 reviewCount++;
               }
             }
           }
-        sv.profiles.push({
+        draftSave.profiles.push({
           id: profileId,
           name: (previous.name + ' · whole machines').slice(0, 80),
           kind: 'calculated',
           plan: carryGuide(rounded, previous.plan),
           state,
         });
-        sv.activeProfile = profileId;
-        d.users.find(x => x.id === u.id)!.activeSave = sv.id;
+        draftSave.activeProfile = profileId;
+        draft.users.find(account => account.id === user.id)!.activeSave = draftSave.id;
       });
       return response(
         {
           saveId: save.id,
           profileId,
           reviewCount,
-          workspace: summary(db.users.find(x => x.id === u.id)),
+          workspace: summary(workspace.users.find(account => account.id === user.id)),
         },
         201,
       );
@@ -792,8 +813,8 @@ export async function openWorkspace({
       const plan = profile.plan;
       if (profile.kind !== 'calculated' || !plan)
         fail('Hard-drive payoff needs a calculated profile.');
-      const b = await body(req);
-      const phase = String(b.phase) as StageKey;
+      const input = await body(req);
+      const phase = String(input.phase) as StageKey;
       if (!['1', '2', '3', '4', '5'].includes(phase)) fail('Choose a phase from 1 to 5.');
       throttle(req, 5);
       const payoff: StoredPayoff = {
@@ -801,12 +822,12 @@ export async function openWorkspace({
         rankedAt: new Date().toISOString(),
         ranking: rankAlternates(plan.settings, { phase, budgetMs: rankBudgetMs }),
       };
-      await commit(d => {
-        const p = d.saves
-          .find(s => s.id === save.id && s.userId === u.id)
+      await commit(draft => {
+        const draftProfile = draft.saves
+          .find(s => s.id === save.id && s.userId === user.id)
           ?.profiles.find(p => p.id === profile.id);
-        if (!p) fail('Profile not found.', 404);
-        p.payoff = payoff;
+        if (!draftProfile) fail('Profile not found.', 404);
+        draftProfile.payoff = payoff;
       });
       return response(payoff);
     }
@@ -847,27 +868,32 @@ export async function openWorkspace({
     // (X-Planner-Revision); checkBase refuses a stale whole-value one (#165). An original
     // profile cannot be moved before Phase 3, which its handbook does not cover.
     if (['/api/update', '/api/import'].includes(endpoint) && req.method === 'POST') {
-      const b = await body(req);
+      const input = await body(req);
       let imported: ProgressState | undefined;
       if (endpoint === '/api/import') {
-        if (b.format && b.format !== 'satisfactory-planner-backup') fail('Wrong backup format.');
-        if (b.profileId && b.profileId !== profile.id)
+        if (input.format && input.format !== 'satisfactory-planner-backup')
+          fail('Wrong backup format.');
+        if (input.profileId && input.profileId !== profile.id)
           fail('This backup belongs to another profile. Switch to that profile before restoring.');
-        imported = validateState(b.format ? b.state : b);
+        imported = validateState(input.format ? input.state : input);
       }
-      const next = await commit(d => {
-        const p = d.saves
-          .find(s => s.id === save.id && s.userId === u.id)
+      const next = await commit(draft => {
+        const draftProfile = draft.saves
+          .find(s => s.id === save.id && s.userId === user.id)
           ?.profiles.find(p => p.id === profile.id);
-        if (!p) fail('Profile not found.', 404);
+        if (!draftProfile) fail('Profile not found.', 404);
         // A whole-value write from a tab that has not seen the latest change is refused (409).
-        if (!imported) checkBase(p.state, b, [req.headers['x-planner-revision']].flat()[0]);
+        if (!imported)
+          checkBase(draftProfile.state, input, [req.headers['x-planner-revision']].flat()[0]);
         // mutate() checks the operation and throws for one it does not know.
-        const state = imported || mutate(p.state, b as UpdateOp);
-        if (p.kind === 'original' && !['3', '4', '5', 'post'].includes(state.settings.phase))
+        const state = imported || mutate(draftProfile.state, input as UpdateOp);
+        if (
+          draftProfile.kind === 'original' &&
+          !['3', '4', '5', 'post'].includes(state.settings.phase)
+        )
           fail('The original handbook covers Phase 3 onward.');
-        state.revision = p.state.revision + 1;
-        p.state = state;
+        state.revision = draftProfile.state.revision + 1;
+        draftProfile.state = state;
         return state;
       });
       return response(next);

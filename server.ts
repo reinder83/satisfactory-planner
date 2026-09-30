@@ -61,7 +61,7 @@ export async function createApp({
     rankBudgetMs,
     estimateBudgetMs,
   });
-  const hash = (s: string) => createHash('sha256').update(s).digest();
+  const hash = (text: string) => createHash('sha256').update(text).digest();
   // JSON replies are never cached, so a browser never shows stale progress.
   const send = (
     res: ServerResponse,
@@ -139,16 +139,16 @@ export async function createApp({
         if (!req.headers['content-type']?.startsWith('application/json'))
           fail('Expected JSON.', 415);
         if (url.pathname.startsWith('/api/')) {
-          const r = await workspace(req, url, body);
-          return send(res, r.status, r.data, r.headers);
+          const reply = await workspace(req, url, body);
+          return send(res, reply.status, reply.data, reply.headers);
         }
         return send(res, 404, { error: 'Not found.' });
       }
       if (!['GET', 'HEAD'].includes(req.method ?? ''))
         return send(res, 405, { error: 'Method not allowed.' }, { Allow: 'GET, HEAD, POST' });
       if (url.pathname.startsWith('/api/')) {
-        const r = await workspace(req, url, body);
-        return send(res, r.status, r.data, r.headers);
+        const reply = await workspace(req, url, body);
+        return send(res, reply.status, reply.data, reply.headers);
       }
       // In development Vite serves the page and its modules, compiling .vue files.
       if (vite && (await vite.handle(req, res, url))) return;
@@ -164,10 +164,10 @@ export async function createApp({
       let content: Buffer;
       try {
         content = await fs.readFile(file);
-      } catch (e) {
-        if (['ENOENT', 'EISDIR'].includes((e as Failure)?.code ?? ''))
+      } catch (error) {
+        if (['ENOENT', 'EISDIR'].includes((error as Failure)?.code ?? ''))
           return send(res, 404, { error: 'Not found.' });
-        throw e;
+        throw error;
       }
       const type = contentTypes[path.extname(file)] || 'application/octet-stream';
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
@@ -175,11 +175,11 @@ export async function createApp({
     } catch (thrown) {
       // Errors thrown with a status are meant for the user; anything else is unexpected and
       // gets a generic message, since commit() never writes a half-applied change.
-      const e = thrown as Failure;
+      const failure = thrown as Failure;
       if (!res.headersSent)
-        send(res, e?.status || 500, {
-          error: e?.status
-            ? e.message
+        send(res, failure?.status || 500, {
+          error: failure?.status
+            ? failure.message
             : 'Could not save or load data. Please retry; your previous progress is retained.',
         });
       else res.end();
@@ -208,8 +208,8 @@ async function devFrontend(server: Server) {
         fs: { strict: true, allow: [path.join(root, 'public'), path.join(root, 'node_modules')] },
       },
     });
-  } catch (e) {
-    if ((e as Failure)?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+  } catch (error) {
+    if ((error as Failure)?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
     throw Error(
       'Development mode needs the dev dependencies: run npm ci (or set NODE_ENV=production to serve a build).',
     );
