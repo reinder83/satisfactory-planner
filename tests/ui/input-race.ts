@@ -4,7 +4,7 @@
 // indicator comes on and after the save. A field bound to the saved value was put back by a
 // redraw over what was typed in it but not yet committed, and the change event that followed
 // saved the old value. Each race below is one kind of field: a delivery counter, a bay name, a
-// group name and a link's round trip.
+// group name, a factory's rate in its group and a link's round trip.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { groupLinks } from '../../public/app/group-links.ts';
@@ -43,6 +43,7 @@ export interface Race {
 
 const bayName = (id: string) => storageBays().find(bay => bay.id === id)?.name;
 const groupName = (id: string) => state.factoryGroups?.groups.find(g => g.id === id)?.name;
+const groupRate = (key: string) => state.factoryGroups?.assignments[key]?.[0]?.rate;
 
 export const races: Record<string, Race> = {
   'delivery counter': {
@@ -103,6 +104,42 @@ export const races: Record<string, Race> = {
       },
       commits: ['Cables', 'Wires', 'Cords'],
       others: ['Plates elsewhere', 'Plates again', 'Plates at last'],
+    },
+  },
+  // A factory card's rate in its group (#691), beside another factory's.
+  'group rate': {
+    async open() {
+      go('factories');
+      open({
+        state: {
+          factoryGroups: {
+            groups: [
+              { id: 'fg-cable01', name: 'Cable factory' },
+              { id: 'fg-plates1', name: 'Stitched plates' },
+            ],
+            assignments: {
+              wire: [{ group: 'fg-cable01', rate: 300 }],
+              computer: [{ group: 'fg-plates1', rate: 10 }],
+            },
+          },
+        },
+      });
+      setFactoryEditing(true);
+      render();
+      await nextTick();
+    },
+    first: '[data-assign-rate="wire"][data-group="fg-cable01"]',
+    second: '[data-assign-rate="computer"][data-group="fg-plates1"]',
+    commit: '120',
+    typed: ['1', '12'],
+    stored: () => [groupRate('wire'), groupRate('computer')],
+    expected: [120, 12],
+    elsewhere: {
+      set(reply, value) {
+        reply.factoryGroups!.assignments.computer![0]!.rate = Number(value);
+      },
+      commits: ['120', '150', '180'],
+      others: ['15', '20', '25'],
     },
   },
   'round trip': (() => {

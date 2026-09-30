@@ -3,7 +3,8 @@
   factory id or the calculated row id. Each membership has a rate (empty: the whole output, or
   the remainder) and a ✕; "+ Add to group…" adds another. Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
-  state.ts. A field is redrawn with the saved value afterwards, whether or not the save worked.
+  state.ts. A rate field shows the saved rate, then what is typed (ui/draft.ts, #691), and is
+  redrawn with the saved rate afterwards, whether or not the save worked.
   `unit` (a calculated generator's card, #374) names what a rate is measured in: a nuclear
   plant's first output, its waste per minute, with `mw` the power one of them stands for, shown
   beside the field while typing; an output-less generator's rate is in MW. Without it the field
@@ -15,14 +16,14 @@ let editors = 0;
 </script>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
-import { vValue } from '../form/value.ts';
+import { resetDraft, useDrafts } from '../draft.ts';
 import { power } from '../../wizard/fields.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
@@ -36,8 +37,13 @@ const props = defineProps<{ factoryKey: string; unit?: RateUnit }>();
 
 // Each editor names its hints apart: a factory in two groups has an editor in each section.
 const uid = 'assign-unit-' + ++editors;
-// What is typed in a rate field and not yet saved, by group, for the power figure beside it.
-const typed = ref<Record<string, string>>({});
+// The rate fields, by group: the saved rate, then what is typed and not yet saved, which a rate
+// saved in another tab does not replace (#691). The power figure beside a field reads it too.
+const savedRates = (): Record<string, string> =>
+  legacy(() =>
+    Object.fromEntries(membershipsOf(props.factoryKey).map(m => [m.group, String(m.rate ?? '')])),
+  );
+const rates = useDrafts(savedRates);
 
 // The hint under a rate field: its unit, and for a nuclear plant the power a valid rate stands
 // for (#374). A field left empty (the whole output or the remainder) has no figure.
@@ -64,7 +70,6 @@ const editor = computed(() =>
           unit = props.unit;
         return {
           group: membership.group,
-          rate: membership.rate ?? '',
           name,
           label:
             (unit
@@ -74,9 +79,7 @@ const editor = computed(() =>
               : 'Production per minute') +
             ' in ' +
             (name || 'this group'),
-          hint: unit
-            ? hint(unit, typed.value[membership.group] ?? String(membership.rate ?? ''))
-            : '',
+          hint: unit ? hint(unit, rates[membership.group] ?? String(membership.rate ?? '')) : '',
           hintId: unit ? uid + '-' + i : undefined,
         };
       }),
@@ -124,22 +127,23 @@ function setRate(event: Event, group: string) {
         true,
       );
       input.value = savedRate(group);
-      delete typed.value[group];
       return;
     }
   }
   assign(input, memberships =>
     memberships.map(m => (m.group === group ? { group, rate } : m)),
   ).then(() => {
-    // The field is bound with v-value, which only redraws a changed rate, so put the saved one
-    // back here: after a failed save, or a rate typed another way ("120.0").
+    // The saved rate again: after a failed save, or a rate typed another way ("120.0").
     input.value = savedRate(group);
-    delete typed.value[group];
   });
 }
 
-const savedRate = (group: string) =>
-  String(membershipsOf(props.factoryKey).find(m => m.group === group)?.rate ?? '');
+// A group's saved rate, which its field's draft takes again, untouched.
+const savedRate = (group: string) => {
+  const rate = savedRates()[group] ?? '';
+  resetDraft(rates, group, rate);
+  return rate;
+};
 
 // ✕: leave that group, keeping the other groups' rates. The row goes, and the whole card when it
 // was drawn in that group's section, so focus goes to this factory's next ✕, else its previous
@@ -189,10 +193,10 @@ async function add(event: Event) {
         :data-assign-rate="factoryKey"
         :data-group="row.group"
         placeholder="all / remainder"
-        v-value="row.rate"
+        :value="rates[row.group]"
         :aria-label="row.label"
         :aria-describedby="row.hintId"
-        @input="typed[row.group] = ($event.target as HTMLInputElement).value"
+        @input="rates[row.group] = ($event.target as HTMLInputElement).value"
         @change="setRate($event, row.group)"
       /><button
         class="btn quiet danger"
