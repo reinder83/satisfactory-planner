@@ -1656,41 +1656,53 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
   // and compare like for like: same goal, same budgets, same recipes.
   if (config.fueledAugmenters && stages[5]?.feasible) {
+    // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
+    // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
+    let stopped = false;
     const unfueled = (() => {
       const options = { maximum: config.goal === 'maximum' };
-      let result = run({ ...config, fueledAugmenters: 0 }, 5, {
-        ...options,
-        conversion: config.sam === 'allow',
-      });
-      if (!result.feasible && config.sam !== 'avoid')
-        result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion: true });
+      const attempt = (conversion: boolean) => {
+        const result = run({ ...config, fueledAugmenters: 0 }, 5, { ...options, conversion });
+        if (!result.feasible && result.solverStatus && !/infeasible/i.test(result.solverStatus))
+          stopped = true;
+        return result;
+      };
+      let result = attempt(config.sam === 'allow');
+      if (!result.feasible && config.sam !== 'avoid') result = attempt(true);
       return result;
     })();
-    // `fuelVerdict` (rendered by fuelVerdictHtml in public/app/wizard/review.js) compares the
+    // Without a proven unfueled answer there is nothing to compare (#634): no verdict, and the
+    // plan's assumptions say why, as the other stopped searches do.
+    if (!unfueled.feasible && stopped)
+      warnings.push(
+        'Fueling the augmenters could not be compared with an unfueled Phase 5: the search stopped before it could prove the best plan without the fuel, so no verdict is given on whether fueling pays off. No resource shortage has been established for the unfueled plan.',
+      );
+    // `fuelVerdict` (rendered by public/app/ui/wizard/FuelVerdict.vue) compares the
     // fueled plan with the unfueled one: fewer buildings wins, or fewer hours under maximum.
     const count = (stage: Partial<StageResult>) =>
         (stage.rows || []).reduce((total, row) => total + row.machines, 0),
       fueled = stages[5] as Solved;
-    stages[5] = {
-      ...fueled,
-      fuelVerdict: {
-        unfueledFeasible: !!unfueled.feasible,
-        buildings: count(fueled),
-        buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
-        requiredMW: fueled.requiredMW,
-        requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
-        availableMW: fueled.availableMW,
-        availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
-        hours: fueled.hours,
-        hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
-        matrixRate: fueled.matrixRate,
-        worthIt:
-          !unfueled.feasible ||
-          (config.goal === 'maximum'
-            ? fueled.hours < unfueled.hours - 1e-6
-            : count(fueled) < count(unfueled)),
-      },
-    };
+    if (unfueled.feasible || !stopped)
+      stages[5] = {
+        ...fueled,
+        fuelVerdict: {
+          unfueledFeasible: !!unfueled.feasible,
+          buildings: count(fueled),
+          buildingsUnfueled: unfueled.feasible ? count(unfueled) : null,
+          requiredMW: fueled.requiredMW,
+          requiredMWUnfueled: unfueled.feasible ? unfueled.requiredMW : null,
+          availableMW: fueled.availableMW,
+          availableMWUnfueled: unfueled.feasible ? unfueled.availableMW : null,
+          hours: fueled.hours,
+          hoursUnfueled: unfueled.feasible ? unfueled.hours : null,
+          matrixRate: fueled.matrixRate,
+          worthIt:
+            !unfueled.feasible ||
+            (config.goal === 'maximum'
+              ? fueled.hours < unfueled.hours - 1e-6
+              : count(fueled) < count(unfueled)),
+        },
+      };
   }
   // Somersloop accounting: each augmenter costs 10, each reserved hand-fed use 1, plus the
   // amplification budget. Warned about, never enforced: the plan is still calculated.
