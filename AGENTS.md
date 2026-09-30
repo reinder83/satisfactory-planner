@@ -27,7 +27,7 @@ Both editions must continue working. A design redesign is welcome; it must prese
 | `planner.ts`, `optimizer.ts`, `recipes.json` | Production calculation, HiGHS solver, recipe data |
 | `fonts.ts`, `THIRD_PARTY.md` | The typefaces' npm packages and attribution; retain licenses |
 | `server.ts`, `workspace.ts` | HTTP/authentication boundary, scoped saves, durable server persistence |
-| `docker-start.ts`, `Dockerfile`, `compose*.yaml` | Container startup and Synology ownership support |
+| `docker-start.ts`, `Dockerfile`, `compose*.yaml` | Container startup and data ownership (PUID/PGID) support |
 | `build.ts` | Release build: minified Docker frontend (`dist/web`) and allowlisted Pages edition (`dist/satisfactory-planner`); adapts the calculator for browser execution |
 | `tests/`, `browser-check.ts` | Server, calculator, interface and real-browser checks |
 | `.github/workflows/docker.yml` | Tests, Docker publishing, public-site publishing |

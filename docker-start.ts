@@ -1,5 +1,5 @@
 // Container entry point (the Dockerfile's CMD). The image starts as root only so it can hand
-// the data volume to the user a NAS expects, then drops to that user before serving anything.
+// the data volume to the configured PUID/PGID, then drops to that user before serving anything.
 // Every failure is reported without touching existing data.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,8 +28,8 @@ try {
   if (dir === path.parse(dir).root)
     throw new Error('DATA_DIR must be a dedicated planner folder, not the filesystem root.');
   if (root) {
-    // A bind mount, such as a Synology shared folder, often arrives root-owned or owned by a NAS
-    // UID/GID the server's user cannot write as. Repair ownership while still root.
+    // A host bind mount often arrives root-owned or owned by a host UID/GID the server's user
+    // cannot write as. Repair ownership while still root.
     fs.mkdirSync(dir, { recursive: true });
     if (fs.realpathSync(dir) !== dir) throw new Error('DATA_DIR must not contain symbolic links.');
     // Hands one path to uid:gid through an open descriptor, so nothing swapped in between the
@@ -58,7 +58,7 @@ try {
       }
     };
     prepare(dir, true);
-    // Repair only planner-owned files, never unrelated files or nested NAS folders.
+    // Repair only planner-owned files, never unrelated files or nested folders.
     for (const name of [
       'workspace.json',
       'workspace.json.bak',
@@ -94,7 +94,7 @@ try {
     process.on(signal, () => server.close(() => process.exit(0)));
 } catch (e) {
   console.error(
-    `Planner startup failed: ${(e as Error | null)?.message}\nCheck PUID/PGID, the data mount's write access and NAS folder permissions. With cap_drop: ALL, allow CHOWN, DAC_OVERRIDE, FOWNER, SETUID and SETGID for startup. Existing data has not been deleted.`,
+    `Planner startup failed: ${(e as Error | null)?.message}\nCheck PUID/PGID, the data mount's write access and the host folder permissions. With cap_drop: ALL, allow CHOWN, DAC_OVERRIDE, FOWNER, SETUID and SETGID for startup. Existing data has not been deleted.`,
   );
   process.exitCode = 1;
 }
