@@ -25,7 +25,45 @@ const { chromium }: typeof import('playwright') = await import(
   process.env.PLANNER_PLAYWRIGHT ? pathToFileURL(process.env.PLANNER_PLAYWRIGHT).href : 'playwright'
 );
 const source = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(source, 'dist');
+const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-browser-check-'));
+// The check serves a copy of the build, taken now (#555). `node build.ts` empties and rewrites
+// dist/satisfactory-planner, and `npm test` runs it (handbook-server-migration.test.ts), so a
+// build in the same checkout during a run answered a reload or a lazy fetch (recipes.json on the
+// upgraded page's first open) with 404 until it finished, and a wait timed out after 30 s.
+// A build still running when the check starts is waited for: the copy is kept once the build
+// holds calculator-worker.js, the last file build.ts writes (a new build first deletes them
+// all), and no file was added, removed or rewritten while it was copied.
+const root = path.join(temp, 'site');
+const built = path.join(source, 'dist', 'satisfactory-planner'),
+  served = path.join(root, 'satisfactory-planner');
+// Each file of the build with its size and modification time, in a fixed order.
+const listing = async () => {
+  const names = (await fs.readdir(built, { recursive: true })).sort();
+  const files = await Promise.all(
+    names.map(async name => {
+      const stat = await fs.stat(path.join(built, name));
+      return [name, stat.size, stat.mtimeMs] as const;
+    }),
+  );
+  return { names, files: JSON.stringify(files) };
+};
+for (let attempt = 1; ; attempt++) {
+  const copied = await (async () => {
+    const before = await listing();
+    await fs.rm(served, { recursive: true, force: true });
+    await fs.cp(built, served, { recursive: true });
+    return (
+      before.names.includes('calculator-worker.js') && before.files === (await listing()).files
+    );
+  })().catch(() => false);
+  if (copied) break;
+  if (attempt === 60) {
+    await fs.rm(temp, { recursive: true, force: true });
+    throw Error('No finished browser edition in dist/satisfactory-planner; run `node build.ts`.');
+  }
+  if (attempt === 1) console.log('Waiting for the build in dist/satisfactory-planner to finish');
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
 const types: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -54,7 +92,6 @@ await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 const port = (listener: http.Server) => (listener.address() as AddressInfo).port;
 const base = 'http://127.0.0.1:' + port(server) + '/satisfactory-planner/';
 let browser: import('playwright').Browser | undefined, backend: http.Server | undefined;
-const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-browser-check-'));
 try {
   browser = await chromium.launch({
     headless: true,
