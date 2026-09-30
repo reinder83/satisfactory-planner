@@ -520,8 +520,10 @@ test('a bay order with unknown floors, bays elsewhere or bad letters is refused 
     [{ type: 'storageBayOrder', floor: 'ground', order: ['a'] }, /Invalid bay order/],
     [{ type: 'storageBayOrder', floor: 'ground', order: 'AB' }, /Invalid bay order/],
     [{ type: 'storageBayOrder', floor: 'cf-base01', order: ['S'] }, /Only bays on this floor/],
-  ] as unknown as [UpdateOp, RegExp][])
+  ] satisfies [unknown, RegExp][]) {
+    // @ts-expect-error: some of these updates are malformed on purpose; mutate must reject them.
     assert.throws(() => mutate(structuredClone(s), op), why, JSON.stringify(op));
+  }
   for (const bayOrder of [
     [],
     { attic: ['A'] },
@@ -612,7 +614,8 @@ test('a container move to the same, an unknown or a malformed address is refused
   ] as const) {
     const before = structuredClone(s);
     assert.throws(
-      () => mutate(before, { type: 'storageSlotMove', ...op } as unknown as UpdateOp),
+      // @ts-expect-error: some of these moves are malformed on purpose; mutate must reject them.
+      () => mutate(before, { type: 'storageSlotMove', ...op }),
       why,
       JSON.stringify(op),
     );

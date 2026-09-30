@@ -7,9 +7,8 @@ import { openBrowserStore, PRE_HANDBOOK, readStoredData } from '../public/browse
 import { handbookToPlan, migrateHandbookState } from '../public/handbook-migration.ts';
 import { initialState } from '../public/state.ts';
 import { catalog } from '../planner.ts';
-import handbookJson from '../public/plan.json' with { type: 'json' };
-import recipesJson from '../recipes.json' with { type: 'json' };
-import type { BrowserWorkspace, Handbook, Recipe, StoredProfile } from '../public/types/index.ts';
+import type { BrowserWorkspace, StoredProfile } from '../public/types/index.ts';
+import { handbook, recipes } from './helpers/data.ts';
 import { fakeIndexedDB, type FakeControls } from './helpers/fake-indexeddb.ts';
 
 test('a workspace written by a newer planner is refused, not read or written back', async () => {
@@ -150,8 +149,6 @@ test('a refused record carries storedData, and readStoredData hands it back exac
 // Retiring the handbook, part 4c (#497): on its first transaction the store migrates every
 // original profile that carries its own handbook, keeping the record as it was under the second
 // key PRE_HANDBOOK, all in one readwrite transaction.
-const handbook = handbookJson as unknown as Handbook;
-const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
 const { pureLimits } = catalog();
 const conversion = handbookToPlan(handbook, recipes, pureLimits);
 const factory = handbook.factories.find(f => conversion.rows['3']![f.id])!;

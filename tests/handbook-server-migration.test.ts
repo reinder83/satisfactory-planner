@@ -13,12 +13,9 @@ import { openWorkspace } from '../workspace.ts';
 import { initialState, mutate, validateState } from '../server.ts';
 import { handbookToPlan, migrateHandbookState } from '../public/handbook-migration.ts';
 import { catalog } from '../planner.ts';
-import frozenJson from '../migrations/handbook-2026-09-13.json' with { type: 'json' };
-import recipesJson from '../recipes.json' with { type: 'json' };
-import type { Handbook, Recipe, StoredProfile, WorkspaceFile } from '../public/types/index.ts';
+import type { StoredProfile, WorkspaceFile } from '../public/types/index.ts';
+import { frozenHandbook as frozen, recipes } from './helpers/data.ts';
 
-const frozen = frozenJson as unknown as Handbook;
-const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
 const conversion = handbookToPlan(frozen, recipes, catalog().pureLimits);
 const factory = frozen.factories.find(f => conversion.rows['3']![f.id])!;
 const row = conversion.rows['3']![factory.id]!;

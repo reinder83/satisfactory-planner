@@ -120,7 +120,7 @@ test('the Pages edition carries a plan guide to a recalculated and a rounded-up 
 // before. Both editions, through Recalculate (POST /api/profiles with carryFrom).
 const migrated = (withOrigin: boolean): SaveExport => {
   const transfer = exported();
-  const state = structuredClone(version12) as unknown as Record<string, unknown>;
+  const state: Record<string, unknown> = structuredClone(version12);
   if (!withOrigin) {
     delete state.handbookOrigin;
     state.version = 11;

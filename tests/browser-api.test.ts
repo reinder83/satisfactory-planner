@@ -11,16 +11,14 @@ import { openBrowserStore, PRE_HANDBOOK } from '../public/browser-store.ts';
 import { handbookToPlan } from '../public/handbook-migration.ts';
 import { initialState } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
-import handbookJson from '../public/plan.json' with { type: 'json' };
 import recipesJson from '../recipes.json' with { type: 'json' };
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
+import { handbook, recipes } from './helpers/data.ts';
 import type {
   BrowserWorkspace,
   Catalog,
   ContextReply,
-  Handbook,
   ProgressState,
-  Recipe,
   SaveExport,
   WorkspaceSummary,
 } from '../public/types/index.ts';
@@ -411,9 +409,7 @@ test("POST /api/profiles refuses kind 'original'", async () => {
 // request is answered, loading recipes.json only for that. Runs last in this file, because the
 // API it starts stays cached for the tab (the failed-start test above needs none cached).
 test('the Pages edition opens an upgraded browser with its original profile migrated', async () => {
-  const handbook = handbookJson as unknown as Handbook;
   const recipesText = JSON.stringify(recipesJson);
-  const recipes = (recipesJson as unknown as { recipes: Recipe[] }).recipes;
   const conversion = handbookToPlan(handbook, recipes, catalog().pureLimits);
   const factory = handbook.factories.find(f => conversion.rows['3']![f.id])!;
   const row = conversion.rows['3']![factory.id]!;
