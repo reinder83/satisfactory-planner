@@ -4665,6 +4665,13 @@ button.rail-tile:hover {
   max-width: 420px;
   margin: 0 0 22px;
 }
+/* The Save name box and, under it while the name is missing (#505), why Continue stopped. */
+.guided-name .field {
+  margin: 0;
+}
+.guided-name .form-error:not(:empty) {
+  margin: 6px 0 0;
+}
 /* The guided start's stepper (SP-35, GuidedPage.vue): numbered steps, the current one in the
    accent, and "3 of 6" beside them. */
 .guided-stepper {
