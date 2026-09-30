@@ -216,8 +216,19 @@ async function deletePersonal(event: Event) {
         @click="move(1)"
       >
         ↓</button
-      ><button class="btn quiet" :data-edit-task="step.id" @click="edit">Edit</button
-      ><button class="btn quiet danger" :data-remove-step="step.id" @click="remove">
+      ><button
+        class="btn quiet"
+        :data-edit-task="step.id"
+        :aria-label="'Edit: ' + step.title"
+        @click="edit"
+      >
+        Edit</button
+      ><button
+        class="btn quiet danger"
+        :data-remove-step="step.id"
+        :aria-label="'Remove: ' + step.title"
+        @click="remove"
+      >
         Remove
       </button></span
     >
