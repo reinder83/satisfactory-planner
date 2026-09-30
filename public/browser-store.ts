@@ -84,14 +84,44 @@ export interface MigrationData {
   pureLimits: Record<string, number>;
 }
 
+// Schema version 2 (#518) marks a database whose record went through the handbook migration. The
+// migration runs in the upgrade to it, so every tab of an earlier release (schema version 1)
+// hears of it: each release since 2026-09-26 closes its connection on versionchange and says to
+// reload, an older one blocks the upgrade until it is closed, and after a reload an earlier
+// release refuses the database with NEWER. None of them can then file a tick or a note under a
+// handbook key on a profile that is calculated by now. The record's own `version` stays 1.
+const SCHEMA = 2;
+
+// Migrates the original profiles of `found` (the record `main` as read in `store`'s transaction)
+// and puts it back, first keeping it under PRE_HANDBOOK unless `kept` (that key's value) holds a
+// copy already. A throw leaves the caller to abort the transaction, so both keys stay as they were.
+function migrateRecord(
+  store: IDBObjectStore,
+  found: BrowserWorkspace,
+  kept: unknown,
+  { recipes, pureLimits }: MigrationData,
+) {
+  // put() copies the value when it is called, so this is the record as it was read.
+  if (kept === undefined) store.put(found, PRE_HANDBOOK);
+  for (const save of found.saves)
+    save.profiles = save.profiles.map(profile =>
+      // migratable() checked that it carries a handbook.
+      migratable(profile)
+        ? migrateOriginalProfile(profile, profile.handbook!, recipes, pureLimits)
+        : profile,
+    );
+  store.put(found, 'main');
+}
+
 // The store browser-api.ts works through (tests pass a stand-in with the same method).
 export interface BrowserStore {
   transaction(): Promise<BrowserWorkspace>;
   transaction<T>(change: (data: BrowserWorkspace) => T): Promise<T>;
 }
 
-// With `loadMigration`, the first transaction on this connection first migrates the original
-// profiles the record holds (migrate below); without it (tests of other behaviour), none is.
+// With `loadMigration`, the original profiles the record holds are migrated: in the upgrade to
+// SCHEMA (open below), and on the first transaction of each connection after that (migrate
+// below); without it (tests of other behaviour), none is.
 export function openBrowserStore(
   indexedDB: IDBFactory,
   name = 'satisfactory-planner-browser-v1',
@@ -102,6 +132,9 @@ export function openBrowserStore(
   // The migration's run on this connection: shared by the transactions that wait for it, and
   // cleared when it fails, so the next one tries again.
   let migrated: Promise<void> | undefined;
+  // The record can gain original profiles after the upgrade: an import still stores them as they
+  // are until #498. No earlier release opens a database at SCHEMA, so these are migrated here, on
+  // the first transaction of the next connection, without the upgrade's notice to older tabs.
   // A readonly look first, so recipes.json is only fetched when there is something to migrate.
   // Then one readwrite transaction reads the record again (another tab may have migrated it
   // meanwhile, and then nothing is written), keeps it under PRE_HANDBOOK unless that key already
@@ -114,7 +147,7 @@ export function openBrowserStore(
       r.onerror = () => reject(r.error);
     });
     if (!current(found) || !needsMigration(found)) return;
-    const { recipes, pureLimits } = await load();
+    const migration = await load();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction('workspace', 'readwrite'),
         store = tx.objectStore('workspace');
@@ -128,14 +161,7 @@ export function openBrowserStore(
           // Saved data is unknown until checked (AGENTS.md).
           const data: unknown = main.result;
           if (!current(data) || !needsMigration(data)) return;
-          // put() copies the value when it is called, so this is the record as it was read.
-          if (kept.result === undefined) store.put(data, PRE_HANDBOOK);
-          for (const save of data.saves)
-            save.profiles = save.profiles.map(p =>
-              // migratable() checked that it carries a handbook.
-              migratable(p) ? migrateOriginalProfile(p, p.handbook!, recipes, pureLimits) : p,
-            );
-          store.put(data, 'main');
+          migrateRecord(store, data, kept.result, migration);
         } catch (e) {
           failure = e;
           tx.abort();
@@ -150,24 +176,88 @@ export function openBrowserStore(
       tx.onerror = () => {};
     });
   };
-  const opened = new Promise<IDBDatabase>((resolve, reject) => {
-    const r = indexedDB.open(name, 1);
-    // Schema version 1 is the only one so far: a brand-new database just gets the empty store.
-    r.onupgradeneeded = () => r.result.createObjectStore('workspace');
-    r.onsuccess = () => {
-      // Close when another tab asks to upgrade the schema, so a future upgrade is not blocked by
-      // tabs left open. Such a tab then refuses its later transactions, saying why, until it is
-      // reloaded (rather than the browser's raw "connection is closing" error).
-      r.result.onversionchange = () => {
-        upgradedElsewhere = true;
-        r.result.close();
+  // Opens the database at SCHEMA. Upgrading from version 1 migrates the record in the upgrade's
+  // own transaction (migrateRecord), which commits together with the new version or not at all:
+  // an abort leaves the database at version 1 with both keys as they were, so the previous
+  // release still opens it and the next open tries again. The migration data is loaded only when
+  // the record needs it: the first attempt aborts the upgrade on finding that, loads it, and
+  // upgrades again (without `loadMigration`, the upgrade migrates nothing).
+  const open = (migration?: MigrationData) =>
+    new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name, SCHEMA);
+      // Why the upgrade aborted: the migration data is needed first, or what failed.
+      let needsData = false,
+        failure: unknown,
+        settled = false;
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        // A brand-new database just gets the empty store.
+        if (!db.objectStoreNames.contains('workspace')) {
+          db.createObjectStore('workspace');
+          return;
+        }
+        if (!loadMigration) return;
+        // The upgrade transaction; it is there while onupgradeneeded runs.
+        const upgrade = request.transaction!,
+          store = upgrade.objectStore('workspace');
+        upgrade.onabort = () => (failure ??= upgrade.error);
+        let read = 0;
+        const main = store.get('main'),
+          kept = store.get(PRE_HANDBOOK);
+        main.onsuccess = kept.onsuccess = () => {
+          if (++read < 2) return;
+          try {
+            // Saved data is unknown until checked (AGENTS.md). A record transaction() refuses
+            // (damaged, newer) is left to it.
+            const found: unknown = main.result;
+            if (!current(found) || !needsMigration(found)) return;
+            if (!migration) {
+              needsData = true;
+              return upgrade.abort();
+            }
+            migrateRecord(store, found, kept.result, migration);
+          } catch (error) {
+            failure = error;
+            upgrade.abort();
+          }
+        };
       };
-      resolve(r.result);
-    };
-    // A database a newer release has upgraded refuses this older schema version.
-    r.onerror = () => reject(r.error?.name === 'VersionError' ? refused(NEWER) : r.error);
-    r.onblocked = () => reject(Error('Close other planner tabs to upgrade browser storage.'));
-  });
+      request.onsuccess = () => {
+        const db = request.result;
+        // Opened after this attempt was refused as blocked: the next transaction opens again.
+        if (settled) return db.close();
+        settled = true;
+        // Close when another tab asks to upgrade the schema, so a future upgrade is not blocked by
+        // tabs left open. Such a tab then refuses its later transactions, saying why, until it is
+        // reloaded (rather than the browser's raw "connection is closing" error).
+        db.onversionchange = () => {
+          upgradedElsewhere = true;
+          db.close();
+        };
+        resolve(db);
+      };
+      request.onerror = () => {
+        if (settled) return;
+        settled = true;
+        // A database a newer release has upgraded refuses this older schema version.
+        if (request.error?.name === 'VersionError') return reject(refused(NEWER));
+        if (needsData) return resolve(loadMigration!().then(open));
+        if (failure !== undefined || request.error?.name === 'AbortError')
+          return reject(
+            refused(NOT_MIGRATED + (failure instanceof Error ? ` (${failure.message})` : '')),
+          );
+        reject(request.error);
+      };
+      // A tab of a release from before 2026-09-26 keeps its connection open through an upgrade.
+      request.onblocked = () => {
+        if (settled) return;
+        settled = true;
+        reject(Error('Close other planner tabs to upgrade browser storage.'));
+      };
+    });
+  // Shared by the transactions that wait for it, and cleared when it fails, so the next one
+  // (the next request, or a reload) tries again.
+  let opened: Promise<IDBDatabase> | undefined;
   return {
     // Without `change`, a readonly read of the whole workspace record. With it, one readwrite
     // transaction: read `main` (or a blank workspace), let `change` mutate it in place and return
@@ -175,6 +265,10 @@ export function openBrowserStore(
     // concurrent tabs cannot interleave a read-modify-write. `change` must be synchronous: the
     // transaction commits once no request is pending.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
+      opened ??= open().catch(error => {
+        opened = undefined;
+        throw error;
+      });
       const db = await opened;
       if (upgradedElsewhere)
         throw Error(
