@@ -195,10 +195,10 @@ export const startPhase = (): StageKey =>
 
 // The phase being worked on: the saved setting, raised to the profile's start phase. With
 // no save open (the empty workspace's placeholder) there is no profile to raise it to, so
-// the top bar shows the placeholder's phase, the one the guided start pre-picks (#561).
+// the top bar follows the phase picked in the open wizard draft, else the placeholder's (#561).
 export const phase = (): Phase => {
   const saved = state.settings.phase;
-  if (!currentSave.id) return saved;
+  if (!currentSave.id) return wizard?.settings.phase || saved;
   return saved !== 'post' && Number(saved) < Number(startPhase()) ? startPhase() : saved;
 };
 

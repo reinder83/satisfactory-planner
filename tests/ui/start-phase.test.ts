@@ -71,3 +71,29 @@ for (const [edition, browser] of [
       'the phase track',
     );
   });
+
+// Picking another card changes the draft's phase, and with no save open the top bar follows it.
+for (const [edition, browser] of [
+  ['Docker', false],
+  ['Pages', true],
+] as const)
+  test(`with no save, the ${edition} edition's top bar follows a different picked card`, async () => {
+    const { $, session } = await bootEmpty(browser);
+    const card = $<HTMLInputElement>('input[name="guided:phase"][value="2"]')!;
+    card.checked = true;
+    card.dispatchEvent(new Event('change', { bubbles: true }));
+    await nextTick();
+    assert.equal(session.wizard?.settings.phase, '2', 'the draft is on Phase 2');
+    assert.equal(
+      $<HTMLInputElement>('input[name="guided:phase"]:checked')?.value,
+      '2',
+      'the picked card',
+    );
+    assert.equal(session.phase(), '2', 'the working phase');
+    assert.equal($<HTMLSelectElement>('#phase-picker')!.value, '2', 'the select');
+    assert.equal(
+      $('.phase-track-seg.current')?.getAttribute('data-phase-seg'),
+      '2',
+      'the phase track',
+    );
+  });
