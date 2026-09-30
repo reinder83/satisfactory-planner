@@ -1355,7 +1355,7 @@ test('the handbook resources page asks for the nitrogen rate in m³/min (#363)',
   assert.match(
     warn.textContent.replace(/ /g, ' ').replace(/\s+/g, ' '),
     new RegExp(
-      `can supply ${num(handbook.resources['4']!['Nitrogen Gas']!).replace(/\./g, '\.')} m³/min at this stage`,
+      `can supply ${num(handbook.resources['4']!['Nitrogen Gas']!).replace(/\./g, '\\.')} m³/min at this stage`,
     ),
   );
 });
