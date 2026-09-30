@@ -185,7 +185,7 @@ test('a new save starts from fresh settings with the Concrete top-up', () => {
   assert.equal(draft.mode, 'guided');
   assert.equal(draft.tutorial, 'doing');
   assert.equal(draft.settings.purity, 'vanilla');
-  assert.equal(draft.settings.phase, '3', 'the server edition starts at Phase 3');
+  assert.equal(draft.settings.phase, '1', 'both editions start at Phase 1 (#561)');
   assert.deepEqual(draft.settings.storageOverrides, { Concrete: GUIDED_TOPUP_RATE });
   assert.deepEqual(draft.settings.limits, workspace.catalog.limits);
   assert.notEqual(draft.settings.limits, workspace.catalog.limits, 'a copy');

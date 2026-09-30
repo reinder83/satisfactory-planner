@@ -6,7 +6,6 @@
 // ui/pages/WizardPage.vue (the five steps, ui/wizard/), GuidedPage.vue (ui/guided/)
 // and SurveyPage.vue (ui/survey/), which read their forms back through the
 // readers here and handle their own controls.
-import { browserMode } from '../../browser-api.ts';
 import {
   GUIDED_TOPUP_RATE,
   knownWorld,
@@ -154,11 +153,11 @@ function handbookSettings(): WizardSettings {
   };
 }
 
-// A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and the
-// browser-only edition starts at Phase 1.
+// A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and both
+// editions start at Phase 1, where a new player starts (#561).
 function freshSettings(): WizardSettings {
   const settings: WizardSettings = {
-    phase: '3',
+    phase: '1',
     purity: 'vanilla',
     distribution: 'original',
     multiplier: 1,
@@ -180,7 +179,6 @@ function freshSettings(): WizardSettings {
     limits: { ...workspace.catalog.limits },
   };
   settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
-  if (browserMode) settings.phase = '1';
   return settings;
 }
 

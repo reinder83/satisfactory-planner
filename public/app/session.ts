@@ -1,7 +1,6 @@
 // The open workspace, save and profile, and the UI state every screen reads.
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
-import { browserMode } from '../browser-api.ts';
 import { readStoredData } from '../browser-store.ts';
 import { initialState } from '../state.ts';
 import { downloadJson, request, toast, writeQueue } from './api.ts';
@@ -194,9 +193,12 @@ export function setFactoryEditing(value: boolean) {
 export const startPhase = (): StageKey =>
   calculated ? (String(calculated.settings?.phase || '1') as StageKey) : '3';
 
-// The phase being worked on: the saved setting, raised to the profile's start phase.
+// The phase being worked on: the saved setting, raised to the profile's start phase. With
+// no save open (the empty workspace's placeholder) there is no profile to raise it to, so
+// the top bar shows the placeholder's phase, the one the guided start pre-picks (#561).
 export const phase = (): Phase => {
   const saved = state.settings.phase;
+  if (!currentSave.id) return saved;
   return saved !== 'post' && Number(saved) < Number(startPhase()) ? startPhase() : saved;
 };
 
@@ -319,7 +321,7 @@ export async function boot() {
       // then the wizard to create the first save. startWizard() navigates to #wizard.
       currentSave = { id: '', name: 'New save' };
       currentProfile = { id: '', name: 'Choose a profile' };
-      state = { ...initialState(), settings: { phase: browserMode ? '1' : '3' } };
+      state = { ...initialState(), settings: { phase: '1' } };
       stateLoaded = true;
       calculated = null;
       endEditing();
