@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp, initialState } from '../server.ts';
+import { seedLegacy } from './helpers/seed.ts';
 import {
   calculate,
   catalog,
@@ -29,6 +30,7 @@ import type {
   WorkspaceSummary,
 } from '../public/types/index.ts';
 async function start(dir: string) {
+  await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   // Listening on a TCP port, so address() is an AddressInfo.
@@ -53,11 +55,11 @@ test('profile removal requires confirmation, preserves other progress and surviv
       await post(app.url, '/api/profiles', {
         saveName: 'Delete test',
         name: 'A',
-        kind: 'original',
+        settings: {},
       }),
     );
     const b = await json(
-      await post(app.url, '/api/profiles', { saveId: a.saveId, name: 'B', kind: 'original' }),
+      await post(app.url, '/api/profiles', { saveId: a.saveId, name: 'B', settings: {} }),
     );
     const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
     await json(
@@ -96,7 +98,7 @@ test('profile removal requires confirmation, preserves other progress and surviv
       await post(app.url, '/api/profiles', {
         saveName: 'Start again',
         name: 'New',
-        kind: 'original',
+        settings: {},
       }),
     );
   } finally {
@@ -429,26 +431,14 @@ test('new calculated profiles start with default factory groups covering every p
         groups.groups.some(g => g.id === a[0]!.group),
         'assignments point at existing groups',
       );
-    const original = await json(
-      await post(app.url, '/api/profiles', {
-        saveId: created.saveId,
-        name: 'Orig',
-        kind: 'original',
-      }),
-    );
-    const os2 = await json(
-      await fetch(app.url + '/api/state', {
-        headers: {
-          'X-Planner-Request': '1',
-          'x-save-id': original.saveId,
-          'x-profile-id': original.profileId,
-        },
-      }),
-    );
-    assert.ok(
-      !os2.factoryGroups?.groups?.length,
-      'original handbook profiles keep their built-in shared sites instead',
-    );
+    // Handbook profiles are retired: /api/profiles refuses to create one (#496).
+    const original = await post(app.url, '/api/profiles', {
+      saveId: created.saveId,
+      name: 'Orig',
+      kind: 'original',
+    });
+    assert.equal(original.status, 400);
+    assert.match((await original.json()).error, /can no longer be created/);
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });

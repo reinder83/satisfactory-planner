@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { createApp } from './server.ts';
+import { createApp, initialState } from './server.ts';
 import os from 'node:os';
 import type { Page } from 'playwright';
 import type {
@@ -494,7 +494,11 @@ try {
   const state = await api<ProgressState>('/api/state');
   assert.equal(state.checks['parallel-one'], true);
   assert.equal(state.checks['parallel-two'], true);
-  // Docker export contains portable handbook and progress, never accounts or sessions.
+  // The Docker edition, upgraded from an early release: its single-profile progress.json is
+  // handbook progress, which migrates into a calculated profile with the guide (#495). A
+  // brand-new server would start with no saves (#496). Its export carries that plan and the
+  // progress, never accounts or sessions.
+  await fs.writeFile(path.join(temp, 'progress.json'), JSON.stringify(initialState()));
   backend = await createApp({ dataDir: temp, password: '' });
   const listening = backend;
   await new Promise<void>(r => listening.listen(0, '127.0.0.1', r));
@@ -524,7 +528,10 @@ try {
   const backup: SaveExport & { users?: unknown; sessions?: unknown } = await (
     await fetch(backendURL + '/api/export-saves')
   ).json();
-  assert.ok(backup.saves[0]!.profiles[0]!.handbook);
+  const migrated = backup.saves[0]!.profiles[0]!;
+  assert.equal(migrated.kind, 'calculated');
+  assert.equal(migrated.handbook, undefined);
+  assert.ok(migrated.plan?.guide, 'the migrated plan carries the guide');
   assert.equal(backup.users, undefined);
   assert.equal(backup.sessions, undefined);
   await api('/api/import-saves', backup);
@@ -532,14 +539,15 @@ try {
   await page.reload();
   await page.getByText('Build the first three iron halls', { exact: true }).waitFor();
   await checkStorage();
-  // Side by side, the two panels of a .backup-grid share a top edge (#309): the handbook's
-  // resources page has one in this edition, the server's Backup page two.
+  // Side by side, the first two panels of a .backup-grid share a top edge (#309). The profile
+  // imported from the server is a migrated calculated one (#495), whose resources page has
+  // several grids.
   await page.goto(base + '#resources');
   await page.locator('.backup-grid > .panel').first().waitFor();
   const gridTops = await page
     .locator('.backup-grid > .panel')
     .evaluateAll(panels => panels.map(p => p.getBoundingClientRect().top));
-  assert.equal(gridTops.length, 2);
+  assert.ok(gridTops.length >= 2, gridTops.length + ' grid panels');
   assert.equal(gridTops[1], gridTops[0], 'the second grid panel starts level with the first');
   const roundtrip = await fetch(backendURL + '/api/import-saves', {
     method: 'POST',

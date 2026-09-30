@@ -6,9 +6,11 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { contentTypes, createApp } from '../server.ts';
+import { seedLegacy } from './helpers/seed.ts';
 import { fontNames } from '../fonts.ts';
 import type { Handbook } from '../public/types/index.ts';
 async function start(dir: string, config: Parameters<typeof createApp>[0] = {}) {
+  await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, ...config });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   // Listening on a TCP port, so address() is an AddressInfo.
@@ -426,6 +428,48 @@ test('live estimates stop at their solving-time budget, and the limit runs befor
     assert.equal(estimateOver.status, 429, 'nor for an estimate over its budget');
   } finally {
     await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+// A brand-new Docker server starts like the Pages edition (decision 5A on #387, #496): the
+// owner has no saves, so the interface opens the guided start, and nothing is created until
+// the pioneer makes a profile. /api/profiles refuses the retired handbook kind.
+test('a fresh data folder has no saves, and a handbook profile cannot be created', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-fresh-'));
+  const server = await createApp({ dataDir: dir, password: '' });
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+  try {
+    const w = await (await fetch(url + '/api/workspace')).json();
+    assert.deepEqual(w.saves, []);
+    assert.equal(w.activeSave, null);
+    const db = JSON.parse(await fs.readFile(path.join(dir, 'workspace.json'), 'utf8'));
+    assert.deepEqual(db.saves, []);
+    assert.equal(db.users[0].activeSave, null);
+    await assert.rejects(fs.stat(path.join(dir, 'workspace.json.pre-handbook')), {
+      code: 'ENOENT',
+    });
+    const refused = await post(url, '/api/profiles', {
+      saveName: 'World',
+      name: 'Handbook',
+      kind: 'original',
+    });
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).error, /can no longer be created/);
+    assert.deepEqual((await (await fetch(url + '/api/workspace')).json()).saves, []);
+    // A calculated profile is the first save.
+    const made = await post(url, '/api/profiles', {
+      saveName: 'World',
+      name: 'Balanced',
+      settings: {},
+    });
+    assert.equal(made.status, 201);
+    const after = await (await fetch(url + '/api/workspace')).json();
+    assert.equal(after.saves.length, 1);
+    assert.equal(after.saves[0].profiles[0].kind, 'calculated');
+  } finally {
+    await close(server);
     await fs.rm(dir, { recursive: true, force: true });
   }
 });

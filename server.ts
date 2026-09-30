@@ -10,10 +10,10 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 import { initialState as blankState, validateState, mutate } from './public/state.ts';
 import type { ProgressState } from './public/types/index.ts';
 export { validateState, mutate };
-// Starting progress for the Original handbook profile of a brand-new server (no
-// workspace.json and no legacy progress.json): the owner's handbook starts in Phase 3 with
-// the storage ground floor built and 125,000 Versatile Frameworks delivered. Not used for
-// any other profile; tests import it to compare against.
+// The starting progress the Original handbook profile of a brand-new server had before the
+// handbook was retired (#387): Phase 3, with the storage ground floor built and 125,000
+// Versatile Frameworks delivered. A new server now starts with no saves (#496); tests and
+// browser-check.ts use this as the progress.json of an upgraded early install.
 export const initialState = (): ProgressState => ({
   ...blankState(),
   checks: { 'storage-ground-shell': true },
@@ -56,7 +56,6 @@ export async function createApp({
   await fs.mkdir(dataDir, { recursive: true });
   const workspace = await openWorkspace({
     dataDir,
-    initialState,
     validateState,
     mutate,
     rankBudgetMs,

@@ -23,7 +23,7 @@ const conversion = handbookToPlan(frozen, recipes, catalog().pureLimits);
 const factory = frozen.factories.find(f => conversion.rows['3']![f.id])!;
 const row = conversion.rows['3']![factory.id]!;
 
-const open = (dataDir: string) => openWorkspace({ dataDir, initialState, validateState, mutate });
+const open = (dataDir: string) => openWorkspace({ dataDir, validateState, mutate });
 const dir = () => fs.mkdtemp(path.join(os.tmpdir(), 'planner-handbook-'));
 const read = async (d: string, name = 'workspace.json') => fs.readFile(path.join(d, name), 'utf8');
 const profile = (id: string, extra: Partial<StoredProfile> = {}): StoredProfile => ({

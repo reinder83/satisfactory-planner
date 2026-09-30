@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
+import { seedLegacy } from './helpers/seed.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import type { BrowserStore } from '../public/browser-store.ts';
 import { calculate } from '../planner.ts';
@@ -17,6 +18,7 @@ import type {
   WorkspaceSummary,
 } from '../public/types/index.ts';
 async function start(dir: string) {
+  await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   // Listening on a TCP port, so address() is an AddressInfo.
