@@ -179,8 +179,10 @@ export async function typedDuringSave(race: Race, stub: Stub) {
 // One field typed in again while its own save is in flight (#664): the delivery counter, which
 // stays editable while it saves (the other fields are read-only meanwhile, app/busy.ts). Its save
 // changes the saved count, and a draft replaced by every new saved count lost what was typed
-// after the commit. It is kept, then saved when committed in turn.
-export async function typedDuringOwnSave(stub: Stub) {
+// after the commit. It is kept, then saved when committed in turn. `typed` is what is typed
+// during the save: another count, or the count saved before (0), which a draft compared with
+// the value saved before took for untouched (#678).
+export async function typedDuringOwnSave(stub: Stub, typed = '7') {
   page();
   await races['delivery counter']!.open();
   const release = holdFirst(stub);
@@ -190,13 +192,13 @@ export async function typedDuringOwnSave(stub: Stub) {
   type(input, '5');
   input.dispatchEvent(new Event('change'));
   await nextTick();
-  type(input, '7');
+  type(input, typed);
   release();
   await settle();
   assert.equal(stored(), 5);
-  assert.equal(input.value, '7', 'kept after its own save of the count before');
+  assert.equal(input.value, typed, 'kept after its own save of the count before');
   input.dispatchEvent(new Event('change'));
   await settle();
-  assert.equal(stored(), 7, 'the typed count is saved');
-  assert.equal(input.value, '7');
+  assert.equal(stored(), Number(typed), 'the typed count is saved');
+  assert.equal(input.value, typed);
 }

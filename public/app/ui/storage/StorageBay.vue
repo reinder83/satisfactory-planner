@@ -25,7 +25,7 @@ import {
   storageFloors,
 } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
-import { useDraft } from '../draft.ts';
+import { reset, useDraft } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -146,7 +146,8 @@ function completeSlot(event: Event, id: string) {
 const name = useDraft(() => props.bay.name);
 
 // The bay's name field, read-only while it saves (app/busy.ts). Redrawn with the saved name
-// whether or not the save worked, so a failed rename shows the saved name again.
+// whether or not the save worked, so a failed rename shows the saved name again, and the field is
+// untouched again: the next saved name (another tab's rename) replaces it (ui/draft.ts).
 function rename(event: Event) {
   const input = event.target as HTMLInputElement;
   return whileBusy(input, async () => {
@@ -155,7 +156,7 @@ function rename(event: Event) {
     } catch {
     } finally {
       render();
-      name.value = props.bay.name;
+      reset(name, props.bay.name);
     }
   });
 }

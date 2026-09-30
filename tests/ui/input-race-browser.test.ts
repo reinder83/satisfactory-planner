@@ -35,3 +35,7 @@ for (const [name, race] of Object.entries(races))
 test('a delivery count typed while the same counter saves is kept and saved in the browser (#664)', async () => {
   await typedDuringOwnSave(stub);
 });
+
+test('the count saved before, typed back while the same counter saves, is kept and saved in the browser (#678)', async () => {
+  await typedDuringOwnSave(stub, '0');
+});
