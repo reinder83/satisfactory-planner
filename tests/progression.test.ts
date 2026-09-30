@@ -1,7 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { progression } from '../public/progression.ts';
+import {
+  baseTasks,
+  guideContext,
+  hardDriveTasks,
+  milestoneTasks,
+  powerTasks,
+  progression,
+  requiredMilestones,
+  retireTasks,
+} from '../public/progression.ts';
 import { calculate } from '../planner.ts';
 import type { CalcRow, Progression, StageKey } from '../public/types/index.ts';
 const data: Progression = JSON.parse(
@@ -105,4 +114,88 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
       /last needed in Phase 3/,
       'later phases still retire what the plan did build',
     );
+});
+
+test('guideContext plans the post-game as Phase 5 and reads only ticked checks', () => {
+  const plan = calculate({}),
+    coal = data.entries.find(entry => entry.name === 'Coal Power')!;
+  const ctx = guideContext(plan, { checks: { ['unlock-' + coal.id]: true } }, data, 'post');
+  assert.equal(ctx.stage, 5);
+  assert.deepEqual(ctx.rows, plan.stages['5'].rows || []);
+  assert.equal(ctx.byName('Coal Power'), coal);
+  assert.ok(ctx.unlocked(coal));
+  assert.ok(!ctx.unlocked(ctx.byName('Nuclear Power')!));
+  assert.match(ctx.funding(coal), /production planned|gather, handcraft/);
+});
+
+test('requiredMilestones brings every prerequisite, and milestoneTasks lists it first', () => {
+  const plan = calculate({ recipes: 'all' });
+  for (const phase of ['1', '2', '3', '4', '5']) {
+    const ctx = guideContext(plan, { checks: {} }, data, phase),
+      required = requiredMilestones(ctx),
+      ids = new Set(required.map(entry => entry.id));
+    // A prerequisite progression.json does not list (the HUB tutorial) cannot be added.
+    for (const entry of required)
+      for (const id of entry.requires.filter(id => data.entries.some(x => x.id === id)))
+        assert.ok(ids.has(id), `phase ${phase}: ${entry.name} needs ${id}`);
+    const tasks = milestoneTasks(ctx, required),
+      position = new Map(tasks.map((task, i) => [task.id, i]));
+    for (const entry of required) {
+      const at = position.get('unlock-' + entry.id);
+      if (at === undefined) continue;
+      assert.ok(!entry.alternate, 'alternates come from hard drives, not milestone steps');
+      for (const id of entry.requires) {
+        const before = position.get('unlock-' + id);
+        if (before !== undefined)
+          assert.ok(before < at, `phase ${phase}: ${id} before ${entry.name}`);
+      }
+    }
+  }
+});
+
+test('milestoneTasks leaves out what cannot be researched yet', () => {
+  const ctx = guideContext(calculate({}), { checks: {} }, data, '1');
+  const late = data.entries.filter(entry => !entry.mam && !entry.alternate && entry.tier >= 3);
+  const tasks = milestoneTasks(ctx, late);
+  assert.deepEqual(tasks, [], 'Phase 1 only researches tiers 1 and 2');
+});
+
+test('hardDriveTasks counts the alternates not yet confirmed', () => {
+  const plan = calculate({ recipes: 'all' }),
+    empty = guideContext(plan, { checks: {} }, data, '2'),
+    alternates = empty.rows.filter(r => r.alternate);
+  assert.ok(alternates.length > 1, 'the fixture plan uses alternates');
+  const confirmed = guideContext(
+    plan,
+    { checks: { ['recipe-unlock-' + alternates[0]!.id]: true } },
+    data,
+    '2',
+  );
+  const tasks = hardDriveTasks(confirmed);
+  assert.equal(tasks.length, alternates.length + 1);
+  assert.equal(tasks[0]!.id, 'hard-drives-2');
+  assert.match(tasks[0]!.body, new RegExp('^' + (alternates.length - 1) + ' selected'));
+  assert.deepEqual(
+    tasks.slice(1).map(task => task.id),
+    alternates.map(r => 'recipe-unlock-' + r.id),
+  );
+  const plain = guideContext(calculate({}), { checks: {} }, data, '1');
+  if (!plain.rows.some(r => r.alternate)) assert.deepEqual(hardDriveTasks(plain), []);
+});
+
+test('powerTasks keeps the Phase 1 start-up order calcTasks interleaves', () => {
+  const ctx = guideContext(calculate({}), { checks: {} }, data, '1');
+  assert.deepEqual(
+    powerTasks(ctx)
+      .slice(0, 4)
+      .map(task => task.id),
+    ['startup-1-power-review', 'startup-biomass', 'startup-solid-biofuel', 'startup-burner-bank-1'],
+  );
+});
+
+test('baseTasks and retireTasks are empty where they do not apply', () => {
+  const plan = calculate({});
+  assert.equal(baseTasks(guideContext(plan, { checks: {} }, data, '1')).length, 7);
+  assert.deepEqual(baseTasks(guideContext(plan, { checks: {} }, data, '2')), []);
+  assert.deepEqual(retireTasks(guideContext(plan, { checks: {} }, data, '1')), []);
 });
