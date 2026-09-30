@@ -31,20 +31,20 @@ export interface PlanStepData {
 // with its own rate, a fluid in m³/min (itemRate in flow.ts, #363), or '' for none.
 const rateList = (rates: Record<string, number>): string =>
   Object.entries(rates)
-    .map(([n, q]) => n + ' ' + itemRate(n, q))
+    .map(([item, rate]) => item + ' ' + itemRate(item, rate))
     .join(', ');
 
 // A step's outputs: a generator's power first, then its items (a nuclear plant's waste, #373).
-const outputList = (r: CalcRow): string =>
-  [...(r.generationMW > 0 ? [power(r.generationMW)] : []), rateList(r.outputs || {})]
+const outputList = (row: CalcRow): string =>
+  [...(row.generationMW > 0 ? [power(row.generationMW)] : []), rateList(row.outputs || {})]
     .filter(Boolean)
-    .join(', ') || power(r.generationMW);
+    .join(', ') || power(row.generationMW);
 
 // The bundled icon a calculated row shows on its card, its dialog and its build-plan step: a
 // generator's building (icons/coal-generator.png and so on), even when it also makes waste
 // (#350), else its main output; '' for neither.
-export const rowIcon = (r: CalcRow): string =>
-  r.generationMW > 0 ? r.machine : Object.keys(r.outputs || {})[0] || '';
+export const rowIcon = (row: CalcRow): string =>
+  row.generationMW > 0 ? row.machine : Object.keys(row.outputs || {})[0] || '';
 
 // The generated checklist for a calculated profile's current phase, before the user's step
 // edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
@@ -57,50 +57,50 @@ export function calcTasks(): PlanStepData[] {
   // A plan with a guide (#393, a migrated handbook profile) has the guide's steps for this phase
   // instead, with their own check ids; a phase the guide leaves out has none (#466).
   if (calculated.guide) return (calculated.guide.phases[phase()] ?? []).map(t => ({ ...t }));
-  const p = calcStage(),
-    g = progression(calculated, state, progressionData, phase());
+  const snapshot = calcStage(),
+    steps = progression(calculated, state, progressionData, phase());
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
   // phases put power first, then milestones.
   const startup =
     stage() === '1'
       ? [
           // Phase 1 always has its seven base steps (progression.ts).
-          g.baseTasks[0]!,
-          ...g.powerTasks.slice(0, 2),
-          ...g.baseTasks.slice(1, 5),
-          ...g.milestoneTasks,
-          ...g.powerTasks.slice(2),
-          ...g.baseTasks.slice(5),
+          steps.baseTasks[0]!,
+          ...steps.powerTasks.slice(0, 2),
+          ...steps.baseTasks.slice(1, 5),
+          ...steps.milestoneTasks,
+          ...steps.powerTasks.slice(2),
+          ...steps.baseTasks.slice(5),
         ]
-      : [...g.powerTasks, ...g.milestoneTasks];
+      : [...steps.powerTasks, ...steps.milestoneTasks];
   return [
     ...startup,
-    ...g.hardDrives,
-    ...(p?.rows || []).map(r => ({
-      id: 'calc-' + stage() + '-' + r.id,
-      title: r.name,
+    ...steps.hardDrives,
+    ...(snapshot?.rows || []).map(row => ({
+      id: 'calc-' + stage() + '-' + row.id,
+      title: row.name,
       // The pointer to an easier rounded option only where the dialog shows one (#379).
-      body: `${machineSetup(r).summary} ${machineSetup(r).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(r).clock) + '% → ≈ ' + machineSetup(r).lastOutput + '.' + (easierSetup(machineSetup(r)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(r).fullOutput + '.'} ${r.amplified ? `Insert ${r.slots} somersloop${(r.slots ?? 0) > 1 ? 's' : ''} in each machine — ${r.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(r.inputs) || 'none'}. Outputs: ${outputList(r)}.`,
+      body: `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`,
     })),
     {
       id: 'calc-' + stage() + '-storage',
       title: 'Connect protected storage and overflow',
       body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
     },
-    ...(g.retire || []),
+    ...(steps.retire || []),
   ];
 }
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)
-// for stage `x` shown as phase `p` (#331). Phase 1 has no generators in the plan (planner.ts
-// keeps hand-fed biomass burners out of the model), so its power is biomass or what already
-// runs. From Phase 2 on the plan builds its own generators: the sentence names the ones this
-// stage's rows build, and says only that more is needed when a stage builds none.
-export function headroomAdvice(x: StoredStage, p: Phase): string {
-  const label = phaseLabel(p);
-  if (p === '1') return label + ' needs biomass or existing generation.';
+// for stage `snapshot` shown as phase `shownPhase` (#331). Phase 1 has no generators in the plan
+// (planner.ts keeps hand-fed biomass burners out of the model), so its power is biomass or what
+// already runs. From Phase 2 on the plan builds its own generators: the sentence names the ones
+// this stage's rows build, and says only that more is needed when a stage builds none.
+export function headroomAdvice(snapshot: StoredStage, shownPhase: Phase): string {
+  const label = phaseLabel(shownPhase);
+  if (shownPhase === '1') return label + ' needs biomass or existing generation.';
   const machines = [
-    ...new Set((x.rows || []).filter(r => (r.generationMW || 0) > 0).map(r => r.machine)),
+    ...new Set((snapshot.rows || []).filter(r => (r.generationMW || 0) > 0).map(r => r.machine)),
   ];
   if (!machines.length)
     return label + ' needs generation beyond the plan, or existing spare power.';
@@ -110,41 +110,44 @@ export function headroomAdvice(x: StoredStage, p: Phase): string {
 }
 
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
-// The options for an infeasible phase `x` under settings `s`, as sentences (none for an
+// The options for an infeasible phase `snapshot` under `settings`, as sentences (none for an
 // older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review
 // (ui/wizard/ReviewStep.vue) list them.
-export function draftFixes(x: StoredStage, s: Partial<CurrentSettings> | undefined): string[] {
+export function draftFixes(
+  snapshot: StoredStage,
+  settings: Partial<CurrentSettings> | undefined,
+): string[] {
   const fixes: string[] = [];
-  if (x.shortfalls?.length)
+  if (snapshot.shortfalls?.length)
     fixes.push(
-      `Raise the short budget${x.shortfalls.length > 1 ? 's' : ''} (Resources): ${x.shortfalls.map(f => `${f.name} to about ${itemRate(f.name, f.needed)} (entered: ${itemRate(f.name, f.budget)})`).join('; ')}.`,
+      `Raise the short budget${snapshot.shortfalls.length > 1 ? 's' : ''} (Resources): ${snapshot.shortfalls.map(shortfall => `${shortfall.name} to about ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`).join('; ')}.`,
     );
-  if (x.wholeMachinesOnly)
+  if (snapshot.wholeMachinesOnly)
     fixes.push(
       'Keep these budgets instead: untick “Run solid-part machines at 100%” (Goals). Precise balancing fits, with one adjustable machine per production line.',
     );
-  if (x.minHours)
+  if (snapshot.minHours)
     fixes.push(
-      s?.goal === 'timed'
-        ? `Raise “Hours per phase” (Goals) to at least ${num(x.minHours)} h.`
-        : `Switch the goal (Goals) to “Target completion time” with at least ${num(x.minHours)} hours per phase.`,
+      settings?.goal === 'timed'
+        ? `Raise “Hours per phase” (Goals) to at least ${num(snapshot.minHours)} h.`
+        : `Switch the goal (Goals) to “Target completion time” with at least ${num(snapshot.minHours)} hours per phase.`,
     );
-  else if (x.shortfalls?.length && !x.wholeMachinesOnly)
+  else if (snapshot.shortfalls?.length && !snapshot.wholeMachinesOnly)
     fixes.push(
-      s?.goal === 'maximum'
+      settings?.goal === 'maximum'
         ? 'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).'
-        : `More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${s?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
+        : `More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${settings?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
     );
-  if (x.shortfalls?.length && s?.recipes === 'standard')
+  if (snapshot.shortfalls?.length && settings?.recipes === 'standard')
     fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
-  if (x.shortfalls?.length && s?.sam === 'avoid')
+  if (snapshot.shortfalls?.length && settings?.sam === 'avoid')
     fixes.push(
       'Allow SAM resource conversion (Preferences) to turn plentiful resources into the short ones.',
     );
   return fixes;
 }
 
-// How to build row `r`: how many machines run at 100% and whether one last machine runs
+// How to build `row`: how many machines run at 100% and whether one last machine runs
 // underclocked, with per-machine output text. `easy` is an optional rounded-up clock for
 // that last machine and the extra inputs/outputs it causes; it is never offered for nuclear
 // or waste lines, whose balance must stay exact. Used by calcTasks and
@@ -156,26 +159,26 @@ export interface EasySetup {
   inputs: ItemRates;
   extraOutputs: ItemRates;
 }
-export function machineSetup(r: CalcRow) {
-  const equivalent = r.equivalent || r.machines - 1 + r.lastClock / 100,
+export function machineSetup(row: CalcRow) {
+  const equivalent = row.equivalent || row.machines - 1 + row.lastClock / 100,
     whole = Math.floor(equivalent + 1e-7),
     fraction = Math.max(0, equivalent - whole),
     partial = fraction > 1e-7;
   const rates = Object.fromEntries(
-    Object.entries(r.outputs || {}).map(([n, q]) => [n, q / equivalent]),
+    Object.entries(row.outputs || {}).map(([item, rate]) => [item, rate / equivalent]),
   );
   // What one machine makes, at 100% and at the adjustable one's clock: a generator's power
   // first, then its items, so a nuclear plant gives its MW with its waste alongside (#373).
   const perMachine = (share: number) =>
     [
-      ...(r.generationMW > 0 ? [`${num((r.generationMW / equivalent) * share)} MW`] : []),
-      ...Object.entries(rates).map(([n, q]) => rateOfItem(n, q * share)),
-    ].join(' · ') || `${num((r.generationMW / equivalent) * share)} MW`;
+      ...(row.generationMW > 0 ? [`${num((row.generationMW / equivalent) * share)} MW`] : []),
+      ...Object.entries(rates).map(([item, rate]) => rateOfItem(item, rate * share)),
+    ].join(' · ') || `${num((row.generationMW / equivalent) * share)} MW`;
   const fullOutput = perMachine(1);
   const lastOutput = perMachine(fraction);
-  const summary = `${r.machines} ${r.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
+  const summary = `${row.machines} ${row.machine} total: ${partial ? (whole ? whole + ' at 100% + ' : '') + '1 adjustable machine' : whole + ' at 100% (no underclock needed)'}.`;
   const sensitive = /uranium|plutonium|ficsonium|waste|non-fissile/i.test(
-    [r.name, ...Object.keys(r.inputs || {}), ...Object.keys(r.outputs || {})].join(' '),
+    [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
   );
   let easy: EasySetup | null = null;
   if (partial && !sensitive) {
@@ -192,11 +195,18 @@ export function machineSetup(r: CalcRow) {
     if (extra > 1e-7)
       easy = {
         clock,
-        output: Object.fromEntries(Object.entries(rates).map(([n, q]) => [n, (q * clock) / 100])),
-        inputs: Object.fromEntries(
-          Object.entries(r.inputs || {}).map(([n, q]) => [n, (q / equivalent) * extra]),
+        output: Object.fromEntries(
+          Object.entries(rates).map(([item, rate]) => [item, (rate * clock) / 100]),
         ),
-        extraOutputs: Object.fromEntries(Object.entries(rates).map(([n, q]) => [n, q * extra])),
+        inputs: Object.fromEntries(
+          Object.entries(row.inputs || {}).map(([item, rate]) => [
+            item,
+            (rate / equivalent) * extra,
+          ]),
+        ),
+        extraOutputs: Object.fromEntries(
+          Object.entries(rates).map(([item, rate]) => [item, rate * extra]),
+        ),
       };
   }
   return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
@@ -205,8 +215,8 @@ export function machineSetup(r: CalcRow) {
 // The easier rounded setting the factory dialog offers (ui/detail/CalcFactoryDialog.vue), and
 // the build-plan step points to (calcTasks): none for a nuclear or waste line, or when the
 // profile runs whole machines (#379).
-export const easierSetup = (m: ReturnType<typeof machineSetup>): EasySetup | null =>
-  calculated?.settings.wholeMachines ? null : m.easy;
+export const easierSetup = (setup: ReturnType<typeof machineSetup>): EasySetup | null =>
+  calculated?.settings.wholeMachines ? null : setup.easy;
 
 // Phases where a line is not built yet, or needs no more machines, have nothing
 // to add: say so with a dash rather than claiming capacity is being kept.
@@ -214,13 +224,13 @@ export const easierSetup = (m: ReturnType<typeof machineSetup>): EasySetup | nul
 // required for row `id` and how many to add over the most installed so far.
 export function calcExpansion(id: string) {
   let installed = 0;
-  return fromStart(calculated?.stages).map(([ph, p]) => {
-    const required = p.rows?.find(x => x.id === id)?.machines || 0;
+  return fromStart(calculated?.stages).map(([stagePhase, snapshot]) => {
+    const required = snapshot.rows?.find(row => row.id === id)?.machines || 0;
     const add = Math.max(0, required - installed);
     installed = Math.max(installed, required);
     return {
-      phase: ph,
-      ...expansionPhase(ph),
+      phase: stagePhase,
+      ...expansionPhase(stagePhase),
       required: required || '—',
       add: add ? '+' + add : '—',
     };
@@ -230,10 +240,10 @@ export function calcExpansion(id: string) {
 // An expansion table row's phase (SP-22): its label, and whether it is the phase being worked
 // on, which the dialogs mark with an accent edge and a "current" tag. Post Phase 5 works on
 // Phase 5's targets, so that row is the current one then, and its tag says so.
-export function expansionPhase(ph: string) {
-  const current = ph === stage();
+export function expansionPhase(rowPhase: string) {
+  const current = rowPhase === stage();
   return {
-    label: phaseLabel(ph),
+    label: phaseLabel(rowPhase),
     current,
     tag: current ? (phase() === 'post' ? 'current: Post Phase 5' : 'current') : '',
   };
@@ -246,14 +256,15 @@ export function expansionPhase(ph: string) {
 let buildCache: { key: string; status: BuildStatus | null } | null = null;
 let buildPlan: unknown = null;
 export function currentBuildStatus(): BuildStatus | null {
-  const x = calcStage();
-  if (!calculated || !x?.rows?.length) return null;
+  const snapshot = calcStage();
+  if (!calculated || !snapshot?.rows?.length) return null;
   const prefix = 'calc-' + stage() + '-';
-  const key = stage() + '|' + x.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('');
+  const key =
+    stage() + '|' + snapshot.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('');
   if (buildPlan !== calculated || buildCache?.key !== key) {
     buildPlan = calculated;
     const spareMW = (calculated.settings.availablePowerGW || 0) * 1000;
-    buildCache = { key, status: buildStatus(x, state.checks, stage(), spareMW) };
+    buildCache = { key, status: buildStatus(snapshot, state.checks, stage(), spareMW) };
   }
   return buildCache.status;
 }
@@ -262,6 +273,8 @@ export function currentBuildStatus(): BuildStatus | null {
 // full output it runs at and the item it is short of, or null. Its factory card says so
 // (CalcFactoryCard.vue) and the factories page's Held back chip counts it (SP-16, #251).
 export function heldBack(rowId: string): { share: number; shortOf: string } | null {
-  const s = currentBuildStatus()?.rows.find(x => x.id === rowId);
-  return s?.built && s.share < 1 && s.shortOf ? { share: s.share, shortOf: s.shortOf } : null;
+  const status = currentBuildStatus()?.rows.find(row => row.id === rowId);
+  return status?.built && status.share < 1 && status.shortOf
+    ? { share: status.share, shortOf: status.shortOf }
+    : null;
 }

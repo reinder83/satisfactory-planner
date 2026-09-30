@@ -79,9 +79,9 @@ async function runEstimate() {
     const plan = await solve(settings);
     if (id === serial && !again)
       Object.assign(estimate, { plan, quick: false, error: '', status: 'done' });
-  } catch (err) {
+  } catch (error) {
     if (id === serial && !again)
-      Object.assign(estimate, { error: (err as Error).message, quick: false, status: 'error' });
+      Object.assign(estimate, { error: (error as Error).message, quick: false, status: 'error' });
   } finally {
     running = false;
     controller = null;

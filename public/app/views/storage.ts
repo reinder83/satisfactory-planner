@@ -39,8 +39,8 @@ export interface StorageFloor {
 // resource and detail views.
 export function inputText(inputs: ItemRates): string {
   return Object.entries(inputs)
-    .filter(([, q]) => q)
-    .map(([n, q]) => n + ' ' + itemRate(n, q))
+    .filter(([, rate]) => rate)
+    .map(([item, rate]) => item + ' ' + itemRate(item, rate))
     .join(' · ');
 }
 
@@ -54,8 +54,8 @@ export interface ItemRateRow {
 // itemRateRows: the same non-zero entries inputText lists, in the same order, as rows.
 export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
   return Object.entries(inputs)
-    .filter(([, q]) => q)
-    .map(([n, q]) => ({ name: n, rate: itemRate(n, q) }));
+    .filter(([, rate]) => rate)
+    .map(([item, rate]) => ({ name: item, rate: itemRate(item, rate) }));
 }
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,
@@ -64,18 +64,18 @@ export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
 // `hiddenBays` (handbook bays taken out of the room, their records kept) and `bayFloors`
 // (handbook bays moved to another floor, #190) and `bayOrder` (the bays' order per floor, #191).
 function storageEdits(): StorageEdits {
-  const e: Partial<StorageEdits> = state?.storageEdits || {};
+  const edits: Partial<StorageEdits> = state?.storageEdits || {};
   return {
-    floors: e.floors || [],
-    floorNames: e.floorNames || {},
-    bays: e.bays || [],
-    bayNames: e.bayNames || {},
-    slots: e.slots || {},
-    clearedSlots: e.clearedSlots || [],
-    hiddenBays: e.hiddenBays || [],
-    hiddenFloors: e.hiddenFloors || [],
-    ...(e.bayFloors ? { bayFloors: e.bayFloors } : {}),
-    ...(e.bayOrder ? { bayOrder: e.bayOrder } : {}),
+    floors: edits.floors || [],
+    floorNames: edits.floorNames || {},
+    bays: edits.bays || [],
+    bayNames: edits.bayNames || {},
+    slots: edits.slots || {},
+    clearedSlots: edits.clearedSlots || [],
+    hiddenBays: edits.hiddenBays || [],
+    hiddenFloors: edits.hiddenFloors || [],
+    ...(edits.bayFloors ? { bayFloors: edits.bayFloors } : {}),
+    ...(edits.bayOrder ? { bayOrder: edits.bayOrder } : {}),
   };
 }
 
@@ -88,15 +88,19 @@ const BUILTIN_FLOORS: [id: string, label: string][] = [
   ['workshop', 'Workshop'],
 ];
 export function storageFloors(): StorageFloor[] {
-  const e = storageEdits(),
+  const edits = storageEdits(),
     hidden = hiddenFloorIds();
   return [
     ...BUILTIN_FLOORS.filter(([id]) => !hidden.has(id)).map(([id, label]) => ({
       id,
-      label: e.floorNames[id] || label,
+      label: edits.floorNames[id] || label,
       builtin: true,
     })),
-    ...e.floors.map(f => ({ id: f.id, label: e.floorNames[f.id] || f.label, builtin: false })),
+    ...edits.floors.map(floor => ({
+      id: floor.id,
+      label: edits.floorNames[floor.id] || floor.label,
+      builtin: false,
+    })),
   ];
 }
 
@@ -109,11 +113,11 @@ function hiddenFloorIds(): Set<string> {
 }
 // The hidden built-in floors, for the storage page's Hidden panel.
 export function hiddenStorageFloors(): { id: string; label: string }[] {
-  const e = storageEdits(),
+  const edits = storageEdits(),
     hidden = hiddenFloorIds();
   return BUILTIN_FLOORS.filter(([id]) => hidden.has(id)).map(([id, label]) => ({
     id,
-    label: e.floorNames[id] || label,
+    label: edits.floorNames[id] || label,
   }));
 }
 
@@ -136,9 +140,10 @@ export function floorOrder(floor: string, ids: string[]): string[] | null {
 // every id is taken. The id becomes part of each container address, so it never changes.
 export function nextBayLetter(): string | null {
   const used = new Set([...STORAGE_ROOM.map(b => b.id), ...storageEdits().bays.map(b => b.id)]);
-  for (const l of 'STUVXYZABCDEFGHIJKLMNOPQRW') if (!used.has(l)) return l;
-  for (const a of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-    for (const b of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(a + b)) return a + b;
+  for (const letter of 'STUVXYZABCDEFGHIJKLMNOPQRW') if (!used.has(letter)) return letter;
+  for (const first of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    for (const second of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+      if (!used.has(first + second)) return first + second;
   return null;
 }
 
@@ -162,30 +167,34 @@ export function hiddenStorageBays(): {
   floor: string;
   moved: boolean;
 }[] {
-  const e = storageEdits(),
-    hidden = new Set(e.hiddenBays);
+  const edits = storageEdits(),
+    hidden = new Set(edits.hiddenBays);
   // A hidden letter an added bay has taken (#167) shares its addresses with that bay, so its
   // planned items are read from the plan alone, not from the added bay's containers.
-  const taken = new Set(e.bays.map(b => b.id).filter(id => hidden.has(id)));
+  const taken = new Set(edits.bays.map(b => b.id).filter(id => hidden.has(id)));
   return allStorageBays(taken)
     .filter(b => !b.custom && hidden.has(b.id))
-    .map(b => ({
-      id: b.id,
-      name: b.name,
-      items: b.items.filter(x => x.name).map(x => x.name!),
-      taken: taken.has(b.id),
+    .map(bay => ({
+      id: bay.id,
+      name: bay.name,
+      items: bay.items.filter(x => x.name).map(x => x.name!),
+      taken: taken.has(bay.id),
       // Where it sits, and whether it was moved there (#190): a hidden bay moved onto a floor
       // still keeps that floor from being hidden or removed (#216).
-      floor: b.floor,
-      moved: !!e.bayFloors?.[b.id],
+      floor: bay.floor,
+      moved: !!edits.bayFloors?.[bay.id],
     }));
 }
 
-// Whether position `x` answers the storage search `q`: a container whose address or item
+// Whether `position` answers the storage search `query`: a container whose address or item
 // contains it, ignoring case. The page narrows each floor's bays with it, a bay marks its
 // matching positions (.slot.match) and storageMatches() lists them on every floor.
-export function slotMatches(x: StoragePosition, q: string): boolean {
-  return !!(q && x.name && (x.id + ' ' + x.name).toLowerCase().includes(q.toLowerCase()));
+export function slotMatches(position: StoragePosition, query: string): boolean {
+  return !!(
+    query &&
+    position.name &&
+    (position.id + ' ' + position.name).toLowerCase().includes(query.toLowerCase())
+  );
 }
 
 // A container found by the storage search, with the floor it is on (#240).
@@ -196,28 +205,28 @@ export interface StorageMatch {
   floorLabel: string;
 }
 
-// The containers answering `q` on every floor, in floor-tab order and then by address (#240).
+// The containers answering `query` on every floor, in floor-tab order and then by address (#240).
 // Only positions the room shows: bays in storageBays(), on a floor with a tab. A hidden bay's
 // containers are not in the room (the page lists its items as unplaced), and a hidden floor has
 // no bay showing, so a result never leads to something the page does not draw.
-export function storageMatches(q: string): StorageMatch[] {
-  if (!q) return [];
+export function storageMatches(query: string): StorageMatch[] {
+  if (!query) return [];
   const floors = storageFloors(),
-    at = (id: string) => floors.findIndex(f => f.id === id);
+    floorIndex = (id: string) => floors.findIndex(f => f.id === id);
   return storageBays()
-    .filter(b => at(b.floor) >= 0)
-    .flatMap(b =>
-      b.items
-        .filter(x => slotMatches(x, q))
-        .map(x => ({
-          id: x.id,
+    .filter(b => floorIndex(b.floor) >= 0)
+    .flatMap(bay =>
+      bay.items
+        .filter(x => slotMatches(x, query))
+        .map(position => ({
+          id: position.id,
           // slotMatches() only accepts a named position.
-          name: x.name!,
-          floor: b.floor,
-          floorLabel: floors[at(b.floor)]!.label,
+          name: position.name!,
+          floor: bay.floor,
+          floorLabel: floors[floorIndex(bay.floor)]!.label,
         })),
     )
-    .sort((a, b) => at(a.floor) - at(b.floor) || a.id.localeCompare(b.id));
+    .sort((a, b) => floorIndex(a.floor) - floorIndex(b.floor) || a.id.localeCompare(b.id));
 }
 
 // Every bay, hidden handbook bays included; storageBays() and hiddenStorageBays() split it.
@@ -227,8 +236,8 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
   // item any phase stores, so unselected handbook positions show as reserved. A plan
   // transcribed from the handbook (engine 'handbook-…', #486) keeps the whole printed room, as
   // the handbook profile it was migrated from showed it (#487).
-  const e = storageEdits(),
-    cleared = new Set(e.clearedSlots);
+  const edits = storageEdits(),
+    cleared = new Set(edits.clearedSlots);
   const selected =
     calculated && !calculated.engine?.startsWith('handbook-')
       ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
@@ -238,47 +247,52 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
     : true;
   // A user's cleared address wins, then a name they filled in, then the planned item.
   const merge = (baseName: string | null, id: string) =>
-    cleared.has(id) ? null : (e.slots[id] ?? baseName);
+    cleared.has(id) ? null : (edits.slots[id] ?? baseName);
   // Eight printed positions per bay, and as many more as the highest address
   // anyone has filled there: a bay that runs out grows instead of turning items
   // away, and the printed addresses keep their place at the front.
   const bayLength = (id: string): number =>
-    Object.keys(e.slots).reduce(
-      (n: number, k) => (bayOfSlot(k) === id ? Math.max(n, slotPosition(k)) : n),
+    Object.keys(edits.slots).reduce(
+      (length: number, address) =>
+        bayOfSlot(address) === id ? Math.max(length, slotPosition(address)) : length,
       8,
     );
   const positions = (id: string, from: number): StoragePosition[] =>
     Array.from({ length: Math.max(0, bayLength(id) - from) }, (_, i) => {
-      const at = id + String(from + i + 1).padStart(2, '0');
-      return { id: at, name: merge(null, at) };
+      const address = id + String(from + i + 1).padStart(2, '0');
+      return { id: address, name: merge(null, address) };
     });
   // The printed bays (storage-room.ts, #388). A calculated profile keeps only its selected items, plus the
   // collectables bays Q and R when its settings keep collectables.
-  const base: StorageBayView[] = STORAGE_ROOM.map(b => ({
-    ...b,
+  const base: StorageBayView[] = STORAGE_ROOM.map(bay => ({
+    ...bay,
     // A handbook bay moved to another floor (#190) keeps everything else.
-    floor: e.bayFloors?.[b.id] ?? b.floor,
-    name: e.bayNames[b.id] || b.name,
+    floor: edits.bayFloors?.[bay.id] ?? bay.floor,
+    name: edits.bayNames[bay.id] || bay.name,
     items: [
-      ...b.items.map(x => {
+      ...bay.items.map(position => {
         const planned = selected
-          ? x.name && (selected.has(x.name) || (['Q', 'R'].includes(b.id) && keepCollectables))
-            ? x.name
+          ? position.name &&
+            (selected.has(position.name) || (['Q', 'R'].includes(bay.id) && keepCollectables))
+            ? position.name
             : null
-          : x.name;
-        return { ...x, name: planOnly.has(b.id) ? planned : merge(planned, x.id) };
+          : position.name;
+        return {
+          ...position,
+          name: planOnly.has(bay.id) ? planned : merge(planned, position.id),
+        };
       }),
-      ...(planOnly.has(b.id) ? [] : positions(b.id, b.items.length)),
+      ...(planOnly.has(bay.id) ? [] : positions(bay.id, bay.items.length)),
     ],
   }));
   // Bays the user added: at least eight positions, all filled from `slots`. They always
   // show, while a handbook bay with nothing selected is hidden from a calculated profile.
-  const custom: StorageBayView[] = e.bays.map(b => ({
-    id: b.id,
-    name: e.bayNames[b.id] || b.name,
-    floor: b.floor,
+  const custom: StorageBayView[] = edits.bays.map(bay => ({
+    id: bay.id,
+    name: edits.bayNames[bay.id] || bay.name,
+    floor: bay.floor,
     custom: true,
-    items: positions(b.id, 0),
+    items: positions(bay.id, 0),
   }));
   return [...base, ...custom].filter(b => b.custom || !selected || b.items.some(x => x.name));
 }
@@ -288,7 +302,7 @@ function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
 // both write these same four keys (ui/storage/StorageBay.vue), as does the container dialog
 // one by one (SLOT_STEPS).
 const slotChecks = ['built', 'labelled', 'connected', 'verified'];
-export const slotKeys = (id: string) => slotChecks.map(k => 'slot-' + id + '-' + k);
+export const slotKeys = (id: string) => slotChecks.map(step => 'slot-' + id + '-' + step);
 export const slotDone = (id: string) => slotKeys(id).every(checked);
 
 // How far a bay is (SP-23, #258): its named containers, and how many of those are Done. A
@@ -298,8 +312,8 @@ export interface StorageProgress {
   done: number;
   named: number;
 }
-export function bayProgress(b: StorageBayView): StorageProgress {
-  const named = b.items.filter(x => x.name);
+export function bayProgress(bay: StorageBayView): StorageProgress {
+  const named = bay.items.filter(x => x.name);
   return { done: named.filter(x => slotDone(x.id)).length, named: named.length };
 }
 
@@ -307,10 +321,13 @@ export function bayProgress(b: StorageBayView): StorageProgress {
 // keyed by floor id. A floor with no bay is absent.
 export function floorProgress(): Map<string, StorageProgress> {
   const totals = new Map<string, StorageProgress>();
-  for (const b of storageBays()) {
-    const p = bayProgress(b),
-      t = totals.get(b.floor) ?? { done: 0, named: 0 };
-    totals.set(b.floor, { done: t.done + p.done, named: t.named + p.named });
+  for (const bay of storageBays()) {
+    const progress = bayProgress(bay),
+      floorTotal = totals.get(bay.floor) ?? { done: 0, named: 0 };
+    totals.set(bay.floor, {
+      done: floorTotal.done + progress.done,
+      named: floorTotal.named + progress.named,
+    });
   }
   return totals;
 }

@@ -6,10 +6,13 @@ import { num } from '../format.ts';
 // A missing figure (a field older plans lack) shows as 0 MW, as it always has. powerParts
 // keeps the number and its unit apart, for a headline that draws the unit smaller (SP-14).
 export const powerParts = (mw: number | null | undefined): { value: string; unit: string } => {
-  const v = mw ?? 0;
-  return { value: num(v > 1000 ? v / 1000 : v), unit: v > 1000 ? 'GW' : 'MW' };
+  const megawatts = mw ?? 0;
+  return {
+    value: num(megawatts > 1000 ? megawatts / 1000 : megawatts),
+    unit: megawatts > 1000 ? 'GW' : 'MW',
+  };
 };
 export const power = (mw: number | null | undefined): string => {
-  const p = powerParts(mw);
-  return p.value + ' ' + p.unit;
+  const parts = powerParts(mw);
+  return parts.value + ' ' + parts.unit;
 };
