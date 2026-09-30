@@ -1631,8 +1631,12 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
     // are the most machines any phase from n to 5 builds, so running a line harder than its own
     // plan asks never needs a building that is not built anyway. The re-solve maximises output
     // under those caps, and is kept only when it finishes strictly sooner, recording the time it
-    // replaces as `aheadOf` (shown by public/app/wizard/wizard.ts).
+    // replaces as `aheadOf` (shown by public/app/wizard/wizard.ts). A re-solve that stopped at its
+    // limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or Phase 5's
+    // deadline) proves nothing either way: that phase keeps its own plan, and the warning says the
+    // search stopped instead of claiming it could not finish sooner (#650).
     const built: Record<number, Record<string, number>> = {};
+    const stopped: number[] = [];
     for (let phase = 1; phase <= 5; phase++)
       for (const row of stages[phase]!.rows || [])
         built[phase] = { ...built[phase], [row.id]: row.machines };
@@ -1644,13 +1648,29 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
       const ahead = run(config, phase, { maximum: true, caps });
       if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
         stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
+      else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
+        stopped.push(phase);
     }
     const pulled = Object.values(stages).filter(stage => stage.aheadOf !== undefined).length;
-    warnings.push(
-      pulled
-        ? `Your target time applies to Phase 5. Earlier phases run their lines as hard as the machines a later phase already builds allow, so ${pulled === 1 ? 'one phase finishes' : pulled + ' phases finish'} sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.`
-        : 'Your target time applies to Phase 5. No earlier phase could finish sooner within the machines its later phases already build.',
-    );
+    const sentences = ['Your target time applies to Phase 5.'];
+    if (pulled)
+      sentences.push(
+        `Earlier phases run their lines as hard as the machines a later phase already builds allow, so ${pulled === 1 ? 'one phase finishes' : pulled + ' phases finish'} sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.`,
+      );
+    else if (stopped.length < 4)
+      sentences.push(
+        `No ${stopped.length ? 'other ' : ''}earlier phase could finish sooner within the machines its later phases already build.`,
+      );
+    if (stopped.length) {
+      const many = stopped.length > 1;
+      const names = many
+        ? stopped.slice(0, -1).join(', ') + ' and ' + stopped[stopped.length - 1]
+        : String(stopped[0]);
+      sentences.push(
+        `For ${many ? 'Phases' : 'Phase'} ${names}, the search stopped before it could prove the best plan, so ${many ? 'those phases keep their' : 'that phase keeps its'} own target time; whether ${many ? 'they' : 'it'} could finish sooner has not been checked.`,
+      );
+    }
+    warnings.push(sentences.join(' '));
   }
   // Fueling an augmenter buys 20% more grid power in exchange for an Alien Power Matrix line.
   // Whether that pays depends on the plan's own scale, so solve Phase 5 again without the fuel
