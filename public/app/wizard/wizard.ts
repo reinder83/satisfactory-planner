@@ -28,6 +28,7 @@ import type {
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
+  SaveSummary,
   StoredCalculatedPlan,
   Survey,
   WorkspaceSummary,
@@ -111,81 +112,105 @@ export function startWizard(saveId: string | null = null) {
 
 function openWizard(saveId: string | null) {
   const existing = workspace.saves.find(s => s.id === saveId);
+  setWizard(newDraft(saveId, existing, startingSettings(existing)));
+  navigate('wizard');
+}
+
+// The settings a new draft starts from. A new profile for an existing save starts from a
+// copy of its active profile's settings (the workspace summary exposes plan.settings), the
+// preserved handbook profile ('original') from handbookSettings; anything else from
+// freshSettings.
+function startingSettings(existing: SaveSummary | undefined): WizardSettings {
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
-  // A new profile for an existing save starts from its active profile's
-  // settings (the workspace summary exposes plan.settings). The preserved
-  // handbook profile ('original') has no calculated settings, so this literal
-  // stands in for the handbook's own assumptions.
   const previous: WizardSettings | null =
-    selected?.settings ||
-    (selected?.kind === 'original'
-      ? {
-          phase: '3',
-          purity: 'pure',
-          distribution: 'randomized',
-          multiplier: 50,
-          powerFactor: 0.5,
-          availablePowerGW: 0,
-          recipes: 'all',
-          pureIngots: true,
-          sam: 'needed',
-          nuclear: 'recycle',
-          uraniumReactors: 1,
-          storage: 'all',
-          storageRate: 1,
-          cellsPerMinute: 20,
-          goal: 'timed',
-          hours: 8,
-          roundRates: true,
-          wholeMachines: true,
-          limitsConfirmed: false,
-          limits: { ...workspace.catalog.pureLimits },
-        }
-      : null);
-  // The draft. Fields:
-  //   step              five-step wizard position, 1-5 (5 = Review)
-  //   saveId, saveName  target save (null = create one) and its name
-  //   name              profile name; blank takes the goal's name on calculate
-  //   settings          everything the planner calculates from; both the guided
-  //                     questions and the five steps write it; sent to
-  //                     /api/preview and /api/profiles
-  //   preview           the last calculated plan, shown on Review; any form
-  //                     read clears it. Creating the profile calculates again.
-  //   carryFrom, carry  source profile id and carryOptions picks (Review panel)
-  //   mode              'guided' | 'advanced' | 'extraction': which screen draws
-  //   guidedStep, guidedAsk, tutorial  guided.ts state; tutorial also feeds
-  //                     guidedBuiltKeys and ada-panel.ts
-  // Added later: guidedTopics (guided.ts), supplyRows (supply.ts) and extraction, extractionStep,
-  // extractionReturn, extractionUndo (extraction.ts).
-  setWizard({
+    selected?.settings || (selected?.kind === 'original' ? handbookSettings() : null);
+  return previous ? structuredClone(previous) : freshSettings();
+}
+
+// The handbook profile has no calculated settings, so this literal stands in for the
+// handbook's own assumptions.
+function handbookSettings(): WizardSettings {
+  return {
+    phase: '3',
+    purity: 'pure',
+    distribution: 'randomized',
+    multiplier: 50,
+    powerFactor: 0.5,
+    availablePowerGW: 0,
+    recipes: 'all',
+    pureIngots: true,
+    sam: 'needed',
+    nuclear: 'recycle',
+    uraniumReactors: 1,
+    storage: 'all',
+    storageRate: 1,
+    cellsPerMinute: 20,
+    goal: 'timed',
+    hours: 8,
+    roundRates: true,
+    wholeMachines: true,
+    limitsConfirmed: false,
+    limits: { ...workspace.catalog.pureLimits },
+  };
+}
+
+// A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and the
+// browser-only edition starts at Phase 1.
+function freshSettings(): WizardSettings {
+  const settings: WizardSettings = {
+    phase: '3',
+    purity: 'vanilla',
+    distribution: 'original',
+    multiplier: 1,
+    powerFactor: 1,
+    availablePowerGW: 0,
+    recipes: 'standard',
+    pureIngots: false,
+    sam: 'needed',
+    nuclear: 'none',
+    uraniumReactors: 1,
+    storage: 'construction',
+    storageRate: 1,
+    cellsPerMinute: 0,
+    goal: 'balanced',
+    hours: 8,
+    roundRates: true,
+    wholeMachines: true,
+    limitsConfirmed: false,
+    limits: { ...workspace.catalog.limits },
+  };
+  settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
+  if (browserMode) settings.phase = '1';
+  return settings;
+}
+
+// A new draft for the save `existing` (saveId null creates a new save) starting from
+// `settings`. The draft. Fields:
+//   step              five-step wizard position, 1-5 (5 = Review)
+//   saveId, saveName  target save (null = create one) and its name
+//   name              profile name; blank takes the goal's name on calculate
+//   settings          everything the planner calculates from; both the guided
+//                     questions and the five steps write it; sent to
+//                     /api/preview and /api/profiles
+//   preview           the last calculated plan, shown on Review; any form
+//                     read clears it. Creating the profile calculates again.
+//   carryFrom, carry  source profile id and carryOptions picks (Review panel)
+//   mode              'guided' | 'advanced' | 'extraction': which screen draws
+//   guidedStep, guidedAsk, tutorial  guided.ts state; tutorial also feeds
+//                     guidedBuiltKeys and ada-panel.ts
+// Added later: guidedTopics (guided.ts), supplyRows (supply.ts) and extraction, extractionStep,
+// extractionReturn, extractionUndo (extraction.ts).
+function newDraft(
+  saveId: string | null,
+  existing: SaveSummary | undefined,
+  settings: WizardSettings,
+): WizardDraft {
+  return {
     step: 1,
     saveId,
     saveName: existing?.name || '',
     name: '',
-    settings: previous
-      ? structuredClone(previous)
-      : {
-          phase: '3',
-          purity: 'vanilla',
-          distribution: 'original',
-          multiplier: 1,
-          powerFactor: 1,
-          availablePowerGW: 0,
-          recipes: 'standard',
-          pureIngots: false,
-          sam: 'needed',
-          nuclear: 'none',
-          uraniumReactors: 1,
-          storage: 'construction',
-          storageRate: 1,
-          cellsPerMinute: 0,
-          goal: 'balanced',
-          hours: 8,
-          roundRates: true,
-          wholeMachines: true,
-          limitsConfirmed: false,
-          limits: { ...workspace.catalog.limits },
-        },
+    settings,
     preview: null,
     carryFrom: existing?.activeProfile || null,
     carry: Object.fromEntries(carryOptions.map(([key]) => [key, true])),
@@ -197,12 +222,7 @@ function openWizard(saveId: string | null) {
     guidedStep: 1,
     guidedAsk: null,
     tutorial: 'doing',
-  });
-  // Fresh settings only: Concrete starts pre-ticked as a guided top-up, and the
-  // browser-only edition starts a fresh plan at Phase 1.
-  if (!previous) draft().settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
-  if (browserMode && !previous) draft().settings.phase = '1';
-  navigate('wizard');
+  };
 }
 
 // Drafts the user has entered or changed something in since startWizard: a typed or chosen
@@ -240,111 +260,145 @@ function dropWizard() {
 // reader; each only finds its own fields). Mutates wizard and wizard.settings
 // and clears the preview. Does not re-render.
 export function readWizard(form: HTMLFormElement) {
-  const f = new FormData(form),
-    w = draft(),
-    s = w.settings,
-    // The name-driven writes below go through this view of the same object. The form's
-    // fields carry the settings' own values, which calculate() checks again.
-    byName: Record<string, unknown> = s,
-    oldPreset = s.purity + '|' + s.distribution;
-  // Name -> setting: MW fields are stored as GW, saveName/profileName go on the
-  // draft, "limit:<r>" into s.limits, then numeric, boolean and text settings.
-  // Other names (carry, alt, rate:, supply rows, sloop) are handled below.
-  for (const [k, v] of f) {
-    if (k === 'availablePowerMW') s.availablePowerGW = Number(v) / 1000;
-    if (k === 'installedPowerMW') s.installedPowerGW = Number(v) / 1000;
-    if (k === 'saveName') w.saveName = String(v);
-    if (k === 'profileName') w.name = String(v);
-    else if (k.startsWith('limit:')) s.limits[k.slice(6)] = Number(v);
-    else if (
-      [
-        'utilityPercent',
-        'droneFuelRate',
-        'droneBridgeRate',
-        'multiplier',
-        'powerFactor',
-        'uraniumReactors',
-        'storageRate',
-        'buildRate',
-        'cellsPerMinute',
-        'somersloops',
-        'augmenters',
-        'fueledAugmenters',
-        'amplifySloops',
-        'hours',
-      ].includes(k)
-    )
-      byName[k] = Number(v);
-    else if (k === 'collectables') s.collectables = v === 'true';
-    else if (k === 'pureIngots') s.pureIngots = v === 'true';
-    else if (
-      [
-        'phase',
-        'purity',
-        'distribution',
-        'recipes',
-        'sam',
-        'nuclear',
-        'storage',
-        'goal',
-        'phaseTime',
-        'modNotes',
-        'mainPower',
-        'worldSeed',
-        'droneFuel',
-      ].includes(k)
-    )
-      byName[k] = v;
-  }
+  const data = new FormData(form),
+    wizardDraft = draft(),
+    settings = wizardDraft.settings,
+    oldPreset = worldPreset(settings);
+  readFields(data, wizardDraft);
+  readSloops(form, data, settings);
+  readAlternates(form, data, settings);
+  const supply = readSupply(form, data);
+  if (supply) settings.existingSupply = supply;
+  readStorageOverrides(form, data, settings);
+  readStepChecks(data, wizardDraft);
+  readCarry(form, data);
+  if (wizardDraft.step === 1 && oldPreset !== worldPreset(settings))
+    resetForNewWorld(wizardDraft, oldPreset);
+  wizardDraft.preview = null;
+}
+
+// The settings a form field of the same name writes: as a number, and as the text it holds.
+const NUMBER_SETTINGS = new Set([
+  'utilityPercent',
+  'droneFuelRate',
+  'droneBridgeRate',
+  'multiplier',
+  'powerFactor',
+  'uraniumReactors',
+  'storageRate',
+  'buildRate',
+  'cellsPerMinute',
+  'somersloops',
+  'augmenters',
+  'fueledAugmenters',
+  'amplifySloops',
+  'hours',
+]);
+const TEXT_SETTINGS = new Set([
+  'phase',
+  'purity',
+  'distribution',
+  'recipes',
+  'sam',
+  'nuclear',
+  'storage',
+  'goal',
+  'phaseTime',
+  'modNotes',
+  'mainPower',
+  'worldSeed',
+  'droneFuel',
+]);
+
+// Which world the settings plan for: purity and distribution, as "purity|distribution".
+const worldPreset = (settings: WizardSettings) => settings.purity + '|' + settings.distribution;
+
+// Copy every named field into the draft: MW fields are stored as GW, saveName/profileName go
+// on the draft, "limit:<r>" into settings.limits, then numeric, boolean and text settings.
+// Other names (carry, alt, rate:, supply rows, sloop) are read by the readers below.
+function readFields(data: FormData, wizardDraft: WizardDraft) {
+  for (const [name, value] of data) readField(wizardDraft, name, value);
+}
+
+function readField(wizardDraft: WizardDraft, name: string, value: FormDataEntryValue) {
+  const settings = wizardDraft.settings,
+    // The name-driven writes go through this view of the same object. The form's fields
+    // carry the settings' own values, which calculate() checks again.
+    byName: Record<string, unknown> = settings;
+  if (name === 'availablePowerMW') settings.availablePowerGW = Number(value) / 1000;
+  else if (name === 'installedPowerMW') settings.installedPowerGW = Number(value) / 1000;
+  else if (name === 'saveName') wizardDraft.saveName = String(value);
+  else if (name === 'profileName') wizardDraft.name = String(value);
+  else if (name.startsWith('limit:')) settings.limits[name.slice(6)] = Number(value);
+  else if (NUMBER_SETTINGS.has(name)) byName[name] = Number(value);
+  else if (name === 'collectables') settings.collectables = value === 'true';
+  else if (name === 'pureIngots') settings.pureIngots = value === 'true';
+  else if (TEXT_SETTINGS.has(name)) byName[name] = value;
+}
+
+// The somersloop ledger's ticked items, when the ledger is on screen.
+function readSloops(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
   if (form.querySelector('[name=sloop]'))
-    s.sloopReserved = f.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
-  if (form.querySelector('.alt-list')) {
-    const alternates = f.getAll('alt').map(String);
-    s.alternateRecipes = alternates;
-    s.preferredRecipes = f
-      .getAll('altpref')
-      .map(String)
-      .filter(id => alternates.includes(id));
+    settings.sloopReserved = data.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
+}
+
+// The recipe picker's ticked alternates, and the starred ones among them, when it is on screen.
+function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+  if (!form.querySelector('.alt-list')) return;
+  const alternates = data.getAll('alt').map(String);
+  settings.alternateRecipes = alternates;
+  settings.preferredRecipes = data
+    .getAll('altpref')
+    .map(String)
+    .filter(id => alternates.includes(id));
+}
+
+// The per-item storage rates ("rate:<item>"), when they are on screen: blank or non-numeric
+// boxes stay unset, zero is kept.
+function readStorageOverrides(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+  if (!form.querySelector('.rate-list')) return;
+  const over: ItemRates = {};
+  for (const [name, value] of data)
+    if (name.startsWith('rate:') && String(value).trim() !== '' && Number.isFinite(Number(value)))
+      over[name.slice(5)] = Number(value);
+  settings.storageOverrides = over;
+}
+
+// An unticked checkbox is absent from FormData, so these are read only on the
+// step that draws them, or leaving another step would clear them.
+function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
+  const settings = wizardDraft.settings;
+  if (wizardDraft.step === 3) {
+    settings.roundRates = data.has('roundRates');
+    settings.wholeMachines = data.has('wholeMachines');
   }
-  {
-    const supply = readSupply(form, f);
-    if (supply) s.existingSupply = supply;
-  }
-  if (form.querySelector('.rate-list')) {
-    const over: ItemRates = {};
-    for (const [k, v] of f)
-      if (k.startsWith('rate:') && String(v).trim() !== '' && Number.isFinite(Number(v)))
-        over[k.slice(5)] = Number(v);
-    s.storageOverrides = over;
-  }
-  // An unticked checkbox is absent from FormData, so these are read only on the
-  // step that draws them, or leaving another step would clear them.
-  if (w.step === 3) {
-    s.roundRates = f.has('roundRates');
-    s.wholeMachines = f.has('wholeMachines');
-  }
-  if (w.step === 4) s.limitsConfirmed = f.has('limitsConfirmed');
-  readCarry(form, f);
-  // Changing purity or distribution on step 1 replaces the budgets with that
-  // world's starting estimates, which then need confirming again. A node survey that
-  // still holds the old world's preset counts follows to the new world's when that is
-  // fully known (presetSurvey keeps the mark, clock, usage and the wells it does not
-  // fill). Counts that differ from the old preset were typed, and stay as they are,
-  // since the survey is not on screen to show the change. The draft survey is a full
-  // copy (extractionOf), so nothing edits the applied settings.extraction.
-  if (w.step === 1 && oldPreset !== s.purity + '|' + s.distribution) {
-    s.limits = resourceDefaults(s.purity, s.distribution).limits;
-    s.limitsConfirmed = false;
-    const [oldPurity = '', oldDistribution] = oldPreset.split('|');
-    if (
-      (w.extraction || s.extraction) &&
-      knownWorld(s.purity, s.distribution) &&
-      knownWorld(oldPurity, oldDistribution) &&
-      matchingPreset(extractionOf(w)) === oldPurity
-    )
-      w.extraction = presetSurvey(s.purity, extractionOf(w), s.distribution);
-  }
-  w.preview = null;
+  if (wizardDraft.step === 4) settings.limitsConfirmed = data.has('limitsConfirmed');
+}
+
+// Changing purity or distribution on step 1 replaces the budgets with that
+// world's starting estimates, which then need confirming again. A node survey that
+// still holds the old world's preset counts follows to the new world's when that is
+// fully known (presetSurvey keeps the mark, clock, usage and the wells it does not
+// fill). Counts that differ from the old preset were typed, and stay as they are,
+// since the survey is not on screen to show the change. The draft survey is a full
+// copy (extractionOf), so nothing edits the applied settings.extraction.
+// `oldPreset` is the worldPreset before the form was read.
+function resetForNewWorld(wizardDraft: WizardDraft, oldPreset: string) {
+  const settings = wizardDraft.settings;
+  settings.limits = resourceDefaults(settings.purity, settings.distribution).limits;
+  settings.limitsConfirmed = false;
+  const [oldPurity = '', oldDistribution] = oldPreset.split('|');
+  if (
+    (wizardDraft.extraction || settings.extraction) &&
+    knownWorld(settings.purity, settings.distribution) &&
+    knownWorld(oldPurity, oldDistribution) &&
+    matchingPreset(extractionOf(wizardDraft)) === oldPurity
+  )
+    wizardDraft.extraction = presetSurvey(
+      settings.purity,
+      extractionOf(wizardDraft),
+      settings.distribution,
+    );
 }
 
 // True while calculateWizard runs; the move functions here, in guided.ts and in
