@@ -28,8 +28,8 @@ test('every container item has a bundled icon, with its wiki source (#455)', () 
   );
   const recorded = new Set(Object.values(sources).map(x => x.file));
   for (const file of BUNDLED_ICONS) assert.ok(recorded.has(file + '.png'), file + ' has a source');
-  for (const [name, x] of Object.entries(sources)) {
-    assert.match(x.url, /^https:\/\/satisfactory\.wiki\.gg\/images\//, name);
-    assert.match(x.source, /^https:\/\/satisfactory\.wiki\.gg\/wiki\/File:/, name);
+  for (const [name, entry] of Object.entries(sources)) {
+    assert.match(entry.url, /^https:\/\/satisfactory\.wiki\.gg\/images\//, name);
+    assert.match(entry.source, /^https:\/\/satisfactory\.wiki\.gg\/wiki\/File:/, name);
   }
 });

@@ -54,18 +54,18 @@ export function appSource() {
     seen.add(url.href);
     const source = fs.readFileSync(url, 'utf8');
     const text = url.pathname.endsWith('.ts') ? stripTypes(source) : source;
-    const ui = url.href.startsWith(UI);
+    const inUiLayer = url.href.startsWith(UI);
     for (const [statement, specifier] of text.matchAll(IMPORT)) {
       // npm packages (vue, @dnd-kit/vue) belong to the Vue layer, which these tests leave out.
       if (!specifier!.startsWith('.')) continue;
       // The pattern's one group always matches.
       const dependency = new URL(specifier!, url);
-      if (dependency.href.startsWith(UI) && !ui)
+      if (dependency.href.startsWith(UI) && !inUiLayer)
         for (const name of statement.match(/\{([^}]*)\}/)?.[1]?.split(',') || [])
           if (name.trim()) stubs.add(name.trim());
       if (!SHARED.has(dependency.href.slice(PUBLIC.href.length))) visit(dependency);
     }
-    if (!ui) ordered.push(text.replace(IMPORT, '').replace(/^export /gm, ''));
+    if (!inUiLayer) ordered.push(text.replace(IMPORT, '').replace(/^export /gm, ''));
   };
   visit(new URL('app.ts', PUBLIC));
   const source = [...[...stubs].map(name => `function ${name}() {}`), ...ordered]

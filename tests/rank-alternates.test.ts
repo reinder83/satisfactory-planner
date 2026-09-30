@@ -6,7 +6,7 @@ import { calculate, rankAlternates } from '../planner.ts';
 
 const MAM = ['Recipe_Alternate_EnrichedCoal_C', 'Recipe_Alternate_Turbofuel_C'];
 const buildings = (settings: object, phase: '3') =>
-  calculate(settings).stages[phase].rows!.reduce((t, r) => t + r.machines, 0);
+  calculate(settings).stages[phase].rows!.reduce((total, r) => total + r.machines, 0);
 
 test('a standard profile is compared with the same recipe pool the trials start from', () => {
   // Standard already has the two MAM recipes; each trial is custom with those plus one more.
@@ -15,7 +15,10 @@ test('a standard profile is compared with the same recipe pool the trials start 
 
 test('every alternate available by the phase is tried, with progress, and some pay off', () => {
   const progress: [number, number][] = [];
-  const ranking = rankAlternates({}, { phase: '3', onProgress: (d, t) => progress.push([d, t]) });
+  const ranking = rankAlternates(
+    {},
+    { phase: '3', onProgress: (finished, total) => progress.push([finished, total]) },
+  );
   assert.equal(ranking.phase, '3');
   assert.ok(ranking.total > 10, 'Phase 3 has many alternates: ' + ranking.total);
   assert.equal(ranking.candidates.length, ranking.total);
@@ -36,10 +39,15 @@ test('every alternate available by the phase is tried, with progress, and some p
   // At least one alternate saves buildings on the default plan, and says so consistently.
   const better = ranking.candidates.filter(c => c.status === 'better');
   assert.ok(better.length, JSON.stringify(ranking.candidates.map(c => [c.name, c.status])));
-  for (const c of better) assert.ok(c.buildings <= 0 && c.rawTotal <= 1e-6, c.name);
+  for (const candidate of better)
+    assert.ok(candidate.buildings <= 0 && candidate.rawTotal <= 1e-6, candidate.name);
   // A candidate the plan does not pick up changes nothing.
-  for (const c of ranking.candidates.filter(c => c.status === 'same'))
-    assert.deepEqual([c.buildings, c.rawTotal, c.raw], [0, 0, {}], c.name);
+  for (const candidate of ranking.candidates.filter(c => c.status === 'same'))
+    assert.deepEqual(
+      [candidate.buildings, candidate.rawTotal, candidate.raw],
+      [0, 0, {}],
+      candidate.name,
+    );
   assert.ok(ranking.base.buildings > 0);
   assert.ok(ranking.elapsedMs >= 0);
 });
@@ -57,10 +65,10 @@ test('alternates the profile already allows are not candidates; "all" leaves non
 });
 
 test('past the time budget the rest are skipped and the ranking says so', () => {
-  const r = rankAlternates({}, { phase: '3', budgetMs: -1 });
-  assert.equal(r.stopped, true);
-  assert.equal(r.candidates.length, 0);
-  assert.ok(r.total > 0);
+  const ranking = rankAlternates({}, { phase: '3', budgetMs: -1 });
+  assert.equal(ranking.stopped, true);
+  assert.equal(ranking.candidates.length, 0);
+  assert.ok(ranking.total > 0);
 });
 
 test("a leftover preferred list does not change a standard profile's trials (#185)", () => {

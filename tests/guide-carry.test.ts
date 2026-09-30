@@ -47,28 +47,28 @@ type Post = (route: string, body: unknown, headers?: Record<string, string>) => 
 test('the Docker edition carries a plan guide to a recalculated and a rounded-up profile', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-guide-carry-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   const post: Post = async (route, body, headers = {}) => {
-    const r = await fetch(url + route, {
+    const response = await fetch(url + route, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
       body: JSON.stringify(body),
     });
-    assert.ok(r.ok, route + ': ' + (await r.clone().text()));
-    return r.json();
+    assert.ok(response.ok, route + ': ' + (await response.clone().text()));
+    return response.json();
   };
   try {
-    const ws = await post('/api/import-saves', exported());
-    const save = ws.saves.find((x: { name: string }) => x.name === 'Guided');
+    const workspace = await post('/api/import-saves', exported());
+    const save = workspace.saves.find((x: { name: string }) => x.name === 'Guided');
     const source = save.profiles[0].id;
-    const h = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
+    const headers = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
     await post(
       '/api/profiles',
       { saveId: save.id, name: 'Recalculated', settings, carryFrom: source },
-      h,
+      headers,
     );
-    await post('/api/round-up', {}, h);
+    await post('/api/round-up', {}, headers);
     const all = await (await fetch(url + '/api/export-saves')).json();
     const byName = Object.fromEntries(
       all.saves
@@ -79,14 +79,14 @@ test('the Docker edition carries a plan guide to a recalculated and a rounded-up
     assert.deepEqual(byName['Recalculated'], expected);
     assert.deepEqual(byName['Guided · whole machines'], expected);
   } finally {
-    await new Promise(r => server.close(r));
+    await new Promise(resolve => server.close(resolve));
   }
 });
 
 test('the Pages edition carries a plan guide to a recalculated and a rounded-up profile', async () => {
   let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
-    async transaction<T>(change?: (d: BrowserWorkspace) => T): Promise<T> {
+    async transaction<T>(change?: (workspace: BrowserWorkspace) => T): Promise<T> {
       const copy = structuredClone(data);
       if (!change) return copy as T;
       const result = change(copy);
@@ -100,13 +100,13 @@ test('the Pages edition carries a plan guide to a recalculated and a rounded-up 
   await post('/api/import-saves', exported());
   const save = data.saves.find(x => x.name === 'Guided')!;
   const source = save.profiles[0]!.id;
-  const h = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
+  const headers = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
   await post(
     '/api/profiles',
     { saveId: save.id, name: 'Recalculated', settings, carryFrom: source },
-    h,
+    headers,
   );
-  await post('/api/round-up', {}, h);
+  await post('/api/round-up', {}, headers);
   const byName = Object.fromEntries(
     data.saves.find(x => x.id === save.id)!.profiles.map(p => [p.name, p.plan?.guide]),
   );
@@ -119,14 +119,14 @@ test('the Pages edition carries a plan guide to a recalculated and a rounded-up 
 // could not place (#489), whatever the carry picks; one carried from any other profile is as
 // before. Both editions, through Recalculate (POST /api/profiles with carryFrom).
 const migrated = (withOrigin: boolean): SaveExport => {
-  const x = exported();
+  const transfer = exported();
   const state = structuredClone(version12) as unknown as Record<string, unknown>;
   if (!withOrigin) {
     delete state.handbookOrigin;
     state.version = 11;
   }
-  x.saves[0]!.profiles[0]!.state = state as never;
-  return x;
+  transfer.saves[0]!.profiles[0]!.state = state as never;
+  return transfer;
 };
 for (const edition of ['Docker', 'Pages'] as const)
   test(`the ${edition} edition carries handbookOrigin to a recalculated profile`, async () => {
@@ -134,15 +134,15 @@ for (const edition of ['Docker', 'Pages'] as const)
     for (const withOrigin of [true, false]) {
       const { post, profiles, close } = await run();
       try {
-        const ws = await post('/api/import-saves', migrated(withOrigin));
-        const save = ws.saves.find((x: { name: string }) => x.name === 'Guided');
+        const workspace = await post('/api/import-saves', migrated(withOrigin));
+        const save = workspace.saves.find((x: { name: string }) => x.name === 'Guided');
         const source = save.profiles[0].id;
-        const h = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
+        const headers = { 'X-Save-Id': save.id, 'X-Profile-Id': source };
         // No carry picks at all: the origin still comes along.
         await post(
           '/api/profiles',
           { saveId: save.id, name: 'Recalculated', settings, carryFrom: source, carry: [] },
-          h,
+          headers,
         );
         const state = (await profiles(save.id))['Recalculated']!;
         if (withOrigin) {
@@ -165,17 +165,17 @@ type Routes = {
 async function dockerRoutes(): Promise<Routes> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-origin-carry-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   return {
     post: async (route, body, headers = {}) => {
-      const r = await fetch(url + route, {
+      const response = await fetch(url + route, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
         body: JSON.stringify(body),
       });
-      assert.ok(r.ok, route + ': ' + (await r.clone().text()));
-      return r.json();
+      assert.ok(response.ok, route + ': ' + (await response.clone().text()));
+      return response.json();
     },
     profiles: async saveId => {
       const all = await (await fetch(url + '/api/export-saves')).json();
@@ -185,13 +185,13 @@ async function dockerRoutes(): Promise<Routes> {
           .profiles.map((p: { name: string; state: unknown }) => [p.name, p.state]),
       );
     },
-    close: () => new Promise(r => server.close(r)),
+    close: () => new Promise(resolve => server.close(resolve)),
   };
 }
 async function pagesRoutes(): Promise<Routes> {
   let data: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
   const store = {
-    async transaction<T>(change?: (d: BrowserWorkspace) => T): Promise<T> {
+    async transaction<T>(change?: (workspace: BrowserWorkspace) => T): Promise<T> {
       const copy = structuredClone(data);
       if (!change) return copy as T;
       const result = change(copy);

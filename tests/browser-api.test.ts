@@ -114,7 +114,7 @@ test('preview and profile calculation forward the progress callback to the calcu
   const phases: number[] = [];
   await api('/api/preview', {
     body: JSON.stringify({ settings: { phase: '1', goal: 'minimal' } }),
-    onProgress: p => phases.push(p),
+    onProgress: phase => phases.push(phase),
   });
   await api('/api/profiles', {
     body: JSON.stringify({
@@ -122,7 +122,7 @@ test('preview and profile calculation forward the progress callback to the calcu
       name: 'Progress',
       settings: { phase: '1', goal: 'minimal' },
     }),
-    onProgress: p => phases.push(p),
+    onProgress: phase => phases.push(phase),
   });
   assert.deepEqual(phases, [4, 4], 'both calculating endpoints report solver progress');
 });
@@ -254,7 +254,7 @@ function fakeWorkers() {
       worker: {
         onmessage: null,
         onerror: null,
-        postMessage: (m: unknown) => entry.posted.push(m),
+        postMessage: (message: unknown) => entry.posted.push(message),
         terminate: () => (entry.terminated = true),
       },
     };
@@ -275,7 +275,7 @@ async function onMockTimers(
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await body(async ms => {
     t.mock.timers.tick(ms);
-    await new Promise(r => setImmediate(r));
+    await new Promise(resolve => setImmediate(resolve));
   });
 }
 
@@ -360,16 +360,16 @@ test('the browser edition refuses a stale whole-value write like the server', as
     body: JSON.stringify({ saveName: 'W', name: 'P', settings: { phase: '1', goal: 'minimal' } }),
   });
   const seen = data.saves[0]!.profiles[0]!.state.revision ?? 0;
-  const update = (op: object, revision: number) =>
+  const update = (change: object, revision: number) =>
     api('/api/update', {
-      body: JSON.stringify(op),
+      body: JSON.stringify(change),
       headers: { 'X-Planner-Revision': String(revision) },
     });
   await update({ type: 'note', key: 'n', value: 'one' }, seen);
   await assert.rejects(
     update({ type: 'note', key: 'n', value: 'two' }, seen),
-    (e: Error & { status?: number }) =>
-      e.status === 409 && /changed in another tab/.test(e.message),
+    (error: Error & { status?: number }) =>
+      error.status === 409 && /changed in another tab/.test(error.message),
   );
   await update({ type: 'check', key: 'k', value: true }, seen);
   const state = data.saves[0]!.profiles[0]!.state;
@@ -474,9 +474,9 @@ test('the Pages edition opens an upgraded browser with its original profile migr
     assert.equal(((await browserRequest('/api/state')) as ProgressState).revision, 5);
     // And it exports as a calculated profile that imports again.
     const exported = (await browserRequest('/api/export-saves')) as SaveExport;
-    const [p] = validateTransfer(exported).saves[0]!.profiles;
-    assert.equal(p!.kind, 'calculated');
-    assert.equal('handbook' in p!, false);
+    const [profile] = validateTransfer(exported).saves[0]!.profiles;
+    assert.equal(profile!.kind, 'calculated');
+    assert.equal('handbook' in profile!, false);
     assert.deepEqual(records.get(PRE_HANDBOOK), seeded, 'the pre-migration copy');
     // A reload opens the store again: nothing is migrated or copied again.
     const before = structuredClone(records);

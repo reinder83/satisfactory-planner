@@ -15,9 +15,9 @@ const mounts = [...workflow.matchAll(/docker (?:run|create)\b[^\n]*/g)].flatMap(
 
 test('the smoke tests mount only named volumes, never a runner path (#399)', () => {
   assert.ok(mounts.length >= 4, 'found the mounts: ' + mounts.join(', '));
-  for (const m of mounts) {
-    const source = m.split(':')[0]!;
-    assert.match(source, /^[a-z][a-z0-9_.-]*$/, `${m} mounts a path, not a named volume`);
+  for (const mount of mounts) {
+    const source = mount.split(':')[0]!;
+    assert.match(source, /^[a-z][a-z0-9_.-]*$/, `${mount} mounts a path, not a named volume`);
   }
 });
 

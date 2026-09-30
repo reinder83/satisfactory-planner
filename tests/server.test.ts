@@ -12,11 +12,11 @@ import type { Handbook } from '../public/types/index.ts';
 async function start(dir: string, config: Parameters<typeof createApp>[0] = {}) {
   await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, ...config });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   // Listening on a TCP port, so address() is an AddressInfo.
   return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = (server: Server) => new Promise(r => server.close(r));
+const close = (server: Server) => new Promise(resolve => server.close(resolve));
 async function post(
   url: string,
   endpoint: string,
@@ -33,8 +33,8 @@ test('progress persists, concurrent updates are not lost, backup restores and in
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
   let app = await start(dir);
   try {
-    let s = await (await fetch(app.url + '/api/state')).json();
-    assert.equal(s.checks['storage-ground-shell'], true);
+    let state = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(state.checks['storage-ground-shell'], true);
     const results = await Promise.all(
       Array.from({ length: 12 }, (_, i) =>
         post(app.url, '/api/update', { type: 'check', key: 'test-' + i, value: true }),
@@ -57,12 +57,12 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     assert.equal(backup.format, 'satisfactory-planner-backup');
     await close(app.server);
     app = await start(dir);
-    s = await (await fetch(app.url + '/api/state')).json();
+    state = await (await fetch(app.url + '/api/state')).json();
     // The fresh server's original profile migrates on the restart (#495); a global note stays.
-    assert.equal(s.notes.global, 'Station A <test> & belt 2');
-    assert.equal(s.deliveries['3-modular-engine'], 321);
-    assert.equal(s.customTasks.length, 1);
-    for (let i = 0; i < 12; i++) assert.equal(s.checks['test-' + i], true);
+    assert.equal(state.notes.global, 'Station A <test> & belt 2');
+    assert.equal(state.deliveries['3-modular-engine'], 321);
+    assert.equal(state.customTasks.length, 1);
+    for (let i = 0; i < 12; i++) assert.equal(state.checks['test-' + i], true);
     assert.equal(
       (await post(app.url, '/api/update', { type: 'phase', value: 'oops' })).status,
       400,
@@ -77,7 +77,7 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     );
     assert.equal((await post(app.url, '/api/import', { version: 1, checks: {} })).status, 400);
     let after = await (await fetch(app.url + '/api/state')).json();
-    assert.deepEqual(after, s);
+    assert.deepEqual(after, state);
     await post(app.url, '/api/update', { type: 'check', key: 'test-1', value: false });
     assert.equal((await post(app.url, '/api/import', backup)).status, 200);
     after = await (await fetch(app.url + '/api/state')).json();
@@ -146,9 +146,9 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
   const app = await start(dir);
   try {
     for (const type of [5, null, ['check']]) {
-      const r = await post(app.url, '/api/update', { type });
-      assert.equal(r.status, 400, JSON.stringify(type));
-      assert.equal((await r.json()).error, 'Unknown update.');
+      const response = await post(app.url, '/api/update', { type });
+      assert.equal(response.status, 400, JSON.stringify(type));
+      assert.equal((await response.json()).error, 'Unknown update.');
     }
     const wrap = { format: 'satisfactory-planner-saves', version: 1 };
     for (const [data, error] of [
@@ -178,9 +178,9 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
         'Invalid handbook sources.',
       ]),
     ] as [unknown, string][]) {
-      const r = await post(app.url, '/api/import-saves', data);
-      assert.equal(r.status, 400, JSON.stringify(data));
-      assert.equal((await r.json()).error, error);
+      const response = await post(app.url, '/api/import-saves', data);
+      assert.equal(response.status, 400, JSON.stringify(data));
+      assert.equal((await response.json()).error, error);
     }
     // The full-save import allows 50 MB, and says so when a file is larger.
     const big = await post(app.url, '/api/import-saves', 'x'.repeat(51 * 1024 * 1024));
@@ -201,7 +201,7 @@ test('a JSON body that is not an object is refused with 400 before any route rea
   const fresh = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-body-fresh-'));
   const app = await start(dir);
   const empty = await createApp({ dataDir: fresh });
-  await new Promise<void>(r => empty.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => empty.listen(0, '127.0.0.1', resolve));
   const emptyUrl = 'http://127.0.0.1:' + (empty.address() as AddressInfo).port;
   try {
     const before = await (await fetch(app.url + '/api/state')).json();
@@ -226,10 +226,10 @@ test('a JSON body that is not an object is refused with 400 before any route rea
     for (const [url, endpoints] of cases)
       for (const endpoint of endpoints)
         for (const data of [null, [], 'x', 5]) {
-          const r = await post(url, endpoint, data);
+          const response = await post(url, endpoint, data);
           const label = endpoint + ' ' + JSON.stringify(data);
-          assert.equal(r.status, 400, label);
-          assert.equal((await r.json()).error, 'Expected a JSON object.', label);
+          assert.equal(response.status, 400, label);
+          assert.equal((await response.json()).error, 'Expected a JSON object.', label);
         }
     assert.deepEqual(await (await fetch(app.url + '/api/state')).json(), before);
     // An object body still reaches its route.
@@ -279,17 +279,17 @@ test('a backup that cannot be checked also stops start-up; only a certainly miss
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
   const stat = fs.stat;
   // Only the .bak lookup fails, and not with ENOENT (a permission error, say).
-  mock.method(fs, 'stat', (p: string) =>
-    String(p).endsWith('workspace.json.bak')
+  mock.method(fs, 'stat', (filePath: string) =>
+    String(filePath).endsWith('workspace.json.bak')
       ? Promise.reject(Object.assign(new Error('denied'), { code: 'EACCES' }))
-      : stat(p),
+      : stat(filePath),
   );
   try {
     // It says the backup could not be checked, with the code, not that it exists (#175).
-    await assert.rejects(refused(dir), (e: Error) => {
-      assert.match(e.message, /workspace\.json\.bak could not be checked \(EACCES\)/);
-      assert.match(e.message, /permissions/);
-      assert.doesNotMatch(e.message, /bak exists/);
+    await assert.rejects(refused(dir), (error: Error) => {
+      assert.match(error.message, /workspace\.json\.bak could not be checked \(EACCES\)/);
+      assert.match(error.message, /permissions/);
+      assert.doesNotMatch(error.message, /bak exists/);
       return true;
     });
     await assert.rejects(fs.access(path.join(dir, 'workspace.json')), 'nothing was written');
@@ -345,9 +345,9 @@ test('a workspace from a newer planner stops start-up with "update the app", unt
       { ...current, version: 3 },
       {
         ...current,
-        saves: current.saves.map((s: { profiles: { state: object }[] }) => ({
-          ...s,
-          profiles: s.profiles.map(p => ({ ...p, state: { ...p.state, version: 99 } })),
+        saves: current.saves.map((save: { profiles: { state: object }[] }) => ({
+          ...save,
+          profiles: save.profiles.map(p => ({ ...p, state: { ...p.state, version: 99 } })),
         })),
       },
     ]) {
@@ -370,29 +370,41 @@ test('a whole-value write from a tab that missed a change is refused, small ones
   try {
     const state = async () => (await (await fetch(app.url + '/api/state')).json()).revision;
     const seen = await state();
-    const at = (revision: number) => ({ 'X-Planner-Revision': String(revision) });
+    const atRevision = (revision: number) => ({ 'X-Planner-Revision': String(revision) });
     // Tab one saves a note from what it saw; tab two, still on that revision, saves its own.
     assert.equal(
-      (await post(app.url, '/api/update', { type: 'note', key: 'n', value: 'one' }, at(seen)))
-        .status,
+      (
+        await post(
+          app.url,
+          '/api/update',
+          { type: 'note', key: 'n', value: 'one' },
+          atRevision(seen),
+        )
+      ).status,
       200,
     );
     const stale = await post(
       app.url,
       '/api/update',
       { type: 'note', key: 'n', value: 'two' },
-      at(seen),
+      atRevision(seen),
     );
     assert.equal(stale.status, 409);
     assert.match((await stale.json()).error, /changed in another tab/);
     const order = { type: 'taskOrder', phase: '3', ids: ['a', 'b'] };
-    assert.equal((await post(app.url, '/api/update', order, at(seen))).status, 409);
-    let s = await (await fetch(app.url + '/api/state')).json();
-    assert.equal(s.notes.n, 'one', "the first tab's note is kept");
+    assert.equal((await post(app.url, '/api/update', order, atRevision(seen))).status, 409);
+    let current = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(current.notes.n, 'one', "the first tab's note is kept");
     // A tick from the stale tab merges, and so does anything without the header.
     assert.equal(
-      (await post(app.url, '/api/update', { type: 'check', key: 'k', value: true }, at(seen)))
-        .status,
+      (
+        await post(
+          app.url,
+          '/api/update',
+          { type: 'check', key: 'k', value: true },
+          atRevision(seen),
+        )
+      ).status,
       200,
     );
     assert.equal(
@@ -406,14 +418,14 @@ test('a whole-value write from a tab that missed a change is refused, small ones
           app.url,
           '/api/update',
           { type: 'note', key: 'n', value: 'two' },
-          at(await state()),
+          atRevision(await state()),
         )
       ).status,
       200,
     );
-    s = await (await fetch(app.url + '/api/state')).json();
-    assert.equal(s.notes.n, 'two');
-    assert.equal(s.checks.k, true);
+    current = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(current.notes.n, 'two');
+    assert.equal(current.checks.k, true);
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });
@@ -486,15 +498,15 @@ test('live estimates stop at their solving-time budget, and the limit runs befor
 test('a fresh data folder has no saves, and a handbook profile cannot be created', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-fresh-'));
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   try {
-    const w = await (await fetch(url + '/api/workspace')).json();
-    assert.deepEqual(w.saves, []);
-    assert.equal(w.activeSave, null);
-    const db = JSON.parse(await fs.readFile(path.join(dir, 'workspace.json'), 'utf8'));
-    assert.deepEqual(db.saves, []);
-    assert.equal(db.users[0].activeSave, null);
+    const workspace = await (await fetch(url + '/api/workspace')).json();
+    assert.deepEqual(workspace.saves, []);
+    assert.equal(workspace.activeSave, null);
+    const file = JSON.parse(await fs.readFile(path.join(dir, 'workspace.json'), 'utf8'));
+    assert.deepEqual(file.saves, []);
+    assert.equal(file.users[0].activeSave, null);
     await assert.rejects(fs.stat(path.join(dir, 'workspace.json.pre-handbook')), {
       code: 'ENOENT',
     });
@@ -526,7 +538,7 @@ test('a request no route answers is checked like any other before it gets "Not f
   const fresh = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-routes-fresh-'));
   const app = await start(dir);
   const empty = await createApp({ dataDir: fresh });
-  await new Promise<void>(r => empty.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => empty.listen(0, '127.0.0.1', resolve));
   const emptyUrl = 'http://127.0.0.1:' + (empty.address() as AddressInfo).port;
   const answer = async (reply: Response) => [reply.status, (await reply.json()).error];
   try {

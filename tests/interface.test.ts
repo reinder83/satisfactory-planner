@@ -52,7 +52,7 @@ import type { calcExpansion } from '../public/app/views/calculated.ts';
 const source = appSource();
 function ui() {
   const node = { addEventListener() {}, close() {}, showModal() {}, innerHTML: '' };
-  const c = vm.createContext({
+  const context = vm.createContext({
     document: {
       querySelector: () => node,
       querySelectorAll: () => [],
@@ -111,18 +111,20 @@ function ui() {
     presetPurities,
     uniformPurities,
   });
-  vm.runInContext(source, c);
-  c.fixture = JSON.parse(fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'));
-  c.catalogData = catalog();
-  c.progressionFixture = JSON.parse(
+  vm.runInContext(source, context);
+  context.fixture = JSON.parse(
+    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
+  );
+  context.catalogData = catalog();
+  context.progressionFixture = JSON.parse(
     fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   );
-  c.generated = calculate({});
+  context.generated = calculate({});
   vm.runInContext(
     `plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,
-    c,
+    context,
   );
-  return c;
+  return context;
 }
 // The wizard and guided screens themselves: tests/ui/wizard.test.ts.
 
@@ -131,35 +133,37 @@ function ui() {
 // The storage page and its container dialog are components, tested in
 // tests/ui/storage.test.ts. Their data stays here.
 test('an added bay takes the next free letter after the handbook bays', () => {
-  const c = ui();
-  assert.equal(vm.runInContext('nextBayLetter()', c), 'S');
-  vm.runInContext(`state.storageEdits={bays:[{id:'S',name:'Overflow',floor:'ground'}]};`, c);
-  assert.equal(vm.runInContext('nextBayLetter()', c), 'T');
+  const context = ui();
+  assert.equal(vm.runInContext('nextBayLetter()', context), 'S');
+  vm.runInContext(`state.storageEdits={bays:[{id:'S',name:'Overflow',floor:'ground'}]};`, context);
+  assert.equal(vm.runInContext('nextBayLetter()', context), 'T');
 });
 
 test('a bay grows past eight containers up to the last addressable position', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `state.storageEdits={floors:[],floorNames:{},bays:[],bayNames:{},slots:{A10:'Aluminum Casing'},clearedSlots:[]};`,
-    c,
+    context,
   );
-  const grown = JSON.parse(vm.runInContext(`JSON.stringify(storageBays().find(b=>b.id==='A'))`, c));
+  const grown = JSON.parse(
+    vm.runInContext(`JSON.stringify(storageBays().find(b=>b.id==='A'))`, context),
+  );
   assert.equal(grown.items.length, 10, 'the bay is as long as its highest filled address');
   assert.equal(grown.items[8].name, null, 'the gap up to the added container is reserved');
   assert.equal(grown.items[9].name, 'Aluminum Casing');
   vm.runInContext(
     `state.storageEdits.slots=Object.fromEntries(Array.from({length:bayCapacity-8},(_,i)=>['A'+(i+9),'Item '+i]));`,
-    c,
+    context,
   );
-  const bay = vm.runInContext(`storageBays().find(b=>b.id==='A')`, c);
+  const bay = vm.runInContext(`storageBays().find(b=>b.id==='A')`, context);
   assert.equal(bay.items.length, bayCapacity);
   assert.equal(bayOfSlot(bay.items.at(-1).id), 'A');
   assert.equal(slotPosition(bay.items.at(-1).id), bayCapacity);
 });
 
 test('machine instructions separate total, full-speed and adjustable machines', () => {
-  const c = ui();
-  c.row = {
+  const context = ui();
+  context.row = {
     name: 'Rubber',
     machine: 'Refinery',
     machines: 3,
@@ -168,20 +172,20 @@ test('machine instructions separate total, full-speed and adjustable machines', 
     outputs: { Rubber: 48.034, 'Heavy Oil Residue': 48.034 },
     inputs: { 'Crude Oil': 72.051 },
   };
-  const setup = vm.runInContext('machineSetup(row)', c);
+  const setup = vm.runInContext('machineSetup(row)', context);
   assert.equal(setup.whole, 2);
   assert.equal(setup.partial, true);
   assert.match(setup.summary, /3 Refinery total: 2 at 100% \+ 1 adjustable/);
   assert.equal(setup.easy.clock, 45);
   assert.equal(setup.easy.output.Rubber, 9);
-  c.row = {
-    ...c.row,
+  context.row = {
+    ...context.row,
     equivalent: 3,
     lastClock: 100,
     outputs: { Rubber: 60 },
     inputs: { 'Crude Oil': 90 },
   };
-  const full = vm.runInContext('machineSetup(row)', c);
+  const full = vm.runInContext('machineSetup(row)', context);
   assert.equal(full.partial, false);
   assert.match(full.summary, /3 at 100%/);
 });
@@ -189,9 +193,9 @@ test('machine instructions separate total, full-speed and adjustable machines', 
 // The factories pages, their group editor and the factory and group build-order dialogs are
 // components, tested in tests/ui/factories.test.ts.
 test('ADA comments on the plan from the sidebar and can be muted', () => {
-  const c = ui();
+  const context = ui();
   // What the panel shows; its markup is covered by tests/ui/shell.test.ts.
-  const ada = () => JSON.parse(vm.runInContext('JSON.stringify(adaView())', c));
+  const ada = () => JSON.parse(vm.runInContext('JSON.stringify(adaView())', context));
   const panel = ada();
   assert.equal(panel.tone, 'calm');
   assert.equal(panel.name, '', 'a normal remark has no fault name');
@@ -203,19 +207,19 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   // A renamed step is the user's own text wherever ADA repeats it (the component escapes it).
   vm.runInContext(
     "state.taskEdits={titles:{[planTasks()[0].id]:'Weld the <boat>'}};adaSignature='';",
-    c,
+    context,
   );
   assert.match(ada().text, /Weld the <boat>/);
   // Cycling walks the whole list and wraps round to the first line.
   const seen = [...Array(8)].map((_, i) =>
-    vm.runInContext('adaIndex=' + i + ';adaCurrent().text', c),
+    vm.runInContext('adaIndex=' + i + ';adaCurrent().text', context),
   );
   assert.ok(new Set(seen).size >= 7, 'ADA has more than one thing to say');
-  assert.equal(vm.runInContext('adaIndex=0;adaCurrent().text', c), seen[0]);
+  assert.equal(vm.runInContext('adaIndex=0;adaCurrent().text', context), seen[0]);
   // The plan decides the tone: a draft profile leads with the draft.
   vm.runInContext(
     "calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Balanced'};calculated.stages['3'].feasible=false;calculated.stages['3'].reason='Iron Ore budget exceeded.';adaSignature='';",
-    c,
+    context,
   );
   const draft = ada();
   assert.equal(draft.tone, 'warn');
@@ -226,92 +230,92 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   );
   vm.runInContext(
     "delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.taskEdits=undefined;adaSignature='';",
-    c,
+    context,
   );
   // The handbook's Phase 3 Versatile Framework delivery was already handed in when it was written.
   // A duplicated or imported original profile has a new id but the same handbook, so ADA counts
   // the same open deliveries for it.
-  const openDeliveries = () => vm.runInContext('adaFacts().deliveries.open', c);
+  const openDeliveries = () => vm.runInContext('adaFacts().deliveries.open', context);
   assert.equal(openDeliveries(), 2);
-  vm.runInContext("currentProfile={id:'copy-uuid',kind:'original',name:'Copy'};", c);
+  vm.runInContext("currentProfile={id:'copy-uuid',kind:'original',name:'Copy'};", context);
   assert.equal(openDeliveries(), 2, 'a copied original profile starts from the handbook counts');
-  vm.runInContext("currentProfile={id:'original',kind:'original',name:'Original'};", c);
+  vm.runInContext("currentProfile={id:'original',kind:'original',name:'Original'};", context);
   // Cycling past the last remark is answered rather than silently repeated.
-  const count = vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length', c);
+  const count = vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length', context);
   assert.match(
-    vm.runInContext('adaIndex=' + count + ';adaCurrent().text', c),
+    vm.runInContext('adaIndex=' + count + ';adaCurrent().text', context),
     /everything I hold on this save/,
   );
-  assert.match(vm.runInContext('adaIndex=' + count * 2 + ';adaCurrent().text', c), /twice/);
+  assert.match(vm.runInContext('adaIndex=' + count * 2 + ';adaCurrent().text', context), /twice/);
   assert.equal(
-    vm.runInContext('adaIndex=' + (count + 1) + ';adaCurrent().text', c),
+    vm.runInContext('adaIndex=' + (count + 1) + ';adaCurrent().text', context),
     seen[1],
     'the lap resumes where it left off',
   );
   // Prod the badge five times and the corporate voice slips. Pokes only count within 2.5 s of
   // each other, so the page's clock stands still here (#221): a stall on a busy machine would
   // otherwise start the count over.
-  vm.runInContext('pokeClock=1e12;Date.now=()=>pokeClock;', c);
-  vm.runInContext('adaIndex=0;for(let i=0;i<3;i++)adaPoke();pokeClock+=2501;adaPoke();', c);
+  vm.runInContext('pokeClock=1e12;Date.now=()=>pokeClock;', context);
+  vm.runInContext('adaIndex=0;for(let i=0;i<3;i++)adaPoke();pokeClock+=2501;adaPoke();', context);
   assert.notEqual(ada().name, '???', 'a gap over 2.5 s starts the count over');
-  vm.runInContext('for(let i=0;i<3;i++)adaPoke();', c);
+  vm.runInContext('for(let i=0;i<3;i++)adaPoke();', context);
   assert.notEqual(ada().name, '???', 'four prods are within tolerance');
-  vm.runInContext('adaPoke()', c);
+  vm.runInContext('adaPoke()', context);
   const fault = ada();
   assert.equal(fault.tone, 'fault');
   assert.equal(fault.name, '???');
-  vm.runInContext('adaPoke()', c);
+  vm.runInContext('adaPoke()', context);
   assert.notEqual(
-    vm.runInContext('adaCurrent().text', c),
-    vm.runInContext('makeFault(1).text', c),
+    vm.runInContext('adaCurrent().text', context),
+    vm.runInContext('makeFault(1).text', context),
     'prodding again advances the transmission',
   );
   assert.equal(ada().tone, 'fault');
   // Anything else hands the terminal back, and no timer is left running.
-  vm.runInContext('adaClearFault();', c);
+  vm.runInContext('adaClearFault();', context);
   assert.equal(ada().name, '');
   // Muted: no remark.
-  vm.runInContext('adaMuted=true;', c);
+  vm.runInContext('adaMuted=true;', context);
   assert.deepEqual(ada(), { muted: true });
-  vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", c);
+  vm.runInContext("adaMuted=false;adaIndex=0;adaSignature='';adaClearFault();", context);
 });
 
 test('storage follows the selected contract and small power displays in MW', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `calculated=generated;currentProfile={id:'p',kind:'calculated',name:'Stock'};`,
-    c,
+    context,
   );
   const named = () =>
     JSON.parse(
       vm.runInContext(
         `JSON.stringify(storageBays().flatMap(b=>b.items).filter(x=>x.name).map(x=>x.name))`,
-        c,
+        context,
       ),
     );
   assert.ok(named().includes('Iron Plate'));
   vm.runInContext(
     `calculated=structuredClone(generated);for(const stage of Object.values(calculated.stages))stage.storage={};calculated.settings.storage='none';calculated.settings.collectables=false;`,
-    c,
+    context,
   );
   assert.deepEqual(named(), [], 'nothing selected leaves no containers');
-  assert.equal(vm.runInContext('power(500)', c), '500 MW');
-  assert.equal(vm.runInContext('power(1000)', c), (1000).toLocaleString() + ' MW');
-  assert.equal(vm.runInContext('power(1500)', c), (1.5).toLocaleString() + ' GW');
+  assert.equal(vm.runInContext('power(500)', context), '500 MW');
+  assert.equal(vm.runInContext('power(1000)', context), (1000).toLocaleString() + ' MW');
+  assert.equal(vm.runInContext('power(1500)', context), (1.5).toLocaleString() + ' GW');
 });
 test('wizard tabs retain edits and recalculate Review', async () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `wizard={step:1,saveName:'World',name:'',settings:structuredClone(generated.settings),preview:generated};render=()=>{};`,
-    c,
+    context,
   );
   const form = {
     reportValidity: () => true,
-    querySelector: (sel: string) =>
-      ['.alt-list', '.carry-list'].includes(sel) ? null : { textContent: '' },
+    querySelector: (selector: string) =>
+      ['.alt-list', '.carry-list'].includes(selector) ? null : { textContent: '' },
   };
-  c.document.querySelector = () => form;
-  c.FormData = class {
+  context.document.querySelector = () => form;
+  context.FormData = class {
     *[Symbol.iterator]() {
       yield ['saveName', 'Edited world'];
       yield ['purity', 'pure'];
@@ -323,11 +327,11 @@ test('wizard tabs retain edits and recalculate Review', async () => {
       return [];
     }
   };
-  await vm.runInContext('moveWizard(2)', c);
-  assert.equal(vm.runInContext('wizard.saveName', c), 'Edited world');
-  assert.equal(vm.runInContext('wizard.settings.limits["Iron Ore"]', c), 152400);
-  assert.equal(vm.runInContext('wizard.preview', c), null);
-  c.FormData = class {
+  await vm.runInContext('moveWizard(2)', context);
+  assert.equal(vm.runInContext('wizard.saveName', context), 'Edited world');
+  assert.equal(vm.runInContext('wizard.settings.limits["Iron Ore"]', context), 152400);
+  assert.equal(vm.runInContext('wizard.preview', context), null);
+  context.FormData = class {
     *[Symbol.iterator]() {
       yield ['utilityPercent', '35'];
       yield ['installedPowerMW', '60000'];
@@ -344,17 +348,17 @@ test('wizard tabs retain edits and recalculate Review', async () => {
   };
   vm.runInContext(
     `post=async(url,body)=>{if(body.settings.utilityPercent!==35)throw Error('Lost input');if(body.settings.augmenters!==1||body.settings.fueledAugmenters!==1||body.settings.somersloops!==104)throw Error('Lost the somersloop ledger');if(body.settings.installedPowerGW!==60)throw Error('Lost installed power');if(String(body.settings.sloopReserved)!=='shards')throw Error('Lost the reserved lines');return generated;}`,
-    c,
+    context,
   );
-  await vm.runInContext('moveWizard(5)', c);
-  assert.equal(vm.runInContext('wizard.step', c), 5);
+  await vm.runInContext('moveWizard(5)', context);
+  assert.equal(vm.runInContext('wizard.step', context), 5);
 });
 
 test('the wizard shows calculation progress and options when the calculation times out', async () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `wizard={step:4,saveName:'W',name:'P',settings:structuredClone(generated.settings),preview:null};render=()=>{};`,
-    c,
+    context,
   );
   // The error line takes focus once set (SP-34).
   const errorNode = {
@@ -368,15 +372,15 @@ test('the wizard shows calculation progress and options when the calculation tim
   const submitNode = { textContent: 'Calculate plan' };
   const form = {
     reportValidity: () => true,
-    querySelector: (sel: string) =>
-      ['.alt-list', '.carry-list'].includes(sel)
+    querySelector: (selector: string) =>
+      ['.alt-list', '.carry-list'].includes(selector)
         ? null
-        : sel === 'button[type="submit"]'
+        : selector === 'button[type="submit"]'
           ? submitNode
           : errorNode,
   };
-  c.document.querySelector = () => form;
-  c.FormData = class {
+  context.document.querySelector = () => form;
+  context.FormData = class {
     *[Symbol.iterator]() {}
     has() {
       return false;
@@ -385,14 +389,14 @@ test('the wizard shows calculation progress and options when the calculation tim
       return [];
     }
   };
-  c.buttonText = () => submitNode.textContent;
+  context.buttonText = () => submitNode.textContent;
   vm.runInContext(
     `let progressText='';post=async(url,body,scope,extra)=>{extra.onProgress(3);progressText=buttonText();throw Error('Calculation timed out. Try fewer alternate recipes or a smaller goal.');};`,
-    c,
+    context,
   );
-  await vm.runInContext('moveWizard(5)', c);
+  await vm.runInContext('moveWizard(5)', context);
   assert.equal(
-    vm.runInContext('progressText', c),
+    vm.runInContext('progressText', context),
     'Calculating… Phase 3 of 5…',
     'the submit button reports the phase being calculated',
   );
@@ -413,26 +417,26 @@ test('the wizard shows calculation progress and options when the calculation tim
     /whole-machine production/,
     'the guidance mentions the whole-machine setting',
   );
-  vm.runInContext(`post=async()=>{throw Error('Save not found.');}`, c);
+  vm.runInContext(`post=async()=>{throw Error('Save not found.');}`, context);
   errorNode.innerHTML = '';
   errorNode.textContent = '';
-  await vm.runInContext('moveWizard(5)', c);
+  await vm.runInContext('moveWizard(5)', context);
   assert.equal(errorNode.textContent, 'Save not found.', 'other errors stay plain text');
   assert.equal(errorNode.innerHTML, '', 'no guidance is attached to unrelated errors');
 });
 
 // The alternate picker itself: tests/ui/wizard.test.ts.
 test('Planner’s choice collects the alternates a plan uses', () => {
-  const c = ui();
+  const context = ui();
   assert.equal(
-    vm.runInContext('JSON.stringify(alternatesUsed(generated))', c),
+    vm.runInContext('JSON.stringify(alternatesUsed(generated))', context),
     '["Recipe_Alternate_EnrichedCoal_C","Recipe_Alternate_Turbofuel_C"]',
     'a standard plan uses no hard-drive alternates, but its turbofuel power chain still needs the MAM picks',
   );
   assert.equal(
     vm.runInContext(
       `JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'x',alternate:true},{id:'y'}]},b:{rows:[{id:'x',alternate:true}]}}}))`,
-      c,
+      context,
     ),
     '["x"]',
     'used alternates are collected uniquely across phases',
@@ -440,7 +444,7 @@ test('Planner’s choice collects the alternates a plan uses', () => {
   assert.equal(
     vm.runInContext(
       `JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'Recipe_Alternate_Turbofuel_C',alternate:false},{id:'y'}]}}}))`,
-      c,
+      context,
     ),
     '["Recipe_Alternate_Turbofuel_C"]',
     'MAM recipes count as used alternates even though plans mark them standard',
@@ -449,12 +453,12 @@ test('Planner’s choice collects the alternates a plan uses', () => {
 
 // The carry panel itself: tests/ui/wizard.test.ts.
 test('the carry-over choices are read into the draft', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `wizard={step:5,saveId:'s1',saveName:'One world',name:'Third',settings:structuredClone(generated.settings),preview:generated,carryFrom:'p2',carry:Object.fromEntries(carryOptions.map(([k])=>[k,true]))};`,
-    c,
+    context,
   );
-  c.FormData = class {
+  context.FormData = class {
     getAll() {
       return ['storage', 'factories'];
     }
@@ -462,27 +466,35 @@ test('the carry-over choices are read into the draft', () => {
       return 'p1';
     }
   };
-  vm.runInContext(`readCarry({querySelector:sel=>sel==='.carry-list'?{}:null})`, c);
-  assert.equal(vm.runInContext('wizard.carryFrom', c), 'p1', 'the chosen source profile is kept');
-  assert.equal(vm.runInContext('wizard.carry.storage', c), true, 'ticked options are kept');
-  assert.equal(vm.runInContext('wizard.carry.notes', c), false, 'unticked options are cleared');
+  vm.runInContext(`readCarry({querySelector:sel=>sel==='.carry-list'?{}:null})`, context);
+  assert.equal(
+    vm.runInContext('wizard.carryFrom', context),
+    'p1',
+    'the chosen source profile is kept',
+  );
+  assert.equal(vm.runInContext('wizard.carry.storage', context), true, 'ticked options are kept');
+  assert.equal(
+    vm.runInContext('wizard.carry.notes', context),
+    false,
+    'unticked options are cleared',
+  );
   // Without the panel on screen (a brand new save) the draft is left alone.
-  vm.runInContext(`readCarry({querySelector:()=>null})`, c);
-  assert.equal(vm.runInContext('wizard.carryFrom', c), 'p1');
+  vm.runInContext(`readCarry({querySelector:()=>null})`, context);
+  assert.equal(vm.runInContext('wizard.carryFrom', context), 'p1');
 });
 
 // The storage rate fields themselves: tests/ui/wizard.test.ts.
 test('per-item storage rates are read back, keeping zero and leaving blanks unset', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `wizard={step:2,saveName:'World',name:'Balanced',settings:structuredClone(generated.settings),preview:null};wizard.settings.storage='all';wizard.settings.storageOverrides={};`,
-    c,
+    context,
   );
   const form = {
-    querySelector: (sel: string) => (sel === '.rate-list' ? {} : null),
+    querySelector: (selector: string) => (selector === '.rate-list' ? {} : null),
     reportValidity: () => true,
   };
-  c.FormData = class {
+  context.FormData = class {
     *[Symbol.iterator]() {
       yield ['rate:Concrete', '60'];
       yield ['rate:Screws', '0'];
@@ -498,9 +510,9 @@ test('per-item storage rates are read back, keeping zero and leaving blanks unse
       return null;
     }
   };
-  vm.runInContext('readWizard(form)', Object.assign(c, { form }));
+  vm.runInContext('readWizard(form)', Object.assign(context, { form }));
   assert.equal(
-    vm.runInContext('JSON.stringify(wizard.settings.storageOverrides)', c),
+    vm.runInContext('JSON.stringify(wizard.settings.storageOverrides)', context),
     '{"Concrete":60,"Screws":0}',
     'blank boxes stay unset while zero is kept',
   );
@@ -508,13 +520,13 @@ test('per-item storage rates are read back, keeping zero and leaving blanks unse
 
 // The goals step and Review themselves: tests/ui/wizard.test.ts.
 test('the target-time choice is read out of the goals step', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `wizard={step:2,saveName:'World',name:'Balanced',settings:structuredClone(generated.settings),preview:null};wizard.step=3;wizard.settings.goal='timed';`,
-    c,
+    context,
   );
   const form = { querySelector: () => null, reportValidity: () => true };
-  c.FormData = class {
+  context.FormData = class {
     *[Symbol.iterator]() {
       yield ['phaseTime', 'final'];
       yield ['goal', 'timed'];
@@ -529,22 +541,22 @@ test('the target-time choice is read out of the goals step', () => {
       return null;
     }
   };
-  vm.runInContext('readWizard(form)', Object.assign(c, { form }));
+  vm.runInContext('readWizard(form)', Object.assign(context, { form }));
   assert.equal(
-    vm.runInContext('wizard.settings.phaseTime', c),
+    vm.runInContext('wizard.settings.phaseTime', context),
     'final',
     'the choice is carried out of the form',
   );
 });
 
 test('the expansion table only claims an addition where there is one', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `calculated={stages:{1:{rows:[]},2:{rows:[{id:'iron',machines:4}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:9}]},5:{rows:[]}}};`,
-    c,
+    context,
   );
   const rows: ReturnType<typeof calcExpansion> = JSON.parse(
-    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c),
+    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, context),
   );
   assert.equal(rows.length, 5, 'every phase is listed');
   const cells = rows.map(r => [r.required, r.add]);
@@ -556,50 +568,50 @@ test('the expansion table only claims an addition where there is one', () => {
 });
 
 test('a profile only offers the phases it was created for', () => {
-  const c = ui();
+  const context = ui();
   vm.runInContext(
     `calculated={...generated,settings:{...generated.settings,phase:'3'}};currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
-    c,
+    context,
   );
   assert.equal(
-    vm.runInContext('JSON.stringify(phaseOptions())', c),
+    vm.runInContext('JSON.stringify(phaseOptions())', context),
     '["3","4","5","post"]',
     'a phase 3 profile hides the phases behind it',
   );
   assert.equal(
-    vm.runInContext(`state.settings.phase='1';phase()`, c),
+    vm.runInContext(`state.settings.phase='1';phase()`, context),
     '3',
     'a stored phase behind the start reads as the start',
   );
   assert.equal(
-    vm.runInContext(`state.settings.phase='4';phase()`, c),
+    vm.runInContext(`state.settings.phase='4';phase()`, context),
     '4',
     'a later phase is left alone',
   );
   assert.equal(
-    vm.runInContext(`state.settings.phase='post';phase()`, c),
+    vm.runInContext(`state.settings.phase='post';phase()`, context),
     'post',
     'post-game is still reachable',
   );
 
   vm.runInContext(
     `calculated={...generated,settings:{...generated.settings,phase:'1'}};state.settings.phase='1';`,
-    c,
+    context,
   );
   // Review flags only the phases the profile plans: tests/ui/wizard.test.ts.
 
   assert.equal(
-    vm.runInContext('JSON.stringify(phaseOptions())', c),
+    vm.runInContext('JSON.stringify(phaseOptions())', context),
     '["1","2","3","4","5","post"]',
     'a phase 1 profile offers everything',
   );
 
   vm.runInContext(
     `calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.settings.phase='3';`,
-    c,
+    context,
   );
   assert.equal(
-    vm.runInContext('JSON.stringify(phaseOptions())', c),
+    vm.runInContext('JSON.stringify(phaseOptions())', context),
     '["3","4","5","post"]',
     'the preserved handbook still starts at phase 3',
   );
@@ -607,10 +619,10 @@ test('a profile only offers the phases it was created for', () => {
   // the expansion table follows the same bound
   vm.runInContext(
     `calculated={settings:{phase:'3'},stages:{1:{rows:[{id:'iron',machines:9}]},2:{rows:[{id:'iron',machines:9}]},3:{rows:[{id:'iron',machines:4}]},4:{rows:[{id:'iron',machines:6}]},5:{rows:[]}}};`,
-    c,
+    context,
   );
   const rows: ReturnType<typeof calcExpansion> = JSON.parse(
-    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, c),
+    vm.runInContext(`JSON.stringify(calcExpansion('iron'))`, context),
   );
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
   assert.deepEqual(

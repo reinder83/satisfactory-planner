@@ -4,13 +4,14 @@ import { calculate, settings, DATA, AMPLIFY_SLOTS } from '../planner.ts';
 import type { CurrentStage } from '../public/types/index.ts';
 
 const base = { phase: '5', recipes: 'all', nuclear: 'recycle', goal: 'balanced' };
-const buildings = (x: CurrentStage) => (x.rows || []).reduce((a, r) => a + r.machines, 0);
-const flow = (x: CurrentStage, name: string) => {
+const buildings = (stage: CurrentStage) =>
+  (stage.rows || []).reduce((total, r) => total + r.machines, 0);
+const flow = (stage: CurrentStage, name: string) => {
   let made = 0,
     used = 0;
-  for (const r of x.rows || []) {
-    made += r.outputs[name] || 0;
-    used += r.inputs[name] || 0;
+  for (const row of stage.rows || []) {
+    made += row.outputs[name] || 0;
+    used += row.inputs[name] || 0;
   }
   return { made, used };
 };
@@ -37,24 +38,24 @@ test('settings saved before the somersloop ledger existed are unchanged by it', 
 });
 
 test('an unfueled augmenter adds 500 MW and a tenth of the grid’s base production', () => {
-  const x = calculate({ ...base, somersloops: 20, augmenters: 1 }).stages[5];
-  assert.equal(x.boost, 0.1);
-  assert.equal(x.augmenterMW, 500);
+  const stage = calculate({ ...base, somersloops: 20, augmenters: 1 }).stages[5];
+  assert.equal(stage.boost, 0.1);
+  assert.equal(stage.augmenterMW, 500);
   // (generators + 500) x 1.1, exactly as the wiki states; one augmenter alone makes 550 MW.
-  assert.ok(Math.abs(x.availableMW! - (x.generationMW! * 1.1 + 550)) < 1e-6);
+  assert.ok(Math.abs(stage.availableMW! - (stage.generationMW! * 1.1 + 550)) < 1e-6);
 });
 
 test('the augmenter multiplier applies to installed capacity, not to the spare part of it', () => {
-  const x = calculate({
+  const stage = calculate({
     ...base,
     somersloops: 20,
     augmenters: 2,
     availablePowerGW: 5,
     installedPowerGW: 60,
   }).stages[5];
-  const expected = x.generationMW! * 1.2 + (60000 + 1000) * 1.2 - 60000 + 5000;
-  assert.equal(x.boost, 0.2);
-  assert.ok(Math.abs(x.availableMW! - expected) < 1e-6, `${x.availableMW} vs ${expected}`);
+  const expected = stage.generationMW! * 1.2 + (60000 + 1000) * 1.2 - 60000 + 5000;
+  assert.equal(stage.boost, 0.2);
+  assert.ok(Math.abs(stage.availableMW! - expected) < 1e-6, `${stage.availableMW} vs ${expected}`);
 });
 
 test('augmenters are Phase 5 buildings and do not power earlier phases', () => {
@@ -81,16 +82,17 @@ test('fuel for an augmenter is derived from the augmenter count, never entered',
 });
 
 test('Review compares the fueled plan with the same plan unfueled', () => {
-  const x = calculate({ ...base, somersloops: 20, augmenters: 1, fueledAugmenters: 1 }).stages[5];
-  const v = x.fuelVerdict;
-  assert.ok(v, 'a verdict is recorded');
-  assert.equal(v.unfueledFeasible, true);
-  assert.equal(v.buildings, buildings(x));
-  assert.ok(v.buildingsUnfueled! > 0);
-  assert.ok(v.availableMW > v.availableMWUnfueled!, 'fuel raises available power');
-  assert.equal(typeof v.worthIt, 'boolean');
+  const stage = calculate({ ...base, somersloops: 20, augmenters: 1, fueledAugmenters: 1 })
+    .stages[5];
+  const verdict = stage.fuelVerdict;
+  assert.ok(verdict, 'a verdict is recorded');
+  assert.equal(verdict.unfueledFeasible, true);
+  assert.equal(verdict.buildings, buildings(stage));
+  assert.ok(verdict.buildingsUnfueled! > 0);
+  assert.ok(verdict.availableMW > verdict.availableMWUnfueled!, 'fuel raises available power');
+  assert.equal(typeof verdict.worthIt, 'boolean');
   // At a modest base production the Matrix chain costs more than the extra 20% returns.
-  assert.equal(v.worthIt, v.buildings < v.buildingsUnfueled!);
+  assert.equal(verdict.worthIt, verdict.buildings < verdict.buildingsUnfueled!);
   assert.equal(
     calculate({ ...base, somersloops: 20, augmenters: 1 }).stages[5].fuelVerdict,
     undefined,
@@ -98,21 +100,21 @@ test('Review compares the fueled plan with the same plan unfueled', () => {
 });
 
 test('items the sink cannot accept are balanced exactly and never offered to it', () => {
-  const x = calculate({
+  const stage = calculate({
     ...base,
     somersloops: 20,
     augmenters: 1,
     fueledAugmenters: 1,
     wholeMachines: true,
   }).stages[5];
-  const shard = flow(x, 'Power Shard');
+  const shard = flow(stage, 'Power Shard');
   assert.ok(shard.made > 0, 'the fuel line needs Power Shards');
   assert.ok(
     Math.abs(shard.made - shard.used) < 0.01,
     `Power Shards must balance exactly: made ${shard.made}, used ${shard.used}`,
   );
-  assert.equal(x.surplus!['Power Shard'], undefined, 'a shard surplus has nowhere to go');
-  for (const name of Object.keys(x.surplus || {}))
+  assert.equal(stage.surplus!['Power Shard'], undefined, 'a shard surplus has nowhere to go');
+  for (const name of Object.keys(stage.surplus || {}))
     assert.ok(DATA.items[name]?.sink! > 0, name + ' cannot be sunk');
   const warning = calculate({
     ...base,
@@ -147,73 +149,83 @@ test('committing more somersloops than the save holds is reported, not silently 
   );
 });
 
-const amplifiedRows = (x: CurrentStage) => (x.rows || []).filter(r => r.amplified);
+const amplifiedRows = (stage: CurrentStage) => (stage.rows || []).filter(r => r.amplified);
 
 test('production amplification is off until the plan asks for it', () => {
   assert.equal(settings({}).amplifySloops, 0);
-  const x = calculate({ ...base, somersloops: 106 }).stages[5];
-  assert.equal(amplifiedRows(x).length, 0, 'no somersloop machines without a budget');
-  assert.equal(x.sloopsUsed, 0);
+  const stage = calculate({ ...base, somersloops: 106 }).stages[5];
+  assert.equal(amplifiedRows(stage).length, 0, 'no somersloop machines without a budget');
+  assert.equal(stage.sloopsUsed, 0);
   assert.throws(() => settings({ amplifySloops: 200 }), /number from 0 to 106/);
 });
 
 test('amplified machines are whole machines that double output for four times the power', () => {
-  const x = calculate({ ...base, somersloops: 106, amplifySloops: 24 }).stages[5];
-  const amp = amplifiedRows(x);
-  assert.ok(amp.length, 'the plan places somersloops');
-  assert.ok(x.sloopsUsed! <= 24, `used ${x.sloopsUsed} of a 24 somersloop budget`);
+  const stage = calculate({ ...base, somersloops: 106, amplifySloops: 24 }).stages[5];
+  const amplified = amplifiedRows(stage);
+  assert.ok(amplified.length, 'the plan places somersloops');
+  assert.ok(stage.sloopsUsed! <= 24, `used ${stage.sloopsUsed} of a 24 somersloop budget`);
   assert.equal(
-    x.sloopsUsed,
-    amp.reduce((a, r) => a + r.sloops!, 0),
+    stage.sloopsUsed,
+    amplified.reduce((total, r) => total + r.sloops!, 0),
   );
-  for (const r of amp) {
+  for (const row of amplified) {
     assert.ok(
-      Math.abs(r.machines - r.equivalent) < 1e-6,
+      Math.abs(row.machines - row.equivalent) < 1e-6,
       'a somersloop cannot go in part of a machine',
     );
-    assert.ok(Math.abs(r.lastClock - 100) < 1e-3);
-    assert.ok(AMPLIFY_SLOTS[r.machine]! > 0, r.machine + ' has no somersloop slots');
-    assert.equal(r.sloops, r.slots! * r.machines);
-    const plain = DATA.recipes.find(y => y.id === r.id.slice(4));
+    assert.ok(Math.abs(row.lastClock - 100) < 1e-3);
+    assert.ok(AMPLIFY_SLOTS[row.machine]! > 0, row.machine + ' has no somersloop slots');
+    assert.equal(row.sloops, row.slots! * row.machines);
+    const plain = DATA.recipes.find(y => y.id === row.id.slice(4));
     assert.ok(plain, 'every amplified row comes from a real recipe');
-    assert.equal(r.power, plain.power * 4);
-    for (const [n, q] of Object.entries(plain.outputs))
-      assert.ok(Math.abs(r.outputs[n]! / r.equivalent - q * 2) < 1e-6, n + ' should double');
-    for (const [n, q] of Object.entries(plain.inputs))
-      assert.ok(Math.abs(r.inputs[n]! / r.equivalent - q) < 1e-6, n + ' should be unchanged');
+    assert.equal(row.power, plain.power * 4);
+    for (const [item, rate] of Object.entries(plain.outputs))
+      assert.ok(
+        Math.abs(row.outputs[item]! / row.equivalent - rate * 2) < 1e-6,
+        item + ' should double',
+      );
+    for (const [item, rate] of Object.entries(plain.inputs))
+      assert.ok(
+        Math.abs(row.inputs[item]! / row.equivalent - rate) < 1e-6,
+        item + ' should be unchanged',
+      );
   }
 });
 
 test('amplification buys ore and buildings with power', () => {
   const off = calculate({ ...base, somersloops: 106 }).stages[5];
   const on = calculate({ ...base, somersloops: 106, amplifySloops: 24 }).stages[5];
-  const raw = (x: CurrentStage) => Object.values(x.raw!).reduce((a, b) => a + b, 0);
-  const count = (x: CurrentStage) => (x.rows || []).reduce((a, r) => a + r.machines, 0);
+  const raw = (stage: CurrentStage) =>
+    Object.values(stage.raw!).reduce((total, rate) => total + rate, 0);
+  const count = (stage: CurrentStage) =>
+    (stage.rows || []).reduce((total, r) => total + r.machines, 0);
   assert.ok(raw(on) < raw(off), `raw ${raw(on)} should be under ${raw(off)}`);
   assert.ok(count(on) < count(off), `buildings ${count(on)} should be under ${count(off)}`);
 });
 
 test('machines without somersloop slots are never amplified', () => {
-  const x = calculate({
+  const stage = calculate({
     ...base,
     recipes: 'all',
     droneFuel: 'Packaged Fuel',
     somersloops: 106,
     amplifySloops: 40,
   }).stages[5];
-  for (const r of amplifiedRows(x))
+  for (const row of amplifiedRows(stage))
     assert.ok(
-      !['Packager', 'Coal Generator', 'Fuel Generator', 'Nuclear Power Plant'].includes(r.machine),
-      r.machine + ' cannot take a somersloop',
+      !['Packager', 'Coal Generator', 'Fuel Generator', 'Nuclear Power Plant'].includes(
+        row.machine,
+      ),
+      row.machine + ' cannot take a somersloop',
     );
   assert.ok(
-    (x.rows || []).some(r => r.machine === 'Packager'),
+    (stage.rows || []).some(r => r.machine === 'Packager'),
     'the plan does package something',
   );
 });
 
 test('a budget the solver cannot fit never costs the user a plan', () => {
-  const x = calculate({
+  const stage = calculate({
     ...base,
     wholeMachines: true,
     storage: 'all',
@@ -221,8 +233,8 @@ test('a budget the solver cannot fit never costs the user a plan', () => {
     somersloops: 106,
     amplifySloops: 106,
   }).stages[5];
-  assert.equal(x.feasible, true, 'the plan survives even if amplification has to be dropped');
-  if (x.amplificationDropped) assert.equal(x.sloopsUsed, 0);
+  assert.equal(stage.feasible, true, 'the plan survives even if amplification has to be dropped');
+  if (stage.amplificationDropped) assert.equal(stage.sloopsUsed, 0);
 });
 
 test('a phase that does not fit is diagnosed before amplification, and says so', () => {

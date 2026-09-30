@@ -73,20 +73,20 @@ test('saves made before the change load exactly as they were', () => {
 async function start(dir: string) {
   await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   // Listening on a TCP port, so address() is an AddressInfo.
   return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = (s: Server) => new Promise(r => s.close(r));
-const post = (url: string, endpoint: string, b: unknown, headers: Record<string, string> = {}) =>
+const close = (server: Server) => new Promise(resolve => server.close(resolve));
+const post = (url: string, endpoint: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
-    body: JSON.stringify(b),
+    body: JSON.stringify(body),
   });
-const json = async (r: Response) => {
-  assert.ok(r.ok, await r.clone().text());
-  return r.json();
+const json = async (response: Response) => {
+  assert.ok(response.ok, await response.clone().text());
+  return response.json();
 };
 
 test('Docker edition: Done is kept per profile, a copy gets its own, and survives a restart', async () => {
@@ -94,8 +94,8 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
   let app = await start(dir);
   try {
     // The default profile (migrated from a handbook one, #495) and a second profile beside it.
-    const oh = { 'X-Save-Id': 'original-save', 'X-Profile-Id': 'original' };
-    const before = await json(await fetch(app.url + '/api/state', { headers: oh }));
+    const originalHeaders = { 'X-Save-Id': 'original-save', 'X-Profile-Id': 'original' };
+    const before = await json(await fetch(app.url + '/api/state', { headers: originalHeaders }));
     assert.equal(before.checks[KEY], undefined, 'a fresh handbook starts with the moves to do');
     const other = await json(
       await post(app.url, '/api/profiles', {
@@ -104,9 +104,11 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
         settings: {},
       }),
     );
-    const bh = { 'X-Save-Id': other.saveId, 'X-Profile-Id': other.profileId };
-    await json(await post(app.url, '/api/update', { type: 'check', key: KEY, value: true }, oh));
-    const done = await json(await fetch(app.url + '/api/state', { headers: oh }));
+    const otherHeaders = { 'X-Save-Id': other.saveId, 'X-Profile-Id': other.profileId };
+    await json(
+      await post(app.url, '/api/update', { type: 'check', key: KEY, value: true }, originalHeaders),
+    );
+    const done = await json(await fetch(app.url + '/api/state', { headers: originalHeaders }));
     assert.equal(done.checks[KEY], true);
     assert.equal(done.version, before.version, 'a tick leaves the content version as it was');
     assert.deepEqual(
@@ -115,7 +117,7 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
       'every other check is as it was',
     );
     assert.deepEqual(done.deliveries, before.deliveries);
-    const untouched = await json(await fetch(app.url + '/api/state', { headers: bh }));
+    const untouched = await json(await fetch(app.url + '/api/state', { headers: otherHeaders }));
     assert.equal(untouched.checks[KEY], undefined, 'the other profile still has the moves to do');
     // A copy starts from the source's progress and then keeps its own.
     const copy = await json(
@@ -124,24 +126,26 @@ test('Docker edition: Done is kept per profile, a copy gets its own, and survive
         profileId: 'original',
       }),
     );
-    const ch = { 'X-Save-Id': copy.saveId, 'X-Profile-Id': copy.profileId };
+    const copyHeaders = { 'X-Save-Id': copy.saveId, 'X-Profile-Id': copy.profileId };
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: ch }))).checks[KEY],
+      (await json(await fetch(app.url + '/api/state', { headers: copyHeaders }))).checks[KEY],
       true,
     );
-    await json(await post(app.url, '/api/update', { type: 'check', key: KEY, value: false }, ch));
+    await json(
+      await post(app.url, '/api/update', { type: 'check', key: KEY, value: false }, copyHeaders),
+    );
     await close(app.server);
     app = await start(dir);
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: oh }))).checks[KEY],
+      (await json(await fetch(app.url + '/api/state', { headers: originalHeaders }))).checks[KEY],
       true,
     );
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: ch }))).checks[KEY],
+      (await json(await fetch(app.url + '/api/state', { headers: copyHeaders }))).checks[KEY],
       false,
     );
     assert.equal(
-      (await json(await fetch(app.url + '/api/state', { headers: bh }))).checks[KEY],
+      (await json(await fetch(app.url + '/api/state', { headers: otherHeaders }))).checks[KEY],
       undefined,
     );
   } finally {

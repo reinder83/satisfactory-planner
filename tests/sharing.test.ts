@@ -20,54 +20,56 @@ import type {
 async function start(dir: string) {
   await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   // Listening on a TCP port, so address() is an AddressInfo.
   return { server, url: 'http://127.0.0.1:' + (server.address() as AddressInfo).port };
 }
-const close = (s: Server) => new Promise(r => s.close(r));
-const post = (url: string, endpoint: string, b: unknown, headers: Record<string, string> = {}) =>
+const close = (server: Server) => new Promise(resolve => server.close(resolve));
+const post = (url: string, endpoint: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(url + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1', ...headers },
-    body: JSON.stringify(b),
+    body: JSON.stringify(body),
   });
-const json = async (r: Response) => {
-  assert.ok(r.ok, await r.clone().text());
-  return r.json();
+const json = async (response: Response) => {
+  assert.ok(response.ok, await response.clone().text());
+  return response.json();
 };
 
 test('a shared profile exports one profile without progress and imports as a fresh copy', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-share-'));
   const app = await start(dir);
   try {
-    const a = await json(
+    const created = await json(
       await post(app.url, '/api/profiles', {
         saveName: 'Shared world',
         name: 'Balanced',
         settings: {},
       }),
     );
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
+    const createdHeaders = { 'X-Save-Id': created.saveId, 'X-Profile-Id': created.profileId };
     await post(
       app.url,
       '/api/update',
       { type: 'check', key: 'calc-3-iron-ingot', value: true },
-      ah,
+      createdHeaders,
     );
     await post(
       app.url,
       '/api/update',
       { type: 'note', key: 'global', value: 'Private seed notes' },
-      ah,
+      createdHeaders,
     );
     await post(
       app.url,
       '/api/update',
       { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' },
-      ah,
+      createdHeaders,
     );
     const share = await json(
-      await fetch(`${app.url}/api/export-saves?save=${a.saveId}&profile=${a.profileId}&share=1`),
+      await fetch(
+        `${app.url}/api/export-saves?save=${created.saveId}&profile=${created.profileId}&share=1`,
+      ),
     );
     assert.equal(share.saves.length, 1);
     assert.equal(share.saves[0].profiles.length, 1, 'only the shared profile is included');
@@ -84,16 +86,22 @@ test('a shared profile exports one profile without progress and imports as a fre
     );
     assert.ok(share.saves[0].profiles[0].plan, 'the calculation snapshot travels with the share');
     assert.ok(!JSON.stringify(share).includes('Private seed notes'));
-    const w: WorkspaceSummary = await json(await post(app.url, '/api/import-saves', share));
-    assert.equal(w.saves.length, 3, 'the default save, the shared world and the imported copy');
-    const importedSave = w.saves.find(s => s.id !== a.saveId && s.name === 'Shared world');
+    const workspace: WorkspaceSummary = await json(await post(app.url, '/api/import-saves', share));
+    assert.equal(
+      workspace.saves.length,
+      3,
+      'the default save, the shared world and the imported copy',
+    );
+    const importedSave = workspace.saves.find(
+      s => s.id !== created.saveId && s.name === 'Shared world',
+    );
     assert.ok(importedSave, 'the share imports as a new copy');
     assert.equal(
       importedSave.profiles[0]!.completed,
       0,
       'the imported copy starts without progress',
     );
-    const original = await json(await fetch(app.url + '/api/state', { headers: ah }));
+    const original = await json(await fetch(app.url + '/api/state', { headers: createdHeaders }));
     assert.equal(
       original.checks['calc-3-iron-ingot'],
       true,
@@ -101,7 +109,9 @@ test('a shared profile exports one profile without progress and imports as a fre
     );
     assert.equal(original.notes.global, 'Private seed notes');
     const scoped = await json(
-      await fetch(`${app.url}/api/export-saves?save=${a.saveId}&profile=${a.profileId}`),
+      await fetch(
+        `${app.url}/api/export-saves?save=${created.saveId}&profile=${created.profileId}`,
+      ),
     );
     assert.equal(
       scoped.saves[0].profiles[0].state.notes.global,
@@ -110,7 +120,7 @@ test('a shared profile exports one profile without progress and imports as a fre
     );
     assert.equal((await fetch(`${app.url}/api/export-saves?save=missing`)).status, 404);
     assert.equal(
-      (await fetch(`${app.url}/api/export-saves?save=${a.saveId}&profile=missing`)).status,
+      (await fetch(`${app.url}/api/export-saves?save=${created.saveId}&profile=missing`)).status,
       404,
     );
     // A selection of saves (#160): exactly those, and any unknown id refuses the whole export.
@@ -138,26 +148,29 @@ test('duplicating a profile copies plan and progress and keeps the original inde
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-copy-'));
   const app = await start(dir);
   try {
-    const a = await json(
+    const created = await json(
       await post(app.url, '/api/profiles', {
         saveName: 'Copy world',
         name: 'Precise',
         settings: {},
       }),
     );
-    const ah = { 'X-Save-Id': a.saveId, 'X-Profile-Id': a.profileId };
+    const createdHeaders = { 'X-Save-Id': created.saveId, 'X-Profile-Id': created.profileId };
     await post(
       app.url,
       '/api/update',
       { type: 'check', key: 'calc-3-iron-ingot', value: true },
-      ah,
+      createdHeaders,
     );
-    const b = await json(
-      await post(app.url, '/api/duplicate-profile', { saveId: a.saveId, profileId: a.profileId }),
+    const duplicate = await json(
+      await post(app.url, '/api/duplicate-profile', {
+        saveId: created.saveId,
+        profileId: created.profileId,
+      }),
     );
-    assert.notEqual(b.profileId, a.profileId);
-    const bh = { 'X-Save-Id': b.saveId, 'X-Profile-Id': b.profileId };
-    const copy = await json(await fetch(app.url + '/api/context', { headers: bh }));
+    assert.notEqual(duplicate.profileId, created.profileId);
+    const duplicateHeaders = { 'X-Save-Id': duplicate.saveId, 'X-Profile-Id': duplicate.profileId };
+    const copy = await json(await fetch(app.url + '/api/context', { headers: duplicateHeaders }));
     assert.match(copy.profile.name, /· copy$/);
     assert.equal(
       copy.state.checks['calc-3-iron-ingot'],
@@ -169,20 +182,32 @@ test('duplicating a profile copies plan and progress and keeps the original inde
       app.url,
       '/api/update',
       { type: 'check', key: 'calc-3-iron-ingot', value: false },
-      bh,
+      duplicateHeaders,
     );
-    await post(app.url, '/api/update', { type: 'note', key: 'global', value: 'Experiment' }, bh);
-    const original = await json(await fetch(app.url + '/api/state', { headers: ah }));
+    await post(
+      app.url,
+      '/api/update',
+      { type: 'note', key: 'global', value: 'Experiment' },
+      duplicateHeaders,
+    );
+    const original = await json(await fetch(app.url + '/api/state', { headers: createdHeaders }));
     assert.equal(
       original.checks['calc-3-iron-ingot'],
       true,
       'edits in the copy never reach the original',
     );
     assert.equal(original.notes.global, undefined);
-    assert.equal((await post(app.url, '/api/duplicate-profile', { saveId: a.saveId })).status, 400);
     assert.equal(
-      (await post(app.url, '/api/duplicate-profile', { saveId: a.saveId, profileId: 'missing' }))
-        .status,
+      (await post(app.url, '/api/duplicate-profile', { saveId: created.saveId })).status,
+      400,
+    );
+    assert.equal(
+      (
+        await post(app.url, '/api/duplicate-profile', {
+          saveId: created.saveId,
+          profileId: 'missing',
+        })
+      ).status,
       404,
     );
   } finally {
@@ -209,7 +234,7 @@ test('browser edition shares and duplicates through the same portable format', a
     post = (route: string, body: unknown) => api(route, { body: JSON.stringify(body) });
   // The replies are unknown to the API's type; each is cast to the shape its route returns.
   type Created = { saveId: string; profileId: string };
-  const a = (await post('/api/profiles', {
+  const created = (await post('/api/profiles', {
     saveName: 'Browser world',
     name: 'Balanced',
     settings: { phase: '1', goal: 'minimal' },
@@ -217,7 +242,7 @@ test('browser edition shares and duplicates through the same portable format', a
   await post('/api/update', { type: 'check', key: 'calc-1-iron-ingot', value: true });
   await post('/api/update', { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
   const share = (await api(
-    `/api/export-saves?save=${a.saveId}&profile=${a.profileId}&share=1`,
+    `/api/export-saves?save=${created.saveId}&profile=${created.profileId}&share=1`,
   )) as SaveExport;
   assert.equal(share.saves.length, 1);
   assert.deepEqual(share.saves[0]!.profiles[0]!.state.checks, {});
@@ -228,10 +253,10 @@ test('browser edition shares and duplicates through the same portable format', a
   await post('/api/import-saves', share);
   assert.equal(((await api('/api/workspace')) as WorkspaceSummary).saves.length, 2);
   const copy = (await post('/api/duplicate-profile', {
-    saveId: a.saveId,
-    profileId: a.profileId,
+    saveId: created.saveId,
+    profileId: created.profileId,
   })) as Created;
-  assert.notEqual(copy.profileId, a.profileId);
+  assert.notEqual(copy.profileId, created.profileId);
   assert.equal(
     ((await api('/api/state')) as ProgressState).checks['calc-1-iron-ingot'],
     true,
@@ -239,7 +264,7 @@ test('browser edition shares and duplicates through the same portable format', a
   );
   await post('/api/update', { type: 'check', key: 'calc-1-iron-ingot', value: false });
   const original = (await api(
-    `/api/state?save=${a.saveId}&profile=${a.profileId}`,
+    `/api/state?save=${created.saveId}&profile=${created.profileId}`,
   )) as ProgressState;
   assert.equal(
     original.checks['calc-1-iron-ingot'],
