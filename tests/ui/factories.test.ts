@@ -2205,7 +2205,7 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
     );
     assert.ok(line, item);
     assert.ok(
-      line.textContent.startsWith(`${num(delivery.rate)} of ${num(delivery.rate)} / min now`),
+      line.textContent.startsWith(`${num(delivery.rate)} of ${num(delivery.rate)}/min now`),
       item,
     );
   }

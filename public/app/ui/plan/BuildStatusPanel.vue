@@ -45,7 +45,7 @@ const view = computed(() =>
       share: percent(status.deliveryShare),
       delivery: status.delivery.map(delivery => ({
         item: delivery.item,
-        text: `${num(delivery.now)} of ${num(delivery.planned)} / min now`,
+        text: `${num(delivery.now)} of ${num(delivery.planned)}/min now`,
         width: delivery.planned > 0 ? Math.min(100, (delivery.now / delivery.planned) * 100) : 0,
       })),
       next,
