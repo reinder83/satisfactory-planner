@@ -130,6 +130,15 @@ Nothing compiles TypeScript to files: Vite and Vitest strip the types when they 
 - The server imports the shared sources (`./public/state.ts`, `transfer.ts`, `preferences.ts`) and Node runs them as they are. The Docker image therefore copies `public/*.ts` next to the built `public/`, and `server.ts` answers 404 for any `.ts` path so browsers only ever get the built files. The Docker smoke test in CI starts that image, so a server import the image lacks fails there.
 - The server-side modules (`server.ts`, `workspace.ts`, `planner.ts`, `optimizer.ts`, `docker-start.ts`) run as they are in the Docker image. A request body is `unknown` until a check narrows it; keep the existing checks rather than trusting a cast. The Pages edition ships `planner.ts` and `optimizer.ts` as `planner.mjs` and `optimizer.mjs`: `build.ts` strips them and replaces a few snippets by exact match (the `node:fs` import, the `recipes.json` read, the import paths), so keep those snippets unchanged.
 
+### Naming
+
+Name variables, parameters and helpers for what they hold, in words a reader understands without looking up where they came from (#503): `user`, `profile`, `draft`, `entry`, `checkKey`, not `u`, `p`, `d`, `v`, `k`. Rules:
+
+- A single letter only for a counted loop index (`for (let i = 0; i < rows.length; i++)`) and for the parameter of a one-line callback whose collection says what it is (`saves.filter(s => s.userId === user.id)`, `profiles.find(p => p.id === profileId)`). A callback that spans several lines, or whose parameter is not an item of the collection it is called on, gets a full name: `commit(draft => { … })`, `users.find(account => account.id === userId)`.
+- No private abbreviations: `error`, not `e`, in a `catch` or error callback; `phase`, not `ph`; `input`, not `b`, for a request body. Names every Node or DOM example uses (`req`, `res`, `url`, `id`, `el` for an element) may stay.
+- A rename is a pure refactor: it never renames what leaves the code (JSON keys, saved state fields, request fields, `data-*` hooks, form field names, exported names other modules or tests import). Keep comments in step with the new name.
+- Existing code is being renamed area by area in sub-tasks of #503; new and changed code follows these rules now.
+
 The server defaults to port 8080. Set `HOST=127.0.0.1` for a local-only preview and `DATA_DIR` to an isolated temporary folder for experiments. Environment-variable syntax differs by shell. Check whether an existing server is running before starting another; never terminate unrelated processes.
 
 For real-browser verification, Playwright is a pinned dev dependency (`npm ci` installs it, without a browser); CI then downloads Chromium:
