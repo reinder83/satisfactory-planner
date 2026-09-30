@@ -21,14 +21,14 @@ const props = defineProps<{
   label?: string;
 }>();
 
-const el = ref<HTMLElement | null>(null),
+const cell = ref<HTMLElement | null>(null),
   handle = ref<HTMLElement | null>(null);
 // A position is the drop target only while the pointer is over it (./drop-point.ts, #298). The
 // detector goes in as a getter: @dnd-kit/vue reads every input through Vue's toValue(), which
 // would call the detector itself, with no arguments, and throw.
 const { isDropTarget } = useDroppable({
   id: () => props.id,
-  element: el,
+  element: cell,
   disabled: () => !props.editing,
   collisionDetector: () => pointerOnly,
 });
@@ -38,14 +38,14 @@ const { isDropTarget } = useDroppable({
 const movable = () => props.editing && !!props.label;
 const { isDragging } = useDraggable({
   id: () => props.id,
-  element: () => (movable() ? el.value : undefined),
+  element: () => (movable() ? cell.value : undefined),
   handle,
   disabled: () => !movable(),
 });
 </script>
 
 <template>
-  <div ref="el" :class="{ 'drop-over': isDropTarget, dragging: isDragging }" :data-drop="id">
+  <div ref="cell" :class="{ 'drop-over': isDropTarget, dragging: isDragging }" :data-drop="id">
     <button
       v-if="editing && label"
       ref="handle"

@@ -20,19 +20,19 @@ const glyph = (name?: string) => GUIDED_GLYPHS[name || ''] || GUIDED_GLYPHS.bala
 <template>
   <div class="guided-grid">
     <label
-      v-for="o in question.options"
-      :key="o.value"
-      :class="['guided-card', o.value === picked ? 'is-picked' : '']"
+      v-for="option in question.options"
+      :key="option.value"
+      :class="['guided-card', option.value === picked ? 'is-picked' : '']"
     >
       <input
         type="radio"
         :name="'guided:' + question.id"
-        :value="o.value"
-        :aria-label="o.label + '. ' + o.detail"
-        :checked="o.value === picked"
+        :value="option.value"
+        :aria-label="option.label + '. ' + option.detail"
+        :checked="option.value === picked"
       />
-      <span v-if="o.items" class="guided-art items" aria-hidden="true"
-        ><ItemIcon v-for="n in o.items.slice(0, 4)" :key="n" :name="n"
+      <span v-if="option.items" class="guided-art items" aria-hidden="true"
+        ><ItemIcon v-for="item in option.items.slice(0, 4)" :key="item" :name="item"
       /></span>
       <span v-else class="guided-art" aria-hidden="true"
         ><svg
@@ -42,12 +42,12 @@ const glyph = (name?: string) => GUIDED_GLYPHS[name || ''] || GUIDED_GLYPHS.bala
           stroke-width="1.6"
           stroke-linecap="round"
           stroke-linejoin="round"
-          v-html="glyph(o.glyph)"
+          v-html="glyph(option.glyph)"
         ></svg
       ></span>
-      <strong>{{ o.label }}</strong>
-      <p>{{ o.detail }}</p>
-      <span v-if="o.handoff" class="badge">Opens All settings</span>
+      <strong>{{ option.label }}</strong>
+      <p>{{ option.detail }}</p>
+      <span v-if="option.handoff" class="badge">Opens All settings</span>
     </label>
   </div>
 </template>

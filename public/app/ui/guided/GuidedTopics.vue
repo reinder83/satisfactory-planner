@@ -14,27 +14,35 @@ import { legacy } from '../bridge.ts';
 
 const view = computed(() =>
   legacy(() => {
-    const w = draft(),
-      s = w.settings,
-      save = workspace.saves.find(x => x.id === w.saveId);
+    const wizardDraft = draft(),
+      settings = wizardDraft.settings,
+      save = workspace.saves.find(entry => entry.id === wizardDraft.saveId);
     const from =
-      save?.profiles.find(p => p.id === (w.carryFrom || save.activeProfile)) || save?.profiles[0];
+      save?.profiles.find(
+        profile => profile.id === (wizardDraft.carryFrom || save.activeProfile),
+      ) || save?.profiles[0];
     return {
       from: from?.name,
-      ticked: w.guidedTopics || ['phase'],
+      ticked: wizardDraft.guidedTopics || ['phase'],
       known: [
-        ['Phase', 'Phase ' + (s.phase || '3')],
-        ['Goal', workspace.catalog.goals.find(g => g.id === s.goal)?.name || s.goal],
+        ['Phase', 'Phase ' + (settings.phase || '3')],
+        [
+          'Goal',
+          workspace.catalog.goals.find(goal => goal.id === settings.goal)?.name || settings.goal,
+        ],
         [
           'Recipes',
-          s.recipes === 'all'
+          settings.recipes === 'all'
             ? 'All alternates'
-            : s.recipes === 'custom'
-              ? num((s.alternateRecipes || []).length) + ' picked'
+            : settings.recipes === 'custom'
+              ? num((settings.alternateRecipes || []).length) + ' picked'
               : 'Standard only',
         ],
-        ['Stocked', (storageOptions.find(([v]) => v === s.storage) || [, s.storage])[1]],
-        ['Machines', s.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
+        [
+          'Stocked',
+          (storageOptions.find(([value]) => value === settings.storage) || [, settings.storage])[1],
+        ],
+        ['Machines', settings.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
       ],
     };
   }),
@@ -48,16 +56,19 @@ const view = computed(() =>
     >. Tick only what changes; the rest is kept as it is.
   </p>
   <div class="guided-known">
-    <span v-for="[k, v] in view.known" :key="k"
-      ><b>{{ k }}</b
-      >{{ v }}</span
+    <span v-for="[label, value] in view.known" :key="label"
+      ><b>{{ label }}</b
+      >{{ value }}</span
     >
   </div>
   <div class="guided-topics">
-    <label v-for="q in guidedQuestions" :key="q.id" class="check-row"
-      ><input type="checkbox" name="topic" :value="q.id" :checked="view.ticked.includes(q.id)" />{{
-        q.title
-      }}</label
+    <label v-for="question in guidedQuestions" :key="question.id" class="check-row"
+      ><input
+        type="checkbox"
+        name="topic"
+        :value="question.id"
+        :checked="view.ticked.includes(question.id)"
+      />{{ question.title }}</label
     >
   </div>
   <p class="small muted">

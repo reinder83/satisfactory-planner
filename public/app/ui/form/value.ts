@@ -9,10 +9,10 @@ import type { Directive } from 'vue';
 type ValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
 export const vValue: Directive<ValueElement, string | number | null | undefined> = {
-  mounted(el, { value }) {
-    el.value = String(value ?? '');
+  mounted(field, { value }) {
+    field.value = String(value ?? '');
   },
-  updated(el, { value, oldValue }) {
-    if (value !== oldValue) el.value = String(value ?? '');
+  updated(field, { value, oldValue }) {
+    if (value !== oldValue) field.value = String(value ?? '');
   },
 };

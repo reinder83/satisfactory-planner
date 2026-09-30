@@ -38,31 +38,31 @@ import SelectField from '../form/SelectField.vue';
 const view = computed(() =>
   legacy(() => {
     if (!wizard) return null;
-    const s = wizard.settings,
-      e = extractionOf(wizard);
-    const known = knownWorld(s.purity, s.distribution);
-    const active = matchingPreset(e);
+    const settings = wizard.settings,
+      extraction = extractionOf(wizard);
+    const known = knownWorld(settings.purity, settings.distribution);
+    const active = matchingPreset(extraction);
     // Random is a shuffle: it moves nodes but not how many of each resource there are. So
     // it costs us only the purity split, and only for the settings that keep the map's own
     // split.
     const splitShuffled =
-      s.distribution === 'randomized' && !known && presetPurities.includes(s.purity);
+      settings.distribution === 'randomized' && !known && presetPurities.includes(settings.purity);
     return {
-      purity: s.purity,
-      distribution: s.distribution,
+      purity: settings.purity,
+      distribution: settings.distribution,
       status:
-        known && active === s.purity
+        known && active === settings.purity
           ? 'filled'
           : known
             ? 'fillable'
             : splitShuffled
               ? 'split'
               : 'unknown',
-      label: (nodePresets.find(([v]) => v === active) || [, ''])[1],
+      label: (nodePresets.find(([value]) => value === active) || [, ''])[1],
       active,
-      shuffled: s.distribution === 'randomized',
-      purityLabel: (purities.find(([v]) => v === s.purity) || [, ''])[1],
-      rich: richShape[s.distribution] || '',
+      shuffled: settings.distribution === 'randomized',
+      purityLabel: (purities.find(([value]) => value === settings.purity) || [, ''])[1],
+      rich: richShape[settings.distribution] || '',
       undo: wizard.extractionUndo ? (wizard.extractionUndoKind ?? 'reset') : null,
     };
   }),
@@ -73,31 +73,37 @@ const view = computed(() =>
 // Fill, Reset and Undo each swap their button for another one, so focus goes to the one that
 // takes its place (ui/refocus.ts, #290): Reset's Undo, Undo's Reset, and after Fill whichever of
 // the two is shown.
-const swapTo = (e: Event, fallback: string[]) =>
-  refocusAfterRemoval(e.currentTarget, { fallback: fallback.map(s => '#main ' + s) });
+const swapTo = (event: Event, fallback: string[]) =>
+  refocusAfterRemoval(event.currentTarget, {
+    fallback: fallback.map(selector => '#main ' + selector),
+  });
 
-function fill(e: Event) {
-  const refocus = swapTo(e, ['[data-node-undo]', '[data-node-reset]']);
-  const w = draft();
+function fill(event: Event) {
+  const refocus = swapTo(event, ['[data-node-undo]', '[data-node-reset]']);
+  const wizardDraft = draft();
   noteWizardEdit();
   const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
   // The button is only drawn with the view.
   const purity = view.value!.purity;
-  w.extraction = presetSurvey(purity, extractionOf(w), w.settings.distribution);
-  w.extractionUndo = null;
-  w.settings.purity = purity;
+  wizardDraft.extraction = presetSurvey(
+    purity,
+    extractionOf(wizardDraft),
+    wizardDraft.settings.distribution,
+  );
+  wizardDraft.extractionUndo = null;
+  wizardDraft.settings.purity = purity;
   render();
   void refocus();
   toast(
     'Filled in the default world at ' +
-      (nodePresets.find(([v]) => v === purity)?.[1] || 'that purity') +
+      (nodePresets.find(([value]) => value === purity)?.[1] || 'that purity') +
       '. Change any count that does not match your save.',
   );
 }
 
-function reset(e: Event) {
-  const refocus = swapTo(e, ['[data-node-undo]']);
+function reset(event: Event) {
+  const refocus = swapTo(event, ['[data-node-undo]']);
   const form = $<HTMLFormElement>('#wizard-form');
   if (form) readExtraction(form);
   resetExtraction();
@@ -108,8 +114,8 @@ function reset(e: Event) {
   );
 }
 
-function undo(e: Event) {
-  const refocus = swapTo(e, ['[data-node-reset]']);
+function undo(event: Event) {
+  const refocus = swapTo(event, ['[data-node-reset]']);
   const kind = view.value?.undo;
   undoExtractionReset();
   render();

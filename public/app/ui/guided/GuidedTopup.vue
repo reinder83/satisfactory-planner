@@ -17,10 +17,10 @@ import ItemIcon from '../ItemIcon.vue';
 const rate = num(GUIDED_TOPUP_RATE);
 const view = computed(() =>
   legacy(() => {
-    const s = draft().settings;
-    if (s.storage === 'none') return null;
-    const over = s.storageOverrides || {};
-    return guidedTopupItems.map(n => ({ name: n, on: over[n] !== undefined }));
+    const settings = draft().settings;
+    if (settings.storage === 'none') return null;
+    const over = settings.storageOverrides || {};
+    return guidedTopupItems.map(item => ({ name: item, on: over[item] !== undefined }));
   }),
 );
 </script>
@@ -35,14 +35,17 @@ const view = computed(() =>
       least spare.
     </p>
     <div class="guided-chips">
-      <label v-for="c in view" :key="c.name" :class="['guided-chip', c.on ? 'is-picked' : '']"
+      <label
+        v-for="chip in view"
+        :key="chip.name"
+        :class="['guided-chip', chip.on ? 'is-picked' : '']"
         ><input
           type="checkbox"
           name="topup"
-          :value="c.name"
-          :aria-label="`Guarantee ${rate} ${c.name} a minute`"
-          :checked="c.on"
-        /><ItemIcon :name="c.name" /><span>{{ c.name }}</span></label
+          :value="chip.name"
+          :aria-label="`Guarantee ${rate} ${chip.name} a minute`"
+          :checked="chip.on"
+        /><ItemIcon :name="chip.name" /><span>{{ chip.name }}</span></label
       >
     </div>
   </fieldset>

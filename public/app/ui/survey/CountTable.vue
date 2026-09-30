@@ -19,15 +19,17 @@ const props = defineProps<{ kind: 'node' | 'well'; names: string[] }>();
 const rows = computed(() =>
   legacy(() => {
     if (!wizard) return [];
-    const e = extractionOf(wizard),
-      map = props.kind === 'well' ? e.wells : e.nodes;
+    const extraction = extractionOf(wizard),
+      map = props.kind === 'well' ? extraction.wells : extraction.nodes;
     return props.names.map(name => {
       const counts = { ...blankCounts(), ...(map?.[name] || {}) };
       const total = purities3.reduce(
-        (a, [k]) =>
-          a +
-          (Number(counts[k]) || 0) *
-            (props.kind === 'well' ? wellYield(k, e) : nodeYield(name, k, e)),
+        (sum, [purity]) =>
+          sum +
+          (Number(counts[purity]) || 0) *
+            (props.kind === 'well'
+              ? wellYield(purity, extraction)
+              : nodeYield(name, purity, extraction)),
         0,
       );
       return {
@@ -43,22 +45,22 @@ const rows = computed(() =>
 
 <template>
   <div class="count-table">
-    <div v-for="r in rows" :key="r.name" class="count-row">
+    <div v-for="row in rows" :key="row.name" class="count-row">
       <span class="count-name"
-        ><ItemIcon :name="r.name" /><span>{{ r.name }}</span></span
+        ><ItemIcon :name="row.name" /><span>{{ row.name }}</span></span
       >
-      <label v-for="c in r.cells" :key="c.key" class="field count-cell"
-        ><span>{{ c.label }}</span
+      <label v-for="cell in row.cells" :key="cell.key" class="field count-cell"
+        ><span>{{ cell.label }}</span
         ><input
-          :name="kind + ':' + r.name + ':' + c.key"
+          :name="kind + ':' + row.name + ':' + cell.key"
           type="number"
           min="0"
           max="10000"
           step="1"
-          :value="c.value"
-          :aria-label="`${c.label} ${r.name} ${kind === 'well' ? 'well satellites' : 'nodes'}`"
+          :value="cell.value"
+          :aria-label="`${cell.label} ${row.name} ${kind === 'well' ? 'well satellites' : 'nodes'}`"
       /></label>
-      <span class="count-total">{{ r.total }}</span>
+      <span class="count-total">{{ row.total }}</span>
     </div>
   </div>
 </template>

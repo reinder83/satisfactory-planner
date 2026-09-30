@@ -33,44 +33,45 @@ const props = withDefaults(defineProps<{ row: CalcRow; group?: string | null }>(
 
 const card = computed(() =>
   legacy(() => {
-    const r = props.row,
-      outputs = Object.entries(r.outputs || {}),
+    const row = props.row,
+      outputs = Object.entries(row.outputs || {}),
       [main, total = 0] = outputs[0] || [],
-      check = 'calc-' + stage() + '-' + r.id,
-      setup = machineSetup(r),
-      generator = r.generationMW > 0,
+      check = 'calc-' + stage() + '-' + row.id,
+      setup = machineSetup(row),
+      generator = row.generationMW > 0,
       // A group's share of the row, as a rate: its main output, or a generator's power, in GW
       // above 1,000 MW like the headline (#380). The share
       // is worked out on the first output, as group-links.ts does, so a fixed rate saved for a
       // nuclear plant keeps its meaning: its waste, with the power that stands for (#374).
       share =
         !main || !total
-          ? (q: number) => power(q)
+          ? (rate: number) => power(rate)
           : generator
-            ? (q: number) => `${rateOfItem(main, q)} (${power((q / total) * r.generationMW)})`
-            : (q: number) => itemRate(main, q);
+            ? (rate: number) =>
+                `${rateOfItem(main, rate)} (${power((rate / total) * row.generationMW)})`
+            : (rate: number) => itemRate(main, rate);
     return {
       check,
       done: checked(check),
       // Built at the site that uses it, as a plan guide says (#468).
-      local: !!calculated?.guide?.factories?.[r.id]?.local,
+      local: !!calculated?.guide?.factories?.[row.id]?.local,
       // A generator shows its building, not its waste (#350).
-      icon: rowIcon(r),
+      icon: rowIcon(row),
       // A generator's power, even when it also makes waste (#371), else the main output; a fluid
       // in m³/min, as the dialog's summary line says it (#351).
       headline:
         generator || !main
-          ? powerParts(r.generationMW)
+          ? powerParts(row.generationMW)
           : { value: num(total), unit: rateUnit(main) },
-      machines: machineLine(r.machines, r.machine, setup.partial ? setup.clock : 100),
+      machines: machineLine(row.machines, row.machine, setup.partial ? setup.clock : 100),
       // The outputs by name, unless the headline already says all of it: one output that
       // gives the row its name. A generator's headline is its power, so its waste is listed.
       outputs:
-        generator || outputs.length > 1 || (outputs[0] && outputs[0][0] !== r.name)
-          ? outputs.map(([n, q]) => `${n}: ${itemRate(n, q)}`)
+        generator || outputs.length > 1 || (outputs[0] && outputs[0][0] !== row.name)
+          ? outputs.map(([item, rate]) => `${item}: ${itemRate(item, rate)}`)
           : [],
       allocation: props.group
-        ? allocationText(r.id, props.group, total || r.generationMW, r.machines, share)
+        ? allocationText(row.id, props.group, total || row.generationMW, row.machines, share)
         : '',
       editing: factoryEditing,
       generator,
@@ -80,12 +81,12 @@ const card = computed(() =>
       rateUnit: !generator
         ? undefined
         : main && total
-          ? { name: main, mw: r.generationMW / total }
+          ? { name: main, mw: row.generationMW / total }
           : { name: 'MW' },
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
-        const h = heldBack(r.id);
-        return h ? `Running at ${Math.round(h.share * 100)}%: short of ${h.shortOf}` : '';
+        const hold = heldBack(row.id);
+        return hold ? `Running at ${Math.round(hold.share * 100)}%: short of ${hold.shortOf}` : '';
       })(),
     };
   }),
@@ -110,7 +111,7 @@ const card = computed(() =>
       <span v-if="card.local" class="badge" data-local>Local</span>
     </div>
     <div v-if="card.outputs.length" class="recipe">
-      <template v-for="(o, i) in card.outputs" :key="i"><br v-if="i" />{{ o }}</template>
+      <template v-for="(output, i) in card.outputs" :key="i"><br v-if="i" />{{ output }}</template>
     </div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
