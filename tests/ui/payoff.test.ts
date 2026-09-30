@@ -75,7 +75,7 @@ const stored = (over: Partial<AlternateRanking> = {}): StoredPayoff => ({
 });
 const names = () => $$('[data-payoff-row] td:first-child button').map(b => b.textContent!.trim());
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 function openPlan(goal?: StoredCalculatedPlan['settings']['goal']) {
@@ -203,7 +203,7 @@ test('the panel is left out of a phase without a plan', () => {
 test('a column no alternate changes is left out and named under the table', () => {
   openPlan();
   const flat = ranking();
-  for (const p of flat.candidates) p.hours = 0;
+  for (const candidate of flat.candidates) candidate.hours = 0;
   setPayoff({ ...stored(), ranking: flat });
   render();
   assert.deepEqual(

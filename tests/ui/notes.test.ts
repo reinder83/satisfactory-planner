@@ -14,7 +14,7 @@ import { answerConfirms, $, $$, evil, go, open, page, stubFetch } from './setup.
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 // The phase panels in page order: [phase, open].
@@ -206,10 +206,10 @@ test('the phase panels open and fold from the keyboard, by their summary', () =>
   assert.equal(summaries.length, 4);
   // A native summary: in the tab order and toggled by Enter or Space in a browser, with no
   // tabindex or role of its own (browser-check.ts presses it for real).
-  for (const s of summaries) {
-    assert.equal(s.parentElement!.firstElementChild, s, 'the summary leads its panel');
-    assert.equal(s.getAttribute('tabindex'), null);
-    assert.equal(s.getAttribute('role'), null);
+  for (const summary of summaries) {
+    assert.equal(summary.parentElement!.firstElementChild, summary, 'the summary leads its panel');
+    assert.equal(summary.getAttribute('tabindex'), null);
+    assert.equal(summary.getAttribute('role'), null);
   }
 });
 

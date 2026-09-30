@@ -111,8 +111,8 @@ test('a migrated handbook profile has the same storage room and plan steps', asy
       render();
       await nextTick();
       assert.ok(
-        !$$('#main .notice').some(n =>
-          /Optional storage template|Ground floor is built/.test(n.textContent!),
+        !$$('#main .notice').some(notice =>
+          /Optional storage template|Ground floor is built/.test(notice.textContent!),
         ),
         'no template or built-room notice',
       );

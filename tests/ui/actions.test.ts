@@ -16,7 +16,7 @@ import type { UpdateOp } from '../../public/types/index.ts';
 const plan = generated();
 
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 
@@ -24,10 +24,10 @@ const settle = async () => {
 type CheckOrNote = Extract<UpdateOp, { type: 'check' | 'note' }>;
 const applying = () =>
   stubFetch<CheckOrNote>({
-    '/api/update': (op: CheckOrNote) =>
-      op.type === 'check'
-        ? { ...state, checks: { ...state.checks, [op.key]: op.value } }
-        : { ...state, notes: { ...state.notes, [op.key]: op.value } },
+    '/api/update': (change: CheckOrNote) =>
+      change.type === 'check'
+        ? { ...state, checks: { ...state.checks, [change.key]: change.value } }
+        : { ...state, notes: { ...state.notes, [change.key]: change.value } },
   });
 
 beforeEach(() => {
@@ -149,7 +149,7 @@ const typeInto = (selector: string, value: string) => {
   box.dispatchEvent(new Event('input', { bubbles: true }));
   return box;
 };
-const pause = () => new Promise(r => setTimeout(r, NOTE_SAVE_DELAY + 100));
+const pause = () => new Promise(resolve => setTimeout(resolve, NOTE_SAVE_DELAY + 100));
 // Which element has focus, as "tag#id", so a failed check prints it rather than the element.
 const focused = () => {
   const el = document.activeElement;
@@ -164,7 +164,7 @@ test('typing a phase note saves it once, after the pause, and says when', async 
   const applied = globalThis.fetch;
   let release = () => {};
   globalThis.fetch = async (path: RequestInfo | URL, options?: RequestInit) => {
-    await new Promise<void>(r => (release = r));
+    await new Promise<void>(resolve => (release = resolve));
     return applied(path, options);
   };
   go('notes');
@@ -218,9 +218,9 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
   // A whitespace-only note is saved by deleting it, as mutate in state.ts does.
   open({ notes: { 'phase-3': 'Old', 'factory-wire': 'Old' } });
   const calls = stubFetch<CheckOrNote>({
-    '/api/update': (op: CheckOrNote) => {
+    '/api/update': (change: CheckOrNote) => {
       const notes = { ...state.notes };
-      delete notes[op.key];
+      delete notes[change.key];
       return { ...state, notes };
     },
   });
@@ -317,9 +317,13 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
     headers.push({ path: String(path), ...(options.headers as Record<string, string>) });
     if (String(path) === '/api/state') return new Response(JSON.stringify(newer));
     if (!refuse) {
-      const op = JSON.parse(String(options.body)) as CheckOrNote;
+      const change = JSON.parse(String(options.body)) as CheckOrNote;
       return new Response(
-        JSON.stringify({ ...state, revision: 6, notes: { ...state.notes, [op.key]: op.value } }),
+        JSON.stringify({
+          ...state,
+          revision: 6,
+          notes: { ...state.notes, [change.key]: change.value },
+        }),
       );
     }
     return new Response(JSON.stringify({ error: 'This profile was changed in another tab.' }), {
@@ -401,7 +405,7 @@ test('Retry in a dialog keeps the keyboard in its notes box once the note is sav
 test('a note whose write fails after its page has gone comes back marked unsaved', async () => {
   let release: () => void = () => {};
   globalThis.fetch = async () => {
-    await new Promise<void>(r => (release = r));
+    await new Promise<void>(resolve => (release = resolve));
     return new Response(JSON.stringify({ error: 'The disk is full.' }), { status: 500 });
   };
   go('notes');

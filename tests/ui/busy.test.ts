@@ -50,11 +50,11 @@ function heldFetch(reply: (path: string, body: never) => unknown) {
   globalThis.fetch = async (path: RequestInfo | URL, options: RequestInit = {}) => {
     const body = options.body ? JSON.parse(String(options.body)) : undefined;
     calls.push([String(path), body]);
-    await new Promise<void>(r => waiting.push(r));
+    await new Promise<void>(resolve => waiting.push(resolve));
     try {
       return new Response(JSON.stringify(reply(String(path), body as never)), { status: 200 });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500 });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500 });
     }
   };
   return {
@@ -63,21 +63,21 @@ function heldFetch(reply: (path: string, body: never) => unknown) {
       for (let i = 0; i < 5 && !waiting.length; i++) await settle();
       const now = waiting;
       waiting = [];
-      now.forEach(r => r());
+      now.forEach(resolve => resolve());
       await settle();
     },
   };
 }
-const updates = (path: string, op: UpdateOp) => {
+const updates = (path: string, update: UpdateOp) => {
   if (path !== '/api/update') throw Error('unexpected ' + path);
-  return applyUpdate(op);
+  return applyUpdate(update);
 };
 const failing = () => {
   throw Error('Simulated failure');
 };
 
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 // Focus a control, then press it, as the keyboard does (Enter on a button, Space on a box).
@@ -128,9 +128,9 @@ test('the browser stand-in takes focus off a control that becomes disabled', asy
   go('storage');
   render();
   await nextTick();
-  const b = $<HTMLButtonElement>('[data-complete-bay="A"]')!;
-  b.focus();
-  b.disabled = true;
+  const button = $<HTMLButtonElement>('[data-complete-bay="A"]')!;
+  button.focus();
+  button.disabled = true;
   await nextTick();
   assert.equal(focused(), document.body, describeFocus());
 });
@@ -487,8 +487,8 @@ test('Recalculate with transport fuel keeps focus while it calculates, then focu
       { id: 'fg-parts1', name: 'Parts' },
     ],
     assignments: Object.fromEntries(
-      plan.stages['3'].rows!.map((r, i) => [
-        r.id,
+      plan.stages['3'].rows!.map((row, i) => [
+        row.id,
         [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }],
       ]),
     ),

@@ -21,11 +21,11 @@ import { $, $$, answerConfirms, evil, go, handbook, open, page, stubFetch } from
 import type { ContextReply, WorkspaceSummary } from '../../public/types/index.ts';
 
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
-const key = (k: string) =>
-  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+const key = (name: string) =>
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
 const focused = () => (document.activeElement as HTMLElement | null)?.textContent?.trim();
 const trigger = () => $<HTMLButtonElement>('[data-profile-switcher]')!;
 const menu = () => $('#profile-switcher')!;
@@ -231,8 +231,8 @@ test('switching asks about a note that could not be saved, and stays when kept',
 });
 
 test('the switcher is busy while a profile opens, and a failure keeps the open one', async () => {
-  let reply: (r: Response) => void = () => {};
-  globalThis.fetch = () => new Promise<Response>(r => (reply = r));
+  let reply: (response: Response) => void = () => {};
+  globalThis.fetch = () => new Promise<Response>(resolve => (reply = resolve));
   render();
   const button = trigger();
   button.focus();

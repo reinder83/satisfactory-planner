@@ -55,10 +55,10 @@ test('Saves & profiles asks for a fresh summary when it opens, after pending wri
     '/api/update': () => ((written = true), { ...state, checks: { a: true } }),
     '/api/workspace': () => ({
       ...workspace,
-      saves: workspace.saves.map(s => ({
-        ...s,
-        profiles: s.profiles.map(p =>
-          p.id === 'p' ? { ...p, completed: written ? 6 : 5, phase: '5' } : p,
+      saves: workspace.saves.map(saveSummary => ({
+        ...saveSummary,
+        profiles: saveSummary.profiles.map(profile =>
+          profile.id === 'p' ? { ...profile, completed: written ? 6 : 5, phase: '5' } : profile,
         ),
       })),
     }),
@@ -81,14 +81,14 @@ test('Saves & profiles asks for a fresh summary when it opens, after pending wri
 // SP-32 (#267): the workspace summary's per-phase counts (both editions use phaseProgress) and
 // the segmented bar on a calculated profile's card, with its reading in words.
 test('phaseProgress counts each planned phase’s lines ticked Running, from the start phase', () => {
-  const p = generated();
-  const from = Number(p.settings.phase);
-  const rows = p.stages[String(from) as '3'].rows!;
+  const plan = generated();
+  const from = Number(plan.settings.phase);
+  const rows = plan.stages[String(from) as '3'].rows!;
   const checks = { [`calc-${from}-${rows[0]!.id}`]: true, [`calc-${from}-${rows[1]!.id}`]: true };
-  const got = phaseProgress(p, checks)!;
+  const got = phaseProgress(plan, checks)!;
   assert.deepEqual(
-    got.map(x => x.phase),
-    ['1', '2', '3', '4', '5'].filter(ph => Number(ph) >= from),
+    got.map(progress => progress.phase),
+    ['1', '2', '3', '4', '5'].filter(phase => Number(phase) >= from),
   );
   assert.deepEqual(got[0], { phase: String(from), done: 2, total: rows.length });
   assert.equal(got[1]!.done, 0);
@@ -139,10 +139,14 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
   assert.equal(bar.getAttribute('role'), 'img');
   assert.equal(bar.getAttribute('aria-label'), 'Phase 4 of 5, 22%');
   assert.deepEqual(
-    [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(s => [
-      s.dataset.phaseSeg,
-      s.classList.contains('done') ? 'done' : s.classList.contains('current') ? 'current' : 'later',
-      (s.firstElementChild as HTMLElement).style.width,
+    [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(segment => [
+      segment.dataset.phaseSeg,
+      segment.classList.contains('done')
+        ? 'done'
+        : segment.classList.contains('current')
+          ? 'current'
+          : 'later',
+      (segment.firstElementChild as HTMLElement).style.width,
     ]),
     [
       ['3', 'done', '100%'],
@@ -225,9 +229,9 @@ test('Saves & profiles lists every profile, escaped, with its actions', () => {
 });
 
 // A key pressed on the focused element, as a browser sends it.
-const key = (k: string) =>
+const key = (name: string) =>
   document.activeElement!.dispatchEvent(
-    new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }),
+    new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }),
   );
 const focusedHook = () =>
   Object.keys((document.activeElement as HTMLElement | null)?.dataset ?? {}).join(',');
@@ -315,8 +319,8 @@ test('a profile card shows one action and keeps the others in its ⋯ menu (#238
 });
 
 test('Duplicate says "Copying…" on ⋯ while it runs, and ⋯ stays focused and busy', async () => {
-  let reply: (r: Response) => void = () => {};
-  globalThis.fetch = () => new Promise<Response>(r => (reply = r));
+  let reply: (response: Response) => void = () => {};
+  globalThis.fetch = () => new Promise<Response>(resolve => (reply = resolve));
   go('profiles');
   render();
   const trigger = $<HTMLButtonElement>('[data-profile-menu="p"]')!;
@@ -344,7 +348,7 @@ test('Duplicate says "Copying…" on ⋯ while it runs, and ⋯ stays focused an
 // Any save or profile can be renamed, not only the open one: the request names it in its scope
 // headers. The open save's new name reaches the breadcrumb and the open profile's the sidebar.
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 const renameReply = (names: { save?: string; original?: string; p?: string }) => ({
@@ -473,7 +477,7 @@ test('a failed sign-out says so and leaves the user signed in', async () => {
   render();
   const calls = stubFetch({}); // /api/logout answers 500
   $('[data-logout]')!.click();
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
   assert.deepEqual(
     calls.map(c => c[0]),
@@ -490,9 +494,9 @@ test('the username pattern is a valid regular expression under the v flag browse
   showSignedOut($('#app')!);
   const pattern = $<HTMLInputElement>('#auth-form input[name=username]')!.pattern;
   // Browsers compile pattern as ^(?:…)$ with the v flag and ignore it when that throws.
-  const re = new RegExp('^(?:' + pattern + ')$', 'v');
-  assert.equal(re.test('pioneer_1-a'), true);
-  assert.equal(re.test('a b'), false);
+  const compiled = new RegExp('^(?:' + pattern + ')$', 'v');
+  assert.equal(compiled.test('pioneer_1-a'), true);
+  assert.equal(compiled.test('a b'), false);
 });
 
 test('the sign-in screen switches between signing in and registering', async () => {
@@ -522,7 +526,7 @@ test('a failed sign-in says why in the form', async () => {
   $<HTMLInputElement>('#auth-form input[name=username]')!.value = 'pioneer';
   $<HTMLInputElement>('#auth-form input[name=password]')!.value = 'correct horse battery';
   $('#auth-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
   assert.equal($('#auth-error')!.textContent, 'Wrong username or password.');
   assert.equal($<HTMLButtonElement>('#auth-form button')!.disabled, false);
@@ -592,8 +596,11 @@ for (const [kind, restoreName] of [
     render();
     // What Tab can reach on the page, by its accessible text.
     const tabbable = $$<HTMLElement>('#main button, #main a[href], #main input, #main summary')
-      .filter(e => e.tabIndex >= 0 && !e.hidden && !(e as HTMLButtonElement).disabled)
-      .map(e => (e.getAttribute('aria-label') || e.textContent || '').trim());
+      .filter(
+        element =>
+          element.tabIndex >= 0 && !element.hidden && !(element as HTMLButtonElement).disabled,
+      )
+      .map(element => (element.getAttribute('aria-label') || element.textContent || '').trim());
     for (const [name, inputId] of [
       ['Import saves…', 'import-saves'],
       [restoreName, 'import-file'],
@@ -626,8 +633,8 @@ for (const [kind, restoreName] of [
 test('restoring a progress backup shows "Saving…" and counts as a pending write', async () => {
   go('backup');
   render();
-  let reply: (r: Response) => void = () => {};
-  globalThis.fetch = async () => new Promise<Response>(r => (reply = r));
+  let reply: (response: Response) => void = () => {};
+  globalThis.fetch = async () => new Promise<Response>(resolve => (reply = resolve));
   answerConfirms(true);
   const input = $<HTMLInputElement>('#import-file')!;
   const file = new File(
@@ -636,14 +643,14 @@ test('restoring a progress backup shows "Saving…" and counts as a pending writ
   );
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
   // pending is what the close-tab warning (listeners.ts) checks.
   assert.equal(pending, 1);
   assert.equal($('#saved')!.textContent, 'Saving…');
   assert.equal($('#saved-short')!.textContent, 'Saving…');
   reply(new Response(JSON.stringify(state), { status: 200 }));
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
   assert.equal(pending, 0);
   assert.notEqual($('#saved')!.textContent, 'Saving…');
@@ -658,7 +665,8 @@ async function slowRestore() {
   globalThis.fetch = async (path: RequestInfo | URL) => {
     sent.push(String(path));
     return new Promise<Response>(
-      r => void replies.push(body => r(new Response(JSON.stringify(body), { status: 200 }))),
+      resolve =>
+        void replies.push(body => resolve(new Response(JSON.stringify(body), { status: 200 }))),
     );
   };
   answerConfirms(true);
@@ -672,17 +680,17 @@ async function slowRestore() {
   );
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   return { sent, replies, restored };
 }
 
 test('a save made during a restore waits for it, and lands on top of it', async () => {
   const { sent, replies, restored } = await slowRestore();
   const tick = save({ type: 'check', key: 'after-restore', value: true });
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   assert.deepEqual(sent, ['/api/import'], 'the tick waits for the restore');
   replies[0]!(restored);
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   assert.deepEqual(sent, ['/api/import', '/api/update']);
   replies[1]!({ ...restored, checks: { 'after-restore': true } });
   await tick;
@@ -695,7 +703,7 @@ test('a restore reply does not replace another profile opened meanwhile', async 
   // The user opens the calculated profile before the reply lands.
   open({ calculated: true, notes: { global: 'Other profile' } });
   replies[0]!(restored);
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(state.notes.global, 'Other profile');
 });
 
@@ -713,7 +721,7 @@ test('after a restore the file box is cleared, so the same backup can be chosen 
   Object.defineProperty(input, 'files', { value: [file], configurable: true });
   Object.defineProperty(input, 'value', {
     get: () => chosen,
-    set: (v: string) => (chosen = v),
+    set: (value: string) => (chosen = value),
     configurable: true,
   });
   input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -832,15 +840,15 @@ test('the handbook resources page shows every resource with its icon, and the po
 // the session's stage is one the handbook has no plan for (a phase 1 or 2 calculated profile).
 // It draws nothing then rather than throwing.
 test('the handbook resources page draws nothing for a phase the handbook has no plan for', async () => {
-  const p = generated();
-  p.settings.phase = '1';
+  const plan = generated();
+  plan.settings.phase = '1';
   for (const phase of ['1', '2'] as const) {
-    open({ calculated: p, phase });
+    open({ calculated: plan, phase });
     assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
     const el = document.createElement('div');
     const errors: unknown[] = [];
     const app = createApp({ render: () => h(ResourcesPage) });
-    app.config.errorHandler = e => void errors.push(e);
+    app.config.errorHandler = error => void errors.push(error);
     app.mount(el);
     await nextTick();
     assert.deepEqual(errors, [], 'phase ' + phase + ' draws without an error');
@@ -872,32 +880,32 @@ test('moving between pages leaves nothing behind', async () => {
 
 // A calculated profile's resources page, with the catalog's raw resources as the server
 // sends them (the same list as the plan's budgets).
-function openCalculatedResources(p: StoredCalculatedPlan) {
+function openCalculatedResources(plan: StoredCalculatedPlan) {
   // Only the field this page reads.
   open({
-    calculated: p,
-    workspace: { catalog: { raw: Object.keys(p.settings.limits) } as Catalog },
+    calculated: plan,
+    workspace: { catalog: { raw: Object.keys(plan.settings.limits) } as Catalog },
   });
   go('resources');
   render();
 }
 
 test('the calculated resources page shows every budget with its icon and what is left', () => {
-  const p = generated();
-  const x = p.stages['3'];
-  const [first] = Object.keys(p.settings.limits);
+  const plan = generated();
+  const stage = plan.stages['3'];
+  const [first] = Object.keys(plan.settings.limits);
   // One resource over budget.
-  x.raw![first!] = p.settings.limits[first!]! + 10;
-  x.surplus = {};
-  openCalculatedResources(p);
+  stage.raw![first!] = plan.settings.limits[first!]! + 10;
+  stage.surplus = {};
+  openCalculatedResources(plan);
   assert.equal($('#main h1')!.textContent, 'Power & resources');
   assert.equal($('#main .eyebrow')!.textContent, 'CHECK BEFORE EXPANDING');
   const rows = $$('#main tbody tr');
   const names = rows.map(r => r.querySelector('.resource-name span')!.textContent);
-  assert.deepEqual([...names].sort(), Object.keys(p.settings.limits).sort(), 'every budget');
+  assert.deepEqual([...names].sort(), Object.keys(plan.settings.limits).sort(), 'every budget');
   // The resource column stays in view when the table scrolls sideways (#358).
   assert.ok($('#main thead th')!.classList.contains('resource-cell'));
-  for (const r of rows) assert.ok(r.firstElementChild!.classList.contains('resource-cell'));
+  for (const row of rows) assert.ok(row.firstElementChild!.classList.contains('resource-cell'));
   assert.equal(names[0], first, 'the one over budget comes first');
   for (const row of rows) {
     const name = row.querySelector('.resource-name span')!.textContent;
@@ -907,8 +915,8 @@ test('the calculated resources page shows every budget with its icon and what is
       `./icons/${slug}.png`,
     );
   }
-  const cells = (r: HTMLElement) =>
-    [...r.querySelectorAll('td')].slice(1).map(td => td.textContent.trim());
+  const cells = (row: HTMLElement) =>
+    [...row.querySelectorAll('td')].slice(1).map(td => td.textContent.trim());
   assert.equal(cells(rows[0]!)[2], '-10/min', 'Iron Ore, an ore, in /min');
   assert.ok(rows[0]!.querySelectorAll('td')[3]!.classList.contains('warn'), 'over budget');
   for (const row of rows.slice(1))
@@ -916,7 +924,7 @@ test('the calculated resources page shows every budget with its icon and what is
   // One power headroom bar instead of the tiles (SP-29); augmenters only when the plan has them.
   assert.equal($$('#main .stat').length, 0);
   assert.deepEqual(
-    $$('#main [data-power-part] .eyebrow').map(e => e.textContent),
+    $$('#main [data-power-part] .eyebrow').map(eyebrow => eyebrow.textContent),
     ['Whole-machine peak', 'Utility allowance', 'New generation', 'Existing spare power'],
   );
   assert.equal(
@@ -933,20 +941,23 @@ test('the calculated resources page shows every budget with its icon and what is
 // a decorative icon, the name as text and the rate (m³/min for a fluid); an empty list keeps
 // its sentence, and vehicle fuel shows only when the plan burns some.
 test('the calculated resources page lists items as icon rows, one panel per list', async () => {
-  const p = generated();
-  const x = p.stages['3'];
-  Object.assign(x, {
+  const plan = generated();
+  const stage = plan.stages['3'];
+  Object.assign(stage, {
     drone: { 'Packaged Fuel': 10 },
     transport: {},
     storage: { 'Iron Plate': 1, [evil]: 2.5, Wire: 0 },
     supplied: {},
     surplus: { 'Polymer Resin': 47.59, Fuel: 12 },
   });
-  openCalculatedResources(p);
+  openCalculatedResources(plan);
   noMarkup();
   const lists = $$<HTMLElement>('#main .backup-grid > .panel[data-rate-list]');
   assert.deepEqual(
-    lists.map(l => [l.dataset.rateList, l.querySelector(':scope > h2:first-child')!.textContent]),
+    lists.map(list => [
+      list.dataset.rateList,
+      list.querySelector(':scope > h2:first-child')!.textContent,
+    ]),
     [
       ['drone', 'Dedicated drone fuel'],
       ['storage', 'Protected storage'],
@@ -985,8 +996,8 @@ test('the calculated resources page lists items as icon rows, one panel per list
   );
   assert.equal($('#main [data-transport-fuel]'), null);
   // Vehicle fuel, and the other empty sentences.
-  Object.assign(x, { drone: {}, transport: { 'Packaged Fuel': 3 }, storage: {}, surplus: {} });
-  openCalculatedResources(p);
+  Object.assign(stage, { drone: {}, transport: { 'Packaged Fuel': 3 }, storage: {}, surplus: {} });
+  openCalculatedResources(plan);
   await nextTick();
   assert.equal(
     $('#main [data-rate-list="transport"] h2')!.textContent,
@@ -1007,8 +1018,8 @@ test('the calculated resources page lists items as icon rows, one panel per list
 
 // SP-27 (#262): a Use column with the handbook page's bar, the tightest resource first.
 test('the calculated resources page sorts by use, tightest first, and dims unused resources', () => {
-  const p = generated();
-  const x = p.stages['3'];
+  const plan = generated();
+  const stage = plan.stages['3'];
   // Catalogue order, with each case: [budget, required].
   const cases: Record<string, [number, number]> = {
     'Iron Ore': [100, 50], // 50%
@@ -1019,9 +1030,13 @@ test('the calculated resources page sorts by use, tightest first, and dims unuse
     'Raw Quartz': [100, 0], // not used
     Sulfur: [1000, 10], // 1%
   };
-  p.settings.limits = Object.fromEntries(Object.entries(cases).map(([n, [b]]) => [n, b]));
-  x.raw = Object.fromEntries(Object.entries(cases).map(([n, [, r]]) => [n, r]));
-  openCalculatedResources(p);
+  plan.settings.limits = Object.fromEntries(
+    Object.entries(cases).map(([name, [budget]]) => [name, budget]),
+  );
+  stage.raw = Object.fromEntries(
+    Object.entries(cases).map(([name, [, required]]) => [name, required]),
+  );
+  openCalculatedResources(plan);
   assert.deepEqual(
     $$('#main thead th').map(th => [th.textContent, th.getAttribute('scope')]),
     [
@@ -1033,16 +1048,16 @@ test('the calculated resources page sorts by use, tightest first, and dims unuse
     ],
   );
   const rows = $$('#main tbody tr');
-  const view = rows.map(r => {
-    const use = r.querySelector<HTMLElement>('[data-use]')!,
+  const view = rows.map(row => {
+    const use = row.querySelector<HTMLElement>('[data-use]')!,
       bar = use.querySelector<HTMLElement>('.resource-bar')!;
     return {
-      name: r.querySelector('.resource-name span')!.textContent,
+      name: row.querySelector('.resource-name span')!.textContent,
       use: use.firstChild!.textContent!.trim(),
       bar: [...bar.classList].filter(c => c !== 'resource-bar').join(' '),
       width: bar.querySelector('span')!.style.width,
       over: use.querySelector('[data-over]')?.textContent.trim() ?? '',
-      dim: r.classList.contains('muted'),
+      dim: row.classList.contains('muted'),
     };
   });
   assert.deepEqual(view, [
@@ -1081,16 +1096,16 @@ test('the calculated resources page sorts by use, tightest first, and dims unuse
 });
 
 test('a resource counts as tight above 90% of its budget and over above 100%', () => {
-  const at = (required: number, available: number) => {
-    const u = resourceUse(required, available);
-    return [u.tight, u.over, u.idle];
+  const flags = (required: number, available: number) => {
+    const use = resourceUse(required, available);
+    return [use.tight, use.over, use.idle];
   };
-  assert.deepEqual(at(90, 100), [false, false, false], '90% is not tight yet');
-  assert.deepEqual(at(90.5, 100), [true, false, false]);
-  assert.deepEqual(at(100, 100), [true, false, false], 'all of it is tight, not over');
-  assert.deepEqual(at(100.5, 100), [true, true, false]);
-  assert.deepEqual(at(5, 0), [true, true, false], 'something from no budget is over');
-  assert.deepEqual(at(0, 0), [false, false, true]);
+  assert.deepEqual(flags(90, 100), [false, false, false], '90% is not tight yet');
+  assert.deepEqual(flags(90.5, 100), [true, false, false]);
+  assert.deepEqual(flags(100, 100), [true, false, false], 'all of it is tight, not over');
+  assert.deepEqual(flags(100.5, 100), [true, true, false]);
+  assert.deepEqual(flags(5, 0), [true, true, false], 'something from no budget is over');
+  assert.deepEqual(flags(0, 0), [false, false, true]);
   assert.equal(resourceUse(5, 0).fraction, Infinity);
   assert.equal(resourceUse(5, 0).overBy, '5');
   assert.equal(resourceUse(0, 0).bar, 0);
@@ -1108,9 +1123,9 @@ test('a resource counts as tight above 90% of its budget and over above 100%', (
 });
 
 test('the calculated resources page lists somersloops, augmenters, conversions and credits', () => {
-  const p = generated();
-  const x = p.stages['3'];
-  Object.assign(x, {
+  const plan = generated();
+  const stage = plan.stages['3'];
+  Object.assign(stage, {
     feasible: false,
     reason: evil,
     sloopsUsed: 12,
@@ -1121,17 +1136,17 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
     conversions: [evil, 'Second conversion'],
     supplied: { 'Iron Plate': 30 },
   });
-  openCalculatedResources(p);
+  openCalculatedResources(plan);
   noMarkup();
   // The somersloop and augmenter counts are legend captions of the power bar (SP-29).
   assert.match(
     $('#main [data-power-part="peak"] small')!.textContent,
     /· 12 somersloops in production: amplified machines give double output at four times the power$/,
   );
-  const spare = p.settings.availablePowerGW * 1000;
+  const spare = plan.settings.availablePowerGW * 1000;
   assert.equal(
     $('#main [data-power-part="boost"] b')!.textContent,
-    power(5000 - (x.generationMW ?? 0) - spare),
+    power(5000 - (stage.generationMW ?? 0) - spare),
     'what the augmenters add to the available power',
   );
   assert.equal(
@@ -1154,12 +1169,12 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
 // (new generation + spare), on one scale, with a headline, a legend and a text alternative;
 // MW below 1,000 and GW above; a shortfall says so in red.
 test('the calculated resources page draws one power headroom bar (SP-29)', () => {
-  const plain = (s: string) => s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
-  const p = generated();
-  const x = p.stages['3'];
-  Object.assign(x, { peakMW: 2000, requiredMW: 2400, generationMW: 3000, augmenters: 0 });
-  p.settings.availablePowerGW = 0.2;
-  openCalculatedResources(p);
+  const plain = (text: string) => text.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  const plan = generated();
+  const stage = plan.stages['3'];
+  Object.assign(stage, { peakMW: 2000, requiredMW: 2400, generationMW: 3000, augmenters: 0 });
+  plan.settings.availablePowerGW = 0.2;
+  openCalculatedResources(plan);
   const bar = $('#main [data-power-headroom]')!;
   const headline = plain(bar.querySelector('[data-power-headline]')!.textContent!);
   // 3,2 GW available, 2,4 GW needed: 0,8 GW, a quarter, left over.
@@ -1180,7 +1195,7 @@ test('the calculated resources page draws one power headroom bar (SP-29)', () =>
   // Both bars share one scale, the larger of the two sides.
   const widths = (side: string) =>
     [...bar.querySelectorAll<HTMLElement>(`[data-power-bar="${side}"] span`)].map(
-      s => s.style.width,
+      segment => segment.style.width,
     );
   assert.deepEqual(widths('demand'), ['62.5%', '12.5%']);
   assert.deepEqual(widths('supply'), ['93.75%', '6.25%']);
@@ -1191,9 +1206,9 @@ test('the calculated resources page draws one power headroom bar (SP-29)', () =>
     `25% headroom. Needed: ${power(2400)} (${power(2000)} whole-machine peak + 400 MW utility allowance). Available: ${power(3200)} (${power(3000)} new generation + 200 MW existing spare power).`,
   );
   // Short: the headline says by how much, in red, and the supply bar shows the gap.
-  x.generationMW = 1000;
+  stage.generationMW = 1000;
   page();
-  openCalculatedResources(structuredClone(p));
+  openCalculatedResources(structuredClone(plan));
   const short = $('#main .power-headline.short')!;
   assert.ok(short, 'the shortfall is marked');
   assert.match(
@@ -1207,11 +1222,11 @@ test('the calculated resources page draws one power headroom bar (SP-29)', () =>
 // Exactly what a profile calculated by an earlier release looks like: no existingSupply in
 // its settings and no supplied on any stage.
 test('the calculated resources page renders a plan saved before existing production existed', () => {
-  const p: StoredCalculatedPlan = generated();
-  delete p.settings.existingSupply;
-  for (const stage of Object.values(p.stages)) delete stage.supplied;
-  openCalculatedResources(p);
-  assert.equal($$('#main tbody tr').length, Object.keys(p.settings.limits).length);
+  const plan: StoredCalculatedPlan = generated();
+  delete plan.settings.existingSupply;
+  for (const stage of Object.values(plan.stages)) delete stage.supplied;
+  openCalculatedResources(plan);
+  assert.equal($$('#main tbody tr').length, Object.keys(plan.settings.limits).length);
   assert.match($('#main .backup-grid')!.textContent, /None credited in this phase\./);
   assert.doesNotMatch($('#main .backup-grid')!.textContent, /does not build these lines/);
 });
@@ -1221,7 +1236,8 @@ test('the calculated resources page renders a plan saved before existing product
 // once more, with no calculated plan open.
 test('a calculated page survives a redraw after the handbook is opened', async () => {
   const errors: unknown[] = [];
-  const onError = (e: { reason?: unknown; error?: unknown }) => errors.push(e.reason ?? e.error);
+  const onError = (event: { reason?: unknown; error?: unknown }) =>
+    errors.push(event.reason ?? event.error);
   process.on('unhandledRejection', onError);
   try {
     for (const view of ['plan', 'factories', 'logistics', 'storage', 'resources'] as const) {
@@ -1234,7 +1250,7 @@ test('a calculated page survives a redraw after the handbook is opened', async (
       open();
       invalidate();
       await nextTick();
-      await new Promise(r => setTimeout(r, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
       render();
       await nextTick();
       assert.ok($('#main h1'), view + ' shows the handbook page after render()');
@@ -1303,9 +1319,9 @@ test('a refused browser record offers its stored data as a download on the error
   // With timers, a busy event loop let the wait below run between the open and the read.
   const record = { version: 1, saves: [1], note: 'keep me' };
   const request = <T>(result: T) => {
-    const r: { result: T; onsuccess?: () => void; onerror?: () => void } = { result };
-    queueMicrotask(() => r.onsuccess?.());
-    return r;
+    const fakeRequest: { result: T; onsuccess?: () => void; onerror?: () => void } = { result };
+    queueMicrotask(() => fakeRequest.onsuccess?.());
+    return fakeRequest;
   };
   const db = {
     objectStoreNames: { contains: () => true },
@@ -1314,10 +1330,10 @@ test('a refused browser record offers its stored data as a download on the error
   };
   Object.assign(globalThis, { indexedDB: { open: () => request(db) } });
   let saved: Blob | undefined;
-  URL.createObjectURL = (b: Blob | MediaSource) => ((saved = b as Blob), 'blob:x');
+  URL.createObjectURL = (blob: Blob | MediaSource) => ((saved = blob as Blob), 'blob:x');
   URL.revokeObjectURL = () => {};
   button.click();
-  await new Promise(r => setTimeout(r));
+  await new Promise(resolve => setTimeout(resolve));
   assert.ok(saved, 'the download is ready');
   assert.deepEqual(JSON.parse(await saved.text()), record);
   // Any other start-up failure shows no such button.
@@ -1349,31 +1365,31 @@ test('the handbook resources page writes its fluid amounts in m³ (#367)', () =>
   open({ phase: '5' });
   go('resources');
   render();
-  const t = $('#main')!.textContent.replace(/ /g, ' ').replace(/\s+/g, ' ');
-  assert.match(t, /Water includes a 2,000 m³\/min reserve/);
-  assert.match(t, /300 m³ Crude, 800 Sulfur, 400 Coal, 600 m³ Nitrogen and 1,000 m³ Water\./);
-  assert.match(t, /cooling needs 42,000 m³ Water\/min/);
-  assert.doesNotMatch(t, /\d Water\/min|\d\/min reserve/);
+  const text = $('#main')!.textContent.replace(/ /g, ' ').replace(/\s+/g, ' ');
+  assert.match(text, /Water includes a 2,000 m³\/min reserve/);
+  assert.match(text, /300 m³ Crude, 800 Sulfur, 400 Coal, 600 m³ Nitrogen and 1,000 m³ Water\./);
+  assert.match(text, /cooling needs 42,000 m³ Water\/min/);
+  assert.doesNotMatch(text, /\d Water\/min|\d\/min reserve/);
 });
 
 // Option 1 on #363: the resource tables mix fluids and ores, so the headers drop "/min" and each
 // rate carries its own unit, m³/min for a fluid and /min for an ore, with a no-break space
 // keeping a fluid's unit on the number's line. "Over by" follows its row; Use stays a percentage.
-const nbsp = (s: string) => s.replace(/ /g, ' ');
+const nbsp = (text: string) => text.replace(/ /g, ' ');
 const unitRows = () =>
   Object.fromEntries(
-    $$('#main tbody tr').map(r => [
-      r.querySelector('.resource-name span')!.textContent,
-      [...r.querySelectorAll('td')].slice(1).map(td => nbsp(td.firstChild!.textContent!.trim())),
+    $$('#main tbody tr').map(row => [
+      row.querySelector('.resource-name span')!.textContent,
+      [...row.querySelectorAll('td')].slice(1).map(td => nbsp(td.firstChild!.textContent!.trim())),
     ]),
   );
 
 test('the calculated resources table writes each rate with its own unit (#363)', () => {
-  const p = generated();
-  const x = p.stages['3'];
-  p.settings.limits = { 'Iron Ore': 1000, 'Crude Oil': 1200, Water: 5000 };
-  x.raw = { 'Iron Ore': 480, 'Crude Oil': 1500, Water: 0 };
-  openCalculatedResources(p);
+  const plan = generated();
+  const stage = plan.stages['3'];
+  plan.settings.limits = { 'Iron Ore': 1000, 'Crude Oil': 1200, Water: 5000 };
+  stage.raw = { 'Iron Ore': 480, 'Crude Oil': 1500, Water: 0 };
+  openCalculatedResources(plan);
   assert.deepEqual(
     $$('#main thead th').map(th => th.textContent),
     ['Resource', 'Required', 'Budget', 'Remaining', 'Use'],
@@ -1411,31 +1427,35 @@ test('the handbook resources table writes each rate with its own unit (#363)', (
     ['Fresh resource', 'Required', 'Available', 'Remaining', 'Use'],
     'no header names a unit',
   );
-  const r = handbook.resources['3']!,
-    cap = handbook.capacities;
+  const required = handbook.resources['3']!,
+    capacity = handbook.capacities;
   const rows = unitRows();
   // Crude oil has a capacity: all three rates in m³/min, and Use a percentage.
   assert.deepEqual(rows['Crude Oil']!.slice(0, 3), [
-    num(r['Crude Oil']) + ' m³/min',
-    num(cap['Crude Oil']) + ' m³/min',
-    num(cap['Crude Oil']! - r['Crude Oil']!) + ' m³/min',
+    num(required['Crude Oil']) + ' m³/min',
+    num(capacity['Crude Oil']) + ' m³/min',
+    num(capacity['Crude Oil']! - required['Crude Oil']!) + ' m³/min',
   ]);
-  const oil = $$('#main tbody tr').find(t => /Crude Oil/.test(t.textContent))!;
+  const oil = $$('#main tbody tr').find(row => /Crude Oil/.test(row.textContent))!;
   assert.match(oil.querySelectorAll('td')[4]!.textContent.trim(), /^[\d.,]+%$/);
   assert.deepEqual(rows['Iron Ore']!.slice(0, 3), [
-    num(r['Iron Ore']) + '/min',
-    num(cap['Iron Ore']) + '/min',
-    num(cap['Iron Ore']! - r['Iron Ore']!) + '/min',
+    num(required['Iron Ore']) + '/min',
+    num(capacity['Iron Ore']) + '/min',
+    num(capacity['Iron Ore']! - required['Iron Ore']!) + '/min',
   ]);
   // Water has no capacity: its requirement is in m³/min, the words beside it carry no unit.
-  assert.deepEqual(rows.Water!.slice(0, 3), [num(r.Water) + ' m³/min', 'Extraction limited', '—']);
+  assert.deepEqual(rows.Water!.slice(0, 3), [
+    num(required.Water) + ' m³/min',
+    'Extraction limited',
+    '—',
+  ]);
 });
 
 // A plan with a guide (#393, #469; a migrated handbook profile) adds its power section to the
 // calculated resources page: the commissioning checklist, ticking the guide's own ids, and its
 // blocks of copy, a paragraph per blank line. All of it is text.
 test("a guided plan's power commissioning and blocks on the resources page", async () => {
-  const p = {
+  const plan = {
     ...generated(),
     guide: {
       phases: {},
@@ -1452,7 +1472,7 @@ test("a guided plan's power commissioning and blocks on the resources page", asy
     },
   };
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  openCalculatedResources(p);
+  openCalculatedResources(plan);
   noMarkup();
   const guide = $('#main [data-guide-power]')!;
   assert.deepEqual(
@@ -1466,7 +1486,7 @@ test("a guided plan's power commissioning and blocks on the resources page", asy
     [evil, 'Nuclear sequence'],
   );
   assert.deepEqual(
-    [...blocks[0]!.querySelectorAll('p')].map(x => x.textContent),
+    [...blocks[0]!.querySelectorAll('p')].map(paragraph => paragraph.textContent),
     [evil, '10 refineries → 8 blenders.'],
   );
   const box = guide.querySelector<HTMLInputElement>('[data-check="power-rocket-1"]')!;

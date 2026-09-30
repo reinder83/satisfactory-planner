@@ -17,11 +17,11 @@ import type { CurrentCalculatedPlan, FuelVerdict } from '../../public/types/inde
 const vueFiles = (dir: string): string[] =>
   fs
     .readdirSync(dir, { withFileTypes: true })
-    .flatMap(e =>
-      e.isDirectory()
-        ? vueFiles(path.join(dir, e.name))
-        : e.name.endsWith('.vue')
-          ? [path.join(dir, e.name)]
+    .flatMap(entry =>
+      entry.isDirectory()
+        ? vueFiles(path.join(dir, entry.name))
+        : entry.name.endsWith('.vue')
+          ? [path.join(dir, entry.name)]
           : [],
     );
 
@@ -53,11 +53,11 @@ test('every notice in the templates names one tone', () => {
 
 // A calculated plan whose current phase is a draft with power headroom to allow.
 function draftPlan(): CurrentCalculatedPlan {
-  const p = generated();
-  p.stages['3']!.feasible = false;
-  p.stages['3']!.reason = 'Needs more iron.';
-  p.stages['3']!.additionalHeadroomMW = 120;
-  return p;
+  const draft = generated();
+  draft.stages['3']!.feasible = false;
+  draft.stages['3']!.reason = 'Needs more iron.';
+  draft.stages['3']!.additionalHeadroomMW = 120;
+  return draft;
 }
 const verdict = (worthIt: boolean): FuelVerdict => ({
   unfueledFeasible: true,
@@ -76,9 +76,9 @@ const verdict = (worthIt: boolean): FuelVerdict => ({
 // The tone each notice was drawn in, by a phrase of its text.
 function tones(): [tone: string, text: string][] {
   assert.deepEqual(untonedNotices(), []);
-  return $$('.notice').map(n => [
-    TONES.find(t => n.classList.contains(t))!,
-    (n.textContent || '').replace(/\s+/g, ' ').trim(),
+  return $$('.notice').map(notice => [
+    TONES.find(t => notice.classList.contains(t))!,
+    (notice.textContent || '').replace(/\s+/g, ' ').trim(),
   ]);
 }
 const toneOf = (all: [string, string][], phrase: RegExp) => {

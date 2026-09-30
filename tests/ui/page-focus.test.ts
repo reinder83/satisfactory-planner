@@ -28,7 +28,7 @@ import type { WizardDraft } from '../../public/app/wizard/wizard.ts';
 import type { ContextReply } from '../../public/types/index.ts';
 
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 // Focus a control, then press it, as the keyboard does.
@@ -63,11 +63,11 @@ const original = (name: string): ContextReply => ({
   handbook,
 });
 
-// Shows `v` the way a route does: the address first, then the page.
-function show(v: Parameters<typeof go>[0]) {
-  history.replaceState(null, '', '#' + v);
+// Shows `route` the way a route does: the address first, then the page.
+function show(route: Parameters<typeof go>[0]) {
+  history.replaceState(null, '', '#' + route);
   acceptRoute();
-  go(v);
+  go(route);
   render();
 }
 

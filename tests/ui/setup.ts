@@ -76,15 +76,18 @@ export const TONES = ['info', 'warn', 'error'];
 export const untonedNotices = () =>
   [...document.querySelectorAll('.notice')]
     .filter(
-      n => TONES.filter(t => n.classList.contains(t)).length !== 1 || n.classList.contains('blue'),
+      notice =>
+        TONES.filter(t => notice.classList.contains(t)).length !== 1 ||
+        notice.classList.contains('blue'),
     )
-    .map(n => `${n.className}: ${(n.textContent || '').trim().slice(0, 60)}`);
+    .map(notice => `${notice.className}: ${(notice.textContent || '').trim().slice(0, 60)}`);
 afterEach(() => assert.deepEqual(untonedNotices(), [], 'every notice names one tone'));
 // Typed as HTMLElement, which every element these tests look up is; `$` still returns null
 // for a missing one.
-export const $ = <E extends Element = HTMLElement>(s: string) => document.querySelector<E>(s);
-export const $$ = <E extends Element = HTMLElement>(s: string) => [
-  ...document.querySelectorAll<E>(s),
+export const $ = <E extends Element = HTMLElement>(selector: string) =>
+  document.querySelector<E>(selector);
+export const $$ = <E extends Element = HTMLElement>(selector: string) => [
+  ...document.querySelectorAll<E>(selector),
 ];
 
 export function page() {
@@ -104,15 +107,15 @@ let confirms: MutationObserver | null = null;
 export function answerConfirms(reply: boolean | ((question: string) => boolean)) {
   confirms?.disconnect();
   const asked: string[] = [];
-  const d = document.querySelector<HTMLDialogElement>('#confirm')!;
+  const dialog = document.querySelector<HTMLDialogElement>('#confirm')!;
   confirms = new MutationObserver(() => {
-    if (!d.open) return;
-    const question = d.querySelector('#confirm-body')?.textContent || '';
+    if (!dialog.open) return;
+    const question = dialog.querySelector('#confirm-body')?.textContent || '';
     asked.push(question);
     const ok = typeof reply === 'function' ? reply(question) : reply;
-    d.querySelector<HTMLElement>(ok ? '[data-confirm-ok]' : '[data-confirm-cancel]')!.click();
+    dialog.querySelector<HTMLElement>(ok ? '[data-confirm-ok]' : '[data-confirm-cancel]')!.click();
   });
-  confirms.observe(d, { attributes: true, attributeFilter: ['open'] });
+  confirms.observe(dialog, { attributes: true, attributeFilter: ['open'] });
   return asked;
 }
 
@@ -200,10 +203,10 @@ export function go(view: View) {
   setView(view);
 }
 
-// A stand-in for POST /api/update that applies `op` the way the server does: to a copy of the open
+// A stand-in for POST /api/update that applies `update` the way the server does: to a copy of the open
 // profile's state, validated. A refused op throws (the stub then answers 500, so save() fails)
 // and leaves the page's state alone; mutate on the live state would change it before refusing.
-export const applyUpdate = (op: UpdateOp) => mutate(structuredClone(state), op);
+export const applyUpdate = (update: UpdateOp) => mutate(structuredClone(state), update);
 
 // Until a test stubs fetch, a request answers 503 at once rather than reaching happy-dom's
 // network, which has no server to talk to: Saves & profiles asks for the workspace summary as it
