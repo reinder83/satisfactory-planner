@@ -59,13 +59,13 @@ const plan = generated();
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 const settle = async () => {
-  await new Promise(r => setTimeout(r, 20));
+  await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
 };
 // The dialog markup with runs of whitespace (template line breaks) as one space.
 const detail = () => $('#detail')!.innerHTML.replace(/\s+/g, ' ');
-const factoryIds = (sel: string) =>
-  $$(`${sel} .factory-card button.name`).map(b => b.dataset.factory);
+const factoryIds = (selector: string) =>
+  $$(`${selector} .factory-card button.name`).map(button => button.dataset.factory);
 
 // Two groups, with Wire split between them.
 const GROUPS = {
@@ -101,12 +101,13 @@ beforeEach(() => {
 // name's hit area covering the card is CSS (tests/style.test.ts, and checked in a browser).
 test('each factory card has one dialog button and one Running box (SP-19)', async () => {
   const tabStops = (card: Element) =>
-    [...card.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea')].map(e =>
-      e.matches('input[type=checkbox]')
-        ? 'checkbox'
-        : e.classList.contains('name')
-          ? 'name'
-          : e.outerHTML,
+    [...card.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea')].map(
+      control =>
+        control.matches('input[type=checkbox]')
+          ? 'checkbox'
+          : control.classList.contains('name')
+            ? 'name'
+            : control.outerHTML,
     );
   render();
   for (const card of $$('#main .factory-card')) {
@@ -154,11 +155,11 @@ test('shared sites group their outputs above the individual factory list', async
 
 // The status chips of both factories pages (FilterChips.vue, SP-16, #251).
 const chips = () =>
-  $$('#factory-filter [role="radio"]').map(b => [
-    b.dataset.filter,
-    b.textContent!.trim().replace(/\s+/g, ' '),
-    b.getAttribute('aria-checked'),
-    b.getAttribute('tabindex'),
+  $$('#factory-filter [role="radio"]').map(chip => [
+    chip.dataset.filter,
+    chip.textContent!.trim().replace(/\s+/g, ' '),
+    chip.getAttribute('aria-checked'),
+    chip.getAttribute('tabindex'),
   ]);
 const chosen = () => $('#factory-filter [aria-checked="true"]')?.dataset.filter;
 const statusChip = (value: string) =>
@@ -195,22 +196,22 @@ test('the status chips filter on the saved factory checks, and the Running boxes
 });
 
 test('the handbook chips count what the search finds, Local included', async () => {
-  const at3 = handbook.factories.filter(f => f.stages['3']);
-  const local = at3.filter(f => f.local).length;
+  const phase3Factories = handbook.factories.filter(f => f.stages['3']);
+  const local = phase3Factories.filter(f => f.local).length;
   assert.ok(local > 0, 'the handbook has local factories');
   open({ state: { checks: { 'factory-3-wire': true } } });
   render();
   assert.deepEqual(chips(), [
-    ['all', `All ${at3.length}`, 'true', '0'],
-    ['todo', `Not running ${at3.length - 1}`, 'false', '-1'],
+    ['all', `All ${phase3Factories.length}`, 'true', '0'],
+    ['todo', `Not running ${phase3Factories.length - 1}`, 'false', '-1'],
     ['done', 'Running 1', 'false', '-1'],
     ['local', `Local ${local}`, 'false', '-1'],
   ]);
   // A search narrows every count, whichever chip is chosen.
   statusChip('done').click();
   await find('wire');
-  const wires = at3.filter(f =>
-    (f.name + ' ' + f.stages['3']!.recipe).toLowerCase().includes('wire'),
+  const wires = phase3Factories.filter(factory =>
+    (factory.name + ' ' + factory.stages['3']!.recipe).toLowerCase().includes('wire'),
   );
   assert.deepEqual(
     chips().map(c => c[1]),
@@ -305,8 +306,8 @@ test('the chosen chip stays through redraws and pages, and older filter values s
 
 test('the calculated page has the chips too, with Held back for rows a missing supplier holds', async () => {
   const rows = plan.stages['3'].rows!;
-  const consumer = rows.find(r =>
-    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  const consumer = rows.find(row =>
+    Object.keys(row.inputs).some(n => rows.some(o => o.id !== row.id && o.outputs[n])),
   )!;
   open({ calculated: plan, state: { checks: { ['calc-3-' + consumer.id]: true } } });
   render();
@@ -418,7 +419,7 @@ test('a factory in two groups without rates shows half in each, as Between group
   go('factories');
   render();
   await nextTick();
-  const lines = $$('.allocation').map(e => e.textContent);
+  const lines = $$('.allocation').map(allocation => allocation.textContent);
   assert.equal(lines.length, 2, JSON.stringify(lines));
   // Each group shows half of Wire's output, not all of it twice.
   for (const line of lines) assert.match(line, /^Remaining here, split 2 ways: /);
@@ -573,7 +574,7 @@ test('every dialog opens at the top, not where the last one was left (#316)', as
 // goes with the old dialog, and showModal() does not run again. happy-dom's showModal() and
 // close() move no focus, so a fresh open leaves focus on the opener here; in a browser it
 // focuses the same first control.
-const focused = (sel: string) => document.activeElement?.matches(sel) ?? false;
+const focused = (selector: string) => document.activeElement?.matches(selector) ?? false;
 // Focuses `link` and presses it, as a keyboard user does, and checks that focus lands on the
 // new dialog's first control, the Running box `key` in its sticky header.
 const follow = (link: HTMLElement, key: string) => {
@@ -655,8 +656,8 @@ test('a late close event leaves a dialog opened in the meantime alone (#322)', a
   first.click();
   assert.equal($('#detail h2')!.textContent, 'Wire');
   // Escape: the browser closes the dialog, but its close event is still on its way.
-  const hold = (e: Event) => {
-    if (e.target === dialog) e.stopImmediatePropagation();
+  const hold = (event: Event) => {
+    if (event.target === dialog) event.stopImmediatePropagation();
   };
   document.addEventListener('close', hold, true);
   dialog.close();
@@ -685,15 +686,15 @@ test('a late close event leaves a dialog opened in the meantime alone (#322)', a
 test('a link inside a calculated factory dialog moves focus into the new one (#319)', async () => {
   open({ calculated: plan });
   render();
-  const x = calcStage()!;
-  const r = x.rows!.find(r =>
-    Object.keys(r.outputs).some(n => x.rows!.some(o => o.id !== r.id && o.inputs[n])),
+  const stage = calcStage()!;
+  const producer = stage.rows!.find(row =>
+    Object.keys(row.outputs).some(n => stage.rows!.some(o => o.id !== row.id && o.inputs[n])),
   )!;
   const dialog = $<HTMLDialogElement>('#detail')!;
-  const opener = $<HTMLButtonElement>(`#main .factory-card [data-calc-factory="${r.id}"]`)!;
+  const opener = $<HTMLButtonElement>(`#main .factory-card [data-calc-factory="${producer.id}"]`)!;
   opener.focus();
   opener.click();
-  assert.equal($('#detail h2')!.textContent, r.name);
+  assert.equal($('#detail h2')!.textContent, producer.name);
   const link = $<HTMLElement>('#detail .dialog-body [data-calc-factory]')!;
   follow(link, 'calc-3-' + link.dataset.calcFactory);
   dialog.close();
@@ -701,11 +702,13 @@ test('a link inside a calculated factory dialog moves focus into the new one (#3
 });
 
 test('a factory in a group’s build order moves focus into its dialog (#319)', async () => {
-  const x = plan.stages['3'];
-  const consumer = x.rows!.find(r =>
-    x.rows!.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
+  const stage = plan.stages['3'];
+  const consumer = stage.rows!.find(row =>
+    stage.rows!.some(
+      o => o.id !== row.id && Object.keys(o.outputs || {}).some(n => row.inputs?.[n]),
+    ),
   )!;
-  const supplier = x.rows!.find(
+  const supplier = stage.rows!.find(
     o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
   )!;
   open({
@@ -788,18 +791,18 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
     };
     const el = document.createElement('div');
     createApp({ render: () => h(LaneAdvice, { model }) }).mount(el);
-    return { cap: plan.lane.cap, text: el.querySelector('.logi-row p')!.textContent!.trim() };
+    return { capacity: plan.lane.cap, text: el.querySelector('.logi-row p')!.textContent!.trim() };
   };
-  const { cap } = advice(1);
+  const { capacity } = advice(1);
   // A hair under the multiple, as a solver value can be, is still every lane full (#88).
-  assert.match(advice(2 * cap * (1 - 1e-10)).text, /all 2 full\.$/);
-  assert.match(advice(2 * cap).text, /→ 2 × Mk\.\d belts — all 2 full\.$/);
+  assert.match(advice(2 * capacity * (1 - 1e-10)).text, /all 2 full\.$/);
+  assert.match(advice(2 * capacity).text, /→ 2 × Mk\.\d belts — all 2 full\.$/);
   // A hair over the multiple needs a third lane, which carries almost nothing (#89).
   assert.match(
-    advice(2 * cap + 0.001).text,
+    advice(2 * capacity + 0.001).text,
     /3 × Mk\.\d belts — 2 full \+ 1 carrying under 0\.01\/min\.$/,
   );
-  assert.match(advice(cap + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
+  assert.match(advice(capacity + 30).text, /→ 2 × Mk\.\d belts — 1 full \+ 1 carrying 30\/min\.$/);
 });
 
 test('closing or replacing a dialog asks before dropping an unsaved note', async () => {
@@ -848,12 +851,15 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
 // in a description list so each number is read with its label. Each cell as [label, value,
 // caption], runs of whitespace as one space.
 const machineCells = () =>
-  $$('#detail dl.machine-cells > div.stat.compact').map(d =>
-    [d.querySelector('dt')!, d.querySelector('dd strong')!, d.querySelector('dd small')!].map(e =>
-      e.textContent!.replace(/\s+/g, ' ').trim(),
-    ),
+  $$('#detail dl.machine-cells > div.stat.compact').map(cell =>
+    [
+      cell.querySelector('dt')!,
+      cell.querySelector('dd strong')!,
+      cell.querySelector('dd small')!,
+    ].map(part => part.textContent!.replace(/\s+/g, ' ').trim()),
   );
-const pct = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '%';
+const percent = (value: number) =>
+  value.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '%';
 
 test('a handbook dialog shows its machines as Total, At 100% and Adjustable cells', () => {
   render();
@@ -880,7 +886,7 @@ test('a handbook dialog shows its machines as Total, At 100% and Adjustable cell
   openFactory('heavy-modular-frame');
   assert.deepEqual(machineCells()[2], [
     'Adjustable',
-    '1 at ' + pct(66.7),
+    '1 at ' + percent(66.7),
     'Set ' + num(66.6666666666666) + '% · ' + num((2.8125 * 66.6666666666666) / 100) + '/min',
   ]);
   // One building at 100% is 1 · 1 · 0 (#112 kept "1 whole buildings" out; the cells count it).
@@ -910,35 +916,42 @@ test('the machine counts follow the card’s clock rule: one decimal, never up t
 });
 
 test('a single handbook building below 100% is 1 · 0 · 1 at its clock', () => {
-  const st = handbook.factories.find(f => f.id === 'versatile-framework')!.stages['3']!;
-  const saved = { ...st };
-  Object.assign(st, { lastClock: 62.5, equivalent: 0.625 });
+  const stage = handbook.factories.find(f => f.id === 'versatile-framework')!.stages['3']!;
+  const saved = { ...stage };
+  Object.assign(stage, { lastClock: 62.5, equivalent: 0.625 });
   try {
     render();
     openFactory('versatile-framework');
     assert.deepEqual(machineCells(), [
       ['Total', '1', 'Assembler · peak load ' + num(7.5) + ' MW'],
       ['At 100%', '0', ''],
-      ['Adjustable', '1 at ' + pct(62.5), num(3.125) + '/min'],
+      ['Adjustable', '1 at ' + percent(62.5), num(3.125) + '/min'],
     ]);
   } finally {
-    Object.assign(st, saved);
+    Object.assign(stage, saved);
   }
 });
 
 test('a calculated dialog shows the same three cells as its card, with output per machine', () => {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
   const made = rows.find(
     r => Object.keys(r.outputs).length === 1 && r.machines > 2 && r.lastClock < 99,
   )!;
-  const gen = rows.find(r => !Object.keys(r.outputs).length)!;
-  const whole = rows.find(r => r !== made && r !== gen && Object.keys(r.outputs).length === 1)!;
-  assert.ok(made && gen && whole, 'the default plan has these lines');
+  const generator = rows.find(r => !Object.keys(r.outputs).length)!;
+  const whole = rows.find(
+    r => r !== made && r !== generator && Object.keys(r.outputs).length === 1,
+  )!;
+  assert.ok(made && generator && whole, 'the default plan has these lines');
   // A generator with its last one at 62.5%, a line running all at 100%, one single machine.
-  Object.assign(gen, { machines: 5, equivalent: 4.625, lastClock: 62.5, generationMW: 406.8 });
+  Object.assign(generator, {
+    machines: 5,
+    equivalent: 4.625,
+    lastClock: 62.5,
+    generationMW: 406.8,
+  });
   Object.assign(whole, { equivalent: whole.machines, lastClock: 100 });
-  open({ calculated: p });
+  open({ calculated: plan });
   render();
   openCalculatedFactory(made.id);
   const [item, rate] = Object.entries(made.outputs)[0]!;
@@ -960,11 +973,15 @@ test('a calculated dialog shows the same three cells as its card, with output pe
   assert.match(cells[2]![1]!, /^1 at [\d.,]+%$/, 'the card and the dialog show one clock');
   assert.doesNotMatch(detail(), /Clock each/, 'the cells replace the setup table');
   // A generator's Total says what it generates; it draws no peak load.
-  openCalculatedFactory(gen.id);
+  openCalculatedFactory(generator.id);
   assert.deepEqual(machineCells(), [
-    ['Total', '5', gen.machine + ' · generates ' + num(406.8) + ' MW'],
+    ['Total', '5', generator.machine + ' · generates ' + num(406.8) + ' MW'],
     ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
-    ['Adjustable', '1 at ' + pct(62.5), `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`],
+    [
+      'Adjustable',
+      '1 at ' + percent(62.5),
+      `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`,
+    ],
   ]);
   // All at 100%: the Adjustable cell is 0, with no clock.
   openCalculatedFactory(whole.id);
@@ -972,12 +989,12 @@ test('a calculated dialog shows the same three cells as its card, with output pe
   assert.equal(machineCells()[1]![1], num(whole.machines));
   // A single machine below 100% is 1 · 0 · 1 at its clock, with nothing at full speed.
   Object.assign(whole, { machines: 1, equivalent: 0.4, lastClock: 40 });
-  open({ calculated: p });
+  open({ calculated: plan });
   render();
   openCalculatedFactory(whole.id);
   assert.deepEqual(
     machineCells().map(c => c[1]),
-    ['1', '0', '1 at ' + pct(40)],
+    ['1', '0', '1 at ' + percent(40)],
   );
   assert.equal(machineCells()[1]![2], '');
 });
@@ -986,11 +1003,17 @@ test('a calculated dialog shows the same three cells as its card, with output pe
 // output and storage rate are the line under the title, and the flow comes straight after the
 // header (after the recipe badge on a handbook factory). No-break spaces keep a rate whole.
 const summary = () => $('#detail .dialog-head [data-dialog-summary]')?.textContent ?? null;
-const nb = ' ';
+const noBreakSpace = ' ';
 const bodyStart = () =>
   [...$('#detail .dialog-body')!.children]
     .slice(0, 2)
-    .map(e => (e.matches('.badge') ? 'badge' : e.tagName === 'H3' ? e.textContent : e.className));
+    .map(child =>
+      child.matches('.badge')
+        ? 'badge'
+        : child.tagName === 'H3'
+          ? child.textContent
+          : child.className,
+    );
 const noTiles = () => {
   assert.equal($('#detail .dialog-body > .stats:not(.machine-cells)'), null, 'no summary tiles');
   assert.doesNotMatch(detail(), /Total production|Protected allowance|Shared oil processes/);
@@ -1001,7 +1024,7 @@ test('a handbook dialog says output and storage under its title instead of in ti
   const card = $('#main button.name[data-factory="iron-ingot"]')!.closest('.factory-card')!;
   openFactory('iron-ingot');
   noTiles();
-  assert.equal(summary(), `${num(5850)}/min · storage${nb}${num(10)}/min`);
+  assert.equal(summary(), `${num(5850)}/min · storage${noBreakSpace}${num(10)}/min`);
   assert.match(card.querySelector('.output')!.textContent!, new RegExp(num(5850)));
   assert.match(card.textContent!, /storage 10\/min/, 'the card says the same');
   assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Handbook page 54');
@@ -1029,7 +1052,7 @@ test('the oil, fluid and nuclear dialogs keep what their tiles said', () => {
   // section, which lists its machines per recipe.
   openFactory('plastic');
   noTiles();
-  assert.equal(summary(), `${num(1800)}/min · storage${nb}${num(200)}/min`);
+  assert.equal(summary(), `${num(1800)}/min · storage${noBreakSpace}${num(200)}/min`);
   assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 3']);
   assert.equal($('#detail .badge.orange')!.textContent, 'Plastic');
   assert.match(detail(), /Shared oil campus · Phase 3/);
@@ -1040,11 +1063,14 @@ test('the oil, fluid and nuclear dialogs keep what their tiles said', () => {
   render();
   openFactory('alumina-solution');
   noTiles();
-  assert.equal(summary(), `${num(10126.666666666666)}${nb}m³/min · storage${nb}0${nb}m³/min`);
+  assert.equal(
+    summary(),
+    `${num(10126.666666666666)}${noBreakSpace}m³/min · storage${noBreakSpace}0${noBreakSpace}m³/min`,
+  );
   // Nuclear: the power fleet takes it, and its notices stay.
   openFactory('uranium-fuel-rod');
   noTiles();
-  assert.equal(summary(), `${num(10)}/min · storage${nb}0/min`);
+  assert.equal(summary(), `${num(10)}/min · storage${noBreakSpace}0/min`);
   assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 4']);
   assert.match(detail(), /nuclear power fleet/);
   assert.match(detail(), /Process buffer at the nuclear site/);
@@ -1055,16 +1081,16 @@ test('the oil, fluid and nuclear dialogs keep what their tiles said', () => {
 });
 
 test('a calculated dialog says its card’s headline under the title, and outputs only when more', () => {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
-  const named = rows.find(r => {
-    const o = Object.keys(r.outputs);
-    return o.length === 1 && o[0] === r.name;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
+  const named = rows.find(row => {
+    const outputNames = Object.keys(row.outputs);
+    return outputNames.length === 1 && outputNames[0] === row.name;
   })!;
   const several = rows.find(r => Object.keys(r.outputs).length > 1)!;
-  const gen = rows.find(r => !Object.keys(r.outputs).length && r.generationMW > 0)!;
-  assert.ok(named && several && gen, 'the default plan has these lines');
-  open({ calculated: p });
+  const generator = rows.find(r => !Object.keys(r.outputs).length && r.generationMW > 0)!;
+  assert.ok(named && several && generator, 'the default plan has these lines');
+  open({ calculated: plan });
   render();
   const headline = (id: string) =>
     $(`#main button.name[data-calc-factory="${id}"]`)!
@@ -1085,23 +1111,23 @@ test('a calculated dialog says its card’s headline under the title, and output
   const [main, mainRate] = Object.entries(several.outputs)[0]!;
   assert.match(summary()!, new RegExp('^' + num(mainRate).replace(/[.,]/g, '\\$&')));
   assert.equal(outputsHeading(), true);
-  for (const n of Object.keys(several.outputs)) assert.match(detail(), new RegExp(n));
+  for (const item of Object.keys(several.outputs)) assert.match(detail(), new RegExp(item));
   assert.ok(main);
   // A generator makes no items: its power is the headline, and nothing else is listed.
-  openCalculatedFactory(gen.id);
-  assert.equal(summary(), power(gen.generationMW));
+  openCalculatedFactory(generator.id);
+  assert.equal(summary(), power(generator.generationMW));
   assert.equal(outputsHeading(), false);
   assert.match(machineCells()[0]![2]!, /generates/);
 });
 
 test('the calculated factories page shows its rows, round-up offer and warnings', async () => {
-  const p = generated();
-  p.stages['3'].feasible = false;
-  p.stages['3'].reason = evil;
-  open({ calculated: p });
+  const plan = generated();
+  plan.stages['3'].feasible = false;
+  plan.stages['3'].reason = evil;
+  open({ calculated: plan });
   render();
   noMarkup();
-  const rows = p.stages['3'].rows!;
+  const rows = plan.stages['3'].rows!;
   assert.equal($$('#main .factory-card').length, rows.length);
   assert.equal($('#main .toolbar > span')!.textContent, rows.length + ' production lines');
   assert.ok($('[data-round-up]'), 'without whole machines it offers rounding up');
@@ -1123,30 +1149,30 @@ test('Round up production… is a one-line offer that asks first (SP-18)', async
   const offer = $('#main .notice.round-up-offer')!;
   assert.ok(offer.classList.contains('info'));
   assert.equal(offer.querySelector('p'), null, 'no paragraph of explanation on the page');
-  const b = offer.querySelector<HTMLButtonElement>('[data-round-up]')!;
-  assert.ok(b.classList.contains('quiet') && !b.classList.contains('primary'));
-  assert.equal(b.textContent!.trim(), 'Round up production…');
+  const button = offer.querySelector<HTMLButtonElement>('[data-round-up]')!;
+  assert.ok(button.classList.contains('quiet') && !button.classList.contains('primary'));
+  assert.equal(button.textContent!.trim(), 'Round up production…');
   const calls = stubFetch({});
   const asked = answerConfirms(false);
   // As a real press does, the button has focus when it is clicked.
-  b.focus();
-  b.click();
+  button.focus();
+  button.click();
   await nextTick();
   await nextTick();
   assert.equal(asked.length, 1, 'it asks');
   assert.match(asked[0]!, /recalculated profile revision/);
   assert.match(asked[0]!, /previous profile stays available/);
   assert.equal(calls.length, 0, 'Cancel sends nothing');
-  assert.equal(document.activeElement, b, 'focus is back on the button');
+  assert.equal(document.activeElement, button, 'focus is back on the button');
 });
 
 // Both card kinds lead with what the line makes, its unit beside it, and put the machines and the
 // last one's clock on the line below (SP-14, #249).
-const cardOf = (sel: string) => $(sel)!.closest('.factory-card')!;
+const cardOf = (selector: string) => $(selector)!.closest('.factory-card')!;
 const headline = (card: Element) => card.querySelector('.card-main .output')!.textContent!.trim();
 // Text with a no-break space (or &nbsp; in markup) and runs of whitespace as one space.
-const plain = (t: string) =>
-  t
+const plain = (text: string) =>
+  text
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -1175,18 +1201,18 @@ test('a handbook card shows its output as the headline and machines with the clo
 });
 
 test('a calculated card shows its main output, or a generator’s power, as the headline', async () => {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
   const made = rows.find(
     r => Object.keys(r.outputs).length === 1 && r.machines > 1 && r.lastClock < 99,
   )!;
-  const gen = rows.find(r => !Object.keys(r.outputs).length)!;
-  assert.ok(made && gen, 'the default plan has a production line and a power line');
-  gen.name = evil;
-  gen.machines = 5;
-  gen.equivalent = 4.625;
-  gen.generationMW = 406.8;
-  open({ calculated: p });
+  const generator = rows.find(r => !Object.keys(r.outputs).length)!;
+  assert.ok(made && generator, 'the default plan has a production line and a power line');
+  generator.name = evil;
+  generator.machines = 5;
+  generator.equivalent = 4.625;
+  generator.generationMW = 406.8;
+  open({ calculated: plan });
   render();
   noMarkup();
   const card = cardOf(`#main button.name[data-calc-factory="${made.id}"]`);
@@ -1199,18 +1225,21 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   assert.match(machinesLine(card)!, /· last at [\d.,]+%$/);
   // A row named after its one output has no line repeating the headline.
   if (made.name === item) assert.equal(card.querySelector('.recipe'), null);
-  const power = cardOf(`#main button.name[data-calc-factory="${gen.id}"]`);
+  const power = cardOf(`#main button.name[data-calc-factory="${generator.id}"]`);
   assert.equal(headline(power), num(406.8) + ' MW');
   assert.equal(power.querySelector('.output span')!.textContent, 'MW');
-  assert.equal(machinesLine(power), `5 × ${gen.machine} · last at ${(62.5).toLocaleString()}%`);
+  assert.equal(
+    machinesLine(power),
+    `5 × ${generator.machine} · last at ${(62.5).toLocaleString()}%`,
+  );
   assert.equal(power.querySelector('.recipe'), null, 'nothing restates the power');
   // Above 1000 MW it is GW, with the unit still shown.
-  gen.generationMW = 24882.66;
-  open({ calculated: p });
+  generator.generationMW = 24882.66;
+  open({ calculated: plan });
   render();
   await nextTick();
   assert.equal(
-    headline(cardOf(`#main button.name[data-calc-factory="${gen.id}"]`)),
+    headline(cardOf(`#main button.name[data-calc-factory="${generator.id}"]`)),
     num(24.88266) + ' GW',
   );
 });
@@ -1223,89 +1252,94 @@ const NUCLEAR = [
   { id: 'power-plutonium', name: 'Plutonium power', rod: 'Plutonium Fuel Rod', rodPer: 0.1 },
 ];
 function withNuclear() {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
-  const gen = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
+  const generator = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
   const shape = [
     { waste: 'Uranium Waste', per: 10, equivalent: 138.892, machines: 139 },
     { waste: 'Plutonium Waste', per: 1, equivalent: 69.446, machines: 70 },
   ];
-  const made = NUCLEAR.map((n, i) => {
-    const s = shape[i]!;
+  const made = NUCLEAR.map((nuclear, i) => {
+    const plantShape = shape[i]!;
     return {
-      ...gen,
-      id: n.id,
-      name: n.name,
+      ...generator,
+      id: nuclear.id,
+      name: nuclear.name,
       machine: 'Nuclear Power Plant',
       power: -2500,
-      inputs: { [n.rod]: n.rodPer * s.equivalent, Water: 240 * s.equivalent },
-      outputs: { [s.waste]: s.per * s.equivalent },
-      equivalent: s.equivalent,
-      machines: s.machines,
-      lastClock: (s.equivalent - (s.machines - 1)) * 100,
-      generationMW: 2500 * s.equivalent,
+      inputs: {
+        [nuclear.rod]: nuclear.rodPer * plantShape.equivalent,
+        Water: 240 * plantShape.equivalent,
+      },
+      outputs: { [plantShape.waste]: plantShape.per * plantShape.equivalent },
+      equivalent: plantShape.equivalent,
+      machines: plantShape.machines,
+      lastClock: (plantShape.equivalent - (plantShape.machines - 1)) * 100,
+      generationMW: 2500 * plantShape.equivalent,
     };
   });
   rows.push(...made);
-  return { p, made };
+  return { plan, made };
 }
 
 test('a nuclear plant card leads with its power and lists its waste below it (#371)', () => {
-  const { p, made } = withNuclear();
-  open({ calculated: p });
+  const { plan, made } = withNuclear();
+  open({ calculated: plan });
   render();
   noMarkup();
-  for (const r of made) {
-    const [waste, rate] = Object.entries(r.outputs)[0]!;
-    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
-    assert.equal(plain(headline(card)), power(r.generationMW), r.name);
+  for (const row of made) {
+    const [waste, rate] = Object.entries(row.outputs)[0]!;
+    const card = cardOf(`#main button.name[data-calc-factory="${row.id}"]`);
+    assert.equal(plain(headline(card)), power(row.generationMW), row.name);
     assert.equal(card.querySelector('.output span')!.textContent, 'GW');
-    assert.equal(machinesLine(card), machineLine(r.machines, r.machine, r.lastClock));
+    assert.equal(machinesLine(card), machineLine(row.machines, row.machine, row.lastClock));
     assert.match(machinesLine(card)!, / · last at [\d.,]+%$/);
     assert.equal(plain(card.querySelector('.recipe')!.textContent!), `${waste}: ${num(rate)}/min`);
     assert.equal(card.textContent!.split(num(rate)).length - 1, 1, 'the waste rate once');
   }
   // The dialog's summary line says the card's headline; its outputs list names the waste.
-  for (const r of made) {
-    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
-    openCalculatedFactory(r.id);
-    assert.equal(summary(), power(r.generationMW));
+  for (const row of made) {
+    const card = cardOf(`#main button.name[data-calc-factory="${row.id}"]`);
+    openCalculatedFactory(row.id);
+    assert.equal(summary(), power(row.generationMW));
     assert.equal(plain(summary()!), plain(headline(card)));
     assert.ok($$('#detail h3').some(h => h.textContent === 'Outputs per minute'));
-    assert.match(detail(), new RegExp(Object.keys(r.outputs)[0]!));
+    assert.match(detail(), new RegExp(Object.keys(row.outputs)[0]!));
     closeDetail();
   }
 });
 
 test('a generator’s card, dialog and build step show its building, not its waste (#350)', () => {
-  const { p, made } = withNuclear();
-  const coal = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
-  const line = p.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
-  open({ calculated: p });
+  const { plan, made } = withNuclear();
+  const coal = plan.stages['3'].rows!.find(
+    r => r.generationMW > 0 && !Object.keys(r.outputs).length,
+  )!;
+  const line = plan.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
+  open({ calculated: plan });
   render();
-  const src = (el: Element | null) => el!.querySelector('img.item-icon')!.getAttribute('src');
-  for (const r of [coal, ...made]) {
-    const icon = `./icons/${slugOf(r.machine)}.png`;
-    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
-    assert.equal(src(card.querySelector('.card-icon')), icon, r.name);
-    assert.deepEqual(taskIcon({ id: `calc-3-${r.id}`, title: r.name }), { item: r.machine });
-    openCalculatedFactory(r.id);
-    assert.equal(src($('#detail .dialog-icon')), icon, r.name);
+  const iconSrc = (el: Element | null) => el!.querySelector('img.item-icon')!.getAttribute('src');
+  for (const row of [coal, ...made]) {
+    const icon = `./icons/${slugOf(row.machine)}.png`;
+    const card = cardOf(`#main button.name[data-calc-factory="${row.id}"]`);
+    assert.equal(iconSrc(card.querySelector('.card-icon')), icon, row.name);
+    assert.deepEqual(taskIcon({ id: `calc-3-${row.id}`, title: row.name }), { item: row.machine });
+    openCalculatedFactory(row.id);
+    assert.equal(iconSrc($('#detail .dialog-icon')), icon, row.name);
     closeDetail();
   }
   // A production line keeps its main output's icon.
   const [item] = Object.keys(line.outputs);
   const card = cardOf(`#main button.name[data-calc-factory="${line.id}"]`);
-  assert.equal(src(card.querySelector('.card-icon')), `./icons/${slugOf(item!)}.png`);
+  assert.equal(iconSrc(card.querySelector('.card-icon')), `./icons/${slugOf(item!)}.png`);
   assert.deepEqual(taskIcon({ id: `calc-3-${line.id}`, title: line.name }), { item });
 });
 
 test('a nuclear plant’s group share says its waste and its power (#371, #374)', async () => {
-  const { p, made } = withNuclear();
+  const { plan, made } = withNuclear();
   const [uranium, plutonium] = made as [(typeof made)[0], (typeof made)[0]];
   const waste = uranium.outputs['Uranium Waste']!;
   open({
-    calculated: p,
+    calculated: plan,
     state: {
       factoryGroups: {
         groups: GROUPS.groups,
@@ -1328,15 +1362,15 @@ test('a nuclear plant’s group share says its waste and its power (#371, #374)'
   render();
   await nextTick();
   const sections = $$('#main .user-group');
-  const text = (i: number, id: string) =>
+  const text = (sectionIndex: number, id: string) =>
     plain(
-      sections[i]!.querySelector(`[data-calc-factory="${id}"]`)!
+      sections[sectionIndex]!.querySelector(`[data-calc-factory="${id}"]`)!
         .closest('.factory-card')!
         .querySelector('.allocation')!.textContent!,
     );
-  const both = (r: (typeof made)[0], share: number) => {
-    const [item, total] = Object.entries(r.outputs)[0]!;
-    return `${num(total * share)} ${item}/min (${power(r.generationMW * share)})`;
+  const both = (row: (typeof made)[0], share: number) => {
+    const [item, total] = Object.entries(row.outputs)[0]!;
+    return `${num(total * share)} ${item}/min (${power(row.generationMW * share)})`;
   };
   assert.ok(
     text(0, uranium.id).startsWith(`Here: ${both(uranium, 1 / 4)} of ${both(uranium, 1)}`),
@@ -1348,23 +1382,25 @@ test('a nuclear plant’s group share says its waste and its power (#371, #374)'
     ),
     text(1, uranium.id),
   );
-  for (const i of [0, 1])
+  for (const sectionIndex of [0, 1])
     assert.ok(
-      text(i, plutonium.id).startsWith(
+      text(sectionIndex, plutonium.id).startsWith(
         `Remaining here, split 2 ways: ${both(plutonium, 1 / 2)} of ${both(plutonium, 1)}`,
       ),
-      text(i, plutonium.id),
+      text(sectionIndex, plutonium.id),
     );
 });
 
 // A generator without outputs (coal, fuel) gives its group share in GW above 1,000 MW, like its
 // card's headline (#380).
 test('a coal plant’s group share is in GW above 1,000 MW, like its headline (#380)', async () => {
-  const p = generated();
-  const coal = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
+  const plan = generated();
+  const coal = plan.stages['3'].rows!.find(
+    r => r.generationMW > 0 && !Object.keys(r.outputs).length,
+  )!;
   coal.generationMW = 4412.6;
   open({
-    calculated: p,
+    calculated: plan,
     state: {
       factoryGroups: {
         groups: GROUPS.groups,
@@ -1395,14 +1431,14 @@ test('a coal plant’s group share is in GW above 1,000 MW, like its headline (#
 // waste per minute, as it always was, with the power that stands for beside it while typing; an
 // output-less generator's rate is in MW. A production line keeps "Production per minute".
 test('the group editor names a generator’s rate unit and shows the power it stands for (#374)', async () => {
-  const { p, made } = withNuclear();
+  const { plan, made } = withNuclear();
   const uranium = made[0]!;
   const waste = uranium.outputs['Uranium Waste']!;
-  const rows = p.stages['3'].rows!;
+  const rows = plan.stages['3'].rows!;
   const coal = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
   const line = rows.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
   open({
-    calculated: p,
+    calculated: plan,
     state: {
       factoryGroups: {
         groups: GROUPS.groups,
@@ -1441,13 +1477,13 @@ test('the group editor names a generator’s rate unit and shows the power it st
   await nextTick();
   assert.equal(hint(fixed), 'Uranium Waste/min', 'no figure for a rate that cannot be saved');
   // An output-less generator's rate is in MW.
-  const c = field(coal.id, 'fg-cable01');
-  assert.equal(c.getAttribute('aria-label'), 'MW in Cable factory');
-  assert.equal(hint(c), 'MW');
+  const coalField = field(coal.id, 'fg-cable01');
+  assert.equal(coalField.getAttribute('aria-label'), 'MW in Cable factory');
+  assert.equal(hint(coalField), 'MW');
   // A production line keeps its label and has no hint.
-  const l = field(line.id, 'fg-cable01');
-  assert.equal(l.getAttribute('aria-label'), 'Production per minute in Cable factory');
-  assert.equal(l.getAttribute('aria-describedby'), null);
+  const lineField = field(line.id, 'fg-cable01');
+  assert.equal(lineField.getAttribute('aria-label'), 'Production per minute in Cable factory');
+  assert.equal(lineField.getAttribute('aria-describedby'), null);
 });
 
 test('the handbook group editor keeps its label, with no unit hint (#374)', async () => {
@@ -1464,10 +1500,10 @@ test('the handbook group editor keeps its label, with no unit hint (#374)', asyn
 // A nuclear plant's flow, machine cells and build-plan step name its power first and its waste
 // alongside (#373); the waste destinations stay, since the waste is belted onward.
 function withNuclearFlow() {
-  const { p, made } = withNuclear();
+  const { plan, made } = withNuclear();
   const uranium = made[0]!;
   const waste = uranium.outputs['Uranium Waste']!;
-  const rows = p.stages['3'].rows!;
+  const rows = plan.stages['3'].rows!;
   const line = rows.find(r => Object.keys(r.outputs).length === 1 && !r.generationMW)!;
   rows.push({
     ...line,
@@ -1476,15 +1512,15 @@ function withNuclearFlow() {
     inputs: { 'Uranium Waste': waste },
     outputs: { 'Non-Fissile Uranium': waste * 1.5 },
   });
-  return { p, uranium, waste };
+  return { plan, uranium, waste };
 }
-const escaped = (t: string) => t.replace(/[.,+()?]/g, '\\$&');
+const escaped = (text: string) => text.replace(/[.,+()?]/g, '\\$&');
 // An element's text with a space between its parts, as it reads on screen.
 const spaced = (el: Element) => plain(el.innerHTML.replace(/<[^>]+>/g, ' '));
 
 test('a nuclear plant’s flow feeds the power grid and sends its waste on (#373)', () => {
-  const { p, uranium, waste } = withNuclearFlow();
-  open({ calculated: p });
+  const { plan, uranium, waste } = withNuclearFlow();
+  open({ calculated: plan });
   render();
   openCalculatedFactory(uranium.id);
   const rows = $$('#detail .rail-row').map(r => spaced(r));
@@ -1496,16 +1532,19 @@ test('a nuclear plant’s flow feeds the power grid and sends its waste on (#373
   const bar = spaced($('#detail .rail-machine-out')!);
   assert.ok(bar.startsWith(power(uranium.generationMW) + ' generation + '), bar);
   assert.match(bar, new RegExp(escaped(`+ ${num(waste)} Uranium Waste/min · `)));
-  const sub = plain($('#detail .rail-machine-main small')!.textContent!);
-  assert.match(sub, new RegExp(escaped(`${num(2500)} MW + 10 Uranium Waste/min out per machine`)));
+  const caption = plain($('#detail .rail-machine-main small')!.textContent!);
+  assert.match(
+    caption,
+    new RegExp(escaped(`${num(2500)} MW + 10 Uranium Waste/min out per machine`)),
+  );
   // The recipe panel gives a plant's power, then its waste.
   const cells = $$('#detail .rail-recipe-outs .rail-cell').map(c => spaced(c));
   assert.deepEqual(cells, [`${num(2500)} MW Power generation`, '10 Uranium Waste']);
 });
 
 test('a nuclear plant’s machine cells and build-plan step give MW with the waste alongside (#373)', async () => {
-  const { p, uranium } = withNuclearFlow();
-  open({ calculated: p });
+  const { plan, uranium } = withNuclearFlow();
+  open({ calculated: plan });
   render();
   const clock = machinesLine(cardOf(`#main button.name[data-calc-factory="${uranium.id}"]`))!.split(
     ' · last at ',
@@ -1534,7 +1573,7 @@ test('a nuclear plant’s machine cells and build-plan step give MW with the was
     outputs: { 'Uranium Waste': 1390 },
     generationMW: 2500 * 139,
   });
-  open({ calculated: p });
+  open({ calculated: plan });
   const whole = calcTasks().find(t => t.id === 'calc-3-' + uranium.id)!;
   assert.match(
     whole.body,
@@ -1543,12 +1582,19 @@ test('a nuclear plant’s machine cells and build-plan step give MW with the was
 });
 
 test('a coal plant’s flow, cells and step still give MW alone (#373)', () => {
-  const p = generated();
-  const gen = p.stages['3'].rows!.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
-  Object.assign(gen, { machines: 5, equivalent: 4.625, lastClock: 62.5, generationMW: 406.8 });
-  open({ calculated: p });
+  const plan = generated();
+  const generator = plan.stages['3'].rows!.find(
+    r => r.generationMW > 0 && !Object.keys(r.outputs).length,
+  )!;
+  Object.assign(generator, {
+    machines: 5,
+    equivalent: 4.625,
+    lastClock: 62.5,
+    generationMW: 406.8,
+  });
+  open({ calculated: plan });
   render();
-  openCalculatedFactory(gen.id);
+  openCalculatedFactory(generator.id);
   const rows = $$('#detail .rail-row').map(r => spaced(r));
   assert.deepEqual(rows, [`Power grid generation ${power(406.8)}`]);
   assert.equal(spaced($('#detail .rail-machine-out')!), `${power(406.8)} generation`);
@@ -1558,10 +1604,14 @@ test('a coal plant’s flow, cells and step still give MW alone (#373)', () => {
   );
   assert.deepEqual(machineCells().slice(1), [
     ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
-    ['Adjustable', '1 at ' + pct(62.5), `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`],
+    [
+      'Adjustable',
+      '1 at ' + percent(62.5),
+      `≈ ${num(62.5)}% → ≈ ${num((406.8 / 4.625) * 0.625)} MW`,
+    ],
   ]);
   closeDetail();
-  const step = calcTasks().find(t => t.id === 'calc-3-' + gen.id)!;
+  const step = calcTasks().find(t => t.id === 'calc-3-' + generator.id)!;
   assert.match(step.body, new RegExp(escaped(`Outputs: ${power(406.8)}.`) + '$'));
 });
 
@@ -1576,17 +1626,17 @@ test('a build-plan step offers the easier rounded option only when the dialog sh
     closeDetail();
     return [step.body.includes(HINT), dialog];
   };
-  const { p, uranium } = withNuclearFlow();
-  const line = p.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
+  const { plan, uranium } = withNuclearFlow();
+  const line = plan.stages['3'].rows!.find(r => !r.generationMW && Object.keys(r.outputs).length)!;
   Object.assign(line, { machines: 5, equivalent: 4.625, lastClock: 62.5 });
-  p.settings.wholeMachines = false;
-  open({ calculated: p });
+  plan.settings.wholeMachines = false;
+  open({ calculated: plan });
   render();
   assert.deepEqual(offered(line.id), [true, true], 'a production line under exact ratios');
   assert.ok(uranium.equivalent % 1 > 0, 'the uranium plant runs one machine below 100%');
   assert.deepEqual(offered(uranium.id), [false, false], 'a nuclear line');
-  p.settings.wholeMachines = true;
-  open({ calculated: p });
+  plan.settings.wholeMachines = true;
+  open({ calculated: plan });
   render();
   assert.deepEqual(offered(line.id), [false, false], 'a profile that runs whole machines');
 });
@@ -1594,16 +1644,16 @@ test('a build-plan step offers the easier rounded option only when the dialog sh
 // A card for a row that generates power says so in words, with a glyph and an accent edge that
 // are not the Running chip's (#374); a production line has neither.
 test('a power plant’s card is marked as generating power, in text (#374)', async () => {
-  const { p, made } = withNuclear();
-  const rows = p.stages['3'].rows!;
+  const { plan, made } = withNuclear();
+  const rows = plan.stages['3'].rows!;
   const coal = rows.find(r => r.generationMW > 0 && !Object.keys(r.outputs).length)!;
   const line = rows.find(r => !r.generationMW)!;
-  open({ calculated: p, state: { checks: { ['calc-3-' + coal.id]: true } } });
+  open({ calculated: plan, state: { checks: { ['calc-3-' + coal.id]: true } } });
   render();
   await nextTick();
-  for (const r of [...made, coal]) {
-    const card = cardOf(`#main button.name[data-calc-factory="${r.id}"]`);
-    assert.ok(card.classList.contains('generator'), r.name);
+  for (const row of [...made, coal]) {
+    const card = cardOf(`#main button.name[data-calc-factory="${row.id}"]`);
+    assert.ok(card.classList.contains('generator'), row.name);
     const mark = card.querySelector('[data-generates]')!;
     assert.equal(plain(mark.textContent!), '⚡︎ Generates power for the grid');
     assert.equal(mark.querySelector('[aria-hidden="true"]')!.textContent, '⚡︎');
@@ -1619,11 +1669,11 @@ test('a power plant’s card is marked as generating power, in text (#374)', asy
 });
 
 test('a calculated card with several outputs names each of them below the headline', () => {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
   const multi = rows.find(r => Object.keys(r.outputs).length > 1)!;
   assert.ok(multi, 'the default plan has a line with a by-product');
-  open({ calculated: p });
+  open({ calculated: plan });
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${multi.id}"]`);
   const outputs = Object.entries(multi.outputs);
@@ -1635,14 +1685,14 @@ test('a calculated card with several outputs names each of them below the headli
       .trim()
       .split('<br>')
       .map(plain),
-    outputs.map(([n, q]) => `${n}: ${num(q)}${FLUIDS.has(n) ? ' m³' : ''}/min`),
+    outputs.map(([item, rate]) => `${item}: ${num(rate)}${FLUIDS.has(item) ? ' m³' : ''}/min`),
   );
 });
 
 // A fluid is measured in m³/min everywhere its rate is written, as the flow diagram and the
 // dialog's summary line already did; solids keep /min (#351, #361). plain() reads a no-break
 // space (or its &nbsp; in markup) as a space.
-const m3 = (q: number) => num(q) + ' m³/min';
+const m3 = (rate: number) => num(rate) + ' m³/min';
 const ROW_FUEL = 'Recipe_ResidualFuel_C'; // Residual Fuel: Heavy Oil Residue in, Fuel out.
 const ROW_OIL = 'Recipe_LiquidFuel_C'; // Fuel: Crude Oil in, Fuel and Polymer Resin out.
 
@@ -1696,12 +1746,12 @@ test('the flow diagram keeps a fluid rate’s unit beside its number (#364)', ()
   const scrap = $$('#detail .rail-row').find(r => /Aluminum Scrap/.test(r.textContent!))!;
   const rate = scrap.querySelector('.rail-rate')!;
   assert.equal(plain(rate.textContent!), m3(10066.666666666666));
-  assert.equal(unit(rate), `${nb}m³/min`, 'the destination row');
+  assert.equal(unit(rate), `${noBreakSpace}m³/min`, 'the destination row');
   const water = $$('#detail .rail-tile').find(t => /Water/.test(t.textContent!))!;
-  assert.equal(unit(water.querySelector('.rail-rate')), `${nb}m³/min`, 'the input tile');
-  assert.equal(unit($('#detail .rail-machine-out b')), `${nb}m³/min`, 'the machine bar');
+  assert.equal(unit(water.querySelector('.rail-rate')), `${noBreakSpace}m³/min`, 'the input tile');
+  assert.equal(unit($('#detail .rail-machine-out b')), `${noBreakSpace}m³/min`, 'the machine bar');
   assert.ok(
-    $$('#detail .rail-rate, #detail .rail-machine-out b').every(e => !/ m³/.test(e.textContent!)),
+    $$('#detail .rail-rate, #detail .rail-machine-out b').every(el => !/ m³/.test(el.textContent!)),
     'no ordinary space before m³ anywhere in the flow',
   );
   // A solid's unit has no space to break at.
@@ -1732,21 +1782,21 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
   render();
   openFactory('alumina-solution');
   cells('Alumina Solution');
-  const p = generated();
-  const rows = p.stages['3'].rows!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
   const made = rows.find(r => Object.keys(r.outputs).length === 1)!;
-  const gen = rows.find(r => r.generationMW > 0)!;
-  assert.ok(made && gen, 'the default plan has a production line and a generator');
-  open({ calculated: p });
+  const generator = rows.find(r => r.generationMW > 0)!;
+  assert.ok(made && generator, 'the default plan has a production line and a generator');
+  open({ calculated: plan });
   render();
   openCalculatedFactory(made.id);
   cells(made.name);
-  openCalculatedFactory(gen.id);
+  openCalculatedFactory(generator.id);
   assert.ok(
     $$('#detail .rail-row').some(r => /Power grid/.test(r.textContent!)),
     'a generator delivers to the power grid',
   );
-  cells(gen.name);
+  cells(generator.name);
 
   const css = fs
     .readFileSync('public/style.css', 'utf8')
@@ -1765,9 +1815,11 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
     return css.slice(open + 1, i);
   };
   const rule = (text: string, selector: string) => {
-    const m = [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(r => r[1]!.trim() === selector);
-    assert.ok(m.length, `${selector} is styled`);
-    return m.map(r => r[2]!.replace(/\s+/g, ' ')).join(' ');
+    const matches = [...text.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+      match => match[1]!.trim() === selector,
+    );
+    assert.ok(matches.length, `${selector} is styled`);
+    return matches.map(match => match[2]!.replace(/\s+/g, ' ')).join(' ');
   };
   const grid = block('@supports (grid-template-columns: subgrid)');
   assert.match(rule(grid, '.rail-rows'), /display: grid;/);
@@ -1781,9 +1833,9 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
   assert.match(rule(top, '.rail-rows'), /display: flex;/);
   assert.match(rule(top, '.rail-row'), /display: flex;/);
   let phone = '';
-  for (let at = css.indexOf('@media (max-width: 640px)'); at >= 0; ) {
-    phone += block('@media (max-width: 640px)', at);
-    at = css.indexOf('@media (max-width: 640px)', at + 1);
+  for (let position = css.indexOf('@media (max-width: 640px)'); position >= 0; ) {
+    phone += block('@media (max-width: 640px)', position);
+    position = css.indexOf('@media (max-width: 640px)', position + 1);
   }
   assert.match(rule(phone, '.rail-rows'), /display: flex;/);
   assert.match(rule(phone, '.rail-row'), /display: flex;.*flex-wrap: wrap;/);
@@ -1795,12 +1847,12 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
 });
 
 test('a calculated card measures a fluid in m³/min, like its dialog (#351)', () => {
-  const p = generated();
-  const rows = p.stages['3'].rows!;
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
   const fuel = rows.find(r => r.id === ROW_FUEL)!,
     oil = rows.find(r => r.id === ROW_OIL)!;
   assert.ok(fuel && oil, 'the default plan makes Fuel on two lines');
-  open({ calculated: p });
+  open({ calculated: plan });
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${fuel.id}"]`);
   assert.equal(plain(headline(card)), m3(fuel.outputs.Fuel!));
@@ -1821,14 +1873,16 @@ test('a calculated card measures a fluid in m³/min, like its dialog (#351)', ()
       .trim()
       .split('<br>')
       .map(plain),
-    Object.entries(oil.outputs).map(([n, q]) => `${n}: ${n === 'Fuel' ? m3(q) : num(q) + '/min'}`),
+    Object.entries(oil.outputs).map(
+      ([item, rate]) => `${item}: ${item === 'Fuel' ? m3(rate) : num(rate) + '/min'}`,
+    ),
   );
 });
 
 test('a calculated factory dialog measures fluid inputs and outputs in m³/min (#361)', () => {
-  const p = generated();
-  const fuel = p.stages['3'].rows!.find(r => r.id === ROW_FUEL)!;
-  open({ calculated: p });
+  const plan = generated();
+  const fuel = plan.stages['3'].rows!.find(r => r.id === ROW_FUEL)!;
+  open({ calculated: plan });
   render();
   openCalculatedFactory(fuel.id);
   const easy = plain($('#detail .notice.info')!.textContent!);
@@ -1853,11 +1907,11 @@ test('the handbook factories page measures a fluid input in m³/min (#361)', () 
 });
 
 test('the calculated card is marked done like the handbook card', () => {
-  const p = generated();
-  const r = p.stages['3'].rows![0]!;
-  open({ calculated: p, state: { checks: { ['calc-3-' + r.id]: true } } });
+  const plan = generated();
+  const row = plan.stages['3'].rows![0]!;
+  open({ calculated: plan, state: { checks: { ['calc-3-' + row.id]: true } } });
   render();
-  assert.ok($(`#main [data-check="calc-3-${r.id}"]`)!.closest('.factory-card.done'));
+  assert.ok($(`#main [data-check="calc-3-${row.id}"]`)!.closest('.factory-card.done'));
 });
 
 // Each card opens with a status chip that follows its Running box: glyph and word, so it reads
@@ -1893,8 +1947,8 @@ test('a calculated card’s status chip says Running, Not built, or Held back wi
   stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   const rows = plan.stages['3'].rows!;
   // A row fed by another row, and that supplier: marked running alone, the row is held back.
-  const consumer = rows.find(r =>
-    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  const consumer = rows.find(row =>
+    Object.keys(row.inputs).some(n => rows.some(o => o.id !== row.id && o.outputs[n])),
   )!;
   const other = rows.find(r => r.id !== consumer.id && !Object.keys(r.inputs).length) ?? rows[0]!;
   open({ calculated: plan });
@@ -1934,17 +1988,17 @@ test('a calculated card’s status chip says Running, Not built, or Held back wi
 test('a calculated factory dialog shows its flow, setup and expansion', () => {
   open({ calculated: plan });
   render();
-  const x = calcStage()!;
-  const r = x.rows!.find(r =>
-    Object.keys(r.outputs).some(n => x.rows!.some(o => o.id !== r.id && o.inputs[n])),
+  const stage = calcStage()!;
+  const producer = stage.rows!.find(row =>
+    Object.keys(row.outputs).some(n => stage.rows!.some(o => o.id !== row.id && o.inputs[n])),
   )!;
-  openCalculatedFactory(r.id);
-  assert.equal($('#detail h2')!.textContent, r.name);
+  openCalculatedFactory(producer.id);
+  assert.equal($('#detail h2')!.textContent, producer.name);
   assert.match(detail(), /Delivers · /);
   assert.ok($('#detail [data-calc-factory]'));
   assert.match(detail(), /Machine setup/);
   assert.match(detail(), /Expansion by phase/);
-  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + r.id);
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + producer.id);
 });
 
 // SP-22 (#257): both dialogs' expansion tables name each phase and mark the one being worked on
@@ -1952,16 +2006,16 @@ test('a calculated factory dialog shows its flow, setup and expansion', () => {
 test('the expansion tables label their phases and mark the current one (SP-22)', () => {
   const rows = () => $$('#detail table').at(-1)!.querySelectorAll('tbody tr');
   const summary = () =>
-    [...rows()].map(tr => [
-      tr.querySelector('td')!.textContent!.replace(/\s+/g, ' ').trim(),
-      tr.classList.contains('current-phase'),
-      tr.getAttribute('aria-current'),
+    [...rows()].map(row => [
+      row.querySelector('td')!.textContent!.replace(/\s+/g, ' ').trim(),
+      row.classList.contains('current-phase'),
+      row.getAttribute('aria-current'),
     ]);
   // A calculated factory at Phase 4.
   open({ calculated: plan, phase: '4' });
   render();
-  const r = calcStage()!.rows![0]!;
-  openCalculatedFactory(r.id);
+  const row = calcStage()!.rows![0]!;
+  openCalculatedFactory(row.id);
   const calc = summary();
   assert.ok(
     calc.every(([label]) => /^Phase \d/.test(label as string)),
@@ -1983,13 +2037,13 @@ test('the expansion tables label their phases and mark the current one (SP-22)',
   open({ phase: '4' });
   render();
   openFactory('wire');
-  const hb = summary();
+  const handbookPhases = summary();
   assert.deepEqual(
-    hb.map(([label]) => (label as string).replace('current', '')),
+    handbookPhases.map(([label]) => (label as string).replace('current', '')),
     ['Phase 3', 'Phase 4', 'Phase 5'],
   );
   assert.deepEqual(
-    hb.filter(([, current]) => current),
+    handbookPhases.filter(([, current]) => current),
     [['Phase 4current', true, 'true']],
   );
 });
@@ -2007,7 +2061,9 @@ const headerRunning = async (key: string, label: RegExp, openIt: () => void) => 
   assert.match(box.closest('label')!.textContent!, label, 'it keeps its label');
   const order = $$('#detail .dialog-head input, #detail .dialog-head button');
   assert.deepEqual(
-    order.map(e => e.dataset.check ?? (e.dataset.close === undefined ? '?' : 'close')),
+    order.map(
+      control => control.dataset.check ?? (control.dataset.close === undefined ? '?' : 'close'),
+    ),
     [key, 'close'],
     'Tab goes title → Running → ×',
   );
@@ -2035,19 +2091,21 @@ test('a calculated factory dialog has its Running box in the header, saved as it
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open({ calculated: plan });
   render();
-  const r = calcStage()!.rows![0]!;
-  await headerRunning('calc-3-' + r.id, /^Running at Phase 3 target$/, () =>
-    openCalculatedFactory(r.id),
+  const row = calcStage()!.rows![0]!;
+  await headerRunning('calc-3-' + row.id, /^Running at Phase 3 target$/, () =>
+    openCalculatedFactory(row.id),
   );
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + r.id, value: true });
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + row.id, value: true });
 });
 
 test('a group build order stages suppliers before consumers', () => {
-  const x = plan.stages['3'];
-  const consumer = x.rows!.find(r =>
-    x.rows!.some(o => o.id !== r.id && Object.keys(o.outputs || {}).some(n => r.inputs?.[n])),
+  const stage = plan.stages['3'];
+  const consumer = stage.rows!.find(row =>
+    stage.rows!.some(
+      o => o.id !== row.id && Object.keys(o.outputs || {}).some(n => row.inputs?.[n]),
+    ),
   )!;
-  const supplier = x.rows!.find(
+  const supplier = stage.rows!.find(
     o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
   )!;
   open({
@@ -2066,7 +2124,7 @@ test('a group build order stages suppliers before consumers', () => {
   assert.ok($('[data-group-chain="fg-test01"]'), 'the group offers its build order');
   openGroupChain('fg-test01');
   assert.match($('#detail .eyebrow')!.textContent, /build\u00a0order/);
-  const names = $$('#detail .chain-title .rail-link').map(b => b.textContent);
+  const names = $$('#detail .chain-title .rail-link').map(link => link.textContent);
   assert.deepEqual(names, [supplier.name + ' ↗', consumer.name + ' ↗'], 'supplier first');
   assert.ok($('#detail .chain-title [data-calc-factory]'), 'stages link to their dialogs');
   assert.match(detail(), /Needs/);
@@ -2086,11 +2144,11 @@ test('a dialog left open when the session ends closes with the sign-in screen', 
 });
 
 test('built so far: the plan panel and factory cards follow the rows marked running', async () => {
-  const x = plan.stages['3'];
-  const rows = x.rows!;
+  const stage = plan.stages['3'];
+  const rows = stage.rows!;
   // A row fed by another row (not only by raw resources), and that supplier.
-  const consumer = rows.find(r =>
-    Object.keys(r.inputs).some(n => rows.some(o => o.id !== r.id && o.outputs[n])),
+  const consumer = rows.find(row =>
+    Object.keys(row.inputs).some(n => rows.some(o => o.id !== row.id && o.outputs[n])),
   )!;
   open({ calculated: plan, state: { checks: { ['calc-3-' + consumer.id]: true } } });
   go('plan');
@@ -2128,12 +2186,15 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
     $('[data-build-next]')!.textContent,
     /Every factory of this phase is marked running/,
   );
-  for (const [item, d] of Object.entries(x.delivery!)) {
-    const line = $$('[data-build-rate]').find(e =>
-      e.closest('.delivery')!.textContent.includes(item),
+  for (const [item, delivery] of Object.entries(stage.delivery!)) {
+    const line = $$('[data-build-rate]').find(rate =>
+      rate.closest('.delivery')!.textContent.includes(item),
     );
     assert.ok(line, item);
-    assert.ok(line.textContent.startsWith(`${num(d.rate)} of ${num(d.rate)} / min now`), item);
+    assert.ok(
+      line.textContent.startsWith(`${num(delivery.rate)} of ${num(delivery.rate)} / min now`),
+      item,
+    );
   }
   // The handbook profile has no such panel.
   open();
@@ -2170,9 +2231,9 @@ test('between groups: a card per group with what comes in and goes out, names es
   // One card per group, in the groups' order, after a card for each raw resource (#222, #339);
   // the elevator is only a row end.
   const all = $$('[data-group-card]');
-  const isSourceCard = (c: HTMLElement) => c.dataset.group!.startsWith('supply/');
+  const isSourceCard = (card: HTMLElement) => card.dataset.group!.startsWith('supply/');
   const sourceCards = all.filter(isSourceCard),
-    cards = all.filter(c => !isSourceCard(c));
+    cards = all.filter(card => !isSourceCard(card));
   assert.ok(sourceCards.length > 1, 'a card per raw resource');
   assert.deepEqual(all.slice(0, sourceCards.length), sourceCards, 'the sources come first');
   assert.deepEqual(
@@ -2180,9 +2241,9 @@ test('between groups: a card per group with what comes in and goes out, names es
     [evil, 'Parts'],
   );
   assert.equal($('[data-group="mines"]'), null, 'no combined mines card any more');
-  for (const c of sourceCards)
+  for (const sourceCard of sourceCards)
     assert.deepEqual(
-      [...c.querySelectorAll<HTMLElement>('[data-flow]')].map(p => p.dataset.flow),
+      [...sourceCard.querySelectorAll<HTMLElement>('[data-flow]')].map(part => part.dataset.flow),
       ['out'],
       'a source only sends',
     );
@@ -2192,8 +2253,9 @@ test('between groups: a card per group with what comes in and goes out, names es
     /Nothing moves in or out of Spare in this phase/,
   );
   const [smelt, parts] = cards as [HTMLElement, HTMLElement];
-  const flow = (card: HTMLElement, dir: string) => card.querySelector(`[data-flow="${dir}"]`)!;
-  const text = (e: Element) => e.textContent!.replace(/\s+/g, ' ').trim();
+  const flow = (card: HTMLElement, direction: string) =>
+    card.querySelector(`[data-flow="${direction}"]`)!;
+  const text = (el: Element) => el.textContent!.replace(/\s+/g, ' ').trim();
   // Each link shows twice: out of its sender and into its receiver, with the controls on Out only.
   const key = 'fg-smelt1:fg-parts1';
   const out = flow(smelt, 'out').querySelector(`[data-link-out="${key}"]`)!;
@@ -2204,14 +2266,16 @@ test('between groups: a card per group with what comes in and goes out, names es
   assert.equal($$('[data-link-in] select, [data-link-in] input').length, 0);
   assert.equal($$('[data-link-mode]').length, $$('[data-link-out]').length);
   // Every link has exactly one Out row, so each can be edited, and the mines' go to the groups.
-  const outs = $$('[data-link-out]').map(r => r.dataset.linkOut);
+  const outs = $$('[data-link-out]').map(row => row.dataset.linkOut);
   assert.equal(new Set(outs).size, outs.length);
   assert.deepEqual(
-    [...new Set($$('[data-link-in]').map(r => r.dataset.linkIn))].filter(k => !outs.includes(k)),
+    [...new Set($$('[data-link-in]').map(row => row.dataset.linkIn))].filter(
+      link => !outs.includes(link),
+    ),
     [],
   );
-  assert.ok(outs.some(k => k!.startsWith('supply/Iron Ore:fg-')));
-  const ends = (dir: string) => $$(`[data-flow="${dir}"] .flow-end`).map(text);
+  assert.ok(outs.some(link => link!.startsWith('supply/Iron Ore:fg-')));
+  const ends = (direction: string) => $$(`[data-flow="${direction}"] .flow-end`).map(text);
   // Each raw resource is a source of its own (#231) with a card of its own (#339), named by its
   // item, whose Out part counts and totals its links; no card has sections any more.
   assert.ok(ends('in').includes('← from Iron Ore'));
@@ -2239,8 +2303,8 @@ test('between groups: a card per group with what comes in and goes out, names es
     'a fluid reads m³/min',
   );
   assert.match(item.getAttribute('title')!, /^[A-Z][\w ]+: [\d.,]+( m³)?\/min$/);
-  for (const b of $$('[data-link-badge]'))
-    assert.match(text(b), /^\d+ × Mk\.\d (belt|pipe)s?( · \d+ × Mk\.\d (belt|pipe)s?)*$/);
+  for (const linkBadge of $$('[data-link-badge]'))
+    assert.match(text(linkBadge), /^\d+ × Mk\.\d (belt|pipe)s?( · \d+ × Mk\.\d (belt|pipe)s?)*$/);
   const badge = (row: Element) => text(row.querySelector('[data-link-badge]')!);
   assert.equal(badge(out), badge(into));
   // Each part counts its links and adds up what they carry.
@@ -2267,7 +2331,7 @@ test('between groups: a card per group with what comes in and goes out, names es
   await nextTick();
   assert.deepEqual(
     $$('[data-group-card]')
-      .map(c => c.dataset.group)
+      .map(card => card.dataset.group)
       .filter(id => !id!.startsWith('supply/')),
     ['fg-parts1', 'ungrouped'],
   );
@@ -2347,8 +2411,8 @@ test('between groups: a link can go by truck, train or back to belts, with the v
   render();
   await nextTick();
   const key = 'fg-smelt1:fg-parts1';
-  const pick = async (sel: string, value: string) => {
-    const el = $<HTMLSelectElement | HTMLInputElement>(sel)!;
+  const pick = async (selector: string, value: string) => {
+    const el = $<HTMLSelectElement | HTMLInputElement>(selector)!;
     el.value = value;
     el.dispatchEvent(new Event('change'));
     await settle();
@@ -2422,8 +2486,8 @@ test('between groups: existing supply sent straight to storage has its row and c
   assert.match(row.textContent!.replace(/\s+/g, ' '), /→ to Protected storage Iron Plate: /);
   // Existing supply is marked and its card comes after the mined resources' (#231, #339).
   const heads = $$('[data-group-card]')
-    .filter(c => c.dataset.group!.startsWith('supply/'))
-    .map(c => c.querySelector('h3')!.textContent!.trim());
+    .filter(card => card.dataset.group!.startsWith('supply/'))
+    .map(card => card.querySelector('h3')!.textContent!.trim());
   const plate = heads.findIndex(h => h.startsWith('Iron Plate (existing supply)'));
   assert.ok(plate > 0, JSON.stringify(heads));
   assert.ok(heads.slice(0, plate).every(h => !h.includes('existing supply')));
@@ -2465,11 +2529,11 @@ test('between groups: a vehicle saved on a whole mines link applies to each sour
   render();
   await nextTick();
   const sources = $$('[data-link-out]')
-    .map(r => r.dataset.linkOut!)
-    .filter(k => k.startsWith('supply/') && k.endsWith(':fg-smelt1'));
+    .map(row => row.dataset.linkOut!)
+    .filter(key => key.startsWith('supply/') && key.endsWith(':fg-smelt1'));
   assert.ok(sources.length > 1, JSON.stringify(sources));
-  for (const k of sources)
-    assert.equal($<HTMLSelectElement>(`[data-link-mode="${k}"]`)!.value, 'truck', k);
+  for (const source of sources)
+    assert.equal($<HTMLSelectElement>(`[data-link-mode="${source}"]`)!.value, 'truck', source);
   // Changing one: the others keep the truck as their own, and the old entry goes.
   const [first, ...rest] = sources;
   const mode = $<HTMLSelectElement>(`[data-link-mode="${first}"]`)!;
@@ -2477,18 +2541,18 @@ test('between groups: a vehicle saved on a whole mines link applies to each sour
   mode.dispatchEvent(new Event('change'));
   await settle();
   const sent = calls.at(-1)![1] as Extract<UpdateOp, { type: 'factoryLinkTransport' }>;
-  assert.deepEqual([...sent.siblings!].sort(), sources.map(k => k.split(':')[0]).sort());
+  assert.deepEqual([...sent.siblings!].sort(), sources.map(source => source.split(':')[0]).sort());
   const links = state.factoryGroups.links!;
   assert.equal(links['mines:fg-smelt1'], undefined);
   assert.deepEqual(links[first!], { mode: 'train', roundTripMin: 7 });
-  for (const k of rest) assert.deepEqual(links[k], truck, k);
+  for (const source of rest) assert.deepEqual(links[source], truck, source);
   assert.equal(state.version, 11);
   noMarkup();
 });
 
 test('between groups: splitting an old mines vehicle keeps it for sources that arrive only in another phase (#235)', async () => {
   // Every phase's rows in one group, so its mines sources differ from phase to phase.
-  const allRows = Object.values(plan.stages).flatMap(st => st.rows || []);
+  const allRows = Object.values(plan.stages).flatMap(stage => stage.rows || []);
   const truck = { mode: 'truck' as const, roundTripMin: 7, fuel: 'Coal' };
   open({
     calculated: plan,
@@ -2509,17 +2573,17 @@ test('between groups: splitting an old mines vehicle keeps it for sources that a
   render();
   await nextTick();
   const shown = $$('[data-link-out]')
-    .map(r => r.dataset.linkOut!)
-    .filter(k => k.startsWith('supply/') && k.endsWith(':fg-smelt1'));
+    .map(row => row.dataset.linkOut!)
+    .filter(key => key.startsWith('supply/') && key.endsWith(':fg-smelt1'));
   // A source that reaches the group in some phase, but not in the one on screen.
   const everywhere = new Set(
     Object.values(plan.stages)
-      .filter(st => st.rows?.length)
-      .flatMap(st => groupLinks(st, state.factoryGroups))
-      .filter(l => l.from.startsWith('supply/') && l.to === 'fg-smelt1')
-      .map(l => l.from + ':' + l.to),
+      .filter(stage => stage.rows?.length)
+      .flatMap(stage => groupLinks(stage, state.factoryGroups))
+      .filter(link => link.from.startsWith('supply/') && link.to === 'fg-smelt1')
+      .map(link => link.from + ':' + link.to),
   );
-  const later = [...everywhere].filter(k => !shown.includes(k));
+  const later = [...everywhere].filter(key => !shown.includes(key));
   assert.ok(later.length > 0, 'the plan has a source this phase does not show');
   const mode = $<HTMLSelectElement>(`[data-link-mode="${shown[0]}"]`)!;
   mode.value = 'train';
@@ -2528,12 +2592,12 @@ test('between groups: splitting an old mines vehicle keeps it for sources that a
   const sent = calls.at(-1)![1] as Extract<UpdateOp, { type: 'factoryLinkTransport' }>;
   assert.deepEqual(
     [...sent.siblings!].sort(),
-    [...everywhere].map(k => k.split(':')[0]).sort(),
+    [...everywhere].map(key => key.split(':')[0]).sort(),
     'the siblings cover every phase',
   );
   const links = state.factoryGroups.links!;
   assert.equal(links['mines:fg-smelt1'], undefined);
-  for (const k of later) assert.deepEqual(links[k], truck, `${k} keeps the truck`);
+  for (const key of later) assert.deepEqual(links[key], truck, `${key} keeps the truck`);
   noMarkup();
 });
 
@@ -2598,10 +2662,10 @@ test('between groups: recalculating with transport fuel creates a revision that 
 // The jump bar and folding sections of both factories pages (JumpBar.vue, CollapseToggle.vue,
 // SP-17, #252).
 const jumps = () =>
-  $$('#main .jump-bar [data-jump]').map(b => [
-    b.dataset.jump,
-    b.querySelector('.count')!.textContent,
-    b.textContent!.trim().replace(/\s+/g, ' '),
+  $$('#main .jump-bar [data-jump]').map(button => [
+    button.dataset.jump,
+    button.querySelector('.count')!.textContent,
+    button.textContent!.trim().replace(/\s+/g, ' '),
   ]);
 const toggleOf = (key: string) => $<HTMLButtonElement>(`[data-collapse="${key}"]`)!;
 const cardsOf = (key: string) => $<HTMLElement>(`#cards-${key}`)!;
@@ -2634,7 +2698,7 @@ test('the jump bar lists each group and shared site with its running count', asy
     ['site-oil', '0/2', 'Oil campus 0/2, 0 of 2 running'],
   ]);
   assert.deepEqual(
-    $$('#main .site-group').map(s => s.id),
+    $$('#main .site-group').map(site => site.id),
     ['section-fg-cable01', 'section-fg-plates1', 'section-site-oil'],
   );
   // The counts follow the search, like the chips, but not the chosen chip: Running keeps the
@@ -2786,20 +2850,20 @@ test('an empty group shows in the jump bar while editing, and user names stay te
 
 test('the calculated page has the jump bar and folding groups too', async () => {
   const rows = plan.stages['3'].rows!;
-  const [a, b, c] = rows;
+  const [first, second, third] = rows;
   open({
     calculated: plan,
     state: {
-      checks: { ['calc-3-' + a!.id]: true },
+      checks: { ['calc-3-' + first!.id]: true },
       factoryGroups: {
         groups: [
           { id: 'fg-cable01', name: 'North' },
           { id: 'fg-plates1', name: 'South' },
         ],
         assignments: {
-          [a!.id]: [{ group: 'fg-cable01', rate: null }],
-          [b!.id]: [{ group: 'fg-cable01', rate: null }],
-          [c!.id]: [{ group: 'fg-plates1', rate: null }],
+          [first!.id]: [{ group: 'fg-cable01', rate: null }],
+          [second!.id]: [{ group: 'fg-cable01', rate: null }],
+          [third!.id]: [{ group: 'fg-plates1', rate: null }],
         },
       },
     },
@@ -2834,25 +2898,25 @@ test('folded sections survive a page refresh, and anything unreadable opens them
     if (stored === null) localStorage.removeItem('planner-collapsed-sections');
     else localStorage.setItem('planner-collapsed-sections', stored);
     vi.resetModules();
-    const s = await import('../../public/app/session.ts');
-    s.setContext({
+    const session = await import('../../public/app/session.ts');
+    session.setContext({
       save: { id: 's', name: 'World' },
       profile: { id: 'original', kind: 'original', name: 'World' },
       state: structuredClone(state),
       plan: null,
       handbook,
     });
-    return s;
+    return session;
   };
-  let s = await fresh('["s/original/fg-cable01","s/other/site-oil"]');
-  assert.equal(s.sectionCollapsed('fg-cable01'), true);
-  assert.equal(s.sectionCollapsed('site-oil'), false, "another profile's choice");
+  let session = await fresh('["s/original/fg-cable01","s/other/site-oil"]');
+  assert.equal(session.sectionCollapsed('fg-cable01'), true);
+  assert.equal(session.sectionCollapsed('site-oil'), false, "another profile's choice");
   for (const bad of [null, 'not json', '{"fg-cable01":true}', '[1,null]']) {
-    s = await fresh(bad);
-    assert.equal(s.sectionCollapsed('fg-cable01'), false, String(bad));
+    session = await fresh(bad);
+    assert.equal(session.sectionCollapsed('fg-cable01'), false, String(bad));
   }
   // Folding again writes a clean list.
-  s.setSectionCollapsed('site-oil', true);
+  session.setSectionCollapsed('site-oil', true);
   assert.deepEqual(JSON.parse(localStorage.getItem('planner-collapsed-sections')!), [
     's/original/site-oil',
   ]);
@@ -2867,17 +2931,17 @@ test('the handbook factories page draws nothing for a phase the handbook has no 
     const el = document.createElement('div');
     const errors: unknown[] = [];
     const app = createApp({ render: () => h(FactoriesPage) });
-    app.config.errorHandler = e => void errors.push(e);
+    app.config.errorHandler = error => void errors.push(error);
     app.mount(el);
     await nextTick();
     assert.deepEqual(errors, [], what + ' draws without an error');
     assert.equal(el.querySelector('h1, .toolbar, .cards'), null, what + ' draws nothing');
     app.unmount();
   };
-  const p = generated();
-  p.settings.phase = '1';
+  const plan = generated();
+  plan.settings.phase = '1';
   for (const phase of ['1', '2'] as const) {
-    open({ calculated: p, phase, state: { factoryGroups: structuredClone(GROUPS) } });
+    open({ calculated: plan, phase, state: { factoryGroups: structuredClone(GROUPS) } });
     assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
     setFactoryEditing(true);
     await draw('phase ' + phase);
@@ -2937,7 +3001,7 @@ test("a guided plan's sites, local badges, notes and completion modules on the f
   assert.match(site.querySelector('.eyebrow')!.textContent!, /SHARED SITE · 2 OUTPUTS/);
   assert.deepEqual(
     [...site.querySelectorAll<HTMLElement>('.factory-card button.name')].map(
-      b => b.dataset.calcFactory,
+      button => button.dataset.calcFactory,
     ),
     [oil1.id, oil2.id],
   );
@@ -2992,12 +3056,12 @@ test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', a
   go('factories');
   render();
   await nextTick();
-  const chips = () => $$('#main [data-filter]').map(c => c.dataset.filter);
+  const chips = () => $$('#main [data-filter]').map(chip => chip.dataset.filter);
   assert.deepEqual(chips(), ['all', 'todo', 'done', 'local', 'held']);
   $('#main [data-filter="local"]')!.click();
   await nextTick();
   assert.deepEqual(
-    $$('#main .factory-card button.name').map(b => b.dataset.calcFactory),
+    $$('#main .factory-card button.name').map(button => button.dataset.calcFactory),
     [local.id],
     'Local keeps only the rows the guide builds locally',
   );
@@ -3033,9 +3097,9 @@ test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', a
 // transport fuel solve it afresh (decision 7B on #387, #480); any other plan does not.
 test('round-up and Recalculate with transport fuel warn first on a transcribed plan (#480)', async () => {
   for (const engine of ['handbook-2026-09-13', plan.engine]) {
-    const p = { ...structuredClone(plan), engine };
-    p.settings.wholeMachines = false;
-    open({ calculated: p });
+    const profilePlan = { ...structuredClone(plan), engine };
+    profilePlan.settings.wholeMachines = false;
+    open({ calculated: profilePlan });
     go('factories');
     render();
     await nextTick();
@@ -3046,9 +3110,9 @@ test('round-up and Recalculate with transport fuel warn first on a transcribed p
     assert.equal(asked.length, 1, engine);
     assert.equal(asked[0]!.includes(RESOLVE_WARNING), engine.startsWith('handbook-'), engine);
     // Recalculate with transport fuel says it beside its button.
-    const rows = p.stages['3'].rows!;
+    const rows = profilePlan.stages['3'].rows!;
     open({
-      calculated: p,
+      calculated: profilePlan,
       workspace: { catalog: catalog() },
       state: {
         version: 7,
