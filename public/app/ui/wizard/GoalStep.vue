@@ -10,6 +10,7 @@ import { draft, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
+import StepHeading from '../form/StepHeading.vue';
 
 const PHASE_TIME = [
   ['every', 'Every phase'],
@@ -37,7 +38,7 @@ const view = computed(() =>
 </script>
 
 <template>
-  <h2>Choose your production goal</h2>
+  <StepHeading :step="3" :total="5">Choose your production goal</StepHeading>
   <p>
     {{
       view.timed

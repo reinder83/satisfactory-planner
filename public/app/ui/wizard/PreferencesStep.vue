@@ -15,6 +15,7 @@ import SelectField from '../form/SelectField.vue';
 import AltPicker from './AltPicker.vue';
 import SloopLedger from './SloopLedger.vue';
 import StorageRates from './StorageRates.vue';
+import StepHeading from '../form/StepHeading.vue';
 
 const RECIPES = [
   ['standard', 'Standard recipes'],
@@ -45,7 +46,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
 </script>
 
 <template>
-  <h2>How do you want to build?</h2>
+  <StepHeading :step="2" :total="5">How do you want to build?</StepHeading>
   <div class="form-grid">
     <SelectField
       label="Recipe access"

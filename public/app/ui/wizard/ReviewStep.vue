@@ -15,6 +15,7 @@ import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
 import FuelVerdict from './FuelVerdict.vue';
 import SupplyNotice from './SupplyNotice.vue';
+import StepHeading from '../form/StepHeading.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -57,7 +58,7 @@ const view = computed(() =>
 
 <template>
   <template v-if="view">
-    <h2>Review {{ view.name }}</h2>
+    <StepHeading :step="5" :total="5">Review {{ view.name }}</StepHeading>
     <p>Nothing has been created yet. Your other profiles and their progress stay intact.</p>
     <div class="table-wrap">
       <table>

@@ -12,7 +12,7 @@
   sits under the form, with a one-line summary at the foot of the screen (#412).
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -37,6 +37,7 @@ import ResourcesStep from '../wizard/ResourcesStep.vue';
 import ReviewStep from '../wizard/ReviewStep.vue';
 import SettingsStep from '../wizard/SettingsStep.vue';
 import { newSave } from '../actions.ts';
+import { focusNewStep } from '../refocus.ts';
 
 const STEPS = ['Game settings', 'Preferences', 'Goals', 'Resources', 'Review'];
 
@@ -54,6 +55,10 @@ const page = computed(() =>
     };
   }),
 );
+
+// Continue and Back replace the form, and focus with it: it goes to the new step's heading
+// (#608). A step tab stays where it is, and keeps focus. Not on the first step drawn.
+watch(() => page.value.draft && page.value.step, focusNewStep, { flush: 'post' });
 
 // Settings whose answer changes what the step shows: read the step and redraw.
 function changed(event: Event) {

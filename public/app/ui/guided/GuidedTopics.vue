@@ -11,6 +11,7 @@ import { guidedQuestions, storageOptions } from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { draft, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
+import StepHeading from '../form/StepHeading.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -50,7 +51,7 @@ const view = computed(() =>
 </script>
 
 <template>
-  <h2>What is different this time?</h2>
+  <StepHeading>What is different this time?</StepHeading>
   <p>
     Starting from the settings of <b>{{ view.from || 'this save' }}</b
     >. Tick only what changes; the rest is kept as it is.

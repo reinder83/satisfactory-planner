@@ -13,7 +13,7 @@
   (form/NameField.vue, #622).
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -28,6 +28,8 @@ import GuidedTopics from '../guided/GuidedTopics.vue';
 import GuidedTopup from '../guided/GuidedTopup.vue';
 import PageHeader from '../PageHeader.vue';
 import SupplyRows from '../wizard/SupplyRows.vue';
+import StepHeading from '../form/StepHeading.vue';
+import { focusNewStep } from '../refocus.ts';
 
 // null once the draft has left the guided questions: until render() swaps this page out, it
 // draws nothing.
@@ -62,6 +64,10 @@ const page = computed(() =>
     };
   }),
 );
+
+// Continue and Back replace the form, and focus with it: it goes to the new screen's heading
+// (#608). Not on the first screen drawn, which has no change to follow.
+watch(() => page.value?.key, focusNewStep, { flush: 'post' });
 
 // A question's answer, a top-up chip or a topic decides what follows: read and redraw. A topic
 // is only recorded (wizard.guidedTopics): Continue applies them, so the topics screen stays.
@@ -125,9 +131,11 @@ function submit() {
         />
       </div>
       <GuidedTopics v-if="page.topics" />
-      <h2 v-else-if="!page.question">Ready to calculate</h2>
+      <StepHeading v-else-if="!page.question">Ready to calculate</StepHeading>
       <template v-else>
-        <h2>{{ page.question.title }}</h2>
+        <StepHeading :step="page.index + 1" :total="page.progress.length">{{
+          page.question.title
+        }}</StepHeading>
         <p>{{ page.question.lead }}</p>
         <SupplyRows v-if="page.question.kind === 'supply'" />
         <GuidedCards v-else :question="page.question" />
