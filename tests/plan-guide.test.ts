@@ -146,7 +146,7 @@ test('a malformed plan guide is refused', () => {
   ])
     assert.throws(
       () => validateTransfer(withGuide(bad)),
-      /Invalid plan guide\./,
+      /This save file has a damaged plan guide, so it cannot be imported\./,
       JSON.stringify(bad),
     );
 });

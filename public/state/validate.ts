@@ -318,7 +318,7 @@ export function linkTransport(value: unknown): LinkTransport {
 // unmapped assignment names need not exist any more.
 export function validateOrigin(raw: unknown): HandbookOrigin | undefined {
   if (raw === undefined) return undefined;
-  const bad = () => fail('Invalid handbook origin.');
+  const bad = () => fail('Invalid record of an earlier profile conversion.');
   if (!plain(raw) || typeof raw.version !== 'string' || !/^[\w.:-]{1,40}$/.test(raw.version)) bad();
   const unmapped = (raw as Raw).unmapped;
   if (!plain(unmapped)) bad();

@@ -58,7 +58,9 @@ function invalid(message: string): never {
 // Save and profile names are checked but kept exactly as exported, untrimmed.
 const title = (name: unknown): string => {
   if (typeof name !== 'string' || !name.trim() || name.length > 80)
-    invalid('Invalid save or profile name.');
+    invalid(
+      'This save file has a world or profile without a usable name (1 to 80 characters), so it cannot be imported. Export it again from the planner that made it.',
+    );
   return name;
 };
 const record = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -77,7 +79,10 @@ const httpsOnly = <T extends { url: string }>(sources: T[]) =>
 // and its source links keep only https ones. Returns a clean copy, or throws.
 function checkGuide(input: unknown): PlanGuide {
   // Typed on the name, so a check followed by bad() narrows what comes after it.
-  const bad: () => never = () => invalid('Invalid plan guide.');
+  const bad: () => never = () =>
+    invalid(
+      'This save file has a damaged plan guide, so it cannot be imported. Export it again from the planner that made it.',
+    );
   const text = (value: unknown): value is string => typeof value === 'string';
   const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
   const rates = (value: unknown) => record(value) && Object.values(value as object).every(finite);
@@ -157,6 +162,24 @@ function checkGuide(input: unknown): PlanGuide {
   }
   return guide;
 }
+// A profile's progress, checked by validateState like any progress write. Its refusals are short
+// ("Invalid group link."), so on the import path they say the file is damaged and what to do
+// next (#662). A newer planner's state keeps its own update message, and an error that is not a
+// refusal (no 400) is passed on unchanged.
+function importedState(state: unknown) {
+  try {
+    return validateState(state);
+  } catch (error) {
+    const { message, status } = error as Error & { status?: number };
+    if (status !== 400 || /newer planner/.test(message)) throw error;
+    const detail = /^Invalid /.test(message) ? ' ' + message : '';
+    return invalid(
+      'This save file has damaged progress, so it cannot be imported.' +
+        detail +
+        ' Export it again from the planner that made it.',
+    );
+  }
+}
 type GuideShape = { id?: unknown; title?: unknown; body?: unknown };
 // Checks a parsed export and returns a clean copy of the same shape, without exportedAt.
 // Throws (invalid(): an Error with status 400) before anything is written. Each profile's progress goes through
@@ -177,7 +200,9 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
   // Only accept data objects; executable links never belong in a portable handbook.
   const text = JSON.stringify(data);
   if (text.length > transferImportLimit || /"(?:__proto__|constructor|prototype)"\s*:/.test(text))
-    invalid('Invalid or oversized save export.');
+    invalid(
+      'This save file is too large or damaged, so it cannot be imported. Export it again from the planner that made it.',
+    );
   const saves = (input.saves as IncomingSave[]).map(save => {
     if (
       !record(save) ||
@@ -185,14 +210,18 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
       !save.profiles.length ||
       save.profiles.length > 30
     )
-      invalid('Invalid profiles in export.');
+      invalid(
+        'This save file has a world with missing, damaged or too many profiles, so it cannot be imported. Export it again from the planner that made it.',
+      );
     const profiles = (save.profiles as IncomingProfile[]).map(profile => {
       if (
         !record(profile) ||
         !['calculated', 'original'].includes(profile.kind as string) ||
         typeof profile.id !== 'string'
       )
-        invalid('Invalid profile.');
+        invalid(
+          'This save file has a damaged profile, so it cannot be imported. Export it again from the planner that made it.',
+        );
       const kind = profile.kind as ProfileKind;
       // A calculated profile must bring its calculation snapshot, since profiles are never
       // silently recalculated, with a stage for each of phases 1–5. An original profile must
@@ -203,11 +232,15 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
           !profile.plan?.stages ||
           !Array.isArray(profile.plan.warnings)
         )
-          invalid('Missing calculation snapshot.');
+          invalid(
+            'This save file has a plan without its calculation, so it cannot be imported. Export it again from the planner that made it.',
+          );
         for (const phase of ['1', '2', '3', '4', '5']) {
           const stage = profile.plan.stages[phase];
           if (!stage || !Array.isArray(stage.rows || []) || typeof stage.feasible !== 'boolean')
-            invalid('Invalid calculation stage.');
+            invalid(
+              'This save file has a plan with a damaged phase, so it cannot be imported. Export it again from the planner that made it.',
+            );
         }
       } else if (
         !profile.handbook?.factories ||
@@ -241,14 +274,16 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
         kind,
         plan,
         ...(handbook ? { handbook: handbook as Handbook } : {}),
-        state: validateState(profile.state),
+        state: importedState(profile.state),
       };
     });
     if (
       new Set(profiles.map(p => p.id)).size !== profiles.length ||
       !profiles.some(p => p.id === save.activeProfile)
     )
-      invalid('Invalid active profile.');
+      invalid(
+        'This save file has a world whose profile list is damaged, so it cannot be imported. Export it again from the planner that made it.',
+      );
     // The check above matched it against the (string) profile ids.
     return {
       id: String(save.id),

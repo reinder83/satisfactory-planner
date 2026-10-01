@@ -46,7 +46,7 @@ test('a malformed handbookOrigin is refused', () => {
   ])
     assert.throws(
       () => validateState({ ...structuredClone(version12), handbookOrigin: bad }),
-      /Invalid handbook origin\./,
+      /Invalid record of an earlier profile conversion\./,
       JSON.stringify(bad),
     );
 });

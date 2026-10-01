@@ -61,3 +61,82 @@ test('each refusal of a file from an older planner says what to do next', async 
     assert.match(error.message, next, name);
   }
 });
+
+// Every other refusal an import can meet names the file and the same next step (#662), including
+// validateState's short ones, which the import path wraps. No refusal names the handbook.
+const calculated = (profile: Record<string, unknown> = {}, save: Record<string, unknown> = {}) => {
+  const stages = Object.fromEntries(
+    ['1', '2', '3', '4', '5'].map(phase => [phase, { rows: [], feasible: true }]),
+  );
+  return {
+    format: 'satisfactory-planner-saves',
+    version: 1,
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'p',
+        profiles: [
+          {
+            id: 'p',
+            name: 'Mine',
+            kind: 'calculated',
+            plan: { settings: {}, stages, warnings: [] },
+            state: initialState(),
+            ...profile,
+          },
+        ],
+        ...save,
+      },
+    ],
+  };
+};
+
+test('a calculated export that is whole imports, so the cases below fail on one thing', () => {
+  assert.equal(validateTransfer(calculated()).saves.length, 1);
+});
+
+test('every import refusal names the save file and a next step, never the handbook', async () => {
+  const state = (change: Record<string, unknown>) => ({ state: { ...initialState(), ...change } });
+  const cases: [string, unknown, RegExp][] = [
+    ['a damaged origin', calculated(state({ handbookOrigin: 5 })), /damaged progress.*earlier/],
+    ['a damaged phase', calculated(state({ settings: { phase: 9 } })), /Invalid selected phase\./],
+    ['no state version', calculated(state({ version: undefined })), /damaged progress, so/],
+    ['a bad kind', calculated({ kind: 'handbook' }), /a damaged profile,/],
+    ['no calculation', calculated({ plan: {} }), /plan without its calculation/],
+    [
+      'a missing stage',
+      calculated({ plan: { settings: {}, stages: {}, warnings: [] } }),
+      /plan with a damaged phase/,
+    ],
+    [
+      'a bad guide',
+      calculated({ plan: { ...calculated().saves[0]!.profiles[0]!.plan, guide: 5 } }),
+      /damaged plan guide/,
+    ],
+    ['an empty name', calculated({ name: ' ' }), /usable name/],
+    ['no active profile', calculated({}, { activeProfile: 'q' }), /profile list is damaged/],
+    ['no profiles', calculated({}, { profiles: [] }), /too many profiles/],
+    [
+      'a prototype key',
+      JSON.parse(JSON.stringify(calculated()).replace('"settings"', '"__proto__"')),
+      /too large or damaged/,
+    ],
+  ];
+  for (const [name, data, detail] of cases) {
+    const error = await refusal(() => importableTransfer(data));
+    assert.equal(error.status, 400, name + ': ' + error.message);
+    assert.match(error.message, /^This save file /, name);
+    assert.match(error.message, detail, name);
+    assert.match(error.message, next, name);
+    assert.doesNotMatch(error.message, retired, name);
+  }
+});
+
+test('a state from a newer planner keeps its update message on import', async () => {
+  const error = await refusal(() =>
+    validateTransfer(calculated({ state: { ...initialState(), version: 13 } })),
+  );
+  assert.equal(error.status, 400);
+  assert.match(error.message, /newer planner version\. Update the app to import it\.$/);
+});
