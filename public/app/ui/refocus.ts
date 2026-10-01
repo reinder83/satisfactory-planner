@@ -75,6 +75,33 @@ function focusHeading() {
   window.scrollTo(0, 0);
 }
 
+// For the wizard's five steps and the guided start (#608): Continue and Back replace the screen's
+// form, so the pressed button goes with it. Focus goes to the new screen's heading
+// (ui/form/StepHeading.vue, tabindex="-1"), whose name says which step it is, and only when focus
+// was lost: a step tab stays on the page and keeps it. The screen starts at the top of the page,
+// as a new page does; where that leaves the heading below the window, or under the estimate's
+// bar at the foot of a phone's screen (#449), the step indicator above the form comes to the top
+// instead, with the heading under it.
+export function focusNewStep() {
+  if (!lost()) return;
+  const heading = document.querySelector<HTMLElement>('#wizard-form [data-step-heading]');
+  if (!heading) return;
+  heading.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+  if (inView(heading)) return;
+  document
+    .querySelector<HTMLElement>('#main .wizard-progress, #main .guided-stepper')
+    ?.scrollIntoView({ block: 'start' });
+  if (!inView(heading)) heading.scrollIntoView({ block: 'start' });
+}
+
+// Whether all of `el` shows in the window, above the estimate's bar when there is one.
+function inView(el: HTMLElement) {
+  const box = el.getBoundingClientRect();
+  const bar = document.querySelector('[data-estimate-peek]')?.getBoundingClientRect().height ?? 0;
+  return box.top >= 0 && box.bottom <= window.innerHeight - bar;
+}
+
 // For the factories pages' jump bar (SP-17, #252): the same move within a page. The section
 // comes to the top of the window (its scroll-margin keeps a gap above it) and its heading takes
 // focus, which a screen reader reads out and where the next Tab starts: the h2 (tabindex="-1",

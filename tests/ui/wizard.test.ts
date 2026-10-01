@@ -295,7 +295,11 @@ test('moving between steps reads the step being left, and Review calculates', as
   assert.equal(calls[0]![1].settings.somersloops, 104);
   assert.deepEqual(calls[0]![1].settings.sloopReserved, ['shards']);
   assert.equal(wizard!.step, 5);
-  assert.equal($('#main h2')!.textContent, 'Review Balanced progression', 'named after the goal');
+  assert.equal(
+    $('#main h2')!.textContent,
+    'Step 5 of 5: Review Balanced progression',
+    'named after the goal',
+  );
   assert.equal($$('#main tbody tr').length, 3, 'the phases from the start phase on');
   // Back steps without validating; Continue moves on.
   await click('[data-wizard-back]');
@@ -802,7 +806,7 @@ test('past the last question the plan is calculated and Review takes over', asyn
   assert.equal(calls.length, 1);
   assert.equal(wizard!.step, 5);
   assert.equal(vuePage('wizard', null, wizard), WizardPage);
-  assert.match($('#main h2')!.textContent, /^Review /);
+  assert.match($('#main h2')!.textContent, /^Step 5 of 5: Review /);
 });
 
 test('a second profile for a save is asked what changed, naming the profile safely', async () => {
@@ -862,7 +866,7 @@ test('a failed calculation with no topics ticked stays on the "what is different
   stubFetch({ '/api/preview': generated() });
   await submit();
   assert.equal(wizard!.step, 5);
-  assert.match($('#main h2')!.textContent, /^Review /);
+  assert.match($('#main h2')!.textContent, /^Step 5 of 5: Review /);
 });
 
 test('"← Guided start" after All settings with no topics ticked returns to the topics', async () => {

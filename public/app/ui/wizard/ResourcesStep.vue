@@ -10,6 +10,7 @@ import { draft, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
+import StepHeading from '../form/StepHeading.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -25,7 +26,7 @@ const view = computed(() =>
 </script>
 
 <template>
-  <h2>Available resource budgets</h2>
+  <StepHeading :step="4" :total="5">Available resource budgets</StepHeading>
   <p>
     <button type="button" class="btn primary" data-open-extraction @click="openExtraction()">
       Work these out from my nodes →

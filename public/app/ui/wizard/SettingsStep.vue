@@ -15,6 +15,7 @@ import InputField from '../form/InputField.vue';
 import NameField from '../form/NameField.vue';
 import SelectField from '../form/SelectField.vue';
 import SupplyRows from './SupplyRows.vue';
+import StepHeading from '../form/StepHeading.vue';
 
 const PHASES = ['1', '2', '3', '4', '5'].map(phase => [phase, 'Phase ' + phase]);
 
@@ -40,7 +41,7 @@ const view = computed(() =>
 </script>
 
 <template>
-  <h2>Your save and game settings</h2>
+  <StepHeading :step="1" :total="5">Your save and game settings</StepHeading>
   <p>Use the settings shown in your game. Values are multipliers: half consumption is 0.5.</p>
   <div class="form-grid">
     <div class="settings-name">
