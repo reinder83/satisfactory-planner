@@ -234,6 +234,53 @@ try {
   await longStep.locator('.delete-task').click();
   await page.locator('#confirm [data-confirm-ok]').click();
   await longStep.waitFor({ state: 'detached' });
+  // A removed step with a long unbroken word in its title wraps inside "Removed steps in this
+  // phase" at phone width, and its Restore stays on screen (#707).
+  await page.locator('[data-toggle-plan-edit]').first().click();
+  const builtIn = page.locator('#main .checklist .task:not([data-task-edit])', {
+    has: page.locator('[data-remove-step]:not([data-remove-step^="custom-"])'),
+  });
+  const builtInId = (await builtIn
+    .first()
+    .locator('[data-remove-step]')
+    .getAttribute('data-remove-step')) as string;
+  const builtInTitle = (
+    await page.locator(`#main [data-task="${builtInId}"] summary`).textContent()
+  )?.trim() as string;
+  const renameStep = async (title: string) => {
+    await page.locator(`#main [data-edit-task="${builtInId}"]`).click();
+    await page.locator(`#main [data-task-edit="${builtInId}"] [name=title]`).fill(title);
+    await page.locator(`#main [data-task-edit="${builtInId}"] button[type=submit]`).click();
+    await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor();
+  };
+  await renameStep(longTitle);
+  await page.locator(`#main [data-remove-step="${builtInId}"]`).click();
+  await page.locator('#confirm [data-confirm-ok]').click();
+  const restoreButton = page.locator(`#main [data-restore-task="${builtInId}"]`);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.locator('#main .removed-steps').evaluate(panel => {
+    (panel as HTMLDetailsElement).open = true;
+  });
+  await restoreButton.waitFor();
+  const removedLayout = await restoreButton.evaluate(button => {
+    const row = button.closest('.removed-step') as HTMLElement;
+    return {
+      row: row.scrollWidth <= row.clientWidth,
+      page: document.documentElement.scrollWidth <= window.innerWidth,
+      restore: button.getBoundingClientRect().right <= window.innerWidth,
+    };
+  });
+  assert.deepEqual(
+    removedLayout,
+    { row: true, page: true, restore: true },
+    'a long word in a removed step wraps and Restore stays on screen at 320 px',
+  );
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await restoreButton.click();
+  await page.locator(`#main [data-remove-step="${builtInId}"]`).waitFor();
+  await renameStep(builtInTitle);
+  await page.locator('[data-toggle-plan-edit]').first().click();
+  await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor({ state: 'detached' });
   // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
   // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,
   // so a point on it hits the <dialog> itself.
