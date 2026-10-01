@@ -1,6 +1,12 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
-import { checkBase, checkPlanStart, currentPayoff, wholeMachineProfile } from '../public/state.ts';
+import {
+  checkBase,
+  checkPlanStart,
+  checkRoundUp,
+  currentPayoff,
+  wholeMachineProfile,
+} from '../public/state.ts';
 import { calculate, rankAlternates } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -22,13 +28,9 @@ export function profileRoutes({
   // of any input (wholeMachineProfile and roundUpState in public/state/carry.ts, shared with
   // browser-api.ts). The same rule newProfileState uses when carrying factory progress.
   async function roundUp({ req, user, save, profile }: ScopedRequest) {
-    if (profile.kind !== 'calculated')
-      fail(
-        'The preserved handbook is unchanged. Create a calculated profile to use whole-machine planning.',
-      );
-    // A calculated profile always carries its plan.
+    checkRoundUp(profile);
+    // checkRoundUp passes only a calculated profile, which always carries its plan.
     const plan = profile.plan!;
-    if (plan.settings.wholeMachines) fail('This profile already uses whole-machine planning.');
     limits.throttle(req);
     const rounded = calculate({ ...plan.settings, wholeMachines: true }),
       profileId = randomId();

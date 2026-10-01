@@ -2,7 +2,7 @@
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
 import fs from 'node:fs/promises';
 import { importableTransfer, transferFormat } from '../public/transfer.ts';
-import { shareState, calculatedProfile } from '../public/state.ts';
+import { shareState, calculatedProfile, checkNewProfileKind } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -139,15 +139,14 @@ export function saveRoutes({
     }
   }
   // Creates a profile in one of the user's saves (saveId) or in a new save (saveName). It is
-  // calculated now and the snapshot stored; kind 'original' is refused, since the handbook
-  // profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
+  // calculated now and the snapshot stored; kind 'original' is refused (checkNewProfileKind), since
+  // that profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
   // (copied, never moved) and built lists finished work; see newProfileState. The plan is
   // calculated before the commit; the save lookup and limits are checked inside it.
   async function createProfile({ req, user, body }: UserRequest) {
     limits.throttle(req);
     const input = await body();
-    if (input.kind === 'original')
-      fail('Handbook profiles can no longer be created. Create a calculated profile instead.');
+    checkNewProfileKind(input.kind);
     const saveName = input.saveId ? null : name(input.saveName),
       profileName = name(input.name);
     const plan = calculate(input.settings);
