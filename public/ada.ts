@@ -63,6 +63,10 @@ export interface AdaFacts {
     tight: boolean;
   } | null;
   hours: string;
+  // The stage's whole-machine search stopped and its exact plan was rounded instead (#593): the
+  // target time as a string like `hours`, and whether the rounded plan takes longer. null when
+  // the search finished.
+  rounded: { target: string; longer: boolean } | null;
   profiles: number;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
@@ -475,6 +479,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.removedSteps > 0,
     text: facts =>
       `${plural(facts.removedSteps, 'step')} removed from this phase. Not deleted — merely ignored, like most safety notices. Restore them under “Removed steps” while editing.`,
+  },
+  {
+    id: 'rounded-after-stop',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => facts.rounded,
+    text: facts =>
+      `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to the nearest whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
   },
   {
     id: 'hours',

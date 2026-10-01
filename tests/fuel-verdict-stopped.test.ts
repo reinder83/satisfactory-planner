@@ -80,13 +80,15 @@ test('a stopped first unfueled attempt does not hide a proven "does not fit" (#6
   assert.equal(verdict.unfueledFeasible, false, 'and the unfueled plan does not fit');
   // Under 'avoid' the comparison makes one attempt, the same solve as the first of the two
   // 'needed' makes (without conversion). The fueled Phase 5 solve before it makes `fueled`
-  // calls: the fewest after which a jump still leaves the fueled phase planned.
+  // calls: the fewest after which a jump still leaves the fueled phase planned by its own search,
+  // not rounded from the exact plan after a stopped one (#693).
   const avoid = { ...shortOfPower, sam: 'avoid' };
   let low = 0,
     high = calculateCounted(avoid).calls;
   while (low < high) {
     const middle = Math.floor((low + high) / 2);
-    if (calculateCounted(avoid, middle).plan.stages[5].feasible) high = middle;
+    const stage = calculateCounted(avoid, middle).plan.stages[5];
+    if (stage.feasible && stage.roundedAfterStop === undefined) high = middle;
     else low = middle + 1;
   }
   const fueled = low;
