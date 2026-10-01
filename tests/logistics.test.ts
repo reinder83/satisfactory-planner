@@ -15,67 +15,69 @@ import { calculate, catalog } from '../planner.ts';
 import { vehicleFuels } from '../public/preferences.ts';
 import type { LinkTransport, ProgressState, UpdateOp } from '../public/types/index.ts';
 
-const c = catalog();
+const gameCatalog = catalog();
 const fluids = new Set(['Water', 'Nitrogen Gas', 'Excited Photonic Matter']);
-const load = (items: [string, number][], t: LinkTransport) =>
+const load = (items: [string, number][], transport: LinkTransport) =>
   linkLoad(
     items.map(([item, rate]) => ({ item, rate })),
-    t,
-    c,
+    transport,
+    gameCatalog,
     fluids,
   );
 
 const grouped = (): ProgressState => {
-  let s = initialState();
-  s = mutate(s, { type: 'factoryGroupAdd', id: 'fg-plates1', name: 'Plates' });
-  s = mutate(s, { type: 'factoryGroupAdd', id: 'fg-motors1', name: 'Motors' });
-  return s;
+  let state = initialState();
+  state = mutate(state, { type: 'factoryGroupAdd', id: 'fg-plates1', name: 'Plates' });
+  state = mutate(state, { type: 'factoryGroupAdd', id: 'fg-motors1', name: 'Motors' });
+  return state;
 };
-const link = (over: Partial<Extract<UpdateOp, { type: 'factoryLinkTransport' }>>): UpdateOp => ({
+const link = (
+  overrides: Partial<Extract<UpdateOp, { type: 'factoryLinkTransport' }>>,
+): UpdateOp => ({
   type: 'factoryLinkTransport',
   from: 'fg-plates1',
   to: 'fg-motors1',
   mode: 'truck',
   roundTripMin: 4,
   fuel: 'Packaged Fuel',
-  ...over,
+  ...overrides,
 });
 
 test('a link’s vehicle is saved as version 7 and going back to belts restores the old version', () => {
-  let s = grouped();
-  assert.equal(s.version, 3);
-  s = mutate(s, link({}));
-  s = mutate(s, link({ from: MINES, to: 'fg-plates1', mode: 'train', fuel: undefined }));
-  assert.deepEqual(s.factoryGroups.links, {
+  let state = grouped();
+  assert.equal(state.version, 3);
+  state = mutate(state, link({}));
+  state = mutate(state, link({ from: MINES, to: 'fg-plates1', mode: 'train', fuel: undefined }));
+  assert.deepEqual(state.factoryGroups.links, {
     'fg-plates1:fg-motors1': { mode: 'truck', roundTripMin: 4, fuel: 'Packaged Fuel' },
     'mines:fg-plates1': { mode: 'train', roundTripMin: 4 },
   });
-  assert.equal(s.version, 7, 'a version-6 planner must refuse it rather than drop the choice');
-  const round = validateState(JSON.parse(JSON.stringify(s)));
-  assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
+  assert.equal(state.version, 7, 'a version-6 planner must refuse it rather than drop the choice');
+  const round = validateState(JSON.parse(JSON.stringify(state)));
+  assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
   assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
   // Removing a group takes its links along; belts again forget the entry.
-  s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-motors1' });
-  assert.deepEqual(Object.keys(s.factoryGroups.links!), ['mines:fg-plates1']);
-  s = mutate(s, link({ from: MINES, to: 'fg-plates1', mode: 'belt' }));
-  assert.equal(s.factoryGroups.links, undefined);
-  assert.equal(s.version, 3);
+  state = mutate(state, { type: 'factoryGroupRemove', id: 'fg-motors1' });
+  assert.deepEqual(Object.keys(state.factoryGroups.links!), ['mines:fg-plates1']);
+  state = mutate(state, link({ from: MINES, to: 'fg-plates1', mode: 'belt' }));
+  assert.equal(state.factoryGroups.links, undefined);
+  assert.equal(state.version, 3);
   // A state without links keeps its exact shape.
   assert.deepEqual(Object.keys(grouped().factoryGroups), ['groups', 'assignments']);
 });
 
 test('a link to or from the vehicle fuel place marks version 9, which older releases refuse with the update message (#220)', () => {
-  let s = mutate(grouped(), link({}));
-  assert.equal(s.version, 7);
-  s = mutate(s, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'tractor' }));
-  assert.equal(s.version, 9, 'a release before #218 does not know the place');
-  const round = validateState(JSON.parse(JSON.stringify(s)));
+  let state = mutate(grouped(), link({}));
+  assert.equal(state.version, 7);
+  state = mutate(state, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'tractor' }));
+  assert.equal(state.version, 9, 'a release before #218 does not know the place');
+  const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.equal(round.version, 9);
-  assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
+  assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
   assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
   // Back to belts, the link goes and the version with it.
-  s = mutate(s, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'belt' }));
-  assert.equal(s.version, 7);
+  state = mutate(state, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'belt' }));
+  assert.equal(state.version, 7);
   // A state saved as 7 with such a link (made by #218 before this fix) still loads, marked 9.
   const early = validateState({ ...JSON.parse(JSON.stringify(round)), version: 7 });
   assert.equal(early.version, 9);
@@ -85,11 +87,11 @@ test('a link from one source item marks version 11, and splits a mines link save
   const ore = 'supply/Iron Ore',
     coal = 'supply/Coal';
   // A mines link with a truck, as saved before #231.
-  let s = mutate(grouped(), link({ from: MINES, to: 'fg-plates1' }));
-  assert.equal(s.version, 7);
+  let state = mutate(grouped(), link({ from: MINES, to: 'fg-plates1' }));
+  assert.equal(state.version, 7);
   // The first choice for one of its items: the other items keep the truck as their own, and the
   // old entry goes.
-  s = mutate(s, {
+  state = mutate(state, {
     type: 'factoryLinkTransport',
     from: ore,
     to: 'fg-plates1',
@@ -97,19 +99,29 @@ test('a link from one source item marks version 11, and splits a mines link save
     roundTripMin: 9,
     siblings: [ore, coal],
   });
-  assert.deepEqual(s.factoryGroups.links, {
+  assert.deepEqual(state.factoryGroups.links, {
     [ore + ':fg-plates1']: { mode: 'train', roundTripMin: 9 },
     [coal + ':fg-plates1']: { mode: 'truck', roundTripMin: 4, fuel: 'Packaged Fuel' },
   });
-  assert.equal(s.version, 11, 'a release before #231 knows only the one mines place');
-  const round = validateState(JSON.parse(JSON.stringify(s)));
-  assert.deepEqual(round.factoryGroups.links, s.factoryGroups.links);
+  assert.equal(state.version, 11, 'a release before #231 knows only the one mines place');
+  const round = validateState(JSON.parse(JSON.stringify(state)));
+  assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
   assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
   // Belts again for both: nothing left, and the version drops.
-  s = mutate(s, { type: 'factoryLinkTransport', from: ore, to: 'fg-plates1', mode: 'belt' });
-  s = mutate(s, { type: 'factoryLinkTransport', from: coal, to: 'fg-plates1', mode: 'belt' });
-  assert.equal(s.factoryGroups.links, undefined);
-  assert.equal(s.version, 3);
+  state = mutate(state, {
+    type: 'factoryLinkTransport',
+    from: ore,
+    to: 'fg-plates1',
+    mode: 'belt',
+  });
+  state = mutate(state, {
+    type: 'factoryLinkTransport',
+    from: coal,
+    to: 'fg-plates1',
+    mode: 'belt',
+  });
+  assert.equal(state.factoryGroups.links, undefined);
+  assert.equal(state.version, 3);
   // A source is only ever the start of a link, and its name must be an item name.
   for (const [from, to] of [
     ['fg-plates1', ore],
@@ -119,7 +131,7 @@ test('a link from one source item marks version 11, and splits a mines link save
     ['supply/a:b', 'fg-plates1'],
   ])
     assert.throws(
-      () => mutate(structuredClone(s), link({ from, to })),
+      () => mutate(structuredClone(state), link({ from, to })),
       /Unknown factory group link|Invalid/,
       from + ' -> ' + to,
     );
@@ -138,8 +150,8 @@ test('a link from one source item marks version 11, and splits a mines link save
 });
 
 test('a malformed link choice is refused and changes nothing', () => {
-  const s = grouped();
-  for (const [op, why] of [
+  const state = grouped();
+  for (const [update, why] of [
     [link({ to: 'fg-gone001' }), /Unknown factory group link/],
     [link({ to: 'fg-plates1' }), /Unknown factory group link/],
     [link({ from: 'attic' }), /Unknown factory group link/],
@@ -150,7 +162,7 @@ test('a malformed link choice is refused and changes nothing', () => {
     [link({ fuel: 'Uranium Fuel Rod' }), /Invalid vehicle fuel/],
     [link({ mode: 'drone', fuel: 'Packaged Fuel' }), /Invalid vehicle fuel/],
   ] as [UpdateOp, RegExp][])
-    assert.throws(() => mutate(structuredClone(s), op), why, JSON.stringify(op));
+    assert.throws(() => mutate(structuredClone(state), update), why, JSON.stringify(update));
   const saved = mutate(grouped(), link({}));
   const withLinks = (links: unknown) =>
     validateState({ ...saved, factoryGroups: { ...saved.factoryGroups, links } });
@@ -165,10 +177,10 @@ test('a malformed link choice is refused and changes nothing', () => {
   // Every place group-links.ts can report is a valid end of a link.
   assert.deepEqual([...linkPlaces].sort(), [UNGROUPED, MINES, ...Object.values(OUTSIDE)].sort());
   assert.deepEqual(
-    c.vehicleFuels.map(f => f.name),
+    gameCatalog.vehicleFuels.map(f => f.name),
     vehicleFuels,
   );
-  assert.ok(c.vehicleFuels.every(f => f.mj > 0));
+  assert.ok(gameCatalog.vehicleFuels.every(f => f.mj > 0));
 });
 
 test('road vehicles fill whole slots per item and burn their fuel', () => {
@@ -220,11 +232,12 @@ test('the fewest vehicles are found, and more item types than slots get vehicles
     ['Cable', 52],
   ];
   for (const trip of [1, 3.5, 7, 22]) {
-    const l = load(items, { mode: 'explorer', roundTripMin: trip, fuel: 'Coal' });
-    assert.ok(l.slotsUsed <= 12, `${trip} min fits`);
-    if (l.vehicles > 1) {
+    const vehicleLoad = load(items, { mode: 'explorer', roundTripMin: trip, fuel: 'Coal' });
+    assert.ok(vehicleLoad.slotsUsed <= 12, `${trip} min fits`);
+    if (vehicleLoad.vehicles > 1) {
       const fewer = items.reduce(
-        (t, [n, r]) => t + Math.ceil((r * trip) / (l.vehicles - 1) / c.stacks[n]!),
+        (total, [item, rate]) =>
+          total + Math.ceil((rate * trip) / (vehicleLoad.vehicles - 1) / gameCatalog.stacks[item]!),
         0,
       );
       assert.ok(fewer > 12, `${trip} min: one explorer fewer would not fit`);
@@ -250,7 +263,7 @@ test('the fewest vehicles are found, and more item types than slots get vehicles
 });
 
 test('a train counts freight cars for solids and one fluid car per 1,600 m³ of each fluid', () => {
-  const t = load(
+  const trainLoad = load(
     [
       ['Iron Plate', 2000],
       ['Water', 300],
@@ -259,11 +272,18 @@ test('a train counts freight cars for solids and one fluid car per 1,600 m³ of 
     { mode: 'train', roundTripMin: 10 },
   );
   // 20,000 plates is 100 slots: four 32-slot cars. 3,000 m³ of water: 2 cars; 1,000 of nitrogen: 1.
-  assert.deepEqual([t.vehicles, t.freightCars, t.fluidCars, t.fuelPerMin], [1, 4, 3, 0]);
-  assert.equal(t.unpackable.length, 0, 'a fluid car takes any fluid');
+  assert.deepEqual(
+    [trainLoad.vehicles, trainLoad.freightCars, trainLoad.fluidCars, trainLoad.fuelPerMin],
+    [1, 4, 3, 0],
+  );
+  assert.equal(trainLoad.unpackable.length, 0, 'a fluid car takes any fluid');
   // Seven cars take two locomotives, at one per four cars (#232).
-  assert.equal(t.locomotives, 2);
-  assert.deepEqual([t.beltLimited, t.pipeLimited], [false, false], 'without speeds only capacity');
+  assert.equal(trainLoad.locomotives, 2);
+  assert.deepEqual(
+    [trainLoad.beltLimited, trainLoad.pipeLimited],
+    [false, false],
+    'without speeds only capacity',
+  );
 });
 
 test('a freight car moves at most one belt or pipe, and a train gets a locomotive per four cars (#232)', () => {
@@ -272,7 +292,7 @@ test('a freight car moves at most one belt or pipe, and a train gets a locomotiv
     linkLoad(
       items.map(([item, rate]) => ({ item, rate })),
       { mode: 'train', roundTripMin },
-      c,
+      gameCatalog,
       fluids,
       lanes,
     );
@@ -288,23 +308,26 @@ test('a freight car moves at most one belt or pipe, and a train gets a locomotiv
   // A long trip is limited by capacity instead, and a long train gets more locomotives.
   const long = train([['Iron Plate', 2000]], 60);
   assert.equal(long.beltLimited, false);
-  assert.equal(long.freightCars, Math.ceil((2000 * 60) / (c.stacks!['Iron Plate']! * 32)));
+  assert.equal(
+    long.freightCars,
+    Math.ceil((2000 * 60) / (gameCatalog.stacks!['Iron Plate']! * 32)),
+  );
   assert.equal(long.locomotives, Math.ceil(long.freightCars / 4));
   assert.ok(long.locomotives > 1, JSON.stringify(long));
   // Road vehicles are unchanged by belt speeds.
   const truck = { mode: 'truck' as const, roundTripMin: 5, fuel: 'Packaged Fuel' };
   assert.deepEqual(
-    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, c, fluids, lanes),
-    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, c, fluids),
+    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, gameCatalog, fluids, lanes),
+    linkLoad([{ item: 'Iron Plate', rate: 2000 }], truck, gameCatalog, fluids),
   );
 });
 
 test('a new profile carrying plan edits keeps the links of the groups it carries', () => {
-  const s = mutate(grouped(), link({}));
+  const state = mutate(grouped(), link({}));
   const plan = calculate({});
-  const next = newProfileState(plan, s, plan, { planEdits: true }, undefined).state;
-  assert.deepEqual(next.factoryGroups.links, s.factoryGroups.links);
+  const next = newProfileState(plan, state, plan, { planEdits: true }, undefined).state;
+  assert.deepEqual(next.factoryGroups.links, state.factoryGroups.links);
   assert.equal(next.version, 7);
-  const fresh = newProfileState(plan, s, plan, { planEdits: false }, undefined).state;
+  const fresh = newProfileState(plan, state, plan, { planEdits: false }, undefined).state;
   assert.equal(fresh.factoryGroups.links, undefined);
 });

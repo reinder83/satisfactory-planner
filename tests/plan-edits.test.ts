@@ -4,7 +4,7 @@ import { initialState, validateState, mutate, shareState } from '../public/state
 import type { UpdateOp } from '../public/types/index.ts';
 
 test('released version 1 and 2 states validate unchanged and gain empty plan edits and groups', () => {
-  const v1 = {
+  const savedV1 = {
     version: 1,
     revision: 2,
     checks: { 'phase-3-iron': true },
@@ -13,35 +13,41 @@ test('released version 1 and 2 states validate unchanged and gain empty plan edi
     settings: { phase: '3' },
     customTasks: [],
   };
-  const c1 = validateState(structuredClone(v1));
-  assert.equal(c1.version, 1);
-  assert.deepEqual(c1.taskEdits, { order: {}, removed: [], titles: {}, bodies: {}, links: {} });
-  assert.deepEqual(c1.factoryGroups, { groups: [], assignments: {} });
-  const v2 = {
-    ...structuredClone(v1),
+  const cleanV1 = validateState(structuredClone(savedV1));
+  assert.equal(cleanV1.version, 1);
+  assert.deepEqual(cleanV1.taskEdits, {
+    order: {},
+    removed: [],
+    titles: {},
+    bodies: {},
+    links: {},
+  });
+  assert.deepEqual(cleanV1.factoryGroups, { groups: [], assignments: {} });
+  const savedV2 = {
+    ...structuredClone(savedV1),
     version: 2,
     storageEdits: { bays: [{ id: 'S', name: 'Overflow', floor: 'ground' }] },
   };
-  const c2 = validateState(structuredClone(v2));
-  assert.equal(c2.version, 2, 'layout edits alone keep the version 2 format');
-  assert.deepEqual(c2.checks, v1.checks);
+  const cleanV2 = validateState(structuredClone(savedV2));
+  assert.equal(cleanV2.version, 2, 'layout edits alone keep the version 2 format');
+  assert.deepEqual(cleanV2.checks, savedV1.checks);
 });
 
 test('build plan edits round-trip, mark the state version 3 and preserve checkmarks', () => {
-  let s = initialState();
-  s.settings.phase = '3';
-  s = mutate(s, { type: 'check', key: 'phase-3-survey', value: true });
-  s = mutate(s, {
+  let state = initialState();
+  state.settings.phase = '3';
+  state = mutate(state, { type: 'check', key: 'phase-3-survey', value: true });
+  state = mutate(state, {
     type: 'taskEdit',
     id: 'phase-3-survey',
     title: 'Survey the coast instead',
     body: 'Notes with <detail>',
     link: 'wire',
   });
-  s = mutate(s, { type: 'taskRemove', id: 'phase-3-retire-power' });
-  s = mutate(s, { type: 'taskOrder', phase: '3', ids: ['phase-3-iron', 'phase-3-survey'] });
-  assert.equal(s.version, 3);
-  const round = validateState(JSON.parse(JSON.stringify(s)));
+  state = mutate(state, { type: 'taskRemove', id: 'phase-3-retire-power' });
+  state = mutate(state, { type: 'taskOrder', phase: '3', ids: ['phase-3-iron', 'phase-3-survey'] });
+  assert.equal(state.version, 3);
+  const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.equal(round.version, 3);
   assert.equal(round.taskEdits.titles['phase-3-survey'], 'Survey the coast instead');
   assert.equal(round.taskEdits.bodies['phase-3-survey'], 'Notes with <detail>');
@@ -49,63 +55,72 @@ test('build plan edits round-trip, mark the state version 3 and preserve checkma
   assert.deepEqual(round.taskEdits.removed, ['phase-3-retire-power']);
   assert.deepEqual(round.taskEdits.order['3'], ['phase-3-iron', 'phase-3-survey']);
   assert.equal(round.checks['phase-3-survey'], true, 'renamed steps keep their completion');
-  s = mutate(s, { type: 'taskRestore', id: 'phase-3-retire-power' });
-  s = mutate(s, { type: 'taskEdit', id: 'phase-3-survey', title: '', body: '', link: '' });
-  s = mutate(s, { type: 'taskOrder', phase: '3', ids: [] });
-  assert.equal(s.version, 1, 'reverting every edit keeps the state importable by older planners');
-  assert.equal(s.checks['phase-3-survey'], true);
+  state = mutate(state, { type: 'taskRestore', id: 'phase-3-retire-power' });
+  state = mutate(state, { type: 'taskEdit', id: 'phase-3-survey', title: '', body: '', link: '' });
+  state = mutate(state, { type: 'taskOrder', phase: '3', ids: [] });
+  assert.equal(
+    state.version,
+    1,
+    'reverting every edit keeps the state importable by older planners',
+  );
+  assert.equal(state.checks['phase-3-survey'], true);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(s)), version: 13 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(state)), version: 13 }),
     /newer planner version/,
   );
 });
 
 test('deleting a personal task cleans its plan edits', () => {
-  let s = initialState();
-  s = mutate(s, { type: 'addTask', id: 'custom-abc123', title: 'Wire outpost', phase: '1' });
-  s = mutate(s, {
+  let state = initialState();
+  state = mutate(state, {
+    type: 'addTask',
+    id: 'custom-abc123',
+    title: 'Wire outpost',
+    phase: '1',
+  });
+  state = mutate(state, {
     type: 'taskEdit',
     id: 'custom-abc123',
     title: 'Wire outpost west',
     link: 'wire',
   });
-  s = mutate(s, { type: 'taskOrder', phase: '1', ids: ['custom-abc123'] });
-  s = mutate(s, { type: 'removeTask', id: 'custom-abc123' });
-  assert.equal(s.taskEdits.titles['custom-abc123'], undefined);
-  assert.equal(s.taskEdits.links['custom-abc123'], undefined);
-  assert.equal(s.taskEdits.order['1'], undefined);
-  assert.equal(s.version, 1);
+  state = mutate(state, { type: 'taskOrder', phase: '1', ids: ['custom-abc123'] });
+  state = mutate(state, { type: 'removeTask', id: 'custom-abc123' });
+  assert.equal(state.taskEdits.titles['custom-abc123'], undefined);
+  assert.equal(state.taskEdits.links['custom-abc123'], undefined);
+  assert.equal(state.taskEdits.order['1'], undefined);
+  assert.equal(state.version, 1);
 });
 
 test('factory groups support production splits and removal keeps factories and progress', () => {
-  let s = initialState();
-  s = mutate(s, { type: 'check', key: 'factory-3-wire', value: true });
-  s = mutate(s, { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
-  s = mutate(s, { type: 'factoryGroupAdd', id: 'fg-plates1', name: 'Stitched plates' });
-  s = mutate(s, {
+  let state = initialState();
+  state = mutate(state, { type: 'check', key: 'factory-3-wire', value: true });
+  state = mutate(state, { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
+  state = mutate(state, { type: 'factoryGroupAdd', id: 'fg-plates1', name: 'Stitched plates' });
+  state = mutate(state, {
     type: 'factoryAssign',
     key: 'wire',
     groups: [{ group: 'fg-cable01', rate: 300 }, { group: 'fg-plates1' }],
   });
-  assert.equal(s.version, 3);
-  const round = validateState(JSON.parse(JSON.stringify(s)));
+  assert.equal(state.version, 3);
+  const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(round.factoryGroups.assignments.wire, [
     { group: 'fg-cable01', rate: 300 },
     { group: 'fg-plates1', rate: null },
   ]);
-  s = mutate(s, { type: 'factoryGroupRename', id: 'fg-cable01', name: 'Cable hall' });
-  assert.equal(s.factoryGroups.groups[0]!.name, 'Cable hall');
-  s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-plates1' });
-  assert.deepEqual(s.factoryGroups.assignments.wire, [{ group: 'fg-cable01', rate: 300 }]);
-  s = mutate(s, { type: 'factoryGroupRemove', id: 'fg-cable01' });
-  assert.deepEqual(s.factoryGroups.assignments, {});
-  assert.equal(s.checks['factory-3-wire'], true, 'ungrouping never touches progress');
-  assert.equal(s.version, 1);
+  state = mutate(state, { type: 'factoryGroupRename', id: 'fg-cable01', name: 'Cable hall' });
+  assert.equal(state.factoryGroups.groups[0]!.name, 'Cable hall');
+  state = mutate(state, { type: 'factoryGroupRemove', id: 'fg-plates1' });
+  assert.deepEqual(state.factoryGroups.assignments.wire, [{ group: 'fg-cable01', rate: 300 }]);
+  state = mutate(state, { type: 'factoryGroupRemove', id: 'fg-cable01' });
+  assert.deepEqual(state.factoryGroups.assignments, {});
+  assert.equal(state.checks['factory-3-wire'], true, 'ungrouping never touches progress');
+  assert.equal(state.version, 1);
 });
 
 test('invalid plan edits and group updates are rejected without corrupting the state', () => {
-  const s = initialState();
-  const ops: UpdateOp[] = [
+  const state = initialState();
+  const updates: UpdateOp[] = [
     { type: 'taskEdit', id: '__proto__', title: 'x' },
     { type: 'taskEdit', id: 'ok', title: 'x'.repeat(241) },
     // @ts-expect-error: '9' is not a phase; mutate must reject it.
@@ -115,13 +130,17 @@ test('invalid plan edits and group updates are rejected without corrupting the s
     { type: 'factoryGroupRename', id: 'fg-nothere1', name: 'Missing' },
     { type: 'factoryAssign', key: 'wire', groups: [{ group: 'fg-nothere1', rate: 1 }] },
   ];
-  for (const op of ops)
-    assert.throws(() => mutate(structuredClone(s), op), Error, JSON.stringify(op));
-  let g = mutate(structuredClone(s), { type: 'factoryGroupAdd', id: 'fg-abcd12', name: 'Hall' });
+  for (const update of updates)
+    assert.throws(() => mutate(structuredClone(state), update), Error, JSON.stringify(update));
+  let withGroup = mutate(structuredClone(state), {
+    type: 'factoryGroupAdd',
+    id: 'fg-abcd12',
+    name: 'Hall',
+  });
   for (const rate of [0, -5, '12', NaN, Infinity])
     assert.throws(
       () =>
-        mutate(structuredClone(g), {
+        mutate(structuredClone(withGroup), {
           type: 'factoryAssign',
           key: 'wire',
           // @ts-expect-error: the string rate '12' is invalid input that mutate must reject.
@@ -136,16 +155,16 @@ test('invalid plan edits and group updates are rejected without corrupting the s
 });
 
 test('a shared profile keeps plan-shaped content but starts with fresh progress', () => {
-  let s = initialState();
-  s.settings.phase = '3';
-  s = mutate(s, { type: 'check', key: 'factory-3-wire', value: true });
-  s = mutate(s, { type: 'note', key: 'global', value: 'My seed' });
-  s = mutate(s, { type: 'delivery', key: '3-modular-engine', value: 12 });
-  s = mutate(s, { type: 'addTask', id: 'custom-share1', title: 'Shared step', phase: '3' });
-  s = mutate(s, { type: 'storageSlotAssign', key: 'S01', name: 'Iron Plate' });
-  s = mutate(s, { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
-  s = mutate(s, { type: 'taskEdit', id: 'phase-3-survey', title: 'Renamed step' });
-  const shared = shareState(s);
+  let state = initialState();
+  state.settings.phase = '3';
+  state = mutate(state, { type: 'check', key: 'factory-3-wire', value: true });
+  state = mutate(state, { type: 'note', key: 'global', value: 'My seed' });
+  state = mutate(state, { type: 'delivery', key: '3-modular-engine', value: 12 });
+  state = mutate(state, { type: 'addTask', id: 'custom-share1', title: 'Shared step', phase: '3' });
+  state = mutate(state, { type: 'storageSlotAssign', key: 'S01', name: 'Iron Plate' });
+  state = mutate(state, { type: 'factoryGroupAdd', id: 'fg-cable01', name: 'Cable factory' });
+  state = mutate(state, { type: 'taskEdit', id: 'phase-3-survey', title: 'Renamed step' });
+  const shared = shareState(state);
   assert.deepEqual(shared.checks, {});
   assert.deepEqual(shared.notes, {});
   assert.deepEqual(shared.deliveries, {});
@@ -191,10 +210,10 @@ test('an update type no table knows is refused, Object.prototype keys included (
       // @ts-expect-error: a type that is not a string
       mutate(initialState(), { type, key: 'a' });
     }, /Unknown update/);
-  for (const op of [null, [], 'check', 3])
+  for (const update of [null, [], 'check', 3])
     assert.throws(() => {
       // @ts-expect-error: an update that is not an object
-      mutate(initialState(), op);
+      mutate(initialState(), update);
     }, /Invalid update/);
 });
 
