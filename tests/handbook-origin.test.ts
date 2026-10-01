@@ -52,7 +52,7 @@ test('a malformed handbookOrigin is refused', () => {
 });
 
 test('no update op creates, changes or removes handbookOrigin', () => {
-  const ops: UpdateOp[] = [
+  const updates: UpdateOp[] = [
     { type: 'check', key: 'factory-3-plastic', value: false },
     { type: 'checks', keys: ['a', 'b'], value: true },
     { type: 'note', key: 'factory-old-campus', value: '' },
@@ -60,15 +60,15 @@ test('no update op creates, changes or removes handbookOrigin', () => {
     { type: 'phase', value: '4' },
     { type: 'addTask', id: 'custom-a1', title: 'Look', phase: '3' },
   ];
-  let s: SavedState = validateState(structuredClone(version12));
-  for (const op of ops) {
-    s = mutate(structuredClone(s), op);
-    assert.deepEqual(s.handbookOrigin, version12.handbookOrigin, op.type);
-    assert.equal(s.version, 12, op.type);
+  let state: SavedState = validateState(structuredClone(version12));
+  for (const update of updates) {
+    state = mutate(structuredClone(state), update);
+    assert.deepEqual(state.handbookOrigin, version12.handbookOrigin, update.type);
+    assert.equal(state.version, 12, update.type);
   }
   // A state without one never gains it.
   assert.equal(
-    'handbookOrigin' in mutate(validateState(structuredClone(version11)), ops[0]!),
+    'handbookOrigin' in mutate(validateState(structuredClone(version11)), updates[0]!),
     false,
   );
 });

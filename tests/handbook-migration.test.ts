@@ -21,55 +21,62 @@ import { handbook, recipes } from './helpers/data.ts';
 
 const byName = new Map(recipes.map(r => [r.name, r]));
 const accepts = (plan: StoredCalculatedPlan) => {
-  const x = structuredClone(saveExport);
-  x.saves[0]!.profiles[0]!.plan = plan as never;
-  return validateTransfer(x).saves[0]!.profiles[0]!.plan!;
+  const transfer = structuredClone(saveExport);
+  transfer.saves[0]!.profiles[0]!.plan = plan as never;
+  return validateTransfer(transfer).saves[0]!.profiles[0]!.plan!;
 };
 
 test("plan.json's factories become rows with the handbook's own figures", () => {
   const { plan, rows, skipped } = handbookToPlan(handbook, recipes);
-  for (const st of ['3', '4', '5'] as const) {
-    const stage = plan.stages[st];
-    for (const f of handbook.factories) {
-      const s = f.stages[st];
-      if (!s || s.recipe === OIL_CAMPUS) continue;
-      const r = byName.get(s.recipe)!;
-      assert.ok(r, `${f.id}: ${s.recipe} is in recipes.json`);
-      assert.equal(rows[st]![f.id], r.id, `${st} ${f.id} maps to its recipe's row`);
-      const row = stage.rows!.find(x => x.id === r.id)!;
-      assert.equal(row.name, f.name);
-      assert.equal(row.outputs[f.name], s.output, f.id);
+  for (const phase of ['3', '4', '5'] as const) {
+    const stage = plan.stages[phase];
+    for (const factory of handbook.factories) {
+      const factoryStage = factory.stages[phase];
+      if (!factoryStage || factoryStage.recipe === OIL_CAMPUS) continue;
+      const recipe = byName.get(factoryStage.recipe)!;
+      assert.ok(recipe, `${factory.id}: ${factoryStage.recipe} is in recipes.json`);
+      assert.equal(
+        rows[phase]![factory.id],
+        recipe.id,
+        `${phase} ${factory.id} maps to its recipe's row`,
+      );
+      const row = stage.rows!.find(x => x.id === recipe.id)!;
+      assert.equal(row.name, factory.name);
+      assert.equal(row.outputs[factory.name], factoryStage.output, factory.id);
       // A factory the stage's oil campus makes has that line's figures (Phase 3's Plastic and
       // Rubber, which the handbook lists with 0 machines); every other one its own.
-      const line = handbook.plans[st]!.oil.find(l => l.recipe === s.recipe);
+      const line = handbook.plans[phase]!.oil.find(l => l.recipe === factoryStage.recipe);
       if (line) {
-        assert.equal(row.machines, line.machines, f.id);
-        assert.equal(row.peakMW, line.peakMW, f.id);
-        assert.ok(Object.keys(row.inputs).length > 0, f.id + ' has its inputs');
+        assert.equal(row.machines, line.machines, factory.id);
+        assert.equal(row.peakMW, line.peakMW, factory.id);
+        assert.ok(Object.keys(row.inputs).length > 0, factory.id + ' has its inputs');
         continue;
       }
-      assert.equal(row.machines, s.machines, f.id);
-      assert.equal(row.equivalent, s.equivalent ?? s.machines, f.id);
-      assert.equal(row.peakMW, s.peakMW, f.id);
-      assert.deepEqual(row.inputs, s.inputs, f.id);
+      assert.equal(row.machines, factoryStage.machines, factory.id);
+      assert.equal(row.equivalent, factoryStage.equivalent ?? factoryStage.machines, factory.id);
+      assert.equal(row.peakMW, factoryStage.peakMW, factory.id);
+      assert.deepEqual(row.inputs, factoryStage.inputs, factory.id);
     }
     // Row ids are unique within a stage, so each calc-<stage>-<id> tick names one row.
     const ids = stage.rows!.map(r => r.id);
-    assert.equal(new Set(ids).size, ids.length, st);
+    assert.equal(new Set(ids).size, ids.length, phase);
     // The stage's figures come from the handbook.
-    assert.deepEqual(stage.raw, handbook.resources[st]);
-    assert.equal(stage.availableMW, handbook.power[st]! * 1000);
-    assert.equal(stage.requiredMW, handbook.plans[st]!.manufacturingPeakGW * 1000);
-    for (const d of handbook.deliveries.filter(d => d.phase === st))
-      assert.deepEqual(stage.delivery![d.name], { target: d.target, rate: d.rate });
+    assert.deepEqual(stage.raw, handbook.resources[phase]);
+    assert.equal(stage.availableMW, handbook.power[phase]! * 1000);
+    assert.equal(stage.requiredMW, handbook.plans[phase]!.manufacturingPeakGW * 1000);
+    for (const delivery of handbook.deliveries.filter(d => d.phase === phase))
+      assert.deepEqual(stage.delivery![delivery.name], {
+        target: delivery.target,
+        rate: delivery.rate,
+      });
   }
   // The campus's own lines are rows in Phases 4 and 5, drawn at the oil site.
-  for (const st of ['4', '5'] as const)
-    for (const l of handbook.plans[st]!.oil) {
-      const id = byName.get(l.recipe)!.id;
-      const row = plan.stages[st].rows!.find(x => x.id === id)!;
-      assert.ok(row, `${st}: the ${l.recipe} line`);
-      assert.equal(row.machines, l.machines);
+  for (const phase of ['4', '5'] as const)
+    for (const line of handbook.plans[phase]!.oil) {
+      const id = byName.get(line.recipe)!.id;
+      const row = plan.stages[phase].rows!.find(x => x.id === id)!;
+      assert.ok(row, `${phase}: the ${line.recipe} line`);
+      assert.equal(row.machines, line.machines);
       assert.equal(plan.guide!.factories![id]!.site, 'oil');
     }
   // Only the campus's Plastic and Rubber are left out; their ticks are not guessed (6B).
@@ -102,8 +109,8 @@ test('the transcribed snapshot: its settings, engine, warning and empty early ph
     'Nitrogen Gas': 13500,
   });
   // Phases 1 and 2 are empty, selectable phases (decision 4).
-  for (const st of ['1', '2'] as const)
-    assert.deepEqual(plan.stages[st], { feasible: true, rows: [] });
+  for (const phase of ['1', '2'] as const)
+    assert.deepEqual(plan.stages[phase], { feasible: true, rows: [] });
   // Converting is repeatable.
   assert.deepEqual(handbookToPlan(handbook, recipes).plan, plan);
 });
@@ -111,11 +118,11 @@ test('the transcribed snapshot: its settings, engine, warning and empty early ph
 test('the narrative goes into the guide with every id unchanged and in order', () => {
   const { plan } = handbookToPlan(handbook, recipes);
   const guide = plan.guide!;
-  for (const [ph, ts] of Object.entries(handbook.phases))
+  for (const [phase, tasks] of Object.entries(handbook.phases))
     assert.deepEqual(
-      guide.phases[ph]!.map(t => [t.id, t.title, t.body]),
-      ts.map(t => [t.id, t.title, t.body]),
-      ph,
+      guide.phases[phase]!.map(t => [t.id, t.title, t.body]),
+      tasks.map(t => [t.id, t.title, t.body]),
+      phase,
     );
   assert.deepEqual(
     guide.storageTasks!.map(t => t.id),
@@ -126,14 +133,18 @@ test('the narrative goes into the guide with every id unchanged and in order', (
   assert.deepEqual(guide.power!.blocks, POWER_BLOCKS);
   assert.deepEqual(guide.sources, handbook.sources);
   // A factory's note, page and flags follow its row.
-  const f = handbook.factories.find(
+  const factory = handbook.factories.find(
     x => x.note && x.stages['3'] && x.stages['3'].recipe !== OIL_CAMPUS,
   )!;
-  const id = byName.get(f.stages['3']!.recipe)!.id;
-  assert.equal(guide.factories![id]!.note, f.note);
-  assert.equal(guide.factories![id]!.page, f.page);
-  for (const x of handbook.factories.filter(x => x.nuclear && x.stages['5']))
-    assert.equal(guide.factories![byName.get(x.stages['5']!.recipe)!.id]!.site, 'nuclear', x.id);
+  const id = byName.get(factory.stages['3']!.recipe)!.id;
+  assert.equal(guide.factories![id]!.note, factory.note);
+  assert.equal(guide.factories![id]!.page, factory.page);
+  for (const nuclearFactory of handbook.factories.filter(x => x.nuclear && x.stages['5']))
+    assert.equal(
+      guide.factories![byName.get(nuclearFactory.stages['5']!.recipe)!.id]!.site,
+      'nuclear',
+      nuclearFactory.id,
+    );
 });
 
 test('the snapshot passes the import checks, guide included', () => {
@@ -177,14 +188,14 @@ test("Phase 3's Plastic and Rubber take their oil campus line's machines", () =>
 
 // ---- migrateHandbookState (#487, part 3c) ----
 const conversion = handbookToPlan(handbook, recipes);
-const rowOf = (st: string, fid: string) => conversion.rows[st]![fid];
+const rowOf = (phase: string, factoryId: string) => conversion.rows[phase]![factoryId];
 const mapped = handbook.factories.find(f => f.stages['3'] && rowOf('3', f.id) && f.stages['5'])!;
 const campus = 'plastic';
 // A handbook profile's progress touching every rule, on top of the version-11 fixture.
 const handbookState = (): SavedState => {
-  const s = structuredClone(version11) as SavedState;
-  s.checks = {
-    ...s.checks,
+  const state = structuredClone(version11) as SavedState;
+  state.checks = {
+    ...state.checks,
     ['factory-3-' + mapped.id]: true,
     ['factory-5-' + mapped.id]: false,
     ['factory-4-' + campus]: true,
@@ -192,66 +203,71 @@ const handbookState = (): SavedState => {
     'phase-3-survey': true,
     'slot-A01-built': true,
   };
-  s.notes = {
-    ...s.notes,
+  state.notes = {
+    ...state.notes,
     ['factory-' + mapped.id]: 'Build it by the lake',
     'factory-no-such-factory': 'An old note',
     'slot-A01': 'Top shelf',
   };
-  s.deliveries = { '3-modular-engine': 12 };
-  s.factoryGroups = {
+  state.deliveries = { '3-modular-engine': 12 };
+  state.factoryGroups = {
     groups: [{ id: 'fg-plates1', name: 'Plates' }],
     assignments: {
       [mapped.id]: [{ group: 'fg-plates1', rate: null }],
       'no-such-factory': [{ group: 'fg-plates1', rate: 5 }],
     },
   };
-  s.taskEdits = { ...s.taskEdits, links: { 'phase-5-survey': mapped.id } };
-  return s;
+  state.taskEdits = { ...state.taskEdits, links: { 'phase-5-survey': mapped.id } };
+  return state;
 };
 
 test('migrateHandbookState moves each record to its new key, or keeps it unmapped', () => {
-  const m = migrateHandbookState(handbookState(), handbook, conversion);
-  assert.equal(m.version, 12);
-  assert.equal(m.handbookOrigin!.version, handbook.version);
+  const migrated = migrateHandbookState(handbookState(), handbook, conversion);
+  assert.equal(migrated.version, 12);
+  assert.equal(migrated.handbookOrigin!.version, handbook.version);
   // Factory ticks become their row's, per stage.
-  assert.equal(m.checks[`calc-3-${rowOf('3', mapped.id)}`], true);
-  assert.equal(m.checks[`calc-5-${rowOf('5', mapped.id)}`], false);
-  assert.equal('factory-3-' + mapped.id in m.checks, false);
+  assert.equal(migrated.checks[`calc-3-${rowOf('3', mapped.id)}`], true);
+  assert.equal(migrated.checks[`calc-5-${rowOf('5', mapped.id)}`], false);
+  assert.equal('factory-3-' + mapped.id in migrated.checks, false);
   // The campus tick is not guessed (6B), nor is an unknown factory's.
-  assert.deepEqual(m.handbookOrigin!.unmapped.checks, {
+  assert.deepEqual(migrated.handbookOrigin!.unmapped.checks, {
     ['factory-4-' + campus]: true,
     'factory-3-no-such-factory': true,
   });
   // Everything else is unchanged, and the handbook's known checks are written.
-  assert.equal(m.checks['phase-3-survey'], true);
-  assert.equal(m.checks['slot-A01-built'], true);
-  for (const [k, v] of Object.entries(handbook.knownChecks)) assert.equal(m.checks[k], v);
+  assert.equal(migrated.checks['phase-3-survey'], true);
+  assert.equal(migrated.checks['slot-A01-built'], true);
+  for (const [key, value] of Object.entries(handbook.knownChecks))
+    assert.equal(migrated.checks[key], value);
   // The factory note follows every row it became; one for a factory this handbook no longer
   // has is kept for review (#493 review).
   for (const row of new Set([rowOf('3', mapped.id), rowOf('5', mapped.id)]))
-    assert.equal(m.notes['factory-' + row], 'Build it by the lake');
-  assert.equal('factory-no-such-factory' in m.notes, false);
-  assert.deepEqual(m.handbookOrigin!.unmapped.notes, { 'factory-no-such-factory': 'An old note' });
-  assert.equal(m.notes['slot-A01'], 'Top shelf');
+    assert.equal(migrated.notes['factory-' + row], 'Build it by the lake');
+  assert.equal('factory-no-such-factory' in migrated.notes, false);
+  assert.deepEqual(migrated.handbookOrigin!.unmapped.notes, {
+    'factory-no-such-factory': 'An old note',
+  });
+  assert.equal(migrated.notes['slot-A01'], 'Top shelf');
   // Deliveries keep their ids; the handbook's recorded count is written where none is saved.
-  assert.equal(m.deliveries['3-modular-engine'], 12);
-  for (const d of handbook.deliveries.filter(d => d.initial > 0 && d.id !== '3-modular-engine'))
-    assert.equal(m.deliveries[d.id], d.initial);
+  assert.equal(migrated.deliveries['3-modular-engine'], 12);
+  for (const delivery of handbook.deliveries.filter(
+    d => d.initial > 0 && d.id !== '3-modular-engine',
+  ))
+    assert.equal(migrated.deliveries[delivery.id], delivery.initial);
   // Group assignments follow the rows; one for no factory of the handbook is kept for review.
-  assert.deepEqual(m.factoryGroups.assignments[rowOf('3', mapped.id)!], [
+  assert.deepEqual(migrated.factoryGroups.assignments[rowOf('3', mapped.id)!], [
     { group: 'fg-plates1', rate: null },
   ]);
-  assert.equal('no-such-factory' in m.factoryGroups.assignments, false);
-  assert.deepEqual(m.handbookOrigin!.unmapped.assignments, {
+  assert.equal('no-such-factory' in migrated.factoryGroups.assignments, false);
+  assert.deepEqual(migrated.handbookOrigin!.unmapped.assignments, {
     'no-such-factory': [{ group: 'fg-plates1', rate: 5 }],
   });
   // A step link names its phase's row.
-  assert.equal(m.taskEdits.links['phase-5-survey'], rowOf('5', mapped.id));
+  assert.equal(migrated.taskEdits.links['phase-5-survey'], rowOf('5', mapped.id));
   // Task edits, custom tasks and the storage layout are untouched.
-  assert.deepEqual(m.customTasks, validateState(handbookState()).customTasks);
-  assert.deepEqual(m.storageEdits, validateState(handbookState()).storageEdits);
-  assert.deepEqual(m.taskEdits.titles, validateState(handbookState()).taskEdits.titles);
+  assert.deepEqual(migrated.customTasks, validateState(handbookState()).customTasks);
+  assert.deepEqual(migrated.storageEdits, validateState(handbookState()).storageEdits);
+  assert.deepEqual(migrated.taskEdits.titles, validateState(handbookState()).taskEdits.titles);
 });
 
 test('migrating twice equals migrating once', () => {
@@ -265,45 +281,63 @@ test('migrating twice equals migrating once', () => {
 test('no record disappears, for every state version and the handbook state', () => {
   for (const [state, version] of [...states, [handbookState(), 11] as const]) {
     const before = validateState(structuredClone(state));
-    const m = migrateHandbookState(state, handbook, conversion);
-    const u = m.handbookOrigin!.unmapped;
-    for (const [k, v] of Object.entries(before.checks)) {
-      const f = /^factory-([345])-(.+)$/.exec(k);
-      const moved = f && rowOf(f[1]!, f[2]!) ? `calc-${f[1]}-${rowOf(f[1]!, f[2]!)}` : k;
-      assert.ok(m.checks[moved] === v || u.checks[k] === v, `v${version} check ${k}`);
-    }
-    for (const [k, v] of Object.entries(before.notes)) {
-      const fid = k.slice('factory-'.length);
-      const rows = [rowOf('3', fid), rowOf('4', fid), rowOf('5', fid)].filter(Boolean);
+    const migrated = migrateHandbookState(state, handbook, conversion);
+    const unmapped = migrated.handbookOrigin!.unmapped;
+    for (const [key, value] of Object.entries(before.checks)) {
+      const match = /^factory-([345])-(.+)$/.exec(key);
+      const moved =
+        match && rowOf(match[1]!, match[2]!)
+          ? `calc-${match[1]}-${rowOf(match[1]!, match[2]!)}`
+          : key;
       assert.ok(
-        m.notes[k] === v || rows.some(r => m.notes['factory-' + r] === v) || u.notes[k] === v,
-        `v${version} note ${k}`,
+        migrated.checks[moved] === value || unmapped.checks[key] === value,
+        `v${version} check ${key}`,
       );
     }
-    for (const [k, v] of Object.entries(before.deliveries))
-      assert.equal(m.deliveries[k], v, `v${version} delivery ${k}`);
-    for (const [k, list] of Object.entries(before.factoryGroups.assignments)) {
-      const rows = [rowOf('3', k), rowOf('4', k), rowOf('5', k)].filter(Boolean) as string[];
+    for (const [key, value] of Object.entries(before.notes)) {
+      const factoryId = key.slice('factory-'.length);
+      const rows = [rowOf('3', factoryId), rowOf('4', factoryId), rowOf('5', factoryId)].filter(
+        Boolean,
+      );
       assert.ok(
-        JSON.stringify(m.factoryGroups.assignments[k]) === JSON.stringify(list) ||
-          rows.some(r => JSON.stringify(m.factoryGroups.assignments[r]) === JSON.stringify(list)) ||
-          JSON.stringify(u.assignments[k]) === JSON.stringify(list),
-        `v${version} assignment ${k}`,
+        migrated.notes[key] === value ||
+          rows.some(r => migrated.notes['factory-' + r] === value) ||
+          unmapped.notes[key] === value,
+        `v${version} note ${key}`,
+      );
+    }
+    for (const [key, value] of Object.entries(before.deliveries))
+      assert.equal(migrated.deliveries[key], value, `v${version} delivery ${key}`);
+    for (const [key, list] of Object.entries(before.factoryGroups.assignments)) {
+      const rows = [rowOf('3', key), rowOf('4', key), rowOf('5', key)].filter(Boolean) as string[];
+      assert.ok(
+        JSON.stringify(migrated.factoryGroups.assignments[key]) === JSON.stringify(list) ||
+          rows.some(
+            r => JSON.stringify(migrated.factoryGroups.assignments[r]) === JSON.stringify(list),
+          ) ||
+          JSON.stringify(unmapped.assignments[key]) === JSON.stringify(list),
+        `v${version} assignment ${key}`,
       );
     }
     // The layout, task edits, custom tasks and phase are as they were.
-    assert.deepEqual(m.storageEdits, before.storageEdits, `v${version} layout`);
-    assert.deepEqual(m.customTasks, before.customTasks);
-    assert.equal(m.settings.phase, before.settings.phase);
+    assert.deepEqual(migrated.storageEdits, before.storageEdits, `v${version} layout`);
+    assert.deepEqual(migrated.customTasks, before.customTasks);
+    assert.equal(migrated.settings.phase, before.settings.phase);
   }
 });
 
 // What the migration kept for review survives a Recalculate of the migrated profile (#489), so
 // an unknown factory's note and assignment are never lost (#493 review).
 test("an unknown factory's note and assignment survive a Recalculate of the migrated profile", () => {
-  const m = migrateHandbookState(handbookState(), handbook, conversion);
-  const { state } = newProfileState(conversion.plan, m, conversion.plan, undefined, undefined);
-  assert.deepEqual(state.handbookOrigin, m.handbookOrigin);
+  const migrated = migrateHandbookState(handbookState(), handbook, conversion);
+  const { state } = newProfileState(
+    conversion.plan,
+    migrated,
+    conversion.plan,
+    undefined,
+    undefined,
+  );
+  assert.deepEqual(state.handbookOrigin, migrated.handbookOrigin);
   assert.equal(state.handbookOrigin!.unmapped.notes['factory-no-such-factory'], 'An old note');
   assert.deepEqual(state.handbookOrigin!.unmapped.assignments['no-such-factory'], [
     { group: 'fg-plates1', rate: 5 },

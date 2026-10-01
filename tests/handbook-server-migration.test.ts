@@ -22,7 +22,8 @@ const row = conversion.rows['3']![factory.id]!;
 
 const open = (dataDir: string) => openWorkspace({ dataDir, validateState, mutate });
 const dir = () => fs.mkdtemp(path.join(os.tmpdir(), 'planner-handbook-'));
-const read = async (d: string, name = 'workspace.json') => fs.readFile(path.join(d, name), 'utf8');
+const read = async (dataDir: string, name = 'workspace.json') =>
+  fs.readFile(path.join(dataDir, name), 'utf8');
 const profile = (id: string, extra: Partial<StoredProfile> = {}): StoredProfile => ({
   id,
   name: 'Original · ' + id,
@@ -69,21 +70,21 @@ const workspace = (): WorkspaceFile => ({
   ],
   sessions: [{ hash: 'abc', userId: 'u2', expires: 4102444800000 }],
 });
-const write = async (d: string, w: unknown) => {
-  const raw = JSON.stringify(w);
-  await fs.writeFile(path.join(d, 'workspace.json'), raw);
+const write = async (dataDir: string, content: unknown) => {
+  const raw = JSON.stringify(content);
+  await fs.writeFile(path.join(dataDir, 'workspace.json'), raw);
   return raw;
 };
 
 test('a direct upgrade migrates every original profile and keeps the file as it was', async () => {
-  const d = await dir();
-  const raw = await write(d, workspace());
-  await open(d);
-  assert.equal(await read(d, 'workspace.json.pre-handbook'), raw, 'the pre-migration copy');
-  const db = JSON.parse(await read(d)) as WorkspaceFile;
+  const dataDir = await dir();
+  const raw = await write(dataDir, workspace());
+  await open(dataDir);
+  assert.equal(await read(dataDir, 'workspace.json.pre-handbook'), raw, 'the pre-migration copy');
+  const saved = JSON.parse(await read(dataDir)) as WorkspaceFile;
   const before = workspace();
-  assert.equal(db.revision, 8);
-  for (const [i, save] of db.saves.entries()) {
+  assert.equal(saved.revision, 8);
+  for (const [i, save] of saved.saves.entries()) {
     const old = before.saves[i]!;
     // Ownership and account isolation are kept: the same users, sessions, saves and owners.
     assert.equal(save.userId, old.userId);
@@ -92,57 +93,60 @@ test('a direct upgrade migrates every original profile and keeps the file as it 
       save.profiles.map(p => [p.id, p.name]),
       old.profiles.map(p => [p.id, p.name]),
     );
-    const p = save.profiles[0]!;
-    assert.equal(p.kind, 'calculated');
-    assert.equal('handbook' in p, false);
-    assert.deepEqual(p.plan, conversion.plan);
-    assert.deepEqual(p.state, migrateHandbookState(old.profiles[0]!.state, frozen, conversion));
-    assert.equal(p.state.checks['calc-3-' + row], true);
-    assert.equal(p.state.notes['factory-' + row], 'By the lake');
+    const migrated = save.profiles[0]!;
+    assert.equal(migrated.kind, 'calculated');
+    assert.equal('handbook' in migrated, false);
+    assert.deepEqual(migrated.plan, conversion.plan);
+    assert.deepEqual(
+      migrated.state,
+      migrateHandbookState(old.profiles[0]!.state, frozen, conversion),
+    );
+    assert.equal(migrated.state.checks['calc-3-' + row], true);
+    assert.equal(migrated.state.notes['factory-' + row], 'By the lake');
   }
-  assert.deepEqual(db.saves[0]!.profiles[1], calculated, 'a calculated profile is untouched');
-  assert.deepEqual(db.users, before.users);
-  assert.deepEqual(db.sessions, before.sessions);
-  assert.equal(db.accountsEnabled, true);
+  assert.deepEqual(saved.saves[0]!.profiles[1], calculated, 'a calculated profile is untouched');
+  assert.deepEqual(saved.users, before.users);
+  assert.deepEqual(saved.sessions, before.sessions);
+  assert.equal(saved.accountsEnabled, true);
 });
 
 test('starting again changes nothing', async () => {
-  const d = await dir();
-  const raw = await write(d, workspace());
-  await open(d);
-  const once = await read(d);
-  await open(d);
-  assert.equal(await read(d), once, 'workspace.json is not written again');
-  assert.equal(await read(d, 'workspace.json.pre-handbook'), raw);
+  const dataDir = await dir();
+  const raw = await write(dataDir, workspace());
+  await open(dataDir);
+  const once = await read(dataDir);
+  await open(dataDir);
+  assert.equal(await read(dataDir), once, 'workspace.json is not written again');
+  assert.equal(await read(dataDir, 'workspace.json.pre-handbook'), raw);
   // A workspace without original profiles never gets a pre-migration copy.
-  const e = await dir();
-  const w = workspace();
-  for (const s of w.saves) s.profiles = [calculated];
-  for (const s of w.saves) s.activeProfile = 'calc';
-  await write(e, w);
-  const plain = await read(e);
-  await open(e);
-  assert.equal(await read(e), plain);
-  await assert.rejects(read(e, 'workspace.json.pre-handbook'), { code: 'ENOENT' });
+  const plainDir = await dir();
+  const plainWorkspace = workspace();
+  for (const save of plainWorkspace.saves) save.profiles = [calculated];
+  for (const save of plainWorkspace.saves) save.activeProfile = 'calc';
+  await write(plainDir, plainWorkspace);
+  const plain = await read(plainDir);
+  await open(plainDir);
+  assert.equal(await read(plainDir), plain);
+  await assert.rejects(read(plainDir, 'workspace.json.pre-handbook'), { code: 'ENOENT' });
 });
 
 test('a crash mid-write keeps the pre-migration copy, and the next start finishes', async () => {
-  const d = await dir();
-  const raw = await write(d, workspace());
+  const dataDir = await dir();
+  const raw = await write(dataDir, workspace());
   const rename = mock.method(fs, 'rename', async () => {
     throw Object.assign(new Error('crash'), { code: 'EIO' });
   });
   try {
-    await assert.rejects(open(d), /crash/);
+    await assert.rejects(open(dataDir), /crash/);
   } finally {
     rename.mock.restore();
   }
-  assert.equal(await read(d), raw, 'workspace.json is as it was');
-  assert.equal(await read(d, 'workspace.json.pre-handbook'), raw);
-  await open(d);
-  assert.equal(await read(d, 'workspace.json.pre-handbook'), raw, 'never replaced');
-  const db = JSON.parse(await read(d)) as WorkspaceFile;
-  assert.ok(db.saves.every(s => s.profiles.every(p => p.kind === 'calculated')));
+  assert.equal(await read(dataDir), raw, 'workspace.json is as it was');
+  assert.equal(await read(dataDir, 'workspace.json.pre-handbook'), raw);
+  await open(dataDir);
+  assert.equal(await read(dataDir, 'workspace.json.pre-handbook'), raw, 'never replaced');
+  const saved = JSON.parse(await read(dataDir)) as WorkspaceFile;
+  assert.ok(saved.saves.every(s => s.profiles.every(p => p.kind === 'calculated')));
 });
 
 test('a profile with its own handbook migrates with that one', async () => {
@@ -150,25 +154,28 @@ test('a profile with its own handbook migrates with that one', async () => {
   own.version = '2026-08-01';
   const renamed = own.factories.find(f => f.id === factory.id)!;
   renamed.id = 'renamed-factory';
-  const w = workspace();
-  const p = profile('original', { handbook: own });
-  p.state.checks = { 'factory-3-renamed-factory': true, ['factory-3-' + factory.id]: true };
-  w.saves[0]!.profiles[0] = p;
-  const d = await dir();
-  await write(d, w);
-  await open(d);
-  const db = JSON.parse(await read(d)) as WorkspaceFile;
-  const m = db.saves[0]!.profiles[0]!;
-  assert.equal('handbook' in m, false);
-  assert.equal(m.plan!.engine, 'handbook-2026-08-01');
-  assert.equal(m.state.checks['calc-3-' + row], true, 'its own factory id');
+  const file = workspace();
+  const ownProfile = profile('original', { handbook: own });
+  ownProfile.state.checks = {
+    'factory-3-renamed-factory': true,
+    ['factory-3-' + factory.id]: true,
+  };
+  file.saves[0]!.profiles[0] = ownProfile;
+  const dataDir = await dir();
+  await write(dataDir, file);
+  await open(dataDir);
+  const saved = JSON.parse(await read(dataDir)) as WorkspaceFile;
+  const migrated = saved.saves[0]!.profiles[0]!;
+  assert.equal('handbook' in migrated, false);
+  assert.equal(migrated.plan!.engine, 'handbook-2026-08-01');
+  assert.equal(migrated.state.checks['calc-3-' + row], true, 'its own factory id');
   // The frozen handbook's id is no factory of this one, so its tick is kept for review.
-  assert.equal(m.state.handbookOrigin!.unmapped.checks['factory-3-' + factory.id], true);
-  assert.equal(db.saves[1]!.profiles[0]!.plan!.engine, 'handbook-' + frozen.version);
+  assert.equal(migrated.state.handbookOrigin!.unmapped.checks['factory-3-' + factory.id], true);
+  assert.equal(saved.saves[1]!.profiles[0]!.plan!.engine, 'handbook-' + frozen.version);
 });
 
 test('a skipped-version upgrade: a single-profile progress.json of an early release', async () => {
-  const d = await dir();
+  const dataDir = await dir();
   // Content version 1, before workspace.json existed: handbook progress, factory ticks included.
   const old = {
     version: 1,
@@ -178,18 +185,18 @@ test('a skipped-version upgrade: a single-profile progress.json of an early rele
     customTasks: [],
     settings: { phase: '4' },
   };
-  await fs.writeFile(path.join(d, 'progress.json'), JSON.stringify(old));
-  await open(d);
-  const db = JSON.parse(await read(d)) as WorkspaceFile;
-  const p = db.saves[0]!.profiles[0]!;
-  assert.equal(p.id, 'original');
-  assert.equal(p.kind, 'calculated');
-  assert.equal(p.state.checks['calc-3-' + row], true);
-  assert.equal(p.state.notes['factory-' + row], 'Old note');
-  assert.equal(p.state.settings.phase, '4');
+  await fs.writeFile(path.join(dataDir, 'progress.json'), JSON.stringify(old));
+  await open(dataDir);
+  const saved = JSON.parse(await read(dataDir)) as WorkspaceFile;
+  const migrated = saved.saves[0]!.profiles[0]!;
+  assert.equal(migrated.id, 'original');
+  assert.equal(migrated.kind, 'calculated');
+  assert.equal(migrated.state.checks['calc-3-' + row], true);
+  assert.equal(migrated.state.notes['factory-' + row], 'Old note');
+  assert.equal(migrated.state.settings.phase, '4');
   // progress.json itself is the pre-migration copy; no other is written.
-  assert.deepEqual(JSON.parse(await read(d, 'progress.json')), old);
-  await assert.rejects(read(d, 'workspace.json.pre-handbook'), { code: 'ENOENT' });
+  assert.deepEqual(JSON.parse(await read(dataDir, 'progress.json')), old);
+  await assert.rejects(read(dataDir, 'workspace.json.pre-handbook'), { code: 'ENOENT' });
 });
 
 test("a migrated profile's Phase 5 is not over budget on Nitrogen Gas (the pureLimits base)", () => {
@@ -200,15 +207,17 @@ test("a migrated profile's Phase 5 is not over budget on Nitrogen Gas (the pureL
 });
 
 test('the frozen handbook is in neither the Docker public files nor the Pages build', () => {
-  const r = spawnSync(process.execPath, ['build.ts'], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap(e =>
-      e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)],
+  const build = spawnSync(process.execPath, ['build.ts'], { encoding: 'utf8' });
+  assert.equal(build.status, 0, build.stderr);
+  const walk = (directory: string): string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap(entry =>
+      entry.isDirectory()
+        ? walk(path.join(directory, entry.name))
+        : [path.join(directory, entry.name)],
     );
   for (const out of ['dist/web', 'dist/satisfactory-planner'])
-    for (const f of walk(out))
-      assert.doesNotMatch(f.replaceAll('\\', '/'), /migrations|handbook-2026-09-13/, f);
+    for (const file of walk(out))
+      assert.doesNotMatch(file.replaceAll('\\', '/'), /migrations|handbook-2026-09-13/, file);
   // The image copies migrations/ next to workspace.ts, outside the public/ it serves.
   const docker = readFileSync('Dockerfile', 'utf8');
   assert.match(docker, /^COPY --chown=node:node migrations \.\/migrations$/m);
