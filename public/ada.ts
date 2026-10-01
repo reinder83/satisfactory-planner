@@ -67,6 +67,10 @@ export interface AdaFacts {
   // target time as a string like `hours`, and whether the rounded plan takes longer. null when
   // the search finished.
   rounded: { target: string; longer: boolean } | null;
+  // The stage's search stopped and no rounded whole-machine plan fit, so it is the exact plan
+  // with easy clocks (#694): the target as for `rounded`, whether it takes longer, and whether
+  // the clocks are easy ('easy', 'rate') or the exact plan's own ('precise'). null otherwise.
+  fractional: { target: string; longer: boolean; clocks: 'easy' | 'rate' | 'precise' } | null;
   profiles: number;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
@@ -487,6 +491,20 @@ const RULES: AdaRule[] = [
     when: facts => facts.rounded,
     text: facts =>
       `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to the nearest whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
+  },
+  {
+    id: 'fractional-after-stop',
+    on: ['plan', 'resources'],
+    tone: 'warn',
+    when: facts => facts.fractional,
+    text: facts => {
+      const { target, longer, clocks } = facts.fractional!;
+      const how =
+        clocks === 'precise'
+          ? 'the exact plan with its precise clocks'
+          : `the exact plan with every solid-part line at 100% except the last machine, at 25%, 50% or 75%${clocks === 'rate' ? ' or at a whole number per minute' : ''}`;
+      return `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, and no rounding to whole machines fit, so this phase is not whole machines: it is ${how}${longer && facts.hours ? `, and it takes ${facts.hours} instead of ${target}` : ''}. Somewhat fiddly. Entirely buildable. Fewer alternates or precise balancing usually let the search finish.`;
+    },
   },
   {
     id: 'hours',

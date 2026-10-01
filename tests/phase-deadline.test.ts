@@ -58,9 +58,15 @@ test('every phase ends within the browser worker’s limit on a slow machine (#5
       `Phase ${index + 1} took ${seconds.toFixed(0)} s on the slow machine`,
     );
   });
-  // A phase cut off by the deadline is a draft that says the search stopped, as at the backstop.
-  const cut = Object.values(stages).filter(stage => !stage.feasible);
+  // A phase cut off by the deadline is rounded from its exact plan (#693) or given easy clocks
+  // (#694); one neither fits is a draft that says the search stopped, as at the backstop.
+  const cut = Object.values(stages).filter(
+    stage =>
+      !stage.feasible ||
+      stage.roundedAfterStop !== undefined ||
+      stage.fractionalAfterStop !== undefined,
+  );
   assert.ok(cut.length, 'the slow machine cuts at least one phase off');
-  for (const stage of cut)
+  for (const stage of cut.filter(stage => !stage.feasible))
     assert.match(stage.reason || '', /search stopped/, 'no resource shortage is claimed');
 });
