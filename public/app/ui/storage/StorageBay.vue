@@ -25,7 +25,7 @@ import {
   storageFloors,
 } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
-import { reset, useDraft } from '../draft.ts';
+import { leave, reset, useDraft } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -144,6 +144,8 @@ function completeSlot(event: Event, id: string) {
 // The bay's name field shows the saved name, then what the user types, so a redraw while another
 // control saves keeps a name typed but not yet committed (#654, ui/draft.ts).
 const name = useDraft(() => props.bay.name);
+// Left without a commit, it shows the saved name again (#687).
+const left = (event: FocusEvent) => leave(name, event);
 
 // The bay's name field, read-only while it saves (app/busy.ts). Redrawn with the saved name
 // whether or not the save worked, so a failed rename shows the saved name again, and the field is
@@ -328,6 +330,7 @@ async function addContainer(event: Event) {
         :aria-label="'Rename bay ' + bay.id"
         @input="name = ($event.target as HTMLInputElement).value"
         @change="rename"
+        @blur="left"
       />
       <h3 v-else>{{ bay.name }}</h3>
     </header>

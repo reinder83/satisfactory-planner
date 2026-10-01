@@ -58,6 +58,13 @@ export const races: Record<string, Race> = {
     typed: ['12', '124'],
     stored: () => [state.deliveries['3-modular-engine'], state.deliveries['3-versatile-framework']],
     expected: [5, 124],
+    elsewhere: {
+      set(reply, value) {
+        reply.deliveries['3-versatile-framework'] = Number(value);
+      },
+      commits: ['5', '6', '7'],
+      others: ['20', '30', '40'],
+    },
   },
   'bay name': {
     async open() {
@@ -73,6 +80,13 @@ export const races: Record<string, Race> = {
     typed: ['Ne', 'New D'],
     stored: () => [bayName('C'), bayName('D')],
     expected: ['Bay C renamed', 'New D'],
+    elsewhere: {
+      set(reply, value) {
+        reply.storageEdits.bayNames.D = value;
+      },
+      commits: ['Bay C renamed', 'Bay C again', 'Bay C at last'],
+      others: ['D elsewhere', 'D again', 'D at last'],
+    },
   },
   'group name': {
     async open() {
@@ -304,4 +318,65 @@ export async function typedBackWhileAnotherTabSaves(
   assert.equal(two().value, elsewhere.others[0]);
   await commitFirst(elsewhere.commits[2], elsewhere.others[2]);
   assert.equal(two().value, elsewhere.others[2], 'untouched after its commit: follows again');
+}
+
+// A field typed in and then typed back to the value it had when focused, while another tab saves
+// a newer value (#687): the browser sends no change when it is left, so nothing is saved. Left,
+// the field drops what is typed and shows the saved value, the other tab's, and follows the next
+// one. A blur that leaves it focused (the user switched browser tabs) keeps what is typed, and a
+// blur right after a commit leaves the field to that commit. `answer` as above.
+export async function leftWithoutCommit(
+  race: Race,
+  answer: (reply: (update: UpdateOp) => ProgressState) => void,
+) {
+  const elsewhere = race.elsewhere!;
+  page();
+  await race.open();
+  let other: string | null = null;
+  answer(update => {
+    const reply = applyUpdate(update);
+    if (other !== null) elsewhere.set(reply, other);
+    return reply;
+  });
+  const one = $<HTMLInputElement>(race.first)!,
+    two = () => $<HTMLInputElement>(race.second)!;
+  assert.ok(one && two(), 'both fields are drawn');
+  const commitFirst = async (value: string, saved: string | null) => {
+    other = saved;
+    type(one, value);
+    one.dispatchEvent(new Event('change'));
+    await settle();
+    assert.equal(String(race.stored()[0]), value);
+  };
+  await commitFirst(elsewhere.commits[0], elsewhere.others[0]);
+  assert.equal(two().value, elsewhere.others[0], 'untouched: another tab’s value is shown');
+  // Typed in, then typed back to the value it had when focused.
+  two().focus();
+  type(two(), race.typed[1]);
+  type(two(), elsewhere.others[0]);
+  await commitFirst(elsewhere.commits[1], elsewhere.others[1]);
+  assert.equal(two().value, elsewhere.others[0], 'typed in: kept while it has focus');
+  // The window loses focus to another browser tab: the field keeps focus, and what is typed.
+  two().dispatchEvent(new FocusEvent('blur'));
+  await nextTick();
+  assert.equal(two().value, elsewhere.others[0], 'kept when the window loses focus');
+  // Focus leaves it, with no change: the saved value, the other tab's, is shown.
+  two().blur();
+  await settle();
+  assert.equal(two().value, elsewhere.others[1], 'left without a commit: the saved value');
+  assert.equal(String(race.stored()[1]), elsewhere.others[1], 'nothing saved on blur');
+  await commitFirst(elsewhere.commits[2], elsewhere.others[2]);
+  assert.equal(two().value, elsewhere.others[2], 'untouched again: follows the next one');
+  // A commit as focus leaves: the browser sends the change just before the blur, which leaves
+  // the field to the commit and its save.
+  other = null;
+  two().focus();
+  type(two(), race.typed[1]);
+  two().dispatchEvent(new Event('change'));
+  two().blur();
+  await nextTick();
+  assert.equal(two().value, race.typed[1], 'the committed value stays while it saves');
+  await settle();
+  assert.equal(String(race.stored()[1]), race.typed[1], 'the committed value is saved');
+  assert.equal(two().value, race.typed[1]);
 }

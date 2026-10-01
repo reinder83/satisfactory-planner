@@ -53,7 +53,7 @@ import { fuelledModes } from '../../../state.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
-import { resetDraft, useDrafts } from '../draft.ts';
+import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -189,6 +189,7 @@ const savedTrips = (): Record<string, string> =>
       link.transport ? [[link.key, String(link.transport.roundTripMin)]] : [],
     ),
   );
+// Left without a commit, a field shows the saved minutes again (#687).
 const trips = useDrafts(savedTrips);
 // Then the saved minutes again, after a refused entry or a save (failed or not).
 const savedTrip = (link: Link) => {
@@ -381,6 +382,7 @@ async function recalculate(event: Event) {
                       :value="trips[link.key]"
                       @input="trips[link.key] = ($event.target as HTMLInputElement).value"
                       @change="setTrip($event, link)"
+                      @blur="leaveDraft(trips, link.key, $event)"
                     />
                     min</label
                   >

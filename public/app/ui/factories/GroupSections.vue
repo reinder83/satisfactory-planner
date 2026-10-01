@@ -15,7 +15,7 @@ import { factoryEditing, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
-import { resetDraft, useDrafts } from '../draft.ts';
+import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
@@ -44,6 +44,7 @@ const editing = computed(() => legacy(() => factoryEditing));
 // another control saves keeps a name typed but not yet committed (#654, ui/draft.ts).
 const savedNames = () =>
   Object.fromEntries(sections.value.map(section => [section.id, section.name]));
+// Left without a commit, a field shows the saved name again (#687).
 const names = useDrafts(savedNames);
 
 // A group's name field, read-only while it saves (app/busy.ts, #299), then redrawn with the saved
@@ -112,6 +113,7 @@ async function remove(event: Event, id: string) {
             :aria-label="'Rename group ' + section.name"
             @input="names[section.id] = ($event.target as HTMLInputElement).value"
             @change="rename($event, section.id)"
+            @blur="leaveDraft(names, section.id, $event)"
           />
           <h2 v-else tabindex="-1" data-section-heading>{{ section.name }}</h2>
         </div>

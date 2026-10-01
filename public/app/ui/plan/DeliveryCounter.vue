@@ -13,7 +13,7 @@ import { duration, num } from '../../format.ts';
 import { currentProfile, state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
-import { settle, useDraft } from '../draft.ts';
+import { leave, settle, useDraft } from '../draft.ts';
 
 // A delivery of the current phase: a handbook one (with the amount handed in when the
 // handbook was written) or a calculated plan's.
@@ -51,6 +51,8 @@ const counter = computed(() =>
 // stays editable while it saves, so a number typed meanwhile is kept when that save returns, and
 // saved when it is committed in turn (#664).
 const draft = useDraft(() => String(counter.value.value));
+// Left without a commit, the counter shows the saved count again (#687).
+const left = (event: FocusEvent) => leave(draft, event);
 
 // A refused entry shows the saved count again at once; a save, done or failed, does so unless
 // another number has been typed since it started (`shown` is the draft then).
@@ -90,6 +92,7 @@ async function change(event: Event) {
         :value="draft"
         @input="draft = ($event.target as HTMLInputElement).value"
         @change="change"
+        @blur="left"
       /><small>/ {{ num(delivery.target) }}</small>
     </div>
     <div class="progress-track">

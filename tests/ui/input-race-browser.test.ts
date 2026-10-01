@@ -18,6 +18,7 @@ vi.mock('../../public/browser-api.ts', async original => ({
 
 import { applyUpdate } from './setup.ts';
 import {
+  leftWithoutCommit,
   races,
   typedBackWhileAnotherTabSaves,
   typedDuringOwnSave,
@@ -57,3 +58,9 @@ test('a delivery count typed while the same counter saves is kept and saved in t
 test('the count saved before, typed back while the same counter saves, is kept and saved in the browser (#678)', async () => {
   await typedDuringOwnSave(stub, '0');
 });
+
+for (const [name, race] of Object.entries(races))
+  if (race.elsewhere)
+    test(`a ${name} left without a commit shows the saved value, another tab’s too, in the browser (#687)`, async () => {
+      await leftWithoutCommit(race, answer);
+    });
