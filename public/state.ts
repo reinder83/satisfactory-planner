@@ -23,7 +23,7 @@
 // The code lives in public/state/, one concern per module; this file only re-exports the names
 // every importer, test and the server use, so none of them names a file under public/state/.
 //   state/validate.ts        blank state, validateState and the record rules
-//   state/mutate.ts          mutate (the /api/update operations) and checkBase
+//   state/mutate.ts          mutate (the /api/update operations), checkBase and checkPlanStart
 //   state/carry.ts           newProfileState, carry options, carryGuide, shareState and the
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
 //                            roundUpState, wholeMachineProfile)
@@ -42,7 +42,7 @@ export {
   slotPosition,
   validateState,
 } from './state/validate.ts';
-export { checkBase, mutate, staleWrite } from './state/mutate.ts';
+export { beforePlanStart, checkBase, checkPlanStart, mutate, staleWrite } from './state/mutate.ts';
 export {
   calculatedProfile,
   carryGuide,

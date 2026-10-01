@@ -1,6 +1,6 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
-import { checkBase, currentPayoff, wholeMachineProfile } from '../public/state.ts';
+import { checkBase, checkPlanStart, currentPayoff, wholeMachineProfile } from '../public/state.ts';
 import { calculate, rankAlternates } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -142,11 +142,8 @@ export function profileRoutes({
         checkBase(draftProfile.state, input, [req.headers['x-planner-revision']].flat()[0]);
       // mutate() checks the operation and throws for one it does not know.
       const state = imported || mutate(draftProfile.state, input as UpdateOp);
-      if (
-        draftProfile.kind === 'original' &&
-        !['3', '4', '5', 'post'].includes(state.settings.phase)
-      )
-        fail('The original handbook covers Phase 3 onward.');
+      // An original profile cannot be moved before Phase 3, where its plan starts.
+      checkPlanStart(draftProfile.kind, state);
       state.revision = draftProfile.state.revision + 1;
       draftProfile.state = state;
       return state;
