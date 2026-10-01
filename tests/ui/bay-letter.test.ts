@@ -3,7 +3,11 @@
 // (bay-letter-race.ts).
 import { test } from 'vitest';
 import { applyUpdate } from './setup.ts';
-import { letterTypedDuringSave, letterTypedWhileSuggestionMoves } from './bay-letter-race.ts';
+import {
+  letterKeptOrRefilled,
+  letterTypedDuringSave,
+  letterTypedWhileSuggestionMoves,
+} from './bay-letter-race.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 test('a bay letter typed while another save runs is kept and used (#670)', async () => {
@@ -18,6 +22,15 @@ test('a bay letter typed while another save runs is kept and used (#670)', async
 
 test('a typed bay letter stays when a save moves the suggested letter (#677)', async () => {
   await letterTypedWhileSuggestionMoves(answer => {
+    globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
+      const update = JSON.parse(String(options.body)) as UpdateOp;
+      return new Response(JSON.stringify(answer(update)), { status: 200 });
+    }) as typeof fetch;
+  });
+});
+
+test('a typed bay letter is kept, and an emptied one takes the suggestion on blur (#681)', async () => {
+  await letterKeptOrRefilled(answer => {
     globalThis.fetch = (async (_path: RequestInfo | URL, options: RequestInit = {}) => {
       const update = JSON.parse(String(options.body)) as UpdateOp;
       return new Response(JSON.stringify(answer(update)), { status: 200 });

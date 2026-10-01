@@ -67,8 +67,17 @@ async function submit(
 // moves the suggestion (a bay added in another tab) moves an untouched box only (#677). Once a bay
 // is added the box starts again on the next free letter, untouched, so it follows the next move
 // too (reset, #678).
+// An emptied box stays empty while it has focus, so a suggestion that arrives meanwhile is not
+// joined to the next keystroke, and shows the suggestion as its placeholder. Left empty, it takes
+// the suggestion again, untouched, and follows it once more (the owner's choice on #681). A blur
+// that leaves it focused (the user switched to another tab or window) is not leaving it: coming
+// back, it is still empty, so the suggestion a refresh brings is not joined to the next keystroke.
 const suggested = () => legacy(() => nextBayLetter() || '');
 const letter = useDraft(suggested);
+const refillIfEmpty = (event: FocusEvent) => {
+  if (document.activeElement === event.target) return;
+  if (!letter.value.trim()) reset(letter, suggested());
+};
 const addBay = async (event: Event) => {
   const added = await submit(event, async name => {
     const field = new FormData(event.target as HTMLFormElement).get('letter');
@@ -181,8 +190,10 @@ async function removeFloor(event: Event) {
           required
           pattern="[A-Za-z]{1,2}"
           :value="letter"
+          :placeholder="suggested() || undefined"
           aria-label="New bay letter"
           @input="letter = ($event.target as HTMLInputElement).value"
+          @blur="refillIfEmpty"
         /><input
           id="new-bay-name"
           name="name"
