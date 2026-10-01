@@ -153,11 +153,17 @@ test('malformed updates and save exports are refused with 400 and a reason', asy
     const wrap = { format: 'satisfactory-planner-saves', version: 1 };
     for (const [data, error] of [
       [{ ...wrap, saves: 'x' }, 'Choose a full planner save export.'],
-      [{ ...wrap, saves: [null] }, 'Invalid profiles in export.'],
-      [{ ...wrap, saves: [{ profiles: [null] }] }, 'Invalid profile.'],
+      [
+        { ...wrap, saves: [null] },
+        'This save file has a world with missing, damaged or too many profiles, so it cannot be imported. Export it again from the planner that made it.',
+      ],
+      [
+        { ...wrap, saves: [{ profiles: [null] }] },
+        'This save file has a damaged profile, so it cannot be imported. Export it again from the planner that made it.',
+      ],
       [
         { ...wrap, saves: [{ profiles: [{ id: 'p', kind: 'calculated' }] }] },
-        'Missing calculation snapshot.',
+        'This save file has a plan without its calculation, so it cannot be imported. Export it again from the planner that made it.',
       ],
       // An original profile whose handbook sources are not a list (#116).
       ...[5, {}, 'x'].map(sources => [
