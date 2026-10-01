@@ -4448,11 +4448,14 @@ button.rail-tile:hover {
   font-size: 12px;
   color: #99a2a9;
 }
+/* A word longer than the row (a long word in a renamed step's title) breaks inside the title
+   instead of pushing Restore past the panel (#707), as in the checklist (#659). */
 .removed-step > span {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .removed-step .task-icon {
   width: 20px;
