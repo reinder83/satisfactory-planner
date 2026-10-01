@@ -1064,6 +1064,8 @@ const UNSETTLED = 'Rounding did not settle';
 // Residue, Alumina Solution and Aluminum Scrap) take turns being rounded up without end; a
 // whole-machine search can find counts that fit both, rounding cannot. The line that keeps
 // coming back keeps its fractional clock, as fluid lines do, and the rest of the plan is whole.
+// A line at the top of a long chain can reach the limit too, sharing no fluid; the warning words
+// the two apart (raisedLines, #714).
 const ROUNDING_RAISES = 6;
 // The same two limits for the finer grids of easyClockFallback (#694). Each raise there leaves a
 // quarter of a machine or less to spare rather than up to a whole one, so a line at the top of a
@@ -2330,13 +2332,11 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
     .map(([phase, stage]) => {
       const target = stage.roundedAfterStop!,
         longer = stage.hours! > target * 1.01;
-      // Lines roundedRun left fractional because they kept taking turns with another.
-      const left = (stage.rows || [])
-        .filter(row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6)
-        .map(row => row.name);
-      const kept = left.length
-        ? ` ${listNames(left)} ${left.length > 1 ? 'share' : 'shares'} a fluid with another whole-machine line, so ${left.length > 1 ? 'they keep' : 'it keeps'} a fractional clock on the last machine.`
-        : '';
+      // Lines roundedRun left fractional because it rounded them up more than ROUNDING_RAISES times.
+      const left = (stage.rows || []).filter(
+        row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6,
+      );
+      const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock');
       return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to the nearest whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
 }
@@ -2364,7 +2364,7 @@ const fractionalClocks = (clocks: FractionalAfterStop['clocks']) =>
     ? 'So this phase is its exact plan, with precise clocks.'
     : `So this phase is its exact plan with easy clocks: every solid-part line runs whole machines at 100% except the last, which runs at 25%, 50% or 75%${clocks === 'rate' ? ', or at the clock that makes a whole number of items per minute' : ''}.`;
 // The solid-part lines of a phase in fractionalWarnings whose last machine is not on an easy
-// clock: they share a fluid with another such line (EASY_RAISES), as a sentence.
+// clock (roundedRun raised them more than EASY_RAISES times), as sentences (raisedLines).
 function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']): string {
   if (clocks === 'precise') return '';
   const easy = (row: CalcRow) => {
@@ -2373,12 +2373,44 @@ function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']
     const perMachine = row.equivalent > 0 ? productRate(row) / row.equivalent : 0;
     return clocks === 'rate' && Math.abs(perMachine * last - Math.round(perMachine * last)) < 1e-4;
   };
-  const left = (stage.rows || [])
-    .filter(row => roundsToWholeMachines(row) && !row.amplified && !easy(row))
-    .map(row => row.name);
-  return left.length
-    ? ` ${listNames(left)} ${left.length > 1 ? 'share' : 'shares'} a fluid with another solid-part line, so ${left.length > 1 ? 'they keep' : 'it keeps'} a precise clock on the last machine.`
-    : '';
+  const left = (stage.rows || []).filter(
+    row => roundsToWholeMachines(row) && !row.amplified && !easy(row),
+  );
+  return raisedLines(stage, left, 'solid-part', 'a precise clock');
+}
+// Why roundedRun left the `left` lines of a stage off their grid, as sentences: it rounded each
+// up more than its raise limit (ROUNDING_RAISES, EASY_RAISES). Two whole lines tied by a fluid
+// that balances exactly (Rubber and Petroleum Coke by Heavy Oil Residue) take turns without end;
+// only a line that makes or uses a non-raw fluid (an exact balance, addBalances) another such line
+// of the stage also makes or uses is said to share a fluid (#714). A line at the top of a long
+// chain (Iron Plate, Copper Ingot) reaches the limit too, raised again each time the lines it
+// feeds were rounded.
+function raisedLines(stage: CurrentStage, left: CalcRow[], kind: string, clock: string): string {
+  const lines = (stage.rows || []).filter(row => roundsToWholeMachines(row));
+  const fluids = (row: CalcRow) =>
+    [...Object.keys(row.inputs), ...Object.keys(row.outputs)].filter(
+      item => DATA.items[item]?.fluid && !RAW.includes(item),
+    );
+  const sharesFluid = (row: CalcRow) =>
+    fluids(row).some(item =>
+      lines.some(other => other.id !== row.id && fluids(other).includes(item)),
+    );
+  const sentence = (rows: CalcRow[], plural: string, single: string) =>
+    rows.length
+      ? ` ${listNames(rows.map(row => row.name))} ${rows.length > 1 ? plural : single}, so ${rows.length > 1 ? 'they keep' : 'it keeps'} ${clock} on the last machine.`
+      : '';
+  return (
+    sentence(
+      left.filter(sharesFluid),
+      `share a fluid with another ${kind} line`,
+      `shares a fluid with another ${kind} line`,
+    ) +
+    sentence(
+      left.filter(row => !sharesFluid(row)),
+      'kept being rounded up as the lines they feed were rounded',
+      'kept being rounded up as the lines it feeds were rounded',
+    )
+  );
 }
 // What the plan does not claim: a global optimum, or simulated mods.
 function scopeWarnings({ config }: FinishedPlan): string[] {
