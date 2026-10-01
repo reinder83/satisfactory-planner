@@ -251,6 +251,10 @@ export interface StageResult {
   // of it, and whether whole nuclear plants did not fit and the phase kept them fractional.
   nuclearPeriod?: number;
   nuclearFractional?: boolean;
+  // The whole-machine search stopped before it could prove the best plan, so the exact plan was
+  // rounded to whole machines instead (#593): the hours the phase was asked to finish in. The
+  // stage's own `hours` can be longer. Absent from older plans and from a search that finished.
+  roundedAfterStop?: number;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;

@@ -473,3 +473,16 @@ test("ADA names a plan guide's open commissioning, storage tasks and completion 
       [],
     );
 });
+
+test('ADA says when a phase was rounded after its whole-machine search stopped (#593)', () => {
+  const find = (given: Partial<AdaFacts>) =>
+    adaRemarks(facts(given)).find(r => r.id === 'rounded-after-stop');
+  assert.equal(find({}), undefined, 'a finished search says nothing');
+  const longer = find({ hours: '11.9 h', rounded: { target: '8 h', longer: true } });
+  assert.ok(longer);
+  assert.match(longer.text, /stopped before it could prove the best plan/);
+  assert.match(longer.text, /takes 11\.9 h instead of 8 h/);
+  const onTime = find({ hours: '7.9 h', rounded: { target: '8 h', longer: false } });
+  assert.ok(onTime);
+  assert.doesNotMatch(onTime.text, /instead of/);
+});

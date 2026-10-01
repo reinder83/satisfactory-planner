@@ -236,6 +236,13 @@ function adaFacts(): AdaFacts {
           }
         : null,
     hours: calculated && storedStage.hours ? num(storedStage.hours) + ' h' : '',
+    rounded:
+      calculated && storedStage.feasible && storedStage.roundedAfterStop !== undefined
+        ? {
+            target: num(storedStage.roundedAfterStop) + ' h',
+            longer: (storedStage.hours || 0) > storedStage.roundedAfterStop * 1.01,
+          }
+        : null,
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
     backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',

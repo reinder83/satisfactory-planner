@@ -72,6 +72,7 @@ interface RunOptions {
   caps?: Record<string, number> | null;
   baseline?: Record<string, number> | null;
   fractionalNuclear?: boolean;
+  roundStopped?: boolean;
 }
 const isRecord = (value: unknown): value is Raw =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -756,6 +757,8 @@ function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
 //   baseline      { recipeId: equivalent } from the exact solve: which lines get amplified twins
 //   fractionalNuclear  leave the uranium plants fractional in a whole-machine fit (the fallback
 //                 when whole nuclear plants do not fit, #370)
+//   roundStopped  when the whole-machine search stops at its limit, round the exact plan to
+//                 whole machines instead (roundedFallback, #593); only solvePhase sets it
 //
 // Returns { feasible: false, solverStatus? } or a stage:
 //   rows        one per recipe in use, in build order (suppliers before consumers): the recipe
@@ -772,44 +775,23 @@ function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
 //   hours       time to finish the phase's deliveries at these rates
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
 //   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
-// The two-step fit may add nuclearFractional, supplyDropped or amplificationDropped.
+// The two-step fit may add nuclearFractional, supplyDropped, amplificationDropped or
+// roundedAfterStop.
 // calculate() may add aheadOf (pullFinalPhaseForward), fuelVerdict (judgeAugmenterFuel), or turn
 // a failed phase into a draft with reason/shortfalls/minHours (draftStage). The interface reads
 // these fields through calcStage() in public/app/session.ts: mainly
 // public/app/views/calculated.ts, public/app/flow.ts and the components in public/app/ui/plan/
 // and public/app/ui/wizard/. Only calculate() calls run, through its phase helpers (solvePhase,
 // draftStage, resolveEarlierPhases, solveUnfueled) and the two-step fit below.
-export function run(
-  config: CurrentSettings,
-  phase: number,
-  {
-    maximum = false,
-    conversion = false,
-    ignoreLimits = false,
-    recipeIds = null,
-    caps = null,
-    baseline = null,
-    fractionalNuclear = false,
-  }: RunOptions = {},
-): RunResult {
-  const context: PhaseContext = {
-    config,
-    phase,
-    maximum,
-    conversion,
-    ignoreLimits,
-    recipeIds,
-    caps,
-    baseline,
-    fractionalNuclear,
-    power: phasePower(config, phase),
-  };
+export function run(config: CurrentSettings, phase: number, options: RunOptions = {}): RunResult {
+  const context = phaseContext(config, phase, options);
   // The inner calls of the two-step fit pass `recipeIds`, so they skip it and plan the phase.
-  if ((config.wholeMachines || config.amplifySloops > 0) && !recipeIds) return twoStepFit(context);
+  if ((config.wholeMachines || config.amplifySloops > 0) && !context.recipeIds)
+    return twoStepFit(context);
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
   const { model, period } = buildModel(context, pool, demands);
-  const solved = solveModel(model, maximum);
+  const solved = solveModel(model, context.maximum);
   // solverStatus lets calculate() tell a search stopped at its limit ('Unknown' at the node limit,
   // 'Time limit reached' at the clock's backstop) from a real shortage.
   if (!solved.feasible || !solved.bounded)
@@ -824,6 +806,33 @@ interface PhaseContext extends Required<RunOptions> {
   phase: number;
   power: PhasePower;
 }
+// run()'s options with their defaults filled in, and the phase's power figures.
+const phaseContext = (
+  config: CurrentSettings,
+  phase: number,
+  {
+    maximum = false,
+    conversion = false,
+    ignoreLimits = false,
+    recipeIds = null,
+    caps = null,
+    baseline = null,
+    fractionalNuclear = false,
+    roundStopped = false,
+  }: RunOptions,
+): PhaseContext => ({
+  config,
+  phase,
+  maximum,
+  conversion,
+  ignoreLimits,
+  recipeIds,
+  caps,
+  baseline,
+  fractionalNuclear,
+  roundStopped,
+  power: phasePower(config, phase),
+});
 // The phase's power figures (see phasePower).
 interface PhasePower {
   utilityFactor: number;
@@ -885,7 +894,253 @@ function twoStepFit(context: PhaseContext): RunResult {
       const without = supply.without(variant);
       if (without?.feasible) return marked(variant, { ...without, supplyDropped: true });
     }
+  // A search that stopped at its limit proves no shortage while the exact plan fits: round that
+  // plan to whole machines instead (#593), when the caller asks for it.
+  if (context.roundStopped && config.wholeMachines && stoppedSearch(fit!)) {
+    const rounded = roundedFallback(context, base, { ids, baseline, variants, marked });
+    if (rounded) return rounded;
+  }
   return fit!;
+}
+// A failure that is a search stopped at its limit ('Unknown' at the node limit, 'Time limit
+// reached' at the backstop or the phase's deadline), not a proven shortage.
+const stoppedSearch = (result: RunResult) =>
+  !result.feasible && !!result.solverStatus && !/infeasible/i.test(result.solverStatus);
+// How much longer than its target a phase rounded after a stopped search may be planned for
+// (#593): the target itself first, then 5%, 10%, 25% and 50% longer. Lower delivery rates mean
+// smaller lines, so a rounded plan that is over a budget at the target can fit at a longer time.
+// At each step, lines rounded down may slow the phase to the next step's time; at the last, not
+// at all, so a rounded phase never takes more than 50% longer than its target.
+const ROUNDED_STRETCH = [1, 1.05, 1.1, 1.25, 1.5];
+// How long roundedFallback may try, in milliseconds. It runs after the phase's searches, which on
+// a slow device end at the phase's deadline (PHASE_SEARCH_MS, 120 s), so this keeps the phase
+// well inside the browser worker's 180 s. An ordinary machine needs a few seconds at most, so the
+// result does not depend on the machine there.
+const ROUNDING_MS = 20000;
+// The whole-machine search of this phase stopped before it could prove the best plan, but the
+// exact plan (`base`) fits. The owner's decision in #593: build whole machines from that plan
+// anyway, each line at the nearest whole count the material balance allows, and let the phase
+// take slightly longer where it must. At each time of ROUNDED_STRETCH, shortest first, try the
+// amplified variant, then the unamplified one (so amplification on never plans worse than off),
+// over the exact plan's network. Each try is linear solves only (roundedFit), so it cannot stop at
+// a search limit and gives the same plan on every run. The first try that fits the budgets is
+// used, and the stage records the target time as `roundedAfterStop`. Returns null when none
+// does; the phase then stays the draft that says the search stopped.
+function roundedFallback(
+  context: PhaseContext,
+  base: Solved,
+  {
+    ids,
+    baseline,
+    variants,
+    marked,
+  }: {
+    ids: Set<string>;
+    baseline: Record<string, number>;
+    variants: CurrentSettings[];
+    marked: (variant: CurrentSettings, result: Solved) => Solved;
+  },
+): Solved | null {
+  const { config, phase, maximum, conversion, ignoreLimits } = context;
+  // The time the phase was asked to finish in: the goal's, or under maximum output the exact
+  // plan's best time.
+  const target = maximum ? base.hours : goalHours(config);
+  const until = Date.now() + ROUNDING_MS;
+  for (const [step, stretch] of ROUNDED_STRETCH.entries())
+    for (const variant of variants) {
+      // At the target itself the goal is unchanged. Longer, the deliveries are spread over the
+      // longer time, as a timed goal spreads them; maximum output keeps its rates unrounded.
+      const timed: CurrentSettings =
+        stretch === 1 && !maximum
+          ? variant
+          : {
+              ...variant,
+              goal: 'timed',
+              hours: target * stretch,
+              ...(maximum ? { roundRates: false } : {}),
+            };
+      // Lines rounded to their nearest count, where those rounded down may slow the phase to the
+      // next step's time (the last step not at all), and every line rounded up (null), which
+      // needs more resources but no more time. The nearest rounding is used unless it does not
+      // fit or the rounded-up plan is as lean: honouring a line rounded down can shift work to
+      // other lines, and then it only slows the phase.
+      const next = ROUNDED_STRETCH[step + 1] ?? stretch;
+      const fit = (slowest: number | null) =>
+        roundedFit(timed, phase, slowest, { conversion, ignoreLimits, recipeIds: ids, baseline });
+      if (Date.now() > until) return null;
+      const nearest = fit(stretch / next);
+      const up = Date.now() > until ? null : fit(null);
+      const rounded =
+        nearest.feasible && !(up?.feasible && machineCount(up) <= machineCount(nearest))
+          ? nearest
+          : up;
+      if (!rounded) return null;
+      if (rounded.feasible) return marked(variant, { ...rounded, roundedAfterStop: target });
+      // Lines that take turns being rounded up do so at any time, so stop there.
+      if (up?.solverStatus === UNSETTLED) return null;
+    }
+  return null;
+}
+// The buildings of a stage's lines.
+const machineCount = (stage: Solved) => stage.rows.reduce((total, row) => total + row.machines, 0);
+// The hours a goal spreads the phase's deliveries over (deliveryDemand).
+const goalHours = (config: CurrentSettings) =>
+  config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+// A whole-machine plan rounded from the exact one, without an integer search (#593). As
+// integerFit does, whole nuclear plants that do not fit fall back to fractional ones
+// (`nuclearFractional`).
+function roundedFit(
+  variant: CurrentSettings,
+  phase: number,
+  slowest: number | null,
+  options: RunOptions,
+): RunResult {
+  const result = roundedRun(phaseContext(variant, phase, options), slowest);
+  if (
+    result.feasible ||
+    result.solverStatus === UNSETTLED ||
+    !variant.wholeMachines ||
+    !options.recipeIds?.has('power-uranium')
+  )
+    return result;
+  const fractional = roundedRun(
+    phaseContext(variant, phase, { ...options, fractionalNuclear: true }),
+    slowest,
+  );
+  return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
+}
+// Rounding passes before roundedRun gives up. Each pass settles at least one more level of the
+// supply chain; the settings tried in #593 needed at most 16, and a line left fractional after
+// ROUNDING_RAISES about as many again.
+const ROUNDING_PASSES = 30;
+const UNSETTLED = 'Rounding did not settle';
+// How often one line may be rounded up again before roundedRun leaves it fractional. Two whole
+// lines tied by a fluid that must balance exactly (Rubber and Petroleum Coke by Heavy Oil
+// Residue, Alumina Solution and Aluminum Scrap) take turns being rounded up without end; a
+// whole-machine search can find counts that fit both, rounding cannot. The line that keeps
+// coming back keeps its fractional clock, as fluid lines do, and the rest of the plan is whole.
+const ROUNDING_RAISES = 6;
+// Solve the fit's model with its integers relaxed and the deliveries drawn at one `pace` (see
+// addPace), then round every whole-machine line (and the uranium plants, see roundNuclear) that
+// comes out fractional to its nearest whole count (at least one machine), and solve again:
+// rounding a line changes what the lines that feed it must make, so this repeats until every such
+// line is whole. A line nearest a higher count gets that count as a minimum, and its suppliers
+// follow. A line nearest a lower count gets it as a cap: it delivers less, the pace drops and the
+// phase takes longer, down to `slowest`. A cap may be exceeded (`over:`), but each solve first
+// exceeds the caps as little as it can (solveRounded), so a cap holds unless the lines it feeds
+// need more than it allows, or the phase would end slower than `slowest`; a line over its cap is
+// rounded up from then on instead. An amplified twin is fixed at its rounded-down count on the
+// first pass, so the somersloop budget still holds; its unamplified line makes up the rest. A line
+// rounded up more than ROUNDING_RAISES times is left fractional from then on (keeping its
+// minimum). Minimums only grow and caps only fall or go, so it ends whole, over a budget, or at
+// ROUNDING_PASSES.
+function roundedRun(context: PhaseContext, slowest: number | null): RunResult {
+  const pool = phasePool(context);
+  const demands = phaseDemands(context, reachableItems(context, pool));
+  const { model, period } = buildModel(context, pool, demands);
+  const whole = Object.keys(model.ints ?? {});
+  const amplified = whole.filter(id => id.startsWith('amp:'));
+  const raised: Record<string, number> = {};
+  const roundUp = new Set<string>(slowest === null ? whole : []);
+  delete model.ints;
+  addPace(model, demands.delivery, slowest ?? 1);
+  for (let pass = 0; pass < ROUNDING_PASSES; pass++) {
+    const solved = solveRounded(model);
+    if (!solved.feasible || !solved.bounded)
+      return { feasible: false, solverStatus: solved.solverStatus };
+    // Caps the lines they limit could not keep: round those lines up instead.
+    const overCap = whole.filter(id => (solved.values['over:' + id] || 0) > 1e-6);
+    for (const id of overCap) {
+      dropCap(model, id);
+      roundUp.add(id);
+    }
+    const rounding = whole.filter(id => (raised[id] || 0) <= ROUNDING_RAISES);
+    const fractional = rounding.filter(
+      id =>
+        overCap.includes(id) ||
+        Math.abs(solved.values[id]! - Math.round(solved.values[id]!)) > 1e-6,
+    );
+    if (!fractional.length) {
+      for (const id of rounding) solved.values[id] = Math.round(solved.values[id]!);
+      if (!satisfiesModel(model, solved)) return { feasible: false };
+      for (const part of Object.values(demands.delivery)) part.rate *= solved.values.pace!;
+      return readStage(context, pool, demands, solved, period);
+    }
+    // The amplified twins are fixed once, on the first pass; left free, each pass would trade
+    // more of them for the unamplified lines already rounded up.
+    const fixing = pass ? fractional : [...new Set([...fractional, ...amplified])];
+    for (const id of fixing) roundLine(model, id, solved.values[id]!, roundUp, raised);
+  }
+  return { feasible: false, solverStatus: UNSETTLED };
+}
+// One line's rounding for the next pass of roundedRun: an amplified twin fixed at its rounded-down
+// count, a cap at the nearest count when that is lower, else the rounded-up count as a minimum.
+function roundLine(
+  model: LpModel,
+  id: string,
+  value: number,
+  roundUp: Set<string>,
+  raised: Record<string, number>,
+) {
+  const key = 'whole:' + id;
+  model.variables[id]![key] = 1;
+  if (id.startsWith('amp:')) {
+    model.constraints[key] = { equal: Math.floor(value + 1e-6) };
+    return;
+  }
+  const nearest = Math.max(1, Math.round(value));
+  if (nearest < value && !roundUp.has(id)) {
+    model.constraints[key] = { ...model.constraints[key], max: nearest };
+    model.variables['over:' + id] ??= { [key]: -1, overCap: 1, keepOver: 1 };
+    return;
+  }
+  model.constraints[key] = { ...model.constraints[key], min: Math.ceil(value - 1e-6) };
+  // The uranium plants have their own fallback to fractional plants (roundedFit).
+  if (id !== 'power-uranium' && id !== 'nuclear-block') raised[id] = (raised[id] || 0) + 1;
+}
+// Lifts a line's cap (roundLine), keeping its minimum.
+function dropCap(model: LpModel, id: string) {
+  delete model.variables['over:' + id];
+  const bound = model.constraints['whole:' + id];
+  if (bound) delete bound.max;
+}
+// The deliveries as a share of their rates: `pace` (at most 1, at least `slowest`) draws every
+// delivered part at pace x its rate, in place of the fixed demand, as the goal variable does under
+// maximum output.
+function addPace(model: LpModel, delivery: Record<string, StageDelivery>, slowest: number) {
+  const pace: Record<string, number> = { gain: 1, paceCap: 1, keepPace: 1 };
+  for (const [item, part] of Object.entries(delivery)) {
+    const balance = model.constraints['item:' + item]!;
+    if (balance.equal !== undefined) balance.equal -= part.rate;
+    else balance.min = (balance.min || 0) - part.rate;
+    pace['item:' + item] = -part.rate;
+  }
+  model.variables.pace = pace;
+  model.constraints.paceCap = { min: slowest, max: 1 };
+}
+// Three solves, each keeping the best of the one before: exceed the caps of roundLine as little as
+// possible, then deliver as fast as that allows, then with as few machines as that pace allows (as
+// solveModel does under maximum output).
+function solveRounded(model: LpModel): Solution {
+  delete model.constraints.keepOver;
+  delete model.constraints.keepPace;
+  const stage = (optimize: string, opType: 'max' | 'min') => {
+    model.optimize = optimize;
+    model.opType = opType;
+    return solve(model);
+  };
+  const caps = Object.keys(model.variables).filter(id => id.startsWith('over:'));
+  if (caps.length) {
+    const leastOver = stage('overCap', 'min');
+    if (!leastOver.feasible || !leastOver.bounded) return leastOver;
+    const over = caps.reduce((total, id) => total + leastOver.values[id]!, 0);
+    model.constraints.keepOver = { max: over + 1e-7 };
+  }
+  const fastest = stage('gain', 'max');
+  if (!fastest.feasible || !fastest.bounded) return fastest;
+  model.constraints.keepPace = { min: fastest.values.pace! * (1 - 1e-8) };
+  const economical = stage('cost', 'min');
+  return economical.feasible ? economical : fastest;
 }
 // The two-step fit's first step: the exact LP, with fractional machines and no amplification.
 const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) =>
@@ -1043,7 +1298,7 @@ function storageDemand(config: CurrentSettings, reachable: Set<string>): ItemRat
 // nearest can round a rate down, so `hours` is recomputed from the rates in readStage.
 function deliveryDemand({ config, phase }: PhaseContext): Record<string, StageDelivery> {
   const delivery: Record<string, StageDelivery> = {};
-  const hours = config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+  const hours = goalHours(config);
   for (const [item, amount] of Object.entries(DELIVERIES[phase]!)) {
     let rate = (amount * config.multiplier) / (hours * 60);
     if (config.roundRates)
@@ -1528,21 +1783,30 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
 // never. Maximum output starts from Phase 2. Phase 1 has no generators and runs on hand-fed
 // biomass: maximising it finds no plan on the default 0 GW of spare power, and without that limit
 // it scales to whatever the raw budgets allow at any power. Phase 1 gets the balanced plan instead.
+// A whole-machine search that stops at its limit is rounded from the exact plan instead
+// (`roundStopped`, #593) in every attempt whose failure the draft would explain: under 'needed'
+// the attempt without conversion is followed by one with it, so only that one rounds.
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
   const maximised = config.goal === 'maximum' && phase >= 2;
+  const retried = phase === 5 && config.sam === 'needed';
   let result = run(
     config.goal === 'maximum' && !maximised ? { ...config, goal: 'balanced' } : config,
     phase,
     {
       maximum: maximised,
       conversion: phase === 5 && config.sam === 'allow',
+      roundStopped: !retried,
     },
   );
-  if (!result.feasible && phase === 5 && config.sam === 'needed')
-    result = run(config, phase, { maximum: config.goal === 'maximum', conversion: true });
+  if (!result.feasible && retried)
+    result = run(config, phase, {
+      maximum: config.goal === 'maximum',
+      conversion: true,
+      roundStopped: true,
+    });
   // For maximum output, compare conversion when allowed only at a binding resource limit.
-  if (config.goal === 'maximum' && phase === 5 && config.sam === 'needed') {
-    const converted = run(config, phase, { maximum: true, conversion: true });
+  if (config.goal === 'maximum' && retried) {
+    const converted = run(config, phase, { maximum: true, conversion: true, roundStopped: true });
     if (converted.feasible && (!result.feasible || converted.hours < result.hours - 1e-6))
       result = converted;
   }
@@ -1580,8 +1844,7 @@ function draftStage(config: CurrentSettings, phase: number, result: Unsolved): C
       'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
   else {
     const draft: DraftContext = { config, phase, plain, conversion };
-    const currentHours =
-      config.goal === 'minimal' ? 24 : config.goal === 'balanced' ? 8 : config.hours;
+    const currentHours = goalHours(config);
     stage.reason =
       config.goal !== 'maximum' && fitsInHours(draft, currentHours)
         ? wholeMachinesReason(stage, draft)
@@ -1962,6 +2225,27 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
     );
   return warnings;
 }
+// Phases whose whole-machine search stopped and whose exact plan was rounded instead (#593), one
+// sentence each, since each can take its own time.
+function roundedWarnings({ stages }: FinishedPlan): string[] {
+  // Two decimals below 10 hours, so a short maximum-output phase still shows the difference.
+  const hours = (value: number) =>
+    value < 10 ? Math.round(value * 100) / 100 : Math.round(value * 10) / 10;
+  return Object.entries(stages)
+    .filter(([, stage]) => stage.feasible && stage.roundedAfterStop !== undefined)
+    .map(([phase, stage]) => {
+      const target = stage.roundedAfterStop!,
+        longer = stage.hours! > target * 1.01;
+      // Lines roundedRun left fractional because they kept taking turns with another.
+      const left = (stage.rows || [])
+        .filter(row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6)
+        .map(row => row.name);
+      const kept = left.length
+        ? ` ${listNames(left)} ${left.length > 1 ? 'share' : 'shares'} a fluid with another whole-machine line, so ${left.length > 1 ? 'they keep' : 'it keeps'} a fractional clock on the last machine.`
+        : '';
+      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to the nearest whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${hours(stage.hours!)} hours instead of ${hours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
+    });
+}
 // What the plan does not claim: a global optimum, or simulated mods.
 function scopeWarnings({ config }: FinishedPlan): string[] {
   const warnings = [
@@ -1983,6 +2267,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   budgetWarnings,
   assumptionWarnings,
   wholeMachineWarnings,
+  roundedWarnings,
   scopeWarnings,
 ];
 // Static data the interface needs before any calculation: recipe lists for the wizard's
