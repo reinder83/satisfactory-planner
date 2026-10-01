@@ -17,7 +17,11 @@ vi.mock('../../public/browser-api.ts', async original => ({
 }));
 
 import { applyUpdate } from './setup.ts';
-import { letterTypedDuringSave, letterTypedWhileSuggestionMoves } from './bay-letter-race.ts';
+import {
+  letterKeptOrRefilled,
+  letterTypedDuringSave,
+  letterTypedWhileSuggestionMoves,
+} from './bay-letter-race.ts';
 
 test('a bay letter typed while another save runs is kept and used in the browser (#670)', async () => {
   await letterTypedDuringSave(held => {
@@ -31,6 +35,15 @@ test('a bay letter typed while another save runs is kept and used in the browser
 
 test('a typed bay letter stays when a save moves the suggested letter in the browser (#677)', async () => {
   await letterTypedWhileSuggestionMoves(answer => {
+    edition.reply = async (path, options) => {
+      if (path !== '/api/update') throw Error('unexpected ' + path);
+      return answer(JSON.parse(String(options.body)) as UpdateOp);
+    };
+  });
+});
+
+test('a typed bay letter is kept, and an emptied one takes the suggestion on blur in the browser (#681)', async () => {
+  await letterKeptOrRefilled(answer => {
     edition.reply = async (path, options) => {
       if (path !== '/api/update') throw Error('unexpected ' + path);
       return answer(JSON.parse(String(options.body)) as UpdateOp);
