@@ -98,7 +98,7 @@ const addBay = async (event: Event) => {
       replace &&
       !(await confirmAction({
         title: `Reuse bay letter ${letter}?`,
-        body: `Bay ${letter} still has saved progress from the handbook bay. Use ${letter} anyway? Its old checks, notes and names will be removed.`,
+        body: `Bay ${letter} still has saved progress from the built-in bay. Use ${letter} anyway? Its old checks, notes and names will be removed.`,
         confirmLabel: `Use ${letter}`,
         danger: true,
       }))
@@ -247,7 +247,7 @@ async function removeFloor(event: Event) {
       </button>
     </div>
     <p class="small muted">
-      Handbook bays and their addresses stay put: rename them, hide them or fill reserved positions.
+      Built-in bays and their addresses stay put: rename them, hide them or fill reserved positions.
       Added bays take any free letter (the next one is filled in), and their addresses and progress
       stay with that letter. A bay with no free position takes extra containers at 09 and upwards.
       Removing a container keeps its saved checkmarks.
