@@ -13,7 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { itemRate, rateOfItem, rateUnit } from '../../flow.ts';
+import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { calculated, checked, factoryEditing, stage } from '../../session.ts';
 import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
@@ -101,7 +101,8 @@ const card = computed(() =>
       <div class="card-main">
         <button class="name" v-bind="factoryLink({ calcFactory: row.id })">{{ row.name }}</button>
         <div class="output">
-          {{ card.headline.value }} <span>{{ card.headline.unit }}</span>
+          {{ card.headline.value }}{{ unitGap(card.headline.unit)
+          }}<span>{{ card.headline.unit }}</span>
         </div>
         <div class="small machines">{{ card.machines }}</div>
         <div v-if="card.generator" class="small generates" data-generates>

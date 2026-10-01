@@ -147,6 +147,11 @@ export const FLUIDS = new Set([
 // else. A card's headline shows it in its own span beside the number.
 export const rateUnit = (item: string): string => (FLUIDS.has(item) ? 'm³/min' : '/min');
 
+// What goes between a headline's number and its unit span (#651): nothing before "/min", so a
+// card reads "435/min" like every other rate, and a no-break space before a word unit
+// (m³/min, MW, GW), as itemRate and power write them.
+export const unitGap = (unit: string): string => (unit.startsWith('/') ? '' : ' ');
+
 // An item's rate with that unit, as the rate lists write it after the item's name: "120 m³/min"
 // for a fluid, "45/min" for a solid. A no-break space keeps a fluid's rate on one line, as the
 // dialogs' summary line does.
