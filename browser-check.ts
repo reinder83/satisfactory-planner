@@ -202,6 +202,38 @@ try {
     key,
     'the next step leads',
   );
+  // A long unbroken word in a step's title or details breaks inside the title column, in edit
+  // mode and out of it, rather than running past the row at phone width (#659).
+  const longTitle = 'Check Supercalifragilisticexpialidocious at the iron site';
+  await page.locator('#add-task [name=title]').fill(longTitle);
+  await page.locator('#add-task button[type=submit]').click();
+  const longStep = page.locator('#main .task', { hasText: longTitle });
+  await longStep.waitFor();
+  await page.locator('[data-toggle-plan-edit]').first().click();
+  await longStep.locator('[data-edit-task]').click();
+  await page
+    .locator('[data-task-edit] [name=body]')
+    .fill('See https://satisfactory.wiki.gg/wiki/Supercalifragilisticexpialidocious_Plate_Factory');
+  await page.locator('[data-task-edit] button[type=submit]').click();
+  await longStep.locator('[data-edit-task]').waitFor();
+  await page.setViewportSize({ width: 320, height: 720 });
+  for (const mode of ['edit mode', 'view mode']) {
+    if (mode === 'view mode') {
+      await page.locator('[data-toggle-plan-edit]').first().click();
+      await longStep.locator('[data-edit-task]').waitFor({ state: 'detached' });
+    }
+    const overflow = await longStep.evaluate(row => {
+      (row.querySelector('details') as HTMLDetailsElement).open = true;
+      return [...row.querySelectorAll<HTMLElement>('summary, details, details p')]
+        .filter(el => el.scrollWidth > el.clientWidth)
+        .map(el => el.localName + ' ' + el.scrollWidth + ' > ' + el.clientWidth);
+    });
+    assert.deepEqual(overflow, [], 'a long word stays inside the title column in ' + mode);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await longStep.locator('.delete-task').click();
+  await page.locator('#confirm [data-confirm-ok]').click();
+  await longStep.waitFor({ state: 'detached' });
   // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
   // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,
   // so a point on it hits the <dialog> itself.
