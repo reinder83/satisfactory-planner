@@ -486,3 +486,28 @@ test('ADA says when a phase was rounded after its whole-machine search stopped (
   assert.ok(onTime);
   assert.doesNotMatch(onTime.text, /instead of/);
 });
+
+test('ADA says when a phase got easy clocks after its whole-machine search stopped (#694)', () => {
+  const find = (given: Partial<AdaFacts>) =>
+    adaRemarks(facts(given)).find(r => r.id === 'fractional-after-stop');
+  assert.equal(find({}), undefined, 'a finished search says nothing');
+  const easy = find({
+    hours: '8.75 h',
+    fractional: { target: '8 h', longer: true, clocks: 'easy' },
+  });
+  assert.ok(easy);
+  assert.equal(easy.tone, 'warn');
+  assert.match(easy.text, /stopped before it could prove the best plan/);
+  assert.match(easy.text, /not whole machines/);
+  assert.match(easy.text, /at 25%, 50% or 75%, and it takes 8\.75 h instead of 8 h\./);
+  const rate = find({ hours: '8 h', fractional: { target: '8 h', longer: false, clocks: 'rate' } });
+  assert.ok(rate);
+  assert.match(rate.text, /or at a whole number per minute/);
+  assert.doesNotMatch(rate.text, /instead of/);
+  const precise = find({
+    hours: '2.5 h',
+    fractional: { target: '2.5 h', longer: false, clocks: 'precise' },
+  });
+  assert.ok(precise);
+  assert.match(precise.text, /the exact plan with its precise clocks/);
+});

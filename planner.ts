@@ -39,6 +39,7 @@ import type {
   CurrentSettings,
   CalcRow,
   CurrentStage,
+  FractionalAfterStop,
   Distribution,
   DroneFuel,
   ExtractionRecord,
@@ -775,8 +776,8 @@ function generators(config: CurrentSettings, phase: number): PoolRecipe[] {
 //   hours       time to finish the phase's deliveries at these rates
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
 //   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
-// The two-step fit may add nuclearFractional, supplyDropped, amplificationDropped or
-// roundedAfterStop.
+// The two-step fit may add nuclearFractional, supplyDropped, amplificationDropped,
+// roundedAfterStop or fractionalAfterStop.
 // calculate() may add aheadOf (pullFinalPhaseForward), fuelVerdict (judgeAugmenterFuel), or turn
 // a failed phase into a draft with reason/shortfalls/minHours (draftStage). The interface reads
 // these fields through calcStage() in public/app/session.ts: mainly
@@ -895,12 +896,23 @@ function twoStepFit(context: PhaseContext): RunResult {
       if (without?.feasible) return marked(variant, { ...without, supplyDropped: true });
     }
   // A search that stopped at its limit proves no shortage while the exact plan fits: round that
-  // plan to whole machines instead (#593), when the caller asks for it.
+  // plan to whole machines instead (#593), when the caller asks for it, and when no rounded plan
+  // fits, plan the exact one with easy clocks (#694). Both share one time limit.
   if (context.roundStopped && config.wholeMachines && stoppedSearch(fit!)) {
-    const rounded = roundedFallback(context, base, { ids, baseline, variants, marked });
-    if (rounded) return rounded;
+    const fallback = { ids, baseline, variants, marked, until: Date.now() + ROUNDING_MS };
+    return roundedFallback(context, base, fallback) ?? easyClockFallback(context, base, fallback);
   }
   return fit!;
+}
+// What the fallbacks after a stopped search (roundedFallback, easyClockFallback) share: the exact
+// plan's network and amplification candidates, the variants to try in order, `marked`, which
+// flags a result of the unamplified variant, and the time (Date.now) they must stop trying by.
+interface StoppedFallback {
+  ids: Set<string>;
+  baseline: Record<string, number>;
+  variants: CurrentSettings[];
+  marked: (variant: CurrentSettings, result: Solved) => Solved;
+  until: number;
 }
 // A failure that is a search stopped at its limit ('Unknown' at the node limit, 'Time limit
 // reached' at the backstop or the phase's deadline), not a proven shortage.
@@ -912,10 +924,11 @@ const stoppedSearch = (result: RunResult) =>
 // At each step, lines rounded down may slow the phase to the next step's time; at the last, not
 // at all, so a rounded phase never takes more than 50% longer than its target.
 const ROUNDED_STRETCH = [1, 1.05, 1.1, 1.25, 1.5];
-// How long roundedFallback may try, in milliseconds. It runs after the phase's searches, which on
-// a slow device end at the phase's deadline (PHASE_SEARCH_MS, 120 s), so this keeps the phase
-// well inside the browser worker's 180 s. An ordinary machine needs a few seconds at most, so the
-// result does not depend on the machine there.
+// How long roundedFallback and easyClockFallback may try together, in milliseconds. They run
+// after the phase's searches, which on a slow device end at the phase's deadline
+// (PHASE_SEARCH_MS, 120 s), so this keeps the phase well inside the browser worker's 180 s. An
+// ordinary machine needs a few seconds at most, so the result does not depend on the machine
+// there.
 const ROUNDING_MS = 20000;
 // The whole-machine search of this phase stopped before it could prove the best plan, but the
 // exact plan (`base`) fits. The owner's decision in #593: build whole machines from that plan
@@ -925,61 +938,91 @@ const ROUNDING_MS = 20000;
 // over the exact plan's network. Each try is linear solves only (roundedFit), so it cannot stop at
 // a search limit and gives the same plan on every run. The first try that fits the budgets is
 // used, and the stage records the target time as `roundedAfterStop`. Returns null when none
-// does; the phase then stays the draft that says the search stopped.
+// does; easyClockFallback then plans the phase.
 function roundedFallback(
   context: PhaseContext,
   base: Solved,
-  {
-    ids,
-    baseline,
-    variants,
-    marked,
-  }: {
-    ids: Set<string>;
-    baseline: Record<string, number>;
-    variants: CurrentSettings[];
-    marked: (variant: CurrentSettings, result: Solved) => Solved;
-  },
+  fallback: StoppedFallback,
 ): Solved | null {
-  const { config, phase, maximum, conversion, ignoreLimits } = context;
-  // The time the phase was asked to finish in: the goal's, or under maximum output the exact
-  // plan's best time.
-  const target = maximum ? base.hours : goalHours(config);
-  const until = Date.now() + ROUNDING_MS;
+  const target = stoppedTarget(context, base);
   for (const [step, stretch] of ROUNDED_STRETCH.entries())
-    for (const variant of variants) {
-      // At the target itself the goal is unchanged. Longer, the deliveries are spread over the
-      // longer time, as a timed goal spreads them; maximum output keeps its rates unrounded.
-      const timed: CurrentSettings =
-        stretch === 1 && !maximum
-          ? variant
-          : {
-              ...variant,
-              goal: 'timed',
-              hours: target * stretch,
-              ...(maximum ? { roundRates: false } : {}),
-            };
-      // Lines rounded to their nearest count, where those rounded down may slow the phase to the
-      // next step's time (the last step not at all), and every line rounded up (null), which
-      // needs more resources but no more time. The nearest rounding is used unless it does not
-      // fit or the rounded-up plan is as lean: honouring a line rounded down can shift work to
-      // other lines, and then it only slows the phase.
+    for (const variant of fallback.variants) {
       const next = ROUNDED_STRETCH[step + 1] ?? stretch;
-      const fit = (slowest: number | null) =>
-        roundedFit(timed, phase, slowest, { conversion, ignoreLimits, recipeIds: ids, baseline });
-      if (Date.now() > until) return null;
-      const nearest = fit(stretch / next);
-      const up = Date.now() > until ? null : fit(null);
-      const rounded =
-        nearest.feasible && !(up?.feasible && machineCount(up) <= machineCount(nearest))
-          ? nearest
-          : up;
+      const rounded = roundedTry(context, variant, { target, stretch, next }, 'whole', fallback);
       if (!rounded) return null;
-      if (rounded.feasible) return marked(variant, { ...rounded, roundedAfterStop: target });
+      if (rounded.feasible)
+        return fallback.marked(variant, { ...rounded, roundedAfterStop: target });
       // Lines that take turns being rounded up do so at any time, so stop there.
-      if (up?.solverStatus === UNSETTLED) return null;
+      if (rounded.solverStatus === UNSETTLED) return null;
     }
   return null;
+}
+// The time a phase whose search stopped was asked to finish in: the goal's, or under maximum
+// output the exact plan's best time.
+const stoppedTarget = ({ config, maximum }: PhaseContext, base: Solved) =>
+  maximum ? base.hours : goalHours(config);
+// No rounded whole-machine plan fits, even 50% longer (#694, the owner's decision in #593:
+// "easy to set" fractions). Plan the exact plan's network at the target time with each solid-part
+// line on whole machines at 100% but the last, which runs at 25%, 50%, 75% or 100% ('easy'). Where
+// that does not fit, the last machine may also run at any clock that makes a whole number of the
+// line's product per minute ('rate'), a figure the game's clock panel takes as well. Each is
+// rounded as roundedFallback's first step rounds (nearest, then all up, at most 5% slower), the
+// amplified variant before the unamplified one. When neither fits, or time runs out, the phase is
+// the exact plan itself ('precise'), which fits by definition, so a stopped search never costs
+// the phase. The stage records the target and the clocks as `fractionalAfterStop`.
+function easyClockFallback(context: PhaseContext, base: Solved, fallback: StoppedFallback): Solved {
+  const target = stoppedTarget(context, base);
+  const time = { target, stretch: 1, next: ROUNDED_STRETCH[1]! };
+  for (const clocks of ['easy', 'rate'] as const)
+    for (const variant of fallback.variants) {
+      const fitted = roundedTry(context, variant, time, clocks, fallback);
+      if (fitted?.feasible)
+        return fallback.marked(variant, { ...fitted, fractionalAfterStop: { target, clocks } });
+    }
+  // The exact plan is unamplified (exactFit), so it is marked as the last variant.
+  return fallback.marked(fallback.variants.at(-1)!, {
+    ...base,
+    fractionalAfterStop: { target, clocks: 'precise' },
+  });
+}
+// One try of the fallbacks after a stopped search: `variant` at `stretch` times the `target`,
+// its lines rounded to the `clocks` grid (roundedFit). Returns null when the time is up.
+function roundedTry(
+  { phase, maximum, conversion, ignoreLimits }: PhaseContext,
+  variant: CurrentSettings,
+  { target, stretch, next }: { target: number; stretch: number; next: number },
+  clocks: Clocks,
+  { ids, baseline, until }: StoppedFallback,
+): RunResult | null {
+  // At the target itself the goal is unchanged. Longer, the deliveries are spread over the
+  // longer time, as a timed goal spreads them; maximum output keeps its rates unrounded.
+  const timed: CurrentSettings =
+    stretch === 1 && !maximum
+      ? variant
+      : {
+          ...variant,
+          goal: 'timed',
+          hours: target * stretch,
+          ...(maximum ? { roundRates: false } : {}),
+        };
+  // Lines rounded to their nearest count, where those rounded down may slow the phase to the
+  // `next` time, and every line rounded up (null), which needs more resources but no more time.
+  // The nearest rounding is used unless it does not fit or the rounded-up plan is as lean:
+  // honouring a line rounded down can shift work to other lines, and then it only slows the phase.
+  const fit = (slowest: number | null) =>
+    roundedFit(
+      timed,
+      phase,
+      slowest,
+      { conversion, ignoreLimits, recipeIds: ids, baseline },
+      clocks,
+    );
+  if (Date.now() > until) return null;
+  const nearest = fit(stretch / next);
+  const up = Date.now() > until ? null : fit(null);
+  return nearest.feasible && !(up?.feasible && machineCount(up) <= machineCount(nearest))
+    ? nearest
+    : up;
 }
 // The buildings of a stage's lines.
 const machineCount = (stage: Solved) => stage.rows.reduce((total, row) => total + row.machines, 0);
@@ -994,8 +1037,9 @@ function roundedFit(
   phase: number,
   slowest: number | null,
   options: RunOptions,
+  clocks: Clocks,
 ): RunResult {
-  const result = roundedRun(phaseContext(variant, phase, options), slowest);
+  const result = roundedRun(phaseContext(variant, phase, options), slowest, clocks);
   if (
     result.feasible ||
     result.solverStatus === UNSETTLED ||
@@ -1006,6 +1050,7 @@ function roundedFit(
   const fractional = roundedRun(
     phaseContext(variant, phase, { ...options, fractionalNuclear: true }),
     slowest,
+    clocks,
   );
   return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
 }
@@ -1020,6 +1065,12 @@ const UNSETTLED = 'Rounding did not settle';
 // whole-machine search can find counts that fit both, rounding cannot. The line that keeps
 // coming back keeps its fractional clock, as fluid lines do, and the rest of the plan is whole.
 const ROUNDING_RAISES = 6;
+// The same two limits for the finer grids of easyClockFallback (#694). Each raise there leaves a
+// quarter of a machine or less to spare rather than up to a whole one, so a line at the top of a
+// long chain (Copper Ingot under Wire, Cable and Copper Sheet) is raised more often before the
+// chain settles; the extra passes leave room for the lines that take turns.
+const EASY_RAISES = 12;
+const EASY_PASSES = ROUNDING_PASSES + 2 * (EASY_RAISES - ROUNDING_RAISES);
 // Solve the fit's model with its integers relaxed and the deliveries drawn at one `pace` (see
 // addPace), then round every whole-machine line (and the uranium plants, see roundNuclear) that
 // comes out fractional to its nearest whole count (at least one machine), and solve again:
@@ -1033,18 +1084,23 @@ const ROUNDING_RAISES = 6;
 // first pass, so the somersloop budget still holds; its unamplified line makes up the rest. A line
 // rounded up more than ROUNDING_RAISES times is left fractional from then on (keeping its
 // minimum). Minimums only grow and caps only fall or go, so it ends whole, over a budget, or at
-// ROUNDING_PASSES.
-function roundedRun(context: PhaseContext, slowest: number | null): RunResult {
+// ROUNDING_PASSES. `clocks` is the grid the lines are rounded to (lineGrid): whole machines for
+// roundedFallback, easy clocks on the last machine for easyClockFallback (whose grids count
+// EASY_RAISES and EASY_PASSES instead).
+function roundedRun(context: PhaseContext, slowest: number | null, clocks: Clocks): RunResult {
   const pool = phasePool(context);
   const demands = phaseDemands(context, reachableItems(context, pool));
   const { model, period } = buildModel(context, pool, demands);
   const whole = Object.keys(model.ints ?? {});
   const amplified = whole.filter(id => id.startsWith('amp:'));
+  const grid = lineGrid(clocks, pool);
   const raised: Record<string, number> = {};
   const roundUp = new Set<string>(slowest === null ? whole : []);
   delete model.ints;
   addPace(model, demands.delivery, slowest ?? 1);
-  for (let pass = 0; pass < ROUNDING_PASSES; pass++) {
+  const [passes, raises] =
+    clocks === 'whole' ? [ROUNDING_PASSES, ROUNDING_RAISES] : [EASY_PASSES, EASY_RAISES];
+  for (let pass = 0; pass < passes; pass++) {
     const solved = solveRounded(model);
     if (!solved.feasible || !solved.bounded)
       return { feasible: false, solverStatus: solved.solverStatus };
@@ -1054,14 +1110,12 @@ function roundedRun(context: PhaseContext, slowest: number | null): RunResult {
       dropCap(model, id);
       roundUp.add(id);
     }
-    const rounding = whole.filter(id => (raised[id] || 0) <= ROUNDING_RAISES);
+    const rounding = whole.filter(id => (raised[id] || 0) <= raises);
     const fractional = rounding.filter(
-      id =>
-        overCap.includes(id) ||
-        Math.abs(solved.values[id]! - Math.round(solved.values[id]!)) > 1e-6,
+      id => overCap.includes(id) || !onGrid(grid(id), solved.values[id]!),
     );
     if (!fractional.length) {
-      for (const id of rounding) solved.values[id] = Math.round(solved.values[id]!);
+      for (const id of rounding) solved.values[id] = gridPoints(grid(id), solved.values[id]!).near;
       if (!satisfiesModel(model, solved)) return { feasible: false };
       for (const part of Object.values(demands.delivery)) part.rate *= solved.values.pace!;
       return readStage(context, pool, demands, solved, period);
@@ -1069,32 +1123,75 @@ function roundedRun(context: PhaseContext, slowest: number | null): RunResult {
     // The amplified twins are fixed once, on the first pass; left free, each pass would trade
     // more of them for the unamplified lines already rounded up.
     const fixing = pass ? fractional : [...new Set([...fractional, ...amplified])];
-    for (const id of fixing) roundLine(model, id, solved.values[id]!, roundUp, raised);
+    for (const id of fixing) roundLine(model, id, solved.values[id]!, grid(id), roundUp, raised);
   }
   return { feasible: false, solverStatus: UNSETTLED };
 }
+// The grids the fallbacks after a stopped search round a line to: 'whole' machines
+// (roundedFallback), or whole machines at 100% with the last at an 'easy' clock (25%, 50% or
+// 75%), or at that or a clock where it makes a whole number of the line's product per minute
+// ('rate'; easyClockFallback, #694).
+type Clocks = 'whole' | 'easy' | 'rate';
+// A line's grid: the machine-equivalents its last machine may add, from 0 to 1, in order.
+const WHOLE_GRID = [0, 1];
+const EASY_GRID = [0, 0.25, 0.5, 0.75, 1];
+// The grid of each line of `pool` under `clocks`. Amplified twins and the uranium plants (or
+// their recycle blocks, see roundNuclear) are always whole machines.
+function lineGrid(clocks: Clocks, pool: PoolRecipe[]): (id: string) => number[] {
+  const rates = new Map(pool.map(recipe => [recipe.id, productRate(recipe)]));
+  return id => {
+    if (clocks === 'whole' || id.startsWith('amp:') || id === 'power-uranium' || !rates.has(id))
+      return WHOLE_GRID;
+    if (clocks === 'easy') return EASY_GRID;
+    // A whole number of items per minute from the last machine: k / rate of a machine.
+    const rate = rates.get(id)!;
+    const counts = Array.from({ length: Math.floor(rate + 1e-9) }, (_, k) => (k + 1) / rate);
+    return [...new Set([...EASY_GRID, ...counts])].sort((a, b) => a - b);
+  };
+}
+// Per minute of one machine at 100%, the product a whole-machine line is rounded for: its first
+// solid, sinkable, non-raw output (roundsToWholeMachines).
+const productRate = (recipe: PoolRecipe) =>
+  Object.entries(recipe.outputs).find(
+    ([item]) =>
+      !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
+  )?.[1] ?? 1;
+// The grid points around `value`: the nearest at or below it, at or above it, and the nearer of
+// those two (the higher on a tie, as Math.round).
+function gridPoints(grid: number[], value: number) {
+  const machines = Math.floor(value + 1e-6),
+    part = value - machines;
+  const below = machines + Math.max(...grid.filter(step => step <= part + 1e-6));
+  const above = machines + Math.min(...grid.filter(step => step >= part - 1e-6));
+  return { below, above, near: value - below < above - value ? below : above };
+}
+const onGrid = (grid: number[], value: number) =>
+  Math.abs(value - gridPoints(grid, value).near) <= 1e-6;
 // One line's rounding for the next pass of roundedRun: an amplified twin fixed at its rounded-down
-// count, a cap at the nearest count when that is lower, else the rounded-up count as a minimum.
+// count, a cap at the nearest grid point when that is lower, else the grid point above as a
+// minimum. A line in use keeps at least the grid's first step (one machine for whole machines).
 function roundLine(
   model: LpModel,
   id: string,
   value: number,
+  grid: number[],
   roundUp: Set<string>,
   raised: Record<string, number>,
 ) {
   const key = 'whole:' + id;
   model.variables[id]![key] = 1;
+  const points = gridPoints(grid, value);
   if (id.startsWith('amp:')) {
-    model.constraints[key] = { equal: Math.floor(value + 1e-6) };
+    model.constraints[key] = { equal: points.below };
     return;
   }
-  const nearest = Math.max(1, Math.round(value));
+  const nearest = Math.max(grid[1]!, points.near);
   if (nearest < value && !roundUp.has(id)) {
     model.constraints[key] = { ...model.constraints[key], max: nearest };
     model.variables['over:' + id] ??= { [key]: -1, overCap: 1, keepOver: 1 };
     return;
   }
-  model.constraints[key] = { ...model.constraints[key], min: Math.ceil(value - 1e-6) };
+  model.constraints[key] = { ...model.constraints[key], min: points.above };
   // The uranium plants have their own fallback to fractional plants (roundedFit).
   if (id !== 'power-uranium' && id !== 'nuclear-block') raised[id] = (raised[id] || 0) + 1;
 }
@@ -2228,9 +2325,6 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
 // Phases whose whole-machine search stopped and whose exact plan was rounded instead (#593), one
 // sentence each, since each can take its own time.
 function roundedWarnings({ stages }: FinishedPlan): string[] {
-  // Two decimals below 10 hours, so a short maximum-output phase still shows the difference.
-  const hours = (value: number) =>
-    value < 10 ? Math.round(value * 100) / 100 : Math.round(value * 10) / 10;
   return Object.entries(stages)
     .filter(([, stage]) => stage.feasible && stage.roundedAfterStop !== undefined)
     .map(([phase, stage]) => {
@@ -2243,8 +2337,48 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
       const kept = left.length
         ? ` ${listNames(left)} ${left.length > 1 ? 'share' : 'shares'} a fluid with another whole-machine line, so ${left.length > 1 ? 'they keep' : 'it keeps'} a fractional clock on the last machine.`
         : '';
-      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to the nearest whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${hours(stage.hours!)} hours instead of ${hours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
+      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to the nearest whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
+}
+// Hours in a warning: two decimals below 10 hours, so a short maximum-output phase still shows
+// the difference.
+const warningHours = (value: number) =>
+  value < 10 ? Math.round(value * 100) / 100 : Math.round(value * 10) / 10;
+// Phases whose search stopped and that no rounded whole-machine plan fit, so they are the exact
+// plan with easy clocks (#694), one sentence each.
+function fractionalWarnings({ stages }: FinishedPlan): string[] {
+  return Object.entries(stages)
+    .filter(([, stage]) => stage.feasible && stage.fractionalAfterStop !== undefined)
+    .map(([phase, stage]) => {
+      const { target, clocks } = stage.fractionalAfterStop!;
+      const longer =
+        stage.hours! > target * 1.01
+          ? ` It takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}.`
+          : '';
+      return `Phase ${phase} is not whole machines: its whole-machine search stopped before it could prove the best plan, and rounding its exact plan to whole machines found no plan that fits the budgets within 50% more time. ${fractionalClocks(clocks)}${longer}${offGridLines(stage, clocks)} Fewer alternates or precise balancing usually let the search finish.`;
+    });
+}
+// How the last machines of a phase in fractionalWarnings are clocked.
+const fractionalClocks = (clocks: FractionalAfterStop['clocks']) =>
+  clocks === 'precise'
+    ? 'So this phase is its exact plan, with precise clocks.'
+    : `So this phase is its exact plan with easy clocks: every solid-part line runs whole machines at 100% except the last, which runs at 25%, 50% or 75%${clocks === 'rate' ? ', or at the clock that makes a whole number of items per minute' : ''}.`;
+// The solid-part lines of a phase in fractionalWarnings whose last machine is not on an easy
+// clock: they share a fluid with another such line (EASY_RAISES), as a sentence.
+function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']): string {
+  if (clocks === 'precise') return '';
+  const easy = (row: CalcRow) => {
+    const last = row.lastClock / 100;
+    if (Math.abs(last * 4 - Math.round(last * 4)) < 1e-4) return true;
+    const perMachine = row.equivalent > 0 ? productRate(row) / row.equivalent : 0;
+    return clocks === 'rate' && Math.abs(perMachine * last - Math.round(perMachine * last)) < 1e-4;
+  };
+  const left = (stage.rows || [])
+    .filter(row => roundsToWholeMachines(row) && !row.amplified && !easy(row))
+    .map(row => row.name);
+  return left.length
+    ? ` ${listNames(left)} ${left.length > 1 ? 'share' : 'shares'} a fluid with another solid-part line, so ${left.length > 1 ? 'they keep' : 'it keeps'} a precise clock on the last machine.`
+    : '';
 }
 // What the plan does not claim: a global optimum, or simulated mods.
 function scopeWarnings({ config }: FinishedPlan): string[] {
@@ -2268,6 +2402,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   assumptionWarnings,
   wholeMachineWarnings,
   roundedWarnings,
+  fractionalWarnings,
   scopeWarnings,
 ];
 // Static data the interface needs before any calculation: recipe lists for the wizard's

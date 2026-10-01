@@ -209,6 +209,11 @@ export interface Shortfall {
 
 // A stage as calculate() returns it today: a plan, or for a phase that does not fit, a draft
 // of the closest plan with feasible false and the reason (see CurrentStage).
+// How a phase whose search stopped was planned when no rounded whole-machine plan fit (#694).
+export interface FractionalAfterStop {
+  target: number;
+  clocks: 'easy' | 'rate' | 'precise';
+}
 export interface StageResult {
   feasible: boolean;
   // In build order, suppliers before consumers.
@@ -255,6 +260,12 @@ export interface StageResult {
   // rounded to whole machines instead (#593): the hours the phase was asked to finish in. The
   // stage's own `hours` can be longer. Absent from older plans and from a search that finished.
   roundedAfterStop?: number;
+  // The search stopped and no rounded whole-machine plan fit either, so the phase is its exact
+  // plan with easy clocks (#694): the hours it was asked to finish in, and the clocks its last
+  // machines take ('easy' 25%, 50% or 75%; 'rate' also a whole number of items per minute;
+  // 'precise' the exact plan's own clocks). Absent from older plans and from a search that
+  // finished.
+  fractionalAfterStop?: FractionalAfterStop;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;

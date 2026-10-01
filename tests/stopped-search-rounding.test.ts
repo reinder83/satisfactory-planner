@@ -151,13 +151,12 @@ test('a line that shares a fluid with another whole line keeps a fractional cloc
   }
 });
 
-test('a phase no rounding fits within 50% longer stays a draft that says the search stopped', () => {
-  // Without amplification the issue's Phase 5 needs about twice the time in whole machines. The
-  // easy-clock fallback for this case is #694.
+test('a phase no rounding fits within 50% longer is not rounded to whole machines', () => {
+  // Without amplification the issue's Phase 5 needs about twice the time in whole machines. It
+  // gets easy clocks instead (#694, tests/stopped-search-easy-clocks.test.ts).
   const stage = withStoppedPhase({ ...settings, amplifySloops: 0 }, 5).stages['5'];
-  assert.equal(stage.feasible, false);
   assert.equal(stage.roundedAfterStop, undefined);
-  assert.match(stage.reason || '', /search stopped before it could prove the best plan/);
+  assert.equal(stage.fractionalAfterStop?.clocks, 'easy');
 });
 
 test('a phase whose search finishes is not rounded', () => {
