@@ -1,11 +1,13 @@
-// The /api/update operations: mutate, one handler per update type, and the stale-write check
-// (checkBase) both editions run before it. Re-exported by ../state.ts.
+// The /api/update operations: mutate, one handler per update type, the stale-write check
+// (checkBase) both editions run before it and the plan-start check (checkPlanStart) they run
+// on the result. Re-exported by ../state.ts.
 import type {
   CustomTask,
   FactoryGroups,
   GroupAssignment,
   LinkTransport,
   Phase,
+  ProfileKind,
   ProgressState,
   SavedState,
   StorageEdits,
@@ -61,6 +63,17 @@ export function checkBase(current: SavedState, update: unknown, base: string | n
   const seen = Number(base);
   if (!Number.isSafeInteger(seen)) return;
   if (seen !== (current.revision ?? 0)) throw Object.assign(Error(staleWrite), { status: 409 });
+}
+
+// An original profile's plan starts at Phase 3, so neither edition moves its progress to an
+// earlier phase, by an update or a restored backup. The text describes the plan, not the
+// retired handbook (#653).
+export const beforePlanStart =
+  'This plan starts at Phase 3, so its progress cannot be set to an earlier phase. Pick ' +
+  'Phase 3 or later, or restore a backup made at Phase 3 or later.';
+export function checkPlanStart(kind: ProfileKind, next: ProgressState) {
+  if (kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
+    fail(beforePlanStart);
 }
 
 // Applies one /api/update operation (update.type below) to a state and returns the validated

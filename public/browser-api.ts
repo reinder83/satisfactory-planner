@@ -25,6 +25,7 @@ import {
   shareState,
   calculatedProfile,
   checkBase,
+  checkPlanStart,
   currentPayoff,
   phaseProgress,
   wholeMachineProfile,
@@ -416,10 +417,9 @@ export function createBrowserApi(
     return writeProgress(profile, validateState(body.format ? body.state : body));
   }
   // Stores `next` as the profile's progress with the revision after its current one. An
-  // original profile cannot be moved before Phase 3, which its handbook does not cover.
+  // original profile cannot be moved before Phase 3, where its plan starts (checkPlanStart).
   function writeProgress(profile: StoredProfile, next: ProgressState) {
-    if (profile.kind === 'original' && !['3', '4', '5', 'post'].includes(next.settings.phase))
-      throw Error('The imported handbook covers Phase 3 onward.');
+    checkPlanStart(profile.kind, next);
     // Every state this store wrote carries a revision (newProfileState, validateState).
     next.revision = (profile.state.revision as number) + 1;
     profile.state = next;
