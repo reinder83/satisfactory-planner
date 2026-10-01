@@ -971,6 +971,11 @@ p {
 .task:has(input:checked) {
   background: #101315;
 }
+/* A word longer than the title column (a pasted URL in a personal step's title or details)
+   breaks inside the column instead of running past the row (#659). Words that fit keep whole. */
+.task details {
+  overflow-wrap: anywhere;
+}
 .task input[type='checkbox'],
 .check-row input {
   width: 18px;
