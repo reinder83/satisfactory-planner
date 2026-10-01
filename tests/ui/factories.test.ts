@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
-import { FLUIDS, lanePlan, rateUnit } from '../../public/app/flow.ts';
+import { FLUIDS, itemRate, lanePlan } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
 import { num, num3, slug as slugOf } from '../../public/app/format.ts';
 import { taskIcon } from '../../public/app/tasks.ts';
@@ -1184,12 +1184,16 @@ const machinesLine = (card: Element) => card.querySelector('.card-main .machines
 test('a handbook card shows its output as the headline and machines with the clock below', () => {
   render();
   const wire = cardOf('#main button.name[data-factory="wire"]');
-  assert.equal(headline(wire), num(9600) + ' /min');
+  assert.equal(
+    headline(wire),
+    num(9600) + '/min',
+    'no gap before /min, as every rate is written (#651)',
+  );
   assert.equal(wire.querySelector('.output span')!.textContent, '/min', 'the unit is its own span');
   assert.equal(machinesLine(wire), num(320) + ' × Constructor', 'all at 100%: no clock');
   assert.match(wire.querySelector('.recipe')!.textContent!, /^\s*Wire\s+· storage 180\/min\s*$/);
   const plating = cardOf('#main button.name[data-factory="smart-plating"]');
-  assert.equal(headline(plating), '115 /min');
+  assert.equal(headline(plating), '115/min');
   assert.equal(machinesLine(plating), '58 × Assembler · last at 50%');
   // One machine below 100% has no "last".
   assert.equal(
@@ -1220,7 +1224,7 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   noMarkup();
   const card = cardOf(`#main button.name[data-calc-factory="${made.id}"]`);
   const [item, rate] = Object.entries(made.outputs)[0]!;
-  assert.equal(headline(card), num(rate) + ' /min');
+  assert.equal(headline(card), num(rate) + '/min');
   assert.ok(
     machinesLine(card)!.startsWith(`${made.machines} × ${made.machine} · last at `),
     'machines, then the adjustable one’s clock',
@@ -1229,7 +1233,7 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   // A row named after its one output has no line repeating the headline.
   if (made.name === item) assert.equal(card.querySelector('.recipe'), null);
   const power = cardOf(`#main button.name[data-calc-factory="${generator.id}"]`);
-  assert.equal(headline(power), num(406.8) + ' MW');
+  assert.equal(headline(power), num(406.8) + ' MW', 'a word unit keeps a no-break space');
   assert.equal(power.querySelector('.output span')!.textContent, 'MW');
   assert.equal(
     machinesLine(power),
@@ -1243,7 +1247,7 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   await nextTick();
   assert.equal(
     headline(cardOf(`#main button.name[data-calc-factory="${generator.id}"]`)),
-    num(24.88266) + ' GW',
+    num(24.88266) + ' GW',
   );
 });
 
@@ -1680,7 +1684,7 @@ test('a calculated card with several outputs names each of them below the headli
   render();
   const card = cardOf(`#main button.name[data-calc-factory="${multi.id}"]`);
   const outputs = Object.entries(multi.outputs);
-  assert.equal(plain(headline(card)), num(outputs[0]![1]) + ' ' + rateUnit(outputs[0]![0]));
+  assert.equal(headline(card), itemRate(outputs[0]![0], outputs[0]![1]));
   assert.deepEqual(
     card
       .querySelector('.recipe')!

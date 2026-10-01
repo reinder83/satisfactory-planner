@@ -9,7 +9,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { itemRate, rateUnit } from '../../flow.ts';
+import { itemRate, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { checked, factoryEditing, stage } from '../../session.ts';
 import { allocationText, machineLine } from '../../views/factories.ts';
@@ -63,7 +63,7 @@ const card = computed(() =>
           {{ factory.name }}
         </button>
         <div class="output">
-          {{ card.output }} <span>{{ card.unit }}</span>
+          {{ card.output }}{{ unitGap(card.unit) }}<span>{{ card.unit }}</span>
         </div>
         <div class="small machines">{{ card.machines }}</div>
       </div>
