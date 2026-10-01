@@ -23,7 +23,7 @@ import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
-import { resetDraft, useDrafts } from '../draft.ts';
+import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { power } from '../../wizard/fields.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
@@ -38,7 +38,8 @@ const props = defineProps<{ factoryKey: string; unit?: RateUnit }>();
 // Each editor names its hints apart: a factory in two groups has an editor in each section.
 const uid = 'assign-unit-' + ++editors;
 // The rate fields, by group: the saved rate, then what is typed and not yet saved, which a rate
-// saved in another tab does not replace (#691). The power figure beside a field reads it too.
+// saved in another tab does not replace (#691), until the field is left without a commit (#687).
+// The power figure beside a field reads it too.
 const savedRates = (): Record<string, string> =>
   legacy(() =>
     Object.fromEntries(membershipsOf(props.factoryKey).map(m => [m.group, String(m.rate ?? '')])),
@@ -198,6 +199,7 @@ async function add(event: Event) {
         :aria-describedby="row.hintId"
         @input="rates[row.group] = ($event.target as HTMLInputElement).value"
         @change="setRate($event, row.group)"
+        @blur="leaveDraft(rates, row.group, $event)"
       /><button
         class="btn quiet danger"
         :data-unassign="factoryKey"
