@@ -17,6 +17,10 @@ import FuelVerdict from './FuelVerdict.vue';
 import SupplyNotice from './SupplyNotice.vue';
 import StepHeading from '../form/StepHeading.vue';
 
+// A number keeps its unit on its line in the narrow Delivery time column (#741): "about 7 h
+// 52 min" may wrap after "about" or between "h" and "52", never between "7" and "h".
+const unbroken = (text: string): string => text.replace(/(\d) /g, '$1\u00a0');
+
 const view = computed(() =>
   legacy(() => {
     const wizardDraft = draft(),
@@ -29,8 +33,9 @@ const view = computed(() =>
       plan: preview,
       rows: stages.map(([phase, stageResult]) => ({
         phase,
-        hours: stageResult.hours ? durationOfHours(stageResult.hours) : '—',
-        was: stageResult.aheadOf !== undefined ? durationOfHours(stageResult.aheadOf) : '',
+        hours: stageResult.hours ? unbroken(durationOfHours(stageResult.hours)) : '—',
+        was:
+          stageResult.aheadOf !== undefined ? unbroken(durationOfHours(stageResult.aheadOf)) : '',
         buildings: stageResult.rows
           ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
           : '—',
@@ -65,15 +70,16 @@ const view = computed(() =>
         <thead>
           <tr>
             <th>Phase</th>
+            <th>Budget</th>
             <th>Delivery time</th>
             <th>Buildings</th>
             <th>New generation</th>
-            <th>Budget</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in view.rows" :key="row.phase">
             <td>{{ row.phase }}</td>
+            <td>{{ row.budget }}</td>
             <td>
               {{ row.hours
               }}<template v-if="row.was"
@@ -82,7 +88,6 @@ const view = computed(() =>
             </td>
             <td>{{ row.buildings }}</td>
             <td>{{ row.generation }}</td>
-            <td>{{ row.budget }}</td>
           </tr>
         </tbody>
       </table>
