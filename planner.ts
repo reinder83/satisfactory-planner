@@ -937,8 +937,10 @@ const ROUNDING_MS = 20000;
 // amplified variant, then the unamplified one (so amplification on never plans worse than off),
 // over the exact plan's network. Each try is linear solves only (roundedFit), so it cannot stop at
 // a search limit and gives the same plan on every run. The first try that fits the budgets is
-// used, and the stage records the target time as `roundedAfterStop`. Returns null when none
-// does; easyClockFallback then plans the phase.
+// used, and the stage records the exact plan's time as `roundedAfterStop`, so the warning says
+// "instead of" only when the rounding slowed the phase: under the balanced goal the rounded rates
+// make the exact plan itself take 8.33 hours (#708). Returns null when none does;
+// easyClockFallback then plans the phase.
 function roundedFallback(
   context: PhaseContext,
   base: Solved,
@@ -951,7 +953,7 @@ function roundedFallback(
       const rounded = roundedTry(context, variant, { target, stretch, next }, 'whole', fallback);
       if (!rounded) return null;
       if (rounded.feasible)
-        return fallback.marked(variant, { ...rounded, roundedAfterStop: target });
+        return fallback.marked(variant, { ...rounded, roundedAfterStop: base.hours });
       // Lines that take turns being rounded up do so at any time, so stop there.
       if (rounded.solverStatus === UNSETTLED) return null;
     }
@@ -971,7 +973,8 @@ const stoppedTarget = ({ config, maximum }: PhaseContext, base: Solved) =>
 // over precise ones at the target (#701). At each time: easy clocks, then rate clocks, each
 // amplified before unamplified, nearest then all up. When none fits, or time runs out, the phase
 // is the exact plan itself ('precise'), which fits by definition, so a stopped search never costs
-// the phase. The stage records the target and the clocks as `fractionalAfterStop`.
+// the phase. The stage records the exact plan's time (as roundedFallback does, #708) and the clocks
+// as `fractionalAfterStop`.
 function easyClockFallback(context: PhaseContext, base: Solved, fallback: StoppedFallback): Solved {
   const target = stoppedTarget(context, base);
   // Lines that take turns being rounded up do so at any time, so a grid and variant that did not
@@ -984,20 +987,23 @@ function easyClockFallback(context: PhaseContext, base: Solved, fallback: Stoppe
         const key = `${clocks}:${index}`;
         if (unsettled.has(key)) continue;
         const fitted = roundedTry(context, variant, time, clocks, fallback);
-        if (!fitted) return exactFallback(fallback, base, target);
+        if (!fitted) return exactFallback(fallback, base);
         if (fitted.feasible)
-          return fallback.marked(variant, { ...fitted, fractionalAfterStop: { target, clocks } });
+          return fallback.marked(variant, {
+            ...fitted,
+            fractionalAfterStop: { target: base.hours, clocks },
+          });
         if (fitted.solverStatus === UNSETTLED) unsettled.add(key);
       }
   }
-  return exactFallback(fallback, base, target);
+  return exactFallback(fallback, base);
 }
 // easyClockFallback's last resort: the exact plan itself, with its precise clocks. It is
 // unamplified (exactFit), so it is marked as the last variant.
-const exactFallback = (fallback: StoppedFallback, base: Solved, target: number): Solved =>
+const exactFallback = (fallback: StoppedFallback, base: Solved): Solved =>
   fallback.marked(fallback.variants.at(-1)!, {
     ...base,
-    fractionalAfterStop: { target, clocks: 'precise' },
+    fractionalAfterStop: { target: base.hours, clocks: 'precise' },
   });
 // One try of the fallbacks after a stopped search: `variant` at `stretch` times the `target`,
 // its lines rounded to the `clocks` grid (roundedFit). Returns null when the time is up.
@@ -2339,7 +2345,9 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
   return warnings;
 }
 // Phases whose whole-machine search stopped and whose exact plan was rounded instead (#593), one
-// sentence each, since each can take its own time.
+// sentence each, since each can take its own time. Not "to the nearest": where only the plan with
+// every line rounded up fits, that one is used (roundedTry, #698). The time is compared with the
+// exact plan's, which the stage records (#708).
 function roundedWarnings({ stages }: FinishedPlan): string[] {
   return Object.entries(stages)
     .filter(([, stage]) => stage.feasible && stage.roundedAfterStop !== undefined)
@@ -2351,7 +2359,7 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
         row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6,
       );
       const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock');
-      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to the nearest whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
+      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
 }
 // Hours in a warning: two decimals below 10 hours, so a short maximum-output phase still shows

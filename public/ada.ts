@@ -490,7 +490,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.rounded,
     text: facts =>
-      `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to the nearest whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
+      `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
   },
   {
     id: 'fractional-after-stop',
