@@ -199,7 +199,7 @@ test('an added bay cannot take a handbook letter, and removing an old one keeps 
         name: 'x',
         floor: 'ground',
       }),
-    /handbook bay/,
+    /Hide that built-in bay first/,
   );
   // A state saved with one, through a direct request or an edited import, still loads.
   state = validateState({
@@ -276,10 +276,10 @@ test('a handbook bay can be hidden and restored, keeping every record, as versio
   assert.deepEqual(state.storageEdits, before.storageEdits);
   assert.equal(state.version, before.version);
   // Only handbook letters can be hidden; an added bay is removed instead.
-  assert.throws(() => mutate(state, { type: 'storageBayHide', id: 'S' }), /Only handbook bays/);
+  assert.throws(() => mutate(state, { type: 'storageBayHide', id: 'S' }), /Only built-in bays/);
   assert.throws(
     () => mutate(state, { type: 'storageBayRemove', id: 'C' }),
-    /Hide a handbook bay instead; its progress is kept/,
+    /Hide a built-in bay instead; its progress is kept/,
   );
 });
 

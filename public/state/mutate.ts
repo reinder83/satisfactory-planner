@@ -442,11 +442,11 @@ function addBay(state: SavedState, layout: StorageEdits, update: Raw) {
   if (handbookBay(update.id)) {
     if (!layout.hiddenBays.includes(update.id))
       fail(
-        `Bay ${update.id} is in the room. Hide that handbook bay first, or choose another letter.`,
+        `Bay ${update.id} is in the room. Hide that built-in bay first, or choose another letter.`,
       );
     if (update.replace !== true)
       fail(
-        `Bay ${update.id} still has saved progress from the handbook bay. Confirm to replace it.`,
+        `Bay ${update.id} still has saved progress from the built-in bay. Confirm to replace it.`,
       );
   }
   if (!knownFloor(layout, update.floor)) fail('Unknown floor.');
@@ -502,7 +502,7 @@ function orderBays(_state: SavedState, layout: StorageEdits, update: Raw) {
 // storageBayHide and storageBayRestore, for handbook bays only.
 function hideOrRestoreBay(_state: SavedState, layout: StorageEdits, update: Raw) {
   if (typeof update.id !== 'string' || !handbookBay(update.id))
-    fail('Only handbook bays can be hidden. Remove an added bay instead.');
+    fail('Only built-in bays can be hidden. Remove an added bay instead.');
   const hidden = new Set(layout.hiddenBays);
   // An added bay under a handbook letter still in the room predates #91 and shares that bay's
   // addresses and records. Hiding the handbook bay would make removing the added one clear
@@ -513,16 +513,16 @@ function hideOrRestoreBay(_state: SavedState, layout: StorageEdits, update: Raw)
     !hidden.has(update.id) &&
     layout.bays.some(bay => bay.id === update.id)
   )
-    fail(`An added bay uses the letter ${update.id}. Remove it before hiding the handbook bay.`);
+    fail(`An added bay uses the letter ${update.id}. Remove it before hiding the built-in bay.`);
   if (update.type === 'storageBayHide') hidden.add(update.id);
   else if (layout.bays.some(bay => bay.id === update.id))
-    fail(`An added bay uses the letter ${update.id}. Remove it before restoring the handbook bay.`);
+    fail(`An added bay uses the letter ${update.id}. Remove it before restoring the built-in bay.`);
   else hidden.delete(update.id);
   layout.hiddenBays = [...hidden].sort();
 }
 function removeBay(state: SavedState, layout: StorageEdits, update: Raw) {
   if (!layout.bays.some(bay => bay.id === update.id))
-    fail('Only added bays can be removed. Hide a handbook bay instead; its progress is kept.');
+    fail('Only added bays can be removed. Hide a built-in bay instead; its progress is kept.');
   layout.bays = layout.bays.filter(bay => bay.id !== update.id);
   // The check above matched an added bay, so the id is a string.
   const id = update.id as string;

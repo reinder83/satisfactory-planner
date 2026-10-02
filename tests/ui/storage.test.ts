@@ -1102,7 +1102,7 @@ test('the update stand-in applies an op like the server: a refused one leaves th
   // Only handbook bays can be hidden, and only a valid state is accepted.
   assert.throws(
     () => applyUpdate({ type: 'storageBayHide', id: 'S' }),
-    /Invalid hidden bay|handbook/,
+    /Invalid hidden bay|Only built-in bays/,
   );
   assert.throws(
     // @ts-expect-error: a check's value must be a boolean
