@@ -97,13 +97,14 @@ async function openThrough(savedPhase: Phase, checks: Record<string, boolean>) {
     state: { ...structuredClone(state), settings: { phase: savedPhase }, checks, customTasks: [] },
     plan: phaseThreePlan(),
   };
-  stubFetch({
+  const calls = stubFetch<UpdateOp>({
     '/api/context': reply,
     '/api/update': (update: UpdateOp) => applyUpdate(update),
   });
   await loadContext('s', 'p');
   render();
   await settle();
+  return calls;
 }
 
 test('the profile opens on Phase 1 while its milestones are open, then on Phase 2, then Phase 3', async () => {
@@ -112,7 +113,7 @@ test('the profile opens on Phase 1 while its milestones are open, then on Phase 
     two = phaseStepIds('2');
   await openThrough('3', {});
   assert.equal(phase(), '1', 'open Phase 1 milestones hold Phase 1 open');
-  assert.ok($('[data-opened-earlier]'), 'the build plan says why');
+  assert.ok($('[data-milestone-only]'), 'the build plan says why');
   await openThrough('3', Object.fromEntries(one.map(id => [id, true])));
   assert.equal(phase(), '2');
   await openThrough('3', Object.fromEntries([...one, ...two].map(id => [id, true])));
@@ -163,4 +164,97 @@ test('the factories and resources pages of a milestone-only phase say why they a
   await settle();
   assert.equal($('#main [data-milestone-only]'), null);
   assert.ok($('#main .card-top'), 'Phase 3 lists its production lines');
+});
+
+// #786: a milestone-only phase plans no production, so the build plan leaves out the side column
+// (deliveries, build status, profile assumptions) and its intro says how its milestones get paid
+// for; one notice says why the profile opened there; and every page of it offers one next step.
+const text = (el: Element | null) => el?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+test('the Phase 1 build plan has no profile assumptions; Phase 3 keeps them', async () => {
+  open({ calculated: phaseThreePlan(), phase: '1' });
+  go('plan');
+  render();
+  await settle();
+  assert.equal($('#main aside'), null, 'no side column');
+  assert.doesNotMatch(text($('#main')), /Profile assumptions/);
+  open({ calculated: phaseThreePlan(), phase: '3' });
+  go('plan');
+  render();
+  await settle();
+  assert.match(text($('#main aside')), /Profile assumptions/);
+});
+
+test('the milestone intro says production starts later, not that running factories pay', async () => {
+  open({ calculated: phaseThreePlan(), phase: '1' });
+  go('plan');
+  render();
+  await settle();
+  const intro = text($('[data-milestone-intro]'));
+  assert.match(
+    intro,
+    /Production starts in Phase 3, so gather, handcraft or build a starter supply/,
+  );
+  assert.doesNotMatch(intro, /factories marked running/);
+});
+
+test('a profile opened on Phase 1 shows one notice that says both why and what', async () => {
+  open({ calculated: phaseThreePlan(), phase: '3' });
+  const open1 = phaseStepIds('1').length;
+  const calls = await openThrough('3', {});
+  assert.equal(phase(), '1');
+  assert.equal($('[data-opened-earlier]'), null, 'no separate opened-earlier notice');
+  assert.equal($$('#main .notice').length, 1, 'one notice');
+  const notice = $('[data-milestone-only]')!;
+  assert.equal(
+    text(notice),
+    `You are working on Phase 3. Phase 1 still has ${open1} open steps, so the plan starts here. ` +
+      'This profile plans production from Phase 3 on. Phase 1 lists only the HUB milestones and ' +
+      'MAM research that belong to it: no production lines, storage or power to build here. ' +
+      'Go to Phase 3',
+  );
+  const button = $<HTMLButtonElement>('[data-go-to-start-phase]')!;
+  assert.equal(button.type, 'button');
+  button.focus();
+  button.click();
+  await settle();
+  await settle();
+  assert.equal(phase(), '3');
+  assert.equal(state.settings.phase, '3');
+  assert.equal($('[data-milestone-only]'), null, 'the notice is gone');
+  assert.equal(document.activeElement, $('#main h1'), 'focus goes to the heading');
+  assert.deepEqual(
+    calls.map(([path]) => path.split('?')[0]),
+    ['/api/context'],
+    'nothing is written: the saved phase already is Phase 3',
+  );
+});
+
+test('factories and resources in a milestone-only phase offer Go to Phase 3', async () => {
+  for (const view of ['factories', 'resources', 'plan'] as const) {
+    open({ calculated: phaseThreePlan(), phase: '3' });
+    // Saved on Phase 1 (picked on the phase track), so it opens there with nothing to explain.
+    const calls = await openThrough('1', {});
+    go(view);
+    render();
+    await settle();
+    assert.equal(phase(), '1');
+    const notice = $('#main [data-milestone-only]');
+    assert.doesNotMatch(text(notice), /You are working on/, view);
+    const button = $<HTMLButtonElement>('#main [data-go-to-start-phase]')!;
+    assert.equal(text(button), 'Go to Phase 3', view + ' offers the start phase');
+    button.focus();
+    button.click();
+    await settle();
+    await settle();
+    assert.equal(phase(), '3', view + ' shows Phase 3');
+    assert.equal(state.settings.phase, '3', view + ' saves Phase 3, as the phase track does');
+    assert.deepEqual(
+      calls.filter(([path]) => path.startsWith('/api/update')).map(([, body]) => body),
+      [{ type: 'phase', value: '3' }],
+      view + ' writes the phase once',
+    );
+    assert.equal($('#main [data-milestone-only]'), null, view + ' notice is gone');
+    assert.equal(document.activeElement, $('#main h1'), view + ' focus goes to the heading');
+  }
 });
