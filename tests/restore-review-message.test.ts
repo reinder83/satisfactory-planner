@@ -1,7 +1,7 @@
 // Restoring an old progress backup can keep some of its records for review (#760): onto a profile
 // moved from the original plan whose mapping cannot place them, its handbook-keyed ticks, notes
 // and group assignments go to handbookOrigin.unmapped, which the Notes page lists under "From the
-// original plan". The Backup page then says how many the restore newly put there
+// original plan". The Backup page then says how many the restore newly put there or changed
 // (restoreMessage in public/app/views/backup.ts), from the state it had and the state
 // /api/import replied with. Both editions reply the same way, so they give the same message.
 import { test } from 'node:test';
@@ -168,12 +168,22 @@ for (const [edition, open] of [
       assert.equal(await restore('foreign', later), 'Backup restored.');
       // Onto an ordinary profile nothing goes to review.
       assert.equal(await restore('ordinary', backupOf(firstState, 'ordinary')), 'Backup restored.');
+      // Another backup from before the migration with a different note for a factory already
+      // listed (#769): the record's key is listed, but what it says changed, so it needs another
+      // look. Restoring that backup again changes nothing.
+      const otherNote = structuredClone(firstState);
+      otherNote.notes['factory-wire'] = 'By the lake';
+      assert.equal(
+        await restore('foreign', backupOf(otherNote, 'foreign')),
+        'Backup restored. 1 item from the original plan needs your review in Notes.',
+      );
+      assert.equal(await restore('foreign', backupOf(otherNote, 'foreign')), 'Backup restored.');
     } finally {
       await close();
     }
   });
 
-test('newlyForReview counts only the ticks, notes and assignments that were not listed before', () => {
+test('newlyForReview counts the ticks, notes and assignments not listed before or changed', () => {
   const origin = (unmapped: Partial<HandbookOrigin['unmapped']>) => ({
     handbookOrigin: {
       version: '2026-09-13',
@@ -187,7 +197,22 @@ test('newlyForReview counts only the ticks, notes and assignments that were not 
   });
   assert.equal(newlyForReview({}, after), 4);
   assert.equal(newlyForReview(origin({}), after), 4);
-  assert.equal(newlyForReview(origin({ checks: { 'factory-3-wire': false } }), after), 3);
+  assert.equal(newlyForReview(origin({ checks: { 'factory-3-wire': true } }), after), 3);
+  // A listed record whose value changed counts again (#769): a tick, a note text, a group.
+  assert.equal(newlyForReview(origin({ checks: { 'factory-3-wire': false } }), after), 4);
+  const listed = structuredClone(after);
+  listed.handbookOrigin.unmapped.notes['factory-wire'] = 'By the lake';
+  listed.handbookOrigin.unmapped.assignments.rubber = [{ group: 'fg-oil', rate: 30 }];
+  assert.equal(newlyForReview(listed, after), 2);
+  // The same records in another key order are unchanged.
+  const reordered = origin({
+    assignments: { rubber: [{ rate: null, group: 'fg-oil' }] },
+    notes: { 'factory-wire': 'By the river' },
+    checks: { 'factory-4-plastic': false, 'factory-3-wire': true },
+  });
+  assert.equal(newlyForReview(reordered, after), 0);
+  // A key only on Object.prototype is not a listed record.
+  assert.equal(newlyForReview(origin({}), origin({ notes: { toString: 'A note' } })), 1);
   assert.equal(newlyForReview(after, after), 0);
   assert.equal(newlyForReview(after, {}), 0);
   assert.equal(
