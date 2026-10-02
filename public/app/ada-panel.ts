@@ -10,7 +10,7 @@ import {
 } from '../ada.ts';
 import { browserMode } from '../browser-api.ts';
 import { stageSupply } from './build-status.ts';
-import { num, slug } from './format.ts';
+import { durationOfHours, num, slug } from './format.ts';
 import {
   calcStage,
   calculated,
@@ -235,18 +235,18 @@ function adaFacts(): AdaFacts {
             tight: true,
           }
         : null,
-    hours: calculated && storedStage.hours ? num(storedStage.hours) + ' h' : '',
+    hours: calculated && storedStage.hours ? durationOfHours(storedStage.hours) : '',
     rounded:
       calculated && storedStage.feasible && storedStage.roundedAfterStop !== undefined
         ? {
-            target: num(storedStage.roundedAfterStop) + ' h',
+            target: durationOfHours(storedStage.roundedAfterStop),
             longer: (storedStage.hours || 0) > storedStage.roundedAfterStop * 1.01,
           }
         : null,
     fractional:
       calculated && storedStage.feasible && storedStage.fractionalAfterStop
         ? {
-            target: num(storedStage.fractionalAfterStop.target) + ' h',
+            target: durationOfHours(storedStage.fractionalAfterStop.target),
             longer: (storedStage.hours || 0) > storedStage.fractionalAfterStop.target * 1.01,
             clocks: storedStage.fractionalAfterStop.clocks,
           }

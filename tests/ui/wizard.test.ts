@@ -553,7 +553,12 @@ test('the goals step and what Review says about each phase', () => {
       stages: { ...plan.stages, 1: { ...plan.stages[1], hours: 5.21, aheadOf: 9.92 } },
     },
   });
-  assert.match(main(), /was 9[.,]92 h/, 'a pulled-forward phase shows what it used to take');
+  // Both in hours and minutes, as the plan header and the elevator counter write them (#643).
+  assert.match(
+    main(),
+    /about 5 h 13 min was about 9 h 55 min/,
+    'a pulled-forward phase shows what it used to take',
+  );
   wizardAt(5);
   assert.doesNotMatch(main(), /was /);
   // Review flags only the phases the profile plans.

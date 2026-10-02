@@ -55,6 +55,9 @@ export function duration(minutes: number): string {
   return `about ${num(Math.floor(whole / 60))} h` + (rest ? ` ${num(rest)} min` : '');
 }
 
+// A phase's delivery time, given in hours, in the same words (#643): "about 7 h 52 min".
+export const durationOfHours = (hours: number): string => duration(hours * 60);
+
 // The item searches (ui/form/ItemSearch.vue): up to `limit` of `items` for the typed text,
 // case-insensitive, names that start with it first, then names that merely contain it.
 export function itemMatches(items: readonly string[], query: unknown, limit = 8): string[] {
