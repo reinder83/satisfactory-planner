@@ -10,7 +10,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { catalog } from '../planner.ts';
-import { migrateOriginalProfile, type MigrationData } from '../public/handbook-migration.ts';
+import {
+  handbookMapping,
+  handbookToPlan,
+  migrateOriginalProfile,
+  usableHandbook,
+  type FrozenMapping,
+  type MigrationData,
+} from '../public/handbook-migration.ts';
 import { errorCode } from './errors.ts';
 import type {
   Handbook,
@@ -42,8 +49,27 @@ export const migrationData = async (): Promise<MigrationData> => ({
   recipes: ((await read('../recipes.json')) as { recipes: Recipe[] }).recipes,
   pureLimits: catalog().pureLimits,
 });
+const frozenHandbook = async () =>
+  (await read('../migrations/handbook-2026-09-13.json')) as Handbook;
+// What the migration of an original profile without a handbook of its own mapped (#606): the
+// frozen handbook's mapping. A progress backup made before the migration is re-keyed with it
+// onto a profile migrated before handbookOrigin.mapping was recorded (profile-routes.ts). Read
+// once, when such a restore first needs it; a failed read is tried again by the next restore.
+let frozen: Promise<FrozenMapping> | undefined;
+export const frozenMapping = (): Promise<FrozenMapping> =>
+  (frozen ??= (async () => {
+    const { handbook } = usableHandbook(await frozenHandbook());
+    const { recipes } = await migrationData();
+    return {
+      version: handbook.version,
+      mapping: handbookMapping(handbook, handbookToPlan(handbook, recipes)),
+    };
+  })().catch(error => {
+    frozen = undefined;
+    throw error;
+  }));
 const migrateOriginals = async (saves: Save[]) => {
-  const handbook = (await read('../migrations/handbook-2026-09-13.json')) as Handbook;
+  const handbook = await frozenHandbook();
   const { recipes, pureLimits } = await migrationData();
   for (const save of saves)
     save.profiles = save.profiles.map(profile =>

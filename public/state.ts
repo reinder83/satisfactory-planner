@@ -13,7 +13,8 @@
 //   factoryGroups  named production areas and row assignments (blankGroups), version 3;
 //                  links, the vehicle picked per group link, version 7
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
-//                  not place (validateOrigin), version 12; no update op edits it
+//                  not place (validateOrigin), version 12; with what the migration mapped
+//                  (mapping, #606), version 13; no update op edits it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -39,6 +40,7 @@ export {
   handbookFloor,
   initialState,
   linkPlaces,
+  mappingFits,
   safeKey,
   slotPosition,
   validateState,
