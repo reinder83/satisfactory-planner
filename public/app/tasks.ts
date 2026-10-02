@@ -47,11 +47,13 @@ export interface PlanStepView extends Step {
   form?: ReturnType<typeof taskLinkChoices> | null;
 }
 
-// A step in "Removed steps in this phase".
+// A step in "Removed steps in this phase". `shared` says which other phases list the same
+// step, so removing and restoring it applies there too (shared-steps.ts, #744).
 export interface RemovedStepView {
   id: string;
   title: string;
   icon: StepIconData;
+  shared?: string;
 }
 
 // The profile's step edits with every part defaulted, so callers can read them freely.

@@ -43,11 +43,13 @@ export function phaseStepIds(phase: StageKey): string[] {
 }
 
 // The ids calcTasks() in views/calculated.ts (a calculated profile, or its guide) or the handbook
-// gives the phase, in no particular order.
-function generatedStepIds(phase: StageKey): string[] {
+// gives the phase, in no particular order. Post-game plans Phase 5's stage, so its production
+// steps have Phase 5's ids, as calcTasks() gives them (shared-steps.ts asks for every phase).
+export function generatedStepIds(phase: Phase): string[] {
   if (!calculated) return (plan.phases[phase] ?? []).map(task => task.id);
   if (calculated.guide) return (calculated.guide.phases[phase] ?? []).map(task => task.id);
-  const steps = progression(calculated, state, progressionData, phase);
+  const steps = progression(calculated, state, progressionData, phase),
+    stage: StageKey = phase === 'post' ? '5' : phase;
   return [
     ...[
       ...steps.baseTasks,
@@ -56,8 +58,8 @@ function generatedStepIds(phase: StageKey): string[] {
       ...steps.hardDrives,
       ...steps.retire,
     ].map(task => task.id),
-    ...(calculated.stages[phase]?.rows || []).map(row => 'calc-' + phase + '-' + row.id),
-    'calc-' + phase + '-storage',
+    ...(calculated.stages[stage]?.rows || []).map(row => 'calc-' + stage + '-' + row.id),
+    'calc-' + stage + '-storage',
   ];
 }
 

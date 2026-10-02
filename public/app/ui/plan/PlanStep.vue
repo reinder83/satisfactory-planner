@@ -10,6 +10,7 @@ import { nextTick, ref } from 'vue';
 import { save } from '../../api.ts';
 import { phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
+import { removeStepBody } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
@@ -121,7 +122,8 @@ const stepList = (control: string) => ({
 
 // "Remove", after a confirmation. A personal task (id custom-…) is deleted; a plan step is
 // only hidden (taskRemove) and keeps its checkmark, so it can be put back from "Removed
-// steps in this phase".
+// steps in this phase". A step other phases list too goes from them too, and the
+// confirmation names them (shared-steps.ts, #744).
 async function remove(event: Event) {
   const id = props.step.id;
   if (id.startsWith('custom-')) return deletePersonal(event);
@@ -129,7 +131,7 @@ async function remove(event: Event) {
   if (
     !(await confirmAction({
       title: 'Remove this step?',
-      body: 'Remove this step from your build plan? Its checkmark is kept and you can restore the step while editing.',
+      body: removeStepBody(id),
       confirmLabel: 'Remove step',
       danger: true,
     }))
