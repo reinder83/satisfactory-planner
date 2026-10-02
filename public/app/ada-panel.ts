@@ -33,7 +33,7 @@ import {
 } from './session.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
-import { planTasks, taskEditsState } from './tasks.ts';
+import { planTasks, removedPlanTasks } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
@@ -211,7 +211,7 @@ function adaFacts(): AdaFacts {
     hasPhaseNote: !!state.notes['phase-' + phase()],
     unplaced: unplacedCount(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
-    removedSteps: taskEditsState().removed.length,
+    removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
     feasible: calculated ? storedStage.feasible !== false : true,
     reason: calculated ? storedStage.reason || '' : '',
