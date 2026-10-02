@@ -10,6 +10,7 @@ import { openingPhase, phaseStepIds } from '../../public/app/opening-phase.ts';
 import { loadContext, openedFrom, phase, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
+import { calcTasks } from '../../public/app/views/calculated.ts';
 import { $, applyUpdate, generatedWith, handbook, open, page, stubFetch } from './setup.ts';
 import type {
   ContextReply,
@@ -63,46 +64,65 @@ test('openingPhase asks only for the phases before the chosen one, up to the fir
   assert.deepEqual(asked, ['1']);
 });
 
-// phaseStepIds works out another phase's checklist without drawing it. It must hold exactly the
-// steps the build plan shows for that phase, edits and personal tasks included.
-test('phaseStepIds is the build plan of each phase of a calculated profile', () => {
+// phaseStepIds works out another phase's checklist without opening it, through the functions
+// the build plan draws with (calcTasks, planTasks, given the phase). Asked from another phase,
+// it must hold exactly the steps the build plan shows once that phase is open, in their order,
+// with the user's edits and personal tasks for that phase.
+const otherPhase = (stage: StageKey): StageKey => (stage === '5' ? '1' : '5');
+
+test('another phase of a calculated profile is worked out as its build plan shows it', () => {
   const plan = phaseOnePlan();
   for (const stage of ['1', '2', '3', '4', '5'] as StageKey[]) {
-    open({
-      calculated: plan,
-      phase: stage,
-      state: {
-        customTasks: [{ id: 'custom-' + stage, phase: stage, title: 'Mine' }],
-        taskEdits: {
-          order: {},
-          removed: ['calc-' + stage + '-storage'],
-          titles: {},
-          bodies: {},
-          links: {},
-        },
+    const edits = {
+      customTasks: [{ id: 'custom-' + stage, phase: stage, title: 'Mine' }],
+      taskEdits: {
+        // The personal task first, by this phase's saved order only.
+        order: { [stage]: ['custom-' + stage] },
+        removed: ['calc-' + stage + '-storage'],
+        titles: {},
+        bodies: {},
+        links: {},
       },
-    });
-    const shown = planTasks().map(task => task.id);
-    assert.ok(shown.includes('custom-' + stage), 'a personal task counts');
-    assert.ok(!shown.includes('calc-' + stage + '-storage'), 'a removed step does not');
+    };
+    open({ calculated: plan, phase: stage, state: structuredClone(edits) });
+    const shown = planTasks().map(task => task.id),
+      generated = calcTasks();
+    assert.equal(shown[0], 'custom-' + stage, 'the saved order applies');
+    assert.ok(!shown.includes('calc-' + stage + '-storage'), 'a removed step does not count');
     assert.ok(
       shown.some(id => id.startsWith('unlock-')),
       'milestones count',
     );
-    assert.deepEqual([...phaseStepIds(stage)].sort(), [...shown].sort(), 'Phase ' + stage);
+    open({ calculated: plan, phase: otherPhase(stage), state: structuredClone(edits) });
+    assert.equal(phase(), otherPhase(stage));
+    assert.deepEqual(phaseStepIds(stage), shown, 'Phase ' + stage + ' steps');
+    assert.deepEqual(calcTasks(stage), generated, 'Phase ' + stage + ' generated steps');
   }
 });
 
-test('phaseStepIds is the build plan of each phase of the handbook', () => {
+test('post-game is worked out from another phase with Phase 5 ids', () => {
+  const plan = phaseOnePlan();
+  open({ calculated: plan, phase: 'post' });
+  const shown = planTasks().map(task => task.id);
+  assert.ok(shown.includes('calc-5-storage'));
+  open({ calculated: plan, phase: '3' });
+  assert.deepEqual(
+    planTasks('post').map(task => task.id),
+    shown,
+  );
+});
+
+test('another phase of the handbook is worked out as its build plan shows it', () => {
   for (const stage of ['3', '4', '5'] as StageKey[]) {
-    open({ phase: stage });
-    assert.deepEqual(
-      [...phaseStepIds(stage)].sort(),
-      planTasks()
-        .map(task => task.id)
-        .sort(),
-      'Phase ' + stage,
-    );
+    const edits = { customTasks: [{ id: 'custom-' + stage, phase: stage, title: 'Mine' }] };
+    open({ phase: stage, state: structuredClone(edits) });
+    const shown = planTasks().map(task => task.id);
+    assert.ok(shown.includes('custom-' + stage), 'a personal task counts');
+    // The handbook plans Phase 3 on.
+    const other: StageKey = stage === '3' ? '5' : '3';
+    open({ phase: other, state: structuredClone(edits) });
+    assert.equal(phase(), other);
+    assert.deepEqual(phaseStepIds(stage), shown, 'Phase ' + stage);
   }
 });
 

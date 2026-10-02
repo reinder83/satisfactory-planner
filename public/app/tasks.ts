@@ -16,7 +16,7 @@ import {
   state,
 } from './session.ts';
 import { calcTasks, rowIcon } from './views/calculated.ts';
-import type { TaskEdits } from '../types/index.ts';
+import type { Phase, TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a handbook, calculated or personal one. id is its saved check key;
 // personal tasks have no body.
@@ -74,14 +74,14 @@ function withEditedWording(t: Step, edits: TaskEdits): Step {
   return { ...t, title: edits.titles[t.id] || t.title, body: edits.bodies[t.id] || t.body };
 }
 
-// Applies the user's edits to the generated steps: drops removed ones, swaps in edited
-// wording and sorts by the saved order for this phase. Steps missing from the saved
+// Applies the user's edits to phase `shownPhase`'s generated steps: drops removed ones, swaps in
+// edited wording and sorts by the saved order for that phase. Steps missing from the saved
 // order (new in a later release, or added since) keep their place after the ordered ones.
-function applyTaskEdits(base: Step[]): Step[] {
+function applyTaskEdits(base: Step[], shownPhase: Phase): Step[] {
   const edits = taskEditsState(),
     removed = new Set(edits.removed);
   const visible = base.filter(t => !removed.has(t.id)).map(t => withEditedWording(t, edits));
-  const savedOrder = edits.order[phase()];
+  const savedOrder = edits.order[shownPhase];
   if (!savedOrder?.length) return visible;
   const position = new Map(savedOrder.map((id, i) => [id, i]));
   return [
@@ -108,17 +108,23 @@ export function taskOrderSlots(): string[] {
   return excess > 0 ? slots.filter(id => inPlan.has(id) || excess-- <= 0) : slots;
 }
 
-// The current phase's steps before edits: calculated steps or handbook steps, plus the
-// user's personal (custom-...) tasks for this phase.
-export function basePlanTasks(): Step[] {
-  return calculated
-    ? [...calcTasks(), ...state.customTasks.filter(t => t.phase === phase())]
-    : tasks();
+// The generated steps of phase `shownPhase` (the current phase unless given), before edits: a
+// calculated profile's (calcTasks, its guide's on a migrated handbook profile) or the handbook's.
+export function generatedTasks(shownPhase: Phase = phase()): Step[] {
+  return calculated ? calcTasks(shownPhase) : (plan.phases[shownPhase] ?? []);
 }
 
-// The steps as the user sees them in the build plan (edits applied, no search filter).
-export function planTasks(): Step[] {
-  return applyTaskEdits(basePlanTasks());
+// Phase `shownPhase`'s steps before edits (the current phase unless given): its generated steps,
+// plus the user's personal (custom-...) tasks for that phase.
+export function basePlanTasks(shownPhase: Phase = phase()): Step[] {
+  return [...generatedTasks(shownPhase), ...state.customTasks.filter(t => t.phase === shownPhase)];
+}
+
+// The steps of phase `shownPhase` (the current phase unless given) as the user sees them in the
+// build plan: edits applied, no search filter. Another phase's steps are worked out the same way
+// without opening it (phaseStepIds in opening-phase.ts).
+export function planTasks(shownPhase: Phase = phase()): Step[] {
+  return applyTaskEdits(basePlanTasks(shownPhase), shownPhase);
 }
 
 // The current phase's removed steps, in their generated order and with the user's edited
@@ -277,9 +283,4 @@ export function filteredPlanTasks(steps: Step[]): Step[] {
       (!hideDone || !checked(step.id)) &&
       (!search || (step.title + ' ' + (step.body || '')).toLowerCase().includes(search)),
   );
-}
-
-// Handbook steps for the current phase from plan.json, plus personal tasks.
-function tasks(): Step[] {
-  return [...(plan.phases[phase()] ?? []), ...state.customTasks.filter(t => t.phase === phase())];
 }
