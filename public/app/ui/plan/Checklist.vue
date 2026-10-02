@@ -40,7 +40,8 @@ import type { PlanStepView, RemovedStepView } from '../../tasks.ts';
 const list = computed(() =>
   legacy(() => {
     const tasks = planTasks(),
-      shown = filteredPlanTasks(tasks);
+      shown = filteredPlanTasks(tasks),
+      removed = removedPlanTasks();
     const steps = shown.map(
       (task): PlanStepView => ({
         id: task.id,
@@ -60,7 +61,7 @@ const list = computed(() =>
       editing: planEditing,
       count: shown.length !== tasks.length ? shown.length + ' of ' + tasks.length + ' steps' : '',
       empty: !tasks.length
-        ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
+        ? emptyPhase(removed.length > 0)
         : query.trim()
           ? 'No steps match this search.'
           : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
@@ -71,13 +72,23 @@ const list = computed(() =>
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       removed: planEditing
-        ? removedPlanTasks().map(
+        ? removed.map(
             (task): RemovedStepView => ({ id: task.id, title: task.title, icon: taskIcon(task) }),
           )
         : [],
     };
   }),
 );
+
+// Why the phase shows no steps at all: the user removed every one, or it never had any (a
+// handbook without steps for this phase, #646). Only the first points to Removed steps,
+// which the checklist lists while editing.
+function emptyPhase(anyRemoved: boolean) {
+  if (!anyRemoved) return 'This phase has no steps yet. Add a task below to start its checklist.';
+  return planEditing
+    ? 'Every step of this phase is removed. Use Removed steps below to restore them.'
+    : 'Every step of this phase is removed. Choose Edit steps to restore them.';
+}
 
 // The step search, as you type.
 function search(event: Event) {

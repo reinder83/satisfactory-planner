@@ -188,8 +188,11 @@ const RULES: AdaRule[] = [
     on: ['plan'],
     tone: 'calm',
     when: facts => facts.kind !== 'none' && !facts.steps?.total,
+    // Only removed steps can be restored; a phase can also start with none (#646).
     text: facts =>
-      `Every step of ${facts.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`,
+      facts.removedSteps > 0
+        ? `Every step of ${facts.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`
+        : `${facts.phaseLabel} has no steps yet. The tidiest checklist, pioneer, and the least productive. Add a task to start it.`,
   },
   // Phase progress on the build plan, from nothing ticked to everything ticked. facts.steps counts
   // the phase's steps and facts.next names the first unticked one.
@@ -490,7 +493,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.rounded,
     text: facts =>
-      `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to the nearest whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
+      `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, so this phase is the exact plan rounded to whole machines${facts.rounded!.longer && facts.hours ? `, and it takes ${facts.hours} instead of ${facts.rounded!.target}` : ''}. It closes. It is not the leanest arrangement. Fewer alternates or precise balancing usually let the search finish.`,
   },
   {
     id: 'fractional-after-stop',

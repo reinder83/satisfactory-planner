@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { num } from '../../format.ts';
+import { durationOfHours, num } from '../../format.ts';
 import { draft } from '../../session.ts';
 import { budgetMeasured, draftFixes, draftHeading } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
@@ -29,8 +29,8 @@ const view = computed(() =>
       plan: preview,
       rows: stages.map(([phase, stageResult]) => ({
         phase,
-        hours: stageResult.hours ? num(stageResult.hours) + ' h' : '—',
-        was: stageResult.aheadOf !== undefined ? num(stageResult.aheadOf) : '',
+        hours: stageResult.hours ? durationOfHours(stageResult.hours) : '—',
+        was: stageResult.aheadOf !== undefined ? durationOfHours(stageResult.aheadOf) : '',
         buildings: stageResult.rows
           ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
           : '—',
@@ -77,7 +77,7 @@ const view = computed(() =>
             <td>
               {{ row.hours
               }}<template v-if="row.was"
-                >{{ ' ' }}<span class="badge">was {{ row.was }} h</span></template
+                >{{ ' ' }}<span class="badge">was {{ row.was }}</span></template
               >
             </td>
             <td>{{ row.buildings }}</td>

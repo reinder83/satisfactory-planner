@@ -10,7 +10,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { num, slug } from '../../format.ts';
+import { durationOfHours, num, slug } from '../../format.ts';
 import {
   calcStage,
   calculated,
@@ -67,7 +67,10 @@ const page = computed(() =>
           text: `${ready} of ${slots.length} storage positions verified`,
         },
         { key: 'power', href: '#resources', text: `${power(stagePlan.generationMW)} new power` },
-        { key: 'hours', text: `Delivery in ${num(stagePlan.hours)} h at steady state` },
+        {
+          key: 'hours',
+          text: `Delivery in ${durationOfHours(stagePlan.hours || 0)} at steady state`,
+        },
       ],
       deliveries: Object.entries(stagePlan.delivery || {}).map(([item, delivery]) => ({
         id: stage() + '-' + slug(item),

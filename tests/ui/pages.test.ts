@@ -159,6 +159,54 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
   assert.equal($('[data-phase-bar="q"]')!.getAttribute('aria-label'), 'Post Phase 5, 75%');
 });
 
+// The issue's reproduction (#667): a Phase 1 profile working on Phase 3 with every Phase 1 line
+// ticked opens on Phase 2 (phaseToOpen, #570), so its card must not draw Phase 2 as finished.
+test('a profile card fills earlier phases with their real share of ticked lines (#667)', () => {
+  const workspace = {
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'p',
+        profiles: [
+          {
+            id: 'p',
+            kind: 'calculated',
+            name: 'Plan',
+            completed: 6,
+            phase: '3',
+            phases: [
+              { phase: '1', done: 6, total: 6 },
+              { phase: '2', done: 2, total: 5 },
+              { phase: '3', done: 0, total: 8 },
+              { phase: '4', done: 0, total: 9 },
+              { phase: '5', done: 0, total: 12 },
+            ],
+          },
+        ],
+      },
+    ],
+  } satisfies Partial<WorkspaceSummary>;
+  open({ workspace });
+  go('profiles');
+  render();
+  const bar = $('[data-phase-bar="p"]')!;
+  assert.equal(bar.getAttribute('aria-label'), 'Phase 3 of 5, 0%; Phase 2 is 40% done');
+  assert.deepEqual(
+    [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(segment => [
+      segment.dataset.phaseSeg,
+      (segment.firstElementChild as HTMLElement).style.width,
+    ]),
+    [
+      ['1', '100%'],
+      ['2', '40%'],
+      ['3', '0%'],
+      ['4', '0%'],
+      ['5', '0%'],
+    ],
+  );
+});
+
 // A profile card counts its ticked checks in words that agree with the number (#421).
 test('a profile card says 1 check, N checks, or none yet', () => {
   const card = (id: string, completed: number): ProfileSummary => ({

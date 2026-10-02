@@ -7,6 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
+import { andList } from '../../views/calculated.ts';
 import ItemIcon from '../ItemIcon.vue';
 import type { ItemRates, StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
@@ -56,7 +57,7 @@ const view = computed(() => {
       power" spare.
     </p>
     <p v-if="view.dropped.length" class="small">
-      <b>{{ view.dropped.length > 1 ? 'Phases' : 'Phase' }} {{ view.dropped.join(' and ') }}</b>
+      <b>{{ view.dropped.length > 1 ? 'Phases' : 'Phase' }} {{ andList(view.dropped) }}</b>
       could not be fitted to whole machines while crediting them, so
       {{ view.dropped.length > 1 ? 'those phases are' : 'that phase is' }} planned as if you built
       all of it yourself. Nothing is lost — the plan is simply the larger one. Exact ratios instead

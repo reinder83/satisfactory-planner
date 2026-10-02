@@ -88,6 +88,10 @@ function ui() {
     },
     window: { addEventListener() {}, scrollTo() {} },
     location: { hash: '#plan' },
+    // The toast's placement watcher (listeners.ts, #663).
+    MutationObserver: class {
+      observe() {}
+    },
     console,
     setTimeout,
     clearTimeout,

@@ -1,5 +1,5 @@
 // The page-wide listeners that belong to no component: broken item artwork, the hash route,
-// a click on the dialog's backdrop and the close-tab warning. The controls several
+// a click on the dialog's backdrop, the close-tab warning and the toast's placement. The controls several
 // components share (checkboxes, notes, factory links, the dialog's ×, "Create a save") are
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
@@ -11,6 +11,7 @@ import { required } from './format.ts';
 import { onBackdropClick } from './backdrop.ts';
 import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
+import { watchToast } from './toast-place.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
 import { noteWizardEdit } from './wizard/wizard.ts';
 
@@ -73,3 +74,6 @@ for (const type of ['input', 'change'])
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refreshState().catch(() => {});
 });
+
+// A toast that would cover the focused control it is about goes to the top (#663).
+watchToast(required('#toast'));

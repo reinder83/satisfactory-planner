@@ -20,6 +20,7 @@ import {
 import { render } from './shell.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
+import { refocusAfterRefresh } from './ui/refocus.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
@@ -92,6 +93,11 @@ function sessionEnded() {
 // it first (loadContext, imports, profile removal) so no queued write lands elsewhere.
 export let writeQueue: Promise<unknown> = Promise.resolve();
 
+// The statuses with which both editions refuse a write they read and judged against the saved
+// state: 400 from mutate/validateState, 409 from checkBase. After either, queuedWrite reloads
+// the state, because the refusal may be about a change another tab or device made.
+const refusedStatuses = [400, 409];
+
 // Saves one progress change. `operation` is an operation for mutate() in state.ts, e.g.
 // { type: 'check', key, value }; the server or browser adapter applies it and returns the
 // profile's full new state. Does not render: callers render() after it resolves. On failure
@@ -138,9 +144,16 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
       if (stillOpen()) setState(next);
       return next;
     } catch (error) {
-      // Refused as stale: load the latest state so the page shows what is saved now, then
-      // reject with the explanation for save() to show.
-      if ((error as { status?: number }).status === 409) await refreshState(true).catch(() => {});
+      // Refused as stale (409) or by mutate (400, such as a bay letter another device has
+      // taken meanwhile, #722): load the latest state so the page shows what is saved now and
+      // what the refusal is talking about, then reject with the explanation for save() to
+      // show. refreshState only redraws when the saved revision moved, so a refusal of this
+      // tab's own mistake leaves the page alone; a network failure (no status) never redraws.
+      // Focus goes to the page's heading if the redraw takes away the control that had it.
+      if (refusedStatuses.includes((error as { status?: number }).status ?? 0)) {
+        const refocus = refocusAfterRefresh(document.activeElement);
+        if (await refreshState(true).catch(() => false)) await refocus();
+      }
       throw error;
     }
   });
@@ -154,7 +167,7 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
 
 // Reloads the open profile's progress if another tab or device changed it, so this tab does
 // not keep showing (and writing from) an old copy (#165). Called when the tab becomes visible
-// again (listeners.ts) and after a write refused as stale (`force`). Without force it leaves
+// again (listeners.ts) and after a refused write (`force`, queuedWrite). Without force it leaves
 // the page alone while a write is pending, a note has unsaved text, a step is being edited or
 // the wizard is open, so nothing typed is redrawn away. Returns whether the state changed.
 export async function refreshState(force = false): Promise<boolean> {

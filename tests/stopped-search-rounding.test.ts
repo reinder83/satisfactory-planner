@@ -73,14 +73,15 @@ test('a stopped whole-machine search is rounded from the exact plan at the targe
   const plan = withStoppedPhase(settings, 4);
   const stage = plan.stages['4'];
   assertWholePlan(stage, plan.settings.limits, 'Phase 4');
-  assert.equal(stage.roundedAfterStop, 8, 'it records the target time');
+  const exact = calculate({ ...settings, wholeMachines: false, amplifySloops: 0 }).stages['4'];
+  assert.equal(stage.roundedAfterStop, exact.hours, 'it records the exact plan’s time (#708)');
   assert.ok(stage.hours! <= 8.01, 'and keeps it');
   assert.equal(stage.amplificationDropped, undefined, 'the amplified rounding fits');
   assert.ok((stage.sloopsUsed || 0) > 0, 'with somersloops placed');
   const warning = plan.warnings.find(line => line.startsWith('Phase 4: the whole-machine search'));
   assert.ok(warning, 'the plan says what happened');
   assert.match(warning, /stopped before it could prove the best plan/);
-  assert.match(warning, /rounded to the nearest whole machines/);
+  assert.match(warning, /rounded to whole machines/);
   assert.doesNotMatch(warning, /instead of/, 'no longer time is claimed');
   // The phases whose searches ran are not rounded.
   for (const phase of ['1', '2', '3', '5'] as StageKey[])
@@ -121,12 +122,13 @@ test('the issue’s Phase 5 is rounded to whole machines and takes slightly long
   const plan = withStoppedPhase(settings, 5);
   const stage = plan.stages['5'];
   assertWholePlan(stage, plan.settings.limits, 'Phase 5');
-  assert.equal(stage.roundedAfterStop, 8);
+  // The balanced goal's rounded rates make the exact plan itself take 8.33 hours (#708).
+  assert.equal(stage.roundedAfterStop, 25 / 3);
   assert.ok(stage.hours! > 8.01 && stage.hours! <= 12.01, `at most 50% longer (${stage.hours})`);
   assert.ok((stage.sloopsUsed || 0) > 0, 'with somersloops placed');
   const warning = plan.warnings.find(line => line.startsWith('Phase 5: the whole-machine search'));
   assert.ok(warning);
-  assert.match(warning, /this phase takes about \d+(\.\d+)? hours instead of 8\b/);
+  assert.match(warning, /this phase takes about \d+(\.\d+)? hours instead of 8\.33\b/);
   // The shortest time that fits is used: a smaller multiplier needs less extra time.
   const smaller = withStoppedPhase({ ...settings, multiplier: 4 }, 5).stages['5'];
   assertWholePlan(smaller, plan.settings.limits, 'Phase 5 at multiplier 4');
