@@ -104,9 +104,13 @@ export function headroomAdvice(snapshot: StoredStage, shownPhase: Phase): string
   ];
   if (!machines.length)
     return label + ' needs generation beyond the plan, or existing spare power.';
-  const names = machines.map(m => m + 's');
-  const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0];
+  const list = andList(machines.map(m => m + 's'));
   return `${label} plans ${list}; add generation beyond those, or count on existing spare power.`;
+}
+
+// Names as a sentence lists them: "2", "2 and 3", "2, 3 and 4" (#735).
+export function andList(names: readonly string[]): string {
+  return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
 }
 
 // Whether the planner measured a budget problem for infeasible stage `snapshot`: shortfalls, the
