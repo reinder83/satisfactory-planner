@@ -376,6 +376,9 @@ input[type='radio'] {
   line-height: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  /* A long word in the profile's name breaks inside the button rather than running past the
+     sidebar's edge (#713). */
+  overflow-wrap: anywhere;
 }
 .profile-switcher:hover,
 .profile-switcher[aria-expanded='true'] {
@@ -406,6 +409,7 @@ input[type='radio'] {
 }
 .sidebar-foot .action-menu-list .btn {
   white-space: normal;
+  overflow-wrap: anywhere;
   text-align: left;
   padding: 8px 12px;
 }
@@ -422,6 +426,7 @@ input[type='radio'] {
 }
 /* "Open" beside the open profile; aria-checked says so to a screen reader. */
 .action-menu-mark {
+  flex: none;
   margin-left: auto;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10.5px;
@@ -1644,6 +1649,14 @@ p.eyebrow {
 }
 .link-transport input {
   width: 5.5em;
+}
+/* A phone's touch target (#674): the vehicle, round trip and fuel controls are 44px tall at the
+   720px phone breakpoint, like the page's other phone targets. */
+@media (max-width: 720px) {
+  .link-transport select,
+  .link-transport input {
+    min-height: 44px;
+  }
 }
 .flow-row [data-link-load] {
   margin: 4px 0 0;
@@ -3270,6 +3283,25 @@ button.rail-tile:hover {
   background: #241a18;
   color: #f3c4b8;
 }
+/* At the top when the focused control it is about lies under the bottom strip (#663,
+   app/toast-place.ts), over the sticky edit bar so it stays readable. */
+#toast[data-place='top'] {
+  top: 22px;
+  bottom: auto;
+  z-index: 40;
+}
+/* On a phone a wrapping toast keeps the page's 16px gutter on both sides (#663), rather than
+   growing left until it meets the screen edge. */
+@media (max-width: 720px) {
+  #toast {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+  #toast[data-place='top'] {
+    top: 16px;
+  }
+}
 .subnav {
   display: flex;
   gap: 15px;
@@ -4389,7 +4421,8 @@ button.rail-tile:hover {
 }
 /* On a phone the step tools take their own row under the title, so the title keeps the row's
    full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
-   keep their order, and their buttons grow to 44px touch targets. */
+   keep their order, and their buttons grow to 44px touch targets, as does Restore under
+   "Removed steps in this phase" (#717). */
 @media (max-width: 720px) {
   .task.is-editing {
     grid-template-columns: 20px 26px minmax(0, 1fr);
@@ -4401,6 +4434,10 @@ button.rail-tile:hover {
   }
   .task-tools .btn.quiet {
     min-width: 44px;
+    min-height: 44px;
+  }
+  /* Height only: a min-width would let the row's flex layout shrink Restore below its text. */
+  .removed-step .btn {
     min-height: 44px;
   }
 }
@@ -4585,6 +4622,8 @@ button.rail-tile:hover {
   .bay-head h3 {
     color: #101417;
   }
+  /* #toast.show too: the screen rule that shows the toast is more specific than #toast, so it
+     would win here and print a toast that is still up (#730). */
   .sidebar,
   .topbar,
   .toolbar,
@@ -4592,6 +4631,7 @@ button.rail-tile:hover {
   .checklist-tools,
   .btn,
   #toast,
+  #toast.show,
   .estimate-peek,
   .phase-track,
   .ada-ticker,

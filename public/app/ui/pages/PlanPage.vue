@@ -1,6 +1,7 @@
 <!--
   #plan for the original handbook: a summary line (factories, storage, power, each linking to its
-  page; SP-43), the phase checklist with its progress bar and edit toggle,
+  page; SP-43), why it opened on an earlier phase than the saved one when it did
+  (ui/plan/OpenedEarlierNotice.vue, #666), the phase checklist with its progress bar and edit toggle,
   personal tasks and a link to the phase notes (on the Notes page, #243), and a side column
   with the Space Elevator deliveries. The next step leads the checklist itself (SP-42). Post-game ('post') reads the Phase 5
   stage of the handbook: stage() maps it to '5'. A calculated profile gets
@@ -17,6 +18,7 @@ import AddTaskForm from '../plan/AddTaskForm.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
@@ -67,6 +69,7 @@ const page = computed(() =>
   />
   <PlanEditBar />
   <PlanSummary :items="page.summary" />
+  <OpenedEarlierNotice />
   <div class="split">
     <section>
       <div class="section-head">

@@ -27,6 +27,10 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     },
     window: { ...element('window'), scrollTo() {} },
     location: { hash: '#plan' },
+    // The toast's placement watcher (listeners.ts, #663) registers no listener.
+    MutationObserver: class {
+      observe() {}
+    },
   });
   globalThis.fetch = async () => {
     throw new Error('offline');
