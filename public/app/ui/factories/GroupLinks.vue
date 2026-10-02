@@ -449,3 +449,14 @@ async function recalculate(event: Event) {
     </div>
   </section>
 </template>
+
+<style scoped>
+/* A phone's touch target (#674): the vehicle, round trip and fuel controls of a link are 44px
+   tall below the 720px breakpoint style.css uses for phones, and as they are wider. */
+@media (max-width: 720px) {
+  .link-transport select,
+  .link-transport input {
+    min-height: 44px;
+  }
+}
+</style>
