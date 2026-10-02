@@ -1,7 +1,8 @@
 <!-- "Removed steps in this phase", shown while editing the build plan, with a Restore button
      per step. Removed steps keep their checklist key and checkmark, so restoring loses
      nothing. `steps` are { id, title, icon }. Restore is announced as "Restore: <step title>"
-     (#612), like the checklist's "Edit: <step title>" and "Remove: <step title>". -->
+     (#612), like the checklist's "Edit: <step title>" and "Remove: <step title>". A step other
+     phases list too says so under its title: restoring it puts it back there too (#744). -->
 <script setup lang="ts">
 import { save } from '../../api.ts';
 import { render } from '../../shell.ts';
@@ -32,7 +33,13 @@ async function restore(event: Event, id: string) {
   <details class="panel removed-steps">
     <summary>Removed steps in this phase ({{ steps.length }})</summary>
     <div v-for="step in steps" :key="step.id" class="removed-step">
-      <span><StepIcon :icon="step.icon" />{{ step.title }}</span
+      <span
+        ><StepIcon :icon="step.icon" /><span
+          >{{ step.title
+          }}<template v-if="step.shared"
+            ><br /><small class="muted" data-shared-step>{{ step.shared }}</small></template
+          ></span
+        ></span
       ><button
         class="btn quiet"
         :data-restore-task="step.id"
