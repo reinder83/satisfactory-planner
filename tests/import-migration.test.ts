@@ -13,15 +13,12 @@ import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore, PRE_HANDBOOK, type BrowserStore } from '../public/browser-store.ts';
-import {
-  handbookToPlan,
-  migrateOriginalProfile,
-  type HandbookConversion,
-} from '../public/handbook-migration.ts';
+import { handbookToPlan, migrateOriginalProfile } from '../public/handbook-migration.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import { shareState, validateState } from '../public/state.ts';
 import { calculate, catalog } from '../planner.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
+import { everyRecordKept } from './helpers/records.ts';
 import { version11 } from './types/fixtures.ts';
 import type {
   BrowserWorkspace,
@@ -51,38 +48,6 @@ const importedOf = (data: Transfer) => {
   return { ...profile, state: profile.state as ProgressState };
 };
 
-// Checks, independently of migrateHandbookState, that every record of `before` is in `after`:
-// under its own key, re-keyed to its factory's row, or kept for review in unmapped.
-function everyRecordKept(before: SavedState, after: ProgressState, { rows }: HandbookConversion) {
-  const unmapped = after.handbookOrigin!.unmapped;
-  const rowsOf = (factoryId: string) =>
-    [...new Set(['3', '4', '5'].map(phase => rows[phase]?.[factoryId]))].filter(
-      (row): row is string => !!row,
-    );
-  for (const [key, ticked] of Object.entries(before.checks)) {
-    const factory = /^factory-([345])-(.+)$/.exec(key);
-    const row = factory && rows[factory[1]!]?.[factory[2]!];
-    if (row) assert.equal(after.checks[`calc-${factory[1]}-${row}`], ticked, key);
-    else if (factory) assert.equal(unmapped.checks[key], ticked, key + ' is kept for review');
-    else assert.equal(after.checks[key], ticked, key);
-  }
-  for (const [key, note] of Object.entries(before.notes)) {
-    const targets = key.startsWith('factory-') ? rowsOf(key.slice('factory-'.length)) : [key];
-    if (targets.length)
-      for (const target of targets)
-        assert.equal(
-          after.notes[key.startsWith('factory-') ? 'factory-' + target : target],
-          note,
-          key,
-        );
-    else assert.equal(unmapped.notes[key], note, key + ' is kept for review');
-  }
-  for (const [id, count] of Object.entries(before.deliveries))
-    assert.equal(after.deliveries[id], count, id);
-  assert.deepEqual(after.customTasks, before.customTasks);
-  assert.equal(after.settings.phase, before.settings.phase);
-}
-
 test('a first-release export converts its original profile with its own handbook', async () => {
   const data = firstExport();
   const handbook = handbookOf(data);
@@ -97,7 +62,7 @@ test('a first-release export converts its original profile with its own handbook
   assert.equal(profile.id, 'original', 'ids are only remapped by the store');
   assert.equal(profile.name, 'Original · 50× complete automation');
   assert.deepEqual(profile.plan, conversion.plan);
-  assert.equal(profile.state.version, 12);
+  assert.equal(profile.state.version, 13);
   assert.equal(profile.state.handbookOrigin!.version, '2026-09-13');
   everyRecordKept(before, profile.state, conversion);
   // The ticks decision 6B leaves for review, and a note for a factory the handbook lacks.

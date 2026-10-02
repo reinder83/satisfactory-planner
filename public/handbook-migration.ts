@@ -15,6 +15,7 @@ import type {
   Handbook,
   HandbookFactory,
   HandbookFactoryStage,
+  HandbookMapping,
   HandbookOrigin,
   ItemRates,
   OilLine,
@@ -340,9 +341,39 @@ export function handbookToPlan(
   };
 }
 
+// What migrateHandbookState needs of a handbook and its conversion (#606): per stage, each
+// factory id's row id; the factory ids; the knownChecks; and each delivery's starting count above
+// 0 (the first, where an id repeats, as the migration has always used). The migration records it
+// on the profile (handbookOrigin.mapping), so a progress backup made before the migration can be
+// re-keyed later without the handbook (restoreProgress). An id that fails safeKey is left out: no
+// saved record can name it.
+export function handbookMapping(
+  handbook: Handbook,
+  conversion: HandbookConversion,
+): HandbookMapping {
+  const rows: HandbookMapping['rows'] = {};
+  for (const stage of ['3', '4', '5'] as const) {
+    const ids = conversion.rows[stage];
+    if (ids)
+      rows[stage] = Object.fromEntries(
+        Object.entries(ids).filter(([factoryId, rowId]) => safeKey(factoryId) && safeKey(rowId)),
+      );
+  }
+  const factories = [...new Set(handbook.factories.map(f => f.id).filter(safeKey))];
+  const knownChecks = Object.fromEntries(
+    Object.entries(handbook.knownChecks || {}).filter(([key]) => safeKey(key)),
+  );
+  const deliveries: Record<string, number> = {};
+  for (const delivery of handbook.deliveries)
+    if (safeKey(delivery.id) && !(delivery.id in deliveries) && delivery.initial > 0)
+      deliveries[delivery.id] = delivery.initial;
+  return { rows, factories, knownChecks, deliveries };
+}
+
 // A handbook profile's progress re-keyed for the plan handbookToPlan made of the same handbook
-// (#487, part 3c of #394). Every record is kept, moved to its new key, or kept for review in
-// handbookOrigin.unmapped (#485); nothing is dropped:
+// (#487, part 3c of #394), through that handbook's mapping (handbookMapping). Every record is
+// kept, moved to its new key, or kept for review in handbookOrigin.unmapped (#485); nothing is
+// dropped:
 //   check factory-<stage>-<factory id>   → calc-<stage>-<row id>; unplaceable → unmapped
 //   note factory-<factory id>            → factory-<row id> for each row the factory became;
 //                                          an unknown id, unplaceable or clashing → unmapped
@@ -357,19 +388,34 @@ export function handbookToPlan(
 //   storageEdits, the phase) unchanged.
 // The Plastic and Rubber campus ticks are not guessed (decision 6B): the conversion skipped
 // them, so they land in unmapped. A state that already carries handbookOrigin is returned as it
-// is, so migrating twice equals migrating once.
+// is, so migrating twice equals migrating once. The result records the mapping
+// (handbookOrigin.mapping) when there is one; without one (a restore onto a profile whose
+// handbook is unknown, restoreProgress), every handbook-keyed record goes to unmapped.
 export function migrateHandbookState(
   state: SavedState,
   handbook: Handbook,
   conversion: HandbookConversion,
 ): ProgressState {
+  return rekeyHandbookState(state, handbook.version, handbookMapping(handbook, conversion));
+}
+
+const noMapping: HandbookMapping = { rows: {}, factories: [], knownChecks: {}, deliveries: {} };
+
+function rekeyHandbookState(
+  state: SavedState,
+  version: string,
+  mapping?: HandbookMapping,
+): ProgressState {
   const progress = validateState(structuredClone(state));
   if (progress.handbookOrigin) return progress;
-  const rows = conversion.rows;
+  const { rows, factories, knownChecks, deliveries: startCounts } = mapping ?? noMapping;
+  const stageRows = (stage: string | undefined) => rows[stage as '3' | '4' | '5'];
   // Every row a factory became, in stage order, without repeats.
   const rowsOf = (factoryId: string) => [
     ...new Set(
-      ['3', '4', '5'].map(phase => rows[phase]?.[factoryId]).filter((row): row is string => !!row),
+      (['3', '4', '5'] as const)
+        .map(stage => rows[stage]?.[factoryId])
+        .filter((row): row is string => !!row),
     ),
   ];
   const unmapped: HandbookOrigin['unmapped'] = { checks: {}, notes: {}, assignments: {} };
@@ -377,20 +423,20 @@ export function migrateHandbookState(
   const moved: [string, boolean][] = [];
   for (const [key, ticked] of Object.entries(progress.checks)) {
     const match = /^factory-([345])-(.+)$/.exec(key);
+    const row = match && stageRows(match[1])?.[match[2]!];
     if (!match) checks[key] = ticked;
-    else if (rows[match[1]!]?.[match[2]!])
-      moved.push([`calc-${match[1]}-${rows[match[1]!]![match[2]!]}`, ticked]);
+    else if (row) moved.push([`calc-${match[1]}-${row}`, ticked]);
     else unmapped.checks[key] = ticked;
   }
   // A moved tick never overwrites a check the state already holds under that key.
   for (const [key, ticked] of moved)
     if (key in checks) unmapped.checks[key.replace(/^calc-/, 'moved-calc-')] = ticked;
     else checks[key] = ticked;
-  for (const [key, ticked] of Object.entries(handbook.knownChecks || {}))
+  for (const [key, ticked] of Object.entries(knownChecks))
     if (!(key in checks)) checks[key] = ticked;
   const notes: Record<string, string> = {};
   const factoryNotes: [string, string][] = [];
-  const known = new Set(handbook.factories.map(f => f.id));
+  const known = new Set(factories);
   // In a handbook state every factory-<id> note names a handbook factory; one this handbook
   // no longer has (an id renamed or removed between releases) is kept for review (#493 review).
   for (const [key, note] of Object.entries(progress.notes)) {
@@ -433,12 +479,11 @@ export function migrateHandbookState(
   for (const [step, factoryId] of Object.entries(progress.taskEdits.links)) {
     const phase = phaseOf(step);
     const stage = phase === 'post' ? '5' : phase;
-    links[step] = (stage && rows[stage]?.[factoryId]) || rowsOf(factoryId)[0] || factoryId;
+    links[step] = stageRows(stage)?.[factoryId] || rowsOf(factoryId)[0] || factoryId;
   }
   const deliveries = { ...progress.deliveries };
-  for (const delivery of handbook.deliveries)
-    if (deliveries[delivery.id] === undefined && delivery.initial > 0)
-      deliveries[delivery.id] = delivery.initial;
+  for (const [id, count] of Object.entries(startCounts))
+    if (deliveries[id] === undefined) deliveries[id] = count;
   return validateState({
     ...progress,
     checks,
@@ -446,9 +491,44 @@ export function migrateHandbookState(
     deliveries,
     taskEdits: { ...progress.taskEdits, links },
     factoryGroups: { ...progress.factoryGroups, assignments },
-    handbookOrigin: { version: handbook.version, unmapped },
+    handbookOrigin: {
+      version,
+      unmapped,
+      ...(mapping ? { mapping: structuredClone(mapping) } : {}),
+    },
   });
 }
+
+// The mapping of the server's frozen handbook (migrations/), for a profile migrated before
+// handbookOrigin.mapping existed: it fits only a profile whose handbookOrigin.version is the same.
+export interface FrozenMapping {
+  version: string;
+  mapping: HandbookMapping;
+}
+
+// A progress backup restored onto a profile (/api/import, both editions, #606). Onto a profile
+// migrated from the handbook (one whose state has handbookOrigin), a backup made before the
+// migration (one without handbookOrigin) is re-keyed as the migration re-keyed the profile: by
+// the profile's recorded mapping, else by `frozen` when its version matches, else with every
+// handbook-keyed record kept for review in handbookOrigin.unmapped. So nothing of the backup is
+// dropped, and the profile stays marked as migrated. A backup made after the migration, and any
+// backup onto another profile, restores as it is. `current` is the profile's progress, `backup`
+// the validated backup; neither is changed.
+export function restoreProgress(
+  current: SavedState,
+  backup: ProgressState,
+  frozen?: FrozenMapping,
+): ProgressState {
+  const origin = current.handbookOrigin;
+  if (!origin || backup.handbookOrigin) return backup;
+  const mapping =
+    origin.mapping ?? (frozen?.version === origin.version ? frozen.mapping : undefined);
+  return rekeyHandbookState(backup, origin.version, mapping);
+}
+// Whether restoreProgress could use the frozen mapping for this restore, so the server reads its
+// frozen handbook only then.
+export const needsFrozenMapping = (current: SavedState, backup: ProgressState): boolean =>
+  !!current.handbookOrigin && !current.handbookOrigin.mapping && !backup.handbookOrigin;
 
 // The parts of a stored or imported handbook the conversion can read (#609). Every release
 // exported a whole plan.json, but a hand-made or damaged file could carry, say, only factories,

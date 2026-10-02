@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–8). Later versions only add optional sections, so an older
+//                  version (1–13). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -12,8 +12,10 @@ import type { Phase } from './common.ts';
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
 // handbook bay, 6 a hidden built-in floor, 7 a vehicle picked for a factory-group link, 8 a
 // handbook bay moved to another floor, 9 a factory-group link to the vehicle fuel, 10 bays put in
-// their own order on a floor, 11 a link from one raw resource or existing-supply item.
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+// their own order on a floor, 11 a link from one raw resource or existing-supply item, 12 a
+// profile migrated from the handbook (handbookOrigin), 13 one that also records what its
+// migration mapped (handbookOrigin.mapping).
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 // Where a profile migrated from the original handbook came from (#387, #485), and whatever the
 // migration could not place on the calculated plan: ticks, notes and group assignments kept
@@ -26,6 +28,20 @@ export interface HandbookOrigin {
     notes: Record<string, string>;
     assignments: Record<string, GroupAssignment[]>;
   };
+  // What the migration mapped (#606), so a progress backup made before the migration can be
+  // re-keyed onto the profile later without the handbook. Version 13; a profile migrated before
+  // it existed has none.
+  mapping?: HandbookMapping;
+}
+
+// What a handbook migration needs of the handbook to re-key progress (migrateHandbookState):
+// per stage, each handbook factory id's row id; the handbook's factory ids; its knownChecks; and
+// its deliveries' starting counts above 0, by delivery id.
+export interface HandbookMapping {
+  rows: Partial<Record<'3' | '4' | '5', Record<string, string>>>;
+  factories: string[];
+  knownChecks: Record<string, boolean>;
+  deliveries: Record<string, number>;
 }
 
 // A step the user added to the build plan. The id starts with 'custom-'.

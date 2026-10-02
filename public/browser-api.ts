@@ -18,7 +18,7 @@
 // Any other route (accounts, login...) throws "This feature needs a self-hosted server."
 // Unlike the server, nothing here throttles calculations or checks request headers.
 import { openBrowserStore, type BrowserStore } from './browser-store.ts';
-import { isTranscribed, type MigrationData } from './handbook-migration.ts';
+import { isTranscribed, restoreProgress, type MigrationData } from './handbook-migration.ts';
 import {
   validateState,
   mutate,
@@ -411,7 +411,13 @@ export function createBrowserApi(
       throw Error('Wrong backup format.');
     if (body.profileId && body.profileId !== profile.id)
       throw Error('Switch to the matching profile before restoring progress.');
-    return writeProgress(profile, validateState(body.format ? body.state : body));
+    // A backup made before the profile's handbook migration is re-keyed for it (#606). This
+    // edition has no handbook: a profile migrated before its mapping was recorded keeps such a
+    // backup's handbook-keyed records for review.
+    return writeProgress(
+      profile,
+      restoreProgress(profile.state, validateState(body.format ? body.state : body)),
+    );
   }
   // Stores `next` as the profile's progress with the revision after its current one. An
   // original profile cannot be moved before Phase 3, where its plan starts (checkPlanStart).

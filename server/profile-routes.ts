@@ -7,9 +7,12 @@ import {
   currentPayoff,
   wholeMachineProfile,
 } from '../public/state.ts';
+import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
+import type { FrozenMapping } from '../public/handbook-migration.ts';
 import { calculate, rankAlternates } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
+import { frozenMapping } from './persistence.ts';
 import { response } from './routing.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
@@ -115,7 +118,9 @@ export function profileRoutes({
   // written in one commit (writeProgress), so a rejected change leaves the saved state as it
   // was. The revision counts accepted writes. An update can carry the revision its tab last
   // saw (X-Planner-Revision); checkBase refuses a stale whole-value one (#165). An original
-  // profile cannot be moved before Phase 3, which its handbook does not cover.
+  // profile cannot be moved before Phase 3, which its handbook does not cover. A backup made
+  // before a profile's handbook migration is re-keyed for it (restoreProgress, #606), with the
+  // frozen handbook's mapping for a profile migrated before the mapping was recorded.
   async function updateProgress(request: ScopedRequest) {
     return writeProgress(request, await request.body());
   }
@@ -125,14 +130,19 @@ export function profileRoutes({
       fail('Wrong backup format.');
     if (input.profileId && input.profileId !== request.profile.id)
       fail('This backup belongs to another profile. Switch to that profile before restoring.');
-    return writeProgress(request, input, validateState(input.format ? input.state : input));
+    const backup = validateState(input.format ? input.state : input);
+    const frozen = needsFrozenMapping(request.profile.state, backup)
+      ? await frozenMapping()
+      : undefined;
+    return writeProgress(request, input, backup, frozen);
   }
   // Writes the scoped profile's next progress: the imported state, or else input applied as an
-  // update. `imported` is only set by /api/import.
+  // update. `imported` and `frozen` are only set by /api/import.
   async function writeProgress(
     { req, user, save, profile }: ScopedRequest,
     input: Body,
     imported?: ProgressState,
+    frozen?: FrozenMapping,
   ) {
     const next = await commit(draft => {
       const draftProfile = draft.saves
@@ -143,7 +153,9 @@ export function profileRoutes({
       if (!imported)
         checkBase(draftProfile.state, input, [req.headers['x-planner-revision']].flat()[0]);
       // mutate() checks the operation and throws for one it does not know.
-      const state = imported || mutate(draftProfile.state, input as UpdateOp);
+      const state = imported
+        ? restoreProgress(draftProfile.state, imported, frozen)
+        : mutate(draftProfile.state, input as UpdateOp);
       // An original profile cannot be moved before Phase 3, where its plan starts.
       checkPlanStart(draftProfile.kind, state);
       state.revision = draftProfile.state.revision + 1;

@@ -10,6 +10,7 @@ import type {
   CustomTask,
   FactoryGroups,
   GroupAssignment,
+  HandbookMapping,
   HandbookOrigin,
   LinkMode,
   LinkTransport,
@@ -352,6 +353,44 @@ export function validateOrigin(raw: unknown): HandbookOrigin | undefined {
       return { group: (member as Raw).group as string, rate: rate as number | null };
     });
   }
+  const mapping = validateMapping((raw as Raw).mapping, bad);
+  if (mapping) out.mapping = mapping;
+  return out;
+}
+// Returns a clean copy of handbookOrigin.mapping (#606), or undefined when absent: what the
+// migration mapped, which re-keys a progress backup made before it (restoreProgress in
+// handbook-migration.ts). Every id passes safeKey, as the records it re-keys do.
+function validateMapping(raw: unknown, bad: () => never): HandbookMapping | undefined {
+  if (raw === undefined) return undefined;
+  if (!plain(raw)) bad();
+  const { rows, factories, knownChecks, deliveries } = raw as Raw;
+  const out: HandbookMapping = { rows: {}, factories: [], knownChecks: {}, deliveries: {} };
+  if (!plain(rows)) bad();
+  for (const [stage, ids] of Object.entries(rows as Raw)) {
+    if (!['3', '4', '5'].includes(stage) || !plain(ids) || Object.keys(ids).length > 1000) bad();
+    const stageRows: Record<string, string> = {};
+    for (const [factoryId, rowId] of Object.entries(ids as Raw)) {
+      if (!safeKey(factoryId) || !safeKey(rowId)) bad();
+      stageRows[factoryId] = rowId as string;
+    }
+    out.rows[stage as '3' | '4' | '5'] = stageRows;
+  }
+  if (!Array.isArray(factories) || factories.length > 1000) bad();
+  for (const factoryId of factories as unknown[]) {
+    if (!safeKey(factoryId) || out.factories.includes(factoryId)) bad();
+    out.factories.push(factoryId as string);
+  }
+  if (!plain(knownChecks) || Object.keys(knownChecks).length > 20000) bad();
+  for (const [key, value] of Object.entries(knownChecks as Raw)) {
+    if (!safeKey(key) || typeof value !== 'boolean') bad();
+    out.knownChecks[key] = value as boolean;
+  }
+  if (!plain(deliveries) || Object.keys(deliveries).length > 1000) bad();
+  for (const [key, value] of Object.entries(deliveries as Raw)) {
+    if (!safeKey(key) || !Number.isSafeInteger(value) || (value as number) < 0) bad();
+    if ((value as number) > 1000000000) bad();
+    out.deliveries[key] = value as number;
+  }
   return out;
 }
 // Returns a clean copy of storageEdits, or a blank one when absent (version 1 states).
@@ -483,17 +522,20 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–12 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–13 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
 // replace good progress. Unknown top-level fields and settings other than phase are not
 // kept.
 export function validateState(state: unknown): ProgressState {
-  if (!plain(state) || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(state.version as number))
+  if (
+    !plain(state) ||
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(state.version as number)
+  )
     fail(
-      // Compared as the old code did, so a version given as "13" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 12
+      // Compared as the old code did, so a version given as "14" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 13
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -559,30 +601,34 @@ export function validateState(state: unknown): ProgressState {
   // existing-supply item as a source of its own (#231) is 11: an older release knows only the
   // one 'mines' place and would refuse the state as malformed. A profile migrated from the
   // handbook (#387) is 12: it carries handbookOrigin, and an older release would open it as an
-  // ordinary profile and drop what the migration kept for review.
-  clean.version = clean.handbookOrigin
-    ? 12
-    : linksNeedV11(clean.factoryGroups)
-      ? 11
-      : clean.storageEdits.bayOrder
-        ? 10
-        : linksNeedV9(clean.factoryGroups)
-          ? 9
-          : clean.storageEdits.bayFloors
-            ? 8
-            : clean.factoryGroups.links
-              ? 7
-              : clean.storageEdits.hiddenFloors.length
-                ? 6
-                : clean.storageEdits.hiddenBays.length
-                  ? 5
-                  : hasAddedSlots(clean.storageEdits)
-                    ? 4
-                    : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                      ? 3
-                      : hasEdits(clean.storageEdits)
-                        ? 2
-                        : 1;
+  // ordinary profile and drop what the migration kept for review. One that also records what its
+  // migration mapped (#606) is 13: a version-12 release would drop the mapping, and a backup
+  // restored onto the profile later could then no longer be re-keyed.
+  clean.version = clean.handbookOrigin?.mapping
+    ? 13
+    : clean.handbookOrigin
+      ? 12
+      : linksNeedV11(clean.factoryGroups)
+        ? 11
+        : clean.storageEdits.bayOrder
+          ? 10
+          : linksNeedV9(clean.factoryGroups)
+            ? 9
+            : clean.storageEdits.bayFloors
+              ? 8
+              : clean.factoryGroups.links
+                ? 7
+                : clean.storageEdits.hiddenFloors.length
+                  ? 6
+                  : clean.storageEdits.hiddenBays.length
+                    ? 5
+                    : hasAddedSlots(clean.storageEdits)
+                      ? 4
+                      : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                        ? 3
+                        : hasEdits(clean.storageEdits)
+                          ? 2
+                          : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

@@ -170,6 +170,26 @@ export const version12 = {
   },
 } satisfies SavedState;
 
+// Version 13: a migrated profile that also records what its migration mapped (#606), so a
+// progress backup made before the migration can be re-keyed onto it later.
+export const version13 = {
+  ...version12,
+  version: 13,
+  handbookOrigin: {
+    ...version12.handbookOrigin,
+    mapping: {
+      rows: {
+        '3': { 'iron-plate': 'Recipe_IronPlate_C', 'iron-rod': 'Recipe_IronRod_C' },
+        '4': { 'iron-plate': 'Recipe_IronPlate_C' },
+        '5': {},
+      },
+      factories: ['iron-plate', 'iron-rod', 'plastic'],
+      knownChecks: { 'storage-ground-shell': true },
+      deliveries: { '3-versatile-framework': 125000 },
+    },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -185,6 +205,7 @@ export const states: [SavedState, number][] = [
   [version10, 10],
   [version11, 11],
   [version12, 12],
+  [version13, 13],
 ];
 
 export const backup = {
