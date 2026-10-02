@@ -3270,6 +3270,25 @@ button.rail-tile:hover {
   background: #241a18;
   color: #f3c4b8;
 }
+/* At the top when the focused control it is about lies under the bottom strip (#663,
+   app/toast-place.ts), over the sticky edit bar so it stays readable. */
+#toast[data-place='top'] {
+  top: 22px;
+  bottom: auto;
+  z-index: 40;
+}
+/* On a phone a wrapping toast keeps the page's 16px gutter on both sides (#663), rather than
+   growing left until it meets the screen edge. */
+@media (max-width: 720px) {
+  #toast {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+  #toast[data-place='top'] {
+    top: 16px;
+  }
+}
 .subnav {
   display: flex;
   gap: 15px;
