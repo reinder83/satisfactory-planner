@@ -4421,7 +4421,8 @@ button.rail-tile:hover {
 }
 /* On a phone the step tools take their own row under the title, so the title keeps the row's
    full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
-   keep their order, and their buttons grow to 44px touch targets. */
+   keep their order, and their buttons grow to 44px touch targets, as does Restore under
+   "Removed steps in this phase" (#717). */
 @media (max-width: 720px) {
   .task.is-editing {
     grid-template-columns: 20px 26px minmax(0, 1fr);
@@ -4433,6 +4434,10 @@ button.rail-tile:hover {
   }
   .task-tools .btn.quiet {
     min-width: 44px;
+    min-height: 44px;
+  }
+  /* Height only: a min-width would let the row's flex layout shrink Restore below its text. */
+  .removed-step .btn {
     min-height: 44px;
   }
 }
