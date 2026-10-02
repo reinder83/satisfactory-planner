@@ -25,7 +25,9 @@ import {
   shareState,
   calculatedProfile,
   checkBase,
+  checkNewProfileKind,
   checkPlanStart,
+  checkRoundUp,
   currentPayoff,
   phaseProgress,
   wholeMachineProfile,
@@ -170,13 +172,10 @@ export function createBrowserApi(
   }
   // Mirrors POST /api/profiles. Names are checked and the plan calculated first; the write
   // then re-finds the target save, applies the 50-save/30-profile limits and starts the state
-  // from newProfileState, optionally carrying progress from body.carryFrom. Unlike the server,
-  // it cannot create an 'original' (handbook) profile: every profile here is calculated.
+  // from newProfileState, optionally carrying progress from body.carryFrom. Like the server,
+  // it refuses kind 'original' (checkNewProfileKind): every new profile is calculated.
   async function createProfile({ body, options }: RouteRequest) {
-    if (body.kind === 'original')
-      throw Error(
-        'Handbook profiles can no longer be created. Create a calculated profile instead.',
-      );
+    checkNewProfileKind(body.kind);
     const profileName = cleanName(body.name),
       saveName = body.saveId ? null : cleanName(body.saveName),
       plan = await calculator(body.settings, options.onProgress),
@@ -308,9 +307,7 @@ export function createBrowserApi(
   // taken from the profile as it is at write time, so ticks made meanwhile in another tab carry.
   async function roundUp({ url, headers, options }: RouteRequest) {
     const before = scope(await store.transaction(), url, headers);
-    // A calculated profile always carries its plan.
-    if (before.profile.kind !== 'calculated' || before.profile.plan!.settings.wholeMachines)
-      throw Error('Choose a calculated profile without whole-machine production.');
+    checkRoundUp(before.profile);
     const rounded = await calculator(
         { ...before.profile.plan!.settings, wholeMachines: true },
         options.onProgress,

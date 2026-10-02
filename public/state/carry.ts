@@ -1,11 +1,13 @@
 // Carrying progress into a new profile (newProfileState, the carry options, carryGuide), the
 // profiles /api/profiles and /api/round-up add in both editions (calculatedProfile,
-// roundUpState, wholeMachineProfile) and sharing a profile without its progress (shareState).
+// roundUpState, wholeMachineProfile), their refusals (checkNewProfileKind, checkRoundUp) and
+// sharing a profile without its progress (shareState).
 // Re-exported by ../state.ts.
 import type {
   CalcRow,
   FactoryGroups,
   GroupAssignment,
+  ProfileKind,
   ProgressState,
   SavedState,
   StageKey,
@@ -268,6 +270,30 @@ export function carryGuide<T extends { stages: StoredCalculatedPlan['stages'] }>
     );
   }
   return { ...plan, guide: copy };
+}
+// The refusals of /api/profiles and /api/round-up, shared by both editions (save-routes.ts,
+// profile-routes.ts and browser-api.ts) so they say the same thing for the same request. They
+// describe the profile, not the retired handbook (owner decision 8 on #387, #705), and say what
+// to do instead. The original profile type cannot be created any more (#496).
+export const retiredProfileType =
+  'This profile type can no longer be created. Create a calculated profile instead.';
+export function checkNewProfileKind(kind: unknown) {
+  if (kind === 'original') fail(retiredProfileType);
+}
+// Only a calculated profile with exact ratios has production to round up to whole machines.
+export const roundUpNeedsCalculated =
+  "Only a calculated profile's production can be rounded up. Create a calculated profile to " +
+  'plan with whole machines.';
+export const alreadyWholeMachines =
+  'This profile already uses whole machines, so there is nothing to round up. Round up a ' +
+  'profile that uses exact ratios instead.';
+export function checkRoundUp(profile: {
+  kind: ProfileKind;
+  plan?: { settings: { wholeMachines?: boolean } } | null;
+}) {
+  if (profile.kind !== 'calculated') fail(roundUpNeedsCalculated);
+  // A calculated profile always carries its plan.
+  if (profile.plan!.settings.wholeMachines) fail(alreadyWholeMachines);
 }
 // The calculated profile /api/profiles adds in both editions (save-routes.ts createProfile and
 // browser-api.ts createProfile): its progress starts from newProfileState, carried from

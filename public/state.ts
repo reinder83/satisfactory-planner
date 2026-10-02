@@ -26,7 +26,8 @@
 //   state/mutate.ts          mutate (the /api/update operations), checkBase and checkPlanStart
 //   state/carry.ts           newProfileState, carry options, carryGuide, shareState and the
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
-//                            roundUpState, wholeMachineProfile)
+//                            roundUpState, wholeMachineProfile) and their refusals
+//                            (checkNewProfileKind, checkRoundUp)
 //   state/summary.ts         phaseProgress and currentPayoff
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 export {
@@ -44,12 +45,17 @@ export {
 } from './state/validate.ts';
 export { beforePlanStart, checkBase, checkPlanStart, mutate, staleWrite } from './state/mutate.ts';
 export {
+  alreadyWholeMachines,
   calculatedProfile,
   carryGuide,
   carryOptions,
   carryPicks,
+  checkNewProfileKind,
+  checkRoundUp,
   newProfileState,
   pickedRecipeUnlocks,
+  retiredProfileType,
+  roundUpNeedsCalculated,
   roundUpState,
   shareState,
   wholeMachineProfile,
