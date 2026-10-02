@@ -109,12 +109,9 @@ async function bundleApp() {
   if (!bundle || !('output' in bundle)) throw Error('build.ts: Vite returned no bundle');
   const chunks = bundle.output;
   const app = chunks.flatMap(c => (c.type === 'chunk' ? [c] : []));
-  // The components' <style> blocks (GroupLinks.vue, #674) come out as one stylesheet, which
-  // ships after style.css in the same file. Any other asset is a mistake.
-  const css = chunks.flatMap(c => (c.type === 'asset' && c.fileName.endsWith('.css') ? [c] : []));
-  if (app.length !== 1 || css.length > 1 || app.length + css.length !== chunks.length)
+  if (app.length !== 1 || chunks.some(c => c.type === 'asset'))
     throw Error('build.ts: expected app.js as the only output, got ' + chunks.map(c => c.fileName));
-  return { js: app[0]!.code, css: css.map(c => String(c.source)).join('') };
+  return app[0]!.code;
 }
 
 // Every script at the root of public/ and in SHARED_DIRS must be classified above, so a new one
@@ -127,14 +124,11 @@ for (const dir of ['', ...SHARED_DIRS])
   }
 
 async function writeScripts(out: string) {
-  const app = await bundleApp();
-  await fs.writeFile(path.join(out, 'app.js'), app.js);
+  await fs.writeFile(path.join(out, 'app.js'), await bundleApp());
   for (const dir of SHARED_DIRS) await fs.mkdir(path.join(out, dir), { recursive: true });
   for (const name of SHARED)
     await fs.writeFile(path.join(out, shipped(name)), await sharedJs(name));
-  // The components' styles come after style.css, as Vite adds them after it in development.
-  const css = (await read('public/style.css')) + '\n' + app.css;
-  await fs.writeFile(path.join(out, 'style.css'), await minifyCss(css));
+  await fs.writeFile(path.join(out, 'style.css'), await minifyCss(await read('public/style.css')));
 }
 
 // Docker edition: everything the server serves from public/, minus the module sources and docs.
