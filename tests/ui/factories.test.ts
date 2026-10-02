@@ -9,6 +9,7 @@ import { createApp, h, nextTick } from 'vue';
 import { FLUIDS, itemRate, lanePlan } from '../../public/app/flow.ts';
 import { groupLinks } from '../../public/app/group-links.ts';
 import { num, num3, slug as slugOf } from '../../public/app/format.ts';
+import { phaseStepIds } from '../../public/app/opening-phase.ts';
 import { taskIcon } from '../../public/app/tasks.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
@@ -2646,7 +2647,11 @@ test('between groups: recalculating with transport fuel creates a revision that 
     note(),
     /The vehicles on these links burn up to Phase 3: [\d.,]+ Packaged Fuel\/min/,
   );
-  // The new revision's context: the same plan, now with the fuel in its settings.
+  // The new revision's context: the same plan, now with the fuel in its settings. Its Phase 1
+  // and 2 milestones are ticked, so it opens on Phase 3 rather than on them (#570, #759).
+  const earlier = Object.fromEntries(
+    [...phaseStepIds('1'), ...phaseStepIds('2')].map(id => [id, true]),
+  );
   let sent: { settings: { transportFuel: object }; carryFrom: string; name: string } | undefined;
   const calls = stubFetch({
     '/api/profiles': (body: typeof sent) => {
@@ -2656,7 +2661,7 @@ test('between groups: recalculating with transport fuel creates a revision that 
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
       profile: { id: 'p', kind: 'calculated', name: 'Fuelled' },
-      state: { ...state, factoryGroups },
+      state: { ...state, factoryGroups, checks: { ...state.checks, ...earlier } },
       plan: {
         ...plan,
         settings: { ...plan.settings, transportFuel: sent!.settings.transportFuel },

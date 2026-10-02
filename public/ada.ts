@@ -76,6 +76,9 @@ export interface AdaFacts {
   backupDays: number | null;
   post: boolean;
   startPhase: string;
+  // The phase the profile's production starts in, as a label, while a milestone-only phase
+  // before it is shown (#759, milestoneOnly() in app/session.ts); '' otherwise.
+  milestoneOnly?: string;
   // The saved working phase, as a label, when the profile opened on an earlier phase that still
   // has open checks (#570, app/opening-phase.ts); '' otherwise.
   openedFrom: string;
@@ -539,7 +542,15 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.startPhase && facts.startPhase !== '1' && facts.kind === 'calculated',
     text: facts =>
-      `This profile begins at Phase ${facts.startPhase}, so the earlier phases are not offered. You have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`,
+      `This profile begins at Phase ${facts.startPhase}, so production is planned from there. The earlier phases list only their milestones: you have already passed them, and each phase plan is a self-contained steady state rather than a diff against the last one.`,
+  },
+  {
+    id: 'milestone-only',
+    on: ['plan', 'factories', 'resources'],
+    tone: 'calm',
+    when: facts => facts.milestoneOnly,
+    text: facts =>
+      `${facts.phaseLabel} is before this profile's production plan, which starts in ${facts.milestoneOnly}. Only its milestones are here. Paperwork from a phase you have already left: FICSIT never forgets an unticked box.`,
   },
   // Praise and follow-ups that apply once a counter is complete or a feature is in use.
   {

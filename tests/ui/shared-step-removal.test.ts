@@ -15,9 +15,10 @@ import { planTasks } from '../../public/app/tasks.ts';
 import { $, answerConfirms, generated, go, open, page } from './setup.ts';
 import type { Phase, TaskEdits } from '../../public/types/index.ts';
 
-// Tier 1: Base Building, which requiredMilestones (progression.ts) adds to every phase. It is a
-// Phase 1 milestone, so a profile that starts in Phase 3 lists it in Phase 3 only (#758).
-const MILESTONE = 'unlock-Schematic_1-1_C';
+// Tier 6: Industrial Manufacturing, which the plan's Phase 3 and later rows need. It is a Phase 3
+// milestone, so a profile that starts in Phase 3 lists it in Phase 3 only (#758). (A Phase 1
+// milestone such as Base Building is listed in the milestone-only Phase 1 since #759.)
+const MILESTONE = 'unlock-Schematic_5-2_C';
 // The biomass start-up, which every phase lists until Coal Power is ticked.
 const SHARED = 'startup-biomass';
 
@@ -47,7 +48,7 @@ const sharedNote = (id: string) =>
 test('the biomass start-up is shared with the later phases; a milestone and a phase-numbered step are not', async () => {
   await editPlan('3');
   const ids = planTasks().map(t => t.id);
-  assert.ok(ids.includes(MILESTONE), 'Phase 3 lists Tier 1: Base Building');
+  assert.ok(ids.includes(MILESTONE), 'Phase 3 lists Tier 6: Industrial Manufacturing');
   assert.ok(ids.includes(SHARED), 'and the biomass start-up');
   assert.ok(ids.includes('calc-3-storage'), 'and its own storage step');
   const shared = sharedStepPhases([MILESTONE, SHARED, 'calc-3-storage']);
