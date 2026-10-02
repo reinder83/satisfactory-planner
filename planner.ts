@@ -2055,7 +2055,7 @@ function shortfallReason(
       ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
       : 'The goal exceeds the available resource or power budgets.') +
     (stage.minHours
-      ? ` It fits the current budgets at about ${stage.minHours} hours for this phase.`
+      ? ` It fits the current budgets at ${warningDuration(stage.minHours)} for this phase.`
       : config.goal === 'maximum'
         ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
         : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.')
@@ -2359,13 +2359,22 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
         row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6,
       );
       const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock');
-      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
+      return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes ${warningDuration(stage.hours!)} instead of ${warningDuration(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
 }
-// Hours in a warning: two decimals below 10 hours, so a short maximum-output phase still shows
-// the difference.
-const warningHours = (value: number) =>
-  value < 10 ? Math.round(value * 100) / 100 : Math.round(value * 10) / 10;
+// A phase time in a warning or draft reason, given in hours, in the words ADA, the plan header
+// and the Review step use (durationOfHours in public/app/format.ts, #740): "45 minutes",
+// "about 7 h 52 min", "about 8 h". Kept here rather than imported, as planner.ts ships to the
+// browser without public/app (build.ts); tests/warning-durations.test.ts checks the two agree.
+export function warningDuration(hours: number): string {
+  const minutes = hours * 60;
+  const count = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (minutes < 1) return 'less than a minute';
+  const whole = Math.round(minutes);
+  if (whole < 60) return `${count(whole)} minute${whole === 1 ? '' : 's'}`;
+  const rest = whole % 60;
+  return `about ${count(Math.floor(whole / 60))} h` + (rest ? ` ${count(rest)} min` : '');
+}
 // Phases whose search stopped and that no rounded whole-machine plan fit, so they are the exact
 // plan with easy clocks (#694), one sentence each.
 function fractionalWarnings({ stages }: FinishedPlan): string[] {
@@ -2375,7 +2384,7 @@ function fractionalWarnings({ stages }: FinishedPlan): string[] {
       const { target, clocks } = stage.fractionalAfterStop!;
       const longer =
         stage.hours! > target * 1.01
-          ? ` It takes about ${warningHours(stage.hours!)} hours instead of ${warningHours(target)}.`
+          ? ` It takes ${warningDuration(stage.hours!)} instead of ${warningDuration(target)}.`
           : '';
       return `Phase ${phase} is not whole machines: its whole-machine search stopped before it could prove the best plan, and rounding its exact plan to whole machines found no plan that fits the budgets within 50% more time. ${fractionalClocks(clocks)}${longer}${offGridLines(stage, clocks)} Fewer alternates or precise balancing usually let the search finish.`;
     });
