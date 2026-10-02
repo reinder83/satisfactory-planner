@@ -518,6 +518,28 @@ input[type='radio'] {
   font-size: 10.5px;
   letter-spacing: 0.1em;
 }
+/* Beside the phone drawer the remark is cut to four lines (three on a short screen, below),
+   so the sidebar fits the window without a scrollbar (#738). More (AdaPanel.vue), offered
+   only when the cut hides something, shows all of it. In the 204px sidebar it wraps under
+   the other two buttons. */
+@media (min-width: 721px) {
+  .ada-line {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+  }
+  .ada-line.is-full {
+    display: block;
+    -webkit-line-clamp: none;
+    line-clamp: none;
+  }
+  .ada-tools {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+}
 .ada.is-muted {
   display: flex;
   align-items: center;
@@ -3944,6 +3966,47 @@ button.rail-tile:hover {
   }
   .aisle {
     margin: 0 6px;
+  }
+}
+/* A short window beside the phone layout (a 1366 × 768 laptop, a 1440 × 900 screen with the
+   browser's own bars): the sidebar tightens its spacing and cuts ADA's remark to three lines,
+   so it still fits without scrolling (#738). */
+@media (min-width: 721px) and (max-height: 880px) {
+  .sidebar {
+    padding: 12px 0 10px;
+  }
+  .brand {
+    padding-bottom: 10px;
+  }
+  .nav {
+    margin-top: 4px;
+  }
+  .nav a {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .ada {
+    margin-top: 10px;
+  }
+  .ada-head {
+    margin-bottom: 5px;
+  }
+  .ada-line {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+  .ada-tools {
+    margin-top: 6px;
+  }
+  .save-status {
+    padding-top: 10px;
+  }
+}
+/* Shorter still, the sidebar scrolls: keep the scrollbar's room reserved, so it appearing
+   or going with ADA's remark never narrows the sidebar and re-wraps its lines (#738). */
+@media (min-width: 721px) and (max-height: 720px) {
+  .sidebar {
+    scrollbar-gutter: stable;
   }
 }
 @media (max-width: 720px) {
