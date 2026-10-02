@@ -1,6 +1,7 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, a summary line (factories,
-  storage and power, each linking to its page, and the delivery time; SP-43), the checklist
+  storage and power, each linking to its page, and the delivery time; SP-43), why it opened on an
+  earlier phase than the saved one when it did (ui/plan/OpenedEarlierNotice.vue, #666), the checklist
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
   "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions, then the
@@ -30,6 +31,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
@@ -98,6 +100,7 @@ const page = computed(() =>
       Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
       elevator exports as needed and sink spare parts.
     </div>
+    <OpenedEarlierNotice />
     <div class="split">
       <section>
         <div class="section-head">
