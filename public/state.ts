@@ -40,6 +40,7 @@ export {
   handbookFloor,
   initialState,
   linkPlaces,
+  mappingFits,
   safeKey,
   slotPosition,
   validateState,

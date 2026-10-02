@@ -8,7 +8,7 @@
 // It is generic: a handbook an older release exported may have other factory ids or a recipe
 // this recipes.json no longer has. Such a factory is left out and reported in `skipped`, never
 // guessed; the state migration (#487) keeps its progress in handbookOrigin.unmapped.
-import { safeKey, validateState } from './state.ts';
+import { mappingFits, safeKey, validateState } from './state.ts';
 import type {
   CalcRow,
   GuideStep,
@@ -389,7 +389,10 @@ export function handbookMapping(
 // The Plastic and Rubber campus ticks are not guessed (decision 6B): the conversion skipped
 // them, so they land in unmapped. A state that already carries handbookOrigin is returned as it
 // is, so migrating twice equals migrating once. The result records the mapping
-// (handbookOrigin.mapping) when there is one; without one (a restore onto a profile whose
+// (handbookOrigin.mapping) when there is one and it fits mappingLimits: it only re-keys a later
+// restore, so a handbook too large for it (a hand-made or damaged one of the profile's own)
+// migrates without it, as version 12, rather than failing; a later restore then keeps the
+// backup's handbook-keyed records for review. Without a mapping (a restore onto a profile whose
 // handbook is unknown, restoreProgress), every handbook-keyed record goes to unmapped.
 export function migrateHandbookState(
   state: SavedState,
@@ -494,7 +497,7 @@ function rekeyHandbookState(
     handbookOrigin: {
       version,
       unmapped,
-      ...(mapping ? { mapping: structuredClone(mapping) } : {}),
+      ...(mapping && mappingFits(mapping) ? { mapping: structuredClone(mapping) } : {}),
     },
   });
 }

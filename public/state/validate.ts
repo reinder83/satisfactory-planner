@@ -357,6 +357,16 @@ export function validateOrigin(raw: unknown): HandbookOrigin | undefined {
   if (mapping) out.mapping = mapping;
   return out;
 }
+// The most handbookOrigin.mapping may hold (#606): row ids per stage, factory ids, knownChecks and
+// deliveries. A stored handbook has no such limits, so the migration records a mapping only when
+// it fits them (mappingFits); a profile whose handbook is larger migrates without one.
+export const mappingLimits = { rows: 1000, factories: 1000, knownChecks: 20000, deliveries: 1000 };
+// Whether a mapping is within mappingLimits, so validateState accepts it.
+export const mappingFits = ({ rows, factories, knownChecks, deliveries }: HandbookMapping) =>
+  Object.values(rows).every(ids => Object.keys(ids).length <= mappingLimits.rows) &&
+  factories.length <= mappingLimits.factories &&
+  Object.keys(knownChecks).length <= mappingLimits.knownChecks &&
+  Object.keys(deliveries).length <= mappingLimits.deliveries;
 // Returns a clean copy of handbookOrigin.mapping (#606), or undefined when absent: what the
 // migration mapped, which re-keys a progress backup made before it (restoreProgress in
 // handbook-migration.ts). Every id passes safeKey, as the records it re-keys do.
@@ -367,7 +377,8 @@ function validateMapping(raw: unknown, bad: () => never): HandbookMapping | unde
   const out: HandbookMapping = { rows: {}, factories: [], knownChecks: {}, deliveries: {} };
   if (!plain(rows)) bad();
   for (const [stage, ids] of Object.entries(rows as Raw)) {
-    if (!['3', '4', '5'].includes(stage) || !plain(ids) || Object.keys(ids).length > 1000) bad();
+    if (!['3', '4', '5'].includes(stage) || !plain(ids)) bad();
+    if (Object.keys(ids).length > mappingLimits.rows) bad();
     const stageRows: Record<string, string> = {};
     for (const [factoryId, rowId] of Object.entries(ids as Raw)) {
       if (!safeKey(factoryId) || !safeKey(rowId)) bad();
@@ -375,17 +386,17 @@ function validateMapping(raw: unknown, bad: () => never): HandbookMapping | unde
     }
     out.rows[stage as '3' | '4' | '5'] = stageRows;
   }
-  if (!Array.isArray(factories) || factories.length > 1000) bad();
+  if (!Array.isArray(factories) || factories.length > mappingLimits.factories) bad();
   for (const factoryId of factories as unknown[]) {
     if (!safeKey(factoryId) || out.factories.includes(factoryId)) bad();
     out.factories.push(factoryId as string);
   }
-  if (!plain(knownChecks) || Object.keys(knownChecks).length > 20000) bad();
+  if (!plain(knownChecks) || Object.keys(knownChecks).length > mappingLimits.knownChecks) bad();
   for (const [key, value] of Object.entries(knownChecks as Raw)) {
     if (!safeKey(key) || typeof value !== 'boolean') bad();
     out.knownChecks[key] = value as boolean;
   }
-  if (!plain(deliveries) || Object.keys(deliveries).length > 1000) bad();
+  if (!plain(deliveries) || Object.keys(deliveries).length > mappingLimits.deliveries) bad();
   for (const [key, value] of Object.entries(deliveries as Raw)) {
     if (!safeKey(key) || !Number.isSafeInteger(value) || (value as number) < 0) bad();
     if ((value as number) > 1000000000) bad();

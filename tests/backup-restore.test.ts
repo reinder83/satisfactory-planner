@@ -24,7 +24,8 @@ import {
   migrateOriginalProfile,
   restoreProgress,
 } from '../public/handbook-migration.ts';
-import { validateState } from '../public/state.ts';
+import { mappingFits, validateState } from '../public/state.ts';
+import { mappingLimits } from '../public/state/validate.ts';
 import { calculate, catalog } from '../planner.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
 import { frozenHandbook, recipes } from './helpers/data.ts';
@@ -138,6 +139,26 @@ test('handbookOrigin.mapping is kept exactly, and a malformed one is refused', (
       /Invalid record of an earlier profile conversion\./,
       JSON.stringify(bad),
     );
+  // The limits are mappingLimits, which the migration checks before recording one (mappingFits).
+  const ids = (count: number) => Array.from({ length: count }, (_, i) => `id-${i}`);
+  const entries = <T>(count: number, value: T) =>
+    Object.fromEntries(ids(count).map(id => [id, value]));
+  for (const [part, value] of [
+    ['rows', (count: number) => ({ '3': entries(count, 'Recipe_IronPlate_C') })],
+    ['factories', ids],
+    ['knownChecks', (count: number) => entries(count, true)],
+    ['deliveries', (count: number) => entries(count, 1)],
+  ] as const) {
+    const at = { ...mapping, [part]: value(mappingLimits[part]) };
+    const over = { ...mapping, [part]: value(mappingLimits[part] + 1) };
+    assert.ok(mappingFits(at) && !mappingFits(over), part);
+    const origin = (m: unknown) => ({
+      ...structuredClone(version13),
+      handbookOrigin: { ...version13.handbookOrigin, mapping: m },
+    });
+    assert.equal(validateState(origin(at)).version, 13, part);
+    assert.throws(() => validateState(origin(over)), /Invalid record/, part);
+  }
 });
 
 test('restoreProgress re-keys a backup made before the migration by the recorded mapping', () => {
@@ -215,6 +236,8 @@ type Edition = {
   // Resolves with the reply, or rejects with the refusal's message.
   request: (route: string, profile: string, body?: unknown) => Promise<unknown>;
   close: () => Promise<unknown>;
+  // The Docker edition's data directory.
+  dataDir?: string;
 };
 const plan = handbookToPlan(frozenHandbook, recipes, pureLimits).plan;
 const profiles = (original: StoredProfile): StoredProfile[] => [
@@ -249,13 +272,14 @@ const save = (original: StoredProfile): BrowserSave => ({
 });
 
 // The Docker edition, from a workspace.json whose original profile has no handbook of its own:
-// it migrates with the frozen copy.
-async function docker(): Promise<Edition> {
+// it migrates with the frozen copy. With `own`, the original profile carries that handbook.
+async function docker(own?: Handbook): Promise<Edition> {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-restore-'));
   const original: StoredProfile = {
     id: 'original',
     name: 'Original · 50× complete automation',
     kind: 'original',
+    ...(own ? { handbook: structuredClone(own) } : {}),
     state: structuredClone(firstState),
   };
   await fs.writeFile(
@@ -270,7 +294,10 @@ async function docker(): Promise<Edition> {
       sessions: [],
     }),
   );
-  const server = await createApp({ dataDir, password: '' });
+  const server = await createApp({ dataDir, password: '' }).catch(async error => {
+    await fs.rm(dataDir, { recursive: true, force: true });
+    throw error;
+  });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
   return {
@@ -289,6 +316,7 @@ async function docker(): Promise<Edition> {
       if (!response.ok) throw Error(reply.error);
       return reply;
     },
+    dataDir,
     close: async () => {
       await new Promise(resolve => server.close(resolve));
       await fs.rm(dataDir, { recursive: true, force: true });
@@ -297,12 +325,12 @@ async function docker(): Promise<Edition> {
 }
 // The Pages edition, from an IndexedDB record whose original profile carries its own handbook,
 // as every one there does.
-async function pages(): Promise<Edition> {
+async function pages(own = ownHandbook): Promise<Edition> {
   const original: StoredProfile = {
     id: 'original',
     name: 'Original · 50× complete automation',
     kind: 'original',
-    handbook: structuredClone(ownHandbook),
+    handbook: structuredClone(own),
     state: structuredClone(firstState),
   };
   const record: BrowserWorkspace = {
@@ -443,3 +471,124 @@ for (const [edition, open] of [
       await close();
     }
   });
+
+// The mapping is optional: it only re-keys a later restore, so it never makes the migration fail.
+// A handbook of the profile's own (hand-made or damaged) may hold more factories or deliveries
+// than handbookOrigin.mapping may record (mappingLimits); such a profile migrates as it did
+// before the mapping existed, as version 12 without one, and a later restore of a backup made
+// before the migration keeps that backup's handbook-keyed records for review. Its version is not
+// the frozen handbook's, so the Docker edition does not re-key with that either.
+const oversized = (extra: 'factories' | 'deliveries', count = 1001): Handbook => {
+  const handbook = structuredClone(ownHandbook);
+  handbook.version = '2026-09-13-extended';
+  for (let i = 1; i <= count; i++)
+    if (extra === 'factories')
+      handbook.factories.push({
+        id: `extra-${i}`,
+        name: `Extra ${i}`,
+        page: 1,
+        note: '',
+        stages: {},
+      });
+    else
+      handbook.deliveries.push({
+        id: `extra-delivery-${i}`,
+        phase: '3',
+        name: `Extra delivery ${i}`,
+        target: 10,
+        rate: 0,
+        initial: 1,
+      });
+  return handbook;
+};
+// The first release's state, plus a tick and a note for an added factory.
+const extendedState: SavedState = {
+  ...structuredClone(firstState),
+  checks: { ...firstState.checks, 'factory-3-extra-7': true },
+  notes: { ...firstState.notes, 'factory-extra-7': 'Hand-made' },
+};
+// The migrated state of an original profile with `handbook` and extendedState.
+const migratedWith = (handbook: Handbook) => {
+  const profile = migrateOriginalProfile(
+    {
+      id: 'original',
+      name: 'Original',
+      kind: 'original',
+      handbook: structuredClone(handbook),
+      state: structuredClone(extendedState),
+    },
+    frozenHandbook,
+    recipes,
+    pureLimits,
+  );
+  assert.equal(profile.kind, 'calculated');
+  // An original profile always comes back migrated, as its kind (checked above) says.
+  return profile.state as ProgressState;
+};
+// What a migration of `state` with `handbook` must keep, with a mapping or without.
+const checkMigrated = (before: SavedState, state: ProgressState, handbook: Handbook) => {
+  everyRecordKept(before, state, handbookToPlan(handbook, recipes, pureLimits));
+  assert.equal(state.handbookOrigin!.version, handbook.version);
+  for (const delivery of handbook.deliveries)
+    if (delivery.initial > 0 && !(delivery.id in before.deliveries))
+      assert.equal(state.deliveries[delivery.id], delivery.initial, delivery.id);
+};
+
+for (const extra of ['factories', 'deliveries'] as const)
+  test(`an own handbook with more ${extra} than a mapping may record migrates without one`, () => {
+    const handbook = oversized(extra);
+    const conversion = handbookToPlan(handbook, recipes, pureLimits);
+    assert.ok(Object.keys(handbookMapping(handbook, conversion)[extra]).length > 1000);
+    const state = migratedWith(handbook);
+    assert.equal(state.version, 12);
+    assert.equal('mapping' in state.handbookOrigin!, false);
+    checkMigrated(extendedState, state, handbook);
+    assert.equal(state.handbookOrigin!.unmapped.checks['factory-3-extra-7'], true);
+    // A valid state, and migrating it again changes nothing.
+    assert.deepEqual(validateState(structuredClone(state)), state);
+    assert.deepEqual(migrateHandbookState(state, handbook, conversion), state);
+  });
+
+test('an own handbook at the limit still records its mapping', () => {
+  const handbook = oversized('factories', 1000 - ownHandbook.factories.length);
+  const state = migratedWith(handbook);
+  assert.equal(state.version, 13);
+  assert.equal(state.handbookOrigin!.mapping!.factories.length, 1000);
+  checkMigrated(extendedState, state, handbook);
+});
+
+for (const [edition, open] of [
+  ['Docker', docker],
+  ['Pages', pages],
+] as const)
+  for (const extra of ['factories', 'deliveries'] as const)
+    test(`${edition} edition: an original profile whose own handbook has more ${extra} than a mapping may record opens`, async () => {
+      const handbook = oversized(extra);
+      const { request, close, dataDir } = await open(handbook);
+      const state = async () => (await request('/api/state', 'original')) as ProgressState;
+      try {
+        const after = await state();
+        assert.equal(after.version, 12);
+        assert.equal('mapping' in after.handbookOrigin!, false);
+        checkMigrated(firstState, after, handbook);
+        // The server kept its pre-migration copy.
+        if (dataDir) await fs.access(path.join(dataDir, 'workspace.json.pre-handbook'));
+        // A backup made before the migration: its handbook-keyed records are kept for review.
+        const restored = (await request(
+          '/api/import',
+          'original',
+          backupOf(v11State),
+        )) as ProgressState;
+        everyRecordKept(v11State, restored, { rows: {} });
+        assert.equal(restored.version, 12);
+        assert.equal(restored.handbookOrigin!.version, handbook.version);
+        assert.equal('mapping' in restored.handbookOrigin!, false);
+        const unmapped = restored.handbookOrigin!.unmapped;
+        assert.equal(unmapped.checks['factory-3-iron-ingot'], true);
+        assert.equal(unmapped.notes['factory-wire'], 'By the river');
+        assert.deepEqual(unmapped.assignments, v11State.factoryGroups!.assignments);
+        assert.deepEqual(await state(), restored);
+      } finally {
+        await close();
+      }
+    });
