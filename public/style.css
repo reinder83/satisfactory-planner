@@ -4435,6 +4435,14 @@ button.rail-tile:hover {
   display: inline-block;
   margin-top: 8px;
 }
+/* On a phone "Open factory: … ↗" under a step is a 44px touch target (#749). Height only: the
+   link is already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
+@media (max-width: 720px) {
+  .task-link {
+    display: inline-flex;
+    min-height: 44px;
+  }
+}
 .task-edit {
   display: block;
   border: 1px solid var(--warm-border);
