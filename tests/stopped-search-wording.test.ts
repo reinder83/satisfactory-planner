@@ -73,7 +73,10 @@ test('a phase rounded after a stopped search is compared with its exact plan’s
   const slower = withStoppedPhase(settings, 5);
   const longer = slower.warnings.find(line => line.startsWith('Phase 5: the whole-machine search'));
   assert.ok(longer);
-  assert.match(longer, /this phase takes about \d+(\.\d+)? hours instead of 8\.33\b/);
+  assert.match(
+    longer,
+    /this phase takes about [\d.,]+ h( [\d.,]+ min)? instead of about 8 h 20 min\b/,
+  );
 });
 
 test('easy clocks after a stopped search are compared with the exact plan’s time (#708)', () => {
@@ -84,5 +87,5 @@ test('easy clocks after a stopped search are compared with the exact plan’s ti
   const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));
   assert.ok(warning);
   assert.ok(stage.hours! > exact.hours! * 1.01, `the easy clocks slow it (${stage.hours})`);
-  assert.match(warning, /It takes about \d+(\.\d+)? hours instead of 8\.33\./);
+  assert.match(warning, /It takes about [\d.,]+ h( [\d.,]+ min)? instead of about 8 h 20 min\./);
 });
