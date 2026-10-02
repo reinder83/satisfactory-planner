@@ -24,15 +24,27 @@ const settings = {
   uraniumReactors: 50,
   existingSupply: { 'Circuit Board': 13.3 },
 };
+// The CPU time this thread has used, in milliseconds: the work it has done, which other
+// processes do not stretch. Before Node 23.9 it is the whole process's, which also counts its
+// helper threads and so only makes the machine seem slower still.
+function cpuMs(): number {
+  const usage = process.threadCpuUsage?.() ?? process.cpuUsage();
+  return (usage.user + usage.system) / 1000;
+}
 // Runs `body` on a machine that seems `factor` times slower: the solver reads the time through
-// performance.now and Date.now, so both run `factor` times faster while it works.
+// performance.now and Date.now, so both advance by `factor` times the CPU time it uses. Wall
+// time would also count the time the system gives to other processes, such as the test files
+// `node --test` runs alongside this one, and under that load a phase seemed to pass the limit it
+// keeps on a quiet machine (#709). CPU time advances in steps (about 16 ms on Windows, so 1.6 s
+// here), which is fine-grained enough against the limit of 180 s.
 function onSlowerMachine<T>(factor: number, body: () => T): T {
   const now = performance.now,
     dateNow = Date.now;
-  const start = now.call(performance),
+  const cpuStart = cpuMs(),
+    start = now.call(performance),
     dateStart = dateNow();
-  performance.now = () => start + (now.call(performance) - start) * factor;
-  Date.now = () => dateStart + (dateNow() - dateStart) * factor;
+  performance.now = () => start + (cpuMs() - cpuStart) * factor;
+  Date.now = () => dateStart + (cpuMs() - cpuStart) * factor;
   try {
     return body();
   } finally {

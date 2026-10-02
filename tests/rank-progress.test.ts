@@ -15,21 +15,8 @@ const alternates = DATA.recipes
   .map(recipe => recipe.id);
 const settings = { phase: '1', recipes: 'custom', alternateRecipes: alternates.slice(1) };
 
-// Runs `body` on a machine that seems `factor` times slower (as in phase-deadline.test.ts).
-function onSlowerMachine<T>(factor: number, body: () => T): T {
-  const now = performance.now,
-    dateNow = Date.now;
-  const start = now.call(performance),
-    dateStart = dateNow();
-  performance.now = () => start + (now.call(performance) - start) * factor;
-  Date.now = () => dateStart + (dateNow() - dateStart) * factor;
-  try {
-    return body();
-  } finally {
-    performance.now = now;
-    Date.now = dateNow;
-  }
-}
+// How many rankings the gap test times (see there).
+const RUNS = 10;
 
 test('a ranking reports as each phase of its calculations starts (#633)', () => {
   const calls: (number | string)[] = [];
@@ -51,22 +38,26 @@ test('a ranking reports as each phase of its calculations starts (#633)', () => 
 });
 
 test('no gap between a ranking’s progress messages passes the worker’s limit on a slow machine (#633)', () => {
-  // Slow the machine down so the ranking's two calculations take twice the limit in all. Its
+  // On a machine slow enough that the ranking's two calculations take twice the limit in all, its
   // longest phase is about a fifth of that, so every gap stays well inside the limit, where
-  // before #633 the first message came only after both calculations.
-  const warm = performance.now();
-  rankAlternates(settings, { phase: '4' });
-  const factor = (2 * WORKER_LIMIT_MS) / (performance.now() - warm);
-  const times: number[] = [];
-  const { started, ended } = onSlowerMachine(factor, () => {
-    const started = Date.now();
-    const mark = () => times.push(Date.now());
+  // before #633 the first message came only after both calculations. The whole ranking takes
+  // about a tenth of a second here, so a moment the system gives to the test files `node --test`
+  // runs alongside this one could make a gap look several times longer than its work (#709).
+  // Other load only ever adds time, so each gap counts at its shortest over several rankings.
+  const runs = Array.from({ length: RUNS }, () => {
+    const times = [performance.now()];
+    const mark = () => times.push(performance.now());
     rankAlternates(settings, { phase: '4', onPhase: mark, onProgress: mark });
-    return { started, ended: Date.now() };
+    mark();
+    return times.slice(1).map((time, index) => time - times[index]!);
   });
-  const marks = [started, ...times, ended];
-  marks.slice(1).forEach((time, index) => {
-    const seconds = (time - marks[index]!) / 1000;
+  // runs[0] is there: RUNS is above 0. Every ranking sends the same messages.
+  const gaps = runs[0]!.map((_, index) => Math.min(...runs.map(run => run[index]!)));
+  for (const run of runs) assert.equal(run.length, gaps.length, 'the same messages every time');
+  // How many times slower the machine is: the ranking takes twice the limit there.
+  const factor = (2 * WORKER_LIMIT_MS) / gaps.reduce((total, gap) => total + gap, 0);
+  gaps.forEach((gap, index) => {
+    const seconds = (gap * factor) / 1000;
     assert.ok(
       seconds * 1000 < WORKER_LIMIT_MS,
       `${seconds.toFixed(0)} s without progress after message ${index} on the slow machine`,
