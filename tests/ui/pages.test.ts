@@ -207,6 +207,53 @@ test('a profile card fills earlier phases with their real share of ticked lines 
   );
 });
 
+// The card fills each phase with its build-plan steps ticked when the summary has them (#746),
+// and a phase with an open step never reads 100%: one open step of 200 is 99%, not a rounded
+// 100%, both in the label and in the segment.
+test('a profile card counts steps, and an unfinished phase reads at most 99% (#746)', () => {
+  const workspace = {
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'p',
+        profiles: [
+          {
+            id: 'p',
+            kind: 'calculated',
+            name: 'Plan',
+            completed: 230,
+            phase: '3',
+            phases: [
+              { phase: '1', done: 13, total: 13, steps: { done: 199, total: 200 } },
+              { phase: '2', done: 2, total: 5, steps: { done: 20, total: 20 } },
+              { phase: '3', done: 1, total: 8, steps: { done: 399, total: 400 } },
+              { phase: '4', done: 0, total: 9, steps: { done: 0, total: 30 } },
+            ],
+          },
+        ],
+      },
+    ],
+  } satisfies Partial<WorkspaceSummary>;
+  open({ workspace });
+  go('profiles');
+  render();
+  const bar = $('[data-phase-bar="p"]')!;
+  assert.equal(bar.getAttribute('aria-label'), 'Phase 3 of 5, 99%; Phase 1 is 99% done');
+  assert.deepEqual(
+    [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(segment => [
+      segment.dataset.phaseSeg,
+      (segment.firstElementChild as HTMLElement).style.width,
+    ]),
+    [
+      ['1', '99%'],
+      ['2', '100%'],
+      ['3', '99%'],
+      ['4', '0%'],
+    ],
+  );
+});
+
 // A profile card counts its ticked checks in words that agree with the number (#421).
 test('a profile card says 1 check, N checks, or none yet', () => {
   const card = (id: string, completed: number): ProfileSummary => ({

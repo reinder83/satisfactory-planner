@@ -7,15 +7,23 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { openingPhase, phaseStepIds } from '../../public/app/opening-phase.ts';
-import { loadContext, openedFrom, phase, state } from '../../public/app/session.ts';
+import {
+  loadContext,
+  openedFrom,
+  phase,
+  progressionData,
+  state,
+} from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
-import { $, applyUpdate, generatedWith, handbook, open, page, stubFetch } from './setup.ts';
+import { planStepIds, profilePhases } from '../../public/state.ts';
+import { $, applyUpdate, generatedWith, go, handbook, open, page, stubFetch } from './setup.ts';
 import type {
   ContextReply,
   CurrentCalculatedPlan,
   Phase,
+  ProfileSummary,
   StageKey,
   UpdateOp,
 } from '../../public/types/index.ts';
@@ -221,4 +229,87 @@ test('the handbook, saved on Phase 5, opens on Phase 3 while its steps are open'
   });
   assert.deepEqual(shownPhase(), { phase: '3', picker: '3', track: '3' });
   assert.equal(state.settings.phase, '5');
+});
+
+// The save list counts each phase's steps without the browser session (planStepIds in
+// public/state/summary.ts, #746), from the stored plan, checks and progression.json. They must
+// be the steps phaseStepIds gives: removed steps left out, personal tasks in, whatever the
+// saved order (which only moves steps).
+test('the summary counts the steps phaseStepIds gives, for every phase', () => {
+  // A plan from Phase 1 plans every phase, each with production rows (the `!`s below).
+  const plan = phaseOnePlan();
+  for (const stage of ['1', '2', '3', '4', '5'] as StageKey[]) {
+    const edits = {
+      checks: { ['calc-' + stage + '-' + plan.stages[stage]!.rows![0]!.id]: true },
+      customTasks: [{ id: 'custom-' + stage, phase: stage, title: 'Mine' }],
+      taskEdits: {
+        order: { [stage]: ['custom-' + stage] },
+        removed: ['calc-' + stage + '-storage'],
+        titles: {},
+        bodies: {},
+        links: {},
+      },
+    };
+    open({ calculated: plan, phase: otherPhase(stage), state: structuredClone(edits) });
+    assert.deepEqual(
+      [...planStepIds(plan, state, progressionData, stage)].sort(),
+      [...phaseStepIds(stage)].sort(),
+      'Phase ' + stage,
+    );
+  }
+});
+
+// The issue's reproduction (#746): a profile starting in Phase 1, working on Phase 3, with every
+// Phase 1 production line ticked and its other steps open. It opens on Phase 1, so its card must
+// not draw Phase 1 as finished; it names Phase 1 as the earlier phase still open.
+const cardFor = (checks: Record<string, boolean>) => {
+  const phases = profilePhases(phaseOnePlan(), { checks, customTasks: [] }, progressionData)!;
+  const summary: ProfileSummary = {
+    id: 'p',
+    kind: 'calculated',
+    name: 'Started in Phase 1',
+    completed: Object.keys(checks).length,
+    phase: '3',
+    phases,
+  };
+  // A fresh document, as opening Saves & profiles from another page draws it.
+  page();
+  open({
+    workspace: { saves: [{ id: 's', name: 'Save', activeProfile: 'p', profiles: [summary] }] },
+  });
+  go('profiles');
+  render();
+  const bar = $('[data-phase-bar="p"]')!;
+  return {
+    label: bar.getAttribute('aria-label'),
+    fill: Object.fromEntries(
+      [...bar.querySelectorAll<HTMLElement>('.phase-seg')].map(segment => [
+        segment.dataset.phaseSeg,
+        (segment.firstElementChild as HTMLElement).style.width,
+      ]),
+    ),
+  };
+};
+
+test('a profile card names the earlier phase the profile opens on (#746)', async () => {
+  // A plan from Phase 1 plans every phase, each with production rows (the `!`s below).
+  const plan = phaseOnePlan();
+  const lines = Object.fromEntries(plan.stages['1']!.rows!.map(row => ['calc-1-' + row.id, true]));
+  const card = cardFor(lines);
+  open();
+  await openThrough(calculatedReply('3', lines));
+  assert.equal(phase(), '1', 'the profile opens on Phase 1');
+  // The first earlier phase the card names is the one the profile opens on.
+  assert.match(card.label!, /^Phase 3 of 5, \d+%; Phase 1 is \d+% done; Phase 2 is \d+% done$/);
+  assert.notEqual(card.fill['1'], '100%', 'Phase 1 is not drawn as finished');
+  // Every Phase 1 step and one Phase 2 line ticked: the profile opens on Phase 2 and the card
+  // draws Phase 1 full and names Phase 2.
+  const checks = { ...ticked(plan, ['1']), ['calc-2-' + plan.stages['2']!.rows![0]!.id]: true };
+  const next = cardFor(checks);
+  open();
+  await openThrough(calculatedReply('3', checks));
+  assert.equal(phase(), '2', 'the profile opens on Phase 2');
+  assert.match(next.label!, /^Phase 3 of 5, \d+%; Phase 2 is \d+% done$/);
+  assert.equal(next.fill['1'], '100%');
+  assert.notEqual(next.fill['2'], '100%');
 });

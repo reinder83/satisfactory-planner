@@ -1,7 +1,7 @@
 // The top bar's phase track (SP-44, #279, ui/Shell.vue): one segment per phase the phase picker
 // offers (phaseOptions()), each with how far its checklist has come. A calculated profile counts
-// its production lines ticked Running, as the profile card's bar does (phaseProgress in state.ts,
-// SP-32); the handbook counts its phase steps. Post-game has no checklist of its own, so its
+// its production lines ticked Running (phaseProgress in state.ts; the profile card counts steps,
+// #746); the handbook counts its phase steps. Post-game has no checklist of its own, so its
 // segment shows no progress. Only saved checks are read.
 import { phaseProgress } from '../../state.ts';
 import { calculated, checked, phaseLabel, phaseOptions, plan, state } from '../session.ts';

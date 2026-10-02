@@ -128,7 +128,8 @@ export interface ProfileSummary {
   completed: number;
   phase: Phase;
   // A calculated profile's progress per phase it plans, from its start phase (SP-32): the
-  // production lines ticked Running over the phase's lines. Absent without a calculated plan.
+  // production lines ticked Running over the phase's lines, and its build-plan steps ticked
+  // (`steps`, #746). Absent without a calculated plan.
   phases?: PhaseProgress[];
 }
 
@@ -136,6 +137,9 @@ export interface PhaseProgress {
   phase: StageKey;
   done: number;
   total: number;
+  // The phase's build-plan steps (planStepIds in public/state/summary.ts) ticked, over all of
+  // them (#746). Absent where the summary had no progression.json, and in replies before #746.
+  steps?: { done: number; total: number };
 }
 
 export interface SaveSummary {

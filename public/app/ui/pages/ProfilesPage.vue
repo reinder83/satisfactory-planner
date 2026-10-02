@@ -74,31 +74,38 @@ const page = computed(() =>
   })),
 );
 // A calculated profile's progress bar (SP-32): a segment per phase it plans, each filled with its
-// share of production lines ticked Running. Phases before the one worked on fill green (`done`),
-// that one in the accent (`current`), later ones are empty; Post Phase 5 works on Phase 5's lines.
-// An earlier phase is not drawn as finished while it has open lines (#667): opening the profile
-// lands on the first earlier phase with open checks (phaseToOpen, #570). The label says it
-// without colour: "Phase 3 of 5, 22%", plus any earlier phase still open, "Phase 3 of 5, 0%;
-// Phase 2 is 40% done". None without per-phase counts (a handbook profile).
+// share of build-plan steps ticked (`steps`, #746; production lines ticked Running from a summary
+// without them). Phases before the one worked on fill green (`done`), that one in the accent
+// (`current`), later ones are empty; Post Phase 5 works on Phase 5's steps. An earlier phase is
+// not drawn as finished while it has an open step (#667, #746): opening the profile lands on the
+// first earlier phase with open checks (phaseToOpen, #570), and the steps counted are the ones
+// it looks at. A phase with an open step reads at most 99%, so it never says "100% done". The
+// label says it without colour: "Phase 3 of 5, 22%", plus any earlier phase still open, "Phase 3
+// of 5, 0%; Phase 2 is 40% done". None without per-phase counts (a handbook profile).
 function phaseBar(profile: ProfileSummary) {
   if (!profile.phases?.length) return null;
   const at = profile.phase === 'post' ? 5 : Number(profile.phase);
+  const counts = profile.phases.map(entry => ({ phase: entry.phase, ...(entry.steps ?? entry) }));
   const share = (entry: { done: number; total: number }) =>
-    entry.total ? Math.round((entry.done / entry.total) * 100) : 0;
-  const current = profile.phases.find(entry => Number(entry.phase) === at);
+    !entry.total
+      ? 0
+      : entry.done >= entry.total
+        ? 100
+        : Math.min(99, Math.round((entry.done / entry.total) * 100));
+  const current = counts.find(entry => Number(entry.phase) === at);
   const percent = current ? share(current) : 0;
-  const open = profile.phases.filter(entry => Number(entry.phase) < at && entry.done < entry.total);
+  const open = counts.filter(entry => Number(entry.phase) < at && entry.done < entry.total);
   return {
     label:
       `${profile.phase === 'post' ? phaseLabel('post') : `Phase ${at} of 5`}, ${percent}%` +
       open.map(entry => `; Phase ${entry.phase} is ${share(entry)}% done`).join(''),
-    segments: profile.phases.map(entry => {
+    segments: counts.map(entry => {
       const phaseNumber = Number(entry.phase);
       const state = phaseNumber < at ? 'done' : phaseNumber === at ? 'current' : 'later';
       return {
         phase: entry.phase,
         state,
-        // An earlier phase without lines to count has nothing open, so it reads as done.
+        // An earlier phase without steps to count has nothing open, so it reads as done.
         fill: state === 'later' ? 0 : state === 'done' && !entry.total ? 100 : share(entry),
       };
     }),
