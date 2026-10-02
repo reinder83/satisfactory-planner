@@ -22,7 +22,6 @@ import { isTranscribed, restoreProgress, type MigrationData } from './handbook-m
 import {
   validateState,
   mutate,
-  shareState,
   calculatedProfile,
   checkBase,
   checkNewProfileKind,
@@ -32,12 +31,7 @@ import {
   phaseProgress,
   wholeMachineProfile,
 } from './state.ts';
-import {
-  importableTransfer,
-  transferFormat,
-  transferFileSize,
-  transferImportLimit,
-} from './transfer.ts';
+import { exportQuery, importableTransfer, remapImportedIds, selectForExport } from './transfer.ts';
 import type {
   AlternateRanking,
   BrowserSave,
@@ -214,50 +208,17 @@ export function createBrowserApi(
       };
     });
   }
-  // Mirrors GET /api/export-saves: all saves, the listed ones (?saves=), one save (?save=), or
-  // one profile (?profile=, with ?share=1 stripping progress through shareState). Only an unscoped full export stamps
-  // lastBackup, which is why this runs as a readwrite transaction. Unlike the server it adds no
-  // default handbook to 'original' profiles; an imported one keeps its own.
+  // Mirrors GET /api/export-saves: the saves the query selects (selectForExport in
+  // transfer.ts), kept as they are stored, without a payoff ranking. Only an export that counts
+  // as a backup stamps lastBackup, which is why this runs as a readwrite transaction. Unlike the
+  // server it adds no default handbook to 'original' profiles; an imported one keeps its own.
   function exportSaves({ url }: RouteRequest) {
-    const saveId = url.searchParams.get('save'),
-      profileId = url.searchParams.get('profile'),
-      share = url.searchParams.get('share') === '1',
-      chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
+    const query = exportQuery(url.searchParams);
     return store.transaction(data => {
-      let saves = structuredClone(data.saves);
-      if (chosen) {
-        saves = saves.filter(s => chosen.includes(s.id));
-        if (saves.length !== new Set(chosen).size) throw Error('Save not found.');
-      }
-      if (saveId) {
-        saves = saves.filter(s => s.id === saveId);
-        if (!saves.length) throw Error('Save not found.');
-      }
-      if (profileId) {
-        saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
-        if (!saves.length) throw Error('Profile not found.');
-      }
-      for (const save of saves) {
-        if (profileId) save.profiles = save.profiles.filter(p => p.id === profileId);
-        // The filters above keep only saves with a matching profile.
-        if (!save.profiles.some(p => p.id === save.activeProfile))
-          save.activeProfile = save.profiles[0]!.id;
-        if (share) for (const profile of save.profiles) profile.state = shareState(profile.state);
-        // A payoff ranking is derived and can be run again; exports leave it out, as on the server.
-        for (const profile of save.profiles) delete profile.payoff;
-      }
-      const exportedAt = new Date().toISOString();
-      const exported = { format: transferFormat, version: 1, exportedAt, saves };
-      // Only a full export counts as a backup, and not one past the import limit: the
-      // Backup page refuses to download that (#118), so it must not reset the reminder.
-      if (
-        !chosen &&
-        !saveId &&
-        !profileId &&
-        !share &&
-        transferFileSize(exported) <= transferImportLimit
-      )
-        data.lastBackup = exportedAt;
+      const { exported, countsAsBackup } = selectForExport(data.saves, query, message => {
+        throw Error(message);
+      });
+      if (countsAsBackup()) data.lastBackup = exported.exportedAt;
       return exported;
     });
   }
@@ -287,14 +248,7 @@ export function createBrowserApi(
     return store.transaction(data => {
       if (data.saves.length + imported.saves.length > 50)
         throw Error('Import would exceed the save limit.');
-      for (const save of imported.saves) {
-        const oldActive = save.activeProfile;
-        for (const importedProfile of save.profiles) {
-          const previous = importedProfile.id;
-          importedProfile.id = randomId();
-          if (previous === oldActive) save.activeProfile = importedProfile.id;
-        }
-        save.id = randomId();
+      for (const save of remapImportedIds(imported, randomId)) {
         data.saves.push(save);
         data.activeSave = save.id;
       }
