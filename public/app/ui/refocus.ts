@@ -144,3 +144,23 @@ export function refocusOnOpenedPage(trigger: EventTarget | null): () => Promise<
     if (lost(trigger)) focusHeading();
   };
 }
+
+// For a write refused after another tab or device changed the profile (queuedWrite in api.ts,
+// #722): the page is redrawn from the saved state, and the control that was pressed may go with
+// it (a Remove on a bay that is already gone, a Restore on a letter that another bay took). Call
+// it before the reload with the control that had focus, and the function it returns after the
+// redraw; that focuses the page's heading, without scrolling, only when the redraw took focus
+// away (on <body>, or the element left the page). Focus that was nowhere stays nowhere, and a
+// control that is still there keeps it, also when Vue patched it in place.
+export function refocusAfterRefresh(focused: Element | null): () => Promise<void> {
+  const had = !!focused && focused !== document.body;
+  return async () => {
+    await nextTick();
+    const current = document.activeElement;
+    if (!had || (current && current !== document.body && current.isConnected)) return;
+    const target =
+      document.querySelector<HTMLElement>('#main h1') ??
+      document.querySelector<HTMLElement>('#main');
+    target?.focus({ preventScroll: true });
+  };
+}
