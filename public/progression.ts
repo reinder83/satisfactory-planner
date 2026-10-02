@@ -60,8 +60,11 @@ const COLLECTIBLES = [
 // Phase 2 and so on, with 9 in Phase 5.
 const phaseForTier = (tier: number) =>
   tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
-const formatNumber = (value: unknown) =>
-  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+// Locale-formatted with at most 2 decimals, exactly as Number(value).toLocaleString(undefined,
+// { maximumFractionDigits: 2 }) would, but with one shared formatter: toLocaleString with options
+// builds a new Intl.NumberFormat on every call, which was most of phaseSteps' time (#772).
+const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+export const formatNumber = (value: unknown): string => numberFormat.format(Number(value));
 
 // The generated guidance steps of a calculated profile for one phase, called by phaseSteps below
 // (calcTasks in app/views/calculated.ts). `plan` is the profile's calculation snapshot, `state` its
