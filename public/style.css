@@ -376,6 +376,9 @@ input[type='radio'] {
   line-height: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  /* A long word in the profile's name breaks inside the button rather than running past the
+     sidebar's edge (#713). */
+  overflow-wrap: anywhere;
 }
 .profile-switcher:hover,
 .profile-switcher[aria-expanded='true'] {
@@ -406,6 +409,7 @@ input[type='radio'] {
 }
 .sidebar-foot .action-menu-list .btn {
   white-space: normal;
+  overflow-wrap: anywhere;
   text-align: left;
   padding: 8px 12px;
 }
@@ -422,6 +426,7 @@ input[type='radio'] {
 }
 /* "Open" beside the open profile; aria-checked says so to a screen reader. */
 .action-menu-mark {
+  flex: none;
   margin-left: auto;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10.5px;
