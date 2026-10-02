@@ -28,7 +28,8 @@ for (const target of targets)
 // server imports some of them, browser-check.ts imports browser-api.js into the page, and
 // each must stay one module instance. Only public/app/ (and app-root.ts) is bundled. Each
 // public/<name>.ts ships as <name>.js. The modules state.ts re-exports, in public/state/, ship
-// the same way, as state/<name>.js (#532).
+// the same way, as state/<name>.js (#532), and so do the ones preferences.ts re-exports, in
+// public/preferences/, as preferences/<name>.js (#777).
 const SHARED = [
   'ada.ts',
   'browser-api.ts',
@@ -40,6 +41,13 @@ const SHARED = [
   'storage-room.ts',
   'transfer.ts',
   'wording.ts',
+  'preferences/extraction.ts',
+  'preferences/fuels.ts',
+  'preferences/guided.ts',
+  'preferences/help.ts',
+  'preferences/presets.ts',
+  'preferences/storage.ts',
+  'preferences/world.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
   'state/mutate.ts',
@@ -47,7 +55,7 @@ const SHARED = [
   'state/validate.ts',
 ];
 // The folders of public/ that hold shared scripts.
-const SHARED_DIRS = ['state'];
+const SHARED_DIRS = ['state', 'preferences'];
 const BUNDLED = ['app.ts', 'app-root.ts'];
 const shipped = (name: string) => name.replace(/\.ts$/, '.js');
 // A file's path under public/ as SHARED lists it ('state/mutate.ts').
