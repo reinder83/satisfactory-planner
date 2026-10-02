@@ -79,8 +79,8 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   for (const [resource, draw] of Object.entries(stage.raw || {}))
     assert.ok(draw <= plan.settings.limits[resource]! + 0.01, `${resource} ${draw} within budget`);
   assertBalanced(stage, 'Phase 5');
-  // At the target time: lines rounded to their nearest clock may slow it by at most 5% (the
-  // balanced goal's rates make the exact plan itself take 8.33 hours).
+  // These clocks fit at the target time, where lines rounded to their nearest clock may slow it
+  // by at most 5% (the balanced goal's rates make the exact plan itself take 8.33 hours).
   assert.ok(stage.hours! <= (25 / 3) * 1.05 + 0.01, `at most 5% slower (${stage.hours})`);
   const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));
   assert.ok(warning, 'the plan says so');
@@ -99,13 +99,48 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   assert.deepEqual(withStoppedPhase(settings, 5).stages['5'].rows, stage.rows, 'deterministic');
 });
 
-test('a phase no clock rounding fits is its exact plan, said so plainly (#694)', () => {
-  // Maximum output with the standard recipes runs Phase 5 against its Crude Oil budget, and no
-  // rounding of its lines fits there (#701): the phase is the exact plan with its precise clocks.
+test('easy clocks may take longer than the target where they do not fit at it (#701)', () => {
+  // Maximum output with the standard recipes runs Phase 5 against its Crude Oil budget: no
+  // rounding of its lines fits at the target time or 5% longer. The owner's decision in #701:
+  // try longer times, as the whole-machine rounding does, rather than fall back to precise clocks.
   const maximum = { ...settings, goal: 'maximum', multiplier: 2, limitsConfirmed: true };
   const plan = withStoppedPhase(maximum, 5);
   const stage = plan.stages['5'];
   const exact = calculate({ ...maximum, wholeMachines: false }).stages['5'];
+  assert.equal(stage.feasible, true, 'the phase is planned, not a draft');
+  assert.equal(stage.roundedAfterStop, undefined, 'no whole-machine rounding fit');
+  assert.equal(stage.fractionalAfterStop?.target, exact.hours, 'the target is the exact time');
+  assert.notEqual(stage.fractionalAfterStop?.clocks, 'precise', 'easy-to-set clocks');
+  assert.ok(stage.hours! > exact.hours! * 1.05, `more than 5% longer (${stage.hours})`);
+  assert.ok(stage.hours! <= exact.hours! * 1.5 + 1e-6, `at most 50% longer (${stage.hours})`);
+  for (const [resource, draw] of Object.entries(stage.raw || {}))
+    assert.ok(draw <= plan.settings.limits[resource]! + 0.01, `${resource} ${draw} within budget`);
+  assertBalanced(stage, 'Phase 5');
+  // The warning states the longer time against the target, as ADA does.
+  const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));
+  assert.ok(warning, 'the plan says so');
+  assert.match(warning, /its exact plan with easy clocks/);
+  const hours = (value: number) => String(Math.round(value * 100) / 100).replace('.', '\\.');
+  assert.match(
+    warning,
+    new RegExp(`It takes about ${hours(stage.hours!)} hours instead of ${hours(exact.hours!)}\\.`),
+  );
+  assert.deepEqual(withStoppedPhase(maximum, 5).stages['5'].rows, stage.rows, 'deterministic');
+});
+
+test('a phase no clock rounding fits is its exact plan, said so plainly (#694)', () => {
+  // Maximum output with all recipes runs Phase 3 in minutes, and no rounding of its lines fits
+  // even 50% longer: the phase is the exact plan with its precise clocks.
+  const maximum = {
+    ...settings,
+    recipes: 'all',
+    goal: 'maximum',
+    multiplier: 1,
+    limitsConfirmed: true,
+  };
+  const plan = withStoppedPhase(maximum, 3);
+  const stage = plan.stages['3'];
+  const exact = calculate({ ...maximum, wholeMachines: false }).stages['3'];
   assert.equal(stage.feasible, true, 'the phase is planned, not a draft');
   assert.deepEqual(stage.fractionalAfterStop, { target: exact.hours, clocks: 'precise' });
   assert.equal(stage.hours, exact.hours, 'at the exact plan’s time');
@@ -114,7 +149,7 @@ test('a phase no clock rounding fits is its exact plan, said so plainly (#694)',
     exact.rows!.map(row => [row.id, row.equivalent]),
     'with the exact plan’s lines',
   );
-  const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));
+  const warning = plan.warnings.find(line => line.startsWith('Phase 3 is not whole machines'));
   assert.ok(warning);
   assert.match(warning, /its exact plan, with precise clocks/);
 });
