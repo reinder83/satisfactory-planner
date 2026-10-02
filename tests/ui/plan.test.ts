@@ -135,7 +135,25 @@ test('the plan shows one progress bar and a summary line linking to each page (S
     ],
   );
   assert.match(calculatedSummary[0]![2]!, /^0 of \d+ production lines running, [\d,.]+ buildings$/);
-  assert.match(calculatedSummary[3]![2]!, /^Delivery in [\d,.]+ h at steady state$/);
+  assert.match(
+    calculatedSummary[3]![2]!,
+    /^Delivery in (about [\d,.]+ h( [\d,.]+ min)?|[\d,.]+ minutes?|less than a minute) at steady state$/,
+  );
+});
+
+// #643: the header writes the phase's delivery time as the elevator counter writes a wait.
+test('the plan header writes the delivery time in hours and minutes', () => {
+  const hoursText = (hours: number) => {
+    page();
+    const plan = makeGenerated();
+    plan.stages['3'] = { ...plan.stages['3'], hours };
+    open({ calculated: plan });
+    render();
+    return $('#main [data-summary=hours]')!.textContent!.trim();
+  };
+  assert.equal(hoursText(7.86), 'Delivery in about 7 h 52 min at steady state');
+  assert.equal(hoursText(8), 'Delivery in about 8 h at steady state');
+  assert.equal(hoursText(0.75), 'Delivery in 45 minutes at steady state');
 });
 
 test('a duplicated or imported original profile also starts from the handbook counts', () => {
