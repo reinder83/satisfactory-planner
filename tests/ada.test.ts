@@ -177,6 +177,18 @@ test('ADA leads with the page you are looking at', () => {
   );
 });
 
+test('ADA says an empty phase was emptied only when steps were removed (#646)', () => {
+  const empty = (removedSteps: number) =>
+    adaRemarks(facts({ steps: { done: 0, total: 0 }, next: '', removedSteps })).find(
+      r => r.id === 'empty-phase',
+    )!.text;
+  assert.match(empty(3), /Every step of Phase 3 has been removed/);
+  assert.match(empty(3), /Removed steps/);
+  assert.match(empty(0), /Phase 3 has no steps yet/);
+  assert.match(empty(0), /Add a task/);
+  assert.doesNotMatch(empty(0), /removed|Removed steps/i);
+});
+
 test('ADA notices the states that are not just a number', () => {
   assert.equal(
     first(facts({ kind: 'none', steps: { done: 0, total: 0 }, next: '' })).id,
