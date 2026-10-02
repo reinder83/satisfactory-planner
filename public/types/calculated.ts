@@ -257,14 +257,15 @@ export interface StageResult {
   nuclearPeriod?: number;
   nuclearFractional?: boolean;
   // The whole-machine search stopped before it could prove the best plan, so the exact plan was
-  // rounded to whole machines instead (#593): the hours the phase was asked to finish in. The
-  // stage's own `hours` can be longer. Absent from older plans and from a search that finished.
+  // rounded to whole machines instead (#593): the hours the exact plan takes (#708; plans from
+  // before that recorded the hours the phase was asked to finish in, the goal's). The stage's own
+  // `hours` can be longer. Absent from older plans and from a search that finished.
   roundedAfterStop?: number;
   // The search stopped and no rounded whole-machine plan fit either, so the phase is its exact
-  // plan with easy clocks (#694): the hours it was asked to finish in, and the clocks its last
-  // machines take ('easy' 25%, 50% or 75%; 'rate' also a whole number of items per minute;
-  // 'precise' the exact plan's own clocks). Absent from older plans and from a search that
-  // finished.
+  // plan with easy clocks (#694): the hours the exact plan takes (as `roundedAfterStop`, #708),
+  // and the clocks its last machines take ('easy' 25%, 50% or 75%; 'rate' also a whole number of
+  // items per minute; 'precise' the exact plan's own clocks). Absent from older plans and from a
+  // search that finished.
   fractionalAfterStop?: FractionalAfterStop;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.

@@ -64,7 +64,8 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   const stage = plan.stages['5'];
   assert.equal(stage.feasible, true, 'the phase is planned, not a draft');
   assert.equal(stage.roundedAfterStop, undefined, 'no whole-machine rounding fit');
-  assert.deepEqual(stage.fractionalAfterStop, { target: 8, clocks: 'easy' });
+  // The exact plan's time: the balanced goal's rounded rates make it 8.33 hours (#708).
+  assert.deepEqual(stage.fractionalAfterStop, { target: 25 / 3, clocks: 'easy' });
   const solid = stage.rows!.filter(roundsWhole);
   assert.ok(solid.length > 20, 'with many solid-part lines');
   for (const row of solid)
@@ -86,7 +87,7 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   assert.ok(warning, 'the plan says so');
   assert.match(warning, /stopped before it could prove the best plan/);
   assert.match(warning, /runs at 25%, 50% or 75%/);
-  assert.match(warning, /takes about \d+(\.\d+)? hours instead of 8\b/);
+  assert.match(warning, /takes about \d+(\.\d+)? hours instead of 8\.33\./);
   assert.doesNotMatch(
     warning,
     /keeps? a precise clock/,
