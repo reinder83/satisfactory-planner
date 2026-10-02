@@ -1,3 +1,5 @@
+import type { HandbookOrigin } from '../../types/index.ts';
+
 // How old the browser edition's last full backup is (SP-40, #275): workspace.lastBackup, the
 // time of the last "Export all saves" in this browser (browser-api.ts). The Backup page shows
 // it as a status and the sidebar repeats a short version under the save indicator; ADA's
@@ -34,4 +36,29 @@ export function backupAge(lastBackup: string | null | undefined, now = Date.now(
     short: 'Backed up ' + (days > 1 ? days + 'd ago' : ago),
     stale: days > STALE_BACKUP_DAYS,
   };
+}
+
+// What the Backup page says after a progress backup is restored (#760). Restoring an old
+// backup onto a profile moved from the original plan can keep some of its ticks, notes and
+// group assignments for review (handbookOrigin.unmapped, restoreProgress in
+// handbook-migration.ts), shown on the Notes page under "From the original plan". Only the
+// records the restore newly put there count: a key the review list did not show before. Both
+// editions reply to /api/import with the restored state, so `before` is the state the page had
+// and `after` that reply.
+type Reviewable = { handbookOrigin?: HandbookOrigin };
+export function newlyForReview(before: Reviewable, after: Reviewable): number {
+  const had = before.handbookOrigin?.unmapped;
+  const now = after.handbookOrigin?.unmapped;
+  if (!now) return 0;
+  let count = 0;
+  for (const kind of ['checks', 'notes', 'assignments'] as const)
+    for (const key of Object.keys(now[kind])) if (!had || !(key in had[kind])) count++;
+  return count;
+}
+export function restoreMessage(before: Reviewable, after: Reviewable): string {
+  const count = newlyForReview(before, after);
+  if (!count) return 'Backup restored.';
+  return count === 1
+    ? 'Backup restored. 1 item from the original plan needs your review in Notes.'
+    : `Backup restored. ${count} items from the original plan need your review in Notes.`;
 }
