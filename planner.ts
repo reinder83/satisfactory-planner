@@ -13,8 +13,9 @@
 // Units: items per minute (m³ per minute for fluids) and MW. Recipe rates in recipes.json are for
 // one machine at 100% clock, so a recipe's LP variable counts machine-equivalents.
 //
-// build.ts finds the node:fs import, the preferences.ts path and the recipes.json read below by
-// exact string match and replaces them for the browser; keep those three snippets unchanged.
+// build.ts finds the node:fs import, the preferences.ts and wording.ts paths and the recipes.json
+// read below by exact string match and replaces them for the browser; keep those snippets
+// unchanged.
 import {
   droneFuels,
   vehicleFuels,
@@ -29,6 +30,7 @@ import {
   powerOptions,
   resourceDefaults,
 } from './public/preferences.ts';
+import { durationOfHours, listNames } from './public/wording.ts';
 import fs from 'node:fs';
 import { setSearchDeadline, solve, type LpModel } from './optimizer.ts';
 import type {
@@ -1977,9 +1979,8 @@ function draftStage(config: CurrentSettings, phase: number, result: Unsolved): C
 // Does the exact LP fit the real budgets at `hours` hours for this phase?
 const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
   run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion }).feasible;
-// "A", "A and B", "A, B and C": names, phase numbers and items in prose (#611).
-export const listNames = (list: string[]) =>
-  list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0];
+// "A", "A and B", "A, B and C" (public/wording.ts), exported for tests/phase-list-wording.test.ts.
+export { listNames };
 // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
 // doubled budgets to measure which resources need headroom and how much; keep bounds modest for
 // MIP stability. Sets `wholeMachinesOnly` and the `shortfalls` it measured on the draft.
@@ -2363,18 +2364,9 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
     });
 }
 // A phase time in a warning or draft reason, given in hours, in the words ADA, the plan header
-// and the Review step use (durationOfHours in public/app/format.ts, #740): "45 minutes",
-// "about 7 h 52 min", "about 8 h". Kept here rather than imported, as planner.ts ships to the
-// browser without public/app (build.ts); tests/warning-durations.test.ts checks the two agree.
-export function warningDuration(hours: number): string {
-  const minutes = hours * 60;
-  const count = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (minutes < 1) return 'less than a minute';
-  const whole = Math.round(minutes);
-  if (whole < 60) return `${count(whole)} minute${whole === 1 ? '' : 's'}`;
-  const rest = whole % 60;
-  return `about ${count(Math.floor(whole / 60))} h` + (rest ? ` ${count(rest)} min` : '');
-}
+// and the Review step use (#740): "45 minutes", "about 7 h 52 min", "about 8 h". The same
+// function as public/app/format.ts's durationOfHours, from public/wording.ts (#763).
+export const warningDuration = durationOfHours;
 // Phases whose search stopped and that no rounded whole-machine plan fit, so they are the exact
 // plan with easy clocks (#694), one sentence each.
 function fractionalWarnings({ stages }: FinishedPlan): string[] {

@@ -1,4 +1,5 @@
 // Small DOM and text helpers shared by every screen.
+import { duration, durationOfHours } from '../wording.ts';
 
 // The first element matching `selector`, or null. `E` narrows the element type for TypeScript
 // callers (`$<HTMLDialogElement>('#detail')`); it is not checked at run time.
@@ -45,18 +46,10 @@ export const slug = (text: string): string =>
 export const plural = (count: number, word: string): string =>
   num(count) + ' ' + word + (count === 1 ? '' : 's');
 
-// A wait of `minutes` as a plain duration (#624): "less than a minute", "1 minute", "52 minutes",
-// then hours and whole minutes from an hour on ("about 7 h 52 min", "about 8 h").
-export function duration(minutes: number): string {
-  if (minutes < 1) return 'less than a minute';
-  const whole = Math.round(minutes);
-  if (whole < 60) return plural(whole, 'minute');
-  const rest = whole % 60;
-  return `about ${num(Math.floor(whole / 60))} h` + (rest ? ` ${num(rest)} min` : '');
-}
-
-// A phase's delivery time, given in hours, in the same words (#643): "about 7 h 52 min".
-export const durationOfHours = (hours: number): string => duration(hours * 60);
+// A wait of `minutes` as a plain duration (#624), and a phase's time given in hours in the same
+// words (#643): "45 minutes", "about 7 h 52 min". They live in public/wording.ts, which the
+// planner's warnings use too (#763).
+export { duration, durationOfHours };
 
 // The item searches (ui/form/ItemSearch.vue): up to `limit` of `items` for the typed text,
 // case-insensitive, names that start with it first, then names that merely contain it.
