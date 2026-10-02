@@ -34,7 +34,8 @@ export function openingPhase(
 
 // The check ids of a phase's build-plan steps as the open profile shows them (planTasks() in
 // tasks.ts for that phase): its generated steps and personal tasks, less the removed ones. A
-// milestone counts in each phase whose list shows it, so it holds open the first of them.
+// milestone is listed once, under its own phase (milestonesListedIn in progression.ts, #758), so
+// it holds that phase open.
 export const phaseStepIds = (phase: StageKey): string[] => planTasks(phase).map(task => task.id);
 
 // The ids of the phase's generated steps, before edits (generatedTasks() in tasks.ts: calcTasks()

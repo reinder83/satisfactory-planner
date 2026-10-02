@@ -90,7 +90,10 @@ export function progression(
   return {
     baseTasks: baseTasks(context),
     powerTasks: powerTasks(context),
-    milestoneTasks: milestoneTasks(context, requiredMilestones(context)),
+    milestoneTasks: milestoneTasks(
+      context,
+      phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage),
+    ),
     hardDrives: hardDriveTasks(context),
     retire: retireTasks(context),
   };
@@ -240,14 +243,44 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   return [...required.values()];
 }
 
-// Whether an unlock can be researched by `stage`: a HUB milestone by its tier, a MAM node by
-// the latest first-available phase of its cost items, collectibles aside.
-function researchable(entry: ProgressionEntry, data: Progression, stage: number): boolean {
-  if (!entry.mam) return phaseForTier(entry.tier) <= stage;
+// The phase an unlock belongs to, the first in which it can be researched: a HUB milestone its
+// tier's phase, a MAM node the latest first-available phase of its cost items, collectibles aside.
+export function milestonePhase(entry: ProgressionEntry, data: Progression): number {
+  if (!entry.mam) return phaseForTier(entry.tier);
   const phases = Object.keys(entry.cost)
     .filter(item => !COLLECTIBLES.includes(item))
     .map(item => data.availability[item] || 1);
-  return Math.max(1, ...phases) <= stage;
+  return Math.max(1, ...phases);
+}
+
+// Whether an unlock can be researched by `stage`.
+const researchable = (entry: ProgressionEntry, data: Progression, stage: number): boolean =>
+  milestonePhase(entry, data) <= stage;
+
+// The milestones whose unlock step phase `stage` (1-5) of the profile lists (#758). The profile
+// lists every milestone one of its planned phases (its start phase on) needs and can research by
+// then (requiredMilestones), each once, under its own phase (milestonePhase), so a Tier 2 unlock
+// only Phase 3's rows need is a Phase 1 step. The build plan offers no phase before the start
+// phase, so a milestone of an earlier phase is listed in the start phase. Post-game, planned as
+// Phase 5, lists none (progression() above): they are all in Phase 5. The check key stays
+// `unlock-<id>` whichever phase lists the step. milestoneTasks orders the list.
+export function milestonesListedIn(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: { checks: Record<string, boolean> },
+  data: Progression,
+  stage: number,
+): ProgressionEntry[] {
+  const start = Number(plan.settings.phase || 1),
+    listed = new Map<string, ProgressionEntry>();
+  const planned = (['1', '2', '3', '4', '5'] as const).filter(
+    key => Number(key) >= start && plan.stages[key],
+  );
+  for (const key of planned)
+    for (const entry of requiredMilestones(guideContext(plan, state, data, key)))
+      if (!entry.alternate && researchable(entry, data, Number(key))) listed.set(entry.id, entry);
+  return [...listed.values()].filter(
+    entry => Math.max(start, milestonePhase(entry, data)) === stage,
+  );
 }
 
 // Depth-first, so every prerequisite in the list comes before what needs it; otherwise keeps
@@ -268,7 +301,8 @@ function prerequisitesFirst(milestones: ProgressionEntry[]): ProgressionEntry[] 
   return ordered;
 }
 
-// One unlock step per required milestone this phase can research. Alternate recipes are left
+// One unlock step per milestone of `required` this phase can research (progression() passes the
+// phase's milestonesListedIn). Alternate recipes are left
 // out: they come from hard drives (hardDriveTasks). Prerequisites come before dependents;
 // among otherwise independent unlocks, costs with running supply come first.
 export function milestoneTasks(context: GuideContext, required: ProgressionEntry[]): GuideTask[] {
