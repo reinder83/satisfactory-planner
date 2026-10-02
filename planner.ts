@@ -962,29 +962,43 @@ function roundedFallback(
 const stoppedTarget = ({ config, maximum }: PhaseContext, base: Solved) =>
   maximum ? base.hours : goalHours(config);
 // No rounded whole-machine plan fits, even 50% longer (#694, the owner's decision in #593:
-// "easy to set" fractions). Plan the exact plan's network at the target time with each solid-part
-// line on whole machines at 100% but the last, which runs at 25%, 50%, 75% or 100% ('easy'). Where
-// that does not fit, the last machine may also run at any clock that makes a whole number of the
-// line's product per minute ('rate'), a figure the game's clock panel takes as well. Each is
-// rounded as roundedFallback's first step rounds (nearest, then all up, at most 5% slower), the
-// amplified variant before the unamplified one. When neither fits, or time runs out, the phase is
-// the exact plan itself ('precise'), which fits by definition, so a stopped search never costs
+// "easy to set" fractions). Plan the exact plan's network with each solid-part line on whole
+// machines at 100% but the last, which runs at 25%, 50%, 75% or 100% ('easy'). Where that does
+// not fit, the last machine may also run at any clock that makes a whole number of the line's
+// product per minute ('rate'), a figure the game's clock panel takes as well. Each is rounded as
+// roundedFallback rounds, at each time of ROUNDED_STRETCH, shortest first: under maximum output the
+// quarter grid can fit only from 10% longer, and the owner chose easy clocks at a longer time
+// over precise ones at the target (#701). At each time: easy clocks, then rate clocks, each
+// amplified before unamplified, nearest then all up. When none fits, or time runs out, the phase
+// is the exact plan itself ('precise'), which fits by definition, so a stopped search never costs
 // the phase. The stage records the target and the clocks as `fractionalAfterStop`.
 function easyClockFallback(context: PhaseContext, base: Solved, fallback: StoppedFallback): Solved {
   const target = stoppedTarget(context, base);
-  const time = { target, stretch: 1, next: ROUNDED_STRETCH[1]! };
-  for (const clocks of ['easy', 'rate'] as const)
-    for (const variant of fallback.variants) {
-      const fitted = roundedTry(context, variant, time, clocks, fallback);
-      if (fitted?.feasible)
-        return fallback.marked(variant, { ...fitted, fractionalAfterStop: { target, clocks } });
-    }
-  // The exact plan is unamplified (exactFit), so it is marked as the last variant.
-  return fallback.marked(fallback.variants.at(-1)!, {
+  // Lines that take turns being rounded up do so at any time, so a grid and variant that did not
+  // settle are not tried longer.
+  const unsettled = new Set<string>();
+  for (const [step, stretch] of ROUNDED_STRETCH.entries()) {
+    const time = { target, stretch, next: ROUNDED_STRETCH[step + 1] ?? stretch };
+    for (const clocks of ['easy', 'rate'] as const)
+      for (const [index, variant] of fallback.variants.entries()) {
+        const key = `${clocks}:${index}`;
+        if (unsettled.has(key)) continue;
+        const fitted = roundedTry(context, variant, time, clocks, fallback);
+        if (!fitted) return exactFallback(fallback, base, target);
+        if (fitted.feasible)
+          return fallback.marked(variant, { ...fitted, fractionalAfterStop: { target, clocks } });
+        if (fitted.solverStatus === UNSETTLED) unsettled.add(key);
+      }
+  }
+  return exactFallback(fallback, base, target);
+}
+// easyClockFallback's last resort: the exact plan itself, with its precise clocks. It is
+// unamplified (exactFit), so it is marked as the last variant.
+const exactFallback = (fallback: StoppedFallback, base: Solved, target: number): Solved =>
+  fallback.marked(fallback.variants.at(-1)!, {
     ...base,
     fractionalAfterStop: { target, clocks: 'precise' },
   });
-}
 // One try of the fallbacks after a stopped search: `variant` at `stretch` times the `target`,
 // its lines rounded to the `clocks` grid (roundedFit). Returns null when the time is up.
 function roundedTry(
