@@ -36,7 +36,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { progression } from '../public/progression.ts';
+import { phaseSteps, progression } from '../public/progression.ts';
 import {
   carryOptions,
   initialState,
@@ -76,6 +76,7 @@ function ui() {
     adaEncore,
     makeFault,
     progression,
+    phaseSteps,
     carryOptions,
     initialState,
     pickedRecipeUnlocks,

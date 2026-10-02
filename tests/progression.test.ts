@@ -6,6 +6,7 @@ import {
   guideContext,
   hardDriveTasks,
   milestoneTasks,
+  phaseSteps,
   powerTasks,
   progression,
   requiredMilestones,
@@ -184,7 +185,7 @@ test('hardDriveTasks counts the alternates not yet confirmed', () => {
   if (!plain.rows.some(r => r.alternate)) assert.deepEqual(hardDriveTasks(plain), []);
 });
 
-test('powerTasks keeps the Phase 1 start-up order calcTasks interleaves', () => {
+test('powerTasks keeps the Phase 1 start-up order phaseSteps interleaves', () => {
   const context = guideContext(calculate({}), { checks: {} }, data, '1');
   assert.deepEqual(
     powerTasks(context)
@@ -199,4 +200,59 @@ test('baseTasks and retireTasks are empty where they do not apply', () => {
   assert.equal(baseTasks(guideContext(plan, { checks: {} }, data, '1')).length, 7);
   assert.deepEqual(baseTasks(guideContext(plan, { checks: {} }, data, '2')), []);
   assert.deepEqual(retireTasks(guideContext(plan, { checks: {} }, data, '1')), []);
+});
+
+// phaseSteps is the build plan's generated step list (calcTasks in app/views/calculated.ts
+// describes its rows). It reads only a stored plan and its checks, so any phase of any profile
+// can be listed without opening it (#757, for the profile summaries of #746).
+test('phaseSteps lists a phase of a stored plan in build-plan order', () => {
+  const plan = calculate({ phase: '1' }),
+    checks = { checks: {} };
+  for (const phase of ['1', '2', '3', '4', '5', 'post']) {
+    const stage = (phase === 'post' ? '5' : phase) as StageKey,
+      steps = phaseSteps(plan, checks, data, phase),
+      guide = progression(plan, checks, data, phase),
+      ids = steps.map(step => step.id);
+    const rows = plan.stages[stage].rows || [];
+    const rowSteps = steps.filter(step => step.row);
+    assert.deepEqual(
+      rowSteps.map(step => step.id),
+      rows.map(row => 'calc-' + stage + '-' + row.id),
+      'one step per row, keyed by the stage',
+    );
+    assert.ok(rowSteps.every(step => step.body === '' && step.title === step.row!.name));
+    const startup =
+      phase === '1'
+        ? [guide.baseTasks[0]!, ...guide.powerTasks.slice(0, 2)]
+        : [...guide.powerTasks, ...guide.milestoneTasks];
+    assert.deepEqual(steps.slice(0, startup.length), startup, 'startup first');
+    const storage = ids.indexOf('calc-' + stage + '-storage');
+    assert.equal(storage, ids.length - guide.retire.length - 1, 'storage, then the retirements');
+    assert.deepEqual(steps.slice(storage + 1), guide.retire);
+    assert.deepEqual(
+      [...ids].sort(),
+      [
+        ...[
+          ...guide.baseTasks,
+          ...guide.powerTasks,
+          ...guide.milestoneTasks,
+          ...guide.hardDrives,
+          ...guide.retire,
+        ].map(task => task.id),
+        ...rows.map(row => 'calc-' + stage + '-' + row.id),
+        'calc-' + stage + '-storage',
+      ].sort(),
+      'every generated step of the phase, once',
+    );
+  }
+});
+
+test('phaseSteps gives a guide plan its guide steps, as copies, and none for a phase it skips', () => {
+  const plan = calculate({}),
+    step = { id: 'early-hub', title: 'Build the HUB', body: 'Place it.' },
+    guided = { ...plan, guide: { phases: { '3': [step] } } };
+  const listed = phaseSteps(guided, { checks: {} }, data, '3');
+  assert.deepEqual(listed, [step]);
+  assert.notEqual(listed[0], step);
+  assert.deepEqual(phaseSteps(guided, { checks: {} }, data, '4'), []);
 });
