@@ -559,6 +559,16 @@ test('the goals step and what Review says about each phase', () => {
     /about 5 h 13 min was about 9 h 55 min/,
     'a pulled-forward phase shows what it used to take',
   );
+  const firstRow = $$('table tbody tr:first-child td').map(td => (td.textContent || '').trim());
+  // Each number keeps its unit on its line in the narrow column (#741).
+  assert.match(firstRow[2] ?? '', /^about 5\xa0h 13\xa0min was about 9\xa0h 55\xa0min$/);
+  // The verdict comes right after the phase, so a phone shows it without scrolling (#661).
+  assert.deepEqual(
+    $$('table thead th').map(th => (th.textContent || '').trim()),
+    ['Phase', 'Budget', 'Delivery time', 'Buildings', 'New generation'],
+  );
+  assert.equal(firstRow[0], '1');
+  assert.match(firstRow[1] ?? '', /^(Within entered limits|Needs adjustment|Planning draft)$/);
   wizardAt(5);
   assert.doesNotMatch(main(), /was /);
   // Review flags only the phases the profile plans.

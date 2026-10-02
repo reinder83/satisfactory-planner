@@ -118,7 +118,7 @@ test('the wizard Review Budget column names a budget only when one is short', ()
   const budget = Object.fromEntries(
     $$('table tbody tr').map(tr => {
       const cells = [...tr.querySelectorAll('td')].map(td => (td.textContent || '').trim());
-      return [cells[0], cells.at(-1)];
+      return [cells[0], cells[1]];
     }),
   );
   assert.equal(budget['1'], 'Within entered limits');
