@@ -108,10 +108,11 @@ export function headroomAdvice(snapshot: StoredStage, shownPhase: Phase): string
   return `${label} plans ${list}; add generation beyond those, or count on existing spare power.`;
 }
 
-// Names as a sentence lists them: "2", "2 and 3", "2, 3 and 4" (#735).
-export function andList(names: readonly string[]): string {
-  return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
-}
+// Names as a sentence lists them: "2", "2 and 3", "2, 3 and 4" (#735). The planner's warnings
+// use the same function, from public/wording.ts (#748). Imported here rather than with the
+// imports above only to keep this change apart from the import block.
+import { listNames } from '../../wording.ts';
+export const andList = listNames;
 
 // Whether the planner measured a budget problem for infeasible stage `snapshot`: shortfalls, the
 // hours it would fit in, or whole machines breaking it. draftHeading and the wizard Review's

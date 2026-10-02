@@ -39,6 +39,7 @@ const SHARED = [
   'state.ts',
   'storage-room.ts',
   'transfer.ts',
+  'wording.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
   'state/mutate.ts',
@@ -197,6 +198,7 @@ async function buildPages() {
   let planner = await read('planner.ts');
   planner = replaceOnce(planner, "import fs from 'node:fs';", '');
   planner = replaceOnce(planner, "from './public/preferences.ts'", "from './preferences.js'");
+  planner = replaceOnce(planner, "from './public/wording.ts'", "from './wording.js'");
   planner = replaceOnce(
     planner,
     "fs.readFileSync(new URL('./recipes.json', import.meta.url), 'utf8')",
