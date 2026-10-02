@@ -8,13 +8,13 @@
   handbook profile) follows: its commissioning checklist, ticking the guide's own ids, and its
   blocks of copy such as the rocket-fuel block and the nuclear sequence, as the handbook page
   showed them. Everything reads the profile's frozen calculation snapshot; nothing here
-  recalculates.
+  recalculates. A milestone-only phase (#759) shows only the header and why it has none of this.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
-import { calcStage, calculated, checked, workspace } from '../../session.ts';
+import { calcStage, calculated, checked, milestoneOnly, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
 import { itemRateRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -23,7 +23,12 @@ import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import { toggleCheck } from '../actions.ts';
 import CalcWarnings from '../plan/CalcWarnings.vue';
+import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
+
+// A milestone-only phase before the profile's start phase (#759) uses no power or resources of
+// its own: the page says so (MilestoneOnlyNotice.vue) rather than drawing nothing.
+const milestones = computed(() => legacy(() => !!calculated && milestoneOnly()));
 
 interface Part {
   key: string;
@@ -204,7 +209,11 @@ const page = computed(() =>
 </script>
 
 <template>
-  <template v-if="page">
+  <template v-if="milestones">
+    <PageHeader eyebrow="CHECK BEFORE EXPANDING" title="Power &amp; resources" />
+    <MilestoneOnlyNotice />
+  </template>
+  <template v-else-if="page">
     <PageHeader
       eyebrow="CHECK BEFORE EXPANDING"
       title="Power & resources"

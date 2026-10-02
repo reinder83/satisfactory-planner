@@ -14,12 +14,23 @@ export interface PhaseSegment {
   pct: number | null;
 }
 
+// A milestone-only phase before a calculated profile's start phase (#759) has no production lines
+// to count, so its segment counts its build-plan steps, which are its milestones (phaseStepIds,
+// as the build plan's progress bar counts them). Imported here, apart from the imports above,
+// which another change edits.
+import { phaseStepIds } from '../opening-phase.ts';
+import { milestoneOnly } from '../session.ts';
+
 export function phaseTrack(): PhaseSegment[] {
   const counted = calculated ? phaseProgress(calculated, state?.checks ?? {}) : undefined;
   return phaseOptions().map(phase => {
     let done = 0,
       total = 0;
-    if (phase !== 'post' && calculated) {
+    if (phase !== 'post' && milestoneOnly(phase)) {
+      const ids = phaseStepIds(phase);
+      done = ids.filter(checked).length;
+      total = ids.length;
+    } else if (phase !== 'post' && calculated) {
       const progress = counted?.find(c => c.phase === phase);
       done = progress?.done ?? 0;
       total = progress?.total ?? 0;

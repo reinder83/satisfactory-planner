@@ -220,20 +220,45 @@ test('a Tier 2 unlock only a later phase needs is a Phase 1 step', () => {
   assert.ok(phaseOne.includes('unlock-' + partAssembly.id), 'in the Phase 1 build plan');
 });
 
-test('a milestone of a phase before the start phase is listed in the start phase', () => {
+// A profile made for a later phase lists the milestones of the phases before it in those phases,
+// which the build plan offers milestone-only (#759, the owner's answer on #570).
+test('a milestone of a phase before the start phase is listed in its own phase', () => {
   const plan = calculate({ phase: '3' }),
     listedIn = milestonePhases(plan, {});
-  assert.deepEqual(new Set(listedIn.keys()), neededSomewhere(plan));
+  assert.deepEqual(new Set(listedIn.keys()), neededSomewhere(plan), 'the same milestones');
   for (const [id, phases] of listedIn)
-    assert.deepEqual(phases, [String(Math.max(3, milestonePhase(entryOf(id), data)))], id);
-  for (const tier of [1, 2, 3, 4])
+    assert.deepEqual(phases, [String(milestonePhase(entryOf(id), data))], id);
+  const tierOf = (phase: string) =>
+    phaseSteps(plan, { checks: {} }, data, phase)
+      .map(step => entryOf(step.id))
+      .filter(entry => entry && !entry.mam)
+      .map(entry => entry.tier);
+  assert.deepEqual([...new Set(tierOf('1'))].sort(), [1, 2], 'Phase 1 has Tiers 1-2');
+  assert.deepEqual([...new Set(tierOf('2'))].sort(), [3, 4], 'Phase 2 has Tiers 3-4');
+  assert.ok(
+    tierOf('3').every(tier => tier >= 5),
+    'Phase 3 no longer shows a Tier 1-4 milestone',
+  );
+  assert.ok(milestonesListedIn(plan, { checks: {} }, data, 2).length, 'Phase 2 lists some');
+});
+
+test('a phase before the start phase lists only its milestones', () => {
+  const plan = calculate({ phase: '3', recipes: 'all' });
+  assert.ok(plan.stages['1'].rows?.length, 'the planner still solved Phase 1');
+  for (const phase of ['1', '2']) {
+    const steps = phaseSteps(plan, { checks: {} }, data, phase);
+    assert.ok(steps.length, 'Phase ' + phase + ' has steps');
     assert.ok(
-      [...listedIn.keys()].some(id => entryOf(id).tier === tier && !entryOf(id).mam),
-      'a Phase 3 profile keeps showing a Tier ' + tier + ' milestone',
+      steps.every(step => step.id.startsWith('unlock-') && !step.row),
+      'Phase ' + phase + ' lists milestones only: ' + steps.map(step => step.id).join(', '),
     );
-  for (const phase of ['1', '2'])
-    assert.deepEqual(progression(plan, { checks: {} }, data, phase).milestoneTasks, []);
-  assert.deepEqual(milestonesListedIn(plan, { checks: {} }, data, 2), []);
+    // Nothing there names a production line of the stage the profile does not build.
+    for (const step of steps) assert.doesNotMatch(step.body, /production planned/);
+  }
+  // The start phase keeps its production, storage and power steps.
+  const three = phaseSteps(plan, { checks: {} }, data, '3').map(step => step.id);
+  assert.ok(three.includes('calc-3-storage') && three.includes('startup-3-power-review'));
+  assert.ok(three.some(id => id.startsWith('calc-3-') && id !== 'calc-3-storage'));
 });
 
 test('a MAM node is listed in the phase its costs first become available', () => {

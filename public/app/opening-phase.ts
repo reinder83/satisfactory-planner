@@ -5,7 +5,7 @@
 // still has an open check: then it opens on the first such phase, so the build plan starts at work
 // that is not done yet. Only the view changes: the saved phase stays what the user picked, and the
 // phase picker saves a new one as before. Nothing here writes progress.
-import { startPhase, state } from './session.ts';
+import { firstPhase, state } from './session.ts';
 import { generatedTasks, planTasks } from './tasks.ts';
 import type { Phase, StageKey } from '../types/index.ts';
 
@@ -13,11 +13,12 @@ import type { Phase, StageKey } from '../types/index.ts';
 // that an earlier phase could hold open.
 const PLANNED_PHASES: StageKey[] = ['1', '2', '3', '4', '5'];
 
-// The phase to open on: the first phase from `start` (the profile's first phase) up to, not
-// including, `chosen` (the saved working phase) with a step id `checks` does not tick, else
-// `chosen`. `stepIds` gives a phase's checklist as the build plan shows it; it is only asked for
-// the phases before `chosen`, and no further than the first open one. A `chosen` phase before
-// `start` is returned as it is (phase() raises it to the start phase).
+// The phase to open on: the first phase from `start` (the profile's first phase, firstPhase() in
+// session.ts, which may be a milestone-only one, #759) up to, not including, `chosen` (the saved
+// working phase) with a step id `checks` does not tick, else `chosen`. `stepIds` gives a phase's
+// checklist as the build plan shows it; it is only asked for the phases before `chosen`, and no
+// further than the first open one. A `chosen` phase before `start` is returned as it is (phase()
+// raises it to the first phase).
 export function openingPhase(
   chosen: Phase,
   start: StageKey,
@@ -45,6 +46,8 @@ export const phaseStepIds = (phase: StageKey): string[] => planTasks(phase).map(
 export const generatedStepIds = (phase: Phase): string[] =>
   generatedTasks(phase).map(task => task.id);
 
-// The phase the open profile opens on (openingPhase for its saved phase, start phase and checks).
+// The phase the open profile opens on (openingPhase for its saved phase, first phase and checks).
+// A calculated profile's first phase is Phase 1, so open milestones of a milestone-only phase
+// before its start phase hold that phase open like any earlier phase (#759).
 export const phaseToOpen = (): Phase =>
-  openingPhase(state.settings.phase, startPhase(), phaseStepIds, state.checks);
+  openingPhase(state.settings.phase, firstPhase(), phaseStepIds, state.checks);

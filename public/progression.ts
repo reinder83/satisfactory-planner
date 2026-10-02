@@ -109,6 +109,8 @@ export interface PhaseStep extends GuideTask {
 // Phase 5's stage), in the order the build plan shows them, before the user's step edits and
 // personal tasks. A plan with a guide (#393, a migrated handbook profile) has the guide's steps
 // for the phase instead, with their own check ids; a phase the guide leaves out has none (#466).
+// A phase before the profile's start phase is milestone-only (#759, milestoneOnlyPhase): its
+// milestone steps and nothing else, since production is planned from the start phase on.
 // Otherwise: startup, power and milestone steps, hard drives, one step per production row,
 // storage, then the lines this phase retires. Row steps use the saved key
 // `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
@@ -120,6 +122,11 @@ export function phaseSteps(
   phase: string,
 ): PhaseStep[] {
   if (plan.guide) return (plan.guide.phases[phase] ?? []).map(step => ({ ...step }));
+  if (milestoneOnlyPhase(plan, phase))
+    return milestoneTasks(
+      guideContext(plan, state, data, phase),
+      milestonesListedIn(plan, state, data, Number(phase)),
+    );
   const stage = (phase === 'post' ? '5' : phase) as StageKey,
     steps = progression(plan, state, data, phase);
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
@@ -154,6 +161,18 @@ export function phaseSteps(
   ];
 }
 
+// Whether `phase` of a calculated plan is milestone-only (#759): a phase before the plan's start
+// phase (its settings' phase), which the build plan offers for the milestones listed there and
+// nothing else. The planner solves every phase from 1 (calculate() in planner.ts), but a stage
+// before the start phase is not this profile's to build: no production lines, storage, power,
+// hard drives or retirements. A plan with a guide has its own steps and no such phase.
+export function milestoneOnlyPhase(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>,
+  phase: string,
+): boolean {
+  return !plan.guide && phase !== 'post' && Number(phase) < Number(plan.settings.phase || 1);
+}
+
 // The context the task lists share, for `phase` '1'-'5' or 'post' (planned as Phase 5).
 export function guideContext(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
@@ -164,10 +183,13 @@ export function guideContext(
   const stageOf = (phaseNumber: number): StoredStage | undefined =>
     plan.stages[String(phaseNumber) as StageKey];
   const stage = Number(phase === 'post' ? 5 : phase),
-    checks = state.checks;
+    checks = state.checks,
+    start = Number(plan.settings.phase || 1);
+  // Only stages the profile builds (its start phase on): one before it is never built, so a
+  // milestone-only phase (#759) has no planned source of its own.
   const sources = (item: string) =>
     (Object.entries(plan.stages) as [string, StoredStage][])
-      .filter(([key]) => Number(key) <= stage)
+      .filter(([key]) => Number(key) >= start && Number(key) <= stage)
       .flatMap(([key, planned]) =>
         (planned.rows || [])
           .filter(row => row.outputs[item])
@@ -260,10 +282,10 @@ const researchable = (entry: ProgressionEntry, data: Progression, stage: number)
 // The milestones whose unlock step phase `stage` (1-5) of the profile lists (#758). The profile
 // lists every milestone one of its planned phases (its start phase on) needs and can research by
 // then (requiredMilestones), each once, under its own phase (milestonePhase), so a Tier 2 unlock
-// only Phase 3's rows need is a Phase 1 step. The build plan offers no phase before the start
-// phase, so a milestone of an earlier phase is listed in the start phase. Post-game, planned as
-// Phase 5, lists none (progression() above): they are all in Phase 5. The check key stays
-// `unlock-<id>` whichever phase lists the step. milestoneTasks orders the list.
+// only Phase 3's rows need is a Phase 1 step. A milestone of a phase before the start phase is
+// listed in that phase, which the build plan offers as a milestone-only phase (#759). Post-game,
+// planned as Phase 5, lists none (progression() above): they are all in Phase 5. The check key
+// stays `unlock-<id>` whichever phase lists the step. milestoneTasks orders the list.
 export function milestonesListedIn(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   state: { checks: Record<string, boolean> },
@@ -278,9 +300,7 @@ export function milestonesListedIn(
   for (const key of planned)
     for (const entry of requiredMilestones(guideContext(plan, state, data, key)))
       if (!entry.alternate && researchable(entry, data, Number(key))) listed.set(entry.id, entry);
-  return [...listed.values()].filter(
-    entry => Math.max(start, milestonePhase(entry, data)) === stage,
-  );
+  return [...listed.values()].filter(entry => milestonePhase(entry, data) === stage);
 }
 
 // Depth-first, so every prerequisite in the list comes before what needs it; otherwise keeps
