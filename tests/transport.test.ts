@@ -43,7 +43,11 @@ test('drone contracts start at unlock phase, balance fuel and upgrade ionized fu
         used = stage.rows.reduce((total, r) => total + (r.inputs[fuel] || 0), 0);
       assert.ok(made - used >= (stage.storage[fuel] || 0) + stage.drone[fuel] - 0.001);
       const guide = progression(plan, { checks: {} }, data, String(phase));
-      assert.ok(guide.milestoneTasks.some(t => t.title.includes('Aeronautical Engineering')));
+      // A Tier 8 milestone, listed once, in its own phase (#758).
+      assert.equal(
+        guide.milestoneTasks.some(t => t.title.includes('Aeronautical Engineering')),
+        phase === 4,
+      );
       assert.ok(guide.powerTasks.some(t => t.id === 'drone-fuel-' + phase));
     }
   }
