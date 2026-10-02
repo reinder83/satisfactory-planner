@@ -192,7 +192,7 @@ const RULES: AdaRule[] = [
     text: facts =>
       facts.removedSteps > 0
         ? `Every step of ${facts.phaseLabel} has been removed. A bold planning methodology, pioneer. Restore what you need under “Removed steps” while editing.`
-        : `${facts.phaseLabel} has no steps yet. A blank checklist is the tidiest kind, pioneer, and the least productive. Add a task under the build sequence to give it one.`,
+        : `${facts.phaseLabel} has no steps yet. The tidiest checklist, pioneer, and the least productive. Add a task to start it.`,
   },
   // Phase progress on the build plan, from nothing ticked to everything ticked. facts.steps counts
   // the phase's steps and facts.next names the first unticked one.

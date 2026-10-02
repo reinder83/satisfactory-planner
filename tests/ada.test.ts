@@ -187,6 +187,9 @@ test('ADA says an empty phase was emptied only when steps were removed (#646)', 
   assert.match(empty(0), /Phase 3 has no steps yet/);
   assert.match(empty(0), /Add a task/);
   assert.doesNotMatch(empty(0), /removed|Removed steps/i);
+  // No longer than the removed line, so ADA's card in the sidebar grows no taller and the
+  // sidebar gets no scrollbar at 1440 × 900 where it had none.
+  assert.ok(empty(0).length < empty(3).length);
 });
 
 test('ADA notices the states that are not just a number', () => {
