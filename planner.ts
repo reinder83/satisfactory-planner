@@ -1977,8 +1977,8 @@ function draftStage(config: CurrentSettings, phase: number, result: Unsolved): C
 // Does the exact LP fit the real budgets at `hours` hours for this phase?
 const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
   run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion }).feasible;
-// "A", "A and B", "A, B and C".
-const listNames = (list: string[]) =>
+// "A", "A and B", "A, B and C": names, phase numbers and items in prose (#611).
+export const listNames = (list: string[]) =>
   list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0];
 // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
 // doubled budgets to measure which resources need headroom and how much; keep bounds modest for
@@ -2219,7 +2219,7 @@ function amplificationWarnings({ config, stages }: FinishedPlan): string[] {
     );
   if (dropped.length)
     warnings.push(
-      `${dropped.length > 1 ? 'Phases' : 'Phase'} ${dropped.join(' and ')} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
+      `${dropped.length > 1 ? 'Phases' : 'Phase'} ${listNames(dropped)} could not fit production amplification: the search stopped before it could prove the best plan, so ${dropped.length > 1 ? 'those phases are' : 'that phase is'} planned without it and no somersloops are placed there. A smaller amplification budget usually fits.`,
     );
   return warnings;
 }
@@ -2238,7 +2238,7 @@ function existingSupplyWarnings({ stages }: FinishedPlan): string[] {
     );
   if (lost.length)
     warnings.push(
-      `${lost.length > 1 ? 'Phases' : 'Phase'} ${lost.join(' and ')} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
+      `${lost.length > 1 ? 'Phases' : 'Phase'} ${listNames(lost)} could not be fitted to whole machines while crediting the production you already run, so ${lost.length > 1 ? 'those phases are' : 'that phase is'} planned as if you built all of it yourself. Nothing is lost: the plan is simply the larger one. Precise balancing instead of whole machines usually keeps the credit.`,
     );
   return warnings;
 }
@@ -2297,7 +2297,7 @@ function unsinkableWarnings({ stages }: FinishedPlan): string[] {
   ];
   if (!stuck.length) return [];
   return [
-    `${stuck.join(' and ')} cannot be sent to the AWESOME Sink, so ${stuck.length > 1 ? 'those lines are' : 'that line is'} balanced exactly instead of run whole at 100%: the last machine is underclocked and nothing is left over to back the line up.`,
+    `${listNames(stuck)} cannot be sent to the AWESOME Sink, so ${stuck.length > 1 ? 'those lines are' : 'that line is'} balanced exactly instead of run whole at 100%: the last machine is underclocked and nothing is left over to back the line up.`,
   ];
 }
 // Budgets the user still has to check: a seed-dependent map, and budgets not yet confirmed.
@@ -2340,7 +2340,7 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
     .map(([phase]) => phase);
   if (fractional.length)
     warnings.push(
-      `${fractional.length > 1 ? 'Phases' : 'Phase'} ${fractional.join(' and ')} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
+      `${fractional.length > 1 ? 'Phases' : 'Phase'} ${listNames(fractional)} could not fit whole Nuclear Power Plants within the resource budgets, so ${fractional.length > 1 ? 'those phases keep' : 'that phase keeps'} a fractional uranium plant count, and ${fractional.length > 1 ? 'their' : 'its'} waste chain fractional clocks, as precise balancing would. A little more uranium or water budget usually lets it round.`,
     );
   return warnings;
 }
