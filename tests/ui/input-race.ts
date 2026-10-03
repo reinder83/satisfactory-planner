@@ -82,7 +82,7 @@ export const races: Record<string, Race> = {
   'bay name': {
     async open() {
       go('storage');
-      open();
+      openMigrated();
       setLayoutEditing(true);
       render();
       await nextTick();

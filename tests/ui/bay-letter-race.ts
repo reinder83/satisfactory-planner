@@ -10,7 +10,7 @@ import { nextTick } from 'vue';
 import { setFloor, setLayoutEditing, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { mutate } from '../../public/state.ts';
-import { $, applyUpdate, go, open, page } from './setup.ts';
+import { $, applyUpdate, go, openMigrated, page } from './setup.ts';
 import type { ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -22,7 +22,7 @@ const settle = async () => {
 // first save (a bay rename) until the letter has been typed and lets every later one through.
 export async function letterTypedDuringSave(stub: (held: () => Promise<void>) => void) {
   page();
-  open();
+  openMigrated();
   setFloor('ground');
   setLayoutEditing(true);
   go('storage');
@@ -73,7 +73,7 @@ export async function letterTypedWhileSuggestionMoves(
   stub: (answer: (update: UpdateOp) => ProgressState) => void,
 ) {
   page();
-  open();
+  openMigrated();
   setFloor('ground');
   setLayoutEditing(true);
   go('storage');
@@ -164,7 +164,7 @@ export async function letterKeptOrRefilled(
   stub: (answer: (update: UpdateOp) => ProgressState) => void,
 ) {
   page();
-  open();
+  openMigrated();
   setFloor('ground');
   setLayoutEditing(true);
   go('storage');

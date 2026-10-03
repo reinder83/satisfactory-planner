@@ -27,8 +27,6 @@ export interface AdaFacts {
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
   storageMiss: string;
-  // The original handbook's ground-floor moves are not marked done yet (SP-25, #260).
-  groundMoves: boolean;
   // A plan guide's own checklists (#393, #470; a migrated handbook profile): its power
   // commissioning checks, its storage tasks and its completion modules, ticked of all. null
   // without a guide; a part the guide leaves out counts 0 of 0.
@@ -314,15 +312,6 @@ const RULES: AdaRule[] = [
     when: facts => facts.view === 'storage' && facts.storageMiss,
     text: facts =>
       `No container on any floor holds “${facts.storageMiss}”. Either it has no address yet or the sign says something else. Edit layout gives it a container.`,
-  },
-  // The built ground floor's moves (SP-25, #260), the same ones its notice and storage step name.
-  {
-    id: 'storage-ground-moves',
-    on: ['storage'],
-    tone: 'calm',
-    when: facts => facts.groundMoves,
-    text: () =>
-      `The ground floor is built and its moves are still open: Gas Filters G08 → H02, Nobelisks H02 → H08, Medicinal Inhalers into G08. Press Done on the ground floor once they are moved. An address is only useful while it is true.`,
   },
   {
     id: 'storage',

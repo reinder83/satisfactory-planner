@@ -157,7 +157,7 @@ test('removing or hiding a bay moves focus to the next bay’s Remove or Hide', 
       { id: 'T', name: 'Spare', floor: 'ground' },
     ],
   } as Partial<StorageEdits> as StorageEdits;
-  open({ state: { storageEdits } });
+  openMigrated({ state: { storageEdits } });
   go('storage');
   setLayoutEditing(true);
   render();
@@ -186,7 +186,7 @@ test('removing an added floor or hiding a built-in one moves focus to the floor 
   const storageEdits = {
     floors: [{ id: 'cf-abcd12', label: 'Basement' }],
   } as Partial<StorageEdits> as StorageEdits;
-  open({ state: { storageEdits } });
+  openMigrated({ state: { storageEdits } });
   go('storage');
   setLayoutEditing(true);
   setFloor('cf-abcd12');
@@ -302,7 +302,7 @@ test('clearing a container moves focus to the next ✕ in its bay, else the prev
     bays: [{ id: 'S', name: 'Overflow', floor: 'ground' }],
     slots: { S01: 'Wire', S02: 'Cable', S03: 'Quickwire' },
   } as Partial<StorageEdits> as StorageEdits;
-  open({ state: { storageEdits } });
+  openMigrated({ state: { storageEdits } });
   go('storage');
   setLayoutEditing(true);
   render();
@@ -325,7 +325,7 @@ test('Restore on a hidden bay or floor moves focus to the next Restore, else wha
     hiddenBays: ['A', 'B', 'O'],
     hiddenFloors: ['workshop'],
   } as Partial<StorageEdits> as StorageEdits;
-  open({ state: { storageEdits } });
+  openMigrated({ state: { storageEdits } });
   go('storage');
   setLayoutEditing(true);
   render();
@@ -351,14 +351,16 @@ test('Restore on a hidden bay or floor moves focus to the next Restore, else wha
 test('the last hidden bay or floor restored moves focus to its floor tab', async () => {
   stubFetch({ '/api/update': applyUpdate });
   // O is an upper-floor bay, restored from the ground floor.
-  open({ state: { storageEdits: { hiddenBays: ['O'] } as Partial<StorageEdits> as StorageEdits } });
+  openMigrated({
+    state: { storageEdits: { hiddenBays: ['O'] } as Partial<StorageEdits> as StorageEdits },
+  });
   go('storage');
   setLayoutEditing(true);
   render();
   press('[data-restore-bay="O"]');
   await settle();
   assert.ok(focusedOn('#main .tabs [data-floor="upper"]'), describeFocus());
-  open({
+  openMigrated({
     state: {
       storageEdits: { hiddenFloors: ['workshop'] } as Partial<StorageEdits> as StorageEdits,
     },

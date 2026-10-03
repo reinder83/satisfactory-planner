@@ -1,12 +1,12 @@
 // The storage room's data (#storage, ui/pages/StoragePage.vue): floors, bays and container
-// positions after the profile's layout edits, and each container's four saved checks. One
-// room serves both profile kinds: the original handbook shows its printed room, a calculated
-// profile shows the same addresses with only the items it selected for storage.
+// positions after the profile's layout edits, and each container's four saved checks. A
+// calculated profile shows the printed room's addresses with only the items it selected for
+// storage; a profile migrated from the handbook (#387) shows the whole printed room.
 // Container addresses (`A01`, `S09`, …) are saved progress keys and must never move.
 import { bayOfSlot, slotPosition } from '../../state.ts';
 import { STORAGE_ROOM } from '../../storage-room.ts';
 import { itemRate } from '../flow.ts';
-import { calculated, checked, currentProfile, state } from '../session.ts';
+import { calculated, checked, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
 
@@ -232,19 +232,17 @@ export function storageMatches(query: string): StorageMatch[] {
 // Every bay, hidden handbook bays included; storageBays() and hiddenStorageBays() split it.
 // Handbook bays in `planOnly` show just the plan's items, without the user's container edits.
 function allStorageBays(planOnly: Set<string> = new Set()): StorageBayView[] {
-  // `selected` is null for the original handbook; for a calculated profile it is every
-  // item any phase stores, so unselected handbook positions show as reserved. A plan
-  // transcribed from the handbook (engine 'handbook-…', #486) keeps the whole printed room, as
-  // the handbook profile it was migrated from showed it (#487).
+  // `selected` is every item any phase of the plan stores, so unselected printed positions show
+  // as reserved (all of them while no plan is open). A plan transcribed from the handbook
+  // (engine 'handbook-…', #486) keeps the whole printed room, as the handbook profile it was
+  // migrated from showed it (#487): `selected` is null.
   const edits = storageEdits(),
     cleared = new Set(edits.clearedSlots);
-  const selected =
-    calculated && !calculated.engine?.startsWith('handbook-')
-      ? new Set(Object.values(calculated.stages).flatMap(p => Object.keys(p.storage || {})))
-      : null;
-  const keepCollectables = calculated
-    ? (calculated.settings.collectables ?? calculated.settings.storage === 'all')
-    : true;
+  const selected = calculated?.engine?.startsWith('handbook-')
+    ? null
+    : new Set(Object.values(calculated?.stages ?? {}).flatMap(p => Object.keys(p.storage || {})));
+  const keepCollectables =
+    calculated?.settings.collectables ?? calculated?.settings.storage === 'all';
   // A user's cleared address wins, then a name they filled in, then the planned item.
   const merge = (baseName: string | null, id: string) =>
     cleared.has(id) ? null : (edits.slots[id] ?? baseName);
@@ -331,15 +329,6 @@ export function floorProgress(): Map<string, StorageProgress> {
   }
   return totals;
 }
-
-// The handbook's ground-floor moves (SP-25, #260): the owner's built room still has Gas Filters,
-// Nobelisks and Medicinal Inhalers to move, which the ground floor's notice asks for until its
-// Done is pressed. Done ticks the key of the handbook's own storage step for the same moves ("Put
-// the filters together"), so no new record is saved and unticking that step shows the notice
-// again. Only the original handbook profile has the built room; a calculated profile never does.
-export const GROUND_MOVES = 'storage-filter-moves';
-export const groundMovesPending = () =>
-  !calculated && currentProfile?.kind === 'original' && !checked(GROUND_MOVES);
 
 // The four steps of a container, as saved check keys `slot-<address>-<step>` and labels.
 export const SLOT_STEPS: [step: string, label: string][] = [

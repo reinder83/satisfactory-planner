@@ -119,7 +119,7 @@ test('a group build order is named by the group, and a factory opened from it by
 });
 
 test('a storage container dialog is named by its item (#321)', () => {
-  open();
+  openMigrated();
   go('storage');
   render();
   openSlot('A01');

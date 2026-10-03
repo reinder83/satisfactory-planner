@@ -456,15 +456,6 @@ test('a storage search nothing holds gets a line on the storage page (#240)', ()
   assert.ok(!ids(facts({ view: 'plan', storageMiss: 'x' })).includes('storage-search-miss'));
 });
 
-test('the built ground floor’s open moves get a line on the storage page (SP-25, #260)', () => {
-  const line = first(facts({ view: 'storage', kind: 'original', groundMoves: true }));
-  assert.equal(line.id, 'storage-ground-moves');
-  assert.equal(line.tone, 'calm');
-  assert.match(line.text, /Gas Filters G08 → H02, Nobelisks H02 → H08/);
-  assert.match(line.text, /Press Done on the ground floor/);
-  assert.ok(!ids(facts({ view: 'storage', groundMoves: false })).includes('storage-ground-moves'));
-});
-
 // A plan guide's checklists (#393, #470): each gets a line while any of it is open, with the
 // guide's own counts, ranked first on the page that holds it; none without a guide or once it is
 // all ticked. Completion modules belong to Post Phase 5.

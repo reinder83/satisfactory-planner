@@ -1,8 +1,10 @@
 // The printed storage room moved from plan.json into storage-room.ts (#388). Every profile builds
 // its room from it, so the room must come out exactly as before: this golden test compares the
 // bays, the hidden bays, the floors and their counts with a snapshot taken on main before the
-// move (tests/fixtures/storage-room-golden.json), for the original profile, with layout edits,
-// and for calculated profiles with and without the collectables bays.
+// move (tests/fixtures/storage-room-golden.json). Its "original" entries are the printed room as
+// the retired handbook profile drew it, plain and with layout edits; a profile migrated from the
+// handbook (#387) now draws them (#798). The calculated entries are with and without the
+// collectables bays.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'vitest';
@@ -12,19 +14,21 @@ import {
   storageBays,
   storageFloors,
 } from '../../public/app/views/storage.ts';
-import { handbookToPlan, migrateHandbookState } from '../../public/handbook-migration.ts';
+import { migrateHandbookState } from '../../public/handbook-migration.ts';
 import * as session from '../../public/app/session.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import {
+  $,
   $$,
-  catalog,
   generated,
   generatedWith,
   go,
   handbook,
+  migratedPlan,
   open,
+  openMigrated,
   page,
-  recipes,
+  transcribed,
 } from './setup.ts';
 import { nextTick } from 'vue';
 import { render } from '../../public/app/shell.ts';
@@ -43,9 +47,9 @@ const room = () => ({
 
 function snapshot() {
   const out: Record<string, unknown> = {};
-  open();
+  openMigrated();
   out.original = room();
-  open({
+  openMigrated({
     state: {
       checks: { 'slot-A01-built': true, 'slot-C02-verified': true },
       storageEdits: layoutEdits({
@@ -75,12 +79,18 @@ test('the storage room is drawn exactly as before the move out of plan.json (#38
 
 // A handbook profile migrated to a calculated one (#487) keeps its storage room exactly: the
 // transcribed plan (engine 'handbook-…') shows the whole printed room, and the migration leaves
-// every slot record and layout edit as it was. Its plan steps keep their ids and order too.
+// every slot record, layout edit and storage task tick as it was, so the room drawn from the
+// migrated state is the one drawn from the state before. Its plan steps keep their ids and order.
 test('a migrated handbook profile has the same storage room and plan steps', async () => {
   page();
-  const conversion = handbookToPlan(handbook, recipes, catalog().pureLimits);
   const state = {
-    checks: { 'slot-A01-built': true, 'slot-C02-verified': true, 'phase-3-survey': true },
+    checks: {
+      'slot-A01-built': true,
+      'slot-C02-verified': true,
+      'phase-3-survey': true,
+      // The ground-floor moves' step: an ordinary storage task now (decision 3B on #387).
+      'storage-filter-moves': true,
+    },
     storageEdits: layoutEdits({
       hiddenBays: ['Q'],
       bayFloors: { C: 'upper' },
@@ -93,14 +103,17 @@ test('a migrated handbook profile has the same storage room and plan steps', asy
   const before: Record<string, unknown> = {};
   for (const phase of ['3', '4', '5', 'post'] as Phase[]) {
     open({ phase, state: structuredClone(state) });
-    before[phase] = { room: room(), steps: steps() };
+    const handbookSteps = steps();
+    openMigrated({ phase, state: structuredClone(state) });
+    before[phase] = { room: room(), steps: handbookSteps };
   }
   // The original profile's whole saved state, as the session holds it, is what migrates.
   open({ phase: '3', state: structuredClone(state) });
-  const migrated = migrateHandbookState(structuredClone(session.state), handbook, conversion);
+  const migrated = migrateHandbookState(structuredClone(session.state), handbook, transcribed());
+  assert.equal(migrated.checks['storage-filter-moves'], true, 'the moves’ tick is kept');
   for (const phase of ['3', '4', '5', 'post'] as Phase[]) {
     open({
-      calculated: structuredClone(conversion.plan),
+      calculated: migratedPlan(),
       phase,
       state: { ...structuredClone(migrated), settings: { phase } },
     });
@@ -109,17 +122,25 @@ test('a migrated handbook profile has the same storage room and plan steps', asy
       JSON.parse(JSON.stringify(before[phase])),
       phase,
     );
-    // Neither the template notice nor the built-room one (decision 3B).
+    // No template notice and no built-room notice (decision 3B); the moves' step is ticked.
     if (phase === '3') {
       session.setFloor('ground');
       go('storage');
       render();
       await nextTick();
+      // (Hidden bay Q's items draw their own warning.)
       assert.ok(
         !$$('#main .notice').some(notice =>
-          /Optional storage template|Ground floor is built/.test(notice.textContent!),
+          /Optional storage template|Ground floor is built|Moved in this plan/.test(
+            notice.textContent!,
+          ),
         ),
         'no template or built-room notice',
+      );
+      assert.equal($('[data-ground-floor]'), null);
+      assert.equal(
+        $<HTMLInputElement>('#main .checklist [data-check="storage-filter-moves"]')!.checked,
+        true,
       );
     }
   }

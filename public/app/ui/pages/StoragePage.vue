@@ -1,36 +1,31 @@
 <!--
-  #storage on both profile kinds: floor tabs and the search, the layout editor, the workshop
-  (on its floor), the bay grid and the storage build checklist. The search looks on every floor
-  (#240): its results above the grid lead to each container, and it narrows the floor shown to
-  the bays with a match. The checklist is the handbook's storageTasks; for a calculated profile
-  the plan guide's storage tasks under their own ids (#467), or else one step with the saved key
-  `calc-storage-layout`. A guided profile gets no ground-floor-built notice and no ground-floor
-  moves (decision 3B on #387): those need an original profile. When the remembered floor no longer
-  exists (a removed floor), the page switches to the first one.
+  #storage: floor tabs and the search, the layout editor, the workshop (on its floor), the bay
+  grid and the storage build checklist. The search looks on every floor (#240): its results above
+  the grid lead to each container, and it narrows the floor shown to the bays with a match. The
+  checklist is the plan guide's storage tasks under their own ids (#467), or else one step with
+  the saved key `calc-storage-layout`. There is no ground-floor-built notice and no ground-floor
+  moves (decision 3B on #387): a migrated profile's `storage-filter-moves` is an ordinary storage
+  task. When the remembered floor no longer exists (a removed floor), the page switches to the
+  first one.
 -->
 <script setup lang="ts">
 import { computed, nextTick } from 'vue';
 import {
   calculated,
-  currentProfile,
   floor,
   layoutEditing,
-  plan,
   query,
   setFloor,
   setLayoutEditing,
   setQuery,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { STORAGE_ROOM } from '../../../storage-room.ts';
 import { DragDropProvider } from '@dnd-kit/vue';
 import type { DragDropManager, DragEndEvent, DragStartEvent } from '@dnd-kit/vue';
 import { followScroll, landsOnTarget } from '../storage/drop-point.ts';
 import {
   floorOrder,
   floorProgress,
-  GROUND_MOVES,
-  groundMovesPending,
   hiddenStorageBays,
   hiddenStorageFloors,
   slotMatches,
@@ -124,28 +119,10 @@ const page = computed(() =>
         .filter(b => b.moved && b.floor === floor)
         .map(b => b.id),
       workshop: floor === 'workshop',
-      // The built room's moves, until their Done (SP-25, #260).
-      groundMoves: groundMovesPending(),
-      // The floor's notice. The ground-floor instructions describe the owner's built room,
-      // so only original (handbook) profiles get them, copies included: a duplicated or
-      // imported one has a new id but keeps its kind and the built ground floor.
-      // A profile migrated from the handbook (engine 'handbook-…', #487) shows neither: its room
-      // is the one built, not a template, and the built-room notice is dropped (decision 3B).
-      notice:
-        floor !== 'ground' || calculated?.engine?.startsWith('handbook-')
-          ? ''
-          : currentProfile.kind !== 'original'
-            ? 'template'
-            : 'built',
-      // Handbook ground-floor bays moved to another floor (#190), which the built room still has.
-      movedOff: storageBays()
-        .filter(
-          bay =>
-            !bay.custom &&
-            bay.floor !== 'ground' &&
-            STORAGE_ROOM.find(builtBay => builtBay.id === bay.id)?.floor === 'ground',
-        )
-        .map(b => `${b.id} to ${floors.find(f => f.id === b.floor)?.label ?? b.floor}`),
+      // The ground floor's template notice. A profile migrated from the handbook (engine
+      // 'handbook-…', #487) has none: its room is the one built, not a template, and the
+      // built-room notice is dropped (decision 3B on #387).
+      template: floor === 'ground' && !calculated?.engine?.startsWith('handbook-'),
       query,
       results: matches.slice(0, RESULT_LIMIT),
       matches: matches.length,
@@ -172,8 +149,7 @@ const page = computed(() =>
       // Every bay on the floor in its current order, search or not, for Move left / right.
       order: order ?? floorBays.map(b => b.id).sort((a, b) => a.localeCompare(b)),
       aisles: Math.floor(placed.length / 2),
-      tasks: calculated ? (calculated.guide?.storageTasks ?? CALCULATED_TASKS) : plan.storageTasks,
-      calculated: !!calculated,
+      tasks: calculated?.guide?.storageTasks ?? CALCULATED_TASKS,
     };
   }),
 );
@@ -265,34 +241,6 @@ async function restoreFloor(event: Event, id: string) {
   if (saved) await refocus();
 }
 
-// "Done" on the built room's moves (SP-25, #260): ticks their storage step, which this profile
-// alone keeps, and the notice goes. Its button goes with it, so focus moves to the ground floor's
-// tab just above (ui/refocus.ts). Unticking the step in the build checklist brings it back.
-async function groundMovesDone(event: Event) {
-  const button = event.currentTarget as HTMLButtonElement;
-  const refocus = refocusAfterRemoval(button, {
-    fallback: ['#main .tabs [data-floor="ground"]'],
-  });
-  const step = plan.storageTasks.find(t => t.id === GROUND_MOVES);
-  let saved = false;
-  // Busy while it saves (app/busy.ts), so a failed save leaves focus on it (#299).
-  await whileBusy(button, async () => {
-    try {
-      await save({ type: 'check', key: GROUND_MOVES, value: true });
-      saved = true;
-      toast(
-        step
-          ? `Ground-floor moves done. Untick “${step.title}” in the storage build checklist to see them again.`
-          : 'Ground-floor moves done.',
-      );
-    } catch {
-    } finally {
-      render();
-    }
-  });
-  if (saved) await refocus();
-}
-
 // A container dropped on another position (#208, ui/storage/SlotCell.vue): one save that moves or
 // swaps it, its checks and note going along. A cancelled drag, or a drop back on its own place,
 // saves nothing.
@@ -331,11 +279,7 @@ function toggleLayout() {
   <PageHeader
     eyebrow="ONE ITEM · ONE ADDRESS"
     title="Storage room"
-    :subtitle="
-      page.calculated
-        ? 'Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable.'
-        : 'Mark containers Done here, or complete a room after placing, labelling, connecting and checking its containers. Click an item for details. Positions match your printed storage plan.'
-    "
+    subtitle="Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable."
   />
   <EditBar
     v-if="page.editing"
@@ -454,30 +398,8 @@ function toggleLayout() {
     :bays="page.floorBays"
     :hidden-here="page.hiddenHere"
   /><WorkshopPanel v-if="page.workshop" />
-  <div v-if="page.notice === 'template'" class="notice info">
+  <div v-if="page.template" class="notice info">
     Optional storage template. Each position has its own checklist; nothing is assumed built.
-  </div>
-  <!-- The built room's moves are a to-do (SP-25, #260): Done ticks their storage step and the
-       notice goes; the bays moved in this plan are still named on their own when there are any. -->
-  <div
-    v-else-if="page.notice === 'built' && (page.groundMoves || page.movedOff.length)"
-    class="notice info"
-    data-ground-floor
-  >
-    <template v-if="page.groundMoves"
-      ><span data-ground-moves
-        ><b>Ground floor is built.</b> The shell is marked complete. Still to do: move Gas Filters
-        G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08. H01 stays
-        Iodine-Infused Filter.</span
-      ><br /><button type="button" class="btn" data-ground-moves-done @click="groundMovesDone">
-        Done<span class="visually-hidden"> with the ground-floor moves</span>
-      </button></template
-    ><template v-if="page.movedOff.length"
-      ><br v-if="page.groundMoves" /><span data-moved-off
-        >Moved in this plan: bay {{ page.movedOff.join(', ') }}. The built room still has
-        {{ page.movedOff.length === 1 ? 'it' : 'them' }} here.</span
-      ></template
-    >
   </div>
   <p v-if="page.query && page.matches" class="small muted">
     Filtered view: showing this floor's bays with a match only. Clear search to see the full floor
