@@ -178,14 +178,21 @@ beforeEach(() => {
 });
 
 for (const kind of KINDS) {
-  test(`no page says "handbook" on ${kind.label}, in any phase or mode`, async () => {
-    for (const phase of PHASES)
+  // One test per phase, and one for the editing modes, rather than one loop over them all: each
+  // phase draws every page and every ADA remark on it (over a hundred renders), and in a full
+  // `npm test` the whole loop took long enough to pass the 30 s test timeout (#851). Split, each
+  // test has its own budget and a failure names its phase.
+  for (const phase of PHASES)
+    test(`no page says "handbook" on ${kind.label}, in Phase ${phase}`, async () => {
       for (const view of PAGES) {
         page();
         openKind(kind, phase);
         await drawn(view, `${view} in Phase ${phase}`);
         adaRemarks(`${view} in Phase ${phase}`);
       }
+    });
+
+  test(`no page says "handbook" on ${kind.label}, in any editing mode or storage floor`, async () => {
     page();
     openKind(kind);
     setPlanEditing(true);

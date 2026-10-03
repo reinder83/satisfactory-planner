@@ -51,6 +51,9 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'document visibilitychange',
     'rendered',
   ]);
-  // Importing the entry point compiles every component through Vite, which takes about 5 s
-  // alone and longer beside the other test files: past Vitest's default 5 s timeout.
-}, 30000);
+  // Importing the entry point compiles every component through Vite, cold: no other test file
+  // shares this worker's module graph, so nothing can be warmed for it. That takes about 4 s
+  // alone, 11 s beside the other test files, and in a full `npm test` on a busy machine it
+  // passed the 30 s timeout the other component tests use (#851). The limit only matters for a
+  // test that hangs, so this one gets twice that.
+}, 60000);
