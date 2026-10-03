@@ -194,6 +194,12 @@ test('an own line’s card is named as its build-plan step, "Wire for Alpha"', a
   assert.match(statorWire.textContent ?? '', /from \d\d Wire for Alpha/);
   const cells = $$('#main [data-gf-table] td').map(cell => cell.textContent?.trim());
   assert.ok(cells.includes('Wire for Alpha'), 'the lines table names it');
+  // Under a "Line" header, not "Recipe": an own line and the central one share a recipe (#947).
+  const headers = $$('#main [data-gf-table] table')[0]!.querySelectorAll('thead th');
+  assert.deepEqual(
+    [...headers].map(th => th.textContent?.trim()),
+    ['#', 'Line', 'Machines', 'Makes'],
+  );
   assert.ok(
     cells.some(cell => /^\d\d Wire for Alpha$/.test(cell ?? '')),
     'the connections table names it',
