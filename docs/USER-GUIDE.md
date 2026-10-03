@@ -97,7 +97,7 @@ Prod the small badge beside her name five times in a row and the corporate voice
 
 ## Progression guidance
 
-Calculated profiles include a Phase 1 construction-stock base, manually supplied Biomass/Solid Biofuel startup, phase-appropriate power commissioning, HUB milestone costs and MAM research suggestions. Mark unlocks in the checklist to update current-power advice. Unlock and alternate-recipe checkmarks persist across phases within the profile. Hard-drive tasks list the actual selected alternates and their recorded prerequisites; random scans do not guarantee a fixed drive count.
+Calculated profiles include a Phase 1 construction-stock base, manually supplied Biomass/Solid Biofuel startup, phase-appropriate power commissioning, HUB milestone costs and MAM research suggestions. Mark unlocks in the checklist to update current-power advice. Unlock and alternate-recipe checkmarks persist across phases within the profile. Hard-drive tasks list the actual selected alternates and their recorded prerequisites; random scans do not guarantee a fixed drive count. Each alternate is listed once, in the first phase that uses it, so a later phase that uses it again counts it there and not twice.
 
 Milestone cost notes use factories explicitly marked running in this or earlier phases. They do not assume that inventory or spare output exists. Starter construction and biomass lines are separate startup guidance, not added to the frozen continuous-production calculation. Existing factory targets and progress IDs are preserved.
 

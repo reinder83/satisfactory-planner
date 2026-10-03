@@ -1,4 +1,4 @@
-// A step one id shares between phases (an alternate's unlock, the biomass start-up) is one step
+// A step one id shares between phases (the biomass start-up) is one step
 // in every phase that lists it: one checkmark, and taskEdits.removed holds step ids, so removing
 // it in Phase 3 removes it in Phase 4 too. The build plan says so where it happens (#744,
 // public/app/shared-steps.ts): the Remove confirmation names the other phases, and "Removed
