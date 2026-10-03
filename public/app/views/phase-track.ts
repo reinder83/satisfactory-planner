@@ -30,12 +30,14 @@ export interface PhaseSegment {
 // (phaseToOpen, #570), which looks at the same steps, and with the profile card, whose summary
 // counts the same steps without the session (planStepIds in state/summary.ts, #746).
 //
-// Working out a phase's steps writes every production step's text (calcTasks, #768), several
-// milliseconds a phase, and the frame draws the track again on every redraw (a save indicator, a
-// tick). So each phase's step ids are kept while the open plan, progress state and progression
-// data are the same objects: session.ts replaces the state on every saved change (setState)
-// rather than editing it, and opening another profile replaces all three. The ticks are counted
-// afresh every time.
+// Working out a phase's step ids no longer writes any step text (planTaskIds, #768), but it still
+// runs the phase's progression (phaseSteps in progression.ts) and applies its edits: about 2.7 ms
+// for the five phases of the default calculated plan, against about 0.01 ms with the ids kept
+// (#794). The frame draws the track again on every redraw (a save indicator, a tick), so each
+// phase's step ids are kept while the open plan, progress state and progression data are the
+// same objects: session.ts replaces the state on every saved change (setState) rather than
+// editing it, and opening another profile replaces all three. The ticks are counted afresh every
+// time.
 let cachedFor: readonly unknown[] = [];
 let cachedIds = new Map<StageKey, string[]>();
 function stepIdsOf(phase: StageKey): string[] {
