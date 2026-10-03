@@ -4912,9 +4912,13 @@ button.rail-tile:hover {
   gap: 12px;
   margin-top: 10px;
 }
-/* The group's items made on site, under its heading when groups are not edited. */
+/* The group's items made on site, under its heading when groups are not edited, and on a line
+   of their own the items it marks that give it no line (#931). */
 .on-site-summary {
   margin: -4px 0 12px;
+}
+.on-site-summary > span {
+  display: block;
 }
 @media (max-width: 720px) {
   .on-site-items {
