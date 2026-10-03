@@ -18,13 +18,24 @@ import type {
 type PickerPlan = Pick<StoredCalculatedPlan, 'stages' | 'settings' | 'guide'>;
 type PickerGroups = Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined;
 
-// The items group `groupId` can mark as made on site in `plan`, sorted: in a phase the plan
-// builds (not a milestone-only phase, #759), an item some plan row makes that a row with a share
-// in the group uses (rowPlaces, so a group's own line made on site counts as the group's). Raw
-// resources are never offered: the planner cannot make them on site (onSitePlannable, its own
-// rule, #921).
-export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: string): string[] {
-  const offered = new Set<string>();
+// One use of an item the picker offers: the phase, and the name of the group's line that uses it
+// there.
+interface OfferUse {
+  phase: StageKey;
+  line: string;
+}
+
+// Each item group `groupId` can mark as made on site in `plan`, with where its lines use it: in
+// a phase the plan builds (not a milestone-only phase, #759), an item some plan row makes that a
+// row with a share in the group uses (rowPlaces, so a group's own line made on site counts as the
+// group's). Raw resources are never offered: the planner cannot make them on site
+// (onSitePlannable, its own rule, #921).
+function offerUses(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  groupId: string,
+): Map<string, OfferUse[]> {
+  const uses = new Map<string, OfferUse[]>();
   for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
     if (milestoneOnlyPhase(plan, phase)) continue;
     const rows = stage?.rows || [];
@@ -32,10 +43,52 @@ export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: st
     for (const row of rows) {
       if ((rowPlaces(row, groups).get(groupId) || 0) <= LINK_DUST) continue;
       for (const item of Object.keys(row.inputs || {}))
-        if (made.has(item) && onSitePlannable(item)) offered.add(item);
+        if (made.has(item) && onSitePlannable(item))
+          uses.set(item, [...(uses.get(item) || []), { phase, line: row.name }]);
     }
   }
-  return [...offered].sort((a, b) => a.localeCompare(b));
+  return uses;
+}
+
+// The items group `groupId` can mark as made on site in `plan`, sorted (offerUses). Every phase
+// the plan builds counts, not only the one the page shows: a mark is the group's in every phase
+// (factoryGroups.local), and a recalculation gives the group a line wherever its rows use the
+// item (onSiteSettings).
+export const onSiteOffers = (plan: PickerPlan, groups: PickerGroups, groupId: string): string[] =>
+  [...offerUses(plan, groups, groupId).keys()].sort((a, b) => a.localeCompare(b));
+
+// One box of a group's "Made on site" picker: the item, and a note in brackets, or '' for none.
+export interface OnSiteOffer {
+  item: string;
+  note: string;
+}
+
+// The boxes of group `groupId`'s picker while the page shows phase `shown` (#941): the items its
+// lines in that phase use first, as the page's cards show them, then the ones only its lines in
+// other phases use, each with a note naming those lines and phases ("(used by Alternate: Turbo
+// Pressure Motor in Phases 4 and 5)"), so an item no card on the page uses says why it is
+// offered. Each part sorted. The same items as onSiteOffers.
+export function onSitePickerOffers(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  groupId: string,
+  shown: StageKey | undefined,
+): OnSiteOffer[] {
+  const here: OnSiteOffer[] = [],
+    elsewhere: OnSiteOffer[] = [];
+  const unique = (names: string[]) => [...new Set(names)];
+  for (const [item, uses] of offerUses(plan, groups, groupId)) {
+    if (uses.some(use => use.phase === shown)) {
+      here.push({ item, note: '' });
+      continue;
+    }
+    const lines = unique(uses.map(use => use.line)).sort((a, b) => a.localeCompare(b));
+    const phases = unique(uses.map(use => use.phase)).sort();
+    const where = (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
+    elsewhere.push({ item, note: `(used by ${listNames(lines)} in ${where})` });
+  }
+  const byItem = (a: OnSiteOffer, b: OnSiteOffer) => a.item.localeCompare(b.item);
+  return [...here.sort(byItem), ...elsewhere.sort(byItem)];
 }
 
 // The items each group makes on site in `onSite`, as sorted lists by group id.
