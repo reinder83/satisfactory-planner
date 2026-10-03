@@ -850,6 +850,9 @@ test('a factory in a group’s build order moves focus into its dialog (#319)', 
 });
 
 test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
+  // The note's save fails (no reply for /api/update), so the note stays unsaved (#858).
+  const calls = stubFetch({});
+  const asked = answerConfirms(true);
   render();
   const wire = 'calc-3-' + row('wire');
   openCalculatedFactory(row('wire'));
@@ -861,9 +864,17 @@ test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   await nextTick();
   assert.equal($<HTMLInputElement>(`#detail [data-check="${wire}"]`)!.checked, true);
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
-  // Replacing the dialog asks about the note first (answered yes in beforeEach).
+  // Leaving the box sends the note, and that write fails.
+  $('#detail-note')!.dispatchEvent(new Event('blur'));
+  await settle();
+  assert.deepEqual(
+    calls.map(([path]) => path),
+    ['/api/update'],
+  );
+  // Replacing the dialog asks about the unsaved note first; answered yes, it is dropped.
   openCalculatedFactory(row('wire'));
   await settle();
+  assert.equal(asked.length, 1, 'replacing the dialog asks about the unsaved note');
   assert.equal(
     $<HTMLTextAreaElement>('#detail-note')!.value,
     '',
