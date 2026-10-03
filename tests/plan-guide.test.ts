@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateTransfer } from '../public/transfer.ts';
 import { saveExport } from './types/fixtures.ts';
-import handbook from '../public/plan.json' with { type: 'json' };
+import { frozenHandbook as handbook } from './helpers/data.ts';
 import type { PlanGuide, SaveExport } from '../public/types/index.ts';
 
 const guide: PlanGuide = {

@@ -85,7 +85,7 @@ Show MW below 1,000 MW and GW where appropriate above that. For machine instruct
 ## Redesign verification
 
 1. Read the existing UI and capture its functional inventory before replacing large sections.
-2. Inspect both an original handbook and a newly calculated profile. Use isolated test data or imported copies; do not experiment on the owner's live workspace.
+2. Inspect both a profile migrated from the retired handbook (import `tests/fixtures/export-2026-09-13.json`, an old export with an original profile) and a newly calculated profile. Use isolated test data or imported copies; do not experiment on the owner's live workspace.
 3. Run the root checks and browser integration test after functional changes. Add coverage for new behavior rather than assertions that merely repeat CSS markup.
 4. Inspect the rendered result at desktop and narrow/mobile widths: navigation, long item names, resource tables, dialogs, wizard controls and tooltips must remain usable.
 5. Verify keyboard navigation, fresh start, profile switching, reload persistence, failed/invalid import feedback and successful full-save transfer. Test both server mode and a rebuilt static subpath preview.

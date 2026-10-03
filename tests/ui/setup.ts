@@ -34,8 +34,11 @@ import type {
   WorkspaceSummary,
 } from '../../public/types/index.ts';
 
-// Vitest runs from the repository root.
-export const handbook: Handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
+// Vitest runs from the repository root. The retired handbook, as the server's migration reads
+// it (#397: public/plan.json, its released copy, is gone).
+export const handbook: Handbook = JSON.parse(
+  fs.readFileSync('migrations/handbook-2026-09-13.json', 'utf8'),
+);
 const recipesFile: { recipes: Recipe[] } = JSON.parse(fs.readFileSync('recipes.json', 'utf8'));
 export const recipes = recipesFile.recipes;
 setProgressionData(JSON.parse(fs.readFileSync('public/progression.json', 'utf8')));
@@ -212,7 +215,7 @@ export function open({
   });
 }
 
-// A profile migrated from the retired handbook (#387): public/plan.json transcribed into a
+// A profile migrated from the retired handbook (#387): the handbook transcribed into a
 // calculated plan with a guide, as the migration stores it, made once per test file.
 // `migratedRow(id, stage)` is the row a handbook factory became in a phase: its checks are
 // calc-<stage>-<row id> and its note factory-<row id>. `openMigrated` opens it like open().

@@ -220,8 +220,7 @@ export function createBrowserApi(
   }
   // Mirrors GET /api/export-saves: the saves the query selects (selectForExport in
   // transfer.ts), kept as they are stored, without a payoff ranking. Only an export that counts
-  // as a backup stamps lastBackup, which is why this runs as a readwrite transaction. Unlike the
-  // server it adds no default handbook to 'original' profiles; an imported one keeps its own.
+  // as a backup stamps lastBackup, which is why this runs as a readwrite transaction.
   function exportSaves({ url }: RouteRequest) {
     const query = exportQuery(url.searchParams);
     return store.transaction(data => {
@@ -313,14 +312,14 @@ export function createBrowserApi(
 
   // Scoped routes, in readRoutes and writeRoutes below: request() has already found the save
   // and profile in the transaction's record.
-  // GET /api/context: what the UI loads when it opens a profile.
+  // GET /api/context: what the UI loads when it opens a profile. Like the server's, it never
+  // sends a profile's own handbook (#820), which only the IndexedDB migration reads.
   function profileContext({ save, profile }: ScopedRequest) {
     return {
       save: { id: save.id, name: save.name },
       profile: { id: profile.id, name: profile.name, kind: profile.kind },
       state: profile.state,
       plan: profile.plan,
-      handbook: profile.handbook,
       payoff: currentPayoff(profile),
     };
   }

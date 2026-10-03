@@ -70,7 +70,7 @@ const current = (record: unknown): record is BrowserWorkspace =>
 // always carries its own handbook, the one it migrates with: it only ever arrived through an
 // import, which requires one (validateTransfer), or as a duplicate of one. A record with an
 // original profile without one was never written by a release; it is left as it is, because the
-// Pages build has no handbook to transcribe it from (its plan.json is an empty template).
+// Pages build has no handbook to transcribe it from.
 const migratable = (profile: StoredProfile) =>
   profile.kind === 'original' && object(profile.handbook);
 const needsMigration = (workspace: BrowserWorkspace) =>

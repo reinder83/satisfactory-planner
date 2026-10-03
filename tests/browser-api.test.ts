@@ -505,7 +505,8 @@ test('the Pages edition opens an upgraded browser with its original profile migr
     assert.equal(listed.transcribed, true);
     assert.equal(listed.name, 'Original · 50× complete automation');
     const context = (await browserRequest('/api/context')) as ContextReply;
-    assert.equal(context.handbook, undefined);
+    // The reply carries no handbook (#820), as the server's does not.
+    assert.deepEqual(Object.keys(context).sort(), ['payoff', 'plan', 'profile', 'save', 'state']);
     assert.equal(context.plan!.engine, 'handbook-' + handbook.version);
     assert.equal(context.state.checks['calc-3-' + row], true, 'the factory tick, re-keyed');
     assert.equal(context.state.checks['storage-ground-shell'], true);

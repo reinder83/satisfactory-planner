@@ -1,6 +1,7 @@
 // What boot() asks for (#800): with the handbook profile type retired, every profile carries
-// its own calculated plan, so boot no longer fetches /plan.json. Each test stubs /plan.json too,
-// so a boot that still fetched it would succeed and fail only here, on the list of requests.
+// its own calculated plan, so boot no longer fetches /plan.json, which no edition serves any
+// more (#397). Each test stubs /plan.json too, so a boot that still fetched it would succeed and
+// fail only here, on the list of requests.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';

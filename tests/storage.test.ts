@@ -2,12 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initialState, mutate, validateState } from '../public/state.ts';
 import fs from 'node:fs';
-import type { Handbook } from '../public/types/index.ts';
+import { STORAGE_ROOM } from '../public/storage-room.ts';
 
 test('every assigned storage item has a bundled PNG and source attribution', () => {
-  const storage: Handbook['storage'] = JSON.parse(
-    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
-  ).storage;
+  const storage = STORAGE_ROOM;
   const sources: Record<string, { source: string; url: string }> = JSON.parse(
     fs.readFileSync(new URL('../public/icons/sources.json', import.meta.url), 'utf8'),
   );

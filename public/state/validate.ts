@@ -96,11 +96,11 @@ export const floorId = (value: unknown): value is string =>
   (builtinFloors.some(([id]) => id === value) || /^cf-[a-z0-9]{4,32}$/.test(value));
 export const bayId = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Z]{1,2}$/.test(value);
-// The handbook's own bays, A–R in plan.json (a test keeps the two in step). An added bay may take
+// The printed room's own bays, A–R in storage-room.ts (a test keeps the two in step). An added bay may take
 // one of these letters only while that handbook bay is hidden (#167), and only after the hidden
 // bay's kept records are cleared, so two bays never share addresses or progress.
 export const handbookBay = (letter: string) => /^[A-R]$/.test(letter);
-// A handbook bay's own floor in plan.json: A–H on the ground floor, I–R upstairs (a test keeps
+// A printed bay's own floor in storage-room.ts: A–H on the ground floor, I–R upstairs (a test keeps
 // this in step too). Moving a bay back there forgets its entry in bayFloors (#190).
 export const handbookFloor = (letter: string) => (letter <= 'H' ? 'ground' : 'upper');
 // An added floor's id as validateEdits has always checked it: the pattern test alone, which
@@ -527,7 +527,7 @@ export const knownFloor = (edits: StorageEdits, id: unknown): id is string =>
   builtinFloors.some(([builtinId]) => builtinId === id) ||
   edits.floors.some(floor => floor.id === id);
 // Whether any bay the layout places itself sits on a floor: an added bay, or a handbook bay
-// moved there. Handbook bays on their own floor are the page's to count (plan.json).
+// moved there. Printed bays on their own floor are the page's to count (storage-room.ts).
 export const baysOn = (edits: StorageEdits, id: string) =>
   edits.bays.some(bay => bay.floor === id) || Object.values(edits.bayFloors || {}).includes(id);
 // The single gate for progress: every load, import, update and new profile passes through

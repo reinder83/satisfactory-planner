@@ -8,7 +8,6 @@ import type { AddressInfo } from 'node:net';
 import { contentTypes, createApp } from '../server.ts';
 import { seedLegacy } from './helpers/seed.ts';
 import { fontNames } from '../fonts.ts';
-import type { Handbook } from '../public/types/index.ts';
 async function start(dir: string, config: Parameters<typeof createApp>[0] = {}) {
   await seedLegacy(dir);
   const server = await createApp({ dataDir: dir, ...config });
@@ -99,10 +98,12 @@ test('progress persists, concurrent updates are not lost, backup restores and in
     assert.equal((await fetch(app.url + '/%2e%2e%2fserver.ts')).status, 403);
     assert.equal((await fetch(app.url + '/no-such-file')).status, 404);
     assert.equal((await fetch(app.url + '/')).status, 200);
-    const plan: Handbook = await (await fetch(app.url + '/plan.json')).json();
-    assert.equal(plan.resources['5']!.Coal, 73473.33333333333);
-    assert.equal(plan.power['5'], 913.925);
-    assert.equal(plan.storage.flatMap(b => b.items).filter(x => x.name).length, 132);
+    // The profile migrated from the handbook opens with its plan and no handbook (#820).
+    const context = await (await fetch(app.url + '/api/context')).json();
+    assert.deepEqual(Object.keys(context).sort(), ['payoff', 'plan', 'profile', 'save', 'state']);
+    assert.equal(context.profile.kind, 'calculated');
+    // The retired handbook is no longer served (#397).
+    assert.equal((await fetch(app.url + '/plan.json')).status, 404);
   } finally {
     await close(app.server);
     await fs.rm(dir, { recursive: true, force: true });

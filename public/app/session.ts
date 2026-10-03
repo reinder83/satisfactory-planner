@@ -13,7 +13,7 @@ import { startWizard, type WizardDraft } from './wizard/wizard.ts';
 import type {
   ContextReply,
   Phase,
-  ProfileKind,
+  StoredProfileKind,
   Progression,
   ProgressState,
   StageKey,
@@ -50,7 +50,7 @@ export interface OpenSave {
 export interface OpenProfile {
   id: string;
   name: string;
-  kind?: ProfileKind;
+  kind?: StoredProfileKind;
 }
 
 // progression.json (unlocks and milestones), read by views/calculated.ts and flow.ts.

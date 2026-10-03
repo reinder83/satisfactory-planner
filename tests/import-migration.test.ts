@@ -24,7 +24,7 @@ import type {
   BrowserWorkspace,
   ProgressState,
   Recipe,
-  SaveExport,
+  ImportableSaveExport,
   SavedState,
   WorkspaceFile,
 } from '../public/types/index.ts';
@@ -34,11 +34,11 @@ import type {
 // string unions, so each test parses its own copy of the file instead.
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
 const exportText = read('./fixtures/export-2026-09-13.json');
-const firstExport = (): SaveExport => JSON.parse(exportText);
+const firstExport = (): ImportableSaveExport => JSON.parse(exportText);
 const recipes: Recipe[] = JSON.parse(read('../recipes.json')).recipes;
 const { pureLimits } = catalog();
 const migration = { recipes, pureLimits };
-type Transfer = Omit<SaveExport, 'exportedAt'>;
+type Transfer = Omit<ImportableSaveExport, 'exportedAt'>;
 const originalOf = (data: Transfer) => data.saves[0]!.profiles[0]!;
 // The fixture's original profile carries its handbook.
 const handbookOf = (data: Transfer) => originalOf(data).handbook!;

@@ -3,17 +3,23 @@
 // with the same shapes from IndexedDB.
 import type { Choice, ItemRates, Phase, StageKey } from './common.ts';
 import type { AlternateRanking, StoredCalculatedPlan, StoredSettings } from './calculated.ts';
-import type { Handbook } from './handbook.ts';
+import type { Handbook } from './legacy-handbook.ts';
 import type { ProgressState, SavedState } from './state.ts';
 
-export type ProfileKind = 'original' | 'calculated';
+// Every profile the planner makes, keeps after its migrations and exports is calculated.
+export type ProfileKind = 'calculated';
+// What a stored or imported profile may say. 'original', the retired handbook profile (#387,
+// #397), is only read: from data saved before its migration (an old workspace.json or
+// progress.json, an IndexedDB record, a full export), which the stores and imports convert into
+// a calculated profile (migrateOriginalProfile in public/handbook-migration.ts). Nothing writes it.
+export type StoredProfileKind = ProfileKind | 'original';
 
-// A profile as stored. The original handbook profile has no plan and may carry its own
-// handbook; a calculated profile carries its frozen plan.
+// A profile as stored: a calculated profile with its frozen plan. An original profile not
+// migrated yet has no plan and may carry its own handbook, the migration's input.
 export interface StoredProfile {
   id: string;
   name: string;
-  kind: ProfileKind;
+  kind: StoredProfileKind;
   plan?: StoredCalculatedPlan | null;
   handbook?: Handbook;
   state: SavedState;
@@ -121,7 +127,7 @@ export interface Catalog {
 export interface ProfileSummary {
   id: string;
   name: string;
-  kind: ProfileKind;
+  kind: StoredProfileKind;
   settings?: StoredSettings;
   // The plan is a transcribed handbook (#486), so re-solving it warns first (#480).
   transcribed?: true;
@@ -170,10 +176,9 @@ export interface WorkspaceSummary {
 // GET /api/context: the scoped save and profile, with everything the pages read.
 export interface ContextReply {
   save: { id: string; name: string };
-  profile: { id: string; name: string; kind: ProfileKind };
+  profile: { id: string; name: string; kind: StoredProfileKind };
   state: ProgressState;
   plan: StoredCalculatedPlan | null;
-  handbook?: Handbook;
   // The stored ranking while it still matches the plan, otherwise null.
   payoff?: StoredPayoff | null;
 }
@@ -189,7 +194,8 @@ export interface ProgressBackup {
   state: SavedState;
 }
 
-// A full-save export (public/transfer.ts): saves with their profiles, never accounts.
+// A full-save export (public/transfer.ts): saves with their profiles, never accounts. Every
+// profile in it is calculated.
 export interface SaveExport {
   format: 'satisfactory-planner-saves';
   version: 1;
@@ -203,8 +209,20 @@ export interface SaveExport {
       name: string;
       kind: ProfileKind;
       plan: StoredCalculatedPlan | null;
-      handbook?: Handbook;
       state: SavedState;
     }[];
   }[];
+}
+
+// Any full-save export a release wrote, as validateTransfer accepts it: one from before the
+// handbook was retired may hold an original profile with its own handbook, which
+// importableTransfer converts into a calculated profile (#387, #605).
+type ExportedSave = SaveExport['saves'][number];
+export interface ImportableSaveExport extends Omit<SaveExport, 'saves'> {
+  saves: (Omit<ExportedSave, 'profiles'> & {
+    profiles: (Omit<ExportedSave['profiles'][number], 'kind'> & {
+      kind: StoredProfileKind;
+      handbook?: Handbook;
+    })[];
+  })[];
 }

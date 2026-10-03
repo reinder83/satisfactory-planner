@@ -194,7 +194,8 @@ async function buildPages() {
   await fs.rm(out, { recursive: true, force: true });
   await fs.mkdir(out, { recursive: true });
   await writeScripts(out);
-  // Explicit allowlist: server data, credentials and private handbook targets never enter the public build.
+  // Explicit allowlist: server data, credentials and the server's frozen handbook (migrations/)
+  // never enter the public build.
   for (const file of ['index.html', 'favicon.svg', 'progression.json'])
     await fs.copyFile(path.join(publicDir, file), path.join(out, file));
   await fs.cp(path.join(publicDir, 'icons'), path.join(out, 'icons'), { recursive: true });
@@ -207,25 +208,6 @@ async function buildPages() {
   );
   await fs.writeFile(path.join(out, 'index.html'), html);
   await fs.writeFile(path.join(out, 'browser-mode.js'), 'globalThis.PLANNER_BROWSER=true;\n');
-  await fs.writeFile(
-    path.join(out, 'plan.json'),
-    JSON.stringify({
-      version: 'public-template-v1',
-      // The printed room is storage-room.ts, bundled with the app (#388).
-      storage: [],
-      storageTasks: [],
-      phases: { 3: [], 4: [], 5: [], post: [] },
-      factories: [],
-      completion: [],
-      deliveries: [],
-      resources: {},
-      capacities: {},
-      plans: {},
-      power: {},
-      knownChecks: {},
-      sources: [],
-    }),
-  );
   await fs.copyFile(path.join(root, 'recipes.json'), path.join(out, 'recipes.json'));
   await fs.writeFile(path.join(out, 'catalog.json'), JSON.stringify(catalog()));
   // The planner and optimizer are TypeScript: stripped here, and shipped as .mjs files that

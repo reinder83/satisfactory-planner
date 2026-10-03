@@ -7,7 +7,7 @@ import type {
   CalcRow,
   FactoryGroups,
   GroupAssignment,
-  ProfileKind,
+  StoredProfileKind,
   ProgressState,
   SavedState,
   StageKey,
@@ -288,7 +288,7 @@ export const alreadyWholeMachines =
   'This profile already uses whole machines, so there is nothing to round up. Round up a ' +
   'profile that uses exact ratios instead.';
 export function checkRoundUp(profile: {
-  kind: ProfileKind;
+  kind: StoredProfileKind;
   plan?: { settings: { wholeMachines?: boolean } } | null;
 }) {
   if (profile.kind !== 'calculated') fail(roundUpNeedsCalculated);

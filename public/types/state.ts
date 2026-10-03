@@ -21,7 +21,7 @@ export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13
 // migration could not place on the calculated plan: ticks, notes and group assignments kept
 // exactly, for review, and never deleted. No update op edits it. Version 12.
 export interface HandbookOrigin {
-  // The handbook's own version (plan.json `version`, e.g. '2026-09-13').
+  // The handbook's own version (its `version`, e.g. '2026-09-13').
   version: string;
   unmapped: {
     checks: Record<string, boolean>;

@@ -12,10 +12,10 @@ import type {
   CurrentCalculatedPlan,
   CurrentSettings,
   Handbook,
+  ImportableSaveExport,
   Progression,
   RecipeData,
   ProgressState,
-  SaveExport,
   StageResult,
   StoredCalculatedPlan,
   StoredStage,
@@ -30,7 +30,8 @@ import type {
   validateState,
 } from '../../public/state.ts';
 import type { validateTransfer } from '../../public/transfer.ts';
-import handbook from '../../public/plan.json' with { type: 'json' };
+// The retired handbook as the server's migration reads it (#397): the converter's input type.
+import handbook from '../../migrations/handbook-2026-09-13.json' with { type: 'json' };
 import progression from '../../public/progression.json' with { type: 'json' };
 import recipes from '../../recipes.json' with { type: 'json' };
 import firstPlan from '../fixtures/calculated-plan-2026-09-12.json' with { type: 'json' };
@@ -104,7 +105,7 @@ export type EntryPointTypes = [
   True<Same<ReturnType<typeof calculate>, CurrentCalculatedPlan>>,
   True<Same<ReturnType<typeof settings>, CurrentSettings>>,
   True<Same<ReturnType<typeof catalog>, Catalog>>,
-  True<Same<ReturnType<typeof validateTransfer>['saves'], SaveExport['saves']>>,
+  True<Same<ReturnType<typeof validateTransfer>['saves'], ImportableSaveExport['saves']>>,
 ];
 // @ts-expect-error a ProgressState is not a number
 export const validateStateIsTyped: ReturnType<typeof validateState> = 0;
