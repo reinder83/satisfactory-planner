@@ -6,11 +6,11 @@ import {
 } from './handbook-migration.ts';
 import type {
   Handbook,
+  ImportableSaveExport,
   PlanGuide,
-  ProfileKind,
-  SaveExport,
   SavedState,
   StoredCalculatedPlan,
+  StoredProfileKind,
 } from './types/index.ts';
 
 // An export as it arrives, with only the fields read here, none of them checked yet.
@@ -38,11 +38,14 @@ interface IncomingSave {
   activeProfile: unknown;
   profiles: unknown;
 }
-// Full-save export: a user's saves with their profiles, plans or handbooks and progress,
-// never accounts, passwords or sessions. Written by /api/export-saves in server/save-routes.ts
-// and browser-api.ts and read back by their /api/import-saves, so saves move between editions.
+// Full-save export: a user's saves with their profiles, plans and progress, never accounts,
+// passwords or sessions. Written by /api/export-saves in server/save-routes.ts and
+// browser-api.ts and read back by their /api/import-saves, so saves move between editions.
 //   { format, version: 1, exportedAt, saves: [{ id, name, activeProfile, profiles: [
-//     { id, name, kind: 'calculated' | 'original', plan, handbook?, state }] }] }
+//     { id, name, kind: 'calculated', plan, state }] }] }
+// An export from before the handbook was retired (#387) may also hold a profile of kind
+// 'original' with its own handbook instead of a plan; it is still read, and importableTransfer
+// converts it into a calculated profile. No export writes one any more.
 // The ids only keep activeProfile pointing at the right profile: both importers give every
 // save and profile a new id, so an import always adds copies and never overwrites.
 export const transferFormat = 'satisfactory-planner-saves';
@@ -189,7 +192,7 @@ type GuideShape = { id?: unknown; title?: unknown; body?: unknown };
 // checked for shape only and otherwise copied as they are.
 // Every field kept is checked or validated on the way out; plans and handbooks are checked for
 // shape only, as above, and then treated as the stored types.
-export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> {
+export function validateTransfer(data: unknown): Omit<ImportableSaveExport, 'exportedAt'> {
   const input = data as Record<string, unknown> | null | undefined;
   if (
     input?.format !== transferFormat ||
@@ -223,7 +226,7 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
         invalid(
           'This save file has a damaged profile, so it cannot be imported. Export it again from the planner that made it.',
         );
-      const kind = profile.kind as ProfileKind;
+      const kind = profile.kind as StoredProfileKind;
       // A calculated profile must bring its calculation snapshot, since profiles are never
       // silently recalculated, with a stage for each of phases 1–5. An original profile must
       // bring its own handbook rather than fall back to the current default.
@@ -308,7 +311,7 @@ export function validateTransfer(data: unknown): Omit<SaveExport, 'exportedAt'> 
 export async function importableTransfer(
   data: unknown,
   load?: () => Promise<MigrationData>,
-): Promise<Omit<SaveExport, 'exportedAt'>> {
+): Promise<Omit<ImportableSaveExport, 'exportedAt'>> {
   const transfer = validateTransfer(data);
   const original = transfer.saves.some(save => save.profiles.some(p => p.kind === 'original'));
   if (!load || !original) return transfer;

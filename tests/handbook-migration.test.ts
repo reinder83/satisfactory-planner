@@ -26,7 +26,7 @@ const accepts = (plan: StoredCalculatedPlan) => {
   return validateTransfer(transfer).saves[0]!.profiles[0]!.plan!;
 };
 
-test("plan.json's factories become rows with the handbook's own figures", () => {
+test("the handbook's factories become rows with the handbook's own figures", () => {
   const { plan, rows, skipped } = handbookToPlan(handbook, recipes);
   for (const phase of ['3', '4', '5'] as const) {
     const stage = plan.stages[phase];

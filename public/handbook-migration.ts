@@ -1,5 +1,5 @@
-// Retiring the handbook profile type (#387): the original handbook (plan.json, or the copy an
-// imported profile carries) transcribed into an ordinary calculated snapshot, without solving
+// Retiring the handbook profile type (#387): the original handbook (the copy a profile
+// carries, or the server's frozen one in migrations/) transcribed into an ordinary calculated snapshot, without solving
 // anything (#394, #486). A fresh solve would pick other recipes and counts and drop progress, so
 // every stage row comes from the handbook's own figures, and its narrative goes into the plan's
 // guide (#466) with every check id unchanged. Pure: nothing here reads or writes a store; part 4
@@ -535,7 +535,7 @@ export const needsFrozenMapping = (current: SavedState, backup: ProgressState): 
   !!current.handbookOrigin && !current.handbookOrigin.mapping && !backup.handbookOrigin;
 
 // The parts of a stored or imported handbook the conversion can read (#609). Every release
-// exported a whole plan.json, but a hand-made or damaged file could carry, say, only factories,
+// exported a whole handbook, but a hand-made or damaged file could carry, say, only factories,
 // phases and storage, and handbookToPlan and migrateHandbookState read every field unchecked: a
 // store holding such a profile could not migrate it, so the server would not start and the
 // browser edition refused every transaction. Here a field the conversion reads that is missing

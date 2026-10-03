@@ -1,10 +1,10 @@
 // The printed storage room, bays A–R on the ground and upper floors, with the item each container
-// holds (#388). It was the storage section of plan.json, which every profile read, and it is the
-// same in every released plan.json; it outlives plan.json because saved slot-<address> checks
-// and notes and every storageEdits field depend on these addresses. A calculated profile blanks
-// the positions it did not select but keeps the bays and addresses. tests/storage-room.test.ts
-// keeps it equal to plan.json while that exists, and state.ts handbookBay / handbookFloor in
-// step with it.
+// holds (#388). It was the storage section of the retired handbook (plan.json, #397), which every
+// profile read, and it is the same in every released handbook; it outlived the handbook because
+// saved slot-<address> checks and notes and every storageEdits field depend on these addresses. A
+// calculated profile blanks the positions it did not select but keeps the bays and addresses.
+// tests/storage-room.test.ts keeps it equal to the server's frozen handbook
+// (migrations/handbook-2026-09-13.json), and state.ts handbookBay / handbookFloor in step with it.
 import type { PrintedBay } from './types/index.ts';
 
 export const STORAGE_ROOM: readonly PrintedBay[] = [

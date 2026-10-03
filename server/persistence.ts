@@ -37,8 +37,8 @@ type ValidateState = (state: unknown) => ProgressState;
 
 // Retiring the handbook profile type (#387, #495): every original profile becomes a calculated
 // one with its progress re-keyed (migrateOriginalProfile). One that carries no handbook of its
-// own was made with this handbook: a frozen, server-only copy of plan.json as it was released,
-// so the migration never depends on the plan.json the release happens to ship. The Docker
+// own was made with this handbook: a frozen, server-only copy of the handbook (plan.json) as it
+// was released; no release ships plan.json any more (#397). The Docker
 // image copies migrations/; the Pages build never includes it. Read only when there is
 // something to migrate.
 const read = async (file: string) =>

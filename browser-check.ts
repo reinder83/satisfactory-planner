@@ -646,8 +646,9 @@ try {
     upgradedPage = await upgradedContext.newPage(),
     earlierTab = await upgradedContext.newPage();
   upgradedPage.on('pageerror', error => errors.push('Upgraded browser: ' + error.message));
+  // The handbook an earlier release imported: the frozen copy of the one it shipped (#397).
   const handbook = JSON.parse(
-    await fs.readFile(path.join(source, 'public', 'plan.json'), 'utf8'),
+    await fs.readFile(path.join(source, 'migrations', 'handbook-2026-09-13.json'), 'utf8'),
   ) as Handbook;
   const { recipes } = JSON.parse(await fs.readFile(path.join(source, 'recipes.json'), 'utf8')) as {
     recipes: Recipe[];
@@ -823,7 +824,7 @@ try {
   ).json();
   const migrated = backup.saves[0]!.profiles[0]!;
   assert.equal(migrated.kind, 'calculated');
-  assert.equal(migrated.handbook, undefined);
+  assert.equal('handbook' in migrated, false);
   assert.ok(migrated.plan?.guide, 'the migrated plan carries the guide');
   assert.equal(backup.users, undefined);
   assert.equal(backup.sessions, undefined);

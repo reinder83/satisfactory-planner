@@ -26,7 +26,7 @@ import type {
   BrowserWorkspace,
   Handbook,
   ProgressState,
-  SaveExport,
+  ImportableSaveExport,
   StoredProfile,
   WorkspaceFile,
 } from '../public/types/index.ts';
@@ -119,8 +119,8 @@ test('a handbook with parts missing converts with the parts it has', () => {
 });
 
 test('every released handbook is complete and used exactly as it is', () => {
-  const firstExport = JSON.parse(read('./fixtures/export-2026-09-13.json')) as SaveExport;
-  // The Pages edition's empty template (buildPages in build.ts).
+  const firstExport = JSON.parse(read('./fixtures/export-2026-09-13.json')) as ImportableSaveExport;
+  // The Pages edition's empty template (buildPages in build.ts wrote it until #397).
   const template = {
     version: 'public-template-v1',
     storage: [],
@@ -136,12 +136,7 @@ test('every released handbook is complete and used exactly as it is', () => {
     knownChecks: {},
     sources: [],
   };
-  for (const handbook of [
-    frozen,
-    JSON.parse(read('../public/plan.json')),
-    firstExport.saves[0]!.profiles[0]!.handbook,
-    template,
-  ]) {
+  for (const handbook of [frozen, firstExport.saves[0]!.profiles[0]!.handbook, template]) {
     const usable = usableHandbook(handbook);
     assert.equal(usable.complete, true);
     assert.deepEqual(usable.handbook, handbook);

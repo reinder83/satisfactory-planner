@@ -1,9 +1,11 @@
-// The owner's handbook (public/plan.json), which the original profile reads. An imported or
-// copied original profile may carry its own copy (`handbook` on the profile). The Pages
-// edition ships an empty template of the same shape (buildPages in build.ts).
+// The retired handbook (#387, #397): the owner's original plan, which the handbook profile (kind
+// 'original') read. The planner no longer ships or serves it. This type is only the input of the
+// conversion in public/handbook-migration.ts: a profile's own `handbook` (in an old full export,
+// an unmigrated workspace.json or IndexedDB record) and the server's frozen copy,
+// migrations/handbook-2026-09-13.json.
 //
 // Phases, stages and ids arrive from JSON as plain strings, so these fields are `string`
-// rather than Phase: tests/types/data.types.ts checks plan.json against this type.
+// rather than Phase: tests/types/data.types.ts checks the frozen handbook against this type.
 import type { ItemRates } from './common.ts';
 import type { CompletionLine } from './calculated.ts';
 import type { PrintedBay } from './storage-room.ts';
@@ -50,7 +52,7 @@ export interface HandbookFactory {
   stages: Partial<Record<string, HandbookFactoryStage>>;
 }
 
-// A storage bay of the printed room (types/storage-room.ts), as plan.json still carries it.
+// A storage bay of the printed room (types/storage-room.ts), as the handbook carries it.
 export type HandbookBay = PrintedBay;
 
 export interface HandbookDelivery {

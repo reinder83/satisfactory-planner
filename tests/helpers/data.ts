@@ -45,9 +45,10 @@ function recipesFile(fromRepo: string): Recipe[] {
   return value.recipes;
 }
 
-// The handbook the app serves (public/plan.json) and the frozen copy the handbook migration
-// reads (migrations/handbook-2026-09-13.json).
-export const handbook = handbookFile('public/plan.json');
+// The retired handbook as the server's migration reads it (migrations/handbook-2026-09-13.json):
+// the copy of public/plan.json as it was released, which #397 removed. Old exports and
+// workspaces carry the same handbook.
 export const frozenHandbook = handbookFile('migrations/handbook-2026-09-13.json');
+export const handbook = frozenHandbook;
 // The recipes the planner solves with (recipes.json).
 export const recipes = recipesFile('recipes.json');

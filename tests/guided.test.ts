@@ -165,16 +165,13 @@ function ui() {
     richShape,
   });
   vm.runInContext(source, context);
-  context.fixture = JSON.parse(
-    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
-  );
   context.catalogData = catalog();
   context.progressionFixture = JSON.parse(
     fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   );
   context.generated = calculate({});
   vm.runInContext(
-    `plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World'};currentProfile={id:'p',kind:'calculated',name:'Balanced'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=generated;`,
+    `progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World'};currentProfile={id:'p',kind:'calculated',name:'Balanced'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};calculated=generated;`,
     context,
   );
   return context;

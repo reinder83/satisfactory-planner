@@ -73,17 +73,15 @@ export function profileRoutes({
     });
     return response(payoff);
   }
-  // Everything the interface needs to open the scoped profile. handbook is only present
-  // on an original profile that carries its own (from an import, or a copy of one);
-  // otherwise the client falls back to its default handbook. A stored payoff ranking is
-  // only sent while it belongs to the profile's plan.
+  // Everything the interface needs to open the scoped profile. A stored payoff ranking is
+  // only sent while it belongs to the profile's plan. A profile's own handbook is never sent
+  // (#820): every profile here is calculated (migrateOriginals, persistence.ts).
   function profileContext({ save, profile }: ScopedRequest) {
     return response({
       save: { id: save.id, name: save.name },
       profile: { id: profile.id, name: profile.name, kind: profile.kind },
       state: profile.state,
       plan: profile.plan || null,
-      handbook: profile.handbook,
       payoff: currentPayoff(profile),
     });
   }
@@ -111,8 +109,7 @@ export function profileRoutes({
   // that names another profile. Both are validated before the state is replaced and
   // written in one commit (writeProgress), so a rejected change leaves the saved state as it
   // was. The revision counts accepted writes. An update can carry the revision its tab last
-  // saw (X-Planner-Revision); checkBase refuses a stale whole-value one (#165). An original
-  // profile cannot be moved before Phase 3, which its handbook does not cover. A backup made
+  // saw (X-Planner-Revision); checkBase refuses a stale whole-value one (#165). A backup made
   // before a profile's handbook migration is re-keyed for it (restoreProgress, #606), with the
   // frozen handbook's mapping for a profile migrated before the mapping was recorded.
   async function updateProgress(request: ScopedRequest) {
