@@ -1,6 +1,6 @@
-// Build-plan steps one id shares between phases (#744). A milestone, an alternate recipe's
-// unlock or the biomass start-up is one thing in the game, so every phase that lists it shows
-// the same step: one checkmark, one edited title and one removal (taskEdits.removed holds step
+// Build-plan steps one id shares between phases (#744). An alternate recipe's unlock or the
+// biomass start-up is one thing in the game, so every phase that lists it shows the same step (a
+// milestone is listed in one phase only, its own, since #758): one checkmark, one edited title and one removal (taskEdits.removed holds step
 // ids, not phases). Removing or restoring such a step therefore changes every phase that lists
 // it, and the build plan says so where it happens: in the Remove confirmation (PlanStep.vue)
 // and under the step in "Removed steps in this phase" (RemovedSteps.vue). Nothing here writes.

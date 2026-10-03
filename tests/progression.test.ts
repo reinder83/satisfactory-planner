@@ -5,6 +5,8 @@ import {
   baseTasks,
   guideContext,
   hardDriveTasks,
+  milestonePhase,
+  milestonesListedIn,
   milestoneTasks,
   phaseSteps,
   powerTasks,
@@ -18,7 +20,7 @@ const data: Progression = JSON.parse(
   fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
 );
 test('Phase 1 has construction stock and biomass guidance, without later power instructions', () => {
-  const plan = calculate({ recipes: 'all' }),
+  const plan = calculate({ phase: '1', recipes: 'all' }),
     guidance = progression(plan, { checks: {} }, data, '1');
   const power = guidance.powerTasks.map(t => t.body).join(' ');
   assert.doesNotMatch(power, /nuclear|aluminum|packaging|rocket fuel/i);
@@ -33,12 +35,14 @@ test('Phase 1 has construction stock and biomass guidance, without later power i
   assert.ok(guidance.hardDrives.some(t => t.body.includes('Choices are random')));
 });
 test('milestone material advice uses actual running checkmarks and unlocks change power advice', () => {
-  const plan = calculate({}),
+  const plan = calculate({ phase: '1' }),
     rows = plan.stages['1'].rows!;
   const iron = rows.find(r => r.outputs['Iron Plate'])!;
   const checks: Record<string, boolean> = { ['calc-1-' + iron.id]: true };
+  // The Tier 1-2 milestones that cost Iron Plate are Phase 1 steps (#758).
+  const phaseOne = progression(plan, { checks }, data, '1');
+  assert.ok(phaseOne.milestoneTasks.some(t => t.body.includes('Iron Plate: already producing')));
   let guidance = progression(plan, { checks }, data, '2');
-  assert.ok(guidance.milestoneTasks.some(t => t.body.includes('Iron Plate: already producing')));
   assert.match(guidance.powerTasks[0]!.body, /Biomass/);
   checks['unlock-' + data.entries.find(s => s.name === 'Coal Power')!.id] = true;
   guidance = progression(plan, { checks }, data, '2');
@@ -160,6 +164,147 @@ test('milestoneTasks leaves out what cannot be researched yet', () => {
   const late = data.entries.filter(entry => !entry.mam && !entry.alternate && entry.tier >= 3);
   const tasks = milestoneTasks(context, late);
   assert.deepEqual(tasks, [], 'Phase 1 only researches tiers 1 and 2');
+});
+
+// Each milestone is listed once, under its own phase (#758, the owner's answer on #570): a HUB
+// milestone under its tier's phase, a MAM node under the phase its costs first become available.
+const PHASES = ['1', '2', '3', '4', '5', 'post'] as const;
+const milestonePhases = (plan: ReturnType<typeof calculate>, checks: Record<string, boolean>) => {
+  const listedIn = new Map<string, string[]>();
+  for (const phase of PHASES)
+    for (const task of progression(plan, { checks }, data, phase).milestoneTasks)
+      listedIn.set(task.id, [...(listedIn.get(task.id) || []), phase]);
+  return listedIn;
+};
+// What the profile listed before #758: in each planned phase, every milestone that phase needs
+// and can research by then.
+const neededSomewhere = (plan: ReturnType<typeof calculate>) =>
+  new Set(
+    (['1', '2', '3', '4', '5'] as const)
+      .filter(phase => Number(phase) >= Number(plan.settings.phase))
+      .flatMap(phase => {
+        const context = guideContext(plan, { checks: {} }, data, phase);
+        return milestoneTasks(context, requiredMilestones(context)).map(task => task.id);
+      }),
+  );
+const entryOf = (stepId: string) => data.entries.find(entry => 'unlock-' + entry.id === stepId)!;
+
+test('each milestone a profile needs is listed once, in its own phase', () => {
+  const plan = calculate({ phase: '1', recipes: 'all' }),
+    listedIn = milestonePhases(plan, {});
+  assert.deepEqual(
+    new Set(listedIn.keys()),
+    neededSomewhere(plan),
+    'the same milestones as before, only the phase listing them moved',
+  );
+  for (const [id, phases] of listedIn) {
+    assert.deepEqual(phases, [String(milestonePhase(entryOf(id), data))], id + ' once, own phase');
+  }
+  // Tier 1: Base Building is needed by every phase and was listed in each.
+  assert.deepEqual(listedIn.get('unlock-Schematic_1-1_C'), ['1']);
+  assert.deepEqual(progression(plan, { checks: {} }, data, 'post').milestoneTasks, []);
+});
+
+test('a Tier 2 unlock only a later phase needs is a Phase 1 step', () => {
+  const plan = calculate({ phase: '1' }),
+    partAssembly = data.entries.find(entry => entry.name === 'Part Assembly')!;
+  // Phases 1 and 2 build nothing, so only Phase 3's rows need Part Assembly's assemblers.
+  plan.stages['1'] = { ...plan.stages['1'], rows: [] };
+  plan.stages['2'] = { ...plan.stages['2'], rows: [] };
+  const neededBy = (phase: StageKey) =>
+    requiredMilestones(guideContext(plan, { checks: {} }, data, phase)).includes(partAssembly);
+  assert.ok(!neededBy('1') && !neededBy('2') && neededBy('3'), 'only Phase 3 needs it');
+  assert.equal(partAssembly.tier, 2);
+  assert.deepEqual(milestonePhases(plan, {}).get('unlock-' + partAssembly.id), ['1']);
+  const phaseOne = phaseSteps(plan, { checks: {} }, data, '1').map(step => step.id);
+  assert.ok(phaseOne.includes('unlock-' + partAssembly.id), 'in the Phase 1 build plan');
+});
+
+// A profile made for a later phase lists the milestones of the phases before it in those phases,
+// which the build plan offers milestone-only (#759, the owner's answer on #570).
+test('a milestone of a phase before the start phase is listed in its own phase', () => {
+  const plan = calculate({ phase: '3' }),
+    listedIn = milestonePhases(plan, {});
+  assert.deepEqual(new Set(listedIn.keys()), neededSomewhere(plan), 'the same milestones');
+  for (const [id, phases] of listedIn)
+    assert.deepEqual(phases, [String(milestonePhase(entryOf(id), data))], id);
+  const tierOf = (phase: string) =>
+    phaseSteps(plan, { checks: {} }, data, phase)
+      .map(step => entryOf(step.id))
+      .filter(entry => entry && !entry.mam)
+      .map(entry => entry.tier);
+  assert.deepEqual([...new Set(tierOf('1'))].sort(), [1, 2], 'Phase 1 has Tiers 1-2');
+  assert.deepEqual([...new Set(tierOf('2'))].sort(), [3, 4], 'Phase 2 has Tiers 3-4');
+  assert.ok(
+    tierOf('3').every(tier => tier >= 5),
+    'Phase 3 no longer shows a Tier 1-4 milestone',
+  );
+  assert.ok(milestonesListedIn(plan, { checks: {} }, data, 2).length, 'Phase 2 lists some');
+});
+
+test('a phase before the start phase lists only its milestones', () => {
+  const plan = calculate({ phase: '3', recipes: 'all' });
+  assert.ok(plan.stages['1'].rows?.length, 'the planner still solved Phase 1');
+  for (const phase of ['1', '2']) {
+    const steps = phaseSteps(plan, { checks: {} }, data, phase);
+    assert.ok(steps.length, 'Phase ' + phase + ' has steps');
+    assert.ok(
+      steps.every(step => step.id.startsWith('unlock-') && !step.row),
+      'Phase ' + phase + ' lists milestones only: ' + steps.map(step => step.id).join(', '),
+    );
+    // Nothing there names a production line of the stage the profile does not build.
+    for (const step of steps) assert.doesNotMatch(step.body, /production planned/);
+  }
+  // The start phase keeps its production, storage and power steps.
+  const three = phaseSteps(plan, { checks: {} }, data, '3').map(step => step.id);
+  assert.ok(three.includes('calc-3-storage') && three.includes('startup-3-power-review'));
+  assert.ok(three.some(id => id.startsWith('calc-3-') && id !== 'calc-3-storage'));
+});
+
+test('a MAM node is listed in the phase its costs first become available', () => {
+  const plan = calculate({ phase: '1', recipes: 'all' }),
+    listedIn = milestonePhases(plan, {});
+  const mam = [...listedIn.keys()].map(entryOf).filter(entry => entry.mam);
+  assert.ok(mam.length, 'the plan needs MAM research');
+  for (const entry of mam) {
+    const costs = Object.keys(entry.cost).filter(
+      item => !/Hard Drive|Slug|Somersloop|Mercer|Power Shard/.test(item),
+    );
+    const available = Math.max(1, ...costs.map(item => data.availability[item] || 1));
+    assert.deepEqual(listedIn.get('unlock-' + entry.id), [String(available)], entry.name);
+  }
+  // Rocket Fuel's costs are a Phase 4 product's, and Caterium, which only Phase 4's rows need
+  // in this plan, can be researched from Phase 1 on.
+  const rocket = data.entries.find(entry => entry.mam && entry.name === 'Rocket Fuel')!;
+  assert.equal(milestonePhase(rocket, data), 4);
+  const caterium = data.entries.find(entry => entry.mam && entry.name === 'Caterium')!;
+  assert.deepEqual(listedIn.get('unlock-' + caterium.id), [String(milestonePhase(caterium, data))]);
+  assert.ok(milestonePhase(caterium, data) < 4);
+});
+
+test('a ticked milestone counts in the phase that lists it now', () => {
+  const plan = calculate({ phase: '1' }),
+    coal = data.entries.find(entry => entry.name === 'Coal Power')!,
+    checks = { ['unlock-' + coal.id]: true };
+  // Coal Power was a step of Phases 2-5; its key is the same in Phase 2 alone.
+  assert.deepEqual(milestonePhases(plan, checks).get('unlock-' + coal.id), ['2']);
+  const phaseTwo = phaseSteps(plan, { checks }, data, '2').map(step => step.id);
+  assert.ok(phaseTwo.includes('unlock-' + coal.id));
+  for (const phase of ['3', '4', '5', 'post'])
+    assert.ok(!phaseSteps(plan, { checks }, data, phase).some(s => s.id === 'unlock-' + coal.id));
+});
+
+test('no milestone needs a prerequisite of a later phase', () => {
+  // So listing each in its own phase never puts a prerequisite after what needs it.
+  for (const entry of data.entries.filter(candidate => !candidate.alternate))
+    for (const id of entry.requires) {
+      const prerequisite = data.entries.find(candidate => candidate.id === id);
+      if (prerequisite)
+        assert.ok(
+          milestonePhase(prerequisite, data) <= milestonePhase(entry, data),
+          entry.name + ' needs ' + prerequisite.name,
+        );
+    }
 });
 
 test('hardDriveTasks counts the alternates not yet confirmed', () => {

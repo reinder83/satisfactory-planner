@@ -46,9 +46,16 @@ for (const calculated of [false, true])
     assert.equal(boxes[0]!.dataset.saveNote, 'global', 'the notes key is on the box');
     assert.equal(boxes[0]!.value, notes.global, 'the note keeps its line break and indent');
     assert.equal($('#global-note-status')!.getAttribute('aria-live'), 'polite');
-    // Then the working phase, open, and the profile's other phases, folded.
+    // Then the working phase, open, and the profile's other phases, folded: a calculated
+    // profile's milestone-only phases before its start phase too (#759).
     assert.deepEqual(panels(), [
       ['3', true],
+      ...((calculated
+        ? [
+            ['1', false],
+            ['2', false],
+          ]
+        : []) as [string, boolean][]),
       ['4', false],
       ['5', false],
       ['post', false],

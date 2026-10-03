@@ -1,7 +1,7 @@
-// Thin wrapper around the HiGHS LP/MIP solver (WebAssembly, the `highs` npm package). Its only
-// caller is `run` in planner.ts. The package loads highs.wasm from next to its own module, in
-// Node and in the browser. build.ts rewrites the import for the Pages edition (highs.mjs next to
-// highs.wasm), so keep it exactly as written.
+// Thin wrapper around the HiGHS LP/MIP solver (WebAssembly, the `highs` npm package). Its
+// callers are in planner/ (`run` and the rounding fallbacks). The package loads highs.wasm from
+// next to its own module, in Node and in the browser. build.ts rewrites the import for the Pages
+// edition (highs.mjs next to highs.wasm), so keep it exactly as written.
 import loadHighs from 'highs';
 
 // A model in the planner's shape (see solve below).
@@ -33,12 +33,12 @@ const highs = await loadHighs();
 // settings gave one of two plans from run to run (the cut-off one without amplification). 5000 is
 // half as much again as the most nodes any search of the test set's plans or of #558's settings
 // needs (about 3300); a search that would need more ends as 'Unknown' and falls back exactly as
-// a time-out did (see AMPLIFY_CANDIDATES and twoStepFit in planner.ts). The clock stays only as
+// a time-out did (see AMPLIFY_CANDIDATES and twoStepFit in planner/). The clock stays only as
 // a backstop far above any search the node limit allows on an ordinary machine. Across one
 // phase's searches, the phase's deadline below applies as well.
 const SEARCH_LIMITS = { output_flag: false, mip_max_nodes: 5000, time_limit: 30 };
 // When the integer searches of the current phase must all have ended (a Date.now() value), set by
-// `solvePhases` in planner.ts at the start of each phase (#592). One phase can chain dozens of
+// `solvePhases` in planner/ at the start of each phase (#592). One phase can chain dozens of
 // searches (the fallbacks of its two-step fit, SAM conversion, and after Phase 5 the re-solves of
 // phaseTime 'final' and fueled augmenters), and each may run up to the backstop above, which
 // could take one phase past the browser worker's time limit. A search that would run past the

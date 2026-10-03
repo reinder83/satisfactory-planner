@@ -28,7 +28,8 @@ for (const target of targets)
 // server imports some of them, browser-check.ts imports browser-api.js into the page, and
 // each must stay one module instance. Only public/app/ (and app-root.ts) is bundled. Each
 // public/<name>.ts ships as <name>.js. The modules state.ts re-exports, in public/state/, ship
-// the same way, as state/<name>.js (#532).
+// the same way, as state/<name>.js (#532), and so do the ones preferences.ts re-exports, in
+// public/preferences/, as preferences/<name>.js (#777).
 const SHARED = [
   'ada.ts',
   'browser-api.ts',
@@ -39,6 +40,14 @@ const SHARED = [
   'state.ts',
   'storage-room.ts',
   'transfer.ts',
+  'wording.ts',
+  'preferences/extraction.ts',
+  'preferences/fuels.ts',
+  'preferences/guided.ts',
+  'preferences/help.ts',
+  'preferences/presets.ts',
+  'preferences/storage.ts',
+  'preferences/world.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
   'state/mutate.ts',
@@ -46,7 +55,7 @@ const SHARED = [
   'state/validate.ts',
 ];
 // The folders of public/ that hold shared scripts.
-const SHARED_DIRS = ['state'];
+const SHARED_DIRS = ['state', 'preferences'];
 const BUNDLED = ['app.ts', 'app-root.ts'];
 const shipped = (name: string) => name.replace(/\.ts$/, '.js');
 // A file's path under public/ as SHARED lists it ('state/mutate.ts').
@@ -66,6 +75,33 @@ const sharedJs = async (name: string) => {
   const code = await minifyJs(await read('public/' + name), 'ts');
   return code.replace(/(from\s*|import\s*\(\s*)(["'])(\.\.?\/[\w/-]+)\.ts\2/g, '$1$2$3.js$2');
 };
+// A planner import as the Pages edition lays the files out: a shared script of public/ ships as
+// .js next to planner.mjs ('./public/wording.ts' -> './wording.js', '../public/preferences.ts'
+// -> '../preferences.js'), the optimizer and the planner's own modules as .mjs.
+const plannerImport = (spec: string) => {
+  const shared = /^(\.\/|(?:\.\.\/)+)public\/([\w/-]+)\.ts$/;
+  if (shared.test(spec)) return spec.replace(shared, '$1$2.js');
+  if (spec.endsWith('.ts')) return spec.replace(/\.ts$/, '.mjs');
+  throw Error('Browser build: unexpected planner import ' + spec);
+};
+// planner.ts or a module of planner/ as the Pages edition ships it: types stripped, minified,
+// planner/data.ts reading recipes.json with fetch instead of node:fs (by exact match, so keep
+// those snippets unchanged), and the relative imports renamed by plannerImport.
+async function plannerJs(file: string) {
+  let code = await read(file);
+  if (file === 'planner/data.ts') {
+    code = replaceOnce(code, "import fs from 'node:fs';", '');
+    code = replaceOnce(
+      code,
+      "fs.readFileSync(new URL('../recipes.json', import.meta.url), 'utf8')",
+      "await (await fetch(new URL('../recipes.json',import.meta.url))).text()",
+    );
+  }
+  return (await minifyJs(code, 'ts')).replace(
+    /(from\s*|import\s*\(\s*)(["'])(\.\.?\/[^"']+)\2/g,
+    (_, lead: string, quote: string, spec: string) => lead + quote + plannerImport(spec) + quote,
+  );
+}
 // The page loads app.ts in development; the editions ship the bundle as app.js.
 const shippedPage = (html: string) => replaceOnce(html, 'src="/app.ts"', 'src="/app.js"');
 // The typefaces, from their npm packages, as style.css names them (fonts.ts).
@@ -193,17 +229,16 @@ async function buildPages() {
   await fs.copyFile(path.join(root, 'recipes.json'), path.join(out, 'recipes.json'));
   await fs.writeFile(path.join(out, 'catalog.json'), JSON.stringify(catalog()));
   // The planner and optimizer are TypeScript: stripped here, and shipped as .mjs files that
-  // import each other by those names.
-  let planner = await read('planner.ts');
-  planner = replaceOnce(planner, "import fs from 'node:fs';", '');
-  planner = replaceOnce(planner, "from './public/preferences.ts'", "from './preferences.js'");
-  planner = replaceOnce(
-    planner,
-    "fs.readFileSync(new URL('./recipes.json', import.meta.url), 'utf8')",
-    "await (await fetch(new URL('./recipes.json',import.meta.url))).text()",
-  );
-  planner = replaceOnce(planner, "from './optimizer.ts'", "from './optimizer.mjs'");
-  await fs.writeFile(path.join(out, 'planner.mjs'), await minifyJs(planner, 'ts'));
+  // import each other by those names. planner.ts re-exports the modules in planner/ (#776),
+  // which ship as planner/<name>.mjs.
+  await fs.writeFile(path.join(out, 'planner.mjs'), await plannerJs('planner.ts'));
+  await fs.mkdir(path.join(out, 'planner'), { recursive: true });
+  for (const name of await fs.readdir(path.join(root, 'planner')))
+    if (name.endsWith('.ts'))
+      await fs.writeFile(
+        path.join(out, 'planner', name.replace(/\.ts$/, '.mjs')),
+        await plannerJs('planner/' + name),
+      );
   let optimizer = await read('optimizer.ts');
   optimizer = replaceOnce(optimizer, "from 'highs'", "from './highs.mjs'");
   await fs.writeFile(path.join(out, 'optimizer.mjs'), await minifyJs(optimizer, 'ts'));

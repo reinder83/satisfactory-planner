@@ -9,8 +9,8 @@ import { slug } from '../public/app/format.ts';
 const icons = new URL('../public/icons/', import.meta.url);
 
 test('every generator the planner models has a bundled, attributed building icon', () => {
-  const planner = fs.readFileSync(new URL('../planner.ts', import.meta.url), 'utf8');
-  // The generator recipes in planner.ts generators(): the ones with a negative power.
+  const planner = fs.readFileSync(new URL('../planner/recipes.ts', import.meta.url), 'utf8');
+  // The generator recipes in planner/recipes.ts generators(): the ones with a negative power.
   const machines = [
     ...new Set(
       [...planner.matchAll(/machine: '([^']+)',\s+phase: \d,\s+power: -/g)].map(m => m[1]!),

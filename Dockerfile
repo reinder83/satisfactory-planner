@@ -14,6 +14,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --chown=node:node server.ts workspace.ts planner.ts optimizer.ts docker-start.ts recipes.json ./
+# The calculator's modules, which planner.ts re-exports (#776).
+COPY --chown=node:node planner ./planner
 # The server modules workspace.ts wires together (persistence, accounts, limits, routes).
 COPY --chown=node:node server ./server
 # The frozen handbook the original-profile migration falls back on (#495), next to
@@ -22,9 +24,11 @@ COPY --chown=node:node migrations ./migrations
 COPY --from=build --chown=node:node /src/dist/web ./public
 # The server imports the shared scripts' TypeScript sources (state.ts, transfer.ts,
 # preferences.ts, ...), which Node runs as they are; the browser gets the built .js files.
-# state.ts re-exports the modules in public/state/ (#532), which go next to their built .js.
+# state.ts re-exports the modules in public/state/ (#532) and preferences.ts those in
+# public/preferences/ (#777), which go next to their built .js.
 COPY --from=build --chown=node:node /src/public/*.ts ./public/
 COPY --from=build --chown=node:node /src/public/state/*.ts ./public/state/
+COPY --from=build --chown=node:node /src/public/preferences/*.ts ./public/preferences/
 RUN mkdir -p /data && chown node:node /data
 USER root
 VOLUME ["/data"]

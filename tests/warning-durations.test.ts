@@ -1,6 +1,6 @@
 // The plan's warnings and draft reasons give phase times in the words ADA, the plan header and
-// the Review step use (#740): "about 7 h 52 min", not "about 7.86 hours". planner.ts keeps its own
-// copy of format.ts's durationOfHours, as it ships to the browser without public/app (build.ts).
+// the Review step use (#740): "about 7 h 52 min", not "about 7.86 hours". Both use the one
+// durationOfHours in public/wording.ts (#763; tests/wording.test.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, DEFAULT_LIMITS, warningDuration } from '../planner.ts';

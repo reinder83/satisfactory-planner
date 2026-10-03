@@ -7,7 +7,11 @@
   "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions, then the
   hard-drive payoff table (ui/plan/PayoffPanel.vue) across the page's width. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
-  `<stage>-<item slug>`, a saved key.
+  `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
+  (#759) has no stage to read: its checklist is its milestones, with ui/plan/MilestoneOnlyNotice.vue
+  above it (which also says why it opened there, in place of OpenedEarlierNotice, #786), and it has
+  no summary line and no side column: deliveries, build status and profile assumptions are all
+  about production.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -17,9 +21,11 @@ import {
   calculated,
   checked,
   currentProfile,
+  milestoneOnly,
   phase,
   phaseLabel,
   stage,
+  startPhase,
 } from '../../session.ts';
 import { storageBays } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -31,6 +37,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
@@ -41,10 +48,11 @@ import PayoffPanel from '../plan/PayoffPanel.vue';
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
   legacy(() => {
-    const stagePlan = calcStage();
-    if (!calculated || !stagePlan) return null;
+    const stagePlan = calcStage(),
+      milestones = milestoneOnly();
+    if (!calculated || (!stagePlan && !milestones)) return null;
     // A production line's Running box is its checklist step, `calc-<stage>-<row id>`.
-    const rows = stagePlan.rows || [];
+    const rows = stagePlan?.rows || [];
     const running = rows.filter(r => checked('calc-' + stage() + '-' + r.id)).length;
     const slots = storageBays()
       .flatMap(b => b.items)
@@ -57,24 +65,32 @@ const page = computed(() =>
       post: phase() === 'post',
       // A plan guide's steps replace the generated ones (#466).
       guided: !!calculated.guide,
-      summary: [
-        {
-          key: 'factories',
-          href: '#factories',
-          text: `${running} of ${rows.length} production lines running, ${buildings} buildings`,
-        },
-        {
-          key: 'storage',
-          href: '#storage',
-          text: `${ready} of ${slots.length} storage positions verified`,
-        },
-        { key: 'power', href: '#resources', text: `${power(stagePlan.generationMW)} new power` },
-        {
-          key: 'hours',
-          text: `Delivery in ${durationOfHours(stagePlan.hours || 0)} at steady state`,
-        },
-      ],
-      deliveries: Object.entries(stagePlan.delivery || {}).map(([item, delivery]) => ({
+      milestones,
+      start: phaseLabel(startPhase()),
+      summary: !stagePlan
+        ? []
+        : [
+            {
+              key: 'factories',
+              href: '#factories',
+              text: `${running} of ${rows.length} production lines running, ${buildings} buildings`,
+            },
+            {
+              key: 'storage',
+              href: '#storage',
+              text: `${ready} of ${slots.length} storage positions verified`,
+            },
+            {
+              key: 'power',
+              href: '#resources',
+              text: `${power(stagePlan.generationMW)} new power`,
+            },
+            {
+              key: 'hours',
+              text: `Delivery in ${durationOfHours(stagePlan.hours || 0)} at steady state`,
+            },
+          ],
+      deliveries: Object.entries(stagePlan?.delivery || {}).map(([item, delivery]) => ({
         id: stage() + '-' + slug(item),
         name: item,
         ...delivery,
@@ -95,13 +111,14 @@ const page = computed(() =>
     />
     <PlanEditBar />
     <CalcWarnings />
-    <PlanSummary :items="page.summary" />
+    <PlanSummary v-if="!page.milestones" :items="page.summary" />
     <div v-if="page.post" class="notice info">
       Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
       elevator exports as needed and sink spare parts.
     </div>
     <OpenedEarlierNotice />
-    <div class="split">
+    <MilestoneOnlyNotice />
+    <div :class="page.milestones ? undefined : 'split'">
       <section>
         <div class="section-head">
           <h2>Build sequence</h2>
@@ -113,6 +130,11 @@ const page = computed(() =>
         <p v-if="page.guided" class="small muted" data-guided-intro>
           Work through the steps in order and tick each one as it is done.
         </p>
+        <p v-else-if="page.milestones" class="small muted" data-milestone-intro>
+          Mark each HUB milestone and MAM node as you complete it; these carry across phases.
+          Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
+          what each one costs.
+        </p>
         <p v-else class="small muted">
           Start with construction stock and currently available power. Mark HUB, MAM and recipe
           unlocks as you complete them; these carry across phases. Milestone cost guidance updates
@@ -123,8 +145,8 @@ const page = computed(() =>
         <AddTaskForm placeholder="Add a task…" />
         <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
       </section>
-      <aside>
-        <section class="panel">
+      <aside v-if="!page.milestones">
+        <section v-if="!page.milestones" class="panel">
           <h2>Elevator delivery</h2>
           <DeliveryCounter
             v-for="delivery in page.deliveries"

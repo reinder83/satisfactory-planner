@@ -1,8 +1,13 @@
 // The routes over the signed-in user's saves and profiles: full-save export and import,
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
 import fs from 'node:fs/promises';
-import { importableTransfer, transferFormat } from '../public/transfer.ts';
-import { shareState, calculatedProfile, checkNewProfileKind } from '../public/state.ts';
+import {
+  exportQuery,
+  importableTransfer,
+  remapImportedIds,
+  selectForExport,
+} from '../public/transfer.ts';
+import { calculatedProfile, checkNewProfileKind } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -24,56 +29,34 @@ export function saveRoutes({
   scope,
   scopeNamed,
 }: WorkspaceContext) {
-  // Full-save export (public/transfer.ts format) of all the user's saves, of the saves listed
-  // in ?saves=<id>,<id> (the Backup page's selection, #160), or of one save with ?save=, or
-  // one profile with ?profile=. share=1 strips progress with shareState.
-  // An original profile without its own handbook is exported with the current plan.json,
-  // so the export can be imported where that default differs. Read-only.
+  // Full-save export (public/transfer.ts format) of the user's saves, scoped by the query as
+  // selectForExport describes; share=1 strips progress with shareState. Each save keeps the shape
+  // this route has always written: no userId, and a profile's plan null when it has none. An
+  // original profile without its own handbook is exported with the current plan.json, so the
+  // export can be imported where that default differs. Read-only.
   async function exportSaves({ url, user }: UserRequest) {
     const handbook = JSON.parse(
       await fs.readFile(new URL('../public/plan.json', import.meta.url), 'utf8'),
     );
-    const saveId = url.searchParams.get('save'),
-      profileId = url.searchParams.get('profile'),
-      share = url.searchParams.get('share') === '1';
-    let saves = current().saves.filter(s => s.userId === user.id);
-    const chosen = url.searchParams.get('saves')?.split(',').filter(Boolean);
-    if (chosen) {
-      saves = saves.filter(s => chosen.includes(s.id));
-      if (saves.length !== new Set(chosen).size) fail('Save not found.', 404);
-    }
-    if (saveId) {
-      saves = saves.filter(s => s.id === saveId);
-      if (!saves.length) fail('Save not found.', 404);
-    }
-    if (profileId) {
-      saves = saves.filter(s => s.profiles.some(p => p.id === profileId));
-      if (!saves.length) fail('Profile not found.', 404);
-    }
-    const exported = saves.map(save => {
-      const profiles = profileId ? save.profiles.filter(p => p.id === profileId) : save.profiles;
-      return {
+    const owned = current()
+      .saves.filter(s => s.userId === user.id)
+      .map(save => ({
         id: save.id,
         name: save.name,
-        activeProfile: profiles.some(p => p.id === save.activeProfile)
-          ? save.activeProfile
-          : profiles[0]!.id,
-        profiles: profiles.map(profile => ({
+        activeProfile: save.activeProfile,
+        profiles: save.profiles.map(profile => ({
           id: profile.id,
           name: profile.name,
           kind: profile.kind,
           plan: profile.plan || null,
-          state: share ? shareState(profile.state) : profile.state,
+          state: profile.state,
           ...(profile.kind === 'original' ? { handbook: profile.handbook || handbook } : {}),
         })),
-      };
-    });
-    return response({
-      format: transferFormat,
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      saves: exported,
-    });
+      }));
+    const { exported } = selectForExport(owned, exportQuery(url.searchParams), message =>
+      fail(message, 404),
+    );
+    return response(exported);
   }
   // Copies a profile of one of the user's saves, plan and progress included, into the same
   // save under a new id and makes the copy active. The source is not changed.
@@ -108,14 +91,7 @@ export function saveRoutes({
         fail('Import would exceed the save limit.');
       // importableTransfer ran every profile's progress through validateState; the owner is
       // added below.
-      for (const save of imported.saves as Save[]) {
-        const oldActive = save.activeProfile;
-        for (const importedProfile of save.profiles) {
-          const previous = importedProfile.id;
-          importedProfile.id = randomId();
-          if (previous === oldActive) save.activeProfile = importedProfile.id;
-        }
-        save.id = randomId();
+      for (const save of remapImportedIds(imported, randomId) as Save[]) {
         save.userId = user.id;
         draft.saves.push(save);
         draft.users.find(account => account.id === user.id)!.activeSave = save.id;
