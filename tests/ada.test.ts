@@ -19,6 +19,7 @@ const facts = (over: Partial<AdaFacts> = {}) => ({
   customTasks: 0,
   removedSteps: 0,
   groups: 1,
+  groupedSteps: false,
   feasible: true,
   reason: '',
   short: [],
@@ -207,6 +208,15 @@ test('ADA notices the states that are not just a number', () => {
   assert.match(
     adaRemarks(facts({ storage: { done: 9, total: 9 } })).find(r => r.id === 'storage-done')!.text,
     /All 9 container positions are verified/,
+  );
+  assert.match(
+    adaRemarks(facts({ view: 'plan', groupedSteps: true })).find(r => r.id === 'grouped-steps')!
+      .text,
+    /follow your factory groups/,
+  );
+  assert.ok(
+    !ids(facts({ view: 'plan' })).includes('grouped-steps'),
+    'only when the steps follow them',
   );
   assert.match(
     adaRemarks(facts({ groups: 3 })).find(r => r.id === 'groups-some')!.text,

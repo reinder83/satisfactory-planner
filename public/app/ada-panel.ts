@@ -31,9 +31,10 @@ import {
   wizard,
   workspace,
 } from './session.ts';
+import { groupsReorder } from './group-order.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
-import { planTasks, removedPlanTasks } from './tasks.ts';
+import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
@@ -207,6 +208,14 @@ function adaFacts(): AdaFacts {
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
+    groupedSteps:
+      factoryGroupsState().groups.length > 0 &&
+      !calculated?.guide &&
+      !milestoneOnly() &&
+      !taskEditsState().order[phase()]?.length &&
+      // Only when the groups change the planner's order: groups with no rows assigned, or rows
+      // that already go group by group, leave it as it was (#869).
+      groupsReorder(calcStage()?.rows || [], state.factoryGroups),
     feasible: calculated ? storedStage.feasible !== false : true,
     reason: calculated ? storedStage.reason || '' : '',
     // Raw resources this stage uses beyond the profile's resource limits.

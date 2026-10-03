@@ -41,7 +41,8 @@ export function openingPhase(
 export const phaseStepIds = (phase: StageKey): string[] => planTaskIds(phase);
 
 // The ids of the phase's generated steps, before edits: the ids of generatedTasks() in tasks.ts
-// without the step text (generatedTaskIds: phaseSteps in progression.ts for a calculated profile
+// without the step text (generatedTaskIds: orderedPhaseSteps in views/calculated.ts, phaseSteps
+// in progression.ts with the production steps in factory-group order, for a calculated profile
 // or its guide, else none). Post-game plans Phase 5's stage, so its production steps
 // have Phase 5's ids (shared-steps.ts asks for every phase).
 export const generatedStepIds = (phase: Phase): string[] => generatedTaskIds(phase);

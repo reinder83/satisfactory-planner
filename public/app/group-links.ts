@@ -12,10 +12,12 @@
 // among everything that asks for it in proportion to what each asks, as elsewhere in the
 // planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
 // left out: they are that group's own belts.
+import { LINK_DUST, rowShares, rowTotal, UNGROUPED } from './group-order.ts';
 import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
 
-// Place ids that are not factory groups.
-export const UNGROUPED = 'ungrouped';
+// Place ids that are not factory groups. UNGROUPED and rowShares live in group-order.ts, which
+// the build plan's order shares (#869); they are exported here too for the pages that use them.
+export { UNGROUPED, rowShares };
 // The mines and existing supply as one place: how links from them were keyed before #231, and
 // the id of the page's card for them. A vehicle saved on such a link applies to every item it
 // carries (linkTransportFor below).
@@ -71,40 +73,6 @@ export interface GroupLink {
   items: { item: string; rate: number }[];
 }
 
-// Rates this small are rounding dust.
-const LINK_DUST = 1e-6;
-
-// The share of a row that sits in each place (group id or UNGROUPED), adding up to 1.
-export function rowShares(
-  total: number,
-  memberships: { group: string; rate: number | null }[] | undefined,
-): Map<string, number> {
-  const shares = new Map<string, number>();
-  const add = (place: string, share: number) => {
-    if (share > LINK_DUST) shares.set(place, (shares.get(place) || 0) + share);
-  };
-  if (!memberships?.length || total <= LINK_DUST) {
-    shares.set(UNGROUPED, 1);
-    return shares;
-  }
-  const fixed = memberships.filter(m => m.rate != null);
-  let taken = 0;
-  for (const membership of fixed) {
-    // Fixed rates past the row's total are capped at what is left.
-    const share = Math.min(membership.rate! / total, 1 - taken);
-    add(membership.group, share);
-    taken += Math.max(0, share);
-  }
-  // What the fixed rates leave is split evenly between the memberships without a rate (a row
-  // just added to a second group has two), or is Ungrouped when every membership has a rate.
-  // The factory cards (allocationText in views/factories.ts) use the same rule (#197).
-  const rest = Math.max(0, 1 - taken);
-  const open = memberships.filter(m => m.rate == null);
-  if (open.length) for (const membership of open) add(membership.group, rest / open.length);
-  else add(UNGROUPED, rest);
-  return shares;
-}
-
 export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink[] {
   const known = new Set(groups.groups.map(g => g.id));
   // Per item: what each place makes and what each place asks for.
@@ -121,7 +89,7 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     placeRates.set(place, (placeRates.get(place) || 0) + rate);
   };
   for (const row of stage.rows || []) {
-    const total = Object.values(row.outputs || {})[0] || row.generationMW || 0;
+    const total = rowTotal(row);
     // A membership in a group that no longer exists counts as ungrouped.
     const memberships = (groups.assignments[row.id] || []).map(membership =>
       known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
