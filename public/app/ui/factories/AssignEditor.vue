@@ -1,7 +1,7 @@
 <!--
   A factory card's group editor, shown while editing groups. `factoryKey` is the calculated row
   id. Each membership has a rate (empty: the whole output, or
-  the remainder) and a ✕; "+ Add to group…" picks another and Add joins it (#856). Every change saves the factory's
+  the rest) and a ✕; "+ Add to group…" picks another and Add joins it (#856). Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
   state.ts. A rate field shows the saved rate, then what is typed (ui/draft.ts, #691), and is
   redrawn with the saved rate afterwards, whether or not the save worked.
@@ -47,7 +47,7 @@ const savedRates = (): Record<string, string> =>
 const rates = useDrafts(savedRates);
 
 // The hint under a rate field: its unit, and for a nuclear plant the power a valid rate stands
-// for (#374). A field left empty (the whole output or the remainder) has no figure.
+// for (#374). A field left empty (the whole output or the rest) has no figure.
 function hint(unit: RateUnit, raw: string): string {
   if (unit.name === 'MW') return 'MW';
   const rate = raw.trim() === '' ? NaN : Number(raw);
@@ -115,7 +115,7 @@ async function assign(
   return saved ?? false;
 }
 
-// The rate beside a group: empty for the whole output or the remainder, anything else above 0.
+// The rate beside a group: empty for the whole output or the rest, anything else above 0.
 function setRate(event: Event, group: string) {
   const input = event.target as HTMLInputElement,
     raw = input.value.trim();
@@ -124,7 +124,7 @@ function setRate(event: Event, group: string) {
     rate = Number(raw);
     if (!Number.isFinite(rate) || rate <= 0) {
       toast(
-        'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
+        'Enter a rate above 0, or leave the field empty for the whole output or the rest.',
         true,
       );
       input.value = savedRate(group);
@@ -203,7 +203,7 @@ async function add(event: Event) {
         step="any"
         :data-assign-rate="factoryKey"
         :data-group="row.group"
-        placeholder="all / remainder"
+        placeholder="all / rest"
         :value="rates[row.group]"
         :aria-label="row.label"
         :aria-describedby="row.hintId"
