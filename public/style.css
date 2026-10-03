@@ -1131,12 +1131,13 @@ p {
     min-height: 44px;
   }
   /* The quiet buttons in these rows are 44px touch targets too (#832): All settings → and
-     ← Guided start, a factory's ✕ per group, ADA's tools and Unmute, and the alternates' tools.
-     Height only, as above. The underline moves from the box's bottom edge to the text
-     (text-decoration), so it stays under the words in the taller box. The storage bays' quiet
-     buttons are drawn as boxes and have their own rule (.bay-actions). */
+     ← Guided start, a factory's ✕ per group and its Add (#856), ADA's tools and Unmute, and the
+     alternates' tools. Height only, as above. The underline moves from the box's bottom edge to
+     the text (text-decoration), so it stays under the words in the taller box. The storage bays'
+     quiet buttons are drawn as boxes and have their own rule (.bay-actions). */
   .guided-escape .btn.quiet,
   .assign-row .btn.quiet,
+  .assign-add .btn.quiet,
   .ada-tools .btn.quiet,
   .ada.is-muted .btn.quiet,
   .alt-tools .btn.quiet {
@@ -4687,7 +4688,15 @@ button.rail-tile:hover {
   font-size: 11px;
   color: var(--muted);
 }
+/* "+ Add to group…" fills the row; Add beside it joins the picked group (#856). */
+.assign-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
 .assign-editor select {
+  min-width: 0;
   border: 1px solid var(--line);
   background: #0f1214;
   color: var(--ink);

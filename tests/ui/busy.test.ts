@@ -409,14 +409,20 @@ test('a factory’s rate field and Add select keep focus while they save', async
   assert.equal(state.factoryGroups?.assignments[wire]?.[0]?.rate, 120);
   assert.ok(ready(rate));
   assert.ok(focusedOn(rate), describeFocus());
-  const add = `[data-assign-add="${wire}"]`;
+  // The menu only picks the group; Add joins it (#856).
+  const add = `[data-assign-add="${wire}"]`,
+    join = `[data-assign-go="${wire}"]`;
   change(add, 'fg-plates1');
   await settle();
-  assert.ok(busy(add));
-  assert.ok(focusedOn(add), describeFocus());
-  change(add, 'fg-remote1');
+  assert.equal(net.calls.length, 1, 'picking a group saves nothing');
+  press(join);
   await settle();
-  assert.equal(net.calls.length, 2, 'a key pressed on it meanwhile saves nothing');
+  assert.ok(busy(join));
+  assert.ok(focusedOn(join), describeFocus());
+  // Pressed again meanwhile, it sends nothing.
+  press(join);
+  await settle();
+  assert.equal(net.calls.length, 2);
   await net.release();
   assert.deepEqual(
     state.factoryGroups?.assignments[wire]?.map(m => m.group),
@@ -428,6 +434,8 @@ test('a factory’s rate field and Add select keep focus while they save', async
   const computer = `[data-assign-add="${migratedRow('computer')}"]`;
   const before = card($(computer));
   change(computer, 'fg-remote1');
+  await settle();
+  press(`[data-assign-go="${migratedRow('computer')}"]`);
   await net.release();
   assert.ok(card($(computer)) !== before, 'the card moved');
   assert.ok(focusedOn(computer), describeFocus());
