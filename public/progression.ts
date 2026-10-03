@@ -568,16 +568,14 @@ function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideT
       title: 'Unlock Coal Power before switching to coal',
       body: 'After Phase 1, prioritize Tier 3 Coal Power. Use existing reinforced-plate, rotor and cable production to fund it; see the HUB cost checklist. Keep biomass online while priming water and starting the coal supply. Only retire burners after stable generation is proven.',
     });
-  if (stage >= 3 && rows.some(r => r.machine === 'Fuel Generator'))
+  const fuels = [
+    ...new Set(rows.filter(r => r.machine === 'Fuel Generator').map(generatorFuel)),
+  ].filter(Boolean);
+  if (stage >= 3 && fuels.length)
     tasks.push({
       id: 'startup-fuel-' + stage,
       title: 'Unlock and commission the planned fuel power',
-      body:
-        'Complete Oil Processing and Petroleum Power first. For turbofuel, complete its Sulfur MAM research; ' +
-        (stage >= 4
-          ? 'Rocket fuel additionally needs its own MAM node, nitrogen supply and Blender access. '
-          : '') +
-        ' Confirm any fuel alternates in the hard-drive checklist. Start with an unlocked fuel recipe and upgrade only after the full new chain is ready.',
+      body: fuelPowerBody(fuels),
     });
   tasks.push(...preferredPowerTasks(context));
   if (stage >= 4 && rows.some(r => r.inputs['Alumina Solution'] || r.outputs['Alumina Solution']))
@@ -596,6 +594,18 @@ function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideT
           : 'Complete the required Tier 9 conversion/quantum unlocks. Commission the full uranium → plutonium → Ficsonium waste chain before burning plutonium. Match underclocks and verify power for recycling during startup.',
     });
   return tasks;
+}
+
+// The fuel power step's text: the fuels this phase's Fuel Generator lines burn (Fuel, Turbofuel,
+// Rocket Fuel, as generators() in planner/recipes.ts names them), with only their unlocks (#880).
+function fuelPowerBody(fuels: string[]): string {
+  const research = [
+    fuels.includes('Turbofuel') ? ' For turbofuel, complete its Sulfur MAM research.' : '',
+    fuels.includes('Rocket Fuel')
+      ? ' Rocket fuel also needs its own MAM node, nitrogen supply and Blender access.'
+      : '',
+  ].join('');
+  return `This phase's Fuel Generators burn ${listNames(fuels)}. Complete Oil Processing and Petroleum Power first.${research} Confirm any fuel alternates in the hard-drive checklist. Start with an unlocked fuel recipe and upgrade only after the full new chain is ready.`;
 }
 
 // From Phase 3, when the profile chose a main power source: the generator lines this phase's
@@ -713,8 +723,17 @@ function generatorStep(
   const prerequisites = sources.map(source => SOURCE_PREREQUISITES[source]).filter(Boolean);
   return {
     title: `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`,
-    body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} Check the actual maximum consumption with the utility allowance, and commission more capacity before connecting the next factory. Keep the previous plant online until the replacement is stable.`,
+    body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`,
   };
+}
+
+// The step's closing advice, by its case (#881). Keep: no line needs more machines, so there is
+// no capacity to commission and no replacement. Build and Expand commission new capacity; a
+// previous plant to keep online exists only after the profile's start phase (previous is 0 there).
+function closingAdvice(verb: string, previous: number): string {
+  if (verb === 'Keep')
+    return "No line needs more machines in this phase. Before connecting the next factory, check the actual maximum consumption, with the utility allowance, against these lines' output.";
+  return `Check the actual maximum consumption with the utility allowance, and commission more capacity before connecting the next factory.${previous ? ' Keep the previous plant online until the replacement is stable.' : ''}`;
 }
 
 // One generator line in the step's text: its count and name as its build step shows them, what
