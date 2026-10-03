@@ -1,6 +1,6 @@
 # Satisfactory Planner — agent guide
 
-Read this file before changing the project. For interface work also read `public/AGENTS.md`. `README.md` describes installation and user features. These instructions describe the current implementation, not a requirement to keep its visual design. Follow the user's current request where it changes the scope.
+Read this file before changing the project. For interface work also read `public/AGENTS.md`. `README.md` summarizes the app for users; `docs/USER-GUIDE.md` describes the user features in detail, `docs/SELF-HOSTING.md` the Docker installation and `docs/DEVELOPMENT.md` running from source, tests, builds and deployment. These instructions describe the current implementation, not a requirement to keep its visual design. Follow the user's current request where it changes the scope.
 
 ## Product and priorities
 

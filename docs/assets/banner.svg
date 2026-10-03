@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="200" viewBox="0 0 960 200" role="img" aria-labelledby="banner-title">
+  <title id="banner-title">Satisfactory Planner: production plans, build order and progress tracking for Satisfactory</title>
+  <defs>
+    <pattern id="hazard" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="13" height="26" fill="#f89c1c"/>
+      <rect x="13" width="13" height="26" fill="#15181a"/>
+    </pattern>
+  </defs>
+  <rect width="960" height="200" fill="#0f1214"/>
+  <rect width="960" height="14" fill="url(#hazard)"/>
+  <rect y="186" width="960" height="14" fill="url(#hazard)"/>
+  <rect y="14" width="960" height="1" fill="#2b3136"/>
+  <rect y="185" width="960" height="1" fill="#2b3136"/>
+  <g transform="translate(52 52) scale(1.5)">
+    <polygon points="32,1 62,16.5 62,47.5 32,63 2,47.5 2,16.5" fill="#f89c1c"/>
+    <circle cx="32" cy="32" r="10" fill="none" stroke="#0b0d0e" stroke-width="7"/>
+  </g>
+  <text x="180" y="72" fill="#f89c1c" font-family="'Saira Condensed', 'Arial Narrow', Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="4">PROJECT ASSEMBLY</text>
+  <text x="178" y="122" fill="#ffffff" font-family="'Saira Condensed', 'Arial Narrow', Arial, sans-serif" font-size="50" font-weight="700" letter-spacing="2">SATISFACTORY PLANNER</text>
+  <text x="180" y="154" fill="#8a949c" font-family="'IBM Plex Mono', Consolas, 'Courier New', monospace" font-size="16">Production plans · build order · progress you keep</text>
+</svg>
