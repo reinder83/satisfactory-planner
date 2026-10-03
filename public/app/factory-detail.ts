@@ -47,6 +47,12 @@ export function openGroupChain(groupId: string) {
   showDetail({ kind: 'group', id: groupId });
 }
 
+// PROTOTYPE #883: the flow diagram for a factory group (ui/detail/GroupFlowDialog.vue).
+export function openGroupFlow(groupId: string) {
+  if (!factoryGroupsState().groups.some(g => g.id === groupId)) return;
+  showDetail({ kind: 'groupflow', id: groupId });
+}
+
 // The rows assigned to group `groupId` that run in the current phase: { id, link, name,
 // machine, machines, inputs, outputs } with total rates, and generationMW as `mw`.
 function groupChainNodes(groupId: string): ChainNode[] {

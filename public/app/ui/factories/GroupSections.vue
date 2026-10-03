@@ -10,7 +10,7 @@
 <script setup lang="ts" generic="T">
 import { computed } from 'vue';
 import { save } from '../../api.ts';
-import { openGroupChain } from '../../factory-detail.ts';
+import { openGroupChain, openGroupFlow } from '../../factory-detail.ts';
 import { factoryEditing, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
@@ -133,6 +133,14 @@ async function remove(event: Event, id: string) {
         @click="openGroupChain(section.id)"
       >
         Build order ↗
+      </button>
+      <button
+        v-if="!editing && section.members.length > 1"
+        class="btn"
+        :data-group-flow="section.id"
+        @click="openGroupFlow(section.id)"
+      >
+        Flow diagram ↗
       </button>
     </header>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
