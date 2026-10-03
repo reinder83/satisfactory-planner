@@ -281,6 +281,41 @@ try {
   await renameStep(builtInTitle);
   await page.locator('[data-toggle-plan-edit]').first().click();
   await page.locator(`#main [data-edit-task="${builtInId}"]`).waitFor({ state: 'detached' });
+  // Back and Forward start each page at its top, also while focus stays on the sidebar link
+  // that was followed (#925): with the browser's own scroll restoration, Chrome put back part of
+  // the old offset after the page was drawn. Focus stays on the link throughout.
+  const scrolledTo = (top: number) =>
+    page.evaluate(top => {
+      window.scrollTo(0, top);
+      return window.scrollY;
+    }, top);
+  const storageLink = page.locator('.nav a[href="#storage"]');
+  assert.ok((await scrolledTo(1500)) > 0, 'the plan scrolls');
+  await storageLink.focus();
+  await page.keyboard.press('Enter');
+  await page.locator('[data-complete-bay="A"]').waitFor();
+  assert.ok((await scrolledTo(400)) > 0, 'the storage room scrolls');
+  const traverse = async (move: 'back' | 'forward', shown: string) => {
+    await page.evaluate(move => (move === 'back' ? history.back() : history.forward()), move);
+    await page.locator(shown).waitFor();
+    // Long enough for a restored offset to land, which came after the page was drawn.
+    await page.waitForTimeout(500);
+    return page.evaluate(() => ({
+      top: window.scrollY,
+      focus: document.activeElement?.matches('.nav a[href="#storage"]') ?? false,
+    }));
+  };
+  assert.deepEqual(
+    await traverse('back', '[data-phase-notes-link]'),
+    { top: 0, focus: true },
+    'Back opens the plan at its top, focus on the sidebar link',
+  );
+  await scrolledTo(500);
+  assert.deepEqual(
+    await traverse('forward', '[data-complete-bay="A"]'),
+    { top: 0, focus: true },
+    'Forward opens the storage room at its top, focus on the sidebar link',
+  );
   // While a dialog's body scrolls, its hazard stripe and sticky header keep the top of the
   // dialog: no body content shows above the header (#314). The stripe is the dialog's ::before,
   // so a point on it hits the <dialog> itself.
