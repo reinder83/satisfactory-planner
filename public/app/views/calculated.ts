@@ -4,7 +4,7 @@
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
 import { groupedRows, groupedSteps } from '../group-order.ts';
-import { phaseSteps, type PhaseStep } from '../../progression.ts';
+import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
 import { itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
@@ -289,6 +289,15 @@ export function currentBuildStatus(): BuildStatus | null {
     buildCache = { key, status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered) };
   }
   return buildCache.status;
+}
+
+// A row of the open phase by its id, named as its build-plan step is (rowStepTitle): "Wire for
+// Alpha" for a factory group's own line made on site (#911), else the row's name; the id itself
+// for a row the phase lacks. The build status (BuildStatusPanel.vue) and ADA name rows by it.
+export function buildRowName(rowId: string): string {
+  const row = calcStage()?.rows?.find(candidate => candidate.id === rowId);
+  if (!row) return rowId;
+  return calculated ? rowStepTitle(calculated, state, row) : row.name;
 }
 
 // A row marked running that a missing supplier holds back (build-status.ts, #66): the share of

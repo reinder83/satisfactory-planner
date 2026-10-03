@@ -236,16 +236,29 @@ function crossingPorts(
 }
 
 // Each port's rate shared among the group's lines that use its item (`ins`) or make it
-// (`outs`), in proportion to their parts.
+// (`outs`), in proportion to their parts. For an item the group makes on site (#876,
+// ItemBooks.local) an outgoing port is shared by what each line making it has left after the
+// links inside the group, as groupLinks counts it: the group's own lines' excess goes to the
+// sink (its `sunk`), and the other lines making the item share the rest, so every output row
+// still adds up (#912).
 function portLinks(
   parts: GroupPart[],
   ports: { ins: FlowPort[]; outs: FlowPort[] },
   belts: BeltsFor,
+  inside: FlowLink[],
+  local: ItemBooks['local'],
+  groupId: string,
 ): FlowLink[] {
-  const share = (port: FlowPort, part: (line: GroupPart) => number, inward: boolean) => {
-    const total = parts.reduce((sum, line) => sum + part(line), 0);
-    return parts.flatMap((line): FlowLink[] => {
-      const rate = total > LINK_DUST ? (port.rate * part(line)) / total : 0;
+  const share = (
+    port: FlowPort,
+    lines: GroupPart[],
+    part: (line: GroupPart) => number,
+    inward: boolean,
+    portRate = port.rate,
+  ) => {
+    const total = lines.reduce((sum, line) => sum + part(line), 0);
+    return lines.flatMap((line): FlowLink[] => {
+      const rate = total > LINK_DUST ? (portRate * part(line)) / total : 0;
       if (rate <= LINK_DUST) return [];
       const place: FlowEnd = { kind: 'place', id: port.place };
       return [
@@ -261,9 +274,48 @@ function portLinks(
       ];
     });
   };
+  // What a line has left of `item` after its links inside the group.
+  const leftOf = (line: GroupPart, item: string) =>
+    Math.max(
+      0,
+      inside
+        .filter(link => link.item === item && isLine(link.from, line.row.id))
+        .reduce((left, link) => left - link.rate, madeBy(line, item)),
+    );
+  const outLinks = (item: string): FlowLink[] => {
+    const itemPorts = ports.outs.filter(port => port.item === item);
+    const madeHere = (line: GroupPart) => madeBy(line, item);
+    if (!local[item]?.has(groupId))
+      return itemPorts.flatMap(port => share(port, parts, madeHere, false));
+    const makers = parts.filter(line => madeHere(line) > LINK_DUST);
+    const own = makers.filter(line => line.row.onSite?.group === groupId);
+    const others = makers.filter(line => line.row.onSite?.group !== groupId);
+    const left = new Map(makers.map(line => [line, leftOf(line, item)]));
+    const leftHere = (line: GroupPart) => left.get(line) || 0;
+    const othersLeft = others.reduce((sum, line) => sum + leftHere(line), 0);
+    // The own lines' excess goes to the sink port(s), up to what they have left.
+    let ownLeft = own.reduce((sum, line) => sum + leftHere(line), 0);
+    const fromOwn = itemPorts.map(port => {
+      const rate = port.place === OUTSIDE.surplus ? Math.min(port.rate, ownLeft) : 0;
+      ownLeft -= rate;
+      return rate;
+    });
+    return itemPorts.flatMap((port, i) => {
+      const rest = port.rate - fromOwn[i]!;
+      // Should the other lines have nothing left (memberships changed since the plan was
+      // calculated), the rest is shared over every line making the item, as without the mark.
+      const restLinks =
+        rest <= LINK_DUST
+          ? []
+          : othersLeft > LINK_DUST
+            ? share(port, others, leftHere, false, rest)
+            : share(port, makers, madeHere, false, rest);
+      return [...share(port, own, leftHere, false, fromOwn[i]), ...restLinks];
+    });
+  };
   return [
-    ...ports.ins.flatMap(port => share(port, line => usedBy(line, port.item), true)),
-    ...ports.outs.flatMap(port => share(port, line => madeBy(line, port.item), false)),
+    ...ports.ins.flatMap(port => share(port, parts, line => usedBy(line, port.item), true)),
+    ...[...new Set(ports.outs.map(port => port.item))].flatMap(outLinks),
   ];
 }
 
@@ -312,9 +364,10 @@ export function groupFlow(
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const parts = groupParts(stage, groups, groupId);
-  const inside = insideLinks(parts, itemBooks(stage, groups), belts, groupId);
+  const books = itemBooks(stage, groups);
+  const inside = insideLinks(parts, books, belts, groupId);
   const ports = crossingPorts(stage, groups, groupId, belts);
-  const links = [...inside, ...portLinks(parts, ports, belts)];
+  const links = [...inside, ...portLinks(parts, ports, belts, inside, books.local, groupId)];
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));
   const lanes = assignLanes(lines);

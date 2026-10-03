@@ -15,6 +15,7 @@ import {
   milestoneOnlyPhase,
   phaseSteps,
   progression,
+  rowStepTitle,
 } from '../public/progression.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { appSource } from './helpers/app-source.ts';
@@ -124,6 +125,7 @@ function ui() {
     progression,
     phaseSteps,
     milestoneOnlyPhase,
+    rowStepTitle,
     firstPlanPhase,
     carryOptions,
     pickedRecipeUnlocks,

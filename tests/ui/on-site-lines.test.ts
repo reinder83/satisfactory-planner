@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { setFactoryEditing, setFactoryFilter, setQuery, state } from '../../public/app/session.ts';
+import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { render } from '../../public/app/shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../public/app/views/factories.ts';
 import { planTasks } from '../../public/app/tasks.ts';
@@ -100,4 +101,21 @@ test('the Notes page lists ticks kept for review, and nothing without them', asy
   assert.match(entry.textContent!, /Now made on site for Site A, and on a central line\./);
   await show();
   assert.equal($('#main [data-site-review]'), null);
+});
+
+test('the build status and ADA name a ticked group line for its group (#911)', async () => {
+  go('plan');
+  await show({ checks: { ['calc-3-' + LINE]: true } });
+  const waiting = $('#main [data-build-waiting]')!;
+  const names = [...waiting.querySelectorAll('li button')].map(button => button.textContent);
+  assert.deepEqual(names, ['Wire for Site A']);
+  setAdaIndex(0);
+  adaClearFault();
+  let remark = '';
+  for (let i = 0; i < 40 && !remark; i++) {
+    setAdaIndex(i);
+    const line = adaCurrent();
+    if (line?.id === 'build-waiting') remark = line.text;
+  }
+  assert.match(remark, /^Wire for Site A is marked running but short of /);
 });
