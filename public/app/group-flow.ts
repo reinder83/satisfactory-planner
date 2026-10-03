@@ -16,7 +16,8 @@
 //
 // Lines are keyed by their plan row's id and placed by rowPlaces alone, so a per-group line
 // (#868, #896: a row that belongs wholly to one group) is a line of its own in that group with
-// no change here. Everything in the model is data: the page measures and draws it.
+// no change here; for an item its group makes on site, it feeds that group's own lines first
+// (#876, insideLinks). Everything in the model is data: the page measures and draws it.
 import { groupedRows, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
   groupLinks,
@@ -155,16 +156,29 @@ const usedBy = (part: GroupPart, item: string) => (part.row.inputs?.[item] || 0)
 
 // The links between the group's own lines, by maker, its outputs in order, then user. A line
 // that uses what it makes gets a self link to itself, so its rows still add up (#898).
-function insideLinks(parts: GroupPart[], books: ItemBooks, belts: BeltsFor): FlowLink[] {
+// For an item the group makes on site (#876, ItemBooks.local) its own lines meet its own demand
+// first, by the same rule among themselves; any other line making it shares out only the part of
+// each user's demand they leave.
+function insideLinks(
+  parts: GroupPart[],
+  books: ItemBooks,
+  belts: BeltsFor,
+  groupId: string,
+): FlowLink[] {
   const links: FlowLink[] = [];
   parts.forEach((maker, makerIndex) => {
     for (const item of Object.keys(maker.row.outputs || {})) {
       const supplied = madeBy(maker, item);
       if (supplied <= LINK_DUST) continue;
-      const made = placeTotal(books.supply[item]),
-        asked = placeTotal(books.demand[item]);
+      const own = books.local[item]?.get(groupId);
+      const onSite = !!own && maker.row.onSite?.group === groupId;
+      const made = onSite ? own.made : placeTotal(books.supply[item]),
+        asked = onSite ? own.asked : placeTotal(books.demand[item]);
+      // The part of each user's demand left after the group's own lines (all of it without them).
+      const left =
+        own && !onSite && own.asked > 0 ? 1 - Math.min(own.made, own.asked) / own.asked : 1;
       parts.forEach((user, userIndex) => {
-        const wanted = usedBy(user, item);
+        const wanted = usedBy(user, item) * left;
         if (wanted <= LINK_DUST) return;
         const rate = sharedRate(made, asked, supplied, wanted);
         if (rate > LINK_DUST)
@@ -298,7 +312,7 @@ export function groupFlow(
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const parts = groupParts(stage, groups, groupId);
-  const inside = insideLinks(parts, itemBooks(stage, groups), belts);
+  const inside = insideLinks(parts, itemBooks(stage, groups), belts, groupId);
   const ports = crossingPorts(stage, groups, groupId, belts);
   const links = [...inside, ...portLinks(parts, ports, belts)];
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts));

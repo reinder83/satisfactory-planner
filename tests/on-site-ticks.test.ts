@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { calculate } from '../planner.ts';
 import { onSiteSettings, siteReviewEntries } from '../public/app/on-site.ts';
+import { groupFlow } from '../public/app/group-flow.ts';
 import { groupLinks, itemBooks, OUTSIDE } from '../public/app/group-links.ts';
 import {
   groupedRows,
@@ -203,6 +204,31 @@ test('two groups that make Wire on site have no Wire link between them', () => {
     ),
     'a Wire link between the groups without the marks',
   );
+});
+
+test("a group's flow feeds its own Wire line to its own users first", () => {
+  const stage = markedPlan().stages['3'];
+  const groups = twoGroups(true);
+  for (const [group, line] of [
+    [ALPHA, ALPHA_WIRE],
+    [BETA, BETA_WIRE],
+  ] as const) {
+    const flow = groupFlow(stage, groups, group, (_item, rate) => String(rate))!;
+    const wireLine = flow.lines.find(entry => entry.id === line)!;
+    const out = wireLine.outputs.find(row => row.item === 'Wire')!;
+    const fed = out.links
+      .filter(link => link.to.kind === 'line')
+      .reduce((sum, link) => sum + link.rate, 0);
+    // Every Wire input row of the group is fed from its own line, in full.
+    const asked = flow.lines
+      .flatMap(entry => entry.inputs)
+      .filter(row => row.item === 'Wire')
+      .reduce((sum, row) => sum + row.rate, 0);
+    assert.ok(asked > 0, group + ' uses Wire');
+    assert.ok(Math.abs(fed - asked) < 1e-6, `${group}: ${fed} of ${asked}`);
+    // No Wire comes into the group from anywhere else.
+    assert.ok(!flow.ins.some(port => port.item === 'Wire'), group + ' takes no Wire in');
+  }
 });
 
 test('a recalculation that splits a ticked central line keeps the tick for review', () => {

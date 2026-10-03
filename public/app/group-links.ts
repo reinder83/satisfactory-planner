@@ -83,10 +83,14 @@ export interface GroupLink {
 // `sunk`: per item, what a group's own lines made on site make beyond the group's own demand,
 // which goes straight to the sink (#876). A group's own lines' supply of an item it marks, and
 // the demand it meets, are left out of `supply` and `demand`: they stay inside the group.
+// `local`: per item and group, what that group's own lines make of an item it marks (`made`) and
+// what the group asked for it before they met it (`asked`), so a group's flow (group-flow.ts)
+// shares those lines out inside the group by the same rule.
 export interface ItemBooks {
   supply: Record<string, Map<string, number>>;
   demand: Record<string, Map<string, number>>;
   sunk: Record<string, Map<string, number>>;
+  local: Record<string, Map<string, { made: number; asked: number }>>;
 }
 
 // The books groupLinks shares out: every row's inputs and outputs split by its places
@@ -129,7 +133,11 @@ export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks 
     put(demand, item, OUTSIDE.delivery, delivery.rate || 0);
   for (const [item, rate] of Object.entries(stage.surplus || {}))
     put(demand, item, OUTSIDE.surplus, rate);
-  return { supply, demand, sunk: onSiteBooks(onSite, demand) };
+  const local: ItemBooks['local'] = {};
+  for (const [item, groupsMaking] of Object.entries(onSite))
+    for (const [group, made] of groupsMaking)
+      (local[item] ??= new Map()).set(group, { made, asked: demand[item]?.get(group) || 0 });
+  return { supply, demand, sunk: onSiteBooks(onSite, demand), local };
 }
 
 // Each group's own lines made on site meet that group's own demand for the item first (#876):
