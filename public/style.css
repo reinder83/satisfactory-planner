@@ -1125,10 +1125,28 @@ p {
    Height only: a min-width would let a flex row shrink a button below its text (#750). Quiet
    buttons are left out: they are underlined text links whose underline would drop away from the
    text, and they sit in dense rows (storage bays, assignment rows); the ones that are touch
-   targets on a phone have their own rule (.task-tools, .task-link). */
+   targets on a phone have their own rule (.task-tools, .task-link) or the one below. */
 @media (max-width: 720px) {
   .btn:not(.quiet) {
     min-height: 44px;
+  }
+  /* The quiet buttons in these rows are 44px touch targets too (#832): All settings → and
+     ← Guided start, a factory's ✕ per group, ADA's tools and Unmute, and the alternates' tools.
+     Height only, as above. The underline moves from the box's bottom edge to the text
+     (text-decoration), so it stays under the words in the taller box. The storage bays' quiet
+     buttons are drawn as boxes and have their own rule (.bay-actions). */
+  .guided-escape .btn.quiet,
+  .assign-row .btn.quiet,
+  .ada-tools .btn.quiet,
+  .ada.is-muted .btn.quiet,
+  .alt-tools .btn.quiet {
+    min-height: 44px;
+    border-bottom: 0;
+    text-decoration: underline 1px rgba(248, 156, 28, 0.5);
+    text-underline-offset: 5px;
+  }
+  .assign-row .btn.quiet.danger {
+    text-decoration-color: rgba(224, 85, 58, 0.5);
   }
 }
 .full {
@@ -1247,6 +1265,13 @@ textarea::placeholder {
 }
 .tab.active .count {
   color: var(--accent);
+}
+/* On a phone a tab is a 44px touch target (#838): the factories' status chips and the storage
+   room's floor tabs. Height only; a button centres its label in the taller box. */
+@media (max-width: 720px) {
+  .tab {
+    min-height: 44px;
+  }
 }
 /* The factories pages' status filter (FilterChips.vue, SP-16): .tabs as a radio group, a count
    beside each label. On a narrow page it takes a row of its own and wraps, each chip growing to
@@ -2169,6 +2194,13 @@ tr.muted td:first-child {
   border-color: var(--accent);
   color: var(--bright);
 }
+/* On a phone the bay's buttons (Complete room, ← →, Hide bay, Remove bay) are 44px touch
+   targets (#832). They are quiet buttons drawn as boxes, so they have no underline to keep. */
+@media (max-width: 720px) {
+  .bay-actions .btn.quiet {
+    min-height: 44px;
+  }
+}
 /* "Move to…" on a bay while editing the layout (#190): sized like the buttons beside it. */
 .bay-actions .move-bay {
   width: auto;
@@ -2400,6 +2432,22 @@ tr.muted td:first-child {
 .slot-drag:focus-visible {
   color: var(--accent-hi);
   border-color: var(--accent);
+}
+/* On a phone the ⠿ and ✕ in a container's corner are 24px targets, 4px apart (#838), the
+   minimum WCAG 2.5.8 asks. 44px each would cover the container's address and its item icon. */
+@media (max-width: 720px) {
+  .slot-remove,
+  .slot-drag {
+    top: 3px;
+    width: 24px;
+    height: 24px;
+  }
+  .slot-remove {
+    right: 3px;
+  }
+  .slot-drag {
+    right: 31px;
+  }
 }
 .slot.drop-over {
   outline: 2px solid var(--accent);
@@ -4349,10 +4397,12 @@ button.rail-tile:hover {
   .resource-inputs {
     grid-template-columns: 1fr 1fr;
   }
+  /* The step tabs are 44px touch targets (#838), height only. */
   .wizard-progress button {
     font-size: 12px;
     padding: 9px 10px;
     letter-spacing: 0.08em;
+    min-height: 44px;
   }
   .wizard-panel {
     padding: 14px;
