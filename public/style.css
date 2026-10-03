@@ -380,6 +380,20 @@ input[type='radio'] {
      sidebar's edge (#713). */
   overflow-wrap: anywhere;
 }
+/* A long profile name shows one line, cut with an ellipsis, so it cannot make the sidebar scroll
+   at a short window (#792): the footer is as tall as it is for a short name. The whole name is
+   still the button's text and title, and the menu and the profiles page show it in full. Inline,
+   so the <br> before the settings lines still ends its line. A cut after two lines
+   would need the clamp property this stylesheet keeps out, so that ADA's remark is never cut
+   (tests/ui/ada-fit.test.ts). */
+.profile-switcher-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
 .profile-switcher:hover,
 .profile-switcher[aria-expanded='true'] {
   border-color: var(--line);
