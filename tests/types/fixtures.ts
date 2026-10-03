@@ -190,6 +190,16 @@ export const version13 = {
   },
 } satisfies SavedState;
 
+// Version 14: a factory group that makes items on site (#868, #874).
+export const version14 = {
+  ...version13,
+  version: 14,
+  factoryGroups: {
+    ...version13.factoryGroups,
+    local: { 'fg-plates1': ['Iron Rod', 'Screws'] },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -206,6 +216,7 @@ export const states: [SavedState, number][] = [
   [version11, 11],
   [version12, 12],
   [version13, 13],
+  [version14, 14],
 ];
 
 export const backup = {

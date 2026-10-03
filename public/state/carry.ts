@@ -247,6 +247,8 @@ function mergeGroups(defaults: FactoryGroups, raw: unknown, plan: RowsPlan | nul
     groups,
     assignments,
     ...(carried.links ? { links: carried.links } : {}),
+    // The items a carried group makes on site (#874) belong to the group, not a row.
+    ...(carried.local ? { local: carried.local } : {}),
   });
 }
 // A plan made from another by a fresh solve (Recalculate as a new profile, round-up) keeps the

@@ -32,6 +32,7 @@
 //   state/summary.ts         phaseProgress, planStepIds, profilePhases, profilePhasesCache and
 //                            currentPayoff
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
+//   state/items.ts           ITEM_NAMES, every item name the game data has held
 export {
   bayCapacity,
   bayOfSlot,
@@ -71,3 +72,4 @@ export {
   profilePhasesCache,
 } from './state/summary.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';
+export { ITEM_NAMES } from './state/items.ts';
