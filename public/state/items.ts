@@ -4,7 +4,8 @@
 //
 // Only ever add names: a name the game data drops stays here, so progress saved while it
 // existed keeps loading (validateState refuses a state naming an unknown item).
-// tests/local-items.test.ts checks that every item in recipes.json is listed.
+// tests/local-items.test.ts checks that every item in recipes.json is listed, and that every
+// name of the pinned snapshot tests/fixtures/item-names-2026-10-03.json still is.
 export const ITEM_NAMES: readonly string[] = [
   'AI Expansion Server',
   'AI Limiter',

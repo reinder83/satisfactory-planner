@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import recipesJson from '../recipes.json' with { type: 'json' };
+import itemNamesSnapshot from './fixtures/item-names-2026-10-03.json' with { type: 'json' };
 import { createApp } from '../server.ts';
 import { createBrowserApi } from '../public/browser-api.ts';
 import { openBrowserStore } from '../public/browser-store.ts';
@@ -53,6 +54,18 @@ test('every item of the game data is a known item, listed once', () => {
   assert.equal(new Set(ITEM_NAMES).size, ITEM_NAMES.length);
   const listed = new Set(ITEM_NAMES);
   for (const name of Object.keys(recipesJson.items)) assert.ok(listed.has(name), name);
+});
+
+// ITEM_NAMES is append-only. The check above passes when a name leaves both recipes.json and
+// ITEM_NAMES, so this pins the 177 names of 2026-10-03 (when version 14 shipped). A removed name
+// would make validateState refuse any progress that saved it in factoryGroups.local: an import
+// fails, and the Docker server refuses to start on a workspace.json validateState rejects, which
+// locks the user out of their saves. Add new names to ITEM_NAMES only; never edit this fixture.
+test('no item name saved progress may hold is ever removed', () => {
+  assert.equal(itemNamesSnapshot.length, 177);
+  const listed = new Set(ITEM_NAMES);
+  const removed = itemNamesSnapshot.filter(name => !listed.has(name));
+  assert.deepEqual(removed, [], 'names removed from ITEM_NAMES');
 });
 
 test('items made on site are kept as version 14; without them the state keeps its version', () => {
