@@ -10,7 +10,7 @@ import DetailDialog from './detail/DetailDialog.vue';
 // What #detail shows: a calculated row, a factory group's build order, a storage container (by
 // address) or an alternate recipe (by recipe id).
 export interface DetailTarget {
-  kind: 'calc' | 'group' | 'slot' | 'alt' | 'groupflow';
+  kind: 'calc' | 'group' | 'slot' | 'alt';
   id: string;
 }
 

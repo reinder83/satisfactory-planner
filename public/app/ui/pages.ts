@@ -1,6 +1,6 @@
 // The page component for each hash route. render() in shell.ts mounts it into <main>.
 import type { Component } from 'vue';
-import type { View } from '../session.ts';
+import { flowGroupOf, type View } from '../session.ts';
 import { guidedFlow } from '../wizard/guided.ts';
 import type { WizardDraft } from '../wizard/wizard.ts';
 import AccountPage from './pages/AccountPage.vue';
@@ -8,6 +8,7 @@ import BackupPage from './pages/BackupPage.vue';
 import CalculatedFactoriesPage from './pages/CalculatedFactoriesPage.vue';
 import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
 import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
+import GroupFlowPage from './pages/GroupFlowPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
 import NoSavePage from './pages/NoSavePage.vue';
@@ -27,7 +28,11 @@ const NEEDS_SAVE: View[] = ['plan', 'factories', 'logistics', 'storage', 'resour
 export function vuePage(view: View, draft: WizardDraft | null, hasSave = true): Component | null {
   if (!hasSave && NEEDS_SAVE.includes(view)) return NoSavePage;
   if (view === 'plan') return CalculatedPlanPage;
-  if (view === 'factories') return CalculatedFactoriesPage;
+  if (view === 'factories')
+    // PROTOTYPE #883: #factories/<group>/flow is the group's flow page.
+    return flowGroupOf(globalThis.location?.hash.slice(1) ?? '') !== null
+      ? GroupFlowPage
+      : CalculatedFactoriesPage;
   if (view === 'logistics') return LogisticsPage;
   if (view === 'storage') return StoragePage;
   if (view === 'profiles') return ProfilesPage;

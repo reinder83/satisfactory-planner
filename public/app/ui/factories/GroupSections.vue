@@ -10,8 +10,7 @@
 <script setup lang="ts" generic="T">
 import { computed } from 'vue';
 import { save } from '../../api.ts';
-import { openGroupChain, openGroupFlow } from '../../factory-detail.ts';
-import { factoryEditing, sectionCollapsed } from '../../session.ts';
+import { factoryEditing, flowRoute, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
@@ -126,22 +125,15 @@ async function remove(event: Event, id: string) {
       >
         Remove group
       </button>
-      <button
+      <!-- PROTOTYPE #883: the group's flow page replaces the build-order dialog. -->
+      <a
         v-else-if="section.members.length > 1"
         class="btn"
         :data-group-chain="section.id"
-        @click="openGroupChain(section.id)"
+        :href="'#' + flowRoute(section.id)"
       >
-        Build order ↗
-      </button>
-      <button
-        v-if="!editing && section.members.length > 1"
-        class="btn"
-        :data-group-flow="section.id"
-        @click="openGroupFlow(section.id)"
-      >
-        Flow diagram ↗
-      </button>
+        Build order →
+      </a>
     </header>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
       <template v-if="section.members.length"

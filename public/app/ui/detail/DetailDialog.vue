@@ -3,7 +3,6 @@
 import AltRecipeDialog from './AltRecipeDialog.vue';
 import CalcFactoryDialog from './CalcFactoryDialog.vue';
 import GroupChainDialog from './GroupChainDialog.vue';
-import GroupFlowDialog from './GroupFlowDialog.vue';
 import SlotDialog from './SlotDialog.vue';
 import type { DetailTarget } from '../detail.ts';
 
@@ -13,7 +12,6 @@ defineProps<{ target: DetailTarget }>();
 <template>
   <CalcFactoryDialog v-if="target.kind === 'calc'" :id="target.id" />
   <GroupChainDialog v-else-if="target.kind === 'group'" :id="target.id" />
-  <GroupFlowDialog v-else-if="target.kind === 'groupflow'" :id="target.id" />
   <SlotDialog v-else-if="target.kind === 'slot'" :id="target.id" />
   <AltRecipeDialog v-else-if="target.kind === 'alt'" :id="target.id" />
 </template>

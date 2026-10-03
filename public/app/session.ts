@@ -36,9 +36,25 @@ export const VIEWS = [
   'account',
 ] as const;
 export type View = (typeof VIEWS)[number];
-// The route a hash names: an unknown one shows the plan.
+// PROTOTYPE #883: #factories/<group>/flow, the flow page of one factory group (its build
+// order with the links between its lines). The group id, or null for any other route.
+export function flowGroupOf(hash: string): string | null {
+  const match = /^factories\/([^/]+)\/flow$/.exec(hash);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+}
+export const flowRoute = (group: string) => 'factories/' + encodeURIComponent(group) + '/flow';
+// The route a hash names: an unknown one shows the plan. A group's flow page is a factories page.
 export const viewOf = (hash: string): View =>
-  (VIEWS as readonly string[]).includes(hash) ? (hash as View) : 'plan';
+  flowGroupOf(hash) !== null
+    ? 'factories'
+    : (VIEWS as readonly string[]).includes(hash)
+      ? (hash as View)
+      : 'plan';
 
 // The open save and profile. A profile opened is 'calculated': the retired handbook kind
 // ('original') is migrated before it reaches the interface (#387). The empty workspace's
