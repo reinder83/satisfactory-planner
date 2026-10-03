@@ -881,10 +881,6 @@ p {
   letter-spacing: 0.18em;
   margin-bottom: 0;
 }
-.panel.accent {
-  background: var(--panel2);
-  border-color: var(--line2);
-}
 .section-head {
   display: flex;
   justify-content: space-between;
@@ -3243,13 +3239,6 @@ button.rail-tile:hover {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.list-links {
-  display: grid;
-  gap: 10px;
-}
-.list-links a {
-  font-size: 11.5px;
-}
 
 /* ── Backup, profiles, toast ───────────────────────────── */
 .backup-grid {
@@ -3928,14 +3917,6 @@ button.rail-tile:hover {
   .split {
     grid-template-columns: 1fr;
   }
-  .side-panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  .side-panels .panel + .panel {
-    margin-top: 0;
-  }
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4199,7 +4180,6 @@ button.rail-tile:hover {
   .stat strong {
     font-size: 25px;
   }
-  .side-panels,
   .backup-grid,
   .completion-grid {
     grid-template-columns: 1fr;
