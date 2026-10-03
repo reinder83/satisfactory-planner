@@ -53,7 +53,7 @@ const connections = computed(() =>
         <tbody>
           <tr v-for="line in flow.lines" :key="line.id">
             <td>{{ lineNumber(line.no) }}</td>
-            <td>{{ line.recipe }}</td>
+            <td>{{ line.name }}</td>
             <td>{{ machines(line) }}</td>
             <td>
               <template v-for="(output, n) in line.outputs" :key="output.id"

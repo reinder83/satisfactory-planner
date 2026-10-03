@@ -55,7 +55,7 @@ export function laneStyles(lanes: readonly FlowLane[]): Map<string, LaneStyle> {
   return styles;
 }
 
-// How the page names the far end of a link: a line by its number (with its recipe where there
+// How the page names the far end of a link: a line by its number (with its name where there
 // is room), a place outside the group by its label, and a self link as "itself".
 export interface FlowNames {
   lines: Map<string, FlowLine>;
@@ -77,7 +77,7 @@ const endName = (names: FlowNames, end: FlowLink['from'], withRecipe: boolean) =
   if (end.kind === 'place') return names.places.get(end.id) ?? end.id;
   const line = names.lines.get(end.id);
   if (!line) return end.id;
-  return withRecipe ? `${lineNumber(line.no)} ${line.recipe}` : lineNumber(line.no);
+  return withRecipe ? `${lineNumber(line.no)} ${line.name}` : lineNumber(line.no);
 };
 
 // Where an input row's item comes from: "from 01 Iron Ingot", "from itself", or a place outside

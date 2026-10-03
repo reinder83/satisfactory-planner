@@ -17,7 +17,9 @@
 // Lines are keyed by their plan row's id and placed by rowPlaces alone, so a per-group line
 // (#868, #896: a row that belongs wholly to one group) is a line of its own in that group with
 // no change here; for an item its group makes on site, it feeds that group's own lines first
-// (#876, insideLinks). Everything in the model is data: the page measures and draws it.
+// (#876, insideLinks). The caller names each line (LineName), so the page names a group's own
+// line as its build-plan step does, "Wire for Alpha" (#896). Everything in the model is data:
+// the page measures and draws it.
 import { groupedRows, LINK_DUST, rowPlaces } from './group-order.ts';
 import {
   groupLinks,
@@ -36,6 +38,12 @@ import type { CalcRow, FactoryGroups, StoredStage } from '../types/index.ts';
 // The belts or pipes that carry `rate` of `item`, in the factory dialog's words: the page
 // passes itemBelts (flow.ts) at the phase it shows, "2 × Mk.3 belts".
 export type BeltsFor = (item: string, rate: number) => string;
+
+// A line's name. The page passes buildRowName (views/calculated.ts), the build plan's step title
+// (rowStepTitle), so a group's own line made on site is "Wire for Alpha" there as here (#896).
+// Without one a line is named after its row: the recipe's name.
+export type LineName = (row: CalcRow) => string;
+const rowName: LineName = row => row.name;
 
 // One end of a link: a line of the group, by its row id, or a place outside the group (another
 // group, Ungrouped, a raw resource or existing-supply source, or a destination from
@@ -75,7 +83,9 @@ export interface FlowLine {
   id: string;
   // Its place in the group's build order, from 1.
   no: number;
+  // The recipe's name, and the line's name as the page shows it (LineName).
   recipe: string;
+  name: string;
   machine: string;
   // The row's whole machines with the last one's clock in %, the group's share of the row
   // (1 unless the row is split between places) and the machines that share comes to.
@@ -322,7 +332,13 @@ function portLinks(
 const isLine = (end: FlowEnd, id: string) => end.kind === 'line' && end.id === id;
 
 // A line with its rows, each row carrying the links into or out of it.
-function flowLine(part: GroupPart, no: number, links: FlowLink[], belts: BeltsFor): FlowLine {
+function flowLine(
+  part: GroupPart,
+  no: number,
+  links: FlowLink[],
+  belts: BeltsFor,
+  name: LineName,
+): FlowLine {
   const { row, share } = part;
   const flowRow = (dir: 'in' | 'out', item: string, rate: number): FlowRow => ({
     id: `${dir}|${row.id}|${item}`,
@@ -342,6 +358,7 @@ function flowLine(part: GroupPart, no: number, links: FlowLink[], belts: BeltsFo
     id: row.id,
     no,
     recipe: row.name,
+    name: name(row),
     machine: row.machine,
     machines: row.machines,
     lastClock: row.lastClock,
@@ -354,13 +371,14 @@ function flowLine(part: GroupPart, no: number, links: FlowLink[], belts: BeltsFo
 }
 
 // The flow of group `groupId` in a calculated phase, null for a group the profile does not have.
-// `belts` words the belts or pipes of a rate (BeltsFor). Deterministic: it reads only its
-// arguments.
+// `belts` words the belts or pipes of a rate (BeltsFor) and `name` names a line (LineName).
+// Deterministic: it reads only its arguments.
 export function groupFlow(
   stage: StoredStage,
   groups: FactoryGroups,
   groupId: string,
   belts: BeltsFor,
+  name: LineName = rowName,
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const parts = groupParts(stage, groups, groupId);
@@ -368,7 +386,7 @@ export function groupFlow(
   const inside = insideLinks(parts, books, belts, groupId);
   const ports = crossingPorts(stage, groups, groupId, belts);
   const links = [...inside, ...portLinks(parts, ports, belts, inside, books.local, groupId)];
-  const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts));
+  const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts, name));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));
   const lanes = assignLanes(lines);
   return {
