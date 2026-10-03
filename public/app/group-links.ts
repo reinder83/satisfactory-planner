@@ -12,7 +12,7 @@
 // among everything that asks for it in proportion to what each asks, as elsewhere in the
 // planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
 // left out: they are that group's own belts.
-import { LINK_DUST, rowShares, rowTotal, UNGROUPED } from './group-order.ts';
+import { LINK_DUST, rowPlaces, rowShares, UNGROUPED } from './group-order.ts';
 import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
 
 // Place ids that are not factory groups. UNGROUPED and rowShares live in group-order.ts, which
@@ -73,9 +73,16 @@ export interface GroupLink {
   items: { item: string; rate: number }[];
 }
 
-export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink[] {
-  const known = new Set(groups.groups.map(g => g.id));
-  // Per item: what each place makes and what each place asks for.
+// Per item, what each place makes (`supply`) and what each place asks for (`demand`), per minute.
+export interface ItemBooks {
+  supply: Record<string, Map<string, number>>;
+  demand: Record<string, Map<string, number>>;
+}
+
+// The books groupLinks shares out: every row's inputs and outputs split by its places
+// (rowPlaces), the raw resources and existing supply as sources, and protected storage, drone
+// fuel, vehicle fuel, the Space Elevator and the sink as destinations.
+export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks {
   const supply: Record<string, Map<string, number>> = {};
   const demand: Record<string, Map<string, number>> = {};
   const put = (
@@ -89,12 +96,8 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     placeRates.set(place, (placeRates.get(place) || 0) + rate);
   };
   for (const row of stage.rows || []) {
-    const total = rowTotal(row);
     // A membership in a group that no longer exists counts as ungrouped.
-    const memberships = (groups.assignments[row.id] || []).map(membership =>
-      known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
-    );
-    for (const [place, share] of rowShares(total, memberships)) {
+    for (const [place, share] of rowPlaces(row, groups)) {
       for (const [item, rate] of Object.entries(row.outputs || {}))
         put(supply, item, place, rate * share);
       for (const [item, rate] of Object.entries(row.inputs || {}))
@@ -113,19 +116,32 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
     put(demand, item, OUTSIDE.delivery, delivery.rate || 0);
   for (const [item, rate] of Object.entries(stage.surplus || {}))
     put(demand, item, OUTSIDE.surplus, rate);
+  return { supply, demand };
+}
+
+// What moves between two places of an item whose places make `made` and ask `asked` in all:
+// the smaller of the two, split both ways by share. `supplied` and `wanted` are the two places'
+// parts. group-flow.ts shares a group's own lines out by the same rule.
+export const sharedRate = (made: number, asked: number, supplied: number, wanted: number): number =>
+  (Math.min(made, asked) * supplied * wanted) / (made * asked);
+
+// The sum of a place map's rates.
+export const placeTotal = (places: Map<string, number> | undefined): number =>
+  [...(places?.values() || [])].reduce((sum, rate) => sum + rate, 0);
+
+export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink[] {
+  const { supply, demand } = itemBooks(stage, groups);
   // Share each item's supply out in proportion to demand.
   const links = new Map<string, GroupLink>();
   for (const [item, sources] of Object.entries(supply)) {
     const sinks = demand[item];
     if (!sinks) continue;
-    const made = [...sources.values()].reduce((sum, rate) => sum + rate, 0);
-    const asked = [...sinks.values()].reduce((sum, rate) => sum + rate, 0);
-    // What actually moves: the smaller of the two, split both ways by share.
-    const moved = Math.min(made, asked);
+    const made = placeTotal(sources),
+      asked = placeTotal(sinks);
     for (const [from, supplied] of sources)
       for (const [to, wanted] of sinks) {
         if (from === to) continue;
-        const rate = (moved * supplied * wanted) / (made * asked);
+        const rate = sharedRate(made, asked, supplied, wanted);
         if (rate <= LINK_DUST) continue;
         const key = from + '\u0000' + to;
         const link = links.get(key) ?? { from, to, items: [] };
