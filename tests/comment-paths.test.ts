@@ -18,6 +18,7 @@ const checked = [
   'optimizer.ts',
   ...tsIn('public'),
   ...tsIn('public/state'),
+  ...tsIn('public/preferences'),
 ];
 
 // The comment text of `source`: whole-line comments, block comment lines and trailing `// `
