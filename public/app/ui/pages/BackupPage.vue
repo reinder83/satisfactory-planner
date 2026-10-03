@@ -253,10 +253,14 @@ async function persistStorage() {
           >· {{ save.profiles }} profile{{ save.profiles === 1 ? '' : 's' }}</span
         ></label
       >
+      <!-- With nothing ticked it has nothing to do: disabled and .unavailable, so style.css
+           draws it without the wait cursor a bare disabled button gets (#943). Only a running
+           export makes it busy (aria-disabled). -->
       <button
         class="btn"
         data-export-selected
         :aria-disabled="exporting || undefined"
+        :class="{ unavailable: !exporting && !chosen.length }"
         :disabled="!exporting && !chosen.length"
         @click="exportSaves(chosen.filter(id => page.saves.some(s => s.id === id)))"
       >
