@@ -20,18 +20,19 @@ export interface PhaseSegment {
 // applied. A milestone-only phase before the start phase (#759) counts its milestones, which are
 // its steps. So the track agrees with the build plan and with the phase the profile opens on
 // (phaseToOpen, #570), which looks at the same steps. Imported here, apart from the imports
-// above, which another change edits; the production-line count they import (phaseProgress) is no
-// longer read here, and goes with that change's edit of them.
+// above, which another change edits. The production-line count they import (phaseProgress) is no
+// longer read here; it goes once that change is in. Until then phaseTrack names it, without
+// calling it, for the type check's noUnusedLocals: inside the function, since the VM interface
+// tests run this module without state.ts's phaseProgress and never draw the track.
 import { phaseStepIds } from '../opening-phase.ts';
 import { progressionData } from '../session.ts';
-void phaseProgress;
 
 // Working out a phase's steps writes every production step's text (calcTasks, #768), several
 // milliseconds a phase, and the frame draws the track again on every redraw (a save indicator, a
-// tick). So each phase's step ids are kept for as long as the
-// open plan, progress state and progression data are the same objects: session.ts replaces the
-// state on every saved change (setState) rather than editing it, and opening another profile
-// replaces all three. The ticks are counted afresh every time.
+// tick). So each phase's step ids are kept while the open plan, progress state and progression
+// data are the same objects: session.ts replaces the state on every saved change (setState)
+// rather than editing it, and opening another profile replaces all three. The ticks are counted
+// afresh every time.
 let cachedFor: readonly unknown[] = [];
 let cachedIds = new Map<StageKey, string[]>();
 function stepIdsOf(phase: StageKey): string[] {
@@ -51,6 +52,7 @@ const share = (done: number, total: number): number | null =>
   !total ? null : done >= total ? 100 : Math.min(99, Math.round((done / total) * 100));
 
 export function phaseTrack(): PhaseSegment[] {
+  void phaseProgress;
   return phaseOptions().map(phase => {
     let done = 0,
       total = 0;
