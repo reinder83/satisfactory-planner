@@ -1,6 +1,6 @@
 <!--
-  A factory card's group editor, shown while editing groups. `factoryKey` is the handbook
-  factory id or the calculated row id. Each membership has a rate (empty: the whole output, or
+  A factory card's group editor, shown while editing groups. `factoryKey` is the calculated row
+  id. Each membership has a rate (empty: the whole output, or
   the remainder) and a ✕; "+ Add to group…" adds another. Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
   state.ts. A rate field shows the saved rate, then what is typed (ui/draft.ts, #691), and is

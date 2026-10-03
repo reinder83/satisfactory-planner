@@ -5,15 +5,32 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { openFactory } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { acceptRoute, refreshState, request } from '../../public/app/api.ts';
 import { calcStage, setQuery, setWizard, state, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { NOTE_SAVE_DELAY } from '../../public/app/ui/note-draft.ts';
-import { answerConfirms, $, $$, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  answerConfirms,
+  $,
+  $$,
+  generated,
+  go,
+  migratedRow,
+  open,
+  openMigrated,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
+// The rows Wire and Reinforced Iron Plate became on a profile migrated from the handbook (#387),
+// with Wire's Running box and note.
+const WIRE = migratedRow('wire');
+const PLATE = migratedRow('reinforced-iron-plate');
+const WIRE_CHECK = 'calc-3-' + WIRE;
+const WIRE_NOTE = 'factory-' + WIRE;
 
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -32,7 +49,7 @@ const applying = () =>
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
 });
 
@@ -40,19 +57,16 @@ test('ticking a progress checkbox saves it and redraws the page', async () => {
   const calls = applying();
   go('factories');
   render();
-  const box = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
+  const box = $<HTMLInputElement>(`.factory-card [data-check="${WIRE_CHECK}"]`)!;
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   // Busy rather than disabled, so it keeps focus (#299).
   assert.equal(box.getAttribute('aria-disabled'), 'true', 'the box waits for the write');
   assert.equal(box.disabled, false);
   await settle();
-  assert.deepEqual(calls.at(-1), [
-    '/api/update',
-    { type: 'check', key: 'factory-3-wire', value: true },
-  ]);
-  assert.equal(state.checks['factory-3-wire'], true);
-  const after = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
+  assert.deepEqual(calls.at(-1), ['/api/update', { type: 'check', key: WIRE_CHECK, value: true }]);
+  assert.equal(state.checks[WIRE_CHECK], true);
+  const after = $<HTMLInputElement>(`.factory-card [data-check="${WIRE_CHECK}"]`)!;
   assert.equal(after.checked, true);
   assert.equal(after.disabled, false);
   assert.equal(after.getAttribute('aria-disabled'), null);
@@ -76,7 +90,7 @@ test('a write refused because the session ended shows the sign-in screen', async
   const calls = sessionEnded();
   go('factories');
   render();
-  const box = $<HTMLInputElement>('.factory-card [data-check="factory-3-wire"]')!;
+  const box = $<HTMLInputElement>(`.factory-card [data-check="${WIRE_CHECK}"]`)!;
   box.checked = true;
   box.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
@@ -216,7 +230,7 @@ test('leaving a notes box saves it at once, and a later reply does not undo more
 
 test('a blank note saves without asking about unsaved notes afterwards', async () => {
   // A whitespace-only note is saved by deleting it, as mutate in state.ts does.
-  open({ notes: { 'phase-3': 'Old', 'factory-wire': 'Old' } });
+  openMigrated({ notes: { 'phase-3': 'Old', [WIRE_NOTE]: 'Old' } });
   const calls = stubFetch<CheckOrNote>({
     '/api/update': (change: CheckOrNote) => {
       const notes = { ...state.notes };
@@ -240,10 +254,10 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
 
   go('factories');
   render();
-  openFactory('wire');
+  openCalculatedFactory(WIRE);
   typeInto('#detail-note', '  ').dispatchEvent(new Event('blur'));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'factory-wire', value: '  ' });
+  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: WIRE_NOTE, value: '  ' });
   assert.equal($<HTMLDialogElement>('#detail')!.open, true, 'saving no longer closes the dialog');
   $('#detail .close[data-close]')!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, false);
@@ -256,13 +270,13 @@ test('a factory link opens its dialog; the × sends a note still being typed and
   const asked = answerConfirms(false);
   go('factories');
   render();
-  $('.factory-card button.name[data-factory="wire"]')!.click();
+  $(`.factory-card button.name[data-calc-factory="${WIRE}"]`)!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, true);
   assert.match($('#detail h2')!.textContent, /Wire/);
   $('#detail .close[data-close]')!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, false);
 
-  openFactory('wire');
+  openCalculatedFactory(WIRE);
   assert.equal($('#detail [data-save-note]')!.id, 'detail-note');
   assert.equal($$('#detail .note-save button').length, 0, 'no "Save notes" button');
   typeInto('#detail-note', 'Needs a second copper line');
@@ -272,16 +286,16 @@ test('a factory link opens its dialog; the × sends a note still being typed and
   assert.equal(asked.length, 0);
   assert.deepEqual(calls.at(-1)![1], {
     type: 'note',
-    key: 'factory-wire',
+    key: WIRE_NOTE,
     value: 'Needs a second copper line',
   });
-  assert.equal(state.notes['factory-wire'], 'Needs a second copper line');
+  assert.equal(state.notes[WIRE_NOTE], 'Needs a second copper line');
   await pause();
   assert.equal(noteWrites(calls).length, 1, 'one write, not another after the pause');
 
   // A link inside a dialog opens the other factory in its place.
-  openFactory('reinforced-iron-plate');
-  $('#detail [data-factory="wire"]')!.click();
+  openCalculatedFactory(PLATE);
+  $(`#detail [data-calc-factory="${WIRE}"]`)!.click();
   assert.match($('#detail h2')!.textContent, /Wire/);
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Needs a second copper line');
 });
@@ -384,7 +398,7 @@ test('Retry in a dialog keeps the keyboard in its notes box once the note is sav
       : applied(path, options);
   go('factories');
   render();
-  openFactory('wire');
+  openCalculatedFactory(WIRE);
   typeInto('#detail-note', 'Second copper line').dispatchEvent(new Event('blur'));
   await settle();
   const retry = $<HTMLButtonElement>('#detail [data-note-retry]')!;
@@ -394,9 +408,9 @@ test('Retry in a dialog keeps the keyboard in its notes box once the note is sav
   retry.click();
   await settle();
   assert.deepEqual(noteWrites(calls), [
-    ['/api/update', { type: 'note', key: 'factory-wire', value: 'Second copper line' }],
+    ['/api/update', { type: 'note', key: WIRE_NOTE, value: 'Second copper line' }],
   ]);
-  assert.equal(state.notes['factory-wire'], 'Second copper line');
+  assert.equal(state.notes[WIRE_NOTE], 'Second copper line');
   assert.equal($('#detail [data-note-retry]'), null);
   assert.equal(focused(), 'textarea#detail-note', 'focus stays in the dialog, on the note');
   assert.equal($<HTMLDialogElement>('#detail')!.open, true);
@@ -432,7 +446,7 @@ test('a note whose write fails after its page has gone comes back marked unsaved
 
 test('coming back to a tab picks up changes saved elsewhere, unless something is unsaved', async () => {
   state.revision = 4;
-  const newer = { ...state, revision: 5, checks: { 'factory-3-wire': true } };
+  const newer = { ...state, revision: 5, checks: { [WIRE_CHECK]: true } };
   stubFetch({ '/api/state': newer });
   go('factories');
   render();
@@ -441,7 +455,7 @@ test('coming back to a tab picks up changes saved elsewhere, unless something is
   render();
   $<HTMLTextAreaElement>('#phase-note-3')!.value = 'Typing';
   assert.equal(await refreshState(), false);
-  assert.equal(state.checks['factory-3-wire'], undefined);
+  assert.equal(state.checks[WIRE_CHECK], undefined);
   $<HTMLTextAreaElement>('#phase-note-3')!.value = '';
   // So does an open wizard, whose typed answers are read only when a step is left.
   const draft = wizard;
@@ -450,6 +464,6 @@ test('coming back to a tab picks up changes saved elsewhere, unless something is
   setWizard(null);
   // The listener in listeners.ts calls refreshState on visibilitychange.
   assert.equal(await refreshState(), true);
-  assert.equal(state.checks['factory-3-wire'], true);
+  assert.equal(state.checks[WIRE_CHECK], true);
   assert.equal(await refreshState(), false, 'nothing new the second time');
 });

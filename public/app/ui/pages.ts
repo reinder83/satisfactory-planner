@@ -9,7 +9,6 @@ import BackupPage from './pages/BackupPage.vue';
 import CalculatedFactoriesPage from './pages/CalculatedFactoriesPage.vue';
 import CalculatedPlanPage from './pages/CalculatedPlanPage.vue';
 import CalculatedResourcesPage from './pages/CalculatedResourcesPage.vue';
-import FactoriesPage from './pages/FactoriesPage.vue';
 import GuidedPage from './pages/GuidedPage.vue';
 import LogisticsPage from './pages/LogisticsPage.vue';
 import NoSavePage from './pages/NoSavePage.vue';
@@ -36,7 +35,7 @@ export function vuePage(
 ): Component | null {
   if (!hasSave && NEEDS_SAVE.includes(view)) return NoSavePage;
   if (view === 'plan') return calculated ? CalculatedPlanPage : PlanPage;
-  if (view === 'factories') return calculated ? CalculatedFactoriesPage : FactoriesPage;
+  if (view === 'factories') return CalculatedFactoriesPage;
   if (view === 'logistics') return LogisticsPage;
   if (view === 'storage') return StoragePage;
   if (view === 'profiles') return ProfilesPage;

@@ -11,7 +11,17 @@ import { groupLinks } from '../../public/app/group-links.ts';
 import { setFactoryEditing, setLayoutEditing, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { storageBays } from '../../public/app/views/storage.ts';
-import { $, applyUpdate, catalog, generated, go, open, page } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  catalog,
+  generated,
+  go,
+  migratedRow,
+  open,
+  openMigrated,
+  page,
+} from './setup.ts';
 import type { ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -44,6 +54,9 @@ export interface Race {
 const bayName = (id: string) => storageBays().find(bay => bay.id === id)?.name;
 const groupName = (id: string) => state.factoryGroups?.groups.find(g => g.id === id)?.name;
 const groupRate = (key: string) => state.factoryGroups?.assignments[key]?.[0]?.rate;
+// The rows Wire and Computer became on a profile migrated from the handbook (#387).
+const WIRE = migratedRow('wire');
+const COMPUTER = migratedRow('computer');
 
 export const races: Record<string, Race> = {
   'delivery counter': {
@@ -91,7 +104,7 @@ export const races: Record<string, Race> = {
   'group name': {
     async open() {
       go('factories');
-      open({
+      openMigrated({
         state: {
           factoryGroups: {
             groups: [
@@ -124,7 +137,7 @@ export const races: Record<string, Race> = {
   'group rate': {
     async open() {
       go('factories');
-      open({
+      openMigrated({
         state: {
           factoryGroups: {
             groups: [
@@ -132,8 +145,8 @@ export const races: Record<string, Race> = {
               { id: 'fg-plates1', name: 'Stitched plates' },
             ],
             assignments: {
-              wire: [{ group: 'fg-cable01', rate: 300 }],
-              computer: [{ group: 'fg-plates1', rate: 10 }],
+              [WIRE]: [{ group: 'fg-cable01', rate: 300 }],
+              [COMPUTER]: [{ group: 'fg-plates1', rate: 10 }],
             },
           },
         },
@@ -142,15 +155,15 @@ export const races: Record<string, Race> = {
       render();
       await nextTick();
     },
-    first: '[data-assign-rate="wire"][data-group="fg-cable01"]',
-    second: '[data-assign-rate="computer"][data-group="fg-plates1"]',
+    first: `[data-assign-rate="${WIRE}"][data-group="fg-cable01"]`,
+    second: `[data-assign-rate="${COMPUTER}"][data-group="fg-plates1"]`,
     commit: '120',
     typed: ['1', '12'],
-    stored: () => [groupRate('wire'), groupRate('computer')],
+    stored: () => [groupRate(WIRE), groupRate(COMPUTER)],
     expected: [120, 12],
     elsewhere: {
       set(reply, value) {
-        reply.factoryGroups!.assignments.computer![0]!.rate = Number(value);
+        reply.factoryGroups!.assignments[COMPUTER]![0]!.rate = Number(value);
       },
       commits: ['120', '150', '180'],
       others: ['15', '20', '25'],

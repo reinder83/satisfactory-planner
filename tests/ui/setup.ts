@@ -12,6 +12,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { mutate } from '../../public/state.ts';
+import { handbookToPlan, type HandbookConversion } from '../../public/handbook-migration.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import type { View } from '../../public/app/session.ts';
 import type {
@@ -201,6 +202,19 @@ export function open({
     handbook,
   });
 }
+
+// A profile migrated from the retired handbook (#387): public/plan.json transcribed into a
+// calculated plan with a guide, as the migration stores it, made once per test file.
+// `migratedRow(id, stage)` is the row a handbook factory became in a phase: its checks are
+// calc-<stage>-<row id> and its note factory-<row id>. `openMigrated` opens it like open().
+let transcription: HandbookConversion | undefined;
+export const transcribed = (): HandbookConversion =>
+  (transcription ??= handbookToPlan(handbook, recipes, catalog().pureLimits));
+export const migratedPlan = () => structuredClone(transcribed().plan);
+export const migratedRow = (factoryId: string, stage = '3') =>
+  transcribed().rows[stage]![factoryId]!;
+export const openMigrated = (options: OpenOptions = {}) =>
+  open({ calculated: migratedPlan(), ...options });
 
 export function go(view: View) {
   setView(view);

@@ -3,10 +3,10 @@
 // close it; a click pressed and released outside its box does.
 import assert from 'node:assert/strict';
 import { beforeAll, test } from 'vitest';
-import { openFactory } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { render } from '../../public/app/shell.ts';
 import { confirmAction } from '../../public/app/ui/confirm.ts';
-import { $, go, open, page } from './setup.ts';
+import { $, go, migratedRow, openMigrated, page } from './setup.ts';
 
 // happy-dom does no layout, so each dialog gets a box: 100..500 across, 100..400 down.
 const place = (dialog: HTMLDialogElement) => {
@@ -25,7 +25,7 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeAll(async () => {
   page();
-  open();
+  openMigrated();
   // The #detail backdrop listener is page-wide (listeners.ts), registered once on import.
   await import('../../public/app/listeners.ts');
   go('factories');
@@ -34,7 +34,7 @@ beforeAll(async () => {
 
 test('#detail stays open for a click on its strip or a drag out of it, and closes for the backdrop', async () => {
   const dialog = $<HTMLDialogElement>('#detail')!;
-  openFactory('wire');
+  openCalculatedFactory(migratedRow('wire'));
   place(dialog);
   const body = dialog.querySelector('.dialog-body')!;
   // The hazard strip (dialog::before) is part of the <dialog> itself, inside its box.

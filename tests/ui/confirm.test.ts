@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { confirmAction } from '../../public/app/ui/confirm.ts';
-import { openFactory } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, evil, go, open, page } from './setup.ts';
+import { $, evil, go, migratedRow, open, openMigrated, page } from './setup.ts';
 
 const dialog = () => $<HTMLDialogElement>('#confirm')!;
 const ask = (danger?: boolean) =>
@@ -66,9 +66,10 @@ test('Escape and a click on the backdrop answer no', async () => {
 });
 
 test('it opens above the factory dialog and answering leaves that dialog open', async () => {
+  openMigrated();
   go('factories');
   render();
-  openFactory('wire');
+  openCalculatedFactory(migratedRow('wire'));
   const detail = $<HTMLDialogElement>('#detail')!;
   assert.equal(detail.open, true);
   const inside = detail.querySelector<HTMLElement>('.close')!;

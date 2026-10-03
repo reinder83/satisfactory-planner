@@ -18,8 +18,20 @@ import {
   workspace,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { openFactory } from '../../public/app/factory-detail.ts';
-import { $, $$, answerConfirms, applyUpdate, catalog, generated, go, open, page } from './setup.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
+import {
+  $,
+  $$,
+  answerConfirms,
+  applyUpdate,
+  catalog,
+  generated,
+  go,
+  migratedRow,
+  open,
+  openMigrated,
+  page,
+} from './setup.ts';
 import type { StorageEdits, UpdateOp } from '../../public/types/index.ts';
 
 // Focus leaves a control that becomes disabled, as in Edge and Chrome. happy-dom's blur() does
@@ -225,9 +237,14 @@ test('a factory dialog’s Running box in the header keeps focus while it saves 
   go('factories');
   render();
   await nextTick();
-  openFactory('wire');
+  openMigrated();
+  go('factories');
+  render();
   await nextTick();
-  const sel = '#detail .dialog-head [data-check="factory-3-wire"]';
+  const key = 'calc-3-' + migratedRow('wire');
+  openCalculatedFactory(migratedRow('wire'));
+  await nextTick();
+  const sel = `#detail .dialog-head [data-check="${key}"]`;
   press(sel);
   await settle();
   assert.ok(busy(sel));
@@ -237,7 +254,7 @@ test('a factory dialog’s Running box in the header keeps focus while it saves 
   assert.equal($<HTMLInputElement>(sel)!.checked, true, 'the second press does not untick it');
   assert.equal(net.calls.length, 1);
   await net.release();
-  assert.equal(state.checks['factory-3-wire'], true);
+  assert.equal(state.checks[key], true);
   assert.ok(ready(sel));
   assert.ok(focusedOn(sel), describeFocus());
 });
@@ -373,7 +390,8 @@ test('a failed Done on the ground floor’s moves leaves focus on it (#260)', as
 
 test('a factory’s rate field and Add select keep focus while they save', async () => {
   const net = heldFetch(updates);
-  open({
+  const wire = migratedRow('wire');
+  openMigrated({
     state: {
       factoryGroups: {
         groups: [
@@ -381,7 +399,7 @@ test('a factory’s rate field and Add select keep focus while they save', async
           { id: 'fg-plates1', name: 'Plates' },
           { id: 'fg-remote1', name: 'Remote' },
         ],
-        assignments: { wire: [{ group: 'fg-cable01', rate: 300 }] },
+        assignments: { [wire]: [{ group: 'fg-cable01', rate: 300 }] },
       },
     },
   });
@@ -389,17 +407,17 @@ test('a factory’s rate field and Add select keep focus while they save', async
   setFactoryEditing(true);
   render();
   await nextTick();
-  const rate = '[data-assign-rate="wire"][data-group="fg-cable01"]';
+  const rate = `[data-assign-rate="${wire}"][data-group="fg-cable01"]`;
   change(rate, '120');
   await settle();
   assert.ok(busy(rate));
   assert.equal($<HTMLInputElement>(rate)!.readOnly, true);
   assert.ok(focusedOn(rate), describeFocus());
   await net.release();
-  assert.equal(state.factoryGroups?.assignments.wire?.[0]?.rate, 120);
+  assert.equal(state.factoryGroups?.assignments[wire]?.[0]?.rate, 120);
   assert.ok(ready(rate));
   assert.ok(focusedOn(rate), describeFocus());
-  const add = '[data-assign-add="wire"]';
+  const add = `[data-assign-add="${wire}"]`;
   change(add, 'fg-plates1');
   await settle();
   assert.ok(busy(add));
@@ -409,17 +427,18 @@ test('a factory’s rate field and Add select keep focus while they save', async
   assert.equal(net.calls.length, 2, 'a key pressed on it meanwhile saves nothing');
   await net.release();
   assert.deepEqual(
-    state.factoryGroups?.assignments.wire?.map(m => m.group),
+    state.factoryGroups?.assignments[wire]?.map(m => m.group),
     ['fg-cable01', 'fg-plates1'],
   );
   assert.ok(focusedOn(add), describeFocus());
   // A factory joining its first group moves to that group's section: focus goes with it.
   const card = (el: Element | null) => el?.closest('.user-group, .cards');
-  const before = card($('[data-assign-add="computer"]'));
-  change('[data-assign-add="computer"]', 'fg-remote1');
+  const computer = `[data-assign-add="${migratedRow('computer')}"]`;
+  const before = card($(computer));
+  change(computer, 'fg-remote1');
   await net.release();
-  assert.ok(card($('[data-assign-add="computer"]')) !== before, 'the card moved');
-  assert.ok(focusedOn('[data-assign-add="computer"]'), describeFocus());
+  assert.ok(card($(computer)) !== before, 'the card moved');
+  assert.ok(focusedOn(computer), describeFocus());
 });
 
 test('the "Working on" phase select keeps focus while it saves', async () => {

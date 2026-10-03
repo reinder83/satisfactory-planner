@@ -3,17 +3,23 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { beforeEach, test } from 'vitest';
-import {
-  openCalculatedFactory,
-  openFactory,
-  openGroupChain,
-} from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
 import { calcStage, setWorkspace, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { closeDetail } from '../../public/app/ui/actions.ts';
 import { openSlot } from '../../public/app/views/storage.ts';
 import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
-import { $, answerConfirms, catalog, generated, go, open, page } from './setup.ts';
+import {
+  $,
+  answerConfirms,
+  catalog,
+  generated,
+  go,
+  migratedRow,
+  open,
+  openMigrated,
+  page,
+} from './setup.ts';
 
 // The attributes index.html gives <dialog id="detail">, which page() leaves out: this file
 // checks the page the app ships, not a copy of it. Vitest runs from the repository root.
@@ -52,17 +58,17 @@ test('#detail is named by its heading, as #confirm is (#321)', () => {
   assert.equal($('#detail')!.getAttribute('aria-labelledby'), 'detail-title');
 });
 
-test('a handbook factory dialog is named by its title, and the one a link puts in its place by its own (#321)', async () => {
-  open();
+test('a migrated factory dialog is named by its title, and the one a link puts in its place by its own (#321)', async () => {
+  openMigrated();
   go('factories');
   render();
-  openFactory('wire');
+  openCalculatedFactory(migratedRow('wire'));
   namedBy('Wire', 'the Wire dialog');
-  $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!.click();
+  $<HTMLButtonElement>(`#detail .rail-link[data-calc-factory="${migratedRow('cable')}"]`)!.click();
   namedBy('Cable', 'the Cable dialog that replaced it');
   void closeDetail();
   await new Promise(resolve => setTimeout(resolve, 20));
-  openFactory('wire');
+  openCalculatedFactory(migratedRow('wire'));
   namedBy('Wire', 'the Wire dialog opened again');
 });
 

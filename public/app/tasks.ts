@@ -28,9 +28,8 @@ export interface Step {
   body?: string;
 }
 
-// The factory a step's "Open factory" button opens (taskLink).
+// The row a step's "Open factory" button opens (taskLink).
 export interface StepLink {
-  calc: boolean;
   id: string;
   name: string;
 }
@@ -217,19 +216,14 @@ export const stepLink = (id: string) => {
   return saved === '-' ? '' : saved || autoTaskLink(id);
 };
 
-// The factory a step links to, as { calc, id, name } for its "Open factory" button
-// (calc: a calculated row, opened by data-calc-factory, otherwise a handbook factory,
-// opened by data-factory), or null when the step has no link or the linked factory is not
-// part of the current phase.
+// The calculated row a step links to, as { id, name } for its "Open factory" button (opened
+// by data-calc-factory), or null when the step has no link or the linked row is not part of
+// the current phase.
 export function taskLink(step: Step): StepLink | null {
   const linked = stepLink(step.id);
   if (!linked) return null;
-  if (calculated) {
-    const row = (calcStage()?.rows || []).find(r => r.id === linked);
-    return row ? { calc: true, id: row.id, name: row.name } : null;
-  }
-  const factory = plan.factories.find(x => x.id === linked && x.stages[stage()]);
-  return factory ? { calc: false, id: factory.id, name: factory.name } : null;
+  const row = (calcStage()?.rows || []).find(r => r.id === linked);
+  return row ? { id: row.id, name: row.name } : null;
 }
 
 // What a step's edit form offers: the factories of this phase as [id, name], and the one

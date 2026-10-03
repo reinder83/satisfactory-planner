@@ -1,13 +1,15 @@
 <!--
-  #factories on a calculated profile: the rows of the current phase matching the search and the
-  status chips (`factoryFilter`, FilterChips.vue, shared with the handbook page; Held back is this
-  page's own chip, a row ticked Running that a missing supplier holds back), user groups first,
+  #factories: the rows of the current phase matching the search and the status chips
+  (`factoryFilter`, FilterChips.vue; Held back is a row ticked Running that a missing supplier
+  holds back, and Local a row a plan guide builds beside its consumers), user groups first,
   then a plan guide's shared sites (#468), then the ungrouped rows; Post Phase 5 adds a guide's
   completion modules. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is.
-  A milestone-only phase (#759) shows only the header and why it has no production lines.
+  A milestone-only phase (#759) shows only the header and why it has no production lines, and
+  so does the page with no calculated plan open (the profile just left, before render() swaps
+  the page).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -79,7 +81,7 @@ const page = computed(() =>
         .includes(query.toLowerCase()),
     );
     const running = (row: (typeof found)[number]) => checked('calc-' + stage() + '-' + row.id);
-    // A guide that builds some rows locally adds the handbook's Local chip (#478).
+    // A guide that builds some rows locally adds the Local chip (#478).
     const notes = calculated.guide?.factories || {};
     type Row = (typeof found)[number];
     const chips: [StatusFilter, (row: Row) => boolean][] = [['held', r => !!heldBack(r.id)]];
@@ -88,8 +90,8 @@ const page = computed(() =>
     const status = statusFilter(found, factoryFilter, running, chips);
     const rows = status.list;
     const ungrouped = rows.filter(r => !membershipsOf(r.id).length);
-    // A plan guide (#393, #468) places some ungrouped rows at a shared site, drawn together as the
-    // handbook drew its oil campus and nuclear site; the rest stay single cards.
+    // A plan guide (#393, #468) places some ungrouped rows at a shared site, its oil campus or
+    // nuclear site, drawn together; the rest stay single cards.
     const guide = calculated.guide;
     const siteOf = (row: (typeof found)[number]) => guide?.factories?.[row.id]?.site ?? null;
     const sites = (['oil', 'nuclear'] as const)
@@ -104,7 +106,7 @@ const page = computed(() =>
       )
       .filter(site => site !== null);
     const singles = ungrouped.filter(r => !siteOf(r));
-    // Post Phase 5 adds a guide's completion modules, as the handbook page did.
+    // Post Phase 5 adds a guide's completion modules.
     const post = phase() === 'post' && !!guide?.completion?.length;
     // Whether any group section shows: an empty group only shows while editing.
     const groupsShown = factoryGroupsState().groups.some(
@@ -253,4 +255,6 @@ async function roundUp(event: Event) {
       <a href="#logistics">Logistics</a>.
     </p>
   </template>
+  <!-- No calculated plan open: only the heading, and nothing reads a plan that is not there. -->
+  <PageHeader v-else eyebrow="CALCULATED PRODUCTION" title="Factory targets" />
 </template>

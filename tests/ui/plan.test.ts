@@ -24,7 +24,9 @@ import {
   generated as makeGenerated,
   go,
   handbook,
+  migratedRow,
   open,
+  openMigrated,
   page,
   stubFetch,
 } from './setup.ts';
@@ -354,16 +356,18 @@ test('every step carries an icon for its kind of work, or the part it makes', ()
   assert.ok(!$('#main [data-kind="undefined"]'));
 });
 
+// On a profile migrated from the handbook (#387), whose guide keeps the handbook's step ids.
 test('edits show on the plan, and edit mode offers tools, removed steps and the form', async () => {
   const calls = stubFetch({ '/api/update': () => state });
-  open({
+  const wire = migratedRow('wire');
+  openMigrated({
     state: {
       taskEdits: {
         order: {},
         removed: ['phase-3-survey'],
         titles: { 'phase-3-iron': evil },
         bodies: {},
-        links: { 'phase-3-retire-power': 'wire' },
+        links: { 'phase-3-retire-power': wire },
       },
       customTasks: [{ id: 'custom-1', phase: '3', title: evil }],
     },
@@ -373,7 +377,7 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   assert.ok(!steps().includes('phase-3-survey'), 'removed steps disappear from the plan');
   assert.equal($('[data-task="phase-3-iron"] summary')!.textContent, evil);
   assert.equal(
-    $('.task-link[data-factory="wire"]')!.textContent.trim(),
+    $(`.task-link[data-calc-factory="${wire}"]`)!.textContent.trim(),
     'Open factory: Wire ↗',
     'linked steps offer the factory',
   );
@@ -396,12 +400,12 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   assert.equal(form.querySelector<HTMLSelectElement>('[name=link]')!.value, '');
   noMarkup();
   form.querySelector<HTMLInputElement>('[name=title]')!.value = 'Iron halls';
-  form.querySelector<HTMLSelectElement>('[name=link]')!.value = 'wire';
+  form.querySelector<HTMLSelectElement>('[name=link]')!.value = wire;
   form.dispatchEvent(new Event('submit', { cancelable: true }));
   await settle();
   assert.deepEqual(calls.at(-1), [
     '/api/update',
-    { type: 'taskEdit', id: 'phase-3-iron', title: 'Iron halls', body: '', link: 'wire' },
+    { type: 'taskEdit', id: 'phase-3-iron', title: 'Iron halls', body: '', link: wire },
   ]);
   assert.equal(editingTask, null, 'a saved step closes its form');
   // Move, remove and restore save the matching operations.

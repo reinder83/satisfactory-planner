@@ -1,6 +1,6 @@
 // Factory groups: the profile's named groups and which factories belong to them, shared by
-// both factories pages (ui/pages/FactoriesPage.vue and CalculatedFactoriesPage.vue, with their
-// parts in ui/factories/), the group build-order dialog (factory-detail.ts) and ADA.
+// the factories page (ui/pages/CalculatedFactoriesPage.vue, with its parts in ui/factories/),
+// the group build-order dialog (factory-detail.ts) and ADA.
 import { itemRate } from '../flow.ts';
 import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';
@@ -9,7 +9,8 @@ import { inputText } from './storage.ts';
 import type { CompletionLine, FactoryGroups, GroupAssignment } from '../../types/index.ts';
 
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key
-// (a handbook factory id, or a calculated row id) to a list of { group, rate } memberships;
+// (a calculated row id; a handbook factory id on an original profile) to a list of { group,
+// rate } memberships;
 // a null rate means the whole output, or the remainder once other groups take theirs.
 export function factoryGroupsState(): FactoryGroups {
   const saved: Partial<FactoryGroups> = state?.factoryGroups || {};
@@ -86,14 +87,12 @@ export function machineCounts(machines: number, lastClock = 100): MachineCounts 
   return { total: machines, full: Math.max(0, machines - 1), adjustable: 1, clock };
 }
 
-// The status filter of both factories pages (SP-16, #251): a chip per status, each with how many
+// The status filter of the factories page (SP-16, #251): a chip per status, each with how many
 // of the factories matching the search it keeps. The chosen value is `factoryFilter` in
-// session.ts, view state only and never saved, and keeps the values the handbook page's old
-// select used ('all', 'todo', 'done', 'local'); the calculated page adds 'held'. Local is a
-// handbook chip, and a calculated one when a plan guide builds rows locally (#478); Held back is
-// a calculated one, so a value the open page has no chip for (or
-// any other) shows All, and is kept for when the other page is open again. Local and Held back
-// are subsets: a held-back row is ticked Running.
+// session.ts, view state only and never saved, and keeps the values the old status select used
+// ('all', 'todo', 'done', 'local'), with 'held' added. Local shows when a plan guide builds rows
+// locally (#478), so a value the page has no chip for (or any other) shows All, and is kept for
+// when it has one again. Local and Held back are subsets: a held-back row is ticked Running.
 export type StatusFilter = 'all' | 'todo' | 'done' | 'local' | 'held';
 export type FilterChip = { value: StatusFilter; label: string; count: number };
 const FILTER_LABELS: Record<StatusFilter, string> = {

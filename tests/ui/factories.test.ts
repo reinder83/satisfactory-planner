@@ -1,7 +1,7 @@
-// The factories pages on both profile kinds (public/app/ui/pages/FactoriesPage.vue and
-// CalculatedFactoriesPage.vue, with their parts in public/app/ui/factories/), and the factory
-// and group build-order dialogs (public/app/ui/detail/), mounted the way the app mounts them,
-// in happy-dom.
+// The factories page (public/app/ui/pages/CalculatedFactoriesPage.vue, with its parts in
+// public/app/ui/factories/), and the factory and group build-order dialogs
+// (public/app/ui/detail/), mounted the way the app mounts them, in happy-dom: on a calculated
+// profile and on one migrated from the retired handbook (#387, #797).
 import assert from 'node:assert/strict';
 import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import fs from 'node:fs';
@@ -15,14 +15,10 @@ import { machineCounts, machineLine } from '../../public/app/views/factories.ts'
 import { calcTasks } from '../../public/app/views/calculated.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
-import FactoriesPage from '../../public/app/ui/pages/FactoriesPage.vue';
+import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, test, vi } from 'vitest';
-import {
-  openCalculatedFactory,
-  openFactory,
-  openGroupChain,
-} from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
 import {
   boot,
   calcStage,
@@ -49,13 +45,23 @@ import {
   go,
   handbook,
   open,
+  migratedPlan,
+  migratedRow,
+  openMigrated,
   page,
   stubFetch,
+  transcribed,
 } from './setup.ts';
 
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
+// A profile migrated from the retired handbook (#387, openMigrated in setup.ts): `row(id)` is the
+// row a handbook factory became in a phase.
+const transcription = transcribed();
+const migrated = migratedPlan;
+const row = migratedRow;
+const migratedRows = (stage = '3') => transcription.plan.stages[stage as '3']!.rows!;
 
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
@@ -66,16 +72,16 @@ const settle = async () => {
 // The dialog markup with runs of whitespace (template line breaks) as one space.
 const detail = () => $('#detail')!.innerHTML.replace(/\s+/g, ' ');
 const factoryIds = (selector: string) =>
-  $$(`${selector} .factory-card button.name`).map(button => button.dataset.factory);
+  $$(`${selector} .factory-card button.name`).map(button => button.dataset.calcFactory);
 
-// Two groups, with Wire split between them.
+// Two groups, with the migrated profile's Wire split between them.
 const GROUPS = {
   groups: [
     { id: 'fg-cable01', name: 'Cable factory' },
     { id: 'fg-plates1', name: 'Stitched plates' },
   ],
   assignments: {
-    wire: [
+    [row('wire')]: [
       { group: 'fg-cable01', rate: 300 },
       { group: 'fg-plates1', rate: null },
     ],
@@ -90,7 +96,7 @@ type GroupOp = { type: UpdateOp['type'] } & Partial<
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setFactoryFilter('all');
   setFactoryEditing(false);
@@ -127,16 +133,21 @@ test('shared sites group their outputs above the individual factory list', async
   render();
   const sites = $$('#main .site-group');
   assert.equal(sites[0]!.querySelector('h2')!.textContent, 'Oil campus');
-  assert.equal(sites[0]!.querySelector('.eyebrow')!.textContent, 'SHARED SITE · 2 OUTPUTS');
+  assert.equal(sites[0]!.querySelector('.eyebrow')!.textContent, 'SHARED SITE · 3 OUTPUTS');
   // One card, whose name is its one dialog button (SP-19: no Details ↗ beside it).
-  assert.equal($$('#main [data-factory="plastic"]').length, 1, 'Plastic sits only in the campus');
+  assert.equal(
+    $$(`#main [data-calc-factory="${row('plastic')}"]`).length,
+    1,
+    'Plastic sits only in the campus',
+  );
+  assert.ok(sites[0]!.querySelector(`[data-calc-factory="${row('plastic')}"]`));
   assert.ok(!$$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
-  assert.equal($('#main > .eyebrow')!.textContent, 'UNGROUPED FACTORIES');
-  open({ phase: '5' });
+  assert.equal($('#main > .eyebrow')!.textContent, 'UNGROUPED PRODUCTION LINES');
+  openMigrated({ phase: '5' });
   render();
   await nextTick();
   assert.ok($$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
-  assert.ok($('#main [data-factory="uranium-fuel-rod"]'));
+  assert.ok($(`#main .site-group [data-calc-factory="${row('uranium-fuel-rod', '5')}"]`));
   $<HTMLInputElement>('#factory-search')!.value = 'plastic';
   $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
@@ -150,7 +161,10 @@ test('shared sites group their outputs above the individual factory list', async
   $<HTMLInputElement>('#factory-search')!.value = 'no-such-part';
   $('#factory-search')!.dispatchEvent(new Event('input'));
   await nextTick();
-  assert.equal($('#main .empty-state')!.textContent!.trim(), 'No factories match this search.');
+  assert.equal(
+    $('#main .empty-state')!.textContent!.trim(),
+    'No production lines match this search.',
+  );
   assert.equal($('[data-show-all]'), null, 'All is already chosen: nothing to offer');
 });
 
@@ -178,41 +192,43 @@ const find = async (text: string) => {
 const emptyText = () => $('[data-filter-empty]')!.firstChild!.textContent!.trim();
 
 test('the status chips filter on the saved factory checks, and the Running boxes work', async () => {
-  open({ state: { checks: { 'factory-3-wire': true } } });
+  const wire = 'calc-3-' + row('wire');
+  openMigrated({ state: { checks: { [wire]: true } } });
   render();
-  assert.equal($<HTMLInputElement>('[data-check="factory-3-wire"]')!.checked, true);
-  assert.ok(
-    $('[data-check="factory-3-wire"]')!.closest('.factory-card')!.classList.contains('done'),
-  );
+  assert.equal($<HTMLInputElement>(`[data-check="${wire}"]`)!.checked, true);
+  assert.ok($(`[data-check="${wire}"]`)!.closest('.factory-card')!.classList.contains('done'));
   assert.equal($('#factory-filter')!.getAttribute('role'), 'radiogroup');
   assert.equal($('#factory-filter')!.getAttribute('aria-label'), 'Factory status');
   statusChip('done').click();
   await nextTick();
-  assert.deepEqual(factoryIds('#main'), ['wire']);
-  assert.equal($('#main .toolbar .muted')!.textContent, '1 targets');
+  assert.deepEqual(factoryIds('#main'), [row('wire')]);
+  assert.equal($('#main .toolbar > span')!.textContent, '1 production lines');
   statusChip('todo').click();
   await nextTick();
-  assert.ok(!factoryIds('#main').includes('wire'));
+  assert.ok(!factoryIds('#main').includes(row('wire')));
   assert.equal(chosen(), 'todo');
 });
 
-test('the handbook chips count what the search finds, Local included', async () => {
-  const phase3Factories = handbook.factories.filter(f => f.stages['3']);
-  const local = phase3Factories.filter(f => f.local).length;
-  assert.ok(local > 0, 'the handbook has local factories');
-  open({ state: { checks: { 'factory-3-wire': true } } });
+test('a migrated profile’s chips count what the search finds, Local included', async () => {
+  const rows = migratedRows();
+  const isLocal = (r: (typeof rows)[number]) => !!transcription.plan.guide!.factories![r.id]?.local;
+  const local = rows.filter(isLocal).length;
+  assert.ok(local > 0, 'the guide builds some rows locally');
+  openMigrated({ state: { checks: { ['calc-3-' + row('wire')]: true } } });
   render();
   assert.deepEqual(chips(), [
-    ['all', `All ${phase3Factories.length}`, 'true', '0'],
-    ['todo', `Not running ${phase3Factories.length - 1}`, 'false', '-1'],
+    ['all', `All ${rows.length}`, 'true', '0'],
+    ['todo', `Not running ${rows.length - 1}`, 'false', '-1'],
     ['done', 'Running 1', 'false', '-1'],
     ['local', `Local ${local}`, 'false', '-1'],
+    // Wire is ticked while Copper Ingot, which feeds it, is not, so it is held back.
+    ['held', 'Held back 1', 'false', '-1'],
   ]);
   // A search narrows every count, whichever chip is chosen.
   statusChip('done').click();
   await find('wire');
-  const wires = phase3Factories.filter(factory =>
-    (factory.name + ' ' + factory.stages['3']!.recipe).toLowerCase().includes('wire'),
+  const wires = rows.filter(r =>
+    (r.name + ' ' + Object.keys(r.outputs).join(' ')).toLowerCase().includes('wire'),
   );
   assert.deepEqual(
     chips().map(c => c[1]),
@@ -220,20 +236,21 @@ test('the handbook chips count what the search finds, Local included', async () 
       `All ${wires.length}`,
       `Not running ${wires.length - 1}`,
       'Running 1',
-      `Local ${wires.filter(f => f.local).length}`,
+      `Local ${wires.filter(isLocal).length}`,
+      'Held back 1',
     ],
   );
-  assert.deepEqual(factoryIds('#main'), ['wire']);
+  assert.deepEqual(factoryIds('#main'), [row('wire')]);
   // A chip the search leaves empty says so and offers All back, which takes focus.
   await find('plastic');
   assert.equal(chipText('done'), 'Running 0');
-  assert.equal(emptyText(), 'No factories match “Running” and this search.');
+  assert.equal(emptyText(), 'No production lines match “Running” and this search.');
   assert.equal($$('#main .factory-card').length, 0);
   $<HTMLButtonElement>('[data-show-all]')!.click();
   await settle();
   assert.equal(chosen(), 'all');
   assert.equal(document.activeElement, statusChip('all'));
-  assert.ok($$('#main [data-factory="plastic"]').length > 0);
+  assert.ok($$(`#main [data-calc-factory="${row('plastic')}"]`).length > 0);
   assert.equal($('[data-filter-empty]'), null);
 });
 
@@ -246,7 +263,7 @@ test('the chips are a radio group: arrows, Home and End move and choose, one Tab
   assert.equal(chosen(), 'todo');
   assert.deepEqual(
     chips().map(c => c[3]),
-    ['-1', '0', '-1', '-1'],
+    ['-1', '0', '-1', '-1', '-1'],
     'only the chosen chip is in the Tab order',
   );
   press('ArrowDown');
@@ -254,25 +271,25 @@ test('the chips are a radio group: arrows, Home and End move and choose, one Tab
   assert.equal(chosen(), 'done');
   press('End');
   await nextTick();
-  assert.equal(document.activeElement, statusChip('local'));
-  assert.equal(chosen(), 'local');
+  assert.equal(document.activeElement, statusChip('held'));
+  assert.equal(chosen(), 'held');
   press('ArrowRight');
   await nextTick();
   assert.equal(document.activeElement, statusChip('all'), 'the arrows wrap around');
   press('ArrowLeft');
   await nextTick();
-  assert.equal(chosen(), 'local');
+  assert.equal(chosen(), 'held');
   press('Home');
   await nextTick();
   assert.equal(chosen(), 'all');
   press('ArrowUp');
   await nextTick();
-  assert.equal(chosen(), 'local');
+  assert.equal(chosen(), 'held');
   // Other keys are left alone.
   const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-  statusChip('local').dispatchEvent(tab);
+  statusChip('held').dispatchEvent(tab);
   assert.equal(tab.defaultPrevented, false);
-  assert.equal(chosen(), 'local');
+  assert.equal(chosen(), 'held');
 });
 
 test('the chosen chip stays through redraws and pages, and older filter values still apply', async () => {
@@ -288,15 +305,14 @@ test('the chosen chip stays through redraws and pages, and older filter values s
   assert.equal(chosen(), 'local', 'kept in factoryFilter while the app is open');
   assert.ok(factoryIds('#main').length > 0);
   // The values the old status select stored each choose their chip.
-  for (const value of ['all', 'todo', 'done', 'local']) {
+  for (const value of ['all', 'todo', 'done', 'local', 'held']) {
     setFactoryFilter(value);
     render();
     await nextTick();
     assert.equal(chosen(), value);
   }
-  // A value this page has no chip for (Held back is the calculated page's), or none at all,
-  // shows All and lists every factory.
-  for (const value of ['held', 'bogus', '']) {
+  // A value this page has no chip for, or none at all, shows All and lists every factory.
+  for (const value of ['bogus', '']) {
     setFactoryFilter(value);
     render();
     await nextTick();
@@ -346,7 +362,7 @@ test('the calculated page has the chips too, with Held back for rows a missing s
   assert.equal(chosen(), 'held');
   assert.equal(chipText('held'), 'Held back 0');
   assert.equal(emptyText(), 'No production lines match “Held back”.');
-  // Local is the handbook's chip: on this page it shows All.
+  // Local is a plan guide's chip: without a guide it shows All.
   setFactoryFilter('local');
   render();
   await nextTick();
@@ -355,7 +371,7 @@ test('the calculated page has the chips too, with Held back for rows a missing s
 });
 
 test('post-game lists the completion modules with their own checks', () => {
-  open({ phase: 'post' });
+  openMigrated({ phase: 'post' });
   render();
   const modules = $$('#main .completion-item');
   assert.ok(modules.length > 0);
@@ -375,7 +391,7 @@ test('post-game lists the completion modules with their own checks', () => {
 });
 
 test('groups show their share of a split factory, and edit mode offers the editor', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   render();
   const groups = $$('#main .user-group');
   assert.deepEqual(
@@ -385,7 +401,10 @@ test('groups show their share of a split factory, and edit mode offers the edito
   assert.equal(groups[0]!.querySelector('.eyebrow')!.textContent, 'FACTORY GROUP · 1 FACTORY');
   assert.match(groups[0]!.querySelector('.allocation')!.textContent, /^Here: 300\/min of /);
   assert.match(groups[1]!.querySelector('.allocation')!.textContent, /^Remaining here: /);
-  assert.ok(!factoryIds('#main > .cards').includes('wire'), 'a grouped factory leaves the list');
+  assert.ok(
+    !factoryIds('#main > .cards').includes(row('wire')),
+    'a grouped factory leaves the list',
+  );
   assert.equal($('[data-group-chain]'), null, 'a one-factory group has no build order');
   $('[data-toggle-factory-edit]')!.click();
   await nextTick();
@@ -393,15 +412,15 @@ test('groups show their share of a split factory, and edit mode offers the edito
   assert.ok($('#add-group'));
   assert.equal($<HTMLInputElement>('[data-group-rename="fg-cable01"]')!.value, 'Cable factory');
   assert.equal(
-    $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!.value,
+    $<HTMLInputElement>(`[data-assign-rate="${row('wire')}"][data-group="fg-cable01"]`)!.value,
     '300',
   );
-  assert.ok($('[data-unassign="wire"][data-group="fg-plates1"]'));
-  assert.ok($('[data-assign-add="computer"]'), 'every card offers a group');
+  assert.ok($(`[data-unassign="${row('wire')}"][data-group="fg-plates1"]`));
+  assert.ok($(`[data-assign-add="${row('computer')}"]`), 'every card offers a group');
 });
 
 test('a factory in two groups without rates shows half in each, as Between groups counts it (#197)', async () => {
-  open({
+  openMigrated({
     state: {
       factoryGroups: {
         groups: [
@@ -409,7 +428,7 @@ test('a factory in two groups without rates shows half in each, as Between group
           { id: 'fg-remote1', name: 'Remote' },
         ],
         assignments: {
-          wire: [
+          [row('wire')]: [
             { group: 'fg-plates1', rate: null },
             { group: 'fg-remote1', rate: null },
           ],
@@ -431,7 +450,7 @@ test('a factory in two groups without rates shows half in each, as Between group
 
 test('the group editor saves groups and memberships', async () => {
   const calls = stubFetch<GroupOp>({ '/api/update': () => state });
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   setFactoryEditing(true);
   render();
   const form = $<HTMLFormElement>('#add-group')!;
@@ -451,13 +470,13 @@ test('the group editor saves groups and memberships', async () => {
     id: 'fg-cable01',
     name: 'Cables',
   });
-  const rate = $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!;
+  const rate = $<HTMLInputElement>(`[data-assign-rate="${row('wire')}"][data-group="fg-cable01"]`)!;
   rate.value = '120';
   rate.dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryAssign',
-    key: 'wire',
+    key: row('wire'),
     groups: [
       { group: 'fg-cable01', rate: 120 },
       { group: 'fg-plates1', rate: null },
@@ -470,16 +489,16 @@ test('the group editor saves groups and memberships', async () => {
   assert.equal(calls.length, count, 'an invalid rate is not saved');
   assert.equal(rate.value, '300', 'and shows the saved rate again');
   assert.match($('#toast')!.textContent, /Enter a rate above 0/);
-  $('[data-unassign="wire"][data-group="fg-plates1"]')!.click();
+  $(`[data-unassign="${row('wire')}"][data-group="fg-plates1"]`)!.click();
   await settle();
   assert.deepEqual(calls.at(-1)![1].groups, [{ group: 'fg-cable01', rate: 300 }]);
-  const add = $<HTMLSelectElement>('[data-assign-add="computer"]')!;
+  const add = $<HTMLSelectElement>(`[data-assign-add="${row('computer')}"]`)!;
   add.value = 'fg-plates1';
   add.dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryAssign',
-    key: 'computer',
+    key: row('computer'),
     groups: [{ group: 'fg-plates1', rate: null }],
   });
   assert.equal(add.value, '', 'the selector goes back to its prompt');
@@ -494,16 +513,16 @@ test('the group editor saves groups and memberships', async () => {
 });
 
 test('group names are escaped on the page, in the editor and in the build order', async () => {
-  open({
+  openMigrated({
     state: {
       factoryGroups: {
         groups: [{ id: 'fg-a', name: evil }],
         assignments: {
-          wire: [{ group: 'fg-a', rate: null }],
-          cable: [{ group: 'fg-a', rate: null }],
+          [row('wire')]: [{ group: 'fg-a', rate: null }],
+          [row('cable')]: [{ group: 'fg-a', rate: null }],
         },
       },
-      notes: { 'factory-computer': evil },
+      notes: { ['factory-' + row('computer')]: evil },
     },
   });
   render();
@@ -517,55 +536,51 @@ test('group names are escaped on the page, in the editor and in the build order'
   render();
   await nextTick();
   assert.equal($<HTMLInputElement>('[data-group-rename="fg-a"]')!.value, evil);
-  assert.equal($('[data-assign-add="computer"] option:last-child')!.textContent, evil);
+  assert.equal($(`[data-assign-add="${row('computer')}"] option:last-child`)!.textContent, evil);
   noMarkup();
-  openFactory('computer');
+  openCalculatedFactory(row('computer'));
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, evil);
   noMarkup();
 });
 
-test('a handbook factory dialog shows its flow, destinations and local inputs', () => {
+test('a migrated factory dialog shows its flow, destinations and inputs', () => {
   render();
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   assert.ok($<HTMLDialogElement>('#detail')!.open);
   assert.match(detail(), /Delivers · Phase 3/);
   assert.match(detail(), /Machines per delivery/, 'delivery rows show machine counts');
-  assert.ok($('#detail .rail-link[data-factory="cable"]'), 'consumers link to their factory');
-  assert.match(detail(), /Storage refill/);
-  openFactory('screws');
-  assert.match(detail(), /only refills the protected storage/, 'no consumers says so');
-  openFactory('smart-plating');
-  assert.ok($('#detail [data-factory="modular-engine"]'));
-  assert.doesNotMatch(detail(), /only refills the protected storage/);
-  openFactory('modular-engine');
+  assert.ok(
+    $(`#detail .rail-link[data-calc-factory="${row('cable')}"]`),
+    'consumers link to their factory',
+  );
+  openCalculatedFactory(row('smart-plating'));
+  assert.ok($(`#detail [data-calc-factory="${row('modular-engine')}"]`));
+  openCalculatedFactory(row('modular-engine'));
   assert.match(detail(), /Space Elevator delivery/);
-  openFactory('reinforced-iron-plate');
-  assert.match(detail(), /Local: ≈ 47 × Constructor at this site/);
-  assert.ok($('#detail [data-factory="wire"]'));
-  assert.match(detail(), /Recipe · Stitched Iron Plate/);
+  openCalculatedFactory(row('reinforced-iron-plate'));
+  assert.ok($(`#detail [data-calc-factory="${row('wire')}"]`), 'inputs link to their maker');
   assert.match(detail(), /Belts &amp; pipes/);
-  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-reinforced-iron-plate');
-  open({ phase: '5' });
-  openFactory('uranium-fuel-rod');
-  assert.match(detail(), /nuclear power fleet/, 'nuclear items point at the power plan');
-  assert.doesNotMatch(detail(), /only refills the protected storage/);
+  assert.equal(
+    $('#detail [data-save-note]')!.dataset.saveNote,
+    'factory-' + row('reinforced-iron-plate'),
+  );
 });
 
 test('every dialog opens at the top, not where the last one was left (#316)', async () => {
   render();
   const dialog = $<HTMLDialogElement>('#detail')!;
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   // The <dialog> is the scroll container and keeps its offset while closed.
   dialog.scrollTop = 300;
   assert.equal(dialog.scrollTop, 300);
   void closeDetail();
   await settle();
   assert.equal(dialog.open, false);
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   assert.equal(dialog.scrollTop, 0, 'reopened after closing a scrolled dialog');
   // A link inside the dialog replaces it while it stays open.
   dialog.scrollTop = 300;
-  $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!.click();
+  $<HTMLButtonElement>(`#detail .rail-link[data-calc-factory="${row('cable')}"]`)!.click();
   assert.equal($('#detail h2')!.textContent, 'Cable');
   assert.ok(dialog.open);
   assert.equal(dialog.scrollTop, 0, 'replaced by a link inside it');
@@ -596,17 +611,20 @@ const follow = (link: HTMLElement, key: string) => {
   assert.equal(dialog.scrollTop, 0, 'and the dialog starts at its top');
 };
 
-test('a link inside a handbook factory dialog moves focus into the new one, and closing returns it to the opener (#319)', async () => {
+test('a link inside a migrated factory dialog moves focus into the new one, and closing returns it to the opener (#319)', async () => {
   render();
   const dialog = $<HTMLDialogElement>('#detail')!;
-  const opener = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
+  const cable = `#detail .rail-link[data-calc-factory="${row('cable')}"]`;
+  const opener = $<HTMLButtonElement>(
+    `#main .factory-card button.name[data-calc-factory="${row('wire')}"]`,
+  )!;
   opener.focus();
   opener.click();
   assert.equal($('#detail h2')!.textContent, 'Wire');
-  follow($('#detail .rail-link[data-factory="cable"]')!, 'factory-3-cable');
+  follow($(cable)!, 'calc-3-' + row('cable'));
   // A second hop, from the dialog that replaced the first.
-  const next = $<HTMLElement>('#detail .dialog-body [data-factory]')!;
-  follow(next, 'factory-3-' + next.dataset.factory);
+  const next = $<HTMLElement>('#detail .dialog-body [data-calc-factory]')!;
+  follow(next, 'calc-3-' + next.dataset.calcFactory);
   // Escape (the browser closes the dialog after the cancel event) goes back to the card's
   // name, however many dialogs came in between.
   const escape = new Event('cancel', { cancelable: true });
@@ -617,7 +635,7 @@ test('a link inside a handbook factory dialog moves focus into the new one, and 
   assert.equal(document.activeElement === opener, true, 'Escape returns focus to the opener');
   // The × does the same.
   opener.click();
-  follow($('#detail .rail-link[data-factory="cable"]')!, 'factory-3-cable');
+  follow($(cable)!, 'calc-3-' + row('cable'));
   $<HTMLButtonElement>('#detail [data-close]')!.focus();
   void closeDetail();
   await settle();
@@ -627,18 +645,20 @@ test('a link inside a handbook factory dialog moves focus into the new one, and 
 
 test('focus moves into the new dialog after the unsaved-note question too (#319)', async () => {
   render();
-  const opener = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
+  const opener = $<HTMLButtonElement>(
+    `#main .factory-card button.name[data-calc-factory="${row('wire')}"]`,
+  )!;
   opener.focus();
   opener.click();
   const asked = answerConfirms(true);
   $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
-  const link = $<HTMLButtonElement>('#detail .rail-link[data-factory="cable"]')!;
+  const link = $<HTMLButtonElement>(`#detail .rail-link[data-calc-factory="${row('cable')}"]`)!;
   link.focus();
   link.click();
   await settle();
   assert.equal(asked.length, 1, 'the note was asked about');
   assert.equal($('#detail h2')!.textContent, 'Cable');
-  assert.equal(focused('#detail .dialog-head [data-check="factory-3-cable"]'), true);
+  assert.equal(focused(`#detail .dialog-head [data-check="calc-3-${row('cable')}"]`), true);
   void closeDetail();
   await settle();
   assert.equal(document.activeElement === opener, true);
@@ -651,8 +671,10 @@ test('focus moves into the new dialog after the unsaved-note question too (#319)
 test('a late close event leaves a dialog opened in the meantime alone (#322)', async () => {
   render();
   const dialog = $<HTMLDialogElement>('#detail')!;
-  const first = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="wire"]')!;
-  const second = $<HTMLButtonElement>('#main .factory-card button.name[data-factory="cable"]')!;
+  const card = (id: string) =>
+    $<HTMLButtonElement>(`#main .factory-card button.name[data-calc-factory="${row(id)}"]`)!;
+  const first = card('wire');
+  const second = card('cable');
   first.focus();
   first.click();
   assert.equal($('#detail h2')!.textContent, 'Wire');
@@ -740,32 +762,20 @@ test('a factory in a group’s build order moves focus into its dialog (#319)', 
   assert.equal(document.activeElement === opener, true, 'the × returns focus to Build order');
 });
 
-test('the oil campus replaces the lane advice for Plastic and Rubber', () => {
-  render();
-  openFactory('plastic');
-  assert.match(detail(), /179 shared campus buildings/, 'expansion counts the shared campus');
-  assert.match(detail(), /\+1[.,]242/, 'campus growth shows as added buildings');
-  assert.match(detail(), /Campus inputs/);
-  assert.match(detail(), /Fuel Generators/, 'the Phase 3 fuel byproduct feeds the generators');
-  assert.doesNotMatch(detail(), /Belts &amp; pipes/);
-  open({ phase: '4' });
-  openFactory('rubber');
-  assert.match(detail(), /Seeding the loops/);
-});
-
 test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
   render();
-  openFactory('wire');
+  const wire = 'calc-3-' + row('wire');
+  openCalculatedFactory(row('wire'));
   $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
   $('#detail-note')!.dispatchEvent(new Event('input'));
   // What toggleCheck (ui/actions.ts) does once the tick is saved.
-  state.checks['factory-3-wire'] = true;
+  state.checks[wire] = true;
   render();
   await nextTick();
-  assert.equal($<HTMLInputElement>('#detail [data-check="factory-3-wire"]')!.checked, true);
+  assert.equal($<HTMLInputElement>(`#detail [data-check="${wire}"]`)!.checked, true);
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
   // Replacing the dialog asks about the note first (answered yes in beforeEach).
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   await settle();
   assert.equal(
     $<HTMLTextAreaElement>('#detail-note')!.value,
@@ -782,10 +792,9 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
       stage: '3',
       equivalent: 4,
       machineCount: 4,
-      inputs: [{ name: 'Iron Ore', rate, link: null, plan, local: null }],
+      inputs: [{ name: 'Iron Ore', rate, link: null, plan }],
       outputs: [],
       machineName: '',
-      local: false,
       recipe: null,
       bar: null,
       sameItemConsumers: () => [],
@@ -808,7 +817,7 @@ test('belt advice counts no extra lane at an exact multiple of the capacity', ()
 
 test('closing or replacing a dialog asks before dropping an unsaved note', async () => {
   render();
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   const asked = answerConfirms(false);
   $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
   const dialog = $<HTMLDialogElement>('#detail')!;
@@ -817,7 +826,7 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
   void closeDetail();
   assert.ok($<HTMLDialogElement>('#confirm')!.open && dialog.open, 'asked above the dialog');
   await settle();
-  openFactory('screws');
+  openCalculatedFactory(row('screws'));
   await settle();
   const escape = new Event('cancel', { cancelable: true });
   cancelDetail(escape);
@@ -827,13 +836,13 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
   assert.equal(escape.defaultPrevented, true);
   assert.ok(dialog.open, 'kept notes keep the dialog open');
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, 'Unsaved thought');
-  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-wire');
+  assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'factory-' + row('wire'));
   // Leaving anyway: the ×, then Escape on a reopened dialog, close it.
   answerConfirms(true);
   void closeDetail();
   await settle();
   assert.equal(dialog.open, false);
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   $<HTMLTextAreaElement>('#detail-note')!.value = 'Unsaved thought';
   const escapeAgain = new Event('cancel', { cancelable: true });
   cancelDetail(escapeAgain);
@@ -842,7 +851,7 @@ test('closing or replacing a dialog asks before dropping an unsaved note', async
   assert.equal(dialog.open, false);
   // Without an edit there is nothing to ask, and it all happens at once.
   const none = answerConfirms(false);
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   void closeDetail();
   assert.equal(dialog.open, false);
   assert.equal(none.length, 0);
@@ -862,43 +871,35 @@ const machineCells = () =>
 const percent = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 1 }) + '%';
 
-test('a handbook dialog shows its machines as Total, At 100% and Adjustable cells', () => {
+test('a migrated dialog shows its machines as Total, At 100% and Adjustable cells', () => {
   render();
-  openFactory('smart-plating');
+  openCalculatedFactory(row('smart-plating'));
   assert.deepEqual(machineCells(), [
     ['Total', '58', 'Assembler · peak load 435 MW'],
-    ['At 100%', '57', num(2) + '/min each'],
-    ['Adjustable', '1 at 50%', num(1) + '/min'],
+    ['At 100%', '57', num(2) + ' Smart Plating/min each'],
+    ['Adjustable', '1 at 50%', '≈ 50% → ≈ ' + num(1) + ' Smart Plating/min'],
   ]);
   assert.equal($$('#detail dl.machine-cells dt').length, 3, 'every number has its label');
   assert.ok(
     !$$('#detail p').some(p => /whole building/.test(p.textContent!)),
     'the old sentence is gone',
   );
-  assert.match(detail(), /upstream factories and logistics are separate/);
   // Every machine at 100%: no adjustable one and no clock. Above 1,000 MW the peak is in GW.
-  openFactory('copper-ingot');
+  openCalculatedFactory(row('copper-ingot'));
   assert.deepEqual(machineCells(), [
     ['Total', num(168), 'Refinery · peak load ' + num(2.52) + ' GW'],
-    ['At 100%', num(168), num(37.5) + '/min each'],
+    ['At 100%', num(168), num(37.5) + ' Copper Ingot/min each'],
     ['Adjustable', '0', 'No underclock needed'],
   ]);
-  // The cell shows the card's clock (one decimal); the caption keeps the handbook's own figure.
-  openFactory('heavy-modular-frame');
-  assert.deepEqual(machineCells()[2], [
-    'Adjustable',
-    '1 at ' + percent(66.7),
-    'Set ' + num(66.6666666666666) + '% · ' + num((2.8125 * 66.6666666666666) / 100) + '/min',
-  ]);
+  // The cell shows the card's clock (one decimal).
+  openCalculatedFactory(row('heavy-modular-frame'));
+  assert.deepEqual(machineCells()[2]![1], '1 at ' + percent(66.7));
   // One building at 100% is 1 · 1 · 0 (#112 kept "1 whole buildings" out; the cells count it).
-  openFactory('versatile-framework');
+  openCalculatedFactory(row('versatile-framework'));
   assert.deepEqual(
     machineCells().map(c => c[1]),
     ['1', '1', '0'],
   );
-  // The oil campus lists its own machines per recipe, so its outputs draw no cells.
-  openFactory('plastic');
-  assert.equal($('#detail .machine-cells'), null);
 });
 
 test('the machine counts follow the card’s clock rule: one decimal, never up to 100%', () => {
@@ -914,23 +915,6 @@ test('the machine counts follow the card’s clock rule: one decimal, never up t
   );
   assert.deepEqual(machineCounts(4, 100), { total: 4, full: 4, adjustable: 0 });
   assert.deepEqual(machineCounts(1, 25), { total: 1, full: 0, adjustable: 1, clock: '25' });
-});
-
-test('a single handbook building below 100% is 1 · 0 · 1 at its clock', () => {
-  const stage = handbook.factories.find(f => f.id === 'versatile-framework')!.stages['3']!;
-  const saved = { ...stage };
-  Object.assign(stage, { lastClock: 62.5, equivalent: 0.625 });
-  try {
-    render();
-    openFactory('versatile-framework');
-    assert.deepEqual(machineCells(), [
-      ['Total', '1', 'Assembler · peak load ' + num(7.5) + ' MW'],
-      ['At 100%', '0', ''],
-      ['Adjustable', '1 at ' + percent(62.5), num(3.125) + '/min'],
-    ]);
-  } finally {
-    Object.assign(stage, saved);
-  }
 });
 
 test('a calculated dialog shows the same three cells as its card, with output per machine', () => {
@@ -1001,8 +985,8 @@ test('a calculated dialog shows the same three cells as its card, with output pe
 });
 
 // SP-21 (#256): the Output, Storage and Machines tiles repeated the card, so they are gone; the
-// output and storage rate are the line under the title, and the flow comes straight after the
-// header (after the recipe badge on a handbook factory). No-break spaces keep a rate whole.
+// output rate is the line under the title, and the flow comes straight after the header (after a
+// guide note). No-break spaces keep a rate whole.
 const summary = () => $('#detail .dialog-head [data-dialog-summary]')?.textContent ?? null;
 const noBreakSpace = ' ';
 const bodyStart = () =>
@@ -1020,63 +1004,47 @@ const noTiles = () => {
   assert.doesNotMatch(detail(), /Total production|Protected allowance|Shared oil processes/);
 };
 
-test('a handbook dialog says output and storage under its title instead of in tiles', () => {
+test('a migrated dialog says its output under its title, its printed page and its note', () => {
   render();
-  const card = $('#main button.name[data-factory="iron-ingot"]')!.closest('.factory-card')!;
-  openFactory('iron-ingot');
+  const card = $(`#main button.name[data-calc-factory="${row('iron-ingot')}"]`)!.closest(
+    '.factory-card',
+  )!;
+  openCalculatedFactory(row('iron-ingot'));
   noTiles();
-  assert.equal(summary(), `${num(5850)}/min · storage${noBreakSpace}${num(10)}/min`);
+  assert.equal(summary(), `${num(5850)}/min`);
   // Escaped: on nl-NL the thousands separator is a dot, a regex wildcard (#576).
   const rate = new RegExp(num(5850).replace(/[.,]/g, '\\$&'));
   assert.match(card.querySelector('.output')!.textContent!, rate);
   assert.doesNotMatch(num(5850).replace(/[.,]/, 'X'), rate, 'a wrong separator does not pass');
-  assert.match(card.textContent!, /storage 10\/min/, 'the card says the same');
-  assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Handbook page 54');
-  // The recipe badge stays, and the flow follows it; the handbook note comes after the flow.
-  assert.equal($('#detail .badge.orange')!.textContent, 'Alternate: Pure Iron Ingot');
-  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 3']);
-  const note = $('#detail .dialog-body > .notice.info')!;
+  assert.equal($('#detail .dialog-head .eyebrow')!.textContent, 'Phase 3 · Printed page 54');
+  // The guide's note for the row comes before the flow.
+  const note = $('#detail .dialog-body > [data-guide-note]')!;
   assert.match(note.textContent!, /Reserve space for 13 halls/);
-  assert.ok(
-    $('#detail .dialog-body > h3')!.compareDocumentPosition(note) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
-  );
+  assert.deepEqual(bodyStart(), ['notice info', 'Flow at Phase 3']);
   // The Machines tile's count and machine are the Total cell's.
   assert.deepEqual(machineCells()[0], ['Total', '90', 'Refinery · peak load ' + power(1350)]);
   // The dialog is still named by its title alone.
   assert.equal($('#detail h2#detail-title')!.textContent, 'Iron Ingot');
-  // A local factory's notice now points up at the consumers the flow lists.
-  openFactory('wire');
-  assert.match(detail(), /beside the consumers listed above/);
 });
 
-test('the oil, fluid and nuclear dialogs keep what their tiles said', () => {
+test('a migrated profile’s oil, fluid and nuclear dialogs say their output under the title', () => {
   render();
-  // Oil: no machine cells; the Machines tile's "Campus · Shared oil processes" is the campus
-  // section, which lists its machines per recipe.
-  openFactory('plastic');
+  // Oil: a row of the shared campus is a row like any other, with its machine cells.
+  openCalculatedFactory(row('plastic'));
   noTiles();
-  assert.equal(summary(), `${num(1800)}/min · storage${noBreakSpace}${num(200)}/min`);
-  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 3']);
-  assert.equal($('#detail .badge.orange')!.textContent, 'Plastic');
-  assert.match(detail(), /Shared oil campus · Phase 3/);
-  assert.match(detail(), /shared campus buildings/);
-  assert.equal($('#detail .machine-cells'), null);
-  // A fluid is measured in m³, as its flow is; its protected storage is 0.
-  open({ phase: '4' });
+  assert.equal(summary(), `${num(1800)}/min`);
+  assert.equal(bodyStart()[0], 'Flow at Phase 3', 'the flow first');
+  assert.ok($('#detail .machine-cells'));
+  // A fluid is measured in m³, as its flow is.
+  openMigrated({ phase: '4' });
   render();
-  openFactory('alumina-solution');
+  openCalculatedFactory(row('alumina-solution', '4'));
   noTiles();
-  assert.equal(
-    summary(),
-    `${num(10126.666666666666)}${noBreakSpace}m³/min · storage${noBreakSpace}0${noBreakSpace}m³/min`,
-  );
-  // Nuclear: the power fleet takes it, and its notices stay.
-  openFactory('uranium-fuel-rod');
+  assert.equal(summary(), `${num(10126.666666666666)}${noBreakSpace}m³/min`);
+  // Nuclear: the guide's nuclear-site notice stays.
+  openCalculatedFactory(row('uranium-fuel-rod', '4'));
   noTiles();
-  assert.equal(summary(), `${num(10)}/min · storage${noBreakSpace}0/min`);
-  assert.deepEqual(bodyStart(), ['badge', 'Flow at Phase 4']);
-  assert.match(detail(), /nuclear power fleet/);
+  assert.equal(summary(), `${num(10)}/min`);
   assert.match(detail(), /Process buffer at the nuclear site/);
   assert.deepEqual(
     machineCells().map(c => c[1]),
@@ -1182,9 +1150,10 @@ const plain = (text: string) =>
     .trim();
 const machinesLine = (card: Element) => card.querySelector('.card-main .machines')!.textContent;
 
-test('a handbook card shows its output as the headline and machines with the clock below', () => {
+test('a migrated card shows its output as the headline and machines with the clock below', () => {
   render();
-  const wire = cardOf('#main button.name[data-factory="wire"]');
+  const card = (id: string) => cardOf(`#main button.name[data-calc-factory="${row(id)}"]`);
+  const wire = card('wire');
   assert.equal(
     headline(wire),
     num(9600) + '/min',
@@ -1192,20 +1161,11 @@ test('a handbook card shows its output as the headline and machines with the clo
   );
   assert.equal(wire.querySelector('.output span')!.textContent, '/min', 'the unit is its own span');
   assert.equal(machinesLine(wire), num(320) + ' × Constructor', 'all at 100%: no clock');
-  assert.match(wire.querySelector('.recipe')!.textContent!, /^\s*Wire\s+· storage 180\/min\s*$/);
-  const plating = cardOf('#main button.name[data-factory="smart-plating"]');
+  const plating = card('smart-plating');
   assert.equal(headline(plating), '115/min');
   assert.equal(machinesLine(plating), '58 × Assembler · last at 50%');
-  // One machine below 100% has no "last".
-  assert.equal(
-    machinesLine(cardOf('#main button.name[data-factory="versatile-framework"]')),
-    '1 × Assembler',
-  );
-  // The oil campus's outputs have no machines of their own.
-  assert.equal(
-    machinesLine(cardOf('#main button.name[data-factory="plastic"]')),
-    'See shared oil campus',
-  );
+  // One machine at 100% has no "last".
+  assert.equal(machinesLine(card('versatile-framework')), '1 × Assembler');
 });
 
 test('a calculated card shows its main output, or a generator’s power, as the headline', async () => {
@@ -1494,15 +1454,14 @@ test('the group editor names a generator’s rate unit and shows the power it st
   assert.equal(lineField.getAttribute('aria-describedby'), null);
 });
 
-test('the handbook group editor keeps its label, with no unit hint (#374)', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+test('a migrated profile’s group editor names the rate unit of a part (#374)', async () => {
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   setFactoryEditing(true);
   render();
   await nextTick();
-  const rate = $<HTMLInputElement>('[data-assign-rate="wire"][data-group="fg-cable01"]')!;
+  const rate = $<HTMLInputElement>(`[data-assign-rate="${row('wire')}"][data-group="fg-cable01"]`)!;
   assert.equal(rate.getAttribute('aria-label'), 'Production per minute in Cable factory');
-  assert.equal(rate.getAttribute('aria-describedby'), null);
-  assert.equal($('.assign-unit'), null);
+  assert.equal($('.assign-unit'), null, 'a part has no power to explain');
 });
 
 // A nuclear plant's flow, machine cells and build-plan step name its power first and its waste
@@ -1704,30 +1663,30 @@ const m3 = (rate: number) => num(rate) + ' m³/min';
 const ROW_FUEL = 'Recipe_ResidualFuel_C'; // Residual Fuel: Heavy Oil Residue in, Fuel out.
 const ROW_OIL = 'Recipe_LiquidFuel_C'; // Fuel: Crude Oil in, Fuel and Polymer Resin out.
 
-test('a handbook card measures a fluid in m³/min, like its dialog (#351)', async () => {
-  open({ phase: '4' });
+test('a migrated card measures a fluid in m³/min, like its dialog (#351)', async () => {
+  const alumina = row('alumina-solution', '4');
+  openMigrated({ phase: '4' });
   render();
-  const card = cardOf('#main button.name[data-factory="alumina-solution"]');
+  const card = cardOf(`#main button.name[data-calc-factory="${alumina}"]`);
   assert.equal(plain(headline(card)), m3(10126.666666666666));
   assert.equal(card.querySelector('.output span')!.textContent, 'm³/min');
-  assert.match(plain(card.querySelector('.recipe')!.textContent!), /· storage 0 m³\/min$/);
   // The headline agrees with the dialog's summary line.
-  openFactory('alumina-solution');
+  openCalculatedFactory(alumina);
   assert.equal(plain(summary()!).split(' · ')[0], plain(headline(card)));
   // The output per machine too, in the machine cells and the flow's machine line.
-  assert.match(machineCells()[1]![2]!, / m³\/min each$/);
+  assert.match(machineCells()[1]![2]!, / m³ Alumina Solution\/min each$/);
   assert.match(plain(detail()), / m³ Alumina Solution\/min out per machine/);
   // A solid keeps /min.
-  const iron = cardOf('#main button.name[data-factory="iron-ingot"]');
+  const iron = cardOf(`#main button.name[data-calc-factory="${row('iron-ingot', '4')}"]`);
   assert.equal(iron.querySelector('.output span')!.textContent, '/min');
   // A group's share of a fluid is in m³/min as well.
-  open({
+  openMigrated({
     phase: '4',
     state: {
       factoryGroups: {
         groups: GROUPS.groups,
         assignments: {
-          'alumina-solution': [
+          [alumina]: [
             { group: 'fg-cable01', rate: 600 },
             { group: 'fg-plates1', rate: null },
           ],
@@ -1747,9 +1706,9 @@ test('a handbook card measures a fluid in m³/min, like its dialog (#351)', asyn
 // happy-dom lays nothing out, so the line boxes were measured in Edge at 1440 and 390 px; this
 // pins what keeps them together: a no-break space before m³, and nowrap on the rates.
 test('the flow diagram keeps a fluid rate’s unit beside its number (#364)', () => {
-  open({ phase: '4' });
+  openMigrated({ phase: '4' });
   render();
-  openFactory('alumina-solution');
+  openCalculatedFactory(row('alumina-solution', '4'));
   const unit = (el: Element | null | undefined) => el?.querySelector('small')?.textContent;
   const scrap = $$('#detail .rail-row').find(r => /Aluminum Scrap/.test(r.textContent!))!;
   const rate = scrap.querySelector('.rail-rate')!;
@@ -1796,9 +1755,9 @@ test('the flow diagram’s destination rows share one set of columns (#378)', ()
       );
     }
   };
-  open({ phase: '4' });
+  openMigrated({ phase: '4' });
   render();
-  openFactory('alumina-solution');
+  openCalculatedFactory(row('alumina-solution', '4'));
   cells('Alumina Solution');
   const plan = generated();
   const rows = plan.stages['3'].rows!;
@@ -1915,8 +1874,8 @@ test('a calculated factory dialog measures fluid inputs and outputs in m³/min (
   assert.doesNotMatch(all, /Heavy Oil Residue [\d.,]+\/min|[\d.,] Fuel\/min/);
 });
 
-test('the handbook factories page measures a fluid input in m³/min (#361)', () => {
-  open({ phase: 'post' });
+test('a migrated profile’s completion modules measure a fluid input in m³/min (#361)', () => {
+  openMigrated({ phase: 'post' });
   render();
   const fabric = $('[data-check="completion-fabric"]')!.closest('.completion-item')!;
   assert.match(plain(fabric.textContent!), /Inputs: Polymer Resin 10\/min · Water 10 m³\/min/);
@@ -1924,7 +1883,7 @@ test('the handbook factories page measures a fluid input in m³/min (#361)', () 
   assert.ok(fabric.textContent!.includes('Water 10 m³/min'));
 });
 
-test('the calculated card is marked done like the handbook card', () => {
+test('a calculated card ticked Running is marked done', () => {
   const plan = generated();
   const row = plan.stages['3'].rows![0]!;
   open({ calculated: plan, state: { checks: { ['calc-3-' + row.id]: true } } });
@@ -1937,28 +1896,29 @@ test('the calculated card is marked done like the handbook card', () => {
 const chip = (card: Element) => card.querySelector<HTMLElement>('.status-chip')!;
 const chipSays = (card: Element) => chip(card).textContent!.replace(/\s+/g, ' ').trim();
 
-test('a handbook card’s status chip says Running or Not built and follows the box', async () => {
+test('a migrated card’s status chip says Running or Not built and follows the box', async () => {
   stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   render();
-  const wire = () => cardOf('#main button.name[data-factory="wire"]');
-  assert.equal(wire().firstElementChild, chip(wire()), 'the chip is at the top of the card');
-  assert.equal(chipSays(wire()), '○ Not built');
-  assert.equal(chip(wire()).dataset.runningStatus, 'idle');
-  assert.equal(chip(wire()).getAttribute('aria-hidden'), 'true', 'the box already says it');
-  assert.equal(chip(wire()).querySelector('button, input'), null, 'a status, not a control');
-  assert.equal(wire().querySelectorAll('[data-check]').length, 1, 'one Running box');
-  assert.ok(!wire().classList.contains('done'));
-  $<HTMLInputElement>('#main [data-check="factory-3-wire"]')!.click();
+  // Iron Ingot draws only raw resources, so ticked alone it runs rather than waiting on a supplier.
+  const key = 'calc-3-' + row('iron-ingot');
+  const ingot = () => cardOf(`#main button.name[data-calc-factory="${row('iron-ingot')}"]`);
+  assert.equal(ingot().firstElementChild, chip(ingot()), 'the chip is at the top of the card');
+  assert.equal(chipSays(ingot()), '○ Not built');
+  assert.equal(chip(ingot()).dataset.runningStatus, 'idle');
+  assert.equal(chip(ingot()).getAttribute('aria-hidden'), 'true', 'the box already says it');
+  assert.equal(chip(ingot()).querySelector('button, input'), null, 'a status, not a control');
+  assert.equal(ingot().querySelectorAll('[data-check]').length, 1, 'one Running box');
+  assert.ok(!ingot().classList.contains('done'));
+  $<HTMLInputElement>(`#main [data-check="${key}"]`)!.click();
   await settle();
-  assert.equal(state.checks['factory-3-wire'], true);
-  assert.equal(chipSays(wire()), '● Running');
-  assert.equal(chip(wire()).dataset.runningStatus, 'running');
-  assert.ok(chip(wire()).classList.contains('green'));
-  assert.ok(wire().classList.contains('done'), 'the running card is tinted');
-  $<HTMLInputElement>('#main [data-check="factory-3-wire"]')!.click();
+  assert.equal(state.checks[key], true);
+  assert.equal(chipSays(ingot()), '● Running');
+  assert.equal(chip(ingot()).dataset.runningStatus, 'running');
+  assert.ok(chip(ingot()).classList.contains('green'));
+  assert.ok(ingot().classList.contains('done'), 'the running card is tinted');
+  $<HTMLInputElement>(`#main [data-check="${key}"]`)!.click();
   await settle();
-  assert.equal(chipSays(wire()), '○ Not built');
-  assert.equal($('[data-running-status="held"]'), null, 'a handbook card is never held back');
+  assert.equal(chipSays(ingot()), '○ Not built');
 });
 
 test('a calculated card’s status chip says Running, Not built, or Held back with its reason', async () => {
@@ -2032,8 +1992,7 @@ test('the expansion tables label their phases and mark the current one (SP-22)',
   // A calculated factory at Phase 4.
   open({ calculated: plan, phase: '4' });
   render();
-  const row = calcStage()!.rows![0]!;
-  openCalculatedFactory(row.id);
+  openCalculatedFactory(calcStage()!.rows![0]!.id);
   const calc = summary();
   assert.ok(
     calc.every(([label]) => /^Phase \d/.test(label as string)),
@@ -2051,17 +2010,17 @@ test('the expansion tables label their phases and mark the current one (SP-22)',
     summary().filter(([, current]) => current),
     [['Phase 5current: Post Phase 5', true, 'true']],
   );
-  // The handbook dialog does the same.
-  open({ phase: '4' });
+  // A migrated profile's dialog does the same, from the phases its plan builds the row in.
+  openMigrated({ phase: '4' });
   render();
-  openFactory('wire');
-  const handbookPhases = summary();
+  openCalculatedFactory(row('wire', '4'));
+  const migratedPhases = summary();
   assert.deepEqual(
-    handbookPhases.map(([label]) => (label as string).replace('current', '')),
+    migratedPhases.map(([label]) => (label as string).replace('current', '')),
     ['Phase 3', 'Phase 4', 'Phase 5'],
   );
   assert.deepEqual(
-    handbookPhases.filter(([, current]) => current),
+    migratedPhases.filter(([, current]) => current),
     [['Phase 4current', true, 'true']],
   );
 });
@@ -2097,23 +2056,24 @@ const headerRunning = async (key: string, label: RegExp, openIt: () => void) => 
   );
 };
 
-test('a handbook factory dialog has its Running box in the header, saved as its card’s', async () => {
+test('a migrated factory dialog has its Running box in the header, saved as its card’s', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   render();
-  await headerRunning('factory-3-wire', /^Running at Phase 3 target$/, () => openFactory('wire'));
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'factory-3-wire', value: true });
-  assert.ok($('#main [data-check="factory-3-wire"]')!.closest('.factory-card.done'));
+  const key = 'calc-3-' + row('wire');
+  await headerRunning(key, /^Running at Phase 3 target$/, () => openCalculatedFactory(row('wire')));
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key, value: true });
+  assert.ok($(`#main [data-check="${key}"]`)!.closest('.factory-card.done'));
 });
 
 test('a calculated factory dialog has its Running box in the header, saved as its card’s', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   open({ calculated: plan });
   render();
-  const row = calcStage()!.rows![0]!;
-  await headerRunning('calc-3-' + row.id, /^Running at Phase 3 target$/, () =>
-    openCalculatedFactory(row.id),
+  const first = calcStage()!.rows![0]!;
+  await headerRunning('calc-3-' + first.id, /^Running at Phase 3 target$/, () =>
+    openCalculatedFactory(first.id),
   );
-  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + row.id, value: true });
+  assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + first.id, value: true });
 });
 
 test('a group build order stages suppliers before consumers', () => {
@@ -2152,7 +2112,7 @@ test('a group build order stages suppliers before consumers', () => {
 
 test('a dialog left open when the session ends closes with the sign-in screen', async () => {
   render();
-  openFactory('wire');
+  openCalculatedFactory(row('wire'));
   assert.equal($<HTMLDialogElement>('#detail')!.open, true);
   // boot() after an ended session: /api/workspace answers with no user.
   stubFetch({ '/api/workspace': { user: null, accountsEnabled: true, saves: [] } });
@@ -2707,7 +2667,9 @@ beforeEach(() => {
 });
 
 test('the jump bar lists each group and shared site with its running count', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS), checks: { 'factory-3-wire': true } } });
+  openMigrated({
+    state: { factoryGroups: structuredClone(GROUPS), checks: { ['calc-3-' + row('wire')]: true } },
+  });
   render();
   await nextTick();
   assert.equal($('#main .jump-bar')!.tagName, 'NAV');
@@ -2717,7 +2679,7 @@ test('the jump bar lists each group and shared site with its running count', asy
   assert.deepEqual(jumps(), [
     ['fg-cable01', '1/1', 'Cable factory 1/1, 1 of 1 running'],
     ['fg-plates1', '1/1', 'Stitched plates 1/1, 1 of 1 running'],
-    ['site-oil', '0/2', 'Oil campus 0/2, 0 of 2 running'],
+    ['site-oil', '0/3', 'Oil campus 0/3, 0 of 3 running'],
   ]);
   assert.deepEqual(
     $$('#main .site-group').map(site => site.id),
@@ -2740,16 +2702,16 @@ test('the jump bar lists each group and shared site with its running count', asy
   await find('no-such-part');
   assert.equal($('#main .jump-bar'), null, 'nothing to jump to');
   // Without a group or site to show there is no bar: here only the ungrouped Wire card.
-  open();
+  openMigrated();
   render();
   await find('wire');
-  assert.deepEqual(factoryIds('#main'), ['wire']);
+  assert.deepEqual(factoryIds('#main'), [row('wire')]);
   assert.equal($('#main .jump-bar'), null);
   await find('');
 });
 
 test('a jump brings the section into view and focuses its heading', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   render();
   await nextTick();
   const button = $<HTMLButtonElement>('[data-jump="site-oil"]')!;
@@ -2773,7 +2735,10 @@ test('a jump brings the section into view and focuses its heading', async () => 
 });
 
 test('a group folds with its toggle, is remembered, and still counts in the chips', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS), checks: { 'factory-3-wire': true } } });
+  openMigrated({
+    profileId: 'original',
+    state: { factoryGroups: structuredClone(GROUPS), checks: { ['calc-3-' + row('wire')]: true } },
+  });
   unfoldAll();
   render();
   await nextTick();
@@ -2809,9 +2774,14 @@ test('a group folds with its toggle, is remembered, and still counts in the chip
   // It is view state in this browser, not progress: nothing in the profile changed.
   assert.deepEqual(state, before);
   assert.deepEqual(JSON.parse(localStorage.getItem('planner-collapsed-sections')!), [
-    's/original/fg-cable01',
+    's/p/fg-cable01',
   ]);
-  open({ profileId: 'other', state: { factoryGroups: structuredClone(GROUPS) } });
+  setContext({
+    save: { id: 's', name: 'World' },
+    profile: { id: 'other', kind: 'calculated', name: 'World' },
+    state: { ...structuredClone(state), factoryGroups: structuredClone(GROUPS) },
+    plan: migrated(),
+  });
   render();
   await nextTick();
   assert.equal(toggleOf('fg-cable01').getAttribute('aria-expanded'), 'true');
@@ -2825,12 +2795,12 @@ test('a group folds with its toggle, is remembered, and still counts in the chip
   toggleOf('site-oil').click();
   await nextTick();
   assert.equal(cardsOf('site-oil').style.display, '');
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   unfoldAll();
 });
 
 test('jumping to a folded section unfolds it, and folding works while editing groups', async () => {
-  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  openMigrated({ state: { factoryGroups: structuredClone(GROUPS) } });
   unfoldAll();
   render();
   await nextTick();
@@ -2854,7 +2824,9 @@ test('jumping to a folded section unfolds it, and folding works while editing gr
 });
 
 test('an empty group shows in the jump bar while editing, and user names stay text', async () => {
-  open({ state: { factoryGroups: { groups: [{ id: 'fg-a', name: evil }], assignments: {} } } });
+  openMigrated({
+    state: { factoryGroups: { groups: [{ id: 'fg-a', name: evil }], assignments: {} } },
+  });
   render();
   await nextTick();
   assert.deepEqual(
@@ -2944,40 +2916,21 @@ test('folded sections survive a page refresh, and anything unreadable opens them
   ]);
   localStorage.removeItem('planner-collapsed-sections');
 });
-// #356: the handbook page stays mounted until render() swaps it out, so it can be drawn while
-// the session's stage is one the handbook has no plan for: a phase 1 or 2 calculated profile,
-// or any phase in the browser edition, whose plan.json has no plans or factories. It draws
-// nothing then rather than throwing, groups and group editing included.
-test('the handbook factories page draws nothing for a phase the handbook has no plan for', async () => {
-  const draw = async (what: string) => {
-    const el = document.createElement('div');
-    const errors: unknown[] = [];
-    const app = createApp({ render: () => h(FactoriesPage) });
-    app.config.errorHandler = error => void errors.push(error);
-    app.mount(el);
-    await nextTick();
-    assert.deepEqual(errors, [], what + ' draws without an error');
-    assert.equal(el.querySelector('h1, .toolbar, .cards'), null, what + ' draws nothing');
-    app.unmount();
-  };
-  const plan = generated();
-  plan.settings.phase = '1';
-  for (const phase of ['1', '2'] as const) {
-    open({ calculated: plan, phase, state: { factoryGroups: structuredClone(GROUPS) } });
-    assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
-    setFactoryEditing(true);
-    await draw('phase ' + phase);
-  }
-  // The browser edition's handbook (build.ts): no plans, resources or factories for any phase.
-  open();
-  setContext({
-    save: { id: 's', name: 'World' },
-    profile: { id: 'original', kind: 'original', name: 'World' },
-    state: structuredClone(state),
-    plan: null,
-    handbook: { ...handbook, factories: [], completion: [], plans: {}, resources: {}, power: {} },
-  });
-  await draw('the empty handbook');
+// #356: a page stays mounted until render() swaps it out, so the factories page can be drawn
+// once more after the profile it was drawn for has gone and no calculated plan is open. It
+// draws nothing then rather than throwing, groups and group editing included.
+test('the factories page draws nothing while no calculated plan is open', async () => {
+  const el = document.createElement('div');
+  const errors: unknown[] = [];
+  open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  setFactoryEditing(true);
+  const app = createApp({ render: () => h(CalculatedFactoriesPage) });
+  app.config.errorHandler = error => void errors.push(error);
+  app.mount(el);
+  await nextTick();
+  assert.deepEqual(errors, [], 'it draws without an error');
+  assert.equal(el.querySelector('.toolbar, .cards'), null, 'it draws no factories');
+  app.unmount();
 });
 
 // A plan with a guide (#393, #468; a migrated handbook profile) draws the rows it places at a

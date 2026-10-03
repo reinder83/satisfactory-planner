@@ -11,7 +11,7 @@ import { bestLane } from '../../flow.ts';
 import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import { factoryLink } from '../actions.ts';
-import type { FlowInput, FlowModel } from '../../flow.ts';
+import type { FlowModel } from '../../flow.ts';
 import type { FactoryLink } from '../actions.ts';
 
 const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model: null });
@@ -38,7 +38,6 @@ interface AdviceRow {
   split: string;
   feed: FeedAdvice | null;
   spare: SpareAdvice | null;
-  local: FlowInput['local'];
 }
 
 // The last lane's rate as printed. A remainder that rounds to 0 at two decimals (a rate a hair
@@ -76,7 +75,6 @@ const advice = computed(() => {
             : ` (${Math.round((input.rate / lane.cap) * 100)}% of ${num(lane.cap)}${lane.unit})`,
         feed: null,
         spare: null,
-        local: input.local,
       };
       if (model.machineCount > 1)
         row.feed =
@@ -150,11 +148,6 @@ const advice = computed(() => {
               >
               from the same bus</template
             ><template v-else>keep it as expansion headroom on this manifold</template>.
-          </p>
-          <p v-if="row.local">
-            <button class="btn quiet" v-bind="factoryLink({ factory: row.local.id })">
-              Local: ≈ {{ row.local.count }} × {{ row.local.machine }} at this site ↗
-            </button>
           </p>
         </div>
       </div>

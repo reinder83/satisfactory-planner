@@ -10,7 +10,7 @@
 import { allowSwitch, navigate, post, save, toast, writeQueue } from '../api.ts';
 import { nextTick } from 'vue';
 import { boot, loadContext, setAuthMode, setFactoryFilter, setWorkspace } from '../session.ts';
-import { openCalculatedFactory, openFactory } from '../factory-detail.ts';
+import { openCalculatedFactory } from '../factory-detail.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
 import { required } from '../format.ts';
@@ -18,8 +18,8 @@ import { containerMove } from '../views/storage.ts';
 import { whileBusy } from '../busy.ts';
 import type { WorkspaceSummary } from '../../types/index.ts';
 
-// A link to a factory's dialog: a handbook factory or a calculated row.
-export type FactoryLink = { factory: string } | { calcFactory: string };
+// A link to a factory's dialog: a row of the calculated plan.
+export type FactoryLink = { calcFactory: string };
 
 // @change on any progress checkbox (data-check is its saved key): plan steps, a factory's
 // "Running", calculated rows, storage and commissioning checklists, the power checks, the
@@ -40,18 +40,15 @@ export function toggleCheck(event: Event) {
 }
 
 // A link to another factory's dialog, as the flow models, the group chain and the plan's
-// steps carry it: { factory: <handbook id> } or { calcFactory: <calculated row id> }. Bound
-// with v-bind, it gives the button its data-factory or data-calc-factory attribute and the
-// click that opens that dialog.
+// steps carry it: { calcFactory: <calculated row id> }. Bound with v-bind, it gives the button
+// its data-calc-factory attribute and the click that opens that dialog.
 export const factoryLink = (link: FactoryLink | null | undefined) =>
   !link
     ? {}
-    : 'calcFactory' in link
-      ? {
-          'data-calc-factory': link.calcFactory,
-          onClick: () => openCalculatedFactory(link.calcFactory),
-        }
-      : { 'data-factory': link.factory, onClick: () => openFactory(link.factory) };
+    : {
+        'data-calc-factory': link.calcFactory,
+        onClick: () => openCalculatedFactory(link.calcFactory),
+      };
 
 // Closes the shared #detail dialog (its × or a backdrop click). Closing unmounts the dialog's
 // app (ui/detail.ts), so allowSwitch() first sends a note still waiting for its pause in
