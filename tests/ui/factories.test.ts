@@ -17,7 +17,7 @@ import { power } from '../../public/app/wizard/fields.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
-import { beforeEach, test, vi } from 'vitest';
+import { beforeEach, onTestFinished, test, vi } from 'vitest';
 import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
 import {
   boot,
@@ -505,12 +505,18 @@ test('the group editor saves groups and memberships', async () => {
   add.value = 'fg-plates1';
   add.dispatchEvent(new Event('change'));
   await settle();
+  $(`[data-assign-go="${row('computer')}"]`)!.click();
+  await settle();
   assert.deepEqual(calls.at(-1)![1], {
     type: 'factoryAssign',
     key: row('computer'),
     groups: [{ group: 'fg-plates1', rate: null }],
   });
-  assert.equal(add.value, '', 'the selector goes back to its prompt');
+  assert.equal(
+    $<HTMLSelectElement>(`[data-assign-add="${row('computer')}"]`)!.value,
+    '',
+    'the selector goes back to its prompt',
+  );
   $('[data-remove-group="fg-plates1"]')!.click();
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'factoryGroupRemove', id: 'fg-plates1' });
@@ -519,6 +525,78 @@ test('the group editor saves groups and memberships', async () => {
   $('[data-remove-group="fg-cable01"]')!.click();
   await settle();
   assert.equal(calls.length, before, 'a declined confirmation removes nothing');
+});
+
+test('"+ Add to group…" only picks a group; Add joins it, once, and a failed add keeps the pick (#856)', async () => {
+  // The stub goes when the test ends: a later test that stubs nothing expects a write to fail.
+  const original = globalThis.fetch;
+  onTestFinished(() => {
+    globalThis.fetch = original;
+  });
+  let fail = false;
+  const calls = stubFetch<GroupOp>({
+    '/api/update': (update: UpdateOp) => {
+      if (fail) throw Error('Simulated failure');
+      return applyUpdate(update);
+    },
+  });
+  openMigrated({
+    state: {
+      factoryGroups: {
+        groups: [
+          { id: 'fg-cable01', name: 'Cable factory' },
+          { id: 'fg-plates1', name: evil },
+        ],
+        assignments: {},
+      },
+    },
+  });
+  setFactoryEditing(true);
+  render();
+  await nextTick();
+  const key = row('computer'),
+    menu = () => $<HTMLSelectElement>(`[data-assign-add="${key}"]`)!,
+    join = () => $<HTMLButtonElement>(`[data-assign-go="${key}"]`)!;
+  assert.equal(join().disabled, true, 'Add has nothing to do before a group is picked');
+  assert.equal(join().getAttribute('aria-label'), 'Add to a group');
+  // An arrow key on the closed menu, as Chrome and Edge on Windows handle it: the value changes
+  // and `change` fires. That only picks the group; the factory joins nothing.
+  menu().focus();
+  menu().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  menu().value = 'fg-cable01';
+  menu().dispatchEvent(new Event('input', { bubbles: true }));
+  menu().dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  // Browsing on to the next group still adds nothing.
+  menu().value = 'fg-plates1';
+  menu().dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+  assert.equal(calls.length, 0, 'browsing the groups saves nothing');
+  assert.equal(menu().value, 'fg-plates1', 'the pick stays');
+  assert.equal(join().disabled, false);
+  assert.equal(join().getAttribute('aria-label'), 'Add to ' + evil);
+  noMarkup();
+  // A failed add: the factory stays out, the pick and focus stay.
+  fail = true;
+  join().focus();
+  join().click();
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(state.factoryGroups?.assignments[key] ?? [], []);
+  assert.equal(menu().value, 'fg-plates1', 'the pick stays after a failure');
+  assert.equal(join().disabled, false);
+  assert.ok(document.activeElement === join(), 'focus stays on Add');
+  // Add saves once.
+  fail = false;
+  join().click();
+  await settle();
+  assert.equal(calls.length, 2, 'Add saves once');
+  assert.deepEqual(calls.at(-1)![1], {
+    type: 'factoryAssign',
+    key,
+    groups: [{ group: 'fg-plates1', rate: null }],
+  });
+  assert.deepEqual(state.factoryGroups?.assignments[key], [{ group: 'fg-plates1', rate: null }]);
 });
 
 test('group names are escaped on the page, in the editor and in the build order', async () => {
