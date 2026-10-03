@@ -54,14 +54,15 @@ test('formatNumber matches toLocaleString with at most 2 decimals for every kind
 });
 
 test('phaseSteps text is byte-identical to the per-call toLocaleString version', async () => {
-  // The module as it was before #772, loaded from a temporary copy. progression.ts imports
-  // types only, so the copy runs on its own.
+  // The module as it was before #772, loaded from a temporary copy. Besides types, progression.ts
+  // imports only wording.ts (#871), which is copied beside it.
   const source = fs.readFileSync(new URL('../public/progression.ts', import.meta.url), 'utf8');
   const shared = /const numberFormat = [^\n]*\n(export const formatNumber = [^\n]*)\n/;
   assert.match(source, shared);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'number-format-'));
   try {
     const file = path.join(dir, 'progression-old.ts');
+    fs.copyFileSync(new URL('../public/wording.ts', import.meta.url), path.join(dir, 'wording.ts'));
     fs.writeFileSync(
       file,
       source.replace(

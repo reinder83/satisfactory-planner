@@ -6,6 +6,7 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
+import { listNames } from './wording.ts';
 
 // A generated guidance step: its checklist key, title and text.
 export interface GuideTask {
@@ -506,12 +507,25 @@ function powerReviewTask(
   };
 }
 
-// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet.
+// The phase a calculated plan starts building in: its settings' phase. The phases before it are
+// milestone-only (#759) and list no power steps.
+const startPhase = ({ plan }: GuideContext): number => Number(plan.settings.phase || 1);
+
+// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet. Gathering
+// Biomass and automating Solid Biofuel are done once in the game, so those two steps are listed
+// once, in the first planned phase that lists the start-up, which is always the start phase
+// (#872), as each milestone (#758) and alternate unlock (#870) is listed once: repeated in every
+// later phase with the same check keys, a tick made while working on Phase 3 made Phases 4 and 5
+// look started. Post-game plans Phase 5's stage, so it lists them too for a profile made for
+// Phase 5. The burner bank is sized for this phase's load and keyed per phase, so every phase
+// with the start-up keeps its own.
 function biomassStartupTasks(
-  { plan, stage, stageOf }: GuideContext,
+  context: GuideContext,
   { coal, petroleum, nuclear }: UnlockedPower,
 ): GuideTask[] {
+  const { plan, stage, stageOf } = context;
   if (!(stage === 1 || (!coal && !petroleum && !nuclear))) return [];
+  const first = stage === startPhase(context);
   const need = Math.max(
       0,
       (stageOf(stage)?.requiredMW || 0) - plan.settings.availablePowerGW * 1000,
@@ -519,7 +533,7 @@ function biomassStartupTasks(
     factor = plan.settings.powerFactor ?? 1;
   // Three starter constructors have their own draw; this is a manually supplied startup estimate.
   const burners = Math.ceil((need + 12 * factor) / 30);
-  return [
+  const once: GuideTask[] = [
     {
       id: 'startup-biomass',
       title: 'Turn leaves and wood into Biomass',
@@ -530,6 +544,9 @@ function biomassStartupTasks(
       title: 'Unlock Obstacle Clearing, then automate Solid Biofuel',
       body: 'Tier 2 Obstacle Clearing unlocks the Chainsaw and Solid Biofuel. One Constructor consumes 120 Biomass/min → 60 Solid Biofuel/min at 100%. Start with one, fed by the Biomass buffer; retain fuel for the chainsaw. With a Mk.1 input belt, limit it to 60 Biomass/min → 30 Solid Biofuel/min; unlock Logistics Mk.2 for a 120/min input and the full 60/min output. A full 360 Biomass/min from both source Constructors can supply three Solid Biofuel Constructors, making 180/min. Split the merge across belts as needed: Mk.1 carries 60/min and Mk.2 120/min, so do not try to put 360/min on one early belt.',
     },
+  ];
+  return [
+    ...(first ? once : []),
     {
       id: 'startup-burner-bank-' + stage,
       title: 'Size and feed the biomass burner bank',
@@ -539,11 +556,13 @@ function biomassStartupTasks(
 }
 
 // Moving to the generators the plan builds: coal, fuel, the preferred main power, aluminum
-// water recycling and nuclear.
+// water recycling and nuclear. "Unlock Coal Power" is one unlock, so it is listed once, in the
+// first planned phase from Phase 2 on (#872, as the biomass start-up above), and post-game with it
+// for a profile made for Phase 5.
 function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideTask[] {
   const { stage, rows } = context;
   const tasks: GuideTask[] = [];
-  if (stage >= 2 && !coal)
+  if (stage === Math.max(2, startPhase(context)) && !coal)
     tasks.push({
       id: 'startup-coal-unlock',
       title: 'Unlock Coal Power before switching to coal',
@@ -579,41 +598,147 @@ function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideT
   return tasks;
 }
 
-// From Phase 3, when the profile chose a main power source: expand it before the next block.
-function preferredPowerTasks({ plan, stage }: GuideContext): GuideTask[] {
+// From Phase 3, when the profile chose a main power source: the generator lines this phase's
+// plan builds, named as their own build steps are, with what each adds (#871). The setting only
+// narrows the generators the planner may choose (generators() in planner/recipes.ts): under
+// "Rocket fuel + nuclear" a phase may burn no rocket fuel at all, and a phase whose spare power
+// covers its load builds none. So the step reads the phase's rows, never the setting alone. Its
+// check key stays `preferred-power-<phase>`.
+function preferredPowerTasks(context: GuideContext): GuideTask[] {
+  const { plan, stage, rows } = context;
   const preferred = plan.settings.mainPower;
   if (!(stage >= 3 && preferred && preferred !== 'auto')) return [];
-  const rocket = preferred.startsWith('rocket'),
-    source =
-      preferred === 'coal'
-        ? 'coal'
-        : preferred === 'nuclear' && stage >= 4
-          ? 'nuclear'
-          : rocket && stage >= 4
-            ? 'rocket fuel'
-            : preferred === 'fuel'
-              ? 'fuel'
-              : 'turbofuel';
+  const generators = rows.filter(isGenerator);
+  const unburned = unburnedPreference(preferred, stage, rows);
   return [
     {
       id: 'preferred-power-' + stage,
-      title: 'Expand ' + source + ' power before the next production block',
-      body:
-        (source === 'coal'
-          ? 'Keep expanding coal extraction, water and generators after Coal Power is unlocked. '
-          : source === 'nuclear'
-            ? 'Complete Nuclear Power and commission fuel supply plus all waste processing before starting reactors. '
-            : rocket && stage >= 4
-              ? 'Upgrade the turbofuel bridge after unlocking Blender access, nitrogen and Rocket Fuel in the Sulfur MAM tree. Build and prime the new chain before switching generators. '
-              : preferred === 'fuel'
-                ? 'Use Fuel after Oil Processing and Petroleum Power. '
-                : 'Use coal until Oil Processing, Petroleum Power and Sulfur MAM Turbofuel research are complete. Commission compacted coal and all byproduct handling. ') +
-        (preferred.endsWith('-nuclear') && stage >= 4
-          ? 'Add the planned nuclear fleet only after its entire waste-processing chain is ready. '
-          : '') +
-        'Build the generator quantities listed in this phase, check the actual maximum consumption with the utility allowance, and commission more capacity before connecting the next factory. Keep the previous plant online until the replacement is stable.',
+      ...(generators.length
+        ? generatorStep(context, generators, unburned)
+        : sparePowerStep(stage, unburned)),
     },
   ];
+}
+
+// A preferred fuel this phase makes but burns in no generator, and the lines that make it.
+interface UnburnedFuel {
+  fuel: string;
+  makers: string[];
+}
+
+// A generator line: a power-<fuel> row (generators() in planner/recipes.ts).
+const isGenerator = (row: CalcRow): boolean => row.generationMW > 0;
+
+// What a generator line burns: its input other than water.
+const generatorFuel = (row: CalcRow): string =>
+  Object.keys(row.inputs).find(item => item !== 'Water') || '';
+
+// A generator line's power source in words, as the settings name it: coal, fuel, turbofuel,
+// rocket fuel or nuclear (any Nuclear Power Plant).
+const generatorSource = (row: CalcRow): string =>
+  row.machine === 'Nuclear Power Plant'
+    ? 'nuclear'
+    : row.machine === 'Coal Generator'
+      ? 'coal'
+      : generatorFuel(row).toLowerCase();
+
+// The fuel the preferred main power burns in this phase (as generators() narrows it), when this
+// phase makes that fuel but no generator burns it, because the planner chose another generator
+// the setting also allows. Null otherwise.
+function unburnedPreference(
+  preferred: string,
+  stage: number,
+  rows: CalcRow[],
+): UnburnedFuel | null {
+  if (preferred === 'coal' || (preferred === 'nuclear' && stage >= 4)) return null;
+  const fuel =
+    preferred === 'fuel'
+      ? 'Fuel'
+      : preferred.startsWith('rocket') && stage >= 4
+        ? 'Rocket Fuel'
+        : 'Turbofuel';
+  if (rows.some(row => isGenerator(row) && row.inputs[fuel])) return null;
+  const makers = rows.filter(row => row.outputs[fuel]).map(row => row.name);
+  return makers.length ? { fuel, makers } : null;
+}
+
+// The sentence for a preferred fuel this phase makes but does not burn.
+const unburnedText = (unburned: UnburnedFuel | null): string =>
+  unburned
+    ? ` Your preferred main power would burn ${unburned.fuel} in this phase, but the planner chose no generator that does: the ${unburned.fuel} from this phase's ${listNames(unburned.makers)} step${unburned.makers.length > 1 ? 's' : ''} is for other uses.`
+    : '';
+
+// What a phase without generator lines says: it runs on the spare power in the settings.
+function sparePowerStep(
+  stage: number,
+  unburned: UnburnedFuel | null,
+): Pick<GuideTask, 'title' | 'body'> {
+  return {
+    title: 'Keep spare power ahead of the next production block',
+    body: `Phase ${stage} builds no generators: its plan runs on the spare existing power in this profile's settings.${unburnedText(unburned)} Before connecting the next factory, check the actual maximum consumption, with the utility allowance, against that spare power.`,
+  };
+}
+
+// The unlocks and commissioning each power source needs before its generators run.
+const SOURCE_PREREQUISITES: Record<string, string> = {
+  coal: 'Coal power needs Coal Power unlocked, coal extraction and water.',
+  fuel: 'Fuel power needs Oil Processing and Petroleum Power.',
+  turbofuel:
+    'Turbofuel power needs Oil Processing, Petroleum Power and the Sulfur MAM Turbofuel research; use coal until they are complete, and commission all byproduct handling.',
+  'rocket fuel':
+    'Rocket fuel power needs Blender access, nitrogen and Rocket Fuel in the Sulfur MAM tree; build and prime its chain before switching generators over.',
+  nuclear:
+    'Complete Nuclear Power and commission the fuel supply plus all waste processing before starting reactors.',
+};
+
+// The step for a phase with generator lines: Build when every line that grows is new to this
+// phase, Expand when one adds to a line the previous phase built, Keep when none needs more
+// machines. The previous phase counts only from the profile's start phase on.
+function generatorStep(
+  { plan, stage, rows, stageOf }: GuideContext,
+  generators: CalcRow[],
+  unburned: UnburnedFuel | null,
+): Pick<GuideTask, 'title' | 'body'> {
+  const previous = stage - 1 >= Number(plan.settings.phase || 1) ? stage - 1 : 0;
+  const builtBefore = (row: CalcRow) =>
+    (previous && stageOf(previous)?.rows?.find(earlier => earlier.id === row.id)?.machines) || 0;
+  const growing = generators.filter(row => row.machines > builtBefore(row));
+  const verb = !growing.length
+    ? 'Keep'
+    : growing.every(row => !builtBefore(row))
+      ? 'Build'
+      : 'Expand';
+  const sources = [...new Set(generators.map(generatorSource))];
+  const lines = generators.map(row => generatorLine(row, builtBefore(row), previous, rows));
+  const prerequisites = sources.map(source => SOURCE_PREREQUISITES[source]).filter(Boolean);
+  return {
+    title: `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`,
+    body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} Check the actual maximum consumption with the utility allowance, and commission more capacity before connecting the next factory. Keep the previous plant online until the replacement is stable.`,
+  };
+}
+
+// One generator line in the step's text: its count and name as its build step shows them, what
+// it adds to the previous phase's line, and the fuel it burns with the lines that make it.
+function generatorLine(
+  row: CalcRow,
+  builtBefore: number,
+  previous: number,
+  rows: CalcRow[],
+): string {
+  const fuel = generatorFuel(row);
+  const makers = rows
+    .filter(maker => !isGenerator(maker) && maker.outputs[fuel])
+    .map(maker => maker.name);
+  const added = !builtBefore
+    ? 'new in this phase'
+    : row.machines > builtBefore
+      ? `${formatNumber(builtBefore)} built in Phase ${previous}, so add ${formatNumber(row.machines - builtBefore)}`
+      : `already built in Phase ${previous}`;
+  const from = makers.length
+    ? ` from the ${listNames(makers)} step${makers.length > 1 ? 's' : ''}`
+    : '';
+  const burns = fuel ? `, burning ${formatNumber(row.inputs[fuel])} ${fuel}/min${from}` : '';
+  return `${formatNumber(row.machines)} × ${row.name} (${row.machine}), ${added}${burns}`;
 }
 
 // The MAM node the Alien Power Augmenters need, by its name in progression.json
