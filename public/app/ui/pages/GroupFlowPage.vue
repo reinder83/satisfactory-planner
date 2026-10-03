@@ -2,7 +2,9 @@
      #factories/<group>/flow, which takes over from the build-order dialog. Direction B from the
      first round: what comes in at the top, the lines as numbered cards in build order, what
      leaves at the bottom. The "Link style" switch compares the reworked in-group links:
-       item  - every link drawn as a lane in the left gutter, one colour and dash per item;
+       item  - the owner's choice (round 3, the default): every link drawn as a lane in the
+               left gutter, one colour and dash per item, from a dot on the output row to an
+               arrowhead on the input row, the gutter sized to the lanes it needs;
        short - links to the very next card drawn as a connector between the two cards, only
                the longer links as lanes;
        chips - no lanes: "from 01" / "to 03" buttons that jump to the card they name.
@@ -24,12 +26,14 @@ import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 
 type LinkStyle = 'item' | 'short' | 'chips';
 const STYLES: { id: LinkStyle; label: string }[] = [
-  { id: 'chips', label: 'Chips' },
-  { id: 'short', label: 'Short lanes' },
   { id: 'item', label: 'Item lanes' },
+  { id: 'short', label: 'Short lanes' },
+  { id: 'chips', label: 'Chips' },
 ];
 const asked = new URLSearchParams(location.search).get('lanes') as LinkStyle;
-const linkStyle = ref<LinkStyle>(STYLES.some(s => s.id === asked) ? asked : 'chips');
+// Round 3: the owner chose item lanes, so they open first.
+const linkStyle = ref<LinkStyle>(STYLES.some(s => s.id === asked) ? asked : 'item');
+const lanesOn = computed(() => linkStyle.value !== 'chips');
 // The line the pointer or focus is on: its links are drawn bright, the rest dim.
 const active = ref<string | null>(null);
 // The input or output row a chip jumped to, outlined for a moment.
@@ -189,70 +193,113 @@ const connections = computed(() =>
 );
 
 // Lanes, measured after layout from the rows' positions in `host`.
+//
+// Round 3 geometry (the owner's four points):
+// - every lane starts with a dot centred on the card's left border at the vertical centre of
+//   the source card's "→ item" output row, and ends with a small arrowhead whose tip touches
+//   the target card's left border at the vertical centre of the "← item" input row it feeds;
+//   that arrowhead is the row's only marker (no separate swatch);
+// - all links from one output row share one lane (a trunk with a branch to each input row);
+// - lanes sit at an even STEP, the innermost one INNER px from the cards, and the gutter is
+//   sized to the lanes actually used: OUTER + (lanes - 1) × STEP + INNER.
+const ARROW = { long: 7, half: 4 };
 const host = ref<HTMLElement | null>(null);
 interface Wire {
   d: string;
   key: string;
   from: string;
   to: string;
+  fromRow: string;
+  toRow: string;
+  label: string;
   color: string;
   dash: string;
-  marker: number;
   start: { x: number; y: number };
+  arrow: string;
 }
 const wires = ref<Wire[]>([]);
 const canvas = ref({ w: 0, h: 0 });
+// The gutter's width in px, from the number of lanes the last measurement needed.
+const gutter = ref(0);
+let settling = 0;
 function measure() {
   const el = host.value,
     v = view.value;
-  if (!el || !v || linkStyle.value === 'chips') {
+  if (!el || !v || !lanesOn.value) {
     wires.value = [];
+    gutter.value = 0;
     return;
   }
+  const narrow = window.matchMedia('(max-width: 720px)').matches;
+  const STEP = narrow ? 8 : 10,
+    INNER = narrow ? 14 : 18,
+    OUTER = 4;
   const base = el.getBoundingClientRect();
-  canvas.value = { w: el.scrollWidth, h: el.scrollHeight };
-  const box = (anchor: string) => {
+  const row = (anchor: string) => {
     const node = el.querySelector(`[data-anchor="${CSS.escape(anchor)}"]`);
     if (!node) return null;
     const r = node.getBoundingClientRect();
-    return { y: r.top - base.top + Math.min(r.height / 2, 11) };
+    const card = node.closest('.gf-card')!.getBoundingClientRect();
+    return { y: r.top - base.top + r.height / 2, x: card.left - base.left };
   };
-  const spans = v.edges
-    .map((edge, i) => ({
-      edge,
-      i,
-      a: box(`o|${edge.from}|${edge.item}`),
-      b: box(`i|${i}`),
-    }))
+  const links = v.edges
+    .map((edge, i) => ({ edge, i, a: row(`o|${edge.from}|${edge.item}`), b: row(`i|${i}`) }))
     .filter(s => inside(s.edge) && s.a && s.b)
-    .filter(s => linkStyle.value === 'item' || !neighbour(s.edge))
-    .map(s => ({ ...s, lo: Math.min(s.a!.y, s.b!.y), hi: Math.max(s.a!.y, s.b!.y) }))
-    .sort((p, q) => p.hi - p.lo - (q.hi - q.lo) || p.lo - q.lo);
-  // Shorter lanes nearer the cards; a lane is reused once the link before it has ended.
+    .filter(s => linkStyle.value === 'item' || !neighbour(s.edge));
+  // One lane per output row, spanning from it to its furthest input row.
+  const trunks = new Map<string, { lo: number; hi: number; links: typeof links }>();
+  for (const s of links) {
+    const key = `${s.edge.from}|${s.edge.item}`;
+    const t = trunks.get(key) ?? { lo: s.a!.y, hi: s.a!.y, links: [] };
+    t.lo = Math.min(t.lo, s.b!.y);
+    t.hi = Math.max(t.hi, s.b!.y);
+    t.links.push(s);
+    trunks.set(key, t);
+  }
+  // Shorter lanes nearer the cards; a lane is reused once the trunk before it has ended.
   const lanes: { lo: number; hi: number }[][] = [];
-  const placed = spans.map(s => {
-    let lane = lanes.findIndex(taken => taken.every(t => s.hi < t.lo - 4 || s.lo > t.hi + 4));
-    if (lane < 0) lane = lanes.push([]) - 1;
-    lanes[lane]!.push(s);
-    return { ...s, lane };
-  });
-  const gutter = el.querySelector('.gf-stack')?.getBoundingClientRect();
-  const left = gutter ? gutter.left - base.left : 60;
-  const step = Math.min(11, (left - 12) / Math.max(1, lanes.length));
-  wires.value = placed.map(s => {
-    const x = left - 9 - s.lane * step;
-    const style = styleOf(s.edge.item);
-    return {
-      d: `M${left},${s.a!.y} H${x} V${s.b!.y} H${left - 2}`,
-      key: String(s.i),
-      from: s.edge.from,
-      to: s.edge.to,
-      color: style.color,
-      dash: style.dash,
-      marker: COLOURS.findIndex(c => style.color === `var(${c})`),
-      start: { x: left, y: s.a!.y },
-    };
-  });
+  const placed = [...trunks.values()]
+    .sort((p, q) => p.hi - p.lo - (q.hi - q.lo) || p.lo - q.lo)
+    .map(t => {
+      let lane = lanes.findIndex(taken => taken.every(o => t.hi < o.lo - 6 || t.lo > o.hi + 6));
+      if (lane < 0) lane = lanes.push([]) - 1;
+      lanes[lane]!.push(t);
+      return { ...t, lane };
+    });
+  const want = lanes.length ? OUTER + (lanes.length - 1) * STEP + INNER : 0;
+  if (want !== gutter.value && settling < 4) {
+    // The gutter changes the cards' width and so the rows' heights: measure again after it.
+    settling++;
+    gutter.value = want;
+    void nextTick(measure);
+    return;
+  }
+  settling = 0;
+  canvas.value = { w: el.scrollWidth, h: el.scrollHeight };
+  wires.value = placed.flatMap(t =>
+    t.links.map(s => {
+      const left = s.b!.x,
+        from = s.a!.x;
+      const x = left - INNER - t.lane * STEP;
+      const style = styleOf(s.edge.item);
+      const y = s.b!.y,
+        back = left - ARROW.long;
+      return {
+        d: `M${from},${s.a!.y} H${x} V${y} H${back}`,
+        key: String(s.i),
+        from: s.edge.from,
+        to: s.edge.to,
+        fromRow: `o|${s.edge.from}|${s.edge.item}`,
+        toRow: `i|${s.i}`,
+        label: `${pad(noOf(s.edge.from))}→${pad(noOf(s.edge.to))} ${s.edge.item}`,
+        color: style.color,
+        dash: style.dash,
+        start: { x: from, y: s.a!.y },
+        // A filled triangle, its tip on the border at the row's centre.
+        arrow: `M${back},${y - ARROW.half} L${left},${y} L${back},${y + ARROW.half} Z`,
+      };
+    }),
+  );
 }
 
 let observer: ResizeObserver | null = null;
@@ -274,6 +321,13 @@ watch([linkStyle, view], async () => {
 const printPage = () => window.print();
 const wireState = (wire: Wire) =>
   !active.value ? '' : wire.from === active.value || wire.to === active.value ? 'hot' : 'dim';
+// Hot wires drawn last, so a shared trunk shows bright rather than under a dimmed twin.
+const drawOrder = computed(() =>
+  [...wires.value].sort((a, b) => +(wireState(a) === 'hot') - +(wireState(b) === 'hot')),
+);
+// On lane styles the lane's dot or arrow is the row's marker, so inside rows lose the swatch.
+const swatched = (item: string, insideLink: boolean) =>
+  insideLink && itemStyles.value.has(item) && !lanesOn.value;
 </script>
 
 <template>
@@ -343,41 +397,23 @@ const wireState = (wire: Wire) =>
         </div>
       </section>
 
-      <div ref="host" :class="['gf-host', linkStyle === 'chips' ? 'no-lanes' : '']">
-        <svg
-          v-if="linkStyle !== 'chips'"
-          class="gf-svg"
-          :width="canvas.w"
-          :height="canvas.h"
-          aria-hidden="true"
-        >
-          <defs>
-            <marker
-              v-for="(c, n) in COLOURS"
-              :id="'gf-arrow-' + n"
-              :key="c"
-              viewBox="0 0 8 8"
-              refX="7"
-              refY="4"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto"
-            >
-              <path d="M0,0 L8,4 L0,8 z" :style="{ fill: `var(${c})` }" />
-            </marker>
-          </defs>
-          <g v-for="wire in wires" :key="wire.key" :class="['gf-wire', wireState(wire)]">
-            <circle
-              :cx="wire.start.x - 2"
-              :cy="wire.start.y"
-              r="2.5"
-              :style="{ fill: wire.color }"
-            />
-            <path
-              :d="wire.d"
-              :marker-end="'url(#gf-arrow-' + wire.marker + ')'"
-              :style="{ stroke: wire.color, strokeDasharray: wire.dash }"
-            />
+      <div
+        ref="host"
+        :class="['gf-host', lanesOn ? 'lanes' : 'no-lanes']"
+        :style="lanesOn ? { paddingLeft: gutter + 'px' } : undefined"
+      >
+        <svg v-if="lanesOn" class="gf-svg" :width="canvas.w" :height="canvas.h" aria-hidden="true">
+          <g
+            v-for="wire in drawOrder"
+            :key="wire.key"
+            :class="['gf-wire', wireState(wire)]"
+            :data-label="wire.label"
+            :data-from-row="wire.fromRow"
+            :data-to-row="wire.toRow"
+          >
+            <path :d="wire.d" :style="{ stroke: wire.color, strokeDasharray: wire.dash }" />
+            <circle :cx="wire.start.x" :cy="wire.start.y" r="3.5" :style="{ fill: wire.color }" />
+            <path class="gf-tip" data-tip :d="wire.arrow" :style="{ fill: wire.color }" />
           </g>
         </svg>
         <ol class="gf-stack">
@@ -433,7 +469,7 @@ const wireState = (wire: Wire) =>
                     :data-anchor="'i|' + i"
                   >
                     <svg
-                      v-if="inside(edge)"
+                      v-if="swatched(edge.item, inside(edge))"
                       class="gf-swatch"
                       width="14"
                       height="8"
@@ -481,7 +517,7 @@ const wireState = (wire: Wire) =>
                     :data-anchor="'o|' + line.key + '|' + output.item"
                   >
                     <svg
-                      v-if="itemStyles.has(output.item)"
+                      v-if="swatched(output.item, true)"
                       class="gf-swatch"
                       width="14"
                       height="8"
@@ -689,13 +725,13 @@ const wireState = (wire: Wire) =>
 }
 .gf-host {
   position: relative;
-  padding-left: 96px;
 }
 .gf-host.no-lanes {
   padding-left: 0;
 }
 .gf-svg {
   position: absolute;
+  z-index: 1;
   inset: 0 auto auto 0;
   pointer-events: none;
   overflow: visible;
@@ -704,14 +740,29 @@ const wireState = (wire: Wire) =>
   fill: none;
   stroke-width: 2.5;
 }
+.gf-wire path.gf-tip {
+  stroke: none;
+}
 .gf-wire {
   transition: opacity 0.12s;
 }
 .gf-wire.dim {
   opacity: 0.12;
 }
-.gf-wire.hot path {
+.gf-wire.hot path:not(.gf-tip) {
   stroke-width: 3.5;
+}
+/* Lane styles: one column per card, so every input and output row reaches the left border
+   where its arrow or dot sits; the cards keep a readable width on wide screens. */
+.gf-host.lanes .gf-io {
+  grid-template-columns: 1fr;
+}
+/* The row's name sits at its vertical centre, level with the arrow or dot. */
+.gf-host.lanes .gf-row {
+  align-items: center;
+}
+.gf-host.lanes .gf-stack {
+  max-width: 820px;
 }
 .gf-colcap {
   margin: 0;
@@ -882,12 +933,6 @@ const wireState = (wire: Wire) =>
 @media (max-width: 720px) {
   .gf-io {
     grid-template-columns: 1fr;
-  }
-  .gf-host {
-    padding-left: 52px;
-  }
-  .gf-host.no-lanes {
-    padding-left: 0;
   }
 }
 @media print {
