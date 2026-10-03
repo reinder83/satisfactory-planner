@@ -1,6 +1,6 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–13). Later versions only add optional sections, so an older
+//                  version (1–14). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
@@ -14,8 +14,9 @@ import type { Phase } from './common.ts';
 // handbook bay moved to another floor, 9 a factory-group link to the vehicle fuel, 10 bays put in
 // their own order on a floor, 11 a link from one raw resource or existing-supply item, 12 a
 // profile migrated from the handbook (handbookOrigin), 13 one that also records what its
-// migration mapped (handbookOrigin.mapping).
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+// migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
+// (factoryGroups.local).
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 
 // Where a profile migrated from the original handbook came from (#387, #485), and whatever the
 // migration could not place on the calculated plan: ticks, notes and group assignments kept
@@ -109,6 +110,9 @@ export interface FactoryGroups {
   // The transport picked for a link between two places (#205), keyed '<from>:<to>' with a
   // group id or a place from group-links.ts. Absent or missing a key: belt or pipe (version 8).
   links?: Record<string, LinkTransport>;
+  // The items a group makes on site (#868, #874), by group id: item names from the game data
+  // (state/items.ts), each at most once. Absent, or missing a group: none (version 14).
+  local?: Record<string, string[]>;
 }
 
 export type LinkMode = 'truck' | 'tractor' | 'explorer' | 'train' | 'drone';

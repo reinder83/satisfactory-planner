@@ -50,6 +50,7 @@ const SHARED = [
   'preferences/world.ts',
   'state/carry.ts',
   'state/factory-groups.ts',
+  'state/items.ts',
   'state/mutate.ts',
   'state/summary.ts',
   'state/validate.ts',

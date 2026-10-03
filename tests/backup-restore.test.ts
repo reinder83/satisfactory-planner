@@ -457,7 +457,7 @@ for (const [edition, open] of [
         const before = await state(profile);
         for (const refused of [
           backupOf(firstState, 'someone-else'),
-          backupOf({ ...structuredClone(firstState), version: 14 }, profile),
+          backupOf({ ...structuredClone(firstState), version: 15 }, profile),
           backupOf({ ...structuredClone(firstState), checks: { 'bad key': true } }, profile),
           { ...backupOf(firstState, profile), format: 'satisfactory-planner-saves' },
         ])

@@ -6,6 +6,7 @@
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
 import { vehicleFuels } from '../preferences.ts';
+import { ITEM_NAMES } from './items.ts';
 import type {
   CustomTask,
   FactoryGroups,
@@ -194,7 +195,9 @@ export function validateTaskEdits(raw: unknown): TaskEdits {
   return clean;
 }
 // Returns a clean copy of factoryGroups, or a blank one when absent. Every assignment must
-// name a group from the same list, each group at most once per row.
+// name a group from the same list, each group at most once per row. The items a group makes on
+// site (local, #874) must each be a known item (items.ts), at most once per group, and the group
+// must exist. Anything else throws, like the rest of the groups.
 export function validateGroups(raw: unknown): FactoryGroups {
   if (raw === undefined) return blankGroups();
   if (!plain(raw)) fail('Invalid factory groups in backup.');
@@ -250,8 +253,28 @@ export function validateGroups(raw: unknown): FactoryGroups {
     // Only kept when there is one, so a state without vehicle links keeps its old shape.
     if (Object.keys(links).length) clean.links = links;
   }
+  if (raw.local !== undefined) {
+    if (!plain(raw.local)) fail('Invalid items made on site.');
+    const known = new Set(clean.groups.map(group => group.id));
+    const local: Record<string, string[]> = {};
+    for (const [group, items] of Object.entries(raw.local)) {
+      if (
+        !known.has(group) ||
+        !Array.isArray(items) ||
+        !items.length ||
+        items.length > ITEM_NAMES.length ||
+        items.some(item => !knownItems.has(item)) ||
+        new Set(items).size !== items.length
+      )
+        fail('Invalid items made on site.');
+      local[group] = [...(items as string[])];
+    }
+    // Only kept when a group has one, so a state without them keeps its old shape and version.
+    if (Object.keys(local).length) clean.local = local;
+  }
   return clean;
 }
+const knownItems = new Set<unknown>(ITEM_NAMES);
 // The places a link can join besides factory groups: group-links.ts's UNGROUPED, MINES and
 // OUTSIDE ids (a test keeps the two lists in step).
 export const linkPlaces = [
@@ -533,7 +556,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–13 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–14 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
@@ -542,11 +565,11 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "14" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 13
+      // Compared as the old code did, so a version given as "15" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 14
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -614,32 +637,35 @@ export function validateState(state: unknown): ProgressState {
   // handbook (#387) is 12: it carries handbookOrigin, and an older release would open it as an
   // ordinary profile and drop what the migration kept for review. One that also records what its
   // migration mapped (#606) is 13: a version-12 release would drop the mapping, and a backup
-  // restored onto the profile later could then no longer be re-keyed.
-  clean.version = clean.handbookOrigin?.mapping
-    ? 13
-    : clean.handbookOrigin
-      ? 12
-      : linksNeedV11(clean.factoryGroups)
-        ? 11
-        : clean.storageEdits.bayOrder
-          ? 10
-          : linksNeedV9(clean.factoryGroups)
-            ? 9
-            : clean.storageEdits.bayFloors
-              ? 8
-              : clean.factoryGroups.links
-                ? 7
-                : clean.storageEdits.hiddenFloors.length
-                  ? 6
-                  : clean.storageEdits.hiddenBays.length
-                    ? 5
-                    : hasAddedSlots(clean.storageEdits)
-                      ? 4
-                      : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                        ? 3
-                        : hasEdits(clean.storageEdits)
-                          ? 2
-                          : 1;
+  // restored onto the profile later could then no longer be re-keyed. A group that makes items on
+  // site (factoryGroups.local, #874) is 14: an older release's validateGroups would drop the choice.
+  clean.version = clean.factoryGroups.local
+    ? 14
+    : clean.handbookOrigin?.mapping
+      ? 13
+      : clean.handbookOrigin
+        ? 12
+        : linksNeedV11(clean.factoryGroups)
+          ? 11
+          : clean.storageEdits.bayOrder
+            ? 10
+            : linksNeedV9(clean.factoryGroups)
+              ? 9
+              : clean.storageEdits.bayFloors
+                ? 8
+                : clean.factoryGroups.links
+                  ? 7
+                  : clean.storageEdits.hiddenFloors.length
+                    ? 6
+                    : clean.storageEdits.hiddenBays.length
+                      ? 5
+                      : hasAddedSlots(clean.storageEdits)
+                        ? 4
+                        : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                          ? 3
+                          : hasEdits(clean.storageEdits)
+                            ? 2
+                            : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

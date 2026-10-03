@@ -238,6 +238,11 @@ function removeGroup(factory: FactoryGroups, update: Raw) {
   for (const link of Object.keys(factory.links || {}))
     if (link.split(':').includes(update.id as string)) delete factory.links![link];
   if (factory.links && !Object.keys(factory.links).length) delete factory.links;
+  // So do the items it made on site (#874).
+  if (factory.local) {
+    delete factory.local[update.id as string];
+    if (!Object.keys(factory.local).length) delete factory.local;
+  }
 }
 // The first choice for one item of a mines link saved before #231 splits that link: the other
 // items on it (`siblings`, the sources the page shows going the same way) keep the old choice as
