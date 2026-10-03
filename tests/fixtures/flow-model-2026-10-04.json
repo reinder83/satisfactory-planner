@@ -90,7 +90,7 @@
   "bar": {
    "sub": "Iron Ingot · @ 100% + 1 adjustable · 30 Iron Ingot/min out per machine · split ≈ 9 / 6 across the deliveries below",
    "out": {
-    "rate": "420,25",
+    "rate": "420.25",
     "unit": "/min"
    },
    "outSub": "out · 1 × Mk.4 belt"
@@ -213,7 +213,7 @@
   "bar": {
    "sub": "Plastic · @ 100% + 1 adjustable",
    "out": {
-    "rate": "40,44",
+    "rate": "40.44",
     "unit": "/min"
    },
    "outSub": "out · Plastic + byproducts"
@@ -375,7 +375,7 @@
   "bar": {
    "sub": "Residual Plastic · @ 100% + 1 adjustable · 20 Plastic/min out per machine · split ≈ 2 / 2 / 1 across the deliveries below",
    "out": {
-    "rate": "17,76",
+    "rate": "17.76",
     "unit": "/min"
    },
    "outSub": "out · 1 × Mk.4 belt"
@@ -492,7 +492,7 @@
   "bar": {
    "sub": "Wire · @ 100% + 1 adjustable · 30 Wire/min out per machine · split ≈ 3 / 3 / 1 across the deliveries below",
    "out": {
-    "rate": "151,8",
+    "rate": "151.8",
     "unit": "/min"
    },
    "outSub": "out · 1 × Mk.4 belt"
@@ -652,7 +652,7 @@
   "bar": {
    "sub": "Stator · @ 100% + 1 adjustable · 5 Stator/min out per machine · split ≈ 2 / 1 across the deliveries below",
    "out": {
-    "rate": "7,9",
+    "rate": "7.9",
     "unit": "/min"
    },
    "outSub": "out · 1 × Mk.4 belt"
@@ -785,7 +785,7 @@
   "bar": {
    "sub": "Cable · @ 100% + 1 adjustable · 30 Cable/min out per machine · split ≈ 1 / 1 / 1 across the deliveries below",
    "out": {
-    "rate": "43,8",
+    "rate": "43.8",
     "unit": "/min"
    },
    "outSub": "out · 1 × Mk.4 belt"
@@ -913,7 +913,7 @@
   "bar": {
    "sub": "Screws · @ 100% + 1 adjustable · 40 Screws/min out per machine · split ≈ 6 / 6 / 4 across the deliveries below",
    "out": {
-    "rate": "592,1",
+    "rate": "592.1",
     "unit": "/min"
    },
    "outSub": "out · 2 × Mk.4 belts"
@@ -977,7 +977,7 @@
     "kind": "ship",
     "label": "Power grid",
     "shipSub": "generation",
-    "rateTxt": "1,2 GW",
+    "rateTxt": "1.2 GW",
     "noItem": true
    }
   ],
@@ -1006,7 +1006,7 @@
   "bar": {
    "sub": "Fuel power · @ 100% + 1 adjustable",
    "out": {
-    "text": "1,2 GW"
+    "text": "1.2 GW"
    },
    "outSub": "generation"
   },

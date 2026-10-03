@@ -269,7 +269,20 @@ test('a plan without lines made on site keeps exactly the flow it had', () => {
     local: { [ALPHA]: ['Wire'], [BETA]: ['Wire', 'Copper Ingot'] },
   };
   assert.equal(Object.keys(recorded).length, 8);
-  for (const factoryGroups of [noGroups, marked])
-    for (const [id, model] of Object.entries(recorded))
-      assert.deepEqual(snapshot(modelOf(id, frozen, factoryGroups)), model, id);
+  // The recording's numbers read as in en-US ("420.25"): num() formats in the machine's locale,
+  // so it is pinned here, or the comparison would depend on where the tests run.
+  const toLocale = Number.prototype.toLocaleString;
+  Number.prototype.toLocaleString = function (
+    _locale?: unknown,
+    options?: Intl.NumberFormatOptions,
+  ) {
+    return toLocale.call(this, 'en-US', options);
+  };
+  try {
+    for (const factoryGroups of [noGroups, marked])
+      for (const [id, model] of Object.entries(recorded))
+        assert.deepEqual(snapshot(modelOf(id, frozen, factoryGroups)), model, id);
+  } finally {
+    Number.prototype.toLocaleString = toLocale;
+  }
 });
