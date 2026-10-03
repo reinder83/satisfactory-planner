@@ -98,7 +98,7 @@ type LayoutOp = { type: UpdateOp['type'] } & Partial<
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setFloor('ground');
   setLayoutEditing(false);
@@ -106,16 +106,18 @@ beforeEach(() => {
   go('storage');
 });
 
-test('the handbook room shows its printed bays, notice and checklist', () => {
+// On a profile migrated from the handbook (#387): the whole printed room, the handbook's storage
+// tasks under their own ids, and no ground-floor notice (decision 3B).
+test('a migrated room shows its printed bays and checklist, with no ground-floor notice', () => {
   render();
   assert.equal($('#main h1')!.textContent, 'Storage room');
-  assert.ok($('[data-slot="A01"]'), 'a state without storageEdits shows the handbook layout');
-  assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
+  assert.ok($('[data-slot="A01"]'), 'a state without storageEdits shows the printed layout');
+  assert.equal($('#main .notice'), null, 'no built-room or template notice');
   assert.deepEqual($$('.tabs .tab').map(tabLabel), ['Ground floor', 'Upper floor', 'Workshop']);
   assert.ok($('.tabs .tab.active')!.dataset.floor === 'ground');
-  assert.equal(
-    $$('#main section:last-child .checklist [data-check]').length,
-    handbook.storageTasks.length,
+  assert.deepEqual(
+    $$('#main section:last-child .checklist [data-check]').map(box => box.dataset.check),
+    handbook.storageTasks.map(t => t.id),
   );
 });
 
@@ -229,14 +231,14 @@ test('a floor without bays draws no key, the workshop and an added floor alike (
   $('[data-floor="workshop"]')!.click();
   await nextTick();
   assert.equal($('#main [data-storage-key]'), null, 'the workshop has no key');
-  open({
+  openMigrated({
     state: { storageEdits: someEdits({ floors: [{ id: 'cf-abcd12', label: 'Basement' }] }) },
   });
   setFloor('cf-abcd12');
   render();
   await nextTick();
   assert.equal($('#main [data-storage-key]'), null, 'an empty added floor has no key');
-  open({ state: { storageEdits: structuredClone(EDITS) } });
+  openMigrated({ state: { storageEdits: structuredClone(EDITS) } });
   setFloor('cf-abcd12');
   render();
   await nextTick();
@@ -270,7 +272,7 @@ test('the key swatches share the grid states’ colour rules, and a phone keeps 
 });
 
 test('layout edits show custom floors, bays and assignments, escaped', async () => {
-  open({ state: { storageEdits: structuredClone(EDITS) } });
+  openMigrated({ state: { storageEdits: structuredClone(EDITS) } });
   render();
   noMarkup();
   assert.ok($$('#main h3').some(h => h.textContent === 'Renamed ingots'));
@@ -308,7 +310,7 @@ test('layout edits show custom floors, bays and assignments, escaped', async () 
 });
 
 test('a bay grows past eight containers and keeps offering the next address', async () => {
-  open({ state: { storageEdits: someEdits({ slots: { A10: 'Aluminum Casing' } }) } });
+  openMigrated({ state: { storageEdits: someEdits({ slots: { A10: 'Aluminum Casing' } }) } });
   setLayoutEditing(true);
   render();
   const bay = $$('#main .bay').find(b => b.querySelector('.bay-letter')!.textContent === 'A')!;
@@ -321,7 +323,7 @@ test('a bay grows past eight containers and keeps offering the next address', as
     bay.querySelector<HTMLInputElement>('.add-container input')!.placeholder,
     /Add container/,
   );
-  open({
+  openMigrated({
     state: {
       storageEdits: someEdits({
         slots: Object.fromEntries(
@@ -443,7 +445,7 @@ test('a search nothing holds shows one empty state (#240)', async () => {
 });
 
 test('the search leaves out hidden bays, and lists at most 24 results (#240)', async () => {
-  open({ state: { storageEdits: someEdits({ hiddenBays: ['C'] }) } });
+  openMigrated({ state: { storageEdits: someEdits({ hiddenBays: ['C'] }) } });
   render();
   await search('wir');
   assert.deepEqual(results(), ['Automated Wiring · Upper floor · K03']);
@@ -453,7 +455,7 @@ test('the search leaves out hidden bays, and lists at most 24 results (#240)', a
 });
 
 test('a result in an added bay on an added floor is escaped and leads there (#240)', async () => {
-  open({ state: { storageEdits: structuredClone(EDITS) } });
+  openMigrated({ state: { storageEdits: structuredClone(EDITS) } });
   render();
   await search('x-evil');
   noMarkup();
@@ -500,7 +502,7 @@ test('Done and "Complete room" write the four checks of each container', async (
 
 test('floor tabs count the Done containers of each floor, as its bays do (SP-23, #258)', () => {
   // A02 and K01 done; A03 has one of its four checks, which is not Done.
-  open({ state: { checks: { ...doneKeys('A02', 'K01'), 'slot-A03-built': true } } });
+  openMigrated({ state: { checks: { ...doneKeys('A02', 'K01'), 'slot-A03-built': true } } });
   render();
   const ground = namedOn('ground'),
     upper = namedOn('upper');
@@ -537,7 +539,7 @@ test('floor tabs count the Done containers of each floor, as its bays do (SP-23,
 test('tab counts leave out reserved positions and hidden bays (SP-23, #258)', () => {
   // A01 cleared and bay C hidden, each with a Done container: neither counts.
   assert.equal(handbook.storage.find(b => b.id === 'C')!.floor, 'ground');
-  open({
+  openMigrated({
     state: {
       storageEdits: someEdits({ clearedSlots: ['A01'], hiddenBays: ['C'] }),
       checks: doneKeys('A01', 'C01'),
@@ -557,7 +559,7 @@ test('tab counts leave out reserved positions and hidden bays (SP-23, #258)', ()
 test('an added floor counts its bays too, and an empty bay draws no bar (SP-23, #258)', async () => {
   const edits = structuredClone(EDITS);
   edits.bays.push({ id: 'T', name: 'Empty', floor: 'cf-abcd12' });
-  open({ state: { storageEdits: edits, checks: doneKeys('S01') } });
+  openMigrated({ state: { storageEdits: edits, checks: doneKeys('S01') } });
   render();
   noMarkup();
   assert.deepEqual(tabCount('cf-abcd12'), ['1/1', ', 1 of 1 done']);
@@ -604,7 +606,7 @@ test('a failed Done save unticks the box again', async () => {
 
 test('the layout editor saves floors, bays, containers and removals', async () => {
   const calls = stubFetch<LayoutOp>({ '/api/update': () => state });
-  open({ state: { storageEdits: structuredClone(EDITS) } });
+  openMigrated({ state: { storageEdits: structuredClone(EDITS) } });
   setLayoutEditing(true);
   render();
   const submit = (form: HTMLElement, value: string) => {
@@ -688,108 +690,62 @@ test('the workshop floor shows its checklist and no bays', async () => {
   assert.equal($('#main .empty-state'), null, 'no empty-floor message on the workshop');
 });
 
-test('a copied original profile keeps the built ground-floor notice', () => {
-  open({ profileId: 'copy-of-original' });
-  render();
-  assert.match($('#main .notice.info')!.textContent, /Ground floor is built\./);
-});
-
-// The built room's moves are a to-do (SP-25, #260): Done ticks the handbook's storage step for
-// the same moves, which this profile alone keeps.
+// The handbook's "ground floor already built" notice and its moves are gone (decision 3B on #387,
+// #798). On a migrated profile `storage-filter-moves` is an ordinary storage task of the guide:
+// a kept tick shows ticked, ticking and unticking save it like any other step, and no notice
+// appears or comes back either way.
 const MOVES = 'storage-filter-moves';
+const noGroundFloorNotice = () => {
+  assert.equal($('#main .notice'), null, 'no ground-floor notice');
+  assert.equal($('[data-ground-floor]'), null);
+  assert.equal($('[data-ground-moves-done]'), null, 'no Done for the moves');
+  assert.equal($('[data-moved-off]'), null, 'no "Moved in this plan" line');
+};
 
-test('the built room’s moves are a to-do: Done saves their step and the notice goes (#260)', async () => {
+test('the filter moves are an ordinary storage task on a migrated profile (#798)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { checks: { 'storage-ground-shell': true } } });
+  openMigrated({ state: { checks: { 'storage-ground-shell': true } } });
   render();
-  const notice = $('#main [data-ground-floor]')!;
-  assert.ok(notice.classList.contains('info'), 'guidance, not a warning');
-  assert.match(
-    notice.querySelector('[data-ground-moves]')!.textContent!,
-    /Still to do: move Gas Filters\s+G08 → H02 and Nobelisks H02 → H08; assign Medicinal Inhalers to G08/,
-  );
-  assert.equal($('[data-moved-off]'), null, 'no bay was moved in this plan');
-  const done = $<HTMLButtonElement>('[data-ground-moves-done]')!;
-  assert.equal(done.type, 'button');
-  assert.equal(done.textContent!.replace(/\s+/g, ' ').trim(), 'Done with the ground-floor moves');
-  done.focus();
-  done.click();
+  noGroundFloorNotice();
+  const step = () => $<HTMLInputElement>(`#main .checklist [data-check="${MOVES}"]`)!;
+  assert.equal(step().checked, false);
+  step().checked = true;
+  step().dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'check', key: MOVES, value: true });
   assert.equal(calls.length, 1, 'one save');
   assert.equal(state.checks[MOVES], true);
   assert.equal(state.checks['storage-ground-shell'], true, 'the other checks are untouched');
-  assert.equal($('#main [data-ground-floor]'), null, 'the notice is gone');
-  assert.equal($('[data-ground-moves-done]'), null);
-  assert.equal(document.activeElement, tab('ground'), 'focus moves to the floor’s tab above');
-  assert.match($('#toast')!.textContent!, /Untick “Put the filters together”/);
-  // The storage step shows it ticked; unticking it there brings the notice back.
-  const step = $<HTMLInputElement>(`#main .checklist [data-check="${MOVES}"]`)!;
-  assert.equal(step.checked, true);
-  step.checked = false;
-  step.dispatchEvent(new Event('change'));
+  noGroundFloorNotice();
+  step().checked = false;
+  step().dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(calls.at(-1)![1], { type: 'check', key: MOVES, value: false });
-  assert.ok($('[data-ground-moves-done]'), 'the to-do is back');
+  noGroundFloorNotice();
+  // A tick the profile kept from before the migration shows ticked.
+  openMigrated({ state: { checks: { [MOVES]: true } } });
+  render();
+  await nextTick();
+  assert.equal(step().checked, true, 'the kept tick');
+  noGroundFloorNotice();
   noMarkup();
 });
 
-test('Done on the moves is busy while it saves, and a failed save keeps the notice and focus', async () => {
-  let answer!: (response: Response) => void;
-  globalThis.fetch = () => new Promise<Response>(resolve => (answer = resolve));
+test('a printed ground-floor bay moved upstairs is not named on the ground floor (#190, #798)', async () => {
+  openMigrated({ state: { version: 8, storageEdits: someEdits({ bayFloors: { D: 'upper' } }) } });
   render();
-  const done = $<HTMLButtonElement>('[data-ground-moves-done]')!;
-  done.focus();
-  done.click();
-  await nextTick();
-  assert.equal(done.getAttribute('aria-disabled'), 'true', 'busy, not disabled (#299)');
-  assert.equal(done.disabled, false);
-  done.click();
-  answer(new Response(JSON.stringify({ error: 'Disk full' }), { status: 500 }));
-  await settle();
-  assert.equal($('#toast')!.textContent, 'Disk full');
-  assert.equal(state.checks[MOVES], undefined, 'nothing was saved');
-  const again = $<HTMLButtonElement>('[data-ground-moves-done]')!;
-  assert.ok(again, 'the to-do stays');
-  assert.equal(again.getAttribute('aria-disabled'), null, 'ready again');
-  assert.equal(document.activeElement, again, 'focus stays on Done');
-});
-
-test('Done is per profile: a copy with its own records still shows the moves (#260)', async () => {
-  open({ state: { checks: { [MOVES]: true } } });
-  render();
-  assert.equal($('#main [data-ground-floor]'), null, 'this profile did them');
-  open({ profileId: 'copy-of-original', state: { checks: {} } });
+  assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');
+  noGroundFloorNotice();
+  setFloor('upper');
   render();
   await nextTick();
-  assert.ok($('[data-ground-moves-done]'), 'its copy has not');
-});
-
-test('with the moves done, the bays moved in this plan are still named (#190, #260)', async () => {
-  open({
-    state: {
-      version: 8,
-      checks: { [MOVES]: true },
-      storageEdits: someEdits({ bayFloors: { D: 'upper' } }),
-    },
-  });
-  render();
-  const notice = $('#main [data-ground-floor]')!;
-  assert.ok(notice.classList.contains('info'));
-  assert.equal(notice.querySelector('[data-ground-moves]'), null, 'the moves are done');
-  assert.match(notice.querySelector('[data-moved-off]')!.textContent!, /bay D to Upper floor/);
-  // And beside the moves while they are open.
-  open({ state: { version: 8, storageEdits: someEdits({ bayFloors: { D: 'upper' } }) } });
-  render();
-  await nextTick();
-  assert.ok($('#main [data-ground-floor] [data-ground-moves]'));
-  assert.match($('#main [data-ground-floor] [data-moved-off]')!.textContent!, /bay D/);
+  assert.ok($('[data-slot="D01"]'), 'it is upstairs');
 });
 
 test('a calculated profile shows only the items it stores, and its one checklist step', () => {
   open({ calculated: generated() });
   render();
-  assert.equal($('[data-ground-moves]'), null, 'the built room’s moves are the handbook’s');
+  assert.equal($('[data-ground-floor]'), null, 'no built-room notice');
   assert.ok($$('#main .slot-details span').some(s => s.textContent === 'Iron Plate'));
   assert.equal($('[data-slot="G01"]'), null);
   assert.match($('#main .notice.info')!.textContent, /Optional storage template/);
@@ -877,7 +833,7 @@ test('the container dialog shows its place, checks, factory link and note', asyn
 });
 
 test('a reserved position opens no dialog', () => {
-  open({ state: { storageEdits: someEdits({ clearedSlots: ['A01'] }) } });
+  openMigrated({ state: { storageEdits: someEdits({ clearedSlots: ['A01'] }) } });
   render();
   openSlot('A01');
   assert.equal($<HTMLDialogElement>('#detail')!.open, false);
@@ -902,7 +858,7 @@ test('"Complete room" stays disabled once the saved room is complete', async () 
 test('a handbook bay can be hidden in edit mode and restored, and its items are listed meanwhile', async () => {
   // The update stand-in applies the operation the way the server does.
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { checks: { 'slot-C01-built': true } } });
+  openMigrated({ state: { checks: { 'slot-C01-built': true } } });
   setLayoutEditing(true);
   render();
   const items = handbook.storage.find(b => b.id === 'C')!.items.filter(x => x.name);
@@ -934,7 +890,7 @@ test('a handbook bay can be hidden in edit mode and restored, and its items are 
 
 test('a reserved position keeps a filled card’s shape, with inert stand-ins (#200)', () => {
   // A01 cleared: a reserved position in the handbook room.
-  open({ state: { storageEdits: someEdits({ clearedSlots: ['A01'] }) } });
+  openMigrated({ state: { storageEdits: someEdits({ clearedSlots: ['A01'] }) } });
   render();
   const reserved = $$('.bay-items .slot.empty').find(
     s => s.querySelector('strong')!.textContent === 'A01',
@@ -954,7 +910,7 @@ test('a reserved position keeps a filled card’s shape, with inert stand-ins (#
 
 test('an empty built-in floor can be hidden and restored from the layout editor (#168)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open();
+  openMigrated();
   setLayoutEditing(true);
   // The ground floor still has its bays: hiding waits until they are gone.
   render();
@@ -984,7 +940,7 @@ test('an empty built-in floor can be hidden and restored from the layout editor 
 
 test('an added bay takes the letter typed, and a hidden handbook letter only after a yes (#167)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { checks: { 'slot-C01-built': true } } });
+  openMigrated({ state: { checks: { 'slot-C01-built': true } } });
   setLayoutEditing(true);
   render();
   const add = async (letter: string, name: string) => {
@@ -1029,7 +985,7 @@ test('an added bay takes the letter typed, and a hidden handbook letter only aft
 });
 
 test('a handbook bay sharing its letter with an added bay stored before #91 offers no Hide', () => {
-  open({
+  openMigrated({
     state: {
       storageEdits: someEdits({ bays: [{ id: 'C', name: 'Old added C', floor: 'ground' }] }),
     },
@@ -1040,9 +996,9 @@ test('a handbook bay sharing its letter with an added bay stored before #91 offe
   assert.ok($('[data-hide-bay="D"]'), 'other handbook bays still offer Hide');
 });
 
-test('a bay moves to another floor from edit mode, with its records, and the built room says so (#190)', async () => {
+test('a bay moves to another floor from edit mode, with its records (#190)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { version: 1, checks: { 'slot-D01-built': true } } });
+  openMigrated({ state: { version: 1, checks: { 'slot-D01-built': true } } });
   render();
   assert.equal($('[data-move-bay]'), null, 'only while editing the layout');
   setLayoutEditing(true);
@@ -1060,7 +1016,7 @@ test('a bay moves to another floor from edit mode, with its records, and the bui
   assert.deepEqual(calls.at(-1)![1], { type: 'storageBayMove', id: 'D', floor: 'upper' });
   assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');
   assert.match($('#toast')!.textContent!, /Bay D moved to Upper floor/);
-  assert.match($('[data-moved-off]')!.textContent!, /bay D to Upper floor/);
+  assert.equal($('[data-moved-off]'), null, 'no "Moved in this plan" line (#798)');
   setFloor('upper');
   render();
   await nextTick();
@@ -1072,7 +1028,7 @@ test('a bay moves to another floor from edit mode, with its records, and the bui
 test('a hidden bay moved onto a floor keeps it from going, and the button says which (#216)', async () => {
   stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   // D moved to an added floor and J to the workshop, both then hidden: neither floor shows a bay.
-  open({
+  openMigrated({
     state: {
       storageEdits: someEdits({
         floors: [{ id: 'cf-abcd', label: 'Annex' }],
@@ -1104,7 +1060,7 @@ test('a hidden bay moved onto a floor keeps it from going, and the button says w
 });
 
 test('the update stand-in applies an op like the server: a refused one leaves the page state alone (#214)', () => {
-  open({ state: { checks: { 'slot-C01-built': true } } });
+  openMigrated({ state: { checks: { 'slot-C01-built': true } } });
   const before = structuredClone(state);
   // Only handbook bays can be hidden, and only a valid state is accepted.
   assert.throws(
@@ -1126,7 +1082,7 @@ test('the update stand-in applies an op like the server: a refused one leaves th
 
 test('bays move left and right on their floor in edit mode, and the hall pairs them in that order (#191)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { version: 1, checks: { 'slot-A01-built': true } } });
+  openMigrated({ state: { version: 1, checks: { 'slot-A01-built': true } } });
   render();
   await nextTick();
   const place = (id: string) => {
@@ -1184,7 +1140,7 @@ test('bays move left and right on their floor in edit mode, and the hall pairs t
 });
 
 test('a stored bay order skips letters no longer on the floor and places the rest (#191)', async () => {
-  open({
+  openMigrated({
     state: {
       version: 9,
       storageEdits: {
@@ -1209,7 +1165,7 @@ test('a stored bay order skips letters no longer on the floor and places the res
 
 test('containers get drag handles in edit mode, and a drop moves or swaps them with their progress (#208)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({
+  openMigrated({
     state: {
       version: 1,
       checks: { 'slot-A02-built': true, 'slot-A03-verified': true },
@@ -1310,7 +1266,9 @@ function dropTargets(): Map<string, string | null> {
 
 test('a drop past the end lands on the position it shows, also once the one before is filled (#292)', async () => {
   stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open({ state: { version: 1, checks: { 'slot-A02-built': true }, notes: { 'slot-A02': evil } } });
+  openMigrated({
+    state: { version: 1, checks: { 'slot-A02-built': true }, notes: { 'slot-A02': evil } },
+  });
   setLayoutEditing(true);
   render();
   await settle();
@@ -1379,7 +1337,7 @@ const mouseDrop = (from: string, to: HTMLElement, x: number, y: number) => ({
 
 test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mid-drop (#292)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open();
+  openMigrated();
   setLayoutEditing(true);
   render();
   await settle();
@@ -1401,7 +1359,7 @@ test('a drop is saved once dnd-kit has finished it, so the bay is not redrawn mi
 });
 
 test('a position is the drop target only while the pointer is over it, in the window (#298)', async () => {
-  open();
+  openMigrated();
   setLayoutEditing(true);
   render();
   await settle();
@@ -1426,7 +1384,7 @@ test('a position is the drop target only while the pointer is over it, in the wi
 });
 
 test('the drop target follows the page as it scrolls under a pointer held still (#303)', async () => {
-  open();
+  openMigrated();
   setLayoutEditing(true);
   render();
   await settle();
@@ -1478,7 +1436,7 @@ test('the drop target follows the page as it scrolls under a pointer held still 
 
 test('a drop let go away from the position dnd-kit names saves nothing (#298)', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
-  open();
+  openMigrated();
   setLayoutEditing(true);
   render();
   await settle();
@@ -1541,7 +1499,7 @@ const submitAdd = async () => {
   await settle();
 };
 const editWithCatalog = (slots: Record<string, string> = {}) => {
-  open({
+  openMigrated({
     workspace: { catalog: catalog() },
     state: { storageEdits: someEdits({ clearedSlots: ['A01'], slots }) },
   });

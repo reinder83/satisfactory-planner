@@ -8,7 +8,7 @@ import { nextTick } from 'vue';
 import { setFloor, setLayoutEditing, setState, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { mutate } from '../../public/state.ts';
-import { $, applyUpdate, go, open, page } from './setup.ts';
+import { $, applyUpdate, go, openMigrated, page } from './setup.ts';
 import type { ProgressState, UpdateOp } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -32,7 +32,7 @@ export function answer(store: Store, path: string, body: unknown): ProgressState
 // Opens the storage layout editor with bay C hidden, in this tab and in `store`.
 function hiddenC(): Store {
   page();
-  open();
+  openMigrated();
   const hidden = applyUpdate({ type: 'storageBayHide', id: 'C' });
   hidden.revision = 1;
   setState(hidden);

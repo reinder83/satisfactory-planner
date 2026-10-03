@@ -79,7 +79,8 @@ const MODES: {
   {
     name: 'storage layout',
     view: 'storage',
-    calculated: false,
+    calculated: true,
+    migrated: true,
     toggle: '[data-toggle-layout]',
     label: 'Editing the layout',
     on: () => layoutEditing,
