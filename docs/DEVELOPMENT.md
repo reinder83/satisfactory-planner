@@ -29,7 +29,7 @@ The frontend lives in `public/`: `app.ts` is the entry point and `public/app/` h
 
 `npm run build -- pages` creates an allowlisted, minified static site in `dist/satisfactory-planner`. Serve `dist` with any static HTTP server to test it.
 
-A local Docker build needs no registry login:
+To build and run the Docker image from your checkout:
 
 ```sh
 docker compose -f compose.yaml -f compose.local.yaml up -d --build

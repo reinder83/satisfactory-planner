@@ -44,13 +44,7 @@ To share a plan, use **Saves & profiles → Share**: it sends the plan and layou
 
 ## Host it yourself
 
-Prefer your saves on your own server, synced between devices, or separate accounts for friends? Run the Docker image (AMD64 and ARM64). It is published privately, so log in to `ghcr.io` first with a GitHub classic personal access token carrying `read:packages`:
-
-```sh
-docker login ghcr.io -u reinder83
-```
-
-Then a `compose.yaml` like this (the one [in this repository](compose.yaml) adds a few hardening options):
+Prefer your saves on your own server, synced between devices, or separate accounts for friends? Run the Docker image (AMD64 and ARM64). It is public, so pulling it needs no GitHub account. Use a `compose.yaml` like this (the one [in this repository](compose.yaml) adds a few hardening options):
 
 ```yaml
 services:
