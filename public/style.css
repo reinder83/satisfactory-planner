@@ -4912,6 +4912,11 @@ button.rail-tile:hover {
   gap: 12px;
   margin-top: 10px;
 }
+/* Why Done editing or folding the group waited: its choice is not saved yet (#930). Right above
+   Save and Discard, which it names. */
+.on-site-held .notice {
+  margin: 12px 0 0;
+}
 /* The group's items made on site, under its heading when groups are not edited, and on a line
    of their own the items it marks that give it no line (#931). */
 .on-site-summary {
