@@ -1,5 +1,6 @@
 // Made on site (#877, part of #868) on the Factories page: which items a group's "Made on site"
-// picker offers, and whether the open plan was calculated with the items the groups mark now. A
+// picker offers, whether the open plan was calculated with the items the groups mark now, and
+// what a group's heading says it makes on site (#931). A
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
@@ -142,3 +143,100 @@ export function onSiteRecalcSettings(
   const { onSite: _planned, ...rest } = settings;
   return change.want ? { ...rest, onSite: change.want } : rest;
 }
+
+// The picker's notes on a mark that gives the group no line (OnSitePicker.vue): an item none of
+// the group's lines uses now, and a raw resource, which the planner can never make on site (#921).
+export const UNUSED_NOTE = '(no line here uses it now)';
+export const RAW_NOTE = "(can't be made on site)";
+
+// One item under a group's heading, with a note in brackets, or '' for none.
+export interface OnSiteEntry {
+  item: string;
+  note: string;
+}
+
+// What a group's heading says outside edit mode (#931), for the phase `stage` shows: `made`, the
+// items of the group's own lines there (rows with `onSite`), and `marked`, the items it marks
+// that have no such line, each with why. Both sorted.
+export interface OnSiteSummary {
+  made: OnSiteEntry[];
+  marked: OnSiteEntry[];
+}
+
+// The heading summary of every group in `groups` for `plan` and its stage `stage` (the phase the
+// page shows), by group id. The plan's own lines say what is made on site, so a mark never reads
+// as made on site without one. A line for an item the groups' marks now would not ask for
+// (onSiteSettings, as the "needs a recalculation" notice compares) is made "until a
+// recalculation"; a mark without a line says why (markNote).
+export function onSiteSummaries(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  stage: StoredStage | undefined,
+): Record<string, OnSiteSummary> {
+  const want = onSiteSettings(plan, groups),
+    had = plan.settings.onSite;
+  const out: Record<string, OnSiteSummary> = {};
+  for (const { id } of groups?.groups || []) {
+    const lines = siteLineItems(stage, id, had?.[id]?.items);
+    const marks: GroupMarks = {
+      used: onSiteOffers(plan, groups, id),
+      wanted: want?.[id]?.items || [],
+      planned: had?.[id]?.items || [],
+      dropped: stage?.onSiteDropped?.[id] || [],
+    };
+    out[id] = {
+      made: lines.map(item => ({
+        item,
+        note: marks.wanted.includes(item) ? '' : '(until a recalculation)',
+      })),
+      marked: (groups?.local?.[id] || [])
+        .filter(item => !lines.includes(item))
+        .map(item => ({ item, note: markNote(item, marks) }))
+        .sort((a, b) => a.item.localeCompare(b.item)),
+    };
+  }
+  return out;
+}
+
+// What one group's marks come to: `used`, the items its lines use (the picker's offers),
+// `wanted`, the items a recalculation now would ask for (onSiteSettings), `planned`, the ones the
+// plan was calculated with, and `dropped`, the ones the planner made centrally in the phase shown.
+interface GroupMarks {
+  used: readonly string[];
+  wanted: readonly string[];
+  planned: readonly string[];
+  dropped: readonly string[];
+}
+
+// Why a group's mark of `item` gives it no line in the phase shown: the picker's notes for a raw
+// resource and for an item none of its lines uses (so a recalculation would give it no line
+// either), "needs a recalculation" when the plan was calculated without it, "made centrally in
+// this phase" when the planner fell back to central lines there, and otherwise "no line in this
+// phase", as when the group uses the item only in other phases.
+function markNote(item: string, marks: GroupMarks): string {
+  if (!onSitePlannable(item)) return RAW_NOTE;
+  if (!marks.used.includes(item) || !marks.wanted.includes(item)) return UNUSED_NOTE;
+  if (!marks.planned.includes(item)) return '(needs a recalculation)';
+  if (marks.dropped.includes(item)) return '(made centrally in this phase)';
+  return '(no line in this phase)';
+}
+
+// The items group `groupId`'s own lines make in `stage`, sorted: of each line's outputs, the ones
+// the plan was calculated to make on site for the group (`items`, its settings.onSite entry), so
+// a byproduct of the recipe is not listed; every output when the plan has no entry for it.
+function siteLineItems(
+  stage: StoredStage | undefined,
+  groupId: string,
+  items: readonly string[] | undefined,
+): string[] {
+  const made = new Set<string>();
+  for (const row of stage?.rows || [])
+    if (row.onSite?.group === groupId)
+      for (const item of Object.keys(row.outputs || {}))
+        if (!items || items.includes(item)) made.add(item);
+  return [...made].sort((a, b) => a.localeCompare(b));
+}
+
+// An entry as the heading words it: "Wire", or "Wire (needs a recalculation)".
+export const onSiteEntryText = (entry: OnSiteEntry): string =>
+  entry.note ? `${entry.item} ${entry.note}` : entry.item;

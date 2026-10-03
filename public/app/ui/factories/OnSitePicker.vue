@@ -5,17 +5,22 @@
   comes last and names them, #941), and Save. Ticking a box only changes the choice on this
   page; Save sends the whole list as one `factoryLocal` update (factoryGroups.local). That is the
   explicit action (#854, #856): nothing is saved while a keyboard user moves through the boxes.
-  Save is disabled while the choice is the saved one, and busy while it saves (app/busy.ts); once
-  saved it has nothing to do again, so focus goes on to the first box (ui/refocus.ts). An item the
-  group marks that it no longer uses stays listed, so it can be cleared. Saving never recalculates:
-  the page then says the plan needs a recalculation and offers it (OnSiteRecalc.vue).
+  Save is disabled while the choice is the saved one, marked .unavailable so it is drawn as having
+  nothing to do rather than as busy (style.css draws a bare disabled button with the wait cursor,
+  #939), and busy only while it saves (app/busy.ts); once saved it has nothing to do again, so
+  focus goes on to the first box (ui/refocus.ts). An item the group marks that it no longer uses
+  stays listed, so it can be cleared. Saving never recalculates: the page then says the plan needs
+  a recalculation and offers it (OnSiteRecalc.vue), at the top of the page, far above this group.
+  So after a save the picker says "Saved." in a live region and, while the plan needs a
+  recalculation, offers "Go to the recalculation", which brings that notice into view and focuses
+  its button.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { save } from '../../api.ts';
 import { calculated, stage } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { onSitePickerOffers } from '../../on-site-picker.ts';
+import { onSiteChange, onSitePickerOffers } from '../../on-site-picker.ts';
 import { onSitePlannable } from '../../on-site.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
@@ -36,6 +41,12 @@ const draft = ref<string[] | null>(null);
 const chosen = computed(() => draft.value ?? saved.value);
 const changed = computed(
   () => draft.value !== null && draft.value.join('|') !== saved.value.join('|'),
+);
+// Set by a save from this picker, until a box is ticked or cleared again.
+const justSaved = ref(false);
+// Whether the plan needs a recalculation for the marks as saved (OnSiteRecalc.vue shows it).
+const needsRecalc = computed(() =>
+  legacy(() => !!calculated && !!onSiteChange(calculated, factoryGroupsState())),
 );
 
 const items = computed(() =>
@@ -65,6 +76,14 @@ function toggle(item: string, on: boolean) {
   if (on) next.add(item);
   else next.delete(item);
   draft.value = sorted([...next]);
+  justSaved.value = false;
+}
+
+// "Go to the recalculation": the page's notice into view, and focus on its button.
+function showRecalc() {
+  const notice = document.querySelector<HTMLElement>('[data-on-site-recalc]');
+  notice?.scrollIntoView({ block: 'center' });
+  notice?.querySelector<HTMLElement>('[data-recalc-on-site]')?.focus({ preventScroll: true });
 }
 
 // Save: the group's whole list, then the page redrawn from the saved state. A failed save keeps
@@ -80,6 +99,7 @@ async function apply(event: Event) {
     try {
       await save({ type: 'factoryLocal', id: props.groupId, items: chosen.value });
       draft.value = null;
+      justSaved.value = true;
       return true;
     } catch {
       return false;
@@ -111,7 +131,8 @@ async function apply(event: Event) {
             :checked="chosen.includes(entry.item)"
             @change="toggle(entry.item, ($event.target as HTMLInputElement).checked)"
           /><ItemIcon :name="entry.item" /><span
-            >{{ entry.item }}<small v-if="entry.note" class="muted"> {{ entry.note }}</small></span
+            >{{ entry.item
+            }}<small v-if="entry.note" class="muted">{{ ' ' + entry.note }}</small></span
           ></label
         >
       </div>
@@ -121,12 +142,30 @@ async function apply(event: Event) {
           type="button"
           :data-on-site-save="groupId"
           :aria-label="'Save made on site for ' + groupName"
+          :class="{ unavailable: !changed }"
           :disabled="!changed"
           @click="apply"
         >
           Save
         </button>
         <span v-if="changed" class="small muted" data-on-site-unsaved>Not saved yet.</span>
+        <span :id="id + '-saved'" class="small" role="status" data-on-site-saved
+          ><template v-if="justSaved && !changed"
+            >Saved.<template v-if="needsRecalc">
+              This plan now needs a recalculation.</template
+            ></template
+          ></span
+        >
+        <button
+          v-if="justSaved && !changed && needsRecalc"
+          class="btn"
+          type="button"
+          data-on-site-next
+          :aria-describedby="id + '-saved'"
+          @click="showRecalc"
+        >
+          Go to the recalculation <span aria-hidden="true">↑</span>
+        </button>
       </div>
     </template>
   </fieldset>

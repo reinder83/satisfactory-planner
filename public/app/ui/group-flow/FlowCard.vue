@@ -1,6 +1,7 @@
 <!--
-  One line of a factory group's flow page (#894): its number, recipe (a link to the factory's
-  dialog), whether it runs, its machines, then one column of rows, the inputs (←) before the
+  One line of a factory group's flow page (#894): its number, name (a link to the factory's
+  dialog; "Wire for Alpha" for a group's own line made on site, as in the build plan, #896),
+  whether it runs, its machines, then one column of rows, the inputs (←) before the
   outputs (→), each with its item, where it comes from or goes, its rate and, under the rate,
   the belts or pipes it takes. Every row reaches the card's left border, where the page draws
   the lanes: a row's name (.gf-name) is what its dot or arrowhead points at, and each row
@@ -43,7 +44,7 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
     <div class="gf-head">
       <span class="chain-no">{{ lineNumber(line.no) }}</span
       ><button type="button" class="rail-link" v-bind="factoryLink({ calcFactory: line.id })">
-        {{ line.recipe }} ↗</button
+        {{ line.name }} ↗</button
       ><span :class="['gf-run', running ? 'on' : '']">{{
         running ? '● Running' : '○ Not built'
       }}</span>

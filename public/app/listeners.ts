@@ -1,5 +1,6 @@
-// The page-wide listeners that belong to no component: broken item artwork, the hash route,
-// a click on the dialog's backdrop, the close-tab warning and the toast's placement. The controls several
+// The page-wide listeners that belong to no component: broken item artwork, the hash route
+// (with the history's scroll restoration), a click on the dialog's backdrop, the close-tab
+// warning and the toast's placement. The controls several
 // components share (checkboxes, notes, factory links, the dialog's ×, "Create a save") are
 // bound in the components themselves, with the handlers in ui/actions.ts.
 
@@ -41,6 +42,14 @@ window.addEventListener('hashchange', () => {
   window.scrollTo(0, 0);
   if (stateLoaded) render();
 });
+
+// Back and Forward start the page at its top too (#925). Left to the browser ('auto'), Chrome
+// restores the history entry's scroll after the listener above has run, while the page is still
+// being drawn: with focus kept on a sidebar link the page opened part way down, not even where
+// the user had left it. A browser without the setting keeps its own behaviour.
+const browserHistory: History | undefined = globalThis.history;
+if (browserHistory && 'scrollRestoration' in browserHistory)
+  browserHistory.scrollRestoration = 'manual';
 
 // A click on the dialog's backdrop (outside the dialog's box, pressed there too) closes the
 // detail dialog.

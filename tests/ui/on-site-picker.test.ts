@@ -135,7 +135,8 @@ test('a raw resource a plan row makes is never offered, and a saved mark of one 
   render();
   await nextTick();
   assert.ok(box('Water').checked);
-  assert.match(box('Water').closest('label')!.textContent!, /can't be made on site/);
+  // With a space between the name and the note (#934).
+  assert.match(box('Water').closest('label')!.textContent!, /Water \(can't be made on site\)$/);
   assert.doesNotMatch(box('Water').closest('label')!.textContent!, /no line here/);
   assert.doesNotMatch(box('Wire').closest('label')!.textContent!, /\(/);
 });
@@ -164,14 +165,18 @@ test('the picker shows a box per offered item while editing, and the marks other
   render();
   await nextTick();
   assert.ok(box('Screws').checked);
-  assert.match(box('Screws').closest('label')!.textContent!, /no line here uses it now/);
+  assert.match(
+    box('Screws').closest('label')!.textContent!,
+    /Screws \(no line here uses it now\)$/,
+  );
   // Not editing: the group lists what it makes on site under its heading.
   setFactoryEditing(false);
   render();
   await nextTick();
   assert.equal(
     $(`#section-${MOTORS} [data-on-site-items]`)!.textContent!.trim(),
-    'Made on site: Screws and Wire',
+    // Neither mark gives it a line yet (#931).
+    'Marked, not made on site: Screws (no line here uses it now) and Wire (needs a recalculation)',
   );
 });
 
