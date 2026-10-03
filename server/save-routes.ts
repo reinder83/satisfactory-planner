@@ -1,6 +1,5 @@
 // The routes over the signed-in user's saves and profiles: full-save export and import,
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
-import fs from 'node:fs/promises';
 import {
   exportQuery,
   importableTransfer,
@@ -31,13 +30,9 @@ export function saveRoutes({
 }: WorkspaceContext) {
   // Full-save export (public/transfer.ts format) of the user's saves, scoped by the query as
   // selectForExport describes; share=1 strips progress with shareState. Each save keeps the shape
-  // this route has always written: no userId, and a profile's plan null when it has none. An
-  // original profile without its own handbook is exported with the current plan.json, so the
-  // export can be imported where that default differs. Read-only.
+  // this route has always written: no userId, and a profile's plan null when it has none.
+  // Read-only.
   async function exportSaves({ url, user }: UserRequest) {
-    const handbook = JSON.parse(
-      await fs.readFile(new URL('../public/plan.json', import.meta.url), 'utf8'),
-    );
     const owned = current()
       .saves.filter(s => s.userId === user.id)
       .map(save => ({
@@ -50,7 +45,6 @@ export function saveRoutes({
           kind: profile.kind,
           plan: profile.plan || null,
           state: profile.state,
-          ...(profile.kind === 'original' ? { handbook: profile.handbook || handbook } : {}),
         })),
       }));
     const { exported } = selectForExport(owned, exportQuery(url.searchParams), message =>
