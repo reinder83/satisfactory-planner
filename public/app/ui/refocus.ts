@@ -26,22 +26,30 @@ export interface RefocusOptions {
   // Rows are looked up inside this element (one bay, one factory card's group editor) while it is
   // still on the page, else in the whole page; so are the fallbacks, all inside it first.
   scope?: Element | null;
+  // What identifies a row across redraws (a build-plan step's checklist key). With it, the
+  // removed row's place is found again by its neighbours when the change lands, not by its
+  // position: other rows may have left the list in the meantime, as a step ticked just before
+  // whose save landed first does (#822).
+  key?: (row: Element) => string | undefined;
 }
 
 export function refocusAfterRemoval(
   trigger: EventTarget | null,
-  { row, control, fallback = [], scope }: RefocusOptions,
+  { row, control, fallback = [], scope, key }: RefocusOptions,
 ): () => Promise<void> {
   const within = (): ParentNode => (scope?.isConnected ? scope : document);
   const rows = row ? [...within().querySelectorAll(row)] : [];
   const at = trigger instanceof Node ? rows.findIndex(r => r.contains(trigger)) : -1;
+  const neighbours = key && at >= 0 ? neighbourKeys(rows, at, key) : null;
   return async () => {
     await nextTick();
     const current = document.activeElement;
     if (current && current !== document.body && current !== trigger && current.isConnected) return;
     const now = row ? [...within().querySelectorAll(row)] : [];
     // The row now in the removed one's place and those after it, then the rows before it.
-    const order = at < 0 ? [] : [...now.slice(at), ...now.slice(0, at).reverse()];
+    const byPlace = at < 0 ? [] : [...now.slice(at), ...now.slice(0, at).reverse()];
+    const byNeighbour = neighbours && key ? rowsByKey(now, neighbours, key) : [];
+    const order = byNeighbour.length ? byNeighbour : byPlace;
     const inRows = order
       .map(r => (control ? r.querySelector<HTMLElement>(control) : (r as HTMLElement)))
       .find(el => el);
@@ -51,6 +59,20 @@ export function refocusAfterRemoval(
       inRows ?? first(within()) ?? first(document) ?? document.querySelector<HTMLElement>('#main');
     target?.focus();
   };
+}
+
+// The keys of the rows after the removed one, nearest first, then of the rows before it,
+// nearest first: the order refocusAfterRemoval() tries them in.
+function neighbourKeys(rows: Element[], at: number, key: (row: Element) => string | undefined) {
+  return [...rows.slice(at + 1), ...rows.slice(0, at).reverse()]
+    .map(key)
+    .filter((id): id is string => !!id);
+}
+
+// The rows still listed whose keys are among `keys`, in the order of `keys`.
+function rowsByKey(rows: Element[], keys: string[], key: (row: Element) => string | undefined) {
+  const byKey = new Map(rows.map(r => [key(r), r]));
+  return keys.map(id => byKey.get(id)).filter((r): r is Element => !!r);
 }
 
 // Where focus goes when an action opens another page or another profile and its control goes
