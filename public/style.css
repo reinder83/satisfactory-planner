@@ -1121,6 +1121,16 @@ p {
   color: #ff7a5e;
   border-color: #4a2a24;
 }
+/* On a phone a button is a 44px touch target (#765), like the page's other phone targets.
+   Height only: a min-width would let a flex row shrink a button below its text (#750). Quiet
+   buttons are left out: they are underlined text links whose underline would drop away from the
+   text, and they sit in dense rows (storage bays, assignment rows); the ones that are touch
+   targets on a phone have their own rule (.task-tools, .task-link). */
+@media (max-width: 720px) {
+  .btn:not(.quiet) {
+    min-height: 44px;
+  }
+}
 .full {
   width: 100%;
 }
