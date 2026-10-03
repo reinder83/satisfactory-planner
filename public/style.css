@@ -4858,6 +4858,73 @@ button.rail-tile:hover {
   margin-top: 12px;
 }
 
+/* ── Made on site (#877) ───────────────────────────────── */
+/* A group's "Made on site" picker while groups are edited (OnSitePicker.vue): a box per item,
+   wrapping into columns, then Save. On a phone each box's label is a 44px touch target, as the
+   page's other phone targets; Save is one through the .btn rule. */
+.on-site-picker {
+  border: 1px dashed var(--line);
+  margin: 0 0 14px;
+  padding: 10px 14px 12px;
+  min-width: 0;
+}
+.on-site-picker legend {
+  font-family: var(--head);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--bright);
+  padding: 0 6px;
+}
+.on-site-picker > p {
+  margin: 2px 0 10px;
+}
+.on-site-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 14px;
+}
+.on-site-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: 12.5px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.on-site-item input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin: 0;
+}
+.on-site-item .item-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+.on-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+/* The group's items made on site, under its heading when groups are not edited. */
+.on-site-summary {
+  margin: -4px 0 12px;
+}
+@media (max-width: 720px) {
+  .on-site-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .on-site-item {
+    min-height: 44px;
+  }
+}
+
 /* ── Print: revert to paper ────────────────────────────── */
 @media print {
   /* On paper the lanes would not line up with the printed cards, so the rows' own words

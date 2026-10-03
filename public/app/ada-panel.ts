@@ -32,6 +32,7 @@ import {
   workspace,
 } from './session.ts';
 import { groupsReorder } from './group-order.ts';
+import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
 import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
@@ -218,6 +219,7 @@ function adaFacts(): AdaFacts {
     hasPhaseNote: !!state.notes['phase-' + phase()],
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
+    onSitePending: !!calculated && !!onSiteChange(calculated, factoryGroupsState()),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,

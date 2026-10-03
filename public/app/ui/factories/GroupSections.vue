@@ -6,7 +6,9 @@
   removed; otherwise a group with more than one factory links to its build order, the group's flow
   page (#factories/<group>/flow, GroupFlowPage.vue, #895). It is a link, not a button: it goes to
   another page, so it can open in a new tab and the address can be shared. Each group can be
-  folded (CollapseToggle.vue, SP-17): its header stays, its cards go. The section's id
+  folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
+  "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise the
+  items it makes on site. The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -21,6 +23,8 @@ import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
+import OnSitePicker from './OnSitePicker.vue';
+import { listNames } from '../../../wording.ts';
 
 // The factories to sort into groups (calculated rows), and the key
 // their memberships are saved under.
@@ -35,6 +39,8 @@ const sections = computed(() =>
           membershipsOf(props.keyOf(item)).some(m => m.group === group.id),
         ),
         collapsed: sectionCollapsed(group.id),
+        // The items it makes on site (#877), listed under its heading.
+        local: listNames(factoryGroupsState().local?.[group.id] || []),
       }))
       .filter(section => section.members.length || factoryEditing),
   ),
@@ -136,6 +142,12 @@ async function remove(event: Event, id: string) {
         Build order →
       </a>
     </header>
+    <template v-if="!section.collapsed">
+      <OnSitePicker v-if="editing" :group-id="section.id" :group-name="section.name" />
+      <p v-else-if="section.local" class="small muted on-site-summary" data-on-site-items>
+        Made on site: {{ section.local }}
+      </p>
+    </template>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
       <template v-if="section.members.length"
         ><template v-for="item in section.members" :key="keyOf(item)"
