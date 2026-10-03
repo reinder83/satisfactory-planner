@@ -127,12 +127,15 @@ export interface ProfileSummary {
   transcribed?: true;
   completed: number;
   phase: Phase;
-  // A calculated profile's progress per phase it plans, from its start phase (SP-32): the
+  // A calculated profile's progress per phase it offers (SP-32): the milestone-only phases before
+  // its start phase (#783, only with `steps`), then each phase from the start phase. The
   // production lines ticked Running over the phase's lines, and its build-plan steps ticked
   // (`steps`, #746). Absent without a calculated plan.
   phases?: PhaseProgress[];
 }
 
+// One phase of ProfileSummary.phases: `done`/`total` are its production lines ticked Running (0
+// of 0 for a milestone-only phase before the start phase, #759, #783).
 export interface PhaseProgress {
   phase: StageKey;
   done: number;

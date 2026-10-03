@@ -7,7 +7,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createBrowserApi } from '../public/browser-api.ts';
-import { initialState, planStepIds, profilePhases } from '../public/state.ts';
+import { firstPlanPhase, milestoneOnlyPhases } from '../public/progression.ts';
+import { initialState, phaseProgress, planStepIds, profilePhases } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { summary } from '../server/scope.ts';
 import type { Workspace } from '../server/persistence.ts';
@@ -18,6 +19,7 @@ import type {
   PhaseProgress,
   ProgressState,
   StageKey,
+  StoredCalculatedPlan,
   WorkspaceSummary,
 } from '../public/types/index.ts';
 
@@ -87,30 +89,41 @@ test('the summary keeps its earlier fields, and has no phases without a calculat
   assert.equal(profilePhases(undefined, state, data), undefined);
 });
 
-// One profile with the reproduction's progress, in each edition's workspace.
-const profile = () => ({
+// One profile with the reproduction's progress (or `state` on `stored`), in each edition's
+// workspace.
+const profile = (stored: CurrentCalculatedPlan = plan, state: ProgressState = reproduction()) => ({
   id: 'p',
   name: 'Plan',
   kind: 'calculated' as const,
-  plan: structuredClone(plan),
-  state: reproduction(),
+  plan: structuredClone(stored),
+  state: structuredClone(state),
 });
 
-test('both editions send the same per-phase step counts, so the card agrees with the phase opened on', async () => {
+// The profile's per-phase counts as each edition's workspace summary sends them: the server's
+// summary() and the browser edition's GET /api/workspace.
+async function bothEditions(stored?: CurrentCalculatedPlan, state?: ProgressState) {
   const server: Workspace = {
     version: 2,
     revision: 1,
     accountsEnabled: false,
     registration: false,
     users: [{ id: 'owner', username: 'owner', activeSave: 's' }],
-    saves: [{ id: 's', name: 'World', userId: 'owner', activeProfile: 'p', profiles: [profile()] }],
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        userId: 'owner',
+        activeProfile: 'p',
+        profiles: [profile(stored, state)],
+      },
+    ],
     sessions: [],
   };
   const fromServer = summary(server, server.users[0]).saves[0]!.profiles[0]!.phases!;
   let record: BrowserWorkspace = {
     version: 1,
     activeSave: 's',
-    saves: [{ id: 's', name: 'World', activeProfile: 'p', profiles: [profile()] }],
+    saves: [{ id: 's', name: 'World', activeProfile: 'p', profiles: [profile(stored, state)] }],
     lastBackup: null,
   };
   const store = {
@@ -124,8 +137,89 @@ test('both editions send the same per-phase step counts, so the card agrees with
   };
   const api = createBrowserApi(store, calculate, {} as Catalog, undefined, undefined, data);
   const reply = (await api('/api/workspace')) as WorkspaceSummary;
-  const fromBrowser = reply.saves[0]!.profiles[0]!.phases!;
+  return { fromServer, fromBrowser: reply.saves[0]!.profiles[0]!.phases! };
+}
+
+test('both editions send the same per-phase step counts, so the card agrees with the phase opened on', async () => {
+  const { fromServer, fromBrowser } = await bothEditions();
   assert.deepEqual(fromBrowser, fromServer, 'the editions agree');
   assert.deepEqual(fromServer, profilePhases(plan, reproduction(), data));
   assert.equal(firstOpen(fromServer, 3), '1', 'Phase 1 is open in the summary');
+});
+
+// A profile made for Phase 3 (#783): the build plan offers Phases 1 and 2 as milestone-only
+// phases (#759, milestoneOnlyPhase in progression.ts) and the profile opens on Phase 1 while one
+// of its milestones is open. The summary lists them first, with no production lines and their
+// milestones as steps, so the card can show them and name the phase the profile opens on.
+const laterPlan: CurrentCalculatedPlan = calculate({});
+const laterState = (checks: Record<string, boolean> = {}): ProgressState => {
+  const state = initialState();
+  state.settings.phase = '3';
+  state.checks = checks;
+  return state;
+};
+
+test('a Phase 3 profile summary starts with its milestone-only Phases 1 and 2 (#783)', () => {
+  assert.equal(laterPlan.settings.phase, '3');
+  assert.deepEqual(firstPlanPhase(laterPlan), '1');
+  assert.deepEqual(milestoneOnlyPhases(laterPlan), ['1', '2']);
+  const phases = profilePhases(laterPlan, laterState(), data)!;
+  assert.deepEqual(
+    phases.map(entry => entry.phase),
+    ['1', '2', '3', '4', '5'] satisfies StageKey[],
+  );
+  for (const entry of phases.slice(0, 2)) {
+    const ids = planStepIds(laterPlan, laterState(), data, entry.phase);
+    assert.ok(ids.length, 'Phase ' + entry.phase + ' lists milestones');
+    assert.ok(
+      ids.every(id => id.startsWith('unlock-')),
+      'only milestones',
+    );
+    assert.deepEqual(entry, {
+      phase: entry.phase,
+      done: 0,
+      total: 0,
+      steps: { done: 0, total: ids.length },
+    });
+  }
+  // From the start phase on, the entries are as before: production lines and steps.
+  assert.deepEqual(
+    phases.slice(2).map(({ phase, done, total }) => ({ phase, done, total })),
+    phaseProgress(laterPlan, {}),
+  );
+  assert.equal(firstOpen(phases, 3), '1', 'Phase 1 is the phase it opens on');
+  // Phase 1's milestones ticked: Phase 2. Both: none, the profile opens on Phase 3.
+  const one = Object.fromEntries(
+    planStepIds(laterPlan, laterState(), data, '1').map(id => [id, true]),
+  );
+  assert.equal(firstOpen(profilePhases(laterPlan, laterState(one), data)!, 3), '2');
+  const both = {
+    ...one,
+    ...Object.fromEntries(planStepIds(laterPlan, laterState(), data, '2').map(id => [id, true])),
+  };
+  assert.equal(firstOpen(profilePhases(laterPlan, laterState(both), data)!, 3), undefined);
+});
+
+test('a plan with a guide, or one made for Phase 1, has no milestone-only phases', () => {
+  const guided: StoredCalculatedPlan = { ...structuredClone(laterPlan), guide: { phases: {} } };
+  assert.equal(firstPlanPhase(guided), '3');
+  assert.deepEqual(milestoneOnlyPhases(guided), []);
+  assert.deepEqual(
+    profilePhases(guided, laterState(), data)!.map(entry => entry.phase),
+    ['3', '4', '5'],
+  );
+  assert.deepEqual(milestoneOnlyPhases(plan), []);
+});
+
+test('both editions send a Phase 3 profile its milestone-only phases (#783)', async () => {
+  const state = laterState({ [planStepIds(laterPlan, laterState(), data, '1')[0]!]: true });
+  const { fromServer, fromBrowser } = await bothEditions(laterPlan, state);
+  assert.deepEqual(fromBrowser, fromServer, 'the editions agree');
+  assert.deepEqual(fromServer, profilePhases(laterPlan, state, data));
+  assert.deepEqual(
+    fromServer.map(entry => entry.phase),
+    ['1', '2', '3', '4', '5'],
+  );
+  assert.equal(fromServer[0]!.steps!.done, 1);
+  assert.equal(firstOpen(fromServer, 3), '1');
 });

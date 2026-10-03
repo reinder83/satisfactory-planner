@@ -73,8 +73,9 @@ const page = computed(() =>
     })),
   })),
 );
-// A calculated profile's progress bar (SP-32): a segment per phase it plans, each filled with its
-// share of build-plan steps ticked (`steps`, #746; production lines ticked Running from a summary
+// A calculated profile's progress bar (SP-32): a segment per phase it offers, as the top bar's
+// phase track, the milestone-only phases before its start phase included (#759, #783), each
+// filled with its share of build-plan steps ticked (`steps`, #746; production lines ticked Running from a summary
 // without them). Phases before the one worked on fill green (`done`), that one in the accent
 // (`current`), later ones are empty; Post Phase 5 works on Phase 5's steps. An earlier phase is
 // not drawn as finished while it has an open step (#667, #746): opening the profile lands on the

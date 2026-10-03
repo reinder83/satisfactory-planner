@@ -36,7 +36,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { milestoneOnlyPhase, phaseSteps, progression } from '../public/progression.ts';
+import {
+  firstPlanPhase,
+  milestoneOnlyPhase,
+  phaseSteps,
+  progression,
+} from '../public/progression.ts';
 import {
   carryOptions,
   initialState,
@@ -78,6 +83,7 @@ function ui() {
     progression,
     phaseSteps,
     milestoneOnlyPhase,
+    firstPlanPhase,
     carryOptions,
     initialState,
     pickedRecipeUnlocks,

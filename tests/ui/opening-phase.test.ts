@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { openingPhase, phaseStepIds } from '../../public/app/opening-phase.ts';
+import { openingPhase, phaseStepIds, phaseToOpen } from '../../public/app/opening-phase.ts';
 import {
   loadContext,
   openedFrom,
@@ -17,8 +17,19 @@ import {
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
+import { phaseTrack } from '../../public/app/views/phase-track.ts';
 import { planStepIds, profilePhases } from '../../public/state.ts';
-import { $, applyUpdate, generatedWith, go, handbook, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  generated,
+  generatedWith,
+  go,
+  handbook,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type {
   ContextReply,
   CurrentCalculatedPlan,
@@ -146,7 +157,11 @@ async function openThrough(reply: ContextReply) {
   await settle();
   return calls;
 }
-const calculatedReply = (savedPhase: Phase, checks: Record<string, boolean>): ContextReply => ({
+const calculatedReply = (
+  savedPhase: Phase,
+  checks: Record<string, boolean>,
+  plan: CurrentCalculatedPlan = phaseOnePlan(),
+): ContextReply => ({
   save: { id: 's', name: 'Save' },
   profile: { id: 'p', kind: 'calculated', name: 'Started in Phase 1' },
   state: {
@@ -155,7 +170,7 @@ const calculatedReply = (savedPhase: Phase, checks: Record<string, boolean>): Co
     checks,
     customTasks: [],
   },
-  plan: phaseOnePlan(),
+  plan,
 });
 // Every check of the given phases' build plans, ticked.
 function ticked(plan: CurrentCalculatedPlan, phases: StageKey[]) {
@@ -262,8 +277,8 @@ test('the summary counts the steps phaseStepIds gives, for every phase', () => {
 // The issue's reproduction (#746): a profile starting in Phase 1, working on Phase 3, with every
 // Phase 1 production line ticked and its other steps open. It opens on Phase 1, so its card must
 // not draw Phase 1 as finished; it names Phase 1 as the earlier phase still open.
-const cardFor = (checks: Record<string, boolean>) => {
-  const phases = profilePhases(phaseOnePlan(), { checks, customTasks: [] }, progressionData)!;
+const cardFor = (checks: Record<string, boolean>, plan = phaseOnePlan()) => {
+  const phases = profilePhases(plan, { checks, customTasks: [] }, progressionData)!;
   const summary: ProfileSummary = {
     id: 'p',
     kind: 'calculated',
@@ -312,4 +327,43 @@ test('a profile card names the earlier phase the profile opens on (#746)', async
   assert.match(next.label!, /^Phase 3 of 5, \d+%; Phase 2 is \d+% done$/);
   assert.equal(next.fill['1'], '100%');
   assert.notEqual(next.fill['2'], '100%');
+});
+
+// A profile made for Phase 3 (#783, #759): Phases 1 and 2 are milestone-only, and it opens on
+// Phase 1 while one of its milestones is open. The card shows those phases too, from the same
+// steps the top bar's phase track counts, and names the phase the profile opens on.
+test('a Phase 3 profile card shows its milestone-only phases and names the one it opens on (#783)', async () => {
+  const plan = generated();
+  assert.equal(plan.settings.phase, '3');
+  const agree = async (checks: Record<string, boolean>, opensOn: Phase, label: RegExp) => {
+    const card = cardFor(checks, structuredClone(plan));
+    assert.deepEqual(Object.keys(card.fill), ['1', '2', '3', '4', '5'], 'a segment per phase');
+    assert.match(card.label!, label);
+    open();
+    await openThrough(calculatedReply('3', checks, structuredClone(plan)));
+    assert.equal(phase(), opensOn, 'the profile opens on Phase ' + opensOn);
+    assert.equal(phaseToOpen(), opensOn);
+    // The top bar's track offers the same phases, filled the same up to the working phase.
+    const track = phaseTrack();
+    assert.deepEqual(
+      track.map(segment => segment.phase),
+      ['1', '2', '3', '4', '5', 'post'],
+    );
+    for (const segment of track.slice(0, 3))
+      assert.equal(card.fill[segment.phase], (segment.pct ?? 0) + '%', 'Phase ' + segment.phase);
+  };
+  await agree({}, '1', /^Phase 3 of 5, 0%; Phase 1 is 0% done; Phase 2 is 0% done$/);
+  // One Phase 1 milestone ticked: still Phase 1, partly done.
+  open({ calculated: structuredClone(plan), phase: '3' });
+  const one = phaseStepIds('1');
+  assert.ok(one.length > 1 && one.every(id => id.startsWith('unlock-')), 'milestones only');
+  await agree(
+    { [one[0]!]: true },
+    '1',
+    /^Phase 3 of 5, 0%; Phase 1 is [1-9]\d?% done; Phase 2 is 0% done$/,
+  );
+  // Every Phase 1 milestone ticked: it opens on Phase 2, and the card names only Phase 2.
+  await agree(ticked(plan, ['1']), '2', /^Phase 3 of 5, \d+%; Phase 2 is 0% done$/);
+  // Both done: it opens on the saved phase, and the card names no earlier phase.
+  await agree(ticked(plan, ['1', '2']), '3', /^Phase 3 of 5, \d+%$/);
 });

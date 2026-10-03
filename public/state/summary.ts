@@ -1,6 +1,6 @@
 // What the save list and GET /api/context show of a profile: its progress per phase and its
 // current hard-drive payoff ranking. Re-exported by ../state.ts.
-import { phaseSteps } from '../progression.ts';
+import { milestoneOnlyPhases, phaseSteps } from '../progression.ts';
 import type {
   CustomTask,
   PhaseProgress,
@@ -63,6 +63,9 @@ export function planStepIds(
 // production lines and `steps`: the phase's build-plan steps (planStepIds, `data` is
 // progression.json) ticked, over all of them. The profile card fills each phase with those, so a
 // phase reads as finished only when the profile would not open on it (openingPhase, #570, #746).
+// The milestone-only phases before the start phase (#759, milestoneOnlyPhases in progression.ts)
+// come first, with no production lines (0 of 0) and their milestones as steps, so the card covers
+// the phases the phase picker offers and names a milestone-only phase the profile opens on (#783).
 export function profilePhases(
   plan: StoredCalculatedPlan | null | undefined,
   state: StepsState,
@@ -70,7 +73,8 @@ export function profilePhases(
 ): PhaseProgress[] | undefined {
   const phases = phaseProgress(plan, state.checks);
   if (!plan || !phases) return phases;
-  return phases.map(entry => {
+  const milestoneOnly = milestoneOnlyPhases(plan).map(phase => ({ phase, done: 0, total: 0 }));
+  return [...milestoneOnly, ...phases].map(entry => {
     const ids = planStepIds(plan, state, data, entry.phase);
     return {
       ...entry,
