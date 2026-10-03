@@ -269,6 +269,40 @@ test('a later start phase lists the Phase 1 milestones its start-up steps ask fo
   }
 });
 
+// Phase 5's augmenter step tells the user to research Power Augmenter in the MAM; the augmenters
+// are buildings, not rows, so the settings bring the node in, listed once in its own phase (#810).
+// Fueled augmenters' Alien Power Matrix node comes in through the fuel row's recipe.
+test('a profile with augmenters lists the MAM nodes its augmenter step asks for', () => {
+  const named = (name: string) => data.entries.find(entry => entry.name === name)!;
+  const augmenter = named('Power Augmenter'),
+    matrix = named('Alien Power Matrix');
+  const phases = ['1', '2', '3', '4', '5', 'post'];
+  const listing = (plan: ReturnType<typeof calculate>, id: string) =>
+    phases.filter(phase =>
+      phaseSteps(plan, { checks: {} }, data, phase).some(step => step.id === 'unlock-' + id),
+    );
+  for (const start of ['1', '3', '5'])
+    for (const fueledAugmenters of [0, 1]) {
+      const plan = calculate({ phase: start, augmenters: 2, fueledAugmenters });
+      const step = phaseSteps(plan, { checks: {} }, data, '5').find(
+        s => s.id === 'alien-power-augmenter',
+      )!;
+      assert.ok(step, `a Phase ${start} profile builds augmenters in Phase 5`);
+      assert.deepEqual(
+        listing(plan, augmenter.id),
+        [String(milestonePhase(augmenter, data))],
+        `a Phase ${start} profile lists ${augmenter.name} once, in its own phase`,
+      );
+      assert.deepEqual(
+        listing(plan, matrix.id),
+        fueledAugmenters ? ['5'] : [],
+        `${matrix.name} listed only when augmenters are fueled`,
+      );
+    }
+  const none = calculate({ phase: '5' });
+  assert.deepEqual(listing(none, augmenter.id), [], 'no augmenters, no Power Augmenter step');
+});
+
 test('a phase before the start phase lists only its milestones', () => {
   const plan = calculate({ phase: '3', recipes: 'all' });
   assert.ok(plan.stages['1'].rows?.length, 'the planner still solved Phase 1');

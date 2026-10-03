@@ -291,6 +291,10 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   if (stage >= 2) add(byName('Coal Power'));
   if (stage >= 4 && plan.settings.droneFuel && plan.settings.droneFuel !== 'none')
     add(byName('Aeronautical Engineering'));
+  // The augmenters are buildings, not rows, so their MAM node comes from the settings: Phase 5's
+  // "Build N Alien Power Augmenters" step (endgameTasks) asks for it (#810). Fueled augmenters'
+  // Alien Power Matrix node comes in through the fuel row's recipe above.
+  if (stage === 5 && (plan.settings.augmenters ?? 0) > 0) add(byName('Power Augmenter'));
   if (rows.some(r => r.machine === 'Fuel Generator')) add(byName('Petroleum Power'));
   if (rows.some(r => r.machine === 'Nuclear Power Plant')) add(byName('Nuclear Power'));
   // Useful early research is reachable through Field Research; its dataset tier is not a HUB gate.
