@@ -7,7 +7,7 @@ import { beforeEach, test } from 'vitest';
 import { setHideDone, setPlanEditing, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import type { TaskEdits } from '../../public/types/index.ts';
-import { $$, go, open, page } from './setup.ts';
+import { $$, go, openMigrated, page } from './setup.ts';
 
 beforeEach(() => {
   page();
@@ -19,7 +19,7 @@ test('every removed step’s Restore button is named after the step', () => {
   const taskEdits: Partial<TaskEdits> = {
     removed: ['phase-3-survey', 'phase-3-iron', 'phase-3-retire-power'],
   };
-  open({ state: { taskEdits: taskEdits as TaskEdits } });
+  openMigrated({ state: { taskEdits: taskEdits as TaskEdits } });
   go('plan');
   setPlanEditing(true);
   render();

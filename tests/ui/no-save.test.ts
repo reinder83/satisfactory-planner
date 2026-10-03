@@ -104,8 +104,8 @@ test('with no save the status claims nothing, and its dot is left out', async ()
   assert.equal($('#saved')!.textContent, 'Nothing saved yet');
   assert.equal($('#saved-short')!.textContent, 'No save yet');
   assert.equal($$('.save-status .dot').length, 0);
-  // An open save reads as before.
-  open();
+  // An open save reads as before (a profile migrated from the handbook, #387).
+  open({ migrated: true });
   render();
   await nextTick();
   assert.equal($('#saved')!.textContent, 'Saved on server');

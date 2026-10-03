@@ -3,17 +3,10 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import {
-  currentProfile,
-  currentSave,
-  setContext,
-  setHideDone,
-  setQuery,
-  state,
-} from '../../public/app/session.ts';
+import { setHideDone, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
-import { $, go, handbook, open, page } from './setup.ts';
+import { $, go, migratedPlan, openMigrated, page } from './setup.ts';
 
 beforeEach(() => {
   page();
@@ -22,14 +15,10 @@ beforeEach(() => {
 });
 
 test('a phase without steps draws an empty bar with a valid range', async () => {
-  open();
-  setContext({
-    save: currentSave,
-    profile: { id: currentProfile.id, kind: 'original', name: currentProfile.name },
-    state,
-    plan: null,
-    handbook: { ...handbook, phases: {} },
-  });
+  // A profile migrated from the handbook (#387) whose guide has no steps for the phase.
+  const plan = migratedPlan();
+  plan.guide = { ...plan.guide!, phases: {} };
+  openMigrated({ calculated: plan });
   assert.equal(planTasks().length, 0);
   go('plan');
   render();
@@ -44,7 +33,7 @@ test('a phase without steps draws an empty bar with a valid range', async () => 
 });
 
 test('a phase with steps keeps its count as the range', async () => {
-  open();
+  openMigrated();
   const tasks = planTasks();
   assert.ok(tasks.length > 1);
   state.checks[tasks[0]!.id] = true;

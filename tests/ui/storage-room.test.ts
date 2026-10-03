@@ -103,7 +103,8 @@ test('a migrated handbook profile has the same storage room and plan steps', asy
   const before: Record<string, unknown> = {};
   for (const phase of ['3', '4', '5', 'post'] as Phase[]) {
     open({ phase, state: structuredClone(state) });
-    const handbookSteps = steps();
+    // The steps the handbook's own build plan listed (that page went with #799).
+    const handbookSteps = handbook.phases[phase]!.map(step => step.id);
     openMigrated({ phase, state: structuredClone(state) });
     before[phase] = { room: room(), steps: handbookSteps };
   }

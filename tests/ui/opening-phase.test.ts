@@ -25,8 +25,9 @@ import {
   generated,
   generatedWith,
   go,
-  handbook,
+  migratedPlan,
   open,
+  openMigrated,
   page,
   stubFetch,
 } from './setup.ts';
@@ -131,15 +132,16 @@ test('post-game is worked out from another phase with Phase 5 ids', () => {
   );
 });
 
-test('another phase of the handbook is worked out as its build plan shows it', () => {
+test('another phase of a profile migrated from the handbook is worked out as its build plan shows it', () => {
   for (const stage of ['3', '4', '5'] as StageKey[]) {
     const edits = { customTasks: [{ id: 'custom-' + stage, phase: stage, title: 'Mine' }] };
-    open({ phase: stage, state: structuredClone(edits) });
+    openMigrated({ phase: stage, state: structuredClone(edits) });
     const shown = planTasks().map(task => task.id);
     assert.ok(shown.includes('custom-' + stage), 'a personal task counts');
-    // The handbook plans Phase 3 on.
+    assert.ok(shown.includes('phase-' + stage + '-delivery'), "the guide's steps count");
+    // The handbook planned Phase 3 on.
     const other: StageKey = stage === '3' ? '5' : '3';
-    open({ phase: other, state: structuredClone(edits) });
+    openMigrated({ phase: other, state: structuredClone(edits) });
     assert.equal(phase(), other);
     assert.deepEqual(phaseStepIds(stage), shown, 'Phase ' + stage);
   }
@@ -233,14 +235,13 @@ test('picking another phase in the select saves and shows it', async () => {
   assert.equal(state.settings.phase, '2');
 });
 
-test('the handbook, saved on Phase 5, opens on Phase 3 while its steps are open', async () => {
+test('a profile migrated from the handbook, saved on Phase 5, opens on Phase 3 while its steps are open', async () => {
   open();
   await openThrough({
     save: { id: 's', name: 'Save' },
-    profile: { id: 'original', kind: 'original', name: 'Handbook' },
+    profile: { id: 'original', kind: 'calculated', name: 'Handbook' },
     state: { ...structuredClone(state), settings: { phase: '5' }, checks: {}, customTasks: [] },
-    plan: null,
-    handbook,
+    plan: migratedPlan(),
   });
   assert.deepEqual(shownPhase(), { phase: '3', picker: '3', track: '3' });
   assert.equal(state.settings.phase, '5');

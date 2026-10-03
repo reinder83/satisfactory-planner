@@ -10,7 +10,7 @@ import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { setHideDone, setPlanEditing, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, applyUpdate, go, open, page, stubFetch } from './setup.ts';
+import { $, applyUpdate, go, openMigrated, page, stubFetch } from './setup.ts';
 
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -39,7 +39,7 @@ const order = () =>
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setHideDone(false);
   stubFetch({ '/api/update': applyUpdate });

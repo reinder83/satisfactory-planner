@@ -58,6 +58,8 @@ beforeEach(() => {
 });
 
 test('the frame shows the open save and profile, escaped, around the page', () => {
+  // A profile migrated from the handbook (#387), whose build plan has a page to draw.
+  openProfile({ migrated: true });
   render();
   assert.equal($('.breadcrumbs a')!.textContent, evil);
   assert.ok($('.breadcrumbs')!.innerHTML.includes('&lt;x-evil'), 'the save name is escaped');
@@ -290,21 +292,11 @@ test('ADA repeats a renamed step escaped', async () => {
   open();
   render();
   setAdaIndex(0);
+  // A profile migrated from the handbook (#387): its guide keeps the handbook's steps.
   const plan = handbook.phases['3']!;
-  const state: Partial<ProgressState> = {
-    settings: { phase: '3' },
-    checks: {},
-    notes: {},
-    deliveries: {},
-    customTasks: [],
-    taskEdits: { titles: { [plan[0]!.id]: 'Weld the <boat>' } } as TaskEdits,
-  };
-  setContext({
-    save: { id: 's', name: 'World' },
-    profile: { id: 'original', kind: 'original', name: 'Original' },
-    state: state as ProgressState,
-    plan: null,
-    handbook,
+  openProfile({
+    migrated: true,
+    state: { taskEdits: { titles: { [plan[0]!.id]: 'Weld the <boat>' } } as TaskEdits },
   });
   render();
   await nextTick();
@@ -330,7 +322,7 @@ test('the sign-in screen replaces the frame, and the next render brings it back'
   showSignedOut($('#app')!);
   assert.equal($('.layout'), null);
   assert.ok($('#auth-form'), 'the sign-in form is shown');
-  open();
+  openProfile({ migrated: true });
   render();
   assert.ok($('.layout'), 'the frame is mounted again');
   assert.ok($('#main .heading-row'));

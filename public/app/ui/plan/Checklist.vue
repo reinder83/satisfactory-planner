@@ -1,5 +1,5 @@
 <!--
-  The build plan's checklist for the current phase, on both profile kinds: the step search
+  The build plan's checklist for the current phase of a calculated profile: the step search
   and "Hide completed" (view state only), the steps that pass them or a message saying why
   none do, and while editing the steps removed from this phase. The steps are planTasks():
   the generated ones with this profile's edits, plus its personal tasks. The step being
@@ -91,8 +91,8 @@ function removedViews(removed: Step[]): RemovedStepView[] {
   });
 }
 
-// Why the phase shows no steps at all: the user removed every one, or it never had any (a
-// handbook without steps for this phase, #646). Only the first points to Removed steps,
+// Why the phase shows no steps at all: the user removed every one, or it never had any (a plan
+// guide without steps for this phase, #646). Only the first points to Removed steps,
 // which the checklist lists while editing.
 function emptyPhase(anyRemoved: boolean) {
   if (!anyRemoved) return 'This phase has no steps yet. Add a task below to start its checklist.';

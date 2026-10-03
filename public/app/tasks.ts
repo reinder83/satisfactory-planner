@@ -11,16 +11,14 @@ import {
   checked,
   hideDone,
   phase,
-  plan,
   progressionData,
   query,
-  stage,
   state,
 } from './session.ts';
 import { calcTasks, rowIcon } from './views/calculated.ts';
 import type { Phase, TaskEdits } from '../types/index.ts';
 
-// A build-plan step: a handbook, calculated or personal one. id is its saved check key;
+// A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
 // personal tasks have no body.
 export interface Step {
   id: string;
@@ -153,19 +151,20 @@ export function taskOrderSlots(): string[] {
   return excess > 0 ? slots.filter(id => inPlan.has(id) || excess-- <= 0) : slots;
 }
 
-// The generated steps of phase `shownPhase` (the current phase unless given), before edits: a
-// calculated profile's (calcTasks, its guide's on a migrated handbook profile) or the handbook's.
+// The generated steps of phase `shownPhase` (the current phase unless given), before edits:
+// the calculated profile's (calcTasks, its guide's on a profile migrated from the handbook),
+// or none while no calculated profile is open.
 export function generatedTasks(shownPhase: Phase = phase()): Step[] {
-  return calculated ? calcTasks(shownPhase) : (plan.phases[shownPhase] ?? []);
+  return calculated ? calcTasks(shownPhase) : [];
 }
 
-// The ids of generatedTasks(shownPhase), in the same order, without describing the steps: a
-// calculated profile's come straight from phaseSteps in progression.ts, which calcTasks
-// describes, so no production row's step text is written only to be dropped (#768).
+// The ids of generatedTasks(shownPhase), in the same order, without describing the steps: they
+// come straight from phaseSteps in progression.ts, which calcTasks describes, so no production
+// row's step text is written only to be dropped (#768).
 export function generatedTaskIds(shownPhase: Phase = phase()): string[] {
   return calculated
     ? phaseSteps(calculated, state, progressionData, shownPhase).map(step => step.id)
-    : (plan.phases[shownPhase] ?? []).map(step => step.id);
+    : [];
 }
 
 // Phase `shownPhase`'s steps before edits (the current phase unless given): its generated steps,
@@ -226,16 +225,14 @@ export function taskLink(step: Step): StepLink | null {
   return row ? { id: row.id, name: row.name } : null;
 }
 
-// What a step's edit form offers: the factories of this phase as [id, name], and the one
-// the step links to now (its saved link, or the automatic one).
+// What a step's edit form offers: the production lines of this phase as [row id, name], and
+// the one the step links to now (its saved link, or the automatic one).
 export function taskLinkChoices(step: Step): {
   options: [id: string, name: string][];
   current: string;
 } {
   return {
-    options: calculated
-      ? (calcStage()?.rows || []).map((r): [string, string] => [r.id, r.name])
-      : plan.factories.filter(f => f.stages[stage()]).map((f): [string, string] => [f.id, f.name]),
+    options: (calcStage()?.rows || []).map((r): [string, string] => [r.id, r.name]),
     current: stepLink(step.id),
   };
 }
@@ -272,7 +269,7 @@ export const TASK_GLYPHS: Record<string, string> = {
 };
 
 // Generated step identifiers are stable, so match those before reading the
-// wording of a handbook step or a personal one.
+// wording of a plan guide's step or a personal one.
 const TASK_ID_KINDS: [RegExp, string][] = [
   [/^custom-/, 'note'],
   [/^recipe-unlock-|^hard-drives-/, 'harddrive'],
@@ -316,18 +313,14 @@ export function taskKind(step: Step): string {
   return 'production';
 }
 
-// The part a step makes, taken from its linked factory: calculated production
-// steps link themselves (a generator shows its building, rowIcon), a handbook or
-// personal step uses the chosen link.
+// The part a step makes, taken from its linked production line: calculated production
+// steps link themselves (a generator shows its building, rowIcon), a guide's or a personal
+// step uses the chosen link.
 function taskIconItem(step: Step): string {
   const linked = stepLink(step.id);
   if (!linked) return '';
-  if (calculated) {
-    const row = (calcStage()?.rows || []).find(r => r.id === linked);
-    return row ? rowIcon(row) : '';
-  }
-  const factory = plan.factories.find(x => x.id === linked && x.stages[stage()]);
-  return factory ? factory.name : '';
+  const row = (calcStage()?.rows || []).find(r => r.id === linked);
+  return row ? rowIcon(row) : '';
 }
 
 // A step's icon: { item } for the made item's bundled icon, otherwise { kind } for its

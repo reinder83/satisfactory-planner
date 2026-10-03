@@ -62,7 +62,9 @@ export const races: Record<string, Race> = {
   'delivery counter': {
     open() {
       go('plan');
-      open({ state: { deliveries: { '3-modular-engine': 0, '3-versatile-framework': 0 } } });
+      openMigrated({
+        state: { deliveries: { '3-modular-engine': 0, '3-versatile-framework': 0 } },
+      });
       render();
     },
     first: '#delivery-3-modular-engine',

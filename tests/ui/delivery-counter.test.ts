@@ -9,7 +9,17 @@ import { beforeEach, test } from 'vitest';
 import { num, slug } from '../../public/app/format.ts';
 import { state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  generated,
+  go,
+  migratedState,
+  open,
+  openMigrated,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const id = '3-versatile-framework';
@@ -26,16 +36,17 @@ beforeEach(() => {
 });
 
 test('a delivery without a rate reads complete only at its target', async () => {
-  // The handbook's Versatile Framework: rate 0, handed in when the handbook was written.
-  open();
+  // A profile migrated from the handbook: its Versatile Framework has rate 0 and was handed in
+  // when the handbook was written, which the migration saved as the count (#387).
+  openMigrated({ state: migratedState() });
   render();
   assert.equal($<HTMLInputElement>(`#delivery-${id}`)!.value, '125000');
   assert.equal(text(), 'Delivery complete');
-  open({ state: { deliveries: { [id]: 3 } } });
+  openMigrated({ state: { deliveries: { [id]: 3 } } });
   render();
   await nextTick();
   assert.match(text(), /^124.997 remaining$/);
-  open({ state: { deliveries: { [id]: 0 } } });
+  openMigrated({ state: { deliveries: { [id]: 0 } } });
   render();
   await nextTick();
   assert.match(text(), /^125.000 remaining$/);
@@ -63,12 +74,12 @@ test('lowering the count on a migrated calculated profile drops the complete tex
 });
 
 test('a delivery with a rate reads complete at its target, not 0 minutes remaining', async () => {
-  // The handbook's Modular Engine: 25,000 at 50/min.
+  // The migrated handbook's Modular Engine: 25,000 at 50/min.
   const engine = '3-modular-engine';
-  open({ state: { deliveries: { [engine]: 24950 } } });
+  openMigrated({ state: { deliveries: { [engine]: 24950 } } });
   render();
   assert.equal(text(engine), '50/min net · 1 minute left');
-  open({ state: { deliveries: { [engine]: 25000 } } });
+  openMigrated({ state: { deliveries: { [engine]: 25000 } } });
   render();
   await nextTick();
   assert.equal(text(engine), 'Delivery complete');

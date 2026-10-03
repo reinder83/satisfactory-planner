@@ -44,9 +44,10 @@ const MODES: {
   on: () => boolean;
 }[] = [
   {
-    name: 'handbook steps',
+    name: 'migrated steps',
     view: 'plan',
-    calculated: false,
+    calculated: true,
+    migrated: true,
     toggle: '[data-toggle-plan-edit]',
     label: 'Editing steps',
     on: () => planEditing,

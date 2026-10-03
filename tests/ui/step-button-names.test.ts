@@ -6,11 +6,11 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
 import { setHideDone, setPlanEditing, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, go, open, page } from './setup.ts';
+import { $, $$, go, openMigrated, page } from './setup.ts';
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setHideDone(false);
   go('plan');

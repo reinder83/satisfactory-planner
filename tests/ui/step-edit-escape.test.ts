@@ -9,7 +9,7 @@ import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { planEditing, setHideDone, setPlanEditing, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, applyUpdate, go, open, page, stubFetch } from './setup.ts';
+import { $, applyUpdate, go, openMigrated, page, stubFetch } from './setup.ts';
 
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -34,7 +34,7 @@ const form = `#main [data-task-edit="${id}"]`;
 let calls: ReturnType<typeof stubFetch>;
 beforeEach(async () => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setHideDone(false);
   calls = stubFetch({ '/api/update': applyUpdate });

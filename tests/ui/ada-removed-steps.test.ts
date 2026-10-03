@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { planTasks, removedPlanTasks } from '../../public/app/tasks.ts';
-import { go, open, page } from './setup.ts';
+import { go, openMigrated, page } from './setup.ts';
 import type { Phase, TaskEdits } from '../../public/types/index.ts';
 
 beforeEach(() => {
@@ -17,7 +17,7 @@ beforeEach(() => {
 // ADA's remarks on the build plan of `phase`, by id, with `removed` steps removed.
 function planRemarks(phase: Phase, removed: string[]) {
   const taskEdits: Partial<TaskEdits> = { removed };
-  open({ phase, state: { taskEdits: taskEdits as TaskEdits } });
+  openMigrated({ phase, state: { taskEdits: taskEdits as TaskEdits } });
   go('plan');
   const remarks = new Map<string, string>();
   for (let i = 0; i < 40; i++) {
@@ -28,9 +28,9 @@ function planRemarks(phase: Phase, removed: string[]) {
   return remarks;
 }
 
-// The ids of the handbook steps of `phase`, before any edits.
+// The ids of the migrated handbook profile's steps of `phase`, before any edits.
 function stepIds(phase: Phase) {
-  open({ phase });
+  openMigrated({ phase });
   return planTasks().map(t => t.id);
 }
 
