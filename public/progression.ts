@@ -311,10 +311,9 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
 }
 
 // A step's "Prerequisites: …" or "First unlock: …" sentence, naming only the unlocks
-// progression.json lists. One it does not list (the HUB tutorial upgrades before HUB Upgrade 6,
-// the alternate schematic Turbo Heavy Fuel and others name for Compacted Coal) is left out, as
-// requiredMilestones leaves it out, rather than shown as its raw class id (#812); with none
-// listed there is no sentence.
+// progression.json lists. One it does not list (the HUB tutorial upgrades before HUB Upgrade 6)
+// is left out, as requiredMilestones leaves it out, rather than shown as its raw class id (#812);
+// with none listed there is no sentence.
 function listedNames(ids: string[], data: Progression, label: string): string {
   const names = ids.flatMap(id => data.entries.find(entry => entry.id === id)?.name ?? []);
   return names.length ? `${label}: ${names.join(', ')}. ` : '';
