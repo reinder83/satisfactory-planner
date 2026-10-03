@@ -2612,21 +2612,6 @@ tr.muted td:first-child {
   font-size: 15px;
   color: var(--muted);
 }
-.mini-label {
-  display: block;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--kicker);
-  margin-bottom: 6px;
-}
-.mode-label {
-  color: var(--accent);
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 400;
-}
 
 /* ── Dialog ────────────────────────────────────────────── */
 dialog {
@@ -3336,11 +3321,6 @@ button.rail-tile:hover {
     margin-top: 0;
   }
 }
-.danger-zone {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #24292e;
-}
 #toast {
   position: fixed;
   bottom: 22px;
@@ -3382,11 +3362,6 @@ button.rail-tile:hover {
   #toast[data-place='top'] {
     top: 16px;
   }
-}
-.subnav {
-  display: flex;
-  gap: 15px;
-  margin-top: 16px;
 }
 .completion-grid {
   display: grid;
@@ -4477,12 +4452,6 @@ button.rail-tile:hover {
   text-transform: uppercase;
   color: var(--bright);
 }
-.head-tools {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 .task.is-editing {
   grid-template-columns: 20px 26px minmax(0, 1fr) auto;
 }
@@ -5369,15 +5338,6 @@ th.resource-cell {
 .node-presets .eyebrow {
   display: block;
   margin-bottom: 9px;
-}
-.node-preset-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.node-preset-buttons .btn.is-active {
-  color: var(--bright);
-  border-bottom: 2px solid var(--accent);
 }
 .node-presets p {
   margin: 11px 0 0;
