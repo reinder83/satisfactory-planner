@@ -1,7 +1,8 @@
 // The toast's placement (public/app/toast-place.ts, #663, #731): at the bottom, unless the
 // focused control lies under it there, as a refused factory-group rate's field can at 375 px;
 // then at the top. On a phone it also goes to the top whenever a form field has focus, since
-// that field's on-screen keyboard covers the bottom of the screen (#731). Shown again with
+// that field's on-screen keyboard covers the bottom of the screen (#731), and so it does on a
+// touch screen wider than that, a phone held sideways or a tablet (#803). Shown again with
 // nothing under it, it is back at the bottom.
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, test } from 'vitest';
@@ -13,16 +14,27 @@ import { $, page } from './setup.ts';
 const BOTTOM = new DOMRect(16, 706, 343, 84);
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// The window's width as the stylesheet's phone query sees it, set per test.
+// The window's width as the stylesheet's phone query sees it, and whether its main pointer is
+// a finger, set per test.
 let phone = false;
+let touch = false;
 const realMatchMedia = window.matchMedia;
+
+// A media query list matches when any of its comma-separated queries does.
+const matchesQuery = (query: string) =>
+  query
+    .split(',')
+    .map(part => part.trim())
+    .some(
+      part => (part === '(max-width: 720px)' && phone) || (part === '(pointer: coarse)' && touch),
+    );
 
 let strip: HTMLElement, field: HTMLInputElement, button: HTMLButtonElement;
 let tick: HTMLInputElement, select: HTMLSelectElement;
 beforeAll(() => {
   window.matchMedia = (query: string) =>
     ({
-      matches: query === '(max-width: 720px)' && phone,
+      matches: matchesQuery(query),
       media: query,
     }) as MediaQueryList; // only matches is read
   page();
@@ -117,4 +129,21 @@ test('on a wide screen a focused field clear of the strip leaves it at the botto
   field.getBoundingClientRect = () => new DOMRect(179, 140, 130, 33);
   assert.equal(await show(field), undefined);
   assert.equal(await show(select), undefined);
+});
+
+test('on a touch screen wider than a phone a focused form field puts the toast at the top (#803)', async () => {
+  // A phone held sideways (852 px) or a tablet: past the 720px breakpoint, but with a keyboard.
+  phone = false;
+  touch = true;
+  try {
+    field.getBoundingClientRect = () => new DOMRect(179, 140, 130, 33);
+    assert.equal(await show(field), 'top', 'a field near the top: its keyboard hides the bottom');
+    assert.equal(await show(select), 'top', 'a select opens its picker over the bottom too');
+    assert.equal(await show(button), undefined, 'no keyboard opens for a button');
+    assert.equal(await show(tick), undefined, 'nor for a checkbox');
+    assert.equal(await show(null), undefined, 'nothing focused');
+  } finally {
+    touch = false;
+  }
+  assert.equal(await show(field), undefined, 'with a mouse the same field leaves it at the bottom');
 });

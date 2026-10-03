@@ -3,10 +3,11 @@
 // instead when a toast shows while the focused field or button lies under it (a refused
 // factory-group rate at 375 px, its field scrolled to the bottom), so what was typed stays
 // readable beside the reason it was refused. At phone width (the stylesheet's 720px
-// breakpoint) it also moves up whenever a form field has focus, whatever its place: the
-// keyboard that field opened covers the bottom of the screen, and a strip positioned against
-// the window would show behind it. At the top it covers the top bar or edit bar for the few
-// seconds it shows, which the owner chose over measuring the keyboard (#731).
+// breakpoint) or on a touch screen it also moves up whenever a form field has focus, whatever
+// its place: the keyboard that field opened covers the bottom of the screen, and a strip
+// positioned against the window would show behind it. A phone held sideways or a tablet is
+// wider than 720px but has that keyboard too (#803). At the top it covers the top bar or edit
+// bar for the few seconds it shows, which the owner chose over measuring the keyboard (#731).
 // `data-place="top"` carries that (style.css), since toast() in api.ts sets the className.
 
 // The focusable controls a toast can be about. A focused page heading or <main> (after a
@@ -20,19 +21,21 @@ const FIELD =
   '[type="button"], [type="submit"], [type="reset"], [type="image"]), ' +
   'select, textarea, [contenteditable="true"]';
 
-// The phone layout, as in style.css.
-const PHONE = '(max-width: 720px)';
+// The screens with an on-screen keyboard: the phone layout, as in style.css, and any screen
+// whose main pointer is a finger, such as a phone held sideways or a tablet (#803). Only the
+// keyboard rule reads this; the toast's width and gutters stay on the 720px breakpoint.
+const KEYBOARD = '(max-width: 720px), (pointer: coarse)';
 
 // Whether two boxes on screen share any area.
 const overlaps = (a: DOMRect, b: DOMRect) =>
   a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
-// Whether a focused form field on a phone may have its keyboard up.
+// Whether a focused form field on a phone or tablet may have its keyboard up.
 const keyboardMayShow = (focused: HTMLElement) =>
-  focused.matches(FIELD) && globalThis.matchMedia?.(PHONE).matches === true;
+  focused.matches(FIELD) && globalThis.matchMedia?.(KEYBOARD).matches === true;
 
 // Puts a toast that has just been shown at the bottom, or at the top when the focused control
-// is under it there or, on a phone, is a form field. A hidden toast takes the bottom again.
+// is under it there or, on a phone or tablet, is a form field. A hidden toast takes the bottom again.
 export function placeToast(el: HTMLElement) {
   delete el.dataset.place;
   if (!el.classList.contains('show')) return;
