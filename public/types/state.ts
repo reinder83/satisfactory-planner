@@ -195,6 +195,8 @@ export type UpdateOp =
   | { type: 'factoryGroupRename'; id: string; name: string }
   | { type: 'factoryGroupRemove'; id: string }
   | { type: 'factoryAssign'; key: string; groups: { group: string; rate?: number | null }[] }
+  // The whole list of items group `id` makes on site (#877); an empty list drops its entry.
+  | { type: 'factoryLocal'; id: string; items: string[] }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';

@@ -40,6 +40,7 @@ import {
   validateState,
   validateTaskEdits,
 } from './validate.ts';
+import { ITEM_NAMES } from './items.ts';
 
 // Operations that send a whole value the tab worked out from the state it last showed: a
 // phase's full step order, a floor's bay order (#191), a container move with the items the
@@ -298,12 +299,36 @@ function assignGroups(factory: FactoryGroups, update: Raw) {
   if (list.length) factory.assignments[update.key] = list;
   else delete factory.assignments[update.key];
 }
+// The items one group makes on site (#877, factoryGroups.local), sent whole: the Factories page's
+// "Made on site" picker saves its list when the user presses Save. An empty list drops the
+// group's entry, and the field goes when no group has one, so the state keeps its old shape and
+// version. Which items are worth offering is the page's business (onSiteOffers in
+// app/on-site.ts); here an item only has to be a known one, as validateGroups checks it. The plan
+// is not touched: it changes only in a recalculation the user starts.
+function setLocalItems(factory: FactoryGroups, update: Raw) {
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
+  const items: unknown = update.items;
+  if (
+    !Array.isArray(items) ||
+    items.length > ITEM_NAMES.length ||
+    items.some(item => typeof item !== 'string' || !ITEM_NAMES.includes(item)) ||
+    new Set(items).size !== items.length
+  )
+    fail('Invalid items made on site.');
+  const local = { ...factory.local };
+  // The check above leaves only item names.
+  if (items.length) local[update.id as string] = [...(items as string[])].sort();
+  else delete local[update.id as string];
+  if (Object.keys(local).length) factory.local = local;
+  else delete factory.local;
+}
 const groupEdits: Record<string, GroupEdit> = {
   factoryGroupAdd: addGroup,
   factoryGroupRename: renameGroup,
   factoryGroupRemove: removeGroup,
   factoryLinkTransport: setLinkTransport,
   factoryAssign: assignGroups,
+  factoryLocal: setLocalItems,
 };
 // Factory group edits, one function per update type above.
 function mutateGroups(state: SavedState, update: Raw) {
