@@ -1,12 +1,22 @@
 // What one user sees of the workspace: the summary of their saves the interface lists, and the
 // save and profile a request is about. Both only ever read saves whose userId is the user's.
+import { readFileSync } from 'node:fs';
 import { isTranscribed } from '../public/handbook-migration.ts';
-import { phaseProgress } from '../public/state.ts';
+import { profilePhases } from '../public/state.ts';
 import { catalog } from '../planner.ts';
 import { publicUser } from './accounts.ts';
 import { fail } from './errors.ts';
-import type { StoredUser, WorkspaceSummary } from '../public/types/index.ts';
+import type { Progression, StoredUser, WorkspaceSummary } from '../public/types/index.ts';
 import type { Workspace } from './persistence.ts';
+
+// progression.json, which the summary's per-phase step counts read (profilePhases, #746): the
+// file the interface loads, in public/ (the Docker image's built public/ has it too). Read once,
+// on the first summary. It is the server's own shipped data, so it is used as it is.
+let progression: Progression | undefined;
+const progressionData = (): Progression =>
+  (progression ??= JSON.parse(
+    readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
+  ) as Progression);
 
 // What the interface needs to list saves: only this user's saves, and per profile its
 // settings and tick count rather than the full state.
@@ -33,7 +43,7 @@ export const summary = (
         ...(isTranscribed(profile.plan) ? { transcribed: true as const } : {}),
         completed: Object.values(profile.state.checks).filter(Boolean).length,
         phase: profile.state.settings.phase,
-        phases: phaseProgress(profile.plan, profile.state.checks),
+        phases: profilePhases(profile.plan, profile.state, progressionData()),
       })),
     })),
 });

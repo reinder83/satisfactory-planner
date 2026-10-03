@@ -164,6 +164,7 @@ test('the Docker image copies every data file the server reads (#620)', () => {
     'migrations/handbook-2026-09-13.json',
     'public/plan.json',
     'public/index.html',
+    'public/progression.json',
   ])
     assert.ok(data.has(file), 'found the read of ' + file + ' in ' + [...data].join(', '));
   // Each COPY line that places one of them is needed.
@@ -180,6 +181,7 @@ test('the Docker image copies every data file the server reads (#620)', () => {
   assert.deepEqual(serverImports(docker.replace(web, '')).missingData.sort(), [
     'public/index.html',
     'public/plan.json',
+    'public/progression.json',
   ]);
 });
 

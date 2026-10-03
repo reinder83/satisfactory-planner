@@ -2,7 +2,7 @@
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
 import { readStoredData } from '../browser-store.ts';
-import { milestoneOnlyPhase } from '../progression.ts';
+import { firstPlanPhase, milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
 import { downloadJson, request, toast, writeQueue } from './api.ts';
 import { required } from './format.ts';
@@ -199,7 +199,8 @@ export const startPhase = (): StageKey =>
 // phase as milestone-only phases (#759, milestoneOnlyPhase in progression.ts): their build plan
 // lists the milestones that belong there and nothing else. A plan guide (a profile moved from
 // the handbook) and the original handbook have no such phases, so they start at the start phase.
-export const firstPhase = (): StageKey => (calculated && !calculated.guide ? '1' : startPhase());
+// The save list works it out the same way for every profile (firstPlanPhase in progression.ts).
+export const firstPhase = (): StageKey => (calculated ? firstPlanPhase(calculated) : startPhase());
 
 // Whether `shown` (the current phase unless given) is a milestone-only phase of the open profile.
 export const milestoneOnly = (shown: Phase = phase()): boolean =>
