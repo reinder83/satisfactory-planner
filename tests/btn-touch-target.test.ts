@@ -4,7 +4,8 @@
 // The storage "Move to…" select grows to 44px and a factory's ✕ per group to 24px wide (#842).
 // The "Move to…" select is drawn like the bay buttons beside it (#852).
 // A factory link ("Copper Ingot ↗") is drawn as a link wherever it is, and on a group's flow
-// page (its build order, #895) it is a 44px target on a phone (#886).
+// page (its build order, #895) and in a factory dialog's flow rows (#891) it is a 44px target on a
+// phone (#886).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -166,19 +167,29 @@ test('a factory link is drawn as an accent link everywhere, not only in a flow r
   assert.match(body, /(?:^|[;\s])color:\s*var\(--accent\)\s*;/);
   assert.match(body, /(?:^|[;\s])border-bottom:\s*1px solid/);
   // One look in both places: no rule draws the flow row's link apart from the others.
-  for (const rule of [...outsideRules(), ...phoneRules()])
+  for (const rule of outsideRules())
     assert.ok(!rule.selectors.includes('.rail-row .rail-link'), rule.selectors.join(', '));
 });
 
-test("the flow page's factory links are 44px tall on a phone, height only (#886, #895)", () => {
+test('the factory links are 44px tall on a phone, height only (#886, #895, #891)', () => {
   // The build-order dialog's links (.chain-title) went with the dialog; the flow page replaced it.
   assert.throws(() => phoneRule('.chain-title .rail-link'));
-  const body = phoneRule('.gf-head .rail-link');
-  assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/);
-  assert.doesNotMatch(body, /min-width/);
-  // The underline stays on the text in the taller box, as for the quiet links (#832).
-  assert.match(body, /border-bottom:\s*0\s*;/);
-  assert.match(body, /text-decoration:\s*underline\b/);
+  // The flow page's links and those in a factory dialog's flow rows (#891), 23px tall before.
+  for (const selector of ['.gf-head .rail-link', '.rail-row .rail-link']) {
+    const body = phoneRule(selector);
+    assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/, selector);
+    assert.doesNotMatch(body, /min-width/, selector);
+    // The underline stays on the text in the taller box, as for the quiet links (#832).
+    assert.match(body, /border-bottom:\s*0\s*;/, selector);
+    assert.match(body, /text-decoration:\s*underline\b/, selector);
+  }
+  // One rule for both, so the two links keep one look on a phone too.
+  assert.ok(
+    phoneRules().some(
+      r =>
+        r.selectors.includes('.gf-head .rail-link') && r.selectors.includes('.rail-row .rail-link'),
+    ),
+  );
   for (const rule of outsideRules())
     if (rule.selectors.some(s => s.endsWith('.rail-link')))
       assert.doesNotMatch(rule.body, /min-height/, rule.selectors.join(', '));

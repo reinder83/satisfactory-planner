@@ -14,6 +14,7 @@
 // for another control (the floor's Remove becomes the next floor's Hide). Focus the user moved
 // elsewhere is left alone.
 import { nextTick } from 'vue';
+import { flowGroupOf } from '../session.ts';
 
 export interface RefocusOptions {
   // The list's rows, as a selector for the whole page ('.task', '.profile-card'), or for `scope`.
@@ -141,8 +142,26 @@ export function focusSection(section: HTMLElement) {
 // For render() in shell.ts, right after a page took the place of another: focus the heading
 // when focus went with the old page. Every page change passes here, whatever started it (a
 // button's navigate(), a link inside the page, Back), so no handler needs its own call.
-export function focusOpenedPage() {
-  if (lost()) focusHeading();
+// `from` is the route (the hash without its #) of the page that went. Leaving a group's flow
+// page (#factories/<group>/flow) for the factories page, by its "← Factories" or by Back,
+// returns to where the user was (#917), as closing the build-order dialog it replaced did:
+// focus goes to that group's "Build order →", brought into view. When the group has no such
+// link any more (removed, down to one factory, groups being edited), the heading takes it.
+export function focusOpenedPage(from = '') {
+  if (!lost()) return;
+  const link = flowLinkOf(from);
+  if (!link) return focusHeading();
+  link.focus({ preventScroll: true });
+  link.scrollIntoView({ block: 'center' });
+}
+
+// The "Build order →" link on the page shown that opens the flow page at `route`, if any.
+function flowLinkOf(route: string) {
+  const group = flowGroupOf(route);
+  if (group === null) return undefined;
+  return [...document.querySelectorAll<HTMLElement>('#main [data-group-flow]')].find(
+    link => link.dataset.groupFlow === group,
+  );
 }
 
 // For a control that swaps its row for another view of it and back: a build-plan step's Edit
