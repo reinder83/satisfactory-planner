@@ -233,13 +233,40 @@ test('a milestone of a phase before the start phase is listed in its own phase',
       .map(step => entryOf(step.id))
       .filter(entry => entry && !entry.mam)
       .map(entry => entry.tier);
-  assert.deepEqual([...new Set(tierOf('1'))].sort(), [1, 2], 'Phase 1 has Tiers 1-2');
+  // Tier 0 is HUB Upgrade 6, which the biomass start-up steps ask for (#781).
+  assert.deepEqual([...new Set(tierOf('1'))].sort(), [0, 1, 2], 'Phase 1 has Tiers 0-2');
   assert.deepEqual([...new Set(tierOf('2'))].sort(), [3, 4], 'Phase 2 has Tiers 3-4');
   assert.ok(
     tierOf('3').every(tier => tier >= 5),
     'Phase 3 no longer shows a Tier 1-4 milestone',
   );
   assert.ok(milestonesListedIn(plan, { checks: {} }, data, 2).length, 'Phase 2 lists some');
+});
+
+// The biomass start-up steps and "Power available now" tell the user to unlock Obstacle Clearing
+// (and the biomass steps HUB Upgrade 6 and Logistics Mk.2) in any phase with no power unlock
+// ticked, so a profile made for a later phase lists those milestones too, in Phase 1 (#781).
+test('a later start phase lists the Phase 1 milestones its start-up steps ask for', () => {
+  const named = (name: string) => data.entries.find(entry => entry.name === name)!;
+  const startup = ['HUB Upgrade 6', 'Obstacle Clearing', 'Logistics Mk.2'].map(named);
+  for (const start of ['2', '3', '5']) {
+    const plan = calculate({ phase: start }),
+      own = phaseSteps(plan, { checks: {} }, data, start);
+    const text = own.map(step => step.title + ' ' + step.body).join(' ');
+    const phaseOne = phaseSteps(plan, { checks: {} }, data, '1').map(step => step.id);
+    for (const entry of startup) {
+      assert.ok(text.includes(entry.name), `Phase ${start}'s steps ask for ${entry.name}`);
+      assert.ok(
+        phaseOne.includes('unlock-' + entry.id),
+        `a Phase ${start} profile lists ${entry.name} in Phase 1`,
+      );
+      for (const phase of ['2', '3', '4', '5', 'post'])
+        assert.ok(
+          !phaseSteps(plan, { checks: {} }, data, phase).some(s => s.id === 'unlock-' + entry.id),
+          `${entry.name} only in Phase 1, not Phase ${phase}`,
+        );
+    }
+  }
 });
 
 test('a phase before the start phase lists only its milestones', () => {

@@ -59,7 +59,8 @@ test('a Phase 3 profile offers Phases 1 and 2 with only their milestones', () =>
       'Phase ' + phaseKey + ' has no production, storage, power, hard-drive or retirement step',
     );
   }
-  assert.deepEqual([...new Set(hubTiers('1'))].sort(), [1, 2]);
+  // Tier 0 is HUB Upgrade 6, which the biomass start-up steps ask for (#781).
+  assert.deepEqual([...new Set(hubTiers('1'))].sort(), [0, 1, 2]);
   assert.deepEqual([...new Set(hubTiers('2'))].sort(), [3, 4]);
   assert.ok(
     hubTiers('3').every(tier => tier >= 5),

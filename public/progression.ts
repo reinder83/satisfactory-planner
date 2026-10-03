@@ -280,11 +280,14 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
     'Resource Sink Bonus Program',
   ])
     add(byName(name));
-  if (stage === 1) {
-    add(byName('HUB Upgrade 6'));
-    add(byName('Obstacle Clearing'));
-    add(byName('Logistics Mk.2'));
-  }
+  // The biomass start-up steps and "Power available now" ask for these in any phase until a
+  // power unlock is ticked (biomassStartupTasks, powerReviewTask), so every phase needs them; a
+  // profile made for a later phase lists them in Phase 1, their own phase (#781). Added in every
+  // phase rather than only while those steps show, so ticking another unlock never takes a
+  // milestone step away.
+  add(byName('HUB Upgrade 6'));
+  add(byName('Obstacle Clearing'));
+  add(byName('Logistics Mk.2'));
   if (stage >= 2) add(byName('Coal Power'));
   if (stage >= 4 && plan.settings.droneFuel && plan.settings.droneFuel !== 'none')
     add(byName('Aeronautical Engineering'));
