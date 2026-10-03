@@ -1010,9 +1010,31 @@ test('a bay moves to another floor from edit mode, with its records (#190)', asy
     ['', 'upper', 'workshop'],
     'every other floor in the tabs',
   );
+  const move = () => $<HTMLButtonElement>('[data-move-bay-go="D"]')!;
+  assert.equal(move().disabled, true, 'Move has nothing to do before a floor is picked');
+  // An arrow key on the closed menu, as Chrome and Edge on Windows handle it: the value changes
+  // and `change` fires. That only picks the floor; the bay stays (#854).
+  menu.focus();
+  menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   menu.value = 'upper';
-  menu.dispatchEvent(new Event('change'));
+  menu.dispatchEvent(new Event('input', { bubbles: true }));
+  menu.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
+  assert.equal(calls.length, 0, 'picking a floor saves nothing');
+  assert.ok($('[data-slot="D01"]'), 'bay D is still on the ground floor');
+  assert.equal($<HTMLSelectElement>('[data-move-bay="D"]')!.value, 'upper', 'the pick stays');
+  assert.equal(move().disabled, false);
+  assert.equal(move().getAttribute('aria-label'), 'Move bay D to Upper floor');
+  // Browsing on to the workshop and back still moves nothing.
+  for (const floor of ['workshop', 'upper']) {
+    menu.value = floor;
+    menu.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await settle();
+  assert.equal(calls.length, 0, 'browsing the floors saves nothing');
+  move().click();
+  await settle();
+  assert.equal(calls.length, 1, 'Move saves once');
   assert.deepEqual(calls.at(-1)![1], { type: 'storageBayMove', id: 'D', floor: 'upper' });
   assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');
   assert.match($('#toast')!.textContent!, /Bay D moved to Upper floor/);
@@ -1124,6 +1146,8 @@ test('bays move left and right on their floor in edit mode, and the hall pairs t
   await nextTick();
   menu().value = 'ground';
   menu().dispatchEvent(new Event('change'));
+  await nextTick();
+  $('[data-move-bay-go="I"]')!.click();
   await settle();
   setFloor('ground');
   render();
