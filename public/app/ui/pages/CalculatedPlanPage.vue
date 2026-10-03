@@ -9,7 +9,9 @@
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
   (#759) has no stage to read: its checklist is its milestones, with ui/plan/MilestoneOnlyNotice.vue
-  above it, and it has no summary line or deliveries.
+  above it (which also says why it opened there, in place of OpenedEarlierNotice, #786), and it has
+  no summary line and no side column: deliveries, build status and profile assumptions are all
+  about production.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -23,6 +25,7 @@ import {
   phase,
   phaseLabel,
   stage,
+  startPhase,
 } from '../../session.ts';
 import { storageBays } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -63,6 +66,7 @@ const page = computed(() =>
       // A plan guide's steps replace the generated ones (#466).
       guided: !!calculated.guide,
       milestones,
+      start: phaseLabel(startPhase()),
       summary: !stagePlan
         ? []
         : [
@@ -114,7 +118,7 @@ const page = computed(() =>
     </div>
     <OpenedEarlierNotice />
     <MilestoneOnlyNotice />
-    <div class="split">
+    <div :class="page.milestones ? undefined : 'split'">
       <section>
         <div class="section-head">
           <h2>Build sequence</h2>
@@ -128,7 +132,8 @@ const page = computed(() =>
         </p>
         <p v-else-if="page.milestones" class="small muted" data-milestone-intro>
           Mark each HUB milestone and MAM node as you complete it; these carry across phases.
-          Milestone cost guidance updates from factories marked running.
+          Production starts in {{ page.start }}, so gather, handcraft or build a starter supply of
+          what each one costs.
         </p>
         <p v-else class="small muted">
           Start with construction stock and currently available power. Mark HUB, MAM and recipe
@@ -140,7 +145,7 @@ const page = computed(() =>
         <AddTaskForm placeholder="Add a task…" />
         <p class="small"><a href="#notes" data-phase-notes-link>Phase notes →</a></p>
       </section>
-      <aside>
+      <aside v-if="!page.milestones">
         <section v-if="!page.milestones" class="panel">
           <h2>Elevator delivery</h2>
           <DeliveryCounter
