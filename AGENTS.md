@@ -177,12 +177,12 @@ The backlog (bugs, feature requests, cleanup) lives in GitHub Issues on `reinder
 
 ## Publishing
 
-- Private source: `reinder83/satisfactory-planner`.
+- Source: `reinder83/satisfactory-planner`.
 - Public generated site repository: `reinder83/reinder83.github.io`.
 - Public URL: `https://reinder83.github.io/satisfactory-planner/`.
 - Docker image: `ghcr.io/reinder83/satisfactory-planner:latest` (AMD64 and ARM64).
 
-Pushes to source `main` run checks and publish both editions. Pull requests run checks without deployment. The source workflow uses the repository-scoped `PAGES_DEPLOY_KEY` secret to push only built website files to the public repository; its own Pages workflow deploys them. Do not replace this with a broad personal token. No live data, the frozen migration data in `migrations/`, account records or workspace files belong in the public build.
+Pushes to source `main` run checks and publish both editions. Pull requests run checks without deployment. The source workflow uses the repository-scoped `PAGES_DEPLOY_KEY` secret to push only built website files to the public site repository; its own Pages workflow deploys them. Do not replace this with a broad personal token. No live data, the frozen migration data in `migrations/`, account records or workspace files belong in the public build.
 
 Frontend assets added during a redesign need entries in the Pages allowlist in `build.ts` and must be available in Docker too; a new script at the root of `public/` must be listed as shared or bundled there, or the build fails. Preserve subpath-safe URLs and worker/WASM loading. Do not add a backend dependency to the public edition. Preserve PUID/PGID/TZ, privilege dropping and data-volume compatibility in Docker.
 
