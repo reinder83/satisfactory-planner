@@ -1,5 +1,6 @@
 // Buttons (.btn) are 44px touch targets on a phone (#765), and unchanged on wider screens.
-// Quiet buttons are left out: they are underlined text links with their own phone rules.
+// Quiet buttons have their own phone rules: the text links keep their underline on the text
+// (#832). Tabs and the wizard's step tabs grow to 44px too, the storage slot ⠿/✕ to 24px (#838).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,4 +52,64 @@ test('wider screens are unchanged: no min-height on plain .btn outside the media
   for (const rule of rules(outside))
     if (rule.selectors.some(s => /^\.btn(:not\(\.quiet\))?$/.test(s)))
       assert.doesNotMatch(rule.body, /min-height/);
+});
+
+// The phone blocks' rules, and the rules outside any media block.
+const phoneRules = () =>
+  mediaBlocks(style)
+    .filter(b => b.query === `(max-width: ${PHONE}px)`)
+    .flatMap(b => rules(b.body));
+const outsideRules = () =>
+  rules(mediaBlocks(style).reduce((css, b) => css.replace(b.body, ''), style));
+const phoneRule = (selector: string) => {
+  const found = phoneRules().filter(r => r.selectors.includes(selector));
+  assert.ok(found.length, `a max-width: ${PHONE}px block has a rule for ${selector}`);
+  return found.map(r => r.body).join('\n');
+};
+
+// The quiet buttons of #832 that are underlined text links.
+const quietLinks = [
+  '.guided-escape .btn.quiet',
+  '.assign-row .btn.quiet',
+  '.ada-tools .btn.quiet',
+  '.ada.is-muted .btn.quiet',
+  '.alt-tools .btn.quiet',
+];
+// The other controls of #832 and #838 that grow to 44px on a phone.
+const otherTargets = ['.bay-actions .btn.quiet', '.tab', '.wizard-progress button'];
+
+test('quiet buttons and tabs are 44px tall at phone widths, height only (#832, #838)', () => {
+  for (const selector of [...quietLinks, ...otherTargets]) {
+    const body = phoneRule(selector);
+    assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/, selector);
+    assert.doesNotMatch(body, /min-width/, selector);
+  }
+});
+
+test('a quiet link keeps its underline on the text in the taller box (#832)', () => {
+  for (const selector of quietLinks) {
+    const body = phoneRule(selector);
+    assert.match(body, /border-bottom:\s*0\s*;/, selector);
+    assert.match(body, /text-decoration:\s*underline\b/, selector);
+  }
+  // The red ✕ keeps a red underline.
+  assert.match(phoneRule('.assign-row .btn.quiet.danger'), /text-decoration-color:/);
+});
+
+test('the storage slot ⠿ and ✕ are 24px targets with space between them on a phone (#838)', () => {
+  const both = phoneRules().find(
+    r => r.selectors.includes('.slot-remove') && r.selectors.includes('.slot-drag'),
+  );
+  assert.ok(both, 'one phone rule sizes both');
+  assert.match(both.body, /width:\s*24px/);
+  assert.match(both.body, /height:\s*24px/);
+  // ✕ sits at right: a, ⠿ at right: b; b - a - 24 is the gap between them.
+  const right = (selector: string) => Number(/right:\s*(\d+)px/.exec(phoneRule(selector))?.[1]);
+  assert.ok(right('.slot-drag') - right('.slot-remove') - 24 >= 4, 'at least 4px apart');
+});
+
+test('wider screens are unchanged: none of these controls has a min-height outside a media block', () => {
+  for (const rule of outsideRules())
+    if (rule.selectors.some(s => [...quietLinks, ...otherTargets].includes(s)))
+      assert.doesNotMatch(rule.body, /min-height/, rule.selectors.join(', '));
 });
