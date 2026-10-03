@@ -65,7 +65,7 @@ const page = computed(() =>
 );
 const flow = () => page.value?.flow ?? null;
 const names = computed(() => (page.value?.flow ? flowNames(page.value.flow) : null));
-const styles = computed(() => laneStyles(page.value?.flow?.lanes ?? []));
+const styles = computed(() => laneStyles(page.value?.flow ?? { lines: [], lanes: [] }));
 
 const host = ref<HTMLElement | null>(null);
 const { gutter, wires } = useLaneLayout(host, flow);
