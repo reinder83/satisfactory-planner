@@ -1,12 +1,6 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
-import {
-  checkBase,
-  checkPlanStart,
-  checkRoundUp,
-  currentPayoff,
-  wholeMachineProfile,
-} from '../public/state.ts';
+import { checkBase, checkRoundUp, currentPayoff, wholeMachineProfile } from '../public/state.ts';
 import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
 import type { FrozenMapping } from '../public/handbook-migration.ts';
 import { calculate, rankAlternates } from '../planner.ts';
@@ -156,8 +150,6 @@ export function profileRoutes({
       const state = imported
         ? restoreProgress(draftProfile.state, imported, frozen)
         : mutate(draftProfile.state, input as UpdateOp);
-      // An original profile cannot be moved before Phase 3, where its plan starts.
-      checkPlanStart(draftProfile.kind, state);
       state.revision = draftProfile.state.revision + 1;
       draftProfile.state = state;
       return state;

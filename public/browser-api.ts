@@ -25,7 +25,6 @@ import {
   calculatedProfile,
   checkBase,
   checkNewProfileKind,
-  checkPlanStart,
   checkRoundUp,
   currentPayoff,
   phaseProgress,
@@ -384,10 +383,8 @@ export function createBrowserApi(
       restoreProgress(profile.state, validateState(body.format ? body.state : body)),
     );
   }
-  // Stores `next` as the profile's progress with the revision after its current one. An
-  // original profile cannot be moved before Phase 3, where its plan starts (checkPlanStart).
+  // Stores `next` as the profile's progress with the revision after its current one.
   function writeProgress(profile: StoredProfile, next: ProgressState) {
-    checkPlanStart(profile.kind, next);
     // Every state this store wrote carries a revision (newProfileState, validateState).
     next.revision = (profile.state.revision as number) + 1;
     profile.state = next;

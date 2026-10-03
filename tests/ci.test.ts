@@ -162,7 +162,6 @@ test('the Docker image copies every data file the server reads (#620)', () => {
   for (const file of [
     'recipes.json',
     'migrations/handbook-2026-09-13.json',
-    'public/plan.json',
     'public/index.html',
     'public/progression.json',
   ])
@@ -180,7 +179,6 @@ test('the Docker image copies every data file the server reads (#620)', () => {
   assert.match(docker, web);
   assert.deepEqual(serverImports(docker.replace(web, '')).missingData.sort(), [
     'public/index.html',
-    'public/plan.json',
     'public/progression.json',
   ]);
 });

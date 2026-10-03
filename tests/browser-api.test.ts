@@ -464,7 +464,6 @@ test('the Pages edition opens an upgraded browser with its original profile migr
             handbook,
             state: {
               ...initialState(),
-              // An original profile works on Phase 3 or later (checkPlanStart).
               settings: { phase: '3' },
               revision: 4,
               checks: { ['factory-3-' + factory.id]: true, 'storage-ground-shell': true },
