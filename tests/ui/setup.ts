@@ -8,6 +8,7 @@ import {
   setContext,
   setProgressionData,
   setView,
+  setWizard,
   setWorkspace,
   state,
 } from '../../public/app/session.ts';
@@ -264,6 +265,15 @@ const noFetch: typeof fetch = async () =>
 globalThis.fetch = noFetch;
 afterEach(() => {
   globalThis.fetch = noFetch;
+});
+// The page a test went to and a wizard draft it opened are module state in session.ts that
+// outlives the test: a later test that opens a profile without go() would draw that page
+// (Saves & profiles asks for /api/workspace as it opens, #418) or the wizard. Each test starts
+// on the build plan with no draft, as the app opens, so test order cannot change an outcome
+// (#864).
+afterEach(() => {
+  setView('plan');
+  setWizard(null);
 });
 
 // Replies to fetch() calls from a table of path -> reply (a value, or a function of the
