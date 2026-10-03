@@ -4,6 +4,7 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
+import { phaseSteps } from '../progression.ts';
 import {
   calcStage,
   calculated,
@@ -11,6 +12,7 @@ import {
   hideDone,
   phase,
   plan,
+  progressionData,
   query,
   stage,
   state,
@@ -75,21 +77,34 @@ function withEditedWording(t: Step, edits: TaskEdits): Step {
 }
 
 // Applies the user's edits to phase `shownPhase`'s generated steps and personal tasks: drops
-// removed ones, swaps in edited wording and sorts by the saved order for that phase, with the
-// steps missing from it put in where withNewSteps places them.
+// removed ones, swaps in edited wording and sorts by the saved order for that phase
+// (inEditedOrder).
 function applyTaskEdits(generated: Step[], personal: Step[], shownPhase: Phase): Step[] {
+  const edits = taskEditsState();
+  return inEditedOrder(generated, personal, shownPhase, t => t.id).map(t =>
+    withEditedWording(t, edits),
+  );
+}
+
+// Phase `shownPhase`'s generated steps and personal tasks (steps, or only their ids: `idOf`
+// reads a step's id) less the removed ones, sorted by the saved order for that phase, with the
+// steps missing from it put in where withNewSteps places them. The one place the build plan's
+// step order is worked out: planTasks() lists the steps, planTaskIds() only their ids (#768).
+function inEditedOrder<T>(
+  generated: readonly T[],
+  personal: readonly T[],
+  shownPhase: Phase,
+  idOf: (step: T) => string,
+): T[] {
   const edits = taskEditsState(),
     removed = new Set(edits.removed);
-  const visible = [...generated, ...personal]
-    .filter(t => !removed.has(t.id))
-    .map(t => withEditedWording(t, edits));
+  const visible = [...generated, ...personal].filter(t => !removed.has(idOf(t)));
   const savedOrder = edits.order[shownPhase];
   if (!savedOrder?.length) return visible;
-  const ids = (steps: Step[]) => steps.map(t => t.id);
-  const merged = withNewSteps(savedOrder, ids(generated), ids(personal));
+  const merged = withNewSteps(savedOrder, generated.map(idOf), personal.map(idOf));
   const position = new Map(merged.map((id, i): [string, number] => [id, i]));
   // withNewSteps lists every generated step and personal task, so each one has a place.
-  return visible.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
+  return visible.sort((a, b) => position.get(idOf(a))! - position.get(idOf(b))!);
 }
 
 // A phase's saved step order with the phase's steps that are missing from it put in (new in a
@@ -131,7 +146,7 @@ export function withNewSteps(
 // steps not in this phase's plan any more are dropped, earliest first; steps in the plan,
 // removed ones included, always keep theirs.
 export function taskOrderSlots(): string[] {
-  const generated = generatedTasks().map(t => t.id),
+  const generated = generatedTaskIds(),
     personal = personalTasks().map(t => t.id);
   const inPlan = new Set([...generated, ...personal]);
   const slots = withNewSteps(taskEditsState().order[phase()] || [], generated, personal);
@@ -143,6 +158,15 @@ export function taskOrderSlots(): string[] {
 // calculated profile's (calcTasks, its guide's on a migrated handbook profile) or the handbook's.
 export function generatedTasks(shownPhase: Phase = phase()): Step[] {
   return calculated ? calcTasks(shownPhase) : (plan.phases[shownPhase] ?? []);
+}
+
+// The ids of generatedTasks(shownPhase), in the same order, without describing the steps: a
+// calculated profile's come straight from phaseSteps in progression.ts, which calcTasks
+// describes, so no production row's step text is written only to be dropped (#768).
+export function generatedTaskIds(shownPhase: Phase = phase()): string[] {
+  return calculated
+    ? phaseSteps(calculated, state, progressionData, shownPhase).map(step => step.id)
+    : (plan.phases[shownPhase] ?? []).map(step => step.id);
 }
 
 // Phase `shownPhase`'s steps before edits (the current phase unless given): its generated steps,
@@ -161,6 +185,14 @@ function personalTasks(shownPhase: Phase = phase()): Step[] {
 // without opening it (phaseStepIds in opening-phase.ts).
 export function planTasks(shownPhase: Phase = phase()): Step[] {
   return applyTaskEdits(generatedTasks(shownPhase), personalTasks(shownPhase), shownPhase);
+}
+
+// The ids of planTasks(shownPhase), in the same order: the same edits applied to the step ids
+// alone (generatedTaskIds), for callers that read only the ids (phaseStepIds in
+// opening-phase.ts, #768).
+export function planTaskIds(shownPhase: Phase = phase()): string[] {
+  const personal = personalTasks(shownPhase).map(t => t.id);
+  return inEditedOrder(generatedTaskIds(shownPhase), personal, shownPhase, id => id);
 }
 
 // The current phase's removed steps, in their generated order and with the user's edited
