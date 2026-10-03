@@ -26,10 +26,13 @@ const props = withDefaults(
 // Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42),
 // so its row is drawn anew and focus would fall to <body>. Ticked, focus goes to the same
 // control in the step that took its place, the next lead's when it led; unticked, to the step
-// itself where it now stands among the unfinished ones.
+// itself where it now stands among the unfinished ones. Each step is known by its checklist key,
+// so a step ticked while an earlier tick is still saving finds its place again by its neighbours
+// once its own save lands, when the earlier step has already gone to Done (#822).
 const openRows = {
   row: '#main [data-open-steps] > .task',
   fallback: ['#main .done-group > summary', '#plan-search'],
+  key: (row: Element) => row.querySelector<HTMLElement>('[data-check]')?.dataset.check,
 };
 function focusStep(id: string, control: string) {
   return async () => {
