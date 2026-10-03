@@ -36,7 +36,7 @@ import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
 import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
-import { currentBuildStatus } from './views/calculated.ts';
+import { buildRowName, currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
@@ -91,22 +91,22 @@ export function adaStore() {
 // A snapshot of the open profile that ada.ts picks remarks from: page, phase, progress
 // counts, feasibility, power, backups. It re-derives the counters the pages show from
 // the same checklist keys (factory-/calc-<stage>-<id>, slot-<address>-verified).
-// ADA's view of the build-so-far status (views/calculated.ts), with row ids turned into names.
-function buildFacts(storedStage: StoredStage): AdaFacts['build'] {
+// ADA's view of the build-so-far status (views/calculated.ts), with row ids turned into names
+// as the build plan's steps give them ("Wire for Alpha", #911).
+function buildFacts(): AdaFacts['build'] {
   const status = currentBuildStatus();
   if (!status) return null;
-  const name = (id: string) => storedStage.rows?.find(r => r.id === id)?.name || id;
   const held = status.rows.filter(r => r.built && r.share < 1 && r.shortOf);
   return {
     built: status.builtCount,
     total: status.rowCount,
     share: Math.round(status.deliveryShare * 100),
-    next: status.next ? name(status.next.id) : '',
+    next: status.next ? buildRowName(status.next.id) : '',
     nextGain: status.next
       ? Math.max(status.next.gain > 0 ? 1 : 0, Math.round(status.next.gain * 100))
       : 0,
     nextUnblocks: status.next?.unblocks || 0,
-    waiting: held.map(r => name(r.id)),
+    waiting: held.map(r => buildRowName(r.id)),
     shortOf: [...new Set(held.map(r => r.shortOf!))],
     powerShort: status.power.short,
   };
@@ -217,6 +217,7 @@ function adaFacts(): AdaFacts {
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
     unplaced: unplacedCount(),
+    siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
@@ -277,7 +278,7 @@ function adaFacts(): AdaFacts {
     milestoneOnly: milestones ? phaseLabel(startPhase()) : '',
     openedFrom: savedPhase ? phaseLabel(savedPhase) : '',
     assumptions: calculated ? (calculated.warnings || []).length : 0,
-    build: buildFacts(storedStage),
+    build: buildFacts(),
     payoff: payoffFacts(),
   };
 }

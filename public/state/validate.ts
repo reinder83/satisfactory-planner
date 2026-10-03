@@ -14,6 +14,7 @@ import type {
   HandbookMapping,
   HandbookOrigin,
   LinkMode,
+  OnSiteReview,
   LinkTransport,
   Phase,
   ProgressState,
@@ -337,6 +338,20 @@ export function linkTransport(value: unknown): LinkTransport {
     ...(fuelledModes.includes(mode) ? { fuel: value.fuel as string } : {}),
   };
 }
+// Returns a clean copy of onSiteReview (#876), or undefined when absent or empty: the ticks a
+// recalculation kept for review because of lines made on site, by check key, as checks are kept.
+export function validateOnSiteReview(raw: unknown): OnSiteReview | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid ticks kept for review.');
+  if (!plain(raw) || !plain(raw.checks) || Object.keys(raw.checks).length > 20000) bad();
+  const checks: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries((raw as Raw).checks as Raw)) {
+    if (!safeKey(key) || typeof value !== 'boolean') bad();
+    checks[key] = value as boolean;
+  }
+  // Only kept with an entry, so a state without one keeps its old shape and version.
+  return Object.keys(checks).length ? { checks } : undefined;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -556,7 +571,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–14 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–15 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. A higher version is refused
 // with an update message, so a newer save is never downgraded or stripped. Anything
 // malformed throws with status 400 instead of being dropped, so a bad import cannot
@@ -565,11 +580,11 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "15" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 14
+      // Compared as the old code did, so a version given as "16" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 15
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -619,6 +634,8 @@ export function validateState(state: unknown): ProgressState {
   clean.factoryGroups = validateGroups(state.factoryGroups);
   const origin = validateOrigin(state.handbookOrigin);
   if (origin) clean.handbookOrigin = origin;
+  const review = validateOnSiteReview(state.onSiteReview);
+  if (review) clean.onSiteReview = review;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -639,33 +656,37 @@ export function validateState(state: unknown): ProgressState {
   // migration mapped (#606) is 13: a version-12 release would drop the mapping, and a backup
   // restored onto the profile later could then no longer be re-keyed. A group that makes items on
   // site (factoryGroups.local, #874) is 14: an older release's validateGroups would drop the choice.
-  clean.version = clean.factoryGroups.local
-    ? 14
-    : clean.handbookOrigin?.mapping
-      ? 13
-      : clean.handbookOrigin
-        ? 12
-        : linksNeedV11(clean.factoryGroups)
-          ? 11
-          : clean.storageEdits.bayOrder
-            ? 10
-            : linksNeedV9(clean.factoryGroups)
-              ? 9
-              : clean.storageEdits.bayFloors
-                ? 8
-                : clean.factoryGroups.links
-                  ? 7
-                  : clean.storageEdits.hiddenFloors.length
-                    ? 6
-                    : clean.storageEdits.hiddenBays.length
-                      ? 5
-                      : hasAddedSlots(clean.storageEdits)
-                        ? 4
-                        : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                          ? 3
-                          : hasEdits(clean.storageEdits)
-                            ? 2
-                            : 1;
+  // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876) are
+  // 15: an older release would drop them, and they are progress.
+  clean.version = clean.onSiteReview
+    ? 15
+    : clean.factoryGroups.local
+      ? 14
+      : clean.handbookOrigin?.mapping
+        ? 13
+        : clean.handbookOrigin
+          ? 12
+          : linksNeedV11(clean.factoryGroups)
+            ? 11
+            : clean.storageEdits.bayOrder
+              ? 10
+              : linksNeedV9(clean.factoryGroups)
+                ? 9
+                : clean.storageEdits.bayFloors
+                  ? 8
+                  : clean.factoryGroups.links
+                    ? 7
+                    : clean.storageEdits.hiddenFloors.length
+                      ? 6
+                      : clean.storageEdits.hiddenBays.length
+                        ? 5
+                        : hasAddedSlots(clean.storageEdits)
+                          ? 4
+                          : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                            ? 3
+                            : hasEdits(clean.storageEdits)
+                              ? 2
+                              : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;

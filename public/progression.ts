@@ -132,7 +132,7 @@ export interface PhaseStep extends GuideTask {
 // `memo` (StepsMemo) lets calls for several phases of the same plan and progress share work.
 export function phaseSteps(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
-  state: { checks: Record<string, boolean> },
+  state: GuideState,
   data: Progression,
   phase: string,
   memo: StepsMemo = {},
@@ -164,7 +164,7 @@ export function phaseSteps(
     ...steps.hardDrives,
     ...(plan.stages[stage]?.rows || []).map(row => ({
       id: 'calc-' + stage + '-' + row.id,
-      title: row.name,
+      title: rowStepTitle(plan, state, row),
       body: '',
       row,
     })),
@@ -175,6 +175,30 @@ export function phaseSteps(
     },
     ...steps.retire,
   ];
+}
+
+// What phaseSteps reads of a profile's progress: its ticks, and its factory groups' names, which
+// name a group's own line made on site.
+export interface GuideState {
+  checks: Record<string, boolean>;
+  factoryGroups?: { groups?: { id: string; name: string }[] };
+}
+
+// A production row's step title: the row's name, and for a factory group's own line made on site
+// (#876) the group it is for, "Wire for Motor works": the group's name now, else the name the
+// plan was calculated with, else its id.
+export function rowStepTitle(
+  plan: Pick<StoredCalculatedPlan, 'settings'>,
+  state: GuideState,
+  row: Pick<CalcRow, 'name' | 'onSite'>,
+): string {
+  const group = row.onSite?.group;
+  if (!group) return row.name;
+  const name =
+    state.factoryGroups?.groups?.find(known => known.id === group)?.name ??
+    plan.settings.onSite?.[group]?.name ??
+    group;
+  return row.name + ' for ' + name;
 }
 
 // Whether `phase` of a calculated plan is milestone-only (#759): a phase before the plan's start

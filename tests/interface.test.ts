@@ -41,6 +41,7 @@ import {
   milestoneOnlyPhase,
   phaseSteps,
   progression,
+  rowStepTitle,
 } from '../public/progression.ts';
 import {
   carryOptions,
@@ -85,6 +86,7 @@ function ui() {
     progression,
     phaseSteps,
     milestoneOnlyPhase,
+    rowStepTitle,
     firstPlanPhase,
     carryOptions,
     initialState,

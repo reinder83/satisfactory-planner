@@ -135,7 +135,7 @@ test('every import refusal names the save file and a next step, never the handbo
 
 test('a state from a newer planner keeps its update message on import', async () => {
   const error = await refusal(() =>
-    validateTransfer(calculated({ state: { ...initialState(), version: 15 } })),
+    validateTransfer(calculated({ state: { ...initialState(), version: 16 } })),
   );
   assert.equal(error.status, 400);
   assert.match(error.message, /newer planner version\. Update the app to import it\.$/);

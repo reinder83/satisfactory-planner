@@ -393,6 +393,20 @@ test('ADA points at the records the original plan could not place (#499)', () =>
   assert.match(one.text, /^1 record from/);
 });
 
+test('ADA points at ticks a recalculation kept for review because of lines made on site (#876)', () => {
+  for (const view of ['plan', 'notes', 'factories']) {
+    const line = adaRemarks(facts({ view, siteReview: 2 })).find(r => r.id === 'site-review')!;
+    assert.equal(line.tone, 'calm');
+    assert.match(line.text, /^2 ticks from the profile this one came from .* foot of Notes/);
+    assert.ok(!ids(facts({ view, siteReview: 0 })).includes('site-review'));
+    assert.ok(!ids(facts({ view })).includes('site-review'), 'absent means none');
+  }
+  const one = adaRemarks(facts({ view: 'notes', siteReview: 1 })).find(
+    r => r.id === 'site-review',
+  )!;
+  assert.match(one.text, /^1 tick from/);
+});
+
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
   for (const view of ['plan', 'notes']) {
     const bare = adaRemarks(facts({ view, hasPhaseNote: false }));

@@ -200,6 +200,16 @@ export const version14 = {
   },
 } satisfies SavedState;
 
+// Version 15: ticks a recalculation kept for review because of lines made on site (#876): a
+// central Wire line split into group lines, and a group's own Screw line the plan dropped.
+export const version15 = {
+  ...version14,
+  version: 15,
+  onSiteReview: {
+    checks: { 'calc-3-Recipe_Wire_C': true, 'calc-3-Recipe_Screw_C:fg-plates1': true },
+  },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -217,6 +227,7 @@ export const states: [SavedState, number][] = [
   [version12, 12],
   [version13, 13],
   [version14, 14],
+  [version15, 15],
 ];
 
 export const backup = {

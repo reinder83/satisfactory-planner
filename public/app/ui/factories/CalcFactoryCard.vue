@@ -17,7 +17,12 @@ import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { calculated, checked, factoryEditing, stage } from '../../session.ts';
 import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
-import { allocationText, machineLine } from '../../views/factories.ts';
+import {
+  allocationText,
+  factoryGroupsState,
+  machineLine,
+  siteGroupName,
+} from '../../views/factories.ts';
 import { power, powerParts } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -73,7 +78,12 @@ const card = computed(() =>
       allocation: props.group
         ? allocationText(row.id, props.group, total || row.generationMW, row.machines, share)
         : '',
-      editing: factoryEditing,
+      // A factory group's own line made on site (#876) names its group. It belongs wholly to that
+      // group while the group exists, so the group editor is not offered for it then.
+      site: row.onSite ? 'Made on site for ' + siteGroupName(row) : '',
+      editing:
+        factoryEditing &&
+        !factoryGroupsState().groups.some(group => group.id === row.onSite?.group),
       generator,
       // The group editor's unit (AssignEditor.vue, #374): a fixed rate is in the first output, as
       // the share is, so a nuclear plant's is its waste, with the MW each one stands for; an
@@ -114,6 +124,7 @@ const card = computed(() =>
     <div v-if="card.outputs.length" class="recipe">
       <template v-for="(output, i) in card.outputs" :key="i"><br v-if="i" />{{ output }}</template>
     </div>
+    <div v-if="card.site" class="small allocation" data-on-site>{{ card.site }}</div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
     <footer>

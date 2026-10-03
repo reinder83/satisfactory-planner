@@ -6,7 +6,8 @@
   notes as they are), so no saved note is out of sight. Every box is NoteBox.vue and saves
   itself as you type; all of them stay mounted while folded, so allowSwitch() still sends or
   asks about each one before the page goes away. The keys are saved progress and do not change.
-  Last, on a profile moved from the original plan, what that move could not place (#499).
+  Then the ticks a recalculation kept for review because of lines made on site (#876), and last,
+  on a profile moved from the original plan, what that move could not place (#499).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -22,6 +23,7 @@ import type { Phase } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import NoteBox from '../NoteBox.vue';
 import PageHeader from '../PageHeader.vue';
+import SiteReview from '../notes/SiteReview.vue';
 import UnplacedRecords from '../notes/UnplacedRecords.vue';
 
 const ALL: Phase[] = ['1', '2', '3', '4', '5', 'post'];
@@ -91,5 +93,6 @@ const page = computed(() =>
       />
     </details>
   </section>
+  <SiteReview />
   <UnplacedRecords />
 </template>

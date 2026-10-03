@@ -7,8 +7,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { calcStage } from '../../session.ts';
-import { currentBuildStatus } from '../../views/calculated.ts';
+import { buildRowName, currentBuildStatus } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import { factoryLink } from '../actions.ts';
@@ -21,17 +20,16 @@ const view = computed(() =>
   legacy(() => {
     const status = currentBuildStatus();
     if (!status) return null;
-    const name = (id: string) => calcStage()?.rows?.find(r => r.id === id)?.name || id;
     const waiting = status.rows
       .filter(r => r.built && r.share < 1 && r.shortOf)
       .map(row => ({
         id: row.id,
-        name: name(row.id),
+        name: buildRowName(row.id),
         text: `running at ${percent(row.share)}%, short of ${row.shortOf}`,
       }));
     const next = status.next && {
       id: status.next.id,
-      name: name(status.next.id),
+      name: buildRowName(status.next.id),
       why:
         status.next.gain > 0
           ? `adds ${Math.max(1, percent(status.next.gain))}% of the elevator delivery`
