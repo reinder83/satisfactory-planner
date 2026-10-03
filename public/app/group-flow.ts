@@ -9,7 +9,9 @@
 //   shared among the group's lines that use (or make) the item in proportion to their parts;
 // - inside the group, an item moves from each line making it to each line using it by the rule
 //   groupLinks shares an item between places by (sharedRate), with the lines as the places.
-// So the links into an input row add up to its rate, and the links out of an output row to its
+// A line whose recipe both uses and makes an item (Distilled Silica's water, #898) feeds its own
+// share of it back into itself: a self link, from and to the same line, marked `self`. With it,
+// the links into an input row add up to its rate, and the links out of an output row to its
 // rate, whenever the plan makes what it asks for.
 //
 // Lines are keyed by their plan row's id and placed by rowPlaces alone, so a per-group line
@@ -49,6 +51,9 @@ export interface FlowLink {
   // A link inside the group to a line built before the one making it (a recycling loop): the
   // later line needs a starter batch.
   loop: boolean;
+  // A line's own output going back into itself (#898): `from` and `to` are the same line. It
+  // rides no lane (assignLanes), so the page shows it as "from itself"; it is never a loop.
+  self: boolean;
 }
 
 // An input or output row of a line: one item at the group's share of the row's rate.
@@ -149,7 +154,7 @@ const madeBy = (part: GroupPart, item: string) => (part.row.outputs?.[item] || 0
 const usedBy = (part: GroupPart, item: string) => (part.row.inputs?.[item] || 0) * part.share;
 
 // The links between the group's own lines, by maker, its outputs in order, then user. A line
-// feeding itself is no link between lines, so it is left out.
+// that uses what it makes gets a self link to itself, so its rows still add up (#898).
 function insideLinks(parts: GroupPart[], books: ItemBooks, belts: BeltsFor): FlowLink[] {
   const links: FlowLink[] = [];
   parts.forEach((maker, makerIndex) => {
@@ -160,7 +165,7 @@ function insideLinks(parts: GroupPart[], books: ItemBooks, belts: BeltsFor): Flo
         asked = placeTotal(books.demand[item]);
       parts.forEach((user, userIndex) => {
         const wanted = usedBy(user, item);
-        if (user === maker || wanted <= LINK_DUST) return;
+        if (wanted <= LINK_DUST) return;
         const rate = sharedRate(made, asked, supplied, wanted);
         if (rate > LINK_DUST)
           links.push({
@@ -170,6 +175,7 @@ function insideLinks(parts: GroupPart[], books: ItemBooks, belts: BeltsFor): Flo
             from: lineEnd(maker),
             to: lineEnd(user),
             loop: userIndex < makerIndex,
+            self: user === maker,
           });
       });
     }
@@ -236,6 +242,7 @@ function portLinks(
           from: inward ? place : lineEnd(line),
           to: inward ? lineEnd(line) : place,
           loop: false,
+          self: false,
         },
       ];
     });
@@ -314,7 +321,7 @@ export function groupFlow(
 }
 
 // The lanes of a group's links (#883 round 3). Every output row with a link to another line of
-// the group gets one lane, a trunk spanning from that row to the furthest input row it feeds,
+// the group gets one lane (a line's self link, #898, rides none), a trunk spanning from that row to the furthest input row it feeds,
 // counted in rows down the one-column cards (each card's input rows, then its output rows).
 // The shortest trunks sit nearest the cards, and a lane is reused once no trunk on it overlaps,
 // so a group needs as few lanes as its overlapping trunks. Deterministic: ties go by span, then
@@ -325,7 +332,7 @@ export function assignLanes(lines: readonly FlowLine[]): FlowLane[] {
     for (const row of [...line.inputs, ...line.outputs]) slot.set(row.id, slot.size);
   const trunks = lines.flatMap(line =>
     line.outputs.flatMap(row => {
-      const links = row.links.filter(link => link.to.kind === 'line');
+      const links = row.links.filter(link => link.to.kind === 'line' && !link.self);
       if (!links.length) return [];
       const to = links.map(link => `in|${link.to.id}|${link.item}`);
       const ends = [row.id, ...to].map(id => slot.get(id) ?? 0);

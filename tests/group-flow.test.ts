@@ -301,6 +301,73 @@ test('a link to a line built earlier is marked as a loop', () => {
   assertAddsUp(loop, factoryGroups, 'fg-iron');
 });
 
+test('a line that uses what it makes links to itself, so its rows add up (#898)', () => {
+  // A distiller like Distilled Silica: it takes 30 water and gives 24 back. A cooling line takes
+  // 4 more, and 10 come from a well. Water: 34 made, 34 asked.
+  const distilled: StoredStage = {
+    feasible: true,
+    rows: [
+      row('distill', { Ore: 10, Water: 30 }, { Silica: 10, Water: 24 }),
+      row('cool', { Water: 4 }, { Steam: 4 }),
+    ],
+    raw: { Ore: 10, Water: 10 },
+    delivery: { Silica: { target: 100, rate: 10 }, Steam: { target: 100, rate: 4 } },
+  };
+  const factoryGroups = groups({ distill: whole('fg-iron'), cool: whole('fg-iron') });
+  const flow = flowOf(distilled, factoryGroups, 'fg-iron');
+  const distill = flow.lines[0]!;
+  const waterIn = distill.inputs.find(input => input.item === 'Water')!;
+  const waterOut = distill.outputs.find(output => output.item === 'Water')!;
+  const self = (link: FlowLink) => link.self;
+  // The self link: 24 × 30 / 34 of the line's own water goes back into it.
+  const back = waterOut.links.find(self)!;
+  assert.deepEqual(
+    [back.from, back.to, back.loop],
+    [{ kind: 'line', id: 'distill' }, { kind: 'line', id: 'distill' }, false],
+  );
+  close(back.rate, (24 * 30) / 34, 'water the line feeds itself');
+  assert.equal(back.belts, `belts for ${back.rate} Water`);
+  // The same link is on both of the line's water rows, and each row adds up exactly.
+  assert.deepEqual(waterIn.links.filter(self), [back]);
+  close(sum(waterIn.links), 30, 'water into the distiller');
+  close(sum(waterOut.links), 24, 'water out of the distiller');
+  assert.deepEqual(
+    waterIn.links.map(link => [link.from.id, link.self]),
+    [
+      ['distill', true],
+      [sourceOf('Water'), false],
+    ],
+  );
+  assert.deepEqual(
+    waterOut.links.map(link => [link.to.id, link.self]),
+    [
+      ['distill', true],
+      ['cool', false],
+    ],
+  );
+  // No other link is a self link.
+  const all = flow.lines.flatMap(line => [...line.inputs, ...line.outputs]).flatMap(r => r.links);
+  assert.ok(all.every(link => link.self === (link.from.id === link.to.id)));
+  // The water lane carries only the link to the cooling line: a self link rides no lane.
+  assert.deepEqual(
+    flow.lanes.map(lane => [lane.from, lane.to, lane.links.length]),
+    [['out|distill|Water', ['in|cool|Water'], 1]],
+  );
+  assertAddsUp(distilled, factoryGroups, 'fg-iron');
+
+  // A distiller on its own: its self link is its water's only link between lines, so no lane.
+  const alone: StoredStage = {
+    ...distilled,
+    rows: [distilled.rows![0]!],
+    raw: { Ore: 10, Water: 6 },
+  };
+  const lone = flowOf(alone, groups({ distill: whole('fg-iron') }), 'fg-iron');
+  assert.ok(lone.lines[0]!.outputs.find(output => output.item === 'Water')!.links.some(self));
+  assert.deepEqual(lone.lanes, []);
+  assert.equal(lone.laneCount, 0);
+  assertAddsUp(alone, groups({ distill: whole('fg-iron') }), 'fg-iron');
+});
+
 test('an empty group, an unknown group and a one-line group', () => {
   const empty = flowOf(stage, ironAndMotor, 'fg-empty');
   assert.deepEqual(empty, {
@@ -351,4 +418,48 @@ test('on a real plan with the default groups, every group’s rates add up', () 
   const grouped = real.rows!.filter(r => factoryGroups.assignments[r.id]?.length);
   assert.ok(grouped.length > 10, 'a plan with lines in its groups');
   assert.deepEqual([...lines].sort(), grouped.map(r => r.id).sort());
+});
+
+test('on generated plans, every line’s rows add up to their rates, self links and all (#898)', () => {
+  let selfLinks = 0;
+  for (const plan of [calculate({}), calculate({ recipes: 'all' }), calculate({ phase: '1' })]) {
+    const byDefault = defaultFactoryGroups(plan);
+    // Every grouped row in one group too, so lines that the default groups keep apart meet.
+    const oneGroup: FactoryGroups = {
+      groups: [{ id: 'fg-all', name: 'Everything' }],
+      assignments: Object.fromEntries(
+        Object.keys(byDefault.assignments).map(id => [id, whole('fg-all')]),
+      ),
+    };
+    for (const stage of Object.values(plan.stages)) {
+      // Only a plan that makes what it asks for promises rows that add up.
+      if (!stage.feasible) continue;
+      for (const factoryGroups of [byDefault, oneGroup])
+        for (const group of factoryGroups.groups) {
+          assertAddsUp(stage, factoryGroups, group.id);
+          const flow = flowOf(stage, factoryGroups, group.id);
+          for (const line of flow.lines)
+            for (const output of line.outputs)
+              selfLinks += output.links.filter(link => link.self).length;
+          // Self links ride no lane.
+          assert.ok(
+            flow.lanes.every(lane => lane.links.every(link => !link.self)),
+            group.id,
+          );
+        }
+    }
+  }
+  assert.ok(selfLinks > 0, 'the generated plans include a line that uses what it makes');
+});
+
+test('Distilled Silica’s water adds up in the concrete & quartz group (#898)', () => {
+  const plan = calculate({ recipes: 'all' });
+  const factoryGroups = defaultFactoryGroups(plan);
+  const flow = flowOf(plan.stages['4'], factoryGroups, 'fg-stone1');
+  const line = flow.lines.find(l => l.id === 'Recipe_Alternate_Silica_Distilled_C');
+  assert.ok(line, 'the plan builds Distilled Silica in the concrete & quartz group');
+  for (const water of [...line.inputs, ...line.outputs].filter(r => r.item === 'Water')) {
+    close(sum(water.links), water.rate, water.id);
+    assert.equal(water.links.filter(link => link.self).length, 1, `${water.id}: one self link`);
+  }
 });
