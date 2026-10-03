@@ -303,6 +303,39 @@ test('a profile with augmenters lists the MAM nodes its augmenter step asks for'
   assert.deepEqual(listing(none, augmenter.id), [], 'no augmenters, no Power Augmenter step');
 });
 
+// HUB Upgrade 6 requires Schematic_Tutorial4_C and three alternates Compacted Coal's retired
+// schematic, neither of which progression.json lists: a step names only the unlocks it lists and
+// never shows a raw class id (#812).
+test('no step shows a raw schematic or research id', () => {
+  const raw = /\b(?:Schematic|Research)_\w+/;
+  for (const start of ['1', '3', '5']) {
+    const plan = calculate({ phase: start, recipes: 'all' });
+    for (const phase of ['1', '2', '3', '4', '5', 'post'])
+      for (const step of phaseSteps(plan, { checks: {} }, data, phase))
+        assert.doesNotMatch(
+          step.title + ' ' + step.body,
+          raw,
+          `a Phase ${start} profile's Phase ${phase} step ${step.id}`,
+        );
+  }
+  const hub6 = data.entries.find(entry => entry.name === 'HUB Upgrade 6')!;
+  const context = guideContext(calculate({ phase: '1' }), { checks: {} }, data, '1');
+  const step = milestoneTasks(context, [hub6])[0]!;
+  assert.equal(step.id, 'unlock-' + hub6.id, 'the check key is unchanged');
+  assert.doesNotMatch(step.body, /Prerequisites/, 'no listed prerequisite, no sentence');
+  // A partial row: hardDriveTasks reads only these fields.
+  const turbo = {
+    id: 'Recipe_Alternate_TurboHeavyFuel_C',
+    name: 'Turbo Heavy Fuel',
+    machine: 'Refinery',
+    alternate: true,
+  } as CalcRow;
+  const unlock = hardDriveTasks({ ...context, rows: [turbo] })[1]!;
+  assert.equal(unlock.id, 'recipe-unlock-' + turbo.id);
+  assert.match(unlock.body, /First unlock: [^.]*\w\. /);
+  assert.doesNotMatch(unlock.body, raw);
+});
+
 test('a phase before the start phase lists only its milestones', () => {
   const plan = calculate({ phase: '3', recipes: 'all' });
   assert.ok(plan.stages['1'].rows?.length, 'the planner still solved Phase 1');
