@@ -29,7 +29,8 @@ export interface RefocusOptions {
   // What identifies a row across redraws (a build-plan step's checklist key). With it, the
   // removed row's place is found again by its neighbours when the change lands, not by its
   // position: other rows may have left the list in the meantime, as a step ticked just before
-  // whose save landed first does (#822).
+  // whose save landed first does (#822). When none of those neighbours has the control, the rows
+  // are tried by place after all, so a row that came in meanwhile is not missed (#841).
   key?: (row: Element) => string | undefined;
 }
 
@@ -49,7 +50,9 @@ export function refocusAfterRemoval(
     // The row now in the removed one's place and those after it, then the rows before it.
     const byPlace = at < 0 ? [] : [...now.slice(at), ...now.slice(0, at).reverse()];
     const byNeighbour = neighbours && key ? rowsByKey(now, neighbours, key) : [];
-    const order = byNeighbour.length ? byNeighbour : byPlace;
+    // The recorded neighbours first, then every row by place: a row that came in meanwhile may
+    // be the only one with the control (a step back above the lead has the only Mark done, #841).
+    const order = [...byNeighbour, ...byPlace];
     const inRows = order
       .map(r => (control ? r.querySelector<HTMLElement>(control) : (r as HTMLElement)))
       .find(el => el);
