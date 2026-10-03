@@ -95,3 +95,17 @@ test('the handbook still counts its phase steps', () => {
   assert.equal(segment('3').pct, 0);
   assert.equal(segment('post').pct, null);
 });
+
+test('alternate unlocks ticked while on Phase 3 do not start Phase 4 on the track (#870)', () => {
+  const plan = generatedWith({ phase: '3', recipes: 'all' });
+  open({ calculated: plan, phase: '3' });
+  const unlocks = phaseStepIds('3').filter(id => id.startsWith('recipe-unlock-'));
+  const reused = (plan.stages['4']?.rows ?? []).filter(
+    row => row.alternate && unlocks.includes('recipe-unlock-' + row.id),
+  );
+  assert.ok(reused.length, 'Phase 4 uses an alternate Phase 3 lists');
+  open({ calculated: plan, phase: '3', state: { checks: ticked(unlocks) } });
+  assert.ok(segment('3').pct! > 0, 'the ticks count in Phase 3');
+  assert.equal(segment('4').pct, 0, 'Phase 4 has not started');
+  assert.ok(!phaseStepIds('4').some(id => unlocks.includes(id)), 'listed once, in Phase 3');
+});

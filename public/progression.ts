@@ -415,10 +415,16 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
   );
 }
 
-// One hard-drive step plus one unlock step per alternate recipe this phase's rows use.
+// One hard-drive step plus one unlock step per alternate recipe this phase's rows use first: an
+// alternate an earlier planned phase (the start phase on) already uses is listed there and not
+// again (#870), as each milestone is listed once (#758). An unlock is a fact about the world, so a
+// step repeated in every phase that uses the recipe made a later phase look started while the
+// profile was still on the first. The check key stays `recipe-unlock-<recipe>` whichever phase
+// lists it, so a tick made in a later phase's list counts in the phase that lists it now.
 export function hardDriveTasks(context: GuideContext): GuideTask[] {
   const { checks, data, stage, rows } = context;
-  const alternates = rows.filter(r => r.alternate);
+  const earlier = earlierAlternates(context);
+  const alternates = rows.filter(r => r.alternate && !earlier.has(r.id));
   if (!alternates.length) return [];
   const missing = alternates.filter(r => !checks['recipe-unlock-' + r.id]);
   return [
@@ -438,6 +444,15 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
       };
     }),
   ];
+}
+
+// The alternate recipes the planned phases before `stage` use (from the plan's start phase on;
+// a stage before it is never built), whose unlock steps those phases list (hardDriveTasks).
+function earlierAlternates({ plan, stage, stageOf }: GuideContext): Set<string> {
+  const ids = new Set<string>();
+  for (let phase = Number(plan.settings.phase || 1); phase < stage; phase++)
+    for (const row of stageOf(phase)?.rows || []) if (row.alternate) ids.add(row.id);
+  return ids;
 }
 
 // The power, fuel and endgame steps of the phase. phaseSteps interleaves Phase 1's lists by
