@@ -311,9 +311,9 @@ test('a profile with augmenters lists the MAM nodes its augmenter step asks for'
   assert.deepEqual(listing(none, augmenter.id), [], 'no augmenters, no Power Augmenter step');
 });
 
-// HUB Upgrade 6 requires Schematic_Tutorial4_C and three alternates Compacted Coal's retired
-// schematic, neither of which progression.json lists: a step names only the unlocks it lists and
-// never shows a raw class id (#812).
+// HUB Upgrade 6 requires Schematic_Tutorial4_C, which progression.json does not list: a step
+// names only the unlocks it lists and never shows a raw class id (#812). Turbo Heavy Fuel's
+// unlocks, Oil Processing and the Compacted Coal research, are both listed (#828).
 test('no step shows a raw schematic or research id', () => {
   const raw = /\b(?:Schematic|Research)_\w+/;
   for (const start of ['1', '3', '5']) {
