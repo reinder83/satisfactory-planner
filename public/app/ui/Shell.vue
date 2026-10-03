@@ -17,7 +17,8 @@
   Focus stays on the switcher after its choice, as it does on a followed sidebar link (the frame
   stays). A long name shows one line, cut with an ellipsis (#792), so it never makes the sidebar
   scroll; the whole name stays in the button's text (its accessible name), in its title, in the
-  menu and on the profiles page.
+  menu and on the profiles page. The breadcrumb's save name is cut the same way (#817), so it
+  never pushes the phase track off the window; its title and the profiles page show it in full.
 
   At 720px and below (SP-37, #272) the sidebar is a drawer: a compact top bar holds ☰, the brand
   mark, the breadcrumb, the phase picker and the save status, and ☰ opens the sidebar full
@@ -448,7 +449,7 @@ async function pickTrack(event: Event) {
           ><img class="topbar-mark" src="./favicon.svg" alt="" />
         </div>
         <div class="breadcrumbs">
-          <a href="#profiles">{{ frame.saveName }}</a>
+          <a href="#profiles" :title="frame.saveName">{{ frame.saveName }}</a>
         </div>
         <div class="topbar-tools">
           <div

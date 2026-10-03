@@ -594,9 +594,22 @@ input[type='radio'] {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+/* A long save name shows one line, cut with an ellipsis (#817), as the profile switcher's does
+   (#792): a name with no spaces would otherwise push the phase track past the window's edge.
+   The breadcrumb gives way rather than the track; the whole name is still the link's text (its
+   accessible name) and title, and the profiles page shows it in full. */
+.topbar .breadcrumbs {
+  min-width: 0;
+}
 .breadcrumbs a {
   color: var(--accent);
   border-bottom: 1px solid rgba(248, 156, 28, 0.45);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
 }
 .topbar select {
   border: 1px solid #343b41;
@@ -4374,7 +4387,6 @@ button.rail-tile:hover {
   }
   .topbar .breadcrumbs {
     max-width: 100%;
-    overflow-wrap: anywhere;
   }
 }
 @media (max-width: 420px) {
