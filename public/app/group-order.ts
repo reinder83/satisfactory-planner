@@ -78,24 +78,27 @@ export function rowPlaces(
   return rowShares(rowTotal(row), memberships);
 }
 
-// The group whose site a row's build-plan step belongs to: of the existing groups the row is in,
-// the one with the largest share of it (rowShares), the earlier membership on a tie, so a row
-// split 40/60 is built with the 60. A part no group takes does not count, so a row in any
-// group is never Ungrouped here. UNGROUPED for a row in no existing group: a membership of a
-// removed group counts as none, as on the Logistics page. A group's own line made on site is
-// built with its group (rowMemberships, #876).
+// The group whose site a row's build-plan step belongs to: the group with the largest share of
+// the row as the Logistics page and a group's flow place it (rowPlaces), so the build plan never
+// builds a row with a group they give a smaller share, or none at all (#900). On a tie, the one
+// rowShares lists first (#928). A part no group takes does not count, so a row with a share in
+// any group is never Ungrouped here: a row split 40/60 is built with the 60, and one with 5 of
+// 20 in a group and the rest in none is built with that group. When no group has a share (no
+// memberships, a total of zero, or a removed group's fixed rate takes up the row), it is the place
+// of the first membership: that group if it exists, else UNGROUPED, as rowPlaces counts a
+// membership of a removed group. A group's own line made on site is built with its group
+// (rowMemberships, #876).
 export function homeGroup(
   row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,
 ): string {
-  const known = new Set((groups?.groups || []).map(group => group.id));
-  const memberships = rowMemberships(row, groups).filter(membership => known.has(membership.group));
-  if (!memberships.length) return UNGROUPED;
-  let home = memberships[0]!.group,
+  let home: string | undefined,
     largest = 0;
-  for (const [place, share] of rowShares(rowTotal(row), memberships))
+  for (const [place, share] of rowPlaces(row, groups))
     if (place !== UNGROUPED && share > largest + LINK_DUST) [home, largest] = [place, share];
-  return home;
+  if (home) return home;
+  const first = rowMemberships(row, groups)[0]?.group;
+  return first && (groups?.groups || []).some(group => group.id === first) ? first : UNGROUPED;
 }
 
 // `steps` (in the planner's build order: suppliers before consumers) put in order group by group,
