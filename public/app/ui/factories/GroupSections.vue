@@ -3,15 +3,16 @@
   it; `keyOf` gives an entry's assignment key and the `card` slot draws its card for a group.
   An empty group is hidden unless groups are being edited. While editing, a group can be
   renamed (saved when the field is committed, then redrawn with the saved name either way) or
-  removed; otherwise a group with more than one factory offers its build order. Each group can be
+  removed; otherwise a group with more than one factory links to its build order, the group's flow
+  page (#factories/<group>/flow, GroupFlowPage.vue, #895). It is a link, not a button: it goes to
+  another page, so it can open in a new tab and the address can be shared. Each group can be
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
 import { computed } from 'vue';
 import { save } from '../../api.ts';
-import { openGroupChain } from '../../factory-detail.ts';
-import { factoryEditing, sectionCollapsed } from '../../session.ts';
+import { factoryEditing, flowRoute, sectionCollapsed } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
@@ -126,14 +127,14 @@ async function remove(event: Event, id: string) {
       >
         Remove group
       </button>
-      <button
+      <a
         v-else-if="section.members.length > 1"
         class="btn"
-        :data-group-chain="section.id"
-        @click="openGroupChain(section.id)"
+        :href="'#' + flowRoute(section.id)"
+        :data-group-flow="section.id"
       >
-        Build order ↗
-      </button>
+        Build order →
+      </a>
     </header>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
       <template v-if="section.members.length"

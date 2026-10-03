@@ -214,6 +214,29 @@ test('an address naming no group says so, and the group name is text', async () 
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 });
 
+test('a line’s ↗ opens that factory’s dialog, and closing it returns to the link (#886, #895)', async () => {
+  // The page replaced the group's build-order dialog, whose stages linked to their factories.
+  await show('fg-iron01');
+  const flow = flowOf();
+  const links = $$<HTMLButtonElement>('#main .gf-head .rail-link');
+  assert.equal(links.length, flow.lines.length, 'one link per line');
+  const line = flow.lines[1]!;
+  const link = links[1]!;
+  assert.equal(link.dataset.calcFactory, line.id);
+  assert.equal(link.textContent!.trim(), line.recipe + ' ↗');
+  link.focus();
+  link.click();
+  const dialog = $<HTMLDialogElement>('#detail')!;
+  assert.ok(dialog.open, 'the factory dialog opens over the page');
+  const row = plan.stages['3'].rows!.find(r => r.id === line.id)!;
+  assert.equal($('#detail h2')!.textContent, row.name);
+  assert.ok($('#main .gf-card'), 'the page stays under it');
+  dialog.close();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await nextTick();
+  assert.equal(document.activeElement, link, 'closing returns focus to the ↗ link');
+});
+
 test('a milestone-only phase shows the factories page’s "Go to Phase N" notice', async () => {
   await show('fg-iron01', { phase: '1' });
   assert.ok($('[data-milestone-only]'));

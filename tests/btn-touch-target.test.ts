@@ -3,8 +3,8 @@
 // (#832). Tabs and the wizard's step tabs grow to 44px too, the storage slot ⠿/✕ to 24px (#838).
 // The storage "Move to…" select grows to 44px and a factory's ✕ per group to 24px wide (#842).
 // The "Move to…" select is drawn like the bay buttons beside it (#852).
-// A factory link ("Copper Ingot ↗") is drawn as a link wherever it is, and in a group's build
-// order it is a 44px target on a phone (#886).
+// A factory link ("Copper Ingot ↗") is drawn as a link wherever it is, and on a group's flow
+// page (its build order, #895) it is a 44px target on a phone (#886).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -170,8 +170,10 @@ test('a factory link is drawn as an accent link everywhere, not only in a flow r
     assert.ok(!rule.selectors.includes('.rail-row .rail-link'), rule.selectors.join(', '));
 });
 
-test("the build order's factory links are 44px tall on a phone, height only (#886)", () => {
-  const body = phoneRule('.chain-title .rail-link');
+test("the flow page's factory links are 44px tall on a phone, height only (#886, #895)", () => {
+  // The build-order dialog's links (.chain-title) went with the dialog; the flow page replaced it.
+  assert.throws(() => phoneRule('.chain-title .rail-link'));
+  const body = phoneRule('.gf-head .rail-link');
   assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/);
   assert.doesNotMatch(body, /min-width/);
   // The underline stays on the text in the taller box, as for the quiet links (#832).
