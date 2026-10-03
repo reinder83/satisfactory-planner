@@ -4,15 +4,14 @@ Most people can simply use the [browser edition](https://reinder83.github.io/sat
 
 ## Install
 
-The image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. The package is private: authenticate with a GitHub classic personal access token carrying `read:packages`. Clone this repository on your Docker host, enter the directory, then:
+The image is **ghcr.io/reinder83/satisfactory-planner:latest**, available for AMD64 and ARM64. It is public, so pulling it needs no GitHub account. Clone this repository on your Docker host, enter the directory, then:
 
 ```sh
-docker login ghcr.io -u reinder83
 docker compose pull
 docker compose up -d
 ```
 
-Open **http://localhost:8080**. To update later, repeat the last two commands.
+Open **http://localhost:8080**. To update later, run both commands again.
 
 Optionally copy [.env.example](../.env.example) to `.env`. For LAN access, set `BIND_ADDRESS=0.0.0.0`, then visit `http://HOST-IP:8080`. For public internet access use an HTTPS reverse proxy and set `COOKIE_SECURE=true`.
 
@@ -25,7 +24,7 @@ Optionally copy [.env.example](../.env.example) to `.env`. For LAN access, set `
 | `APP_USER` / `APP_PASSWORD` | `pioneer` / empty | Optional host-wide Basic Auth gate; set a password before exposing the planner beyond your own machine |
 | `COOKIE_SECURE` | `false` | Set `true` behind an HTTPS reverse proxy when using accounts |
 
-A local build from this repository needs no registry login:
+To build the image yourself from this repository instead of pulling it:
 
 ```sh
 docker compose -f compose.yaml -f compose.local.yaml up -d --build
