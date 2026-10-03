@@ -70,6 +70,16 @@ test('the issue’s row: a removed group’s fixed rate takes up the row, so it 
   assert.equal(homeGroup(r, groups), UNGROUPED);
   // Released: g3, a group whose flow page does not show the row.
   assert.equal(releasedHomeGroup(r, groups), 'g3');
+  // The order of the memberships does not matter: with an existing group first, still Ungrouped.
+  const reordered = groupsOf({
+    r: [
+      { group: 'g1', rate: null },
+      { group: 'gone', rate: 41.68 },
+      { group: 'g3', rate: 18.78 },
+    ],
+  });
+  assert.deepEqual([...rowPlaces(r, reordered)], [[UNGROUPED, 1]]);
+  assert.equal(homeGroup(r, reordered), UNGROUPED);
 });
 
 test('a removed group’s fixed rate can move the larger share to another group', () => {
@@ -162,7 +172,8 @@ function generatedRows(withRemoved: boolean, count: number, seed: number) {
 }
 
 // What homeGroup must name for the places rowPlaces gives: the group with the largest share (the
-// first in rowShares' order on a tie), or, when no group has one, the first membership's place.
+// first in rowShares' order on a tie); when no group has one, Ungrouped if a removed group's
+// membership takes up a row with a total, else the first membership's place.
 function expectedHome(r: CalcRow, groups: GroupsInput): string {
   const shares = [...rowPlaces(r, groups)].filter(
     ([place, share]) => place !== UNGROUPED && share > LINK_DUST,
@@ -171,7 +182,9 @@ function expectedHome(r: CalcRow, groups: GroupsInput): string {
     const top = Math.max(...shares.map(([, share]) => share));
     return shares.find(([, share]) => share >= top - LINK_DUST)![0];
   }
-  const first = rowMemberships(r, groups)[0]?.group;
+  const memberships = rowMemberships(r, groups);
+  if (rowTotal(r) > LINK_DUST && memberships.some(m => REMOVED.includes(m.group))) return UNGROUPED;
+  const first = memberships[0]?.group;
   return first && KNOWN.includes(first) ? first : UNGROUPED;
 }
 
@@ -188,10 +201,13 @@ test('homeGroup names the group rowPlaces gives the largest share, for generated
         assert.ok((places.get(home) || 0) > LINK_DUST, `${what}: ${home} has a share`);
         for (const [place, share] of groupShares)
           assert.ok(share <= places.get(home)! + LINK_DUST, `${what}: ${place} over ${home}`);
-      } else if (rowMemberships(r, groups).some(m => REMOVED.includes(m.group)))
+      } else if (
+        rowTotal(r) > LINK_DUST &&
+        rowMemberships(r, groups).some(m => REMOVED.includes(m.group))
+      )
         // A removed group's membership never makes the row a group's when no group has a share,
-        // unless the row's first membership is an existing group.
-        assert.ok(home === UNGROUPED || KNOWN.includes(rowMemberships(r, groups)[0]!.group));
+        // whatever the order of the memberships: rowPlaces puts it in Ungrouped.
+        assert.equal(home, UNGROUPED, what);
     }
 });
 
