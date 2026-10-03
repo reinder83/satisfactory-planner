@@ -407,6 +407,19 @@ test('ADA points at ticks a recalculation kept for review because of lines made 
   assert.match(one.text, /^1 tick from/);
 });
 
+test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
+  for (const view of ['factories', 'plan', 'logistics']) {
+    const line = adaRemarks(facts({ view, onSitePending: true })).find(
+      r => r.id === 'on-site-pending',
+    )!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /Nothing recalculates by itself/);
+    assert.match(line.text, /Recalculate with items made on site/);
+    assert.ok(!ids(facts({ view, onSitePending: false })).includes('on-site-pending'));
+    assert.ok(!ids(facts({ view })).includes('on-site-pending'), 'absent means none');
+  }
+});
+
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
   for (const view of ['plan', 'notes']) {
     const bare = adaRemarks(facts({ view, hasPhaseNote: false }));

@@ -31,13 +31,15 @@ document.addEventListener(
 // The address hash is the page: sidebar links and navigate() in api.ts both land here.
 // An unknown hash shows the plan. Clears the search and scrolls to the top; before the
 // first load (no state) nothing is drawn. Unsaved notes are asked about first (acceptRoute),
-// and when the user keeps them the page stays as it is.
+// and when the user keeps them the page stays as it is. The scroll comes before the redraw, so
+// the new page starts at its top unless render() brings something else into view: a group's
+// "Build order →" on the way back from its flow page (#917, focusOpenedPage in ui/refocus.ts).
 window.addEventListener('hashchange', () => {
   if (!acceptRoute()) return;
   setView(viewOf(location.hash.slice(1)));
   setQuery('');
-  if (stateLoaded) render();
   window.scrollTo(0, 0);
+  if (stateLoaded) render();
 });
 
 // A click on the dialog's backdrop (outside the dialog's box, pressed there too) closes the
