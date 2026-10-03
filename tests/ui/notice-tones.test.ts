@@ -110,7 +110,7 @@ test('a profile migrated from the handbook draws each notice in its tone', () =>
     all.push(...tones());
   }
   setFloor('ground');
-  assert.equal(toneOf(all, /transcribed from the original handbook/), 'warn');
+  assert.equal(toneOf(all, /transcribed from the original plan, not solved/), 'warn');
   assert.equal(toneOf(all, /Whole-machine production/), 'info');
   assert.equal(toneOf(all, /until the factories are in groups/), 'info');
 });

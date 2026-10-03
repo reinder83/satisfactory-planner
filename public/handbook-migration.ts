@@ -42,9 +42,10 @@ export const isTranscribed = (plan: { engine?: string } | null | undefined): boo
   !!plan?.engine?.startsWith('handbook-');
 
 // What Recalculate, round-up and the payoff ranking say before they solve a transcribed plan
-// afresh (decision 7B on #387, #480). Naming the source is the point here, so it names the handbook.
+// afresh (decision 7B on #387, #480). It names the source as "the original plan", as TRANSCRIBED
+// below does: no "handbook" in user-facing copy (decision 8, #802).
 export const RESOLVE_WARNING =
-  'This plan was transcribed from the original handbook, not solved by this planner, so solving it afresh can change its recipes and machine counts.';
+  'This profile was transcribed from the original plan, not solved by this planner, so solving it afresh can change its recipes and machine counts.';
 
 // The warning on every transcribed snapshot. No "handbook" in user-facing copy (decision 8).
 export const TRANSCRIBED = 'Transcribed from the original plan; not solved by this planner.';
