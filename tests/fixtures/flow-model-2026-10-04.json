@@ -1,0 +1,1018 @@
+{
+ "Recipe_IngotIron_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Iron Ore",
+    "rate": 420.25,
+    "link": null,
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 420.25,
+     "full": 0,
+     "spare": 59.75,
+     "word": "belt"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Iron Rod",
+    "icon": "Iron Rod",
+    "link": {
+     "calcFactory": "Recipe_IronRod_C"
+    },
+    "rate": 252.925,
+    "unit": "/min",
+    "pre": "",
+    "mach": 8.430833333333334,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Iron Plate",
+    "icon": "Iron Plate",
+    "link": {
+     "calcFactory": "Recipe_IronPlate_C"
+    },
+    "rate": 167.32500000000002,
+    "unit": "/min",
+    "pre": "",
+    "mach": 5.577500000000001,
+    "beltTxt": "1 × Mk.4 belt"
+   }
+  ],
+  "equivalent": 14.008333333333333,
+  "machineCount": 15,
+  "machineName": "Smelter",
+  "recipe": {
+   "name": "Iron Ingot",
+   "machine": "Smelter",
+   "ins": [
+    [
+     "Iron Ore",
+     30,
+     null
+    ]
+   ],
+   "outs": [
+    [
+     "Iron Ingot",
+     30
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Iron Ingot · @ 100% + 1 adjustable · 30 Iron Ingot/min out per machine · split ≈ 9 / 6 across the deliveries below",
+   "out": {
+    "rate": "420,25",
+    "unit": "/min"
+   },
+   "outSub": "out · 1 × Mk.4 belt"
+  },
+  "bankNote": {
+   "shared": false
+  },
+  "sameItemConsumers": {
+   "Iron Ore": [
+    {
+     "label": "Steel Ingot",
+     "rate": 297.25,
+     "link": {
+      "calcFactory": "Recipe_IngotSteel_C"
+     }
+    }
+   ]
+  }
+ },
+ "Recipe_Plastic_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Crude Oil",
+    "rate": 60.66686520376172,
+    "link": null,
+    "plan": {
+     "lane": {
+      "mark": "Mk.2",
+      "cap": 600,
+      "entry": "Schematic_6-5_C",
+      "fluid": true,
+      "unit": " m³/min",
+      "milestone": {
+       "name": "Pipeline Engineering Mk.2",
+       "tier": 6,
+       "phase": 3,
+       "marked": false
+      },
+      "next": null
+     },
+     "count": 1,
+     "last": 60.66686520376172,
+     "full": 0,
+     "spare": 539.3331347962383,
+     "word": "pipe"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Residual Fuel",
+    "icon": "Fuel",
+    "link": {
+     "calcFactory": "Recipe_ResidualFuel_C"
+    },
+    "rate": 37.722288401253905,
+    "unit": " m³/min",
+    "pre": "Heavy Oil Residue",
+    "beltTxt": "1 × Mk.2 pipe"
+   },
+   {
+    "kind": "consumer",
+    "label": "Circuit Board",
+    "icon": "Circuit Board",
+    "link": {
+     "calcFactory": "Recipe_CircuitBoard_C"
+    },
+    "rate": 31.600000000000005,
+    "unit": "/min",
+    "pre": "Plastic",
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Computer",
+    "icon": "Computer",
+    "link": {
+     "calcFactory": "Recipe_Computer_C"
+    },
+    "rate": 25.6,
+    "unit": "/min",
+    "pre": "Plastic",
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "store",
+    "label": "Protected storage",
+    "icon": "Plastic",
+    "rate": 1,
+    "unit": "/min",
+    "pre": "Plastic"
+   }
+  ],
+  "equivalent": 2.0222288401253907,
+  "machineCount": 3,
+  "machineName": "Refinery",
+  "recipe": {
+   "name": "Plastic",
+   "machine": "Refinery",
+   "ins": [
+    [
+     "Crude Oil",
+     30,
+     null
+    ]
+   ],
+   "outs": [
+    [
+     "Plastic",
+     20
+    ],
+    [
+     "Heavy Oil Residue",
+     10
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Plastic · @ 100% + 1 adjustable",
+   "out": {
+    "rate": "40,44",
+    "unit": "/min"
+   },
+   "outSub": "out · Plastic + byproducts"
+  },
+  "bankNote": {
+   "shared": true
+  },
+  "sameItemConsumers": {
+   "Crude Oil": [
+    {
+     "label": "Fuel",
+     "rate": 106.53253918495302,
+     "link": {
+      "calcFactory": "Recipe_LiquidFuel_C"
+     }
+    },
+    {
+     "label": "Rubber",
+     "rate": 26.25,
+     "link": {
+      "calcFactory": "Recipe_Rubber_C"
+     }
+    }
+   ]
+  }
+ },
+ "Recipe_ResidualPlastic_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Polymer Resin",
+    "rate": 53.266269592476576,
+    "link": {
+     "calcFactory": "Recipe_LiquidFuel_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 53.266269592476576,
+     "full": 0,
+     "spare": 426.7337304075234,
+     "word": "belt"
+    }
+   },
+   {
+    "name": "Water",
+    "rate": 17.755423197492192,
+    "link": null,
+    "plan": {
+     "lane": {
+      "mark": "Mk.2",
+      "cap": 600,
+      "entry": "Schematic_6-5_C",
+      "fluid": true,
+      "unit": " m³/min",
+      "milestone": {
+       "name": "Pipeline Engineering Mk.2",
+       "tier": 6,
+       "phase": 3,
+       "marked": false
+      },
+      "next": null
+     },
+     "count": 1,
+     "last": 17.755423197492192,
+     "full": 0,
+     "spare": 582.2445768025078,
+     "word": "pipe"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Circuit Board",
+    "icon": "Circuit Board",
+    "link": {
+     "calcFactory": "Recipe_CircuitBoard_C"
+    },
+    "rate": 31.600000000000005,
+    "unit": "/min",
+    "pre": "",
+    "mach": 1.5800000000000003,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Computer",
+    "icon": "Computer",
+    "link": {
+     "calcFactory": "Recipe_Computer_C"
+    },
+    "rate": 25.6,
+    "unit": "/min",
+    "pre": "",
+    "mach": 1.28,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "store",
+    "label": "Protected storage",
+    "icon": "Plastic",
+    "rate": 1,
+    "unit": "/min",
+    "pre": "",
+    "mach": 0.05
+   }
+  ],
+  "equivalent": 0.8877711598746096,
+  "machineCount": 1,
+  "machineName": "Refinery",
+  "recipe": {
+   "name": "Residual Plastic",
+   "machine": "Refinery",
+   "ins": [
+    [
+     "Polymer Resin",
+     60,
+     {
+      "calcFactory": "Recipe_LiquidFuel_C"
+     }
+    ],
+    [
+     "Water",
+     20,
+     null
+    ]
+   ],
+   "outs": [
+    [
+     "Plastic",
+     20
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Residual Plastic · @ 100% + 1 adjustable · 20 Plastic/min out per machine · split ≈ 2 / 2 / 1 across the deliveries below",
+   "out": {
+    "rate": "17,76",
+    "unit": "/min"
+   },
+   "outSub": "out · 1 × Mk.4 belt"
+  },
+  "bankNote": {
+   "shared": true
+  },
+  "sameItemConsumers": {
+   "Polymer Resin": [],
+   "Water": []
+  }
+ },
+ "Recipe_Wire_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Copper Ingot",
+    "rate": 75.9,
+    "link": {
+     "calcFactory": "Recipe_IngotCopper_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 75.9,
+     "full": 0,
+     "spare": 404.1,
+     "word": "belt"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Cable",
+    "icon": "Cable",
+    "link": {
+     "calcFactory": "Recipe_Cable_C"
+    },
+    "rate": 87.6,
+    "unit": "/min",
+    "pre": "",
+    "mach": 2.92,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Stator",
+    "icon": "Stator",
+    "link": {
+     "calcFactory": "Recipe_Stator_C"
+    },
+    "rate": 63.2,
+    "unit": "/min",
+    "pre": "",
+    "mach": 2.106666666666667,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "store",
+    "label": "Protected storage",
+    "icon": "Wire",
+    "rate": 1,
+    "unit": "/min",
+    "pre": "",
+    "mach": 0.03333333333333333
+   }
+  ],
+  "equivalent": 5.0600000000000005,
+  "machineCount": 6,
+  "machineName": "Constructor",
+  "recipe": {
+   "name": "Wire",
+   "machine": "Constructor",
+   "ins": [
+    [
+     "Copper Ingot",
+     15,
+     {
+      "calcFactory": "Recipe_IngotCopper_C"
+     }
+    ]
+   ],
+   "outs": [
+    [
+     "Wire",
+     30
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Wire · @ 100% + 1 adjustable · 30 Wire/min out per machine · split ≈ 3 / 3 / 1 across the deliveries below",
+   "out": {
+    "rate": "151,8",
+    "unit": "/min"
+   },
+   "outSub": "out · 1 × Mk.4 belt"
+  },
+  "bankNote": {
+   "shared": false
+  },
+  "sameItemConsumers": {
+   "Copper Ingot": [
+    {
+     "label": "Copper Sheet",
+     "rate": 33.6,
+     "link": {
+      "calcFactory": "Recipe_CopperSheet_C"
+     }
+    }
+   ]
+  }
+ },
+ "Recipe_Stator_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Steel Pipe",
+    "rate": 23.700000000000003,
+    "link": {
+     "calcFactory": "Recipe_SteelPipe_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 23.700000000000003,
+     "full": 0,
+     "spare": 456.3,
+     "word": "belt"
+    }
+   },
+   {
+    "name": "Wire",
+    "rate": 63.2,
+    "link": {
+     "calcFactory": "Recipe_Wire_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 63.2,
+     "full": 0,
+     "spare": 416.8,
+     "word": "belt"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Motor",
+    "icon": "Motor",
+    "link": {
+     "calcFactory": "Recipe_Motor_C"
+    },
+    "rate": 6.4,
+    "unit": "/min",
+    "pre": "",
+    "mach": 1.28,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Automated Wiring",
+    "icon": "Automated Wiring",
+    "link": {
+     "calcFactory": "Recipe_SpaceElevatorPart_3_C"
+    },
+    "rate": 1.5,
+    "unit": "/min",
+    "pre": "",
+    "mach": 0.3,
+    "beltTxt": "1 × Mk.4 belt"
+   }
+  ],
+  "equivalent": 1.58,
+  "machineCount": 2,
+  "machineName": "Assembler",
+  "recipe": {
+   "name": "Stator",
+   "machine": "Assembler",
+   "ins": [
+    [
+     "Steel Pipe",
+     15.000000000000002,
+     {
+      "calcFactory": "Recipe_SteelPipe_C"
+     }
+    ],
+    [
+     "Wire",
+     40,
+     {
+      "calcFactory": "Recipe_Wire_C"
+     }
+    ]
+   ],
+   "outs": [
+    [
+     "Stator",
+     5
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Stator · @ 100% + 1 adjustable · 5 Stator/min out per machine · split ≈ 2 / 1 across the deliveries below",
+   "out": {
+    "rate": "7,9",
+    "unit": "/min"
+   },
+   "outSub": "out · 1 × Mk.4 belt"
+  },
+  "bankNote": {
+   "shared": false
+  },
+  "sameItemConsumers": {
+   "Steel Pipe": [
+    {
+     "label": "Heavy Modular Frame",
+     "rate": 26,
+     "link": {
+      "calcFactory": "Recipe_ModularFrameHeavy_C"
+     }
+    }
+   ],
+   "Wire": [
+    {
+     "label": "Cable",
+     "rate": 87.6,
+     "link": {
+      "calcFactory": "Recipe_Cable_C"
+     }
+    }
+   ]
+  }
+ },
+ "Recipe_Cable_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Wire",
+    "rate": 87.6,
+    "link": {
+     "calcFactory": "Recipe_Wire_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 87.6,
+     "full": 0,
+     "spare": 392.4,
+     "word": "belt"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Automated Wiring",
+    "icon": "Automated Wiring",
+    "link": {
+     "calcFactory": "Recipe_SpaceElevatorPart_3_C"
+    },
+    "rate": 30,
+    "unit": "/min",
+    "pre": "",
+    "mach": 1,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Computer",
+    "icon": "Computer",
+    "link": {
+     "calcFactory": "Recipe_Computer_C"
+    },
+    "rate": 12.8,
+    "unit": "/min",
+    "pre": "",
+    "mach": 0.4266666666666667,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "store",
+    "label": "Protected storage",
+    "icon": "Cable",
+    "rate": 1,
+    "unit": "/min",
+    "pre": "",
+    "mach": 0.03333333333333333
+   }
+  ],
+  "equivalent": 1.46,
+  "machineCount": 2,
+  "machineName": "Constructor",
+  "recipe": {
+   "name": "Cable",
+   "machine": "Constructor",
+   "ins": [
+    [
+     "Wire",
+     60,
+     {
+      "calcFactory": "Recipe_Wire_C"
+     }
+    ]
+   ],
+   "outs": [
+    [
+     "Cable",
+     30
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Cable · @ 100% + 1 adjustable · 30 Cable/min out per machine · split ≈ 1 / 1 / 1 across the deliveries below",
+   "out": {
+    "rate": "43,8",
+    "unit": "/min"
+   },
+   "outSub": "out · 1 × Mk.4 belt"
+  },
+  "bankNote": {
+   "shared": false
+  },
+  "sameItemConsumers": {
+   "Wire": [
+    {
+     "label": "Stator",
+     "rate": 63.2,
+     "link": {
+      "calcFactory": "Recipe_Stator_C"
+     }
+    }
+   ]
+  }
+ },
+ "Recipe_Screw_C": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Iron Rod",
+    "rate": 148.025,
+    "link": {
+     "calcFactory": "Recipe_IronRod_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.4",
+      "cap": 480,
+      "entry": "Schematic_6-1_C",
+      "fluid": false,
+      "unit": "/min",
+      "milestone": {
+       "name": "Logistics Mk.4",
+       "tier": 5,
+       "phase": 3,
+       "marked": false
+      },
+      "next": {
+       "mark": "Mk.5",
+       "cap": 780,
+       "entry": "Schematic_7-2_C",
+       "milestone": {
+        "name": "Logistics Mk.5",
+        "tier": 7,
+        "phase": 4,
+        "marked": false
+       }
+      }
+     },
+     "count": 1,
+     "last": 148.025,
+     "full": 0,
+     "spare": 331.975,
+     "word": "belt"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "consumer",
+    "label": "Reinforced Iron Plate",
+    "icon": "Reinforced Iron Plate",
+    "link": {
+     "calcFactory": "Recipe_IronPlateReinforced_C"
+    },
+    "rate": 221.1,
+    "unit": "/min",
+    "pre": "",
+    "mach": 5.5275,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Rotor",
+    "icon": "Rotor",
+    "link": {
+     "calcFactory": "Recipe_Rotor_C"
+    },
+    "rate": 215.00000000000003,
+    "unit": "/min",
+    "pre": "",
+    "mach": 5.375000000000001,
+    "beltTxt": "1 × Mk.4 belt"
+   },
+   {
+    "kind": "consumer",
+    "label": "Heavy Modular Frame",
+    "icon": "Heavy Modular Frame",
+    "link": {
+     "calcFactory": "Recipe_ModularFrameHeavy_C"
+    },
+    "rate": 156,
+    "unit": "/min",
+    "pre": "",
+    "mach": 3.9,
+    "beltTxt": "1 × Mk.4 belt"
+   }
+  ],
+  "equivalent": 14.8025,
+  "machineCount": 15,
+  "machineName": "Constructor",
+  "recipe": {
+   "name": "Screws",
+   "machine": "Constructor",
+   "ins": [
+    [
+     "Iron Rod",
+     10,
+     {
+      "calcFactory": "Recipe_IronRod_C"
+     }
+    ]
+   ],
+   "outs": [
+    [
+     "Screws",
+     40
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Screws · @ 100% + 1 adjustable · 40 Screws/min out per machine · split ≈ 6 / 6 / 4 across the deliveries below",
+   "out": {
+    "rate": "592,1",
+    "unit": "/min"
+   },
+   "outSub": "out · 2 × Mk.4 belts"
+  },
+  "bankNote": {
+   "shared": false
+  },
+  "sameItemConsumers": {
+   "Iron Rod": [
+    {
+     "label": "Modular Frame",
+     "rate": 60.900000000000006,
+     "link": {
+      "calcFactory": "Recipe_ModularFrame_C"
+     }
+    },
+    {
+     "label": "Rotor",
+     "rate": 43.00000000000001,
+     "link": {
+      "calcFactory": "Recipe_Rotor_C"
+     }
+    }
+   ]
+  }
+ },
+ "power-fuel": {
+  "stage": "3",
+  "inputs": [
+   {
+    "name": "Fuel",
+    "rate": 96.16988505747129,
+    "link": {
+     "calcFactory": "Recipe_LiquidFuel_C"
+    },
+    "plan": {
+     "lane": {
+      "mark": "Mk.2",
+      "cap": 600,
+      "entry": "Schematic_6-5_C",
+      "fluid": true,
+      "unit": " m³/min",
+      "milestone": {
+       "name": "Pipeline Engineering Mk.2",
+       "tier": 6,
+       "phase": 3,
+       "marked": false
+      },
+      "next": null
+     },
+     "count": 1,
+     "last": 96.16988505747129,
+     "full": 0,
+     "spare": 503.8301149425287,
+     "word": "pipe"
+    }
+   }
+  ],
+  "outputs": [
+   {
+    "kind": "ship",
+    "label": "Power grid",
+    "shipSub": "generation",
+    "rateTxt": "1,2 GW",
+    "noItem": true
+   }
+  ],
+  "equivalent": 4.808494252873564,
+  "machineCount": 5,
+  "machineName": "Fuel Generator",
+  "recipe": {
+   "name": "Fuel power",
+   "machine": "Fuel Generator",
+   "ins": [
+    [
+     "Fuel",
+     20,
+     {
+      "calcFactory": "Recipe_LiquidFuel_C"
+     }
+    ]
+   ],
+   "outs": [
+    [
+     "MW",
+     250
+    ]
+   ]
+  },
+  "bar": {
+   "sub": "Fuel power · @ 100% + 1 adjustable",
+   "out": {
+    "text": "1,2 GW"
+   },
+   "outSub": "generation"
+  },
+  "bankNote": null,
+  "sameItemConsumers": {
+   "Fuel": []
+  }
+ }
+}
