@@ -1,7 +1,7 @@
 <!--
-  The page frame: sidebar navigation, save status, the profile switcher, and the top bar with
-  the breadcrumb (the save), ADA's one-line ticker (#738) and the phase picker. The current page
-  is drawn into the empty <main> by render() in shell.ts.
+  The page frame: sidebar navigation, ADA, save status, the profile switcher, and the top bar
+  with the breadcrumb (the save) and the phase picker. The current page is drawn into the empty
+  <main> by render() in shell.ts.
 
   The phase picker is a phase track (SP-44, #279): one segment per phase, each with its
   checklist's progress (views/phase-track.ts), as a group of radio buttons named "Working
@@ -22,8 +22,7 @@
   height over the page, with its navigation (the open page marked), ADA and the profile
   switcher. The open drawer is a modal dialog: Tab stays inside it, and Esc, its × or the
   backdrop close it and return focus to ☰. A followed link closes it and lets the opened page
-  take focus. Wider, the button is hidden and the sidebar is as before, and ADA moves to the
-  top bar.
+  take focus. Wider, the button is hidden and the sidebar is as before.
 -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -182,18 +181,16 @@ function navFollowed(event: Event) {
   closeMenu(same);
   if (!same) link.blur();
 }
-// Beside the phone layout ADA is a ticker in the top bar, so a long remark never grows the
-// sidebar (#738); at phone width she is in the drawer (SP-38). One panel at a time, so her ids
-// and live region stay unique. Widening past the phone layout also shows the sidebar again,
-// so the drawer closes.
-const wideQuery = globalThis.matchMedia?.('(min-width: 721px)');
-const wide = ref(wideQuery?.matches ?? true);
+// Widening past the phone layout shows the sidebar again, so the drawer closes.
+let wide: MediaQueryList | undefined;
 const widened = (event: MediaQueryListEvent) => {
-  wide.value = event.matches;
   if (event.matches) closeMenu(false);
 };
-onMounted(() => wideQuery?.addEventListener?.('change', widened));
-onBeforeUnmount(() => wideQuery?.removeEventListener?.('change', widened));
+onMounted(() => {
+  wide = globalThis.matchMedia?.('(min-width: 721px)');
+  wide?.addEventListener?.('change', widened);
+});
+onBeforeUnmount(() => wide?.removeEventListener?.('change', widened));
 
 // The top bar's short save status (shown at phone width, where the sidebar's is hidden)
 // reserves the width of its longest label in this edition, so it never shifts the bar.
@@ -334,7 +331,7 @@ async function pickTrack(event: Event) {
           ></a
         >
       </nav>
-      <AdaPanel v-if="!wide" />
+      <AdaPanel />
       <div class="save-status">
         <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
@@ -455,7 +452,6 @@ async function pickTrack(event: Event) {
         <div class="breadcrumbs">
           <a href="#profiles">{{ frame.saveName }}</a>
         </div>
-        <AdaPanel v-if="wide" topbar />
         <div class="topbar-tools">
           <div
             class="phase-track"

@@ -435,27 +435,39 @@ input[type='radio'] {
   color: var(--accent);
 }
 
-/* ── ADA: the assistant's one-line ticker ──────────────── */
-/* She is a ticker everywhere (AdaPanel.vue): ◈ and the remark cut to one line on a button that
-   unfolds the full panel in place (the whole remark, Another remark, Mute) and folds it again.
-   Shell.vue puts her in the top bar beside the phone layout, so a long remark never grows the
-   sidebar (#738; placed below, after the top bar), and in the menu drawer at phone width
-   (SP-38; the max-width: 720px block). Folded, the remark stays in the page as #ada-line, out
-   of sight, so a new one is still announced. */
+/* ── ADA: the assistant panel in the sidebar ───────────── */
 .ada {
+  margin: 16px 14px 0;
   border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
   background: var(--panel2);
   padding: 10px 12px 11px;
-}
-.ada:not(.is-muted) {
-  padding: 0;
 }
 .ada[data-tone='warn'] {
   border-left-color: var(--red);
 }
 .ada[data-tone='praise'] {
   border-left-color: var(--green);
+}
+.ada-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+.ada-head b {
+  display: block;
+  font-family: var(--head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--bright);
+}
+.ada-head .eyebrow {
+  margin-top: 1px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
 }
 .ada-mark {
   width: 22px;
@@ -482,6 +494,10 @@ input[type='radio'] {
   border-left-color: var(--blue);
   background: #0c1116;
 }
+.ada[data-tone='fault'] .ada-head b {
+  color: var(--blue);
+  letter-spacing: 0.32em;
+}
 .ada[data-tone='fault'] .ada-mark {
   border-color: var(--blue);
   color: var(--blue);
@@ -489,54 +505,6 @@ input[type='radio'] {
 }
 .ada[data-tone='fault'] .ada-line {
   color: #93a7b8;
-}
-.ada-ticker {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  background: none;
-  color: #a7b0b7;
-  font: inherit;
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-.ada-ticker-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.ada.is-open .ada-ticker-text {
-  font-family: var(--head);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--bright);
-}
-.ada[data-tone='fault'].is-open .ada-ticker-text {
-  color: var(--blue);
-  letter-spacing: 0.32em;
-}
-.ada-ticker-sign {
-  flex: none;
-  color: var(--accent);
-  font-size: 14px;
-}
-.ada-body {
-  padding: 0 12px 11px;
-}
-/* Her role under her name in the unfolded panel ("Artificial Directory and Assistant"), clear
-   of the ticker's focus ring. */
-.ada-head {
-  margin: 4px 0 6px;
-  letter-spacing: 0.04em;
-  line-height: 1.35;
 }
 .ada-line {
   margin: 0;
@@ -554,23 +522,6 @@ input[type='radio'] {
   padding: 2px 0;
   font-size: 10.5px;
   letter-spacing: 0.1em;
-}
-.ada:not(.is-open) .ada-head,
-.ada:not(.is-open) .ada-tools {
-  display: none;
-}
-.ada:not(.is-open) .ada-body {
-  padding: 0;
-}
-/* Out of sight but rendered: display: none or visibility: hidden would silence it. */
-.ada:not(.is-open) .ada-line {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 .ada.is-muted {
   display: flex;
@@ -592,6 +543,10 @@ input[type='radio'] {
   padding: 2px 0;
   font-size: 10.5px;
 }
+/* The phone ticker (SP-38, AdaPanel.vue): shown at ≤720px only, below. */
+.ada-ticker {
+  display: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .ada-mark {
     animation: none;
@@ -610,11 +565,10 @@ input[type='radio'] {
 .topbar {
   padding: 13px clamp(14px, 2.4vw, 30px);
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   background: #0f1214;
-  gap: 12px 16px;
+  gap: 16px;
   border-bottom: 7px solid;
   border-image: var(--hazard) 7;
 }
@@ -723,20 +677,6 @@ input[type='radio'] {
 }
 .topbar .phase-select {
   display: none;
-}
-/* ADA's ticker beside the phone layout (#738, Shell.vue): between the save name and the phase
-   picker, taking the room between them. Unfolded, she takes a row of her own under them, so
-   the whole remark has the bar's width. */
-.topbar .ada {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.topbar .ada.is-muted {
-  flex: 0 1 auto;
-}
-.topbar .ada.is-open {
-  order: 1;
-  flex-basis: 100%;
 }
 /* The save status is the sidebar's; the top bar carries a short copy for phone widths,
    where the sidebar's is hidden. Its labels share one grid cell, so the widest one sets
@@ -3960,8 +3900,11 @@ button.rail-tile:hover {
     grid-template-columns: 204px minmax(0, 1fr);
   }
   /* Between the phone layout and 1100px the page column is too narrow for the save name and
-     the phase track side by side: the track drops under the name (the top bar wraps), and its
-     segments wrap rather than push the page wider than the window (#658). */
+     the phase track side by side: the track drops under the name, and its segments wrap
+     rather than push the page wider than the window (#658). */
+  .topbar {
+    flex-wrap: wrap;
+  }
   .phase-track {
     flex-wrap: wrap;
   }
@@ -4006,6 +3949,65 @@ button.rail-tile:hover {
   }
   .aisle {
     margin: 0 6px;
+  }
+}
+/* Beside the phone layout the sidebar keeps its scrollbar's room reserved, so a long remark
+   from ADA that makes it scroll never narrows it and re-wraps the profile footer (#738). A
+   thin scrollbar takes less of that room. */
+@media (min-width: 721px) {
+  .sidebar {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+}
+/* A short window (a 1366 × 768 laptop, a 1440 × 900 screen) or a narrow one, beside the phone
+   layout: the sidebar tightens its spacing, so ADA's whole remark usually fits without a
+   scrollbar (#738). Her remark is never cut. */
+@media (min-width: 721px) and (max-height: 900px), (min-width: 721px) and (max-width: 1100px) {
+  .sidebar {
+    padding: 12px 0 10px;
+  }
+  .brand {
+    padding-bottom: 10px;
+  }
+  .nav {
+    margin-top: 4px;
+  }
+  .nav a {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+  .ada {
+    margin-top: 10px;
+    padding: 8px 12px 9px;
+  }
+  .ada-head {
+    margin-bottom: 5px;
+  }
+  .ada-line {
+    line-height: 1.6;
+  }
+  .ada-tools {
+    margin-top: 6px;
+  }
+  .save-status {
+    padding-top: 10px;
+  }
+  .backup-age {
+    margin-top: 6px;
+  }
+  .sidebar-foot {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+}
+/* In the narrow 204px sidebar ADA's card also gives her remark a little more width. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  .ada {
+    margin-right: 10px;
+    margin-left: 10px;
+    padding-right: 10px;
+    padding-left: 10px;
   }
 }
 @media (max-width: 720px) {
@@ -4079,15 +4081,69 @@ button.rail-tile:hover {
   .sidebar-foot {
     margin-top: auto;
   }
-  /* ADA's ticker in the drawer (SP-38): a 44px touch target, and her role line left out. */
   .ada {
     margin: 12px 16px 0;
   }
+  /* ADA is one line in the drawer (SP-38): ◈ and the remark cut short, a button that unfolds
+     the full panel in place. Folded, the remark stays in the page as #ada-line, out of sight,
+     so a new one is still announced. */
+  .ada:not(.is-muted) {
+    padding: 0;
+  }
   .ada-ticker {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
     min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    background: none;
+    color: #a7b0b7;
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .ada-ticker-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .ada.is-open .ada-ticker-text {
+    font-family: var(--head);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--bright);
+  }
+  .ada-ticker-sign {
+    flex: none;
+    color: var(--accent);
+    font-size: 14px;
+  }
+  .ada-body {
+    padding: 0 12px 11px;
   }
   .ada .ada-head {
     display: none;
+  }
+  .ada:not(.is-open) .ada-tools {
+    display: none;
+  }
+  .ada:not(.is-open) .ada-body {
+    padding: 0;
+  }
+  .ada:not(.is-open) .ada-line {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   /* A thinner hazard stripe on a phone (SP-39): 4px rather than 7px. */
   .topbar {

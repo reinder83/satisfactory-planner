@@ -228,7 +228,7 @@ test('ADA speaks, cycles, mutes and unmutes', async () => {
   assert.ok($('[data-ada-next]'));
 });
 
-test('ADA is a one-line ticker that unfolds the panel in place (SP-38, #738)', async () => {
+test('at phone width ADA is a one-line ticker that unfolds the panel in place (SP-38)', async () => {
   render();
   const ticker = $('[data-ada-ticker]')!;
   assert.equal(ticker.tagName, 'BUTTON');
@@ -264,23 +264,26 @@ test('ADA is a one-line ticker that unfolds the panel in place (SP-38, #738)', a
   assert.equal($('[data-ada-ticker]')!.getAttribute('aria-expanded'), 'true');
 });
 
-test('the phone ticker is a touch target and keeps the remark announced while folded (SP-38)', () => {
+test('the phone ticker keeps the remark announced while folded (style.css, SP-38)', () => {
   const css = fs.readFileSync('public/style.css', 'utf8').replace(/\r/g, '');
-  const phone = css.slice(css.indexOf('@media (max-width: 720px) {\n  .layout {'));
-  const rule = (block: string, selector: string, indent: string) => {
-    const start = block.indexOf(`\n${indent}${selector} {`);
-    assert.ok(start > 0, selector);
-    return block.slice(start, block.indexOf('}', start));
+  const phone = css.slice(css.indexOf('@media (max-width: 720px)'));
+  const rule = (selector: string) => {
+    const start = phone.indexOf(`\n  ${selector} {`);
+    assert.ok(start > 0, `${selector} at ≤720px`);
+    return phone.slice(start, phone.indexOf('}', start));
   };
-  assert.match(rule(phone, '.ada-ticker', '  '), /min-height: 44px/);
-  // The ticker itself is drawn the same in the drawer and the top bar (#738), at the top
-  // level (not indented).
-  assert.match(rule(css, '.ada-ticker', ''), /display: flex/);
-  assert.match(rule(css, '.ada-ticker-text', ''), /text-overflow: ellipsis/);
+  assert.match(rule('.ada-ticker'), /display: flex/);
+  assert.match(rule('.ada-ticker'), /min-height: 44px/);
+  assert.match(rule('.ada-ticker-text'), /text-overflow: ellipsis/);
   // Out of sight but rendered: display: none or visibility: hidden would silence it.
-  const folded = rule(css, '.ada:not(.is-open) .ada-line', '');
+  const folded = rule('.ada:not(.is-open) .ada-line');
   assert.match(folded, /clip-path: inset\(50%\)/);
   assert.doesNotMatch(folded, /display: none|visibility: hidden/);
+  // Wider screens never show the ticker.
+  assert.match(
+    css.slice(0, css.indexOf('@media (max-width: 720px)')),
+    /\n\.ada-ticker \{\n  display: none;/,
+  );
 });
 
 test('ADA repeats a renamed step escaped', async () => {
@@ -311,13 +314,10 @@ test('ADA repeats a renamed step escaped', async () => {
 
 test('five pokes at the badge stage a transmission fault; the next remark ends it', async () => {
   render();
-  // happy-dom's window is wider than the phone layout, so ADA is in the top bar (#738).
-  for (let i = 0; i < 5; i++) $('[data-ada-ticker] .ada-mark')!.click();
+  for (let i = 0; i < 5; i++) $('.ada-head .ada-mark')!.click();
   await nextTick();
   assert.equal($('.ada')!.dataset.tone, 'fault');
-  $('[data-ada-ticker]')!.click();
-  await nextTick();
-  assert.equal($('.ada-ticker-text')!.textContent, '???');
+  assert.equal($('.ada b')!.textContent, '???');
   assert.match($('.ada')!.textContent, /Transmission fault/);
   $('[data-ada-next]')!.click();
   await nextTick();
