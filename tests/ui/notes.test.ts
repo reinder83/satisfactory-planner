@@ -134,6 +134,11 @@ test('a redraw keeps unsaved notes, and another working phase opens its own box 
   ]);
   assert.equal($<HTMLTextAreaElement>('#phase-note-4')!.value, 'Phase 4 plans');
   assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Unsaved thought');
+  // Leave no draft waiting: one still waiting when the page goes is written then, and kept for
+  // this save, profile and key if that write fails (orphans in ui/note-draft.ts), where a later
+  // test's Phase 3 box would take it over (#864).
+  note.value = '';
+  note.dispatchEvent(new Event('input'));
 });
 
 test('leaving the page or changing phase asks before dropping an unsaved note', async () => {

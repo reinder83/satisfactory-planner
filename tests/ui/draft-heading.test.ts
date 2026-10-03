@@ -38,7 +38,12 @@ const overBudget = new Set(['short', 'power', 'hours', 'whole']);
 // The bold heading of each warning notice on the page.
 const headings = () => $$('.notice.warn > b:first-child').map(b => (b.textContent || '').trim());
 
-beforeEach(() => page());
+// The wizard opens over an open save, as boot() leaves one, and the frame around it reads it;
+// each test opens its own rather than relying on one an earlier test opened (#864).
+beforeEach(() => {
+  page();
+  open();
+});
 
 test('the plan page names a budget only when one is short', () => {
   for (const [kind, stage] of Object.entries(stages)) {
