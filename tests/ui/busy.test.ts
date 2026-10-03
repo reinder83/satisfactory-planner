@@ -283,20 +283,40 @@ test('Move right / Move left keep focus, and go to the other arrow at the end of
   assert.ok(focusedOn('[data-bay-right="A"]'), describeFocus());
 });
 
-test('Move to… keeps focus while it saves, then goes to the next bay’s menu', async () => {
-  const net = heldFetch(updates);
+test('a failed Move keeps the bay, the floor picked and focus on Move (#854)', async () => {
+  const net = heldFetch(failing);
   go('storage');
   setLayoutEditing(true);
   render();
   await nextTick();
   change('[data-move-bay="D"]', 'upper');
   await settle();
-  assert.ok(busy('[data-move-bay="D"]'));
-  assert.ok(focusedOn('[data-move-bay="D"]'), describeFocus());
-  // A key pressed on it meanwhile changes nothing.
-  change('[data-move-bay="D"]', 'workshop');
+  press('[data-move-bay-go="D"]');
+  await net.release();
+  assert.ok($('[data-slot="D01"]'), 'bay D is still there');
+  assert.equal($<HTMLSelectElement>('[data-move-bay="D"]')!.value, 'upper');
+  assert.ok(ready('[data-move-bay-go="D"]'));
+  assert.ok(focusedOn('[data-move-bay-go="D"]'), describeFocus());
+  assert.equal(net.calls.length, 1);
+});
+
+test('Move keeps focus while it saves, then goes to the next bay’s menu', async () => {
+  const net = heldFetch(updates);
+  go('storage');
+  setLayoutEditing(true);
+  render();
+  await nextTick();
+  // The menu only picks the floor; Move moves the bay (#854).
+  change('[data-move-bay="D"]', 'upper');
   await settle();
-  assert.equal($<HTMLSelectElement>('[data-move-bay="D"]')!.value, '');
+  assert.equal(net.calls.length, 0, 'picking a floor saves nothing');
+  press('[data-move-bay-go="D"]');
+  await settle();
+  assert.ok(busy('[data-move-bay-go="D"]'));
+  assert.ok(focusedOn('[data-move-bay-go="D"]'), describeFocus());
+  // Pressed again meanwhile, it sends nothing.
+  press('[data-move-bay-go="D"]');
+  await settle();
   assert.equal(net.calls.length, 1);
   await net.release();
   assert.equal($('[data-slot="D01"]'), null, 'bay D left the ground floor');

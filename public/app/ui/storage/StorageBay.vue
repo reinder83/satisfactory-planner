@@ -5,8 +5,9 @@
   room" does that for every named container of the bay. While editing the layout, the bay
   can be renamed, a container cleared (its checkmarks stay with the address), an item added
   (a free position first, then the next address), a container dragged to another position
-  (SlotCell.vue, #208) and an added bay removed. Move left / Move right set the order of the bays
-  on the floor (#191): `order` is every bay on it, in its current order.
+  (SlotCell.vue, #208), the bay moved to another floor ("Move to…" picks it, Move moves it, #854)
+  and an added bay removed. Move left / Move right set the order of the bays on the floor (#191):
+  `order` is every bay on it, in its current order.
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
@@ -205,23 +206,28 @@ async function hideBay(event: Event) {
   saving(button, { type: 'storageBayHide', id: props.bay.id }, refocus);
 }
 
-// "Move to…": the bay goes to another floor with its letter, so its containers, checkmarks
-// and notes go with it (#190). The menu is reset either way, and is busy while it saves
-// (app/busy.ts): a key pressed on it meanwhile changes nothing. The bay leaves this floor on
-// success, so focus goes to the next bay's menu, else the previous one's, else the new bay's
-// letter field.
+// "Move to…" only picks a floor; "Move" beside it moves the bay there (#854). Chrome and Edge on
+// Windows change a closed select's value on each arrow key and fire `change`, so a menu that
+// moved the bay on `change` moved it while a keyboard user was still reading the floors. The bay
+// goes with its letter, so its containers, checkmarks and notes go with it (#190). Move is
+// disabled until a floor is picked, and busy while it saves (app/busy.ts): pressed again
+// meanwhile, it sends nothing. The bay leaves this floor on success, so focus goes to the next
+// bay's menu, else the previous one's, else the new bay's letter field; a failed move keeps the
+// floor picked and focus on Move.
+const picked = ref('');
+// The picked floor, while the bay can still move there.
+const target = computed(() => view.value.moveTo.find(f => f.id === picked.value));
 function moveBay(event: Event) {
-  const select = event.target as HTMLSelectElement,
-    floor = select.value,
-    label = storageFloors().find(f => f.id === floor)?.label;
-  select.value = '';
-  if (!floor || isBusy(select)) return;
-  const refocus = refocusAfterRemoval(select, { ...bayList, control: '[data-move-bay]' });
-  return whileBusy(select, async () => {
+  const button = event.currentTarget as HTMLButtonElement,
+    floor = target.value;
+  if (!floor || isBusy(button)) return;
+  const refocus = refocusAfterRemoval(button, { ...bayList, control: '[data-move-bay]' });
+  return whileBusy(button, async () => {
     try {
-      await save({ type: 'storageBayMove', id: props.bay.id, floor });
+      await save({ type: 'storageBayMove', id: props.bay.id, floor: floor.id });
+      picked.value = '';
       render();
-      toast(`Bay ${props.bay.id} moved to ${label}, with its containers and checkmarks.`);
+      toast(`Bay ${props.bay.id} moved to ${floor.label}, with its containers and checkmarks.`);
       void refocus();
     } catch {}
   });
@@ -375,18 +381,28 @@ async function addContainer(event: Event) {
             →
           </button></template
         >
-        <select
-          v-if="view.editing && view.moveTo.length"
-          class="move-bay"
-          :data-move-bay="bay.id"
-          :aria-label="'Move bay ' + bay.id + ' to another floor'"
-          @change="moveBay"
+        <template v-if="view.editing && view.moveTo.length"
+          ><select
+            class="move-bay"
+            :data-move-bay="bay.id"
+            :value="target?.id ?? ''"
+            :aria-label="'Floor to move bay ' + bay.id + ' to'"
+            @change="picked = ($event.target as HTMLSelectElement).value"
+          >
+            <option value="">Move to…</option>
+            <option v-for="floor in view.moveTo" :key="floor.id" :value="floor.id">
+              {{ floor.label }}
+            </option></select
+          ><button
+            class="btn quiet unavailable"
+            :data-move-bay-go="bay.id"
+            :aria-label="'Move bay ' + bay.id + (target ? ' to ' + target.label : '')"
+            :disabled="!target"
+            @click="moveBay"
+          >
+            Move
+          </button></template
         >
-          <option value="">Move to…</option>
-          <option v-for="floor in view.moveTo" :key="floor.id" :value="floor.id">
-            {{ floor.label }}
-          </option>
-        </select>
         <button
           v-if="view.editing && view.canHide"
           class="btn quiet"
