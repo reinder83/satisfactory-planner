@@ -184,6 +184,14 @@ function siteLineItems(
   return [...made].sort((a, b) => a.localeCompare(b));
 }
 
-// An entry as the heading words it: "Wire", or "Wire (needs a recalculation)".
-export const onSiteEntryText = (entry: OnSiteEntry): string =>
-  entry.note ? `${entry.item} ${entry.note}` : entry.item;
+// A list of entries as the heading words it (#955): the items that share a note under that note
+// once, each run in the order its note first comes and joined as a list, the runs apart by "; ":
+// "Cable and Quickwire (no line here uses it now); Water (can't be made on site)". Items without a
+// note make a run of their own: "Copper Ingot (until a recalculation); Wire". '' for none.
+export function onSiteEntriesText(entries: readonly OnSiteEntry[]): string {
+  const byNote = new Map<string, string[]>();
+  for (const { item, note } of entries) byNote.set(note, [...(byNote.get(note) || []), item]);
+  return [...byNote]
+    .map(([note, items]) => (note ? `${listNames(items)} ${note}` : listNames(items)))
+    .join('; ');
+}
