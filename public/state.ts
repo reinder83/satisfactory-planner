@@ -29,7 +29,7 @@
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
 //                            roundUpState, wholeMachineProfile) and their refusals
 //                            (checkNewProfileKind, checkRoundUp)
-//   state/summary.ts         phaseProgress and currentPayoff
+//   state/summary.ts         phaseProgress, planStepIds, profilePhases and currentPayoff
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
 export {
   bayCapacity,
@@ -62,5 +62,5 @@ export {
   shareState,
   wholeMachineProfile,
 } from './state/carry.ts';
-export { currentPayoff, phaseProgress } from './state/summary.ts';
+export { currentPayoff, phaseProgress, planStepIds, profilePhases } from './state/summary.ts';
 export { defaultFactoryGroups } from './state/factory-groups.ts';

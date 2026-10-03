@@ -45,6 +45,8 @@ import type {
   UpdateOp,
   WorkspaceSummary,
 } from './types/index.ts';
+import { profilePhases } from './state.ts';
+import type { Progression } from './types/index.ts';
 
 // What app/api.ts passes: fetch's options (a JSON string body and a plain headers object) and
 // the calculation progress callback.
@@ -98,6 +100,8 @@ let instance: Promise<BrowserRequest> | undefined;
 // and planner.ts's calculate. `ranker` runs a payoff ranking; without one that route is refused.
 // `loadMigration` loads what converting an imported original profile needs (importableTransfer
 // in transfer.ts); without it (tests of other behaviour) an import stores one as it is.
+// `progression` is progression.json, which the summary's per-phase step counts read (#746);
+// without it (tests of other behaviour) the summary counts production lines only.
 // Errors are thrown; app/api.ts shows them like a server { error }.
 export function createBrowserApi(
   store: BrowserStore,
@@ -105,6 +109,7 @@ export function createBrowserApi(
   catalog: Catalog,
   ranker?: Ranker,
   loadMigration?: () => Promise<MigrationData>,
+  progression?: Progression,
 ): BrowserRequest {
   const randomId = () => crypto.randomUUID();
   const cleanName = (name: unknown): string => {
@@ -131,7 +136,10 @@ export function createBrowserApi(
         ...(isTranscribed(profile.plan) ? { transcribed: true as const } : {}),
         completed: Object.values(profile.state.checks).filter(Boolean).length,
         phase: profile.state.settings.phase,
-        phases: phaseProgress(profile.plan, profile.state.checks),
+        // The same per-phase counts the server sends (profilePhases, #746).
+        phases: progression
+          ? profilePhases(profile.plan, profile.state, progression)
+          : phaseProgress(profile.plan, profile.state.checks),
       })),
     })),
   });
@@ -573,9 +581,9 @@ export function workerJobs(
   };
 }
 // Entry point app/api.ts calls in browser mode. The first call creates the store, the worker
-// wrapper and the catalog. If that fails (no IndexedDB, the catalog did not load), the calls
-// already waiting fail with that error and the next call tries again, so a passing network
-// hiccup does not need a reload.
+// wrapper, the catalog and progression.json. If that fails (no IndexedDB, the catalog or
+// progression.json did not load), the calls already waiting fail with that error and the next
+// call tries again, so a passing network hiccup does not need a reload.
 export async function browserRequest(route: string, options?: BrowserRequestOptions) {
   if (!instance) {
     const starting = (instance = (async () => {
@@ -589,6 +597,11 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
       const response = await fetch(new URL('./catalog.json', import.meta.url));
       if (!response.ok) throw Error('Could not load recipe catalog.');
       const catalog = (await response.json()) as Catalog;
+      // progression.json, for the summary's step counts (#746). The interface loads it at boot
+      // too, and cannot start without it.
+      const steps = await fetch(new URL('./progression.json', import.meta.url));
+      if (!steps.ok) throw Error('Could not load the milestone data.');
+      const progression = (await steps.json()) as Progression;
       // The handbook migration's recipes (#497), fetched only when the record or an import (#605)
       // holds an original profile. A failed fetch fails that request and changes nothing; the
       // next one tries again.
@@ -609,6 +622,7 @@ export async function browserRequest(route: string, options?: BrowserRequestOpti
         catalog,
         jobs.rank,
         loadMigration,
+        progression,
       );
     })());
     starting.catch(() => {

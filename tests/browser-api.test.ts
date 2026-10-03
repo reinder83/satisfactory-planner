@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   browserRequest,
   createBrowserApi,
@@ -237,6 +238,35 @@ test('a failed start is not cached: the next browser request tries again', async
   }
 });
 
+// progression.json, which the summary's step counts read (#746), is loaded with the catalog: a
+// failed load fails the start the same way, and the next request tries again.
+test('a failed progression.json load is not cached either', async () => {
+  const saved = { indexedDB: globalThis.indexedDB, fetch: globalThis.fetch };
+  const fetched: string[] = [];
+  Object.assign(globalThis, {
+    indexedDB: {},
+    fetch: async (url: URL) => {
+      const name = url.pathname.split('/').pop()!;
+      fetched.push(name);
+      return name === 'catalog.json'
+        ? new Response(JSON.stringify(catalog()))
+        : new Response('', { status: 503 });
+    },
+  });
+  try {
+    await assert.rejects(browserRequest('/api/workspace'), /milestone data/);
+    await assert.rejects(browserRequest('/api/workspace'), /milestone data/);
+    assert.deepEqual(fetched, [
+      'catalog.json',
+      'progression.json',
+      'catalog.json',
+      'progression.json',
+    ]);
+  } finally {
+    Object.assign(globalThis, saved);
+  }
+});
+
 // A stand-in worker that records what it is sent; the test answers for it with reply().
 function fakeWorkers() {
   interface Spawned {
@@ -410,6 +440,10 @@ test("POST /api/profiles refuses kind 'original'", async () => {
 // API it starts stays cached for the tab (the failed-start test above needs none cached).
 test('the Pages edition opens an upgraded browser with its original profile migrated', async () => {
   const recipesText = JSON.stringify(recipesJson);
+  const progressionText = fs.readFileSync(
+    new URL('../public/progression.json', import.meta.url),
+    'utf8',
+  );
   const conversion = handbookToPlan(handbook, recipes, catalog().pureLimits);
   const factory = handbook.factories.find(f => conversion.rows['3']![f.id])!;
   const row = conversion.rows['3']![factory.id]!;
@@ -448,13 +482,16 @@ test('the Pages edition opens an upgraded browser with its original profile migr
       fetched.push(name);
       if (name === 'catalog.json') return new Response(JSON.stringify(catalog()));
       if (name === 'recipes.json') return new Response(recipesText);
+      if (name === 'progression.json') return new Response(progressionText);
       return new Response('', { status: 404 });
     },
   });
   try {
     const summary = (await browserRequest('/api/workspace')) as WorkspaceSummary;
-    assert.deepEqual(fetched, ['catalog.json', 'recipes.json']);
+    assert.deepEqual(fetched, ['catalog.json', 'progression.json', 'recipes.json']);
     const listed = summary.saves[0]!.profiles[0]!;
+    // The summary counts each phase's steps from progression.json (#746).
+    assert.ok(listed.phases!.every(entry => entry.steps));
     assert.equal(listed.kind, 'calculated');
     assert.equal(listed.transcribed, true);
     assert.equal(listed.name, 'Original · 50× complete automation');

@@ -173,6 +173,23 @@ export function milestoneOnlyPhase(
   return !plan.guide && phase !== 'post' && Number(phase) < Number(plan.settings.phase || 1);
 }
 
+// The first phase a calculated plan offers (#759): Phase 1, the phases before its start phase
+// milestone-only (milestoneOnlyPhase), or the start phase itself for a plan with a guide, which
+// has no such phases. firstPhase() in app/session.ts asks this for the open profile, and the
+// save list's per-phase counts (profilePhases in state/summary.ts) for every profile, so the
+// profile card, the top bar's phase track and the phase a profile opens on cover the same phases.
+export const firstPlanPhase = (plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>): StageKey =>
+  plan.guide ? (String(plan.settings?.phase || '1') as StageKey) : '1';
+
+// The milestone-only phases of a calculated plan, in order: from its first phase (firstPlanPhase)
+// up to, not including, its start phase. None for a plan with a guide or one made for Phase 1.
+export const milestoneOnlyPhases = (
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>,
+): StageKey[] =>
+  (['1', '2', '3', '4'] as const).filter(
+    phase => Number(phase) >= Number(firstPlanPhase(plan)) && milestoneOnlyPhase(plan, phase),
+  );
+
 // The context the task lists share, for `phase` '1'-'5' or 'post' (planned as Phase 5).
 export function guideContext(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
