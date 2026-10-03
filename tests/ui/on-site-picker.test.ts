@@ -171,7 +171,8 @@ test('the picker shows a box per offered item while editing, and the marks other
   await nextTick();
   assert.equal(
     $(`#section-${MOTORS} [data-on-site-items]`)!.textContent!.trim(),
-    'Made on site: Screws and Wire',
+    // Neither mark gives it a line yet (#931).
+    'Marked, not made on site: Screws (no line here uses it now) and Wire (needs a recalculation)',
   );
 });
 
