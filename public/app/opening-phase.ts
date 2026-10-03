@@ -6,7 +6,7 @@
 // that is not done yet. Only the view changes: the saved phase stays what the user picked, and the
 // phase picker saves a new one as before. Nothing here writes progress.
 import { firstPhase, state } from './session.ts';
-import { generatedTasks, planTasks } from './tasks.ts';
+import { generatedTaskIds, planTaskIds } from './tasks.ts';
 import type { Phase, StageKey } from '../types/index.ts';
 
 // The phases with a checklist of their own, in order; post-game comes after Phase 5 and has none
@@ -33,18 +33,18 @@ export function openingPhase(
   return chosen;
 }
 
-// The check ids of a phase's build-plan steps as the open profile shows them (planTasks() in
-// tasks.ts for that phase): its generated steps and personal tasks, less the removed ones. A
+// The check ids of a phase's build-plan steps as the open profile shows them, in their order:
+// the ids of planTasks() in tasks.ts for that phase, worked out without the step text
+// (planTaskIds, #768). Its generated steps and personal tasks, less the removed ones. A
 // milestone is listed once, under its own phase (milestonesListedIn in progression.ts, #758), so
 // it holds that phase open.
-export const phaseStepIds = (phase: StageKey): string[] => planTasks(phase).map(task => task.id);
+export const phaseStepIds = (phase: StageKey): string[] => planTaskIds(phase);
 
-// The ids of the phase's generated steps, before edits (generatedTasks() in tasks.ts: calcTasks()
-// in views/calculated.ts for a calculated profile or its guide, else the handbook's). Post-game
-// plans Phase 5's stage, so its production steps have Phase 5's ids (shared-steps.ts asks for
-// every phase).
-export const generatedStepIds = (phase: Phase): string[] =>
-  generatedTasks(phase).map(task => task.id);
+// The ids of the phase's generated steps, before edits: the ids of generatedTasks() in tasks.ts
+// without the step text (generatedTaskIds: phaseSteps in progression.ts for a calculated profile
+// or its guide, else the handbook's). Post-game plans Phase 5's stage, so its production steps
+// have Phase 5's ids (shared-steps.ts asks for every phase).
+export const generatedStepIds = (phase: Phase): string[] => generatedTaskIds(phase);
 
 // The phase the open profile opens on (openingPhase for its saved phase, first phase and checks).
 // A calculated profile's first phase is Phase 1, so open milestones of a milestone-only phase
