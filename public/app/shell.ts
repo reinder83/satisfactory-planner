@@ -33,7 +33,7 @@ export function render() {
 function drawPage() {
   mountShell(required('#app'));
   invalidate();
-  const component = vuePage(view, wizard, !!currentSave.id);
+  const component = vuePage(view, wizard, !!currentSave.id, location.hash.slice(1));
   if (component) {
     if (mountPage(required('#main'), component)) focusOpenedPage();
   } else {

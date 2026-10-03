@@ -3292,6 +3292,208 @@ button.rail-tile:hover {
 .chain-loop {
   color: var(--accent);
 }
+/* ── A factory group's flow page, #factories/<group>/flow (#894, GroupFlowPage.vue) ─────
+   The lines as one-column cards in build order, every row reaching the card's left border,
+   and the links between them as item lanes in a gutter left of the cards (the gutter's width
+   is set on .gf-host from the lanes the group needs). Only :root tokens. */
+.gf-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.gf-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.gf-key-item {
+  white-space: nowrap;
+}
+.gf-swatch {
+  flex: none;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.gf-swatch line {
+  stroke-width: 3;
+}
+.gf-colcap {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--kicker);
+}
+.gf-band {
+  margin: 10px 0;
+}
+.gf-ports {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.gf-card,
+.gf-port {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 10px;
+  position: relative;
+  min-width: 0;
+}
+.gf-card.hot {
+  border-color: var(--accent);
+}
+.gf-port h3,
+.gf-port h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--bright);
+}
+.gf-port h4 {
+  margin-top: 8px;
+  color: var(--muted);
+}
+.gf-fold summary {
+  cursor: pointer;
+}
+.gf-fold summary h3 {
+  display: inline;
+  margin-right: 8px;
+}
+.gf-host {
+  position: relative;
+}
+/* The drawing covers the cards' box exactly, so it never widens the page. */
+.gf-lanes {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.gf-wire path {
+  fill: none;
+  stroke-width: 2.5;
+}
+.gf-wire path.gf-tip {
+  stroke: none;
+}
+.gf-wire {
+  transition: opacity 0.12s;
+}
+.gf-wire.dim {
+  opacity: 0.12;
+}
+.gf-wire.hot path:not(.gf-tip) {
+  stroke-width: 3.5;
+}
+.gf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 820px;
+}
+.gf-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.gf-head .chain-no {
+  min-width: 0;
+  font-size: 16px;
+}
+.gf-head .rail-link {
+  font-size: 15px;
+  text-align: left;
+}
+.gf-run {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.gf-run.on {
+  color: var(--green);
+}
+.gf-io {
+  margin-top: 4px;
+}
+/* A row's name sits at its vertical centre, level with its lane's arrowhead or dot. */
+.gf-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 0;
+  border-top: 1px solid var(--line2);
+}
+.gf-port .gf-row {
+  align-items: flex-start;
+}
+.gf-row .item-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.gf-item {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gf-name {
+  color: var(--ink);
+}
+.gf-num {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.gf-num b {
+  white-space: nowrap;
+  color: var(--bright);
+}
+.gf-num small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+/* An input fed only from outside the group has no lane: a blue bar marks it instead. */
+.gf-in.outside {
+  box-shadow: inset 2px 0 0 var(--blue);
+  padding-left: 6px;
+}
+.gf-text {
+  margin-top: 14px;
+}
+.gf-text .table-wrap {
+  margin-top: 8px;
+}
+.gf-text caption {
+  text-align: left;
+  padding: 6px 14px;
+}
+/* On a phone the recipe links are 44px touch targets, as in the build-order dialog. */
+@media (max-width: 720px) {
+  .gf-head .rail-link {
+    min-height: 44px;
+    border-bottom: 0;
+    text-decoration: underline 1px var(--accent-sh);
+    text-underline-offset: 5px;
+  }
+  .gf-head .chain-no {
+    line-height: 44px;
+  }
+}
 .logi {
   margin: 10px 0 4px;
   border: 1px solid var(--line2);
@@ -4705,6 +4907,27 @@ button.rail-tile:hover {
 
 /* ── Print: revert to paper ────────────────────────────── */
 @media print {
+  /* On paper the lanes would not line up with the printed cards, so the rows' own words
+     ("from 01 Iron Ingot", "to 02, 03") carry the links, and the cards stay whole. */
+  .gf-host {
+    padding-left: 0 !important;
+  }
+  .gf-lanes,
+  .gf-key {
+    display: none;
+  }
+  .gf-stack {
+    max-width: none;
+  }
+  /* The print tokens are dark on white already (--panel, --ink, --bright). */
+  .gf-card,
+  .gf-port {
+    break-inside: avoid;
+  }
+  .gf-card.hot {
+    border-color: var(--line);
+  }
+
   /* Paper is white, and printing drops backgrounds by default, so every text colour has to
      read on white (#330). The tokens turn dark here, keeping their hue so the tones still
      differ; the rules below name the few screen colours that are literals. */
