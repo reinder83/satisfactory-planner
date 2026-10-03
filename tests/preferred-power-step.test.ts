@@ -154,3 +154,46 @@ test('the step is only for a chosen main power', () => {
   const ids = powerTasks(guideContext(auto, { checks: {} }, data, '4')).map(task => task.id);
   assert.ok(!ids.some(id => id.startsWith('preferred-power-')));
 });
+
+// The closing advice matches the step's case (#881): a Keep step commissions nothing and replaces
+// nothing, and the start phase has no previous plant to keep online.
+test('a kept line is not told to commission more capacity or keep a previous plant', () => {
+  const plan = rocketNuclearPlan();
+  plan.stages['5'] = { ...plan.stages['5'], rows: [uranium(5), fuelRods] };
+  const step = powerStep(plan, '5')!;
+  assert.equal(step.id, 'preferred-power-5', 'the check key is unchanged');
+  assert.match(step.title, /^Keep nuclear power/);
+  assert.doesNotMatch(step.body, /commission more capacity|previous plant/);
+  assert.match(
+    step.body,
+    /No line needs more machines in this phase\. Before connecting the next factory, check the actual maximum consumption, with the utility allowance, against these lines' output\.$/,
+  );
+});
+
+test('the spare-power step is not told to commission more capacity either', () => {
+  const step = powerStep(rocketNuclearPlan(), '3')!;
+  assert.doesNotMatch(step.body, /commission more capacity|previous plant/);
+});
+
+test('a Build step in the start phase names no previous plant', () => {
+  const plan = rocketNuclearPlan('4');
+  const step = powerStep(plan, '4')!;
+  assert.equal(step.id, 'preferred-power-4', 'the check key is unchanged');
+  assert.match(step.title, /^Build nuclear power/);
+  assert.match(step.body, /commission more capacity before connecting the next factory\.$/);
+  assert.doesNotMatch(step.body, /previous plant/);
+});
+
+test('Build and Expand steps after the start phase keep the previous plant online', () => {
+  for (const [start, phase] of [
+    ['3', '4'],
+    ['3', '5'],
+  ] as const) {
+    const step = powerStep(rocketNuclearPlan(start), phase)!;
+    assert.match(step.title, /^(Build|Expand) /);
+    assert.match(
+      step.body,
+      /commission more capacity before connecting the next factory\. Keep the previous plant online until the replacement is stable\.$/,
+    );
+  }
+});
