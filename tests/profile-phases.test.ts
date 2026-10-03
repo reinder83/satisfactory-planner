@@ -66,8 +66,11 @@ test('the summary counts every step of a phase, so an earlier phase with all lin
   assert.equal(one.steps!.done, rowsOf('1').length, 'only the lines are ticked');
   assert.ok(one.steps!.done < one.steps!.total, 'its other steps are open');
   assert.equal(firstOpen(phases, 3), '1', 'the profile opens on Phase 1');
+  // Steps up to the phase worked on (Phase 3), which the card reads; none after it (#804).
   for (const entry of phases)
-    assert.equal(entry.steps!.total, planStepIds(plan, state, data, entry.phase).length);
+    if (Number(entry.phase) <= 3)
+      assert.equal(entry.steps!.total, planStepIds(plan, state, data, entry.phase).length);
+    else assert.equal(entry.steps, undefined, 'Phase ' + entry.phase);
   // Every step of Phase 1 ticked: the profile opens on Phase 2, and the summary says so.
   for (const id of planStepIds(plan, state, data, '1')) state.checks[id] = true;
   const done = profilePhases(plan, state, data)!;

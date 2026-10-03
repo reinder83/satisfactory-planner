@@ -45,7 +45,7 @@ import type {
   UpdateOp,
   WorkspaceSummary,
 } from './types/index.ts';
-import { profilePhases } from './state.ts';
+import { profilePhasesCache } from './state.ts';
 import type { Progression } from './types/index.ts';
 
 // What app/api.ts passes: fetch's options (a JSON string body and a plain headers object) and
@@ -117,6 +117,9 @@ export function createBrowserApi(
       throw Error('Enter a name with 1–80 characters.');
     return name.trim();
   };
+  // Each profile's per-phase counts, kept until its plan or progress changes, as the server keeps
+  // them (profilePhasesCache, #804).
+  const cachedPhases = profilePhasesCache();
   // Mirrors summary() in server/scope.ts: profile lists without plans or progress. Adds
   // `browser: true` and `lastBackup`, the last full export, which the Backup page and ADA show.
   const summary = (workspace: BrowserWorkspace): WorkspaceSummary => ({
@@ -138,7 +141,7 @@ export function createBrowserApi(
         phase: profile.state.settings.phase,
         // The same per-phase counts the server sends (profilePhases, #746).
         phases: progression
-          ? profilePhases(profile.plan, profile.state, progression)
+          ? cachedPhases(profile.id, profile.plan, profile.state, progression)
           : phaseProgress(profile.plan, profile.state.checks),
       })),
     })),
