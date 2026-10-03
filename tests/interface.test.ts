@@ -201,8 +201,9 @@ test('machine instructions separate total, full-speed and adjustable machines', 
   assert.match(full.summary, /3 at 100%/);
 });
 
-// The factories pages, their group editor and the factory and group build-order dialogs are
-// components, tested in tests/ui/factories.test.ts.
+// The factories pages, their group editor and the factory dialog are components, tested in
+// tests/ui/factories.test.ts; a group's build order is its flow page
+// (tests/ui/group-flow-page.test.ts).
 test('ADA comments on the plan from the sidebar and can be muted', () => {
   const context = ui();
   // A profile migrated from the handbook (#387): its guide keeps the handbook's steps.

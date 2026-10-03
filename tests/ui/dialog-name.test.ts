@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { beforeEach, test } from 'vitest';
-import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { calcStage, setWorkspace, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { closeDetail } from '../../public/app/ui/actions.ts';
@@ -86,36 +86,6 @@ test('a calculated factory dialog is named by its title, also after a link repla
   const next = stage.rows!.find(o => o.id === link.dataset.calcFactory)!;
   link.click();
   namedBy(next.name, 'the calculated factory dialog that replaced it');
-});
-
-test('a group build order is named by the group, and a factory opened from it by its own (#321)', () => {
-  const stage = plan.stages['3'];
-  const consumer = stage.rows!.find(row =>
-    stage.rows!.some(
-      o => o.id !== row.id && Object.keys(o.outputs || {}).some(n => row.inputs?.[n]),
-    ),
-  )!;
-  const supplier = stage.rows!.find(
-    o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
-  )!;
-  open({
-    calculated: plan,
-    state: {
-      factoryGroups: {
-        groups: [{ id: 'fg-test01', name: 'Chain test' }],
-        assignments: {
-          [consumer.id]: [{ group: 'fg-test01', rate: null }],
-          [supplier.id]: [{ group: 'fg-test01', rate: null }],
-        },
-      },
-    },
-  });
-  go('factories');
-  render();
-  openGroupChain('fg-test01');
-  namedBy('Chain test', 'the build order');
-  $<HTMLButtonElement>('#detail .chain-title [data-calc-factory]')!.click();
-  namedBy(supplier.name, 'the factory dialog that replaced it');
 });
 
 test('a storage container dialog is named by its item (#321)', () => {

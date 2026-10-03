@@ -383,20 +383,41 @@ test('a focused control is scrolled clear of the estimate bar (#412)', () => {
   assert.ok(pad.line < bar.line + 20, 'in the same phone block as the bar');
 });
 
-// On a phone a dialog's title is one line, cut short (#318), except the Build order dialog's,
-// the group name the user typed, which wraps in full (#435).
-test('a Build order title wraps on a phone, other dialog titles stay one line (#318, #435)', () => {
+// On a phone a dialog's title is one line, cut short (#318). The one dialog whose title wrapped,
+// a group's Build order (#435, #454), became the group's flow page (#895), headed like any page.
+test('dialog titles stay one line on a phone (#318)', () => {
   const css = screenCss();
   const phone = css.slice(css.indexOf('.dialog-head .eyebrow,'));
   const one = rules(phone).find(r => r.selector.split(', ').includes('.dialog-head h2'))!;
   assert.deepEqual(decls(one.body, 'white-space'), ['nowrap']);
-  const wrap = rules(phone).find(r => r.selector === '.dialog-head.wrap-title h2')!;
-  assert.deepEqual(decls(wrap.body, 'white-space'), ['normal']);
-  assert.ok(wrap.line > one.line, 'the wrapping rule comes after the one-line rule');
-  // Its eyebrow wraps as well, so the phase at the end of it stays readable (#454).
-  const eyebrow = rules(phone).find(r => r.selector === '.dialog-head.wrap-title .eyebrow')!;
-  assert.deepEqual(decls(eyebrow.body, 'white-space'), ['normal']);
-  assert.ok(eyebrow.line > one.line);
+});
+
+// The build-order dialog (GroupChainDialog.vue) went when the flow page replaced it (#895): no
+// rule is left for its classes, and nothing in public/ draws them. Its line number and loop
+// marker (.chain-no, .chain-loop) and the factory link (.rail-link) stay: the flow page uses them.
+test('no CSS is left for the build-order dialog (#895)', () => {
+  const sources = fs
+    .readdirSync(new URL('../public/', import.meta.url), { recursive: true, encoding: 'utf8' })
+    .filter(file => /\.(ts|vue|html)$/.test(file))
+    .map(file => fs.readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8'))
+    .join('\n');
+  const selectors = rules(splitCss().screen + splitCss().print).map(r => r.selector);
+  for (const name of ['chain', 'chain-stage', 'chain-body', 'chain-title', 'wrap-title']) {
+    const used = new RegExp(`\\.${name}(?![\\w-])`);
+    assert.ok(!selectors.some(s => used.test(s)), `style.css has no rule for .${name}`);
+    // In a class attribute, a :class string or a selector a script looks for.
+    const drawn = new RegExp(
+      `class="(?:[^"]* )?${name}(?: [^"]*)?"|'${name}'|\\.${name}(?![\\w-])`,
+    );
+    assert.doesNotMatch(sources, drawn, `nothing draws .${name}`);
+  }
+  for (const name of ['chain-no', 'chain-loop', 'rail-link']) {
+    assert.ok(
+      selectors.some(s => s.includes('.' + name)),
+      `.${name} keeps its rule`,
+    );
+    assert.match(sources, new RegExp(`class="${name}"`), `.${name} is still drawn`);
+  }
 });
 
 // Saves & profiles on a phone (#452): the save's name takes the section head's first row, so it

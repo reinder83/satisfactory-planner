@@ -1,20 +1,22 @@
 // "Handbook" is gone from what users see (decision 8 on #387, #802): every page, in every phase,
 // edit mode and storage floor, the wizard's steps, the guided start and the node survey, ADA's
-// remarks, and the dialogs (a factory, a group's build order, a container, an alternate recipe,
-// a confirmation), drawn on a profile migrated from the handbook and on a calculated one. Any
+// remarks, each group's flow page (its build order, #895), and the dialogs (a factory, a
+// container, an alternate recipe, a confirmation), drawn on a profile migrated from the handbook and on a calculated one. Any
 // "handbook" in the rendered text, or in an attribute a user can see or hear, fails.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { setAdaIndex } from '../../public/app/ada-panel.ts';
-import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import {
   calcStage,
+  flowRoute,
   setFactoryEditing,
   setFloor,
   setLayoutEditing,
   setPlanEditing,
   setWizard,
+  viewOf,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { closeDetail } from '../../public/app/ui/actions.ts';
@@ -201,6 +203,12 @@ for (const kind of KINDS) {
     setFactoryEditing(true);
     await drawn('factories', 'the factory groups being edited');
     setFactoryEditing(false);
+    // Each group's build order is its flow page (#895), reached from the factories page.
+    for (const group of ['fg-a', 'fg-b']) {
+      history.replaceState(null, '', '#' + flowRoute(group));
+      await drawn(viewOf(flowRoute(group)), `the build order of ${group}`);
+    }
+    history.replaceState(null, '', '#');
     for (const floor of ['ground', 'upper', 'workshop']) {
       setFloor(floor);
       await drawn('storage', `the storage room's ${floor} floor`);
@@ -218,12 +226,6 @@ for (const kind of KINDS) {
       openCalculatedFactory(row.id);
       detailOpen(row.name);
       noHandbook(`the dialog for ${row.name}`);
-      await closeDetail();
-    }
-    for (const group of ['fg-a', 'fg-b']) {
-      openGroupChain(group);
-      detailOpen(group);
-      noHandbook(`the build order of ${group}`);
       await closeDetail();
     }
     go('storage');
