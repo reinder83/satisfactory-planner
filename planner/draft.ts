@@ -21,7 +21,8 @@ interface DraftContext {
 // it is a budget problem, split into "only whole machines break it" and a real shortfall.
 // The draft only explains what exceeds the budgets: the exact LP is fast and avoids another integer search.
 // The diagnostics solve without production amplification (the owner's choice in #64): the
-// exact LP stays fast and cannot time out on the amplified integer fit, and the reason says
+// exact LP stays fast and runs no integer search, so unlike the amplified integer fit it cannot
+// stop at the node limit or the phase's deadline before proving the best plan. The reason says
 // the amounts are before amplification when somersloops are budgeted for it.
 export function draftStage(config: CurrentSettings, phase: number, result: Unsolved): CurrentStage {
   const conversion = phase === 5 && config.sam !== 'avoid';
