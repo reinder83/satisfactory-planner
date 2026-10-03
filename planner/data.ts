@@ -5,6 +5,7 @@
 // replaces them for the browser; keep those snippets unchanged.
 // Re-exported by ../planner.ts.
 import fs from 'node:fs';
+import { rawResources } from '../public/preferences.ts';
 import type { ItemRates, RecipeData } from '../public/types/index.ts';
 
 // Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
@@ -28,23 +29,10 @@ export const powerNeedsTurbofuel = (mainPower: string | undefined) =>
 export const ALT_IDS = new Set(DATA.recipes.filter(r => r.alternate).map(r => r.id));
 // Extracted resources. Each is supplied by a `raw:` LP variable capped by the profile's budget in
 // `settings.limits` (per minute); nothing crafts them except the Phase 5 Converter recipes, which
-// are only in the pool when `conversion` is on. The order is the Resources table's row order
-// (`catalog().raw`).
-export const RAW: string[] = [
-  'Iron Ore',
-  'Copper Ore',
-  'Limestone',
-  'Coal',
-  'Caterium Ore',
-  'Raw Quartz',
-  'Sulfur',
-  'Bauxite',
-  'Uranium',
-  'SAM',
-  'Crude Oil',
-  'Nitrogen Gas',
-  'Water',
-];
+// are only in the pool when `conversion` is on. The list is `rawResources` in
+// public/preferences/world.ts, which the interface reads too (#921); its order is the Resources
+// table's row order (`catalog().raw`).
+export const RAW: string[] = [...rawResources];
 // Resource budgets per minute for the default map at its own purities, every node worked at 250%
 // clock: Miner Mk.3 300/600/1200 on impure/normal/pure, Oil Extractor 150/300/600 (resource wells
 // excluded), Resource Well Extractor 75/150/300 per nitrogen satellite. These are `nodeCounts`
