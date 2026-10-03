@@ -1,6 +1,5 @@
 // The factories page (public/app/ui/pages/CalculatedFactoriesPage.vue, with its parts in
-// public/app/ui/factories/), and the factory and group build-order dialogs
-// (public/app/ui/detail/), mounted the way the app mounts them, in happy-dom: on a calculated
+// public/app/ui/factories/), and the factory dialog (public/app/ui/detail/), mounted the way the app mounts them, in happy-dom: on a calculated
 // profile and on one migrated from the retired handbook (#387, #797).
 import assert from 'node:assert/strict';
 import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
@@ -18,10 +17,11 @@ import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
 import { beforeEach, onTestFinished, test, vi } from 'vitest';
-import { openCalculatedFactory, openGroupChain } from '../../public/app/factory-detail.ts';
+import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import {
   boot,
   calcStage,
+  flowRoute,
   setFactoryEditing,
   setContext,
   setFactoryFilter,
@@ -414,7 +414,7 @@ test('groups show their share of a split factory, and edit mode offers the edito
     !factoryIds('#main > .cards').includes(row('wire')),
     'a grouped factory leaves the list',
   );
-  assert.equal($('[data-group-chain]'), null, 'a one-factory group has no build order');
+  assert.equal($('[data-group-flow]'), null, 'a one-factory group has no build order');
   $('[data-toggle-factory-edit]')!.click();
   await nextTick();
   assert.equal($('[data-toggle-factory-edit]')!.textContent.trim(), 'Done editing');
@@ -599,7 +599,7 @@ test('"+ Add to group…" only picks a group; Add joins it, once, and a failed a
   assert.deepEqual(state.factoryGroups?.assignments[key], [{ group: 'fg-plates1', rate: null }]);
 });
 
-test('group names are escaped on the page, in the editor and in the build order', async () => {
+test('group names are escaped on the page, in the editor and in the build order link', async () => {
   openMigrated({
     state: {
       factoryGroups: {
@@ -615,10 +615,8 @@ test('group names are escaped on the page, in the editor and in the build order'
   render();
   noMarkup();
   assert.equal($('.user-group h2')!.textContent, evil);
-  $('[data-group-chain="fg-a"]')!.click();
-  await nextTick();
-  assert.equal($('#detail h2')!.textContent, evil);
-  noMarkup();
+  // The flow page it leads to draws the name as text too (tests/ui/group-flow-page.test.ts).
+  assert.equal($('[data-group-flow="fg-a"]')!.getAttribute('href'), '#' + flowRoute('fg-a'));
   setFactoryEditing(true);
   render();
   await nextTick();
@@ -809,44 +807,6 @@ test('a link inside a calculated factory dialog moves focus into the new one (#3
   follow(link, 'calc-3-' + link.dataset.calcFactory);
   dialog.close();
   assert.equal(document.activeElement === opener, true, 'closing returns focus to the opener');
-});
-
-test('a factory in a group’s build order moves focus into its dialog (#319)', async () => {
-  const stage = plan.stages['3'];
-  const consumer = stage.rows!.find(row =>
-    stage.rows!.some(
-      o => o.id !== row.id && Object.keys(o.outputs || {}).some(n => row.inputs?.[n]),
-    ),
-  )!;
-  const supplier = stage.rows!.find(
-    o => o.id !== consumer.id && Object.keys(o.outputs || {}).some(n => consumer.inputs[n]),
-  )!;
-  open({
-    calculated: plan,
-    state: {
-      factoryGroups: {
-        groups: [{ id: 'fg-test01', name: 'Chain test' }],
-        assignments: {
-          [consumer.id]: [{ group: 'fg-test01', rate: null }],
-          [supplier.id]: [{ group: 'fg-test01', rate: null }],
-        },
-      },
-    },
-  });
-  render();
-  const opener = $<HTMLButtonElement>('[data-group-chain="fg-test01"]')!;
-  opener.focus();
-  opener.click();
-  // "build order" is joined by a no-break space, so a wrapping eyebrow keeps it whole (#460).
-  assert.match($('#detail .eyebrow')!.textContent, /^Factory group · build\u00a0order · /);
-  // The group's name heads it and the body does not repeat it, so it may wrap on a phone (#435).
-  assert.ok($('#detail .dialog-head')!.classList.contains('wrap-title'));
-  follow($('#detail .chain-title [data-calc-factory]')!, 'calc-3-' + supplier.id);
-  // A factory's own dialog keeps its one-line title (#318).
-  assert.ok(!$('#detail .dialog-head')!.classList.contains('wrap-title'));
-  void closeDetail();
-  await settle();
-  assert.equal(document.activeElement === opener, true, 'the × returns focus to Build order');
 });
 
 test('a dialog keeps an unsaved note while a box in it is ticked', async () => {
@@ -2174,7 +2134,7 @@ test('a calculated factory dialog has its Running box in the header, saved as it
   assert.deepEqual(calls.at(-1)![1], { type: 'check', key: 'calc-3-' + first.id, value: true });
 });
 
-test('a group build order stages suppliers before consumers', () => {
+test('Build order is a link to the group’s flow page, which stages suppliers first (#895)', async () => {
   const stage = plan.stages['3'];
   const consumer = stage.rows!.find(row =>
     stage.rows!.some(
@@ -2197,15 +2157,43 @@ test('a group build order stages suppliers before consumers', () => {
     },
   });
   render();
-  assert.ok($('[data-group-chain="fg-test01"]'), 'the group offers its build order');
-  openGroupChain('fg-test01');
-  assert.match($('#detail .eyebrow')!.textContent, /build\u00a0order/);
-  const names = $$('#detail .chain-title .rail-link').map(link => link.textContent);
-  assert.deepEqual(names, [supplier.name + ' ↗', consumer.name + ' ↗'], 'supplier first');
-  assert.ok($('#detail .chain-title [data-calc-factory]'), 'stages link to their dialogs');
-  assert.match(detail(), /Needs/);
-  assert.match(detail(), /Feeds/);
-  assert.match(detail(), /stage 1/, 'the consumer names the stage that supplies it');
+  // A real link, not a button that opens a dialog: it can be opened in a new tab, and Enter
+  // follows it. A .btn is a 44px touch target on a phone (tests/btn-touch-target.test.ts).
+  const link = $<HTMLAnchorElement>('[data-group-flow="fg-test01"]')!;
+  assert.equal(link.tagName, 'A');
+  assert.ok(link.classList.contains('btn'));
+  assert.equal(link.getAttribute('href'), '#' + flowRoute('fg-test01'));
+  assert.equal(link.textContent!.trim(), 'Build order →');
+  assert.equal($('[data-group-chain]'), null, 'the dialog opener is gone');
+  // Following it, as the hashchange listener in listeners.ts does.
+  history.replaceState(null, '', link.getAttribute('href'));
+  go(viewOf(location.hash.slice(1)));
+  render();
+  await nextTick();
+  try {
+    assert.equal($('#main h1')!.textContent, 'Chain test', 'the group’s flow page');
+    assert.equal($<HTMLDialogElement>('#detail')!.open, false, 'no dialog opens');
+    const lines = $$('#main .gf-card').map(card => card.getAttribute('data-line'));
+    assert.deepEqual(lines, [supplier.id, consumer.id], 'supplier first');
+    assert.ok($('#main .gf-head .rail-link[data-calc-factory]'), 'lines link to their dialogs');
+  } finally {
+    history.replaceState(null, '', '#factories');
+  }
+});
+
+test('the build-order dialog is gone: the flow page replaced it (#895)', async () => {
+  // Vitest runs from the repository root.
+  assert.equal(fs.existsSync('public/app/ui/detail/GroupChainDialog.vue'), false);
+  const detail = fs.readFileSync('public/app/ui/detail/DetailDialog.vue', 'utf8');
+  assert.doesNotMatch(detail, /GroupChain|kind === 'group'/);
+  const opener = await import('../../public/app/factory-detail.ts');
+  assert.deepEqual(Object.keys(opener), ['openCalculatedFactory']);
+  // No page or component opens it or styles it any more.
+  const sources = fs
+    .readdirSync('public', { recursive: true, encoding: 'utf8' })
+    .filter(file => /\.(ts|vue)$/.test(file))
+    .map(file => fs.readFileSync(`public/${file}`, 'utf8'));
+  for (const source of sources) assert.doesNotMatch(source, /openGroupChain|data-group-chain/);
 });
 
 test('a dialog left open when the session ends closes with the sign-in screen', async () => {

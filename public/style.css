@@ -3053,8 +3053,8 @@ button.rail-tile:hover {
 .rail-row.more {
   border-style: dashed;
 }
-/* A link to a factory's dialog ("Copper Ingot ↗"): in a flow row and in a group's build order
-   (GroupChainDialog.vue, .chain-title), which got the browser's grey button without it (#886). */
+/* A link to a factory's dialog ("Copper Ingot ↗"): in a flow row and on a group's flow page
+   (FlowCard.vue, .gf-head). A button with no look of its own is the browser's grey one (#886). */
 .rail-link {
   background: none;
   border: 0;
@@ -3070,23 +3070,6 @@ button.rail-tile:hover {
 .rail-link:hover {
   color: var(--accent-hi);
   border-bottom-color: var(--accent-hi);
-}
-/* On a phone the build order's links are 44px touch targets, like the quiet links of #832: height
-   only, with the underline moved onto the text so it stays under the words in the taller box. The
-   stage number takes the same line height, so it stays level with the link text beside it. */
-@media (max-width: 720px) {
-  .chain-title .rail-link {
-    min-height: 44px;
-    border-bottom: 0;
-    text-decoration: underline 1px rgba(248, 156, 28, 0.4);
-    text-underline-offset: 5px;
-  }
-  .chain-title .rail-link:hover {
-    text-decoration-color: var(--accent-hi);
-  }
-  .chain-no {
-    line-height: 44px;
-  }
 }
 .rail-mach {
   flex: none;
@@ -3253,19 +3236,7 @@ button.rail-tile:hover {
   outline: 2px solid var(--accent-hi);
   outline-offset: 2px;
 }
-.chain {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 14px 0 6px;
-}
-.chain-stage {
-  display: flex;
-  gap: 13px;
-  border: 1px solid var(--line);
-  padding: 11px 13px;
-  align-items: flex-start;
-}
+/* A line's number and a loop's marker on a group's flow page (FlowCard.vue). */
 .chain-no {
   flex: none;
   font-family: var(--head);
@@ -3273,21 +3244,6 @@ button.rail-tile:hover {
   font-size: 19px;
   color: var(--accent);
   min-width: 30px;
-}
-.chain-body {
-  min-width: 0;
-  flex: 1;
-}
-.chain-title {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  flex-wrap: wrap;
-  margin-bottom: 2px;
-}
-.chain-body p {
-  margin: 6px 0 0;
-  line-height: 1.6;
 }
 .chain-loop {
   color: var(--accent);
@@ -3482,13 +3438,18 @@ button.rail-tile:hover {
   text-align: left;
   padding: 6px 14px;
 }
-/* On a phone the recipe links are 44px touch targets, as in the build-order dialog. */
+/* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
+   with the underline moved onto the text so it stays under the words in the taller box (#886).
+   The line number takes the same line height, so it stays level with the link text beside it. */
 @media (max-width: 720px) {
   .gf-head .rail-link {
     min-height: 44px;
     border-bottom: 0;
     text-decoration: underline 1px var(--accent-sh);
     text-underline-offset: 5px;
+  }
+  .gf-head .rail-link:hover {
+    text-decoration-color: var(--accent-hi);
   }
   .gf-head .chain-no {
     line-height: 44px;
@@ -4570,17 +4531,6 @@ button.rail-tile:hover {
     margin-top: 2px;
     font-size: 19px;
     line-height: 1.2;
-  }
-  /* A group's Build order dialog is headed by the name the user typed, up to 80 characters,
-     which its body does not repeat: it wraps in full (#435). Its eyebrow wraps too, between
-     words, so the phase at its end is not lost to the ellipsis (#454). That dialog has no
-     Running row, so three lines of title still leave the header short. */
-  .dialog-head.wrap-title h2 {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .dialog-head.wrap-title .eyebrow {
-    white-space: normal;
   }
   .dialog-head .subtitle {
     margin-top: 2px;
