@@ -3,7 +3,7 @@
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
-import { onSiteSettings } from './on-site.ts';
+import { onSitePlannable, onSiteSettings } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { listNames } from '../wording.ts';
 import type {
@@ -21,10 +21,9 @@ type PickerGroups = Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'loca
 // The items group `groupId` can mark as made on site in `plan`, sorted: in a phase the plan
 // builds (not a milestone-only phase, #759), an item some plan row makes that a row with a share
 // in the group uses (rowPlaces, so a group's own line made on site counts as the group's). Raw
-// resources (every key of the plan's budgets) are never offered: no plan row makes them, and the
-// planner ignores them (#875).
+// resources are never offered: the planner cannot make them on site (onSitePlannable, its own
+// rule, #921).
 export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: string): string[] {
-  const raw = new Set(Object.keys(plan.settings.limits || {}));
   const offered = new Set<string>();
   for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
     if (milestoneOnlyPhase(plan, phase)) continue;
@@ -33,7 +32,7 @@ export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: st
     for (const row of rows) {
       if ((rowPlaces(row, groups).get(groupId) || 0) <= LINK_DUST) continue;
       for (const item of Object.keys(row.inputs || {}))
-        if (made.has(item) && !raw.has(item)) offered.add(item);
+        if (made.has(item) && onSitePlannable(item)) offered.add(item);
     }
   }
   return [...offered].sort((a, b) => a.localeCompare(b));

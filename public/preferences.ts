@@ -4,7 +4,8 @@
 // names the planner, the wizard, the pages and the tests use, so none of them names a file
 // under preferences/:
 //   storage.ts     the storage setting: covered items, construction materials, refill rates
-//   world.ts       World Randomization choices, the original map's node counts, default budgets
+//   world.ts       World Randomization choices, the raw resources, the original map's node counts,
+//                  default budgets
 //   fuels.ts       main power, vehicle and drone fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
 //   guided.ts      the guided start's questions
@@ -19,7 +20,13 @@ export {
   storageRateFor,
   wantsStorage,
 } from './preferences/storage.ts';
-export { distributions, nodeCounts, purities, resourceDefaults } from './preferences/world.ts';
+export {
+  distributions,
+  nodeCounts,
+  purities,
+  rawResources,
+  resourceDefaults,
+} from './preferences/world.ts';
 export { droneFuels, droneSupply, powerOptions, vehicleFuels } from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
 export {

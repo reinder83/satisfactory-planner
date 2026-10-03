@@ -9,6 +9,8 @@ const modules = fs
   .readdirSync(new URL('../public/preferences/', import.meta.url))
   .filter(name => name.endsWith('.ts'));
 
+// rawResources was added after the split, as the raw-resource list the planner and the interface
+// share (#921).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'GUIDED_TOPUP_RATE',
@@ -44,6 +46,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'purities',
     'purities3',
     'purityFactor',
+    'rawResources',
     'resourceAvailable',
     'resourceDefaults',
     'resourcePool',

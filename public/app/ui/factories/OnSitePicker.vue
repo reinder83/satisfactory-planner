@@ -15,6 +15,7 @@ import { save } from '../../api.ts';
 import { calculated } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { onSiteOffers } from '../../on-site-picker.ts';
+import { onSitePlannable } from '../../on-site.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
 import { whileBusy } from '../../busy.ts';
@@ -39,11 +40,16 @@ const changed = computed(
 const items = computed(() =>
   legacy(() => {
     const offered = calculated ? onSiteOffers(calculated, factoryGroupsState(), props.groupId) : [];
-    // A marked item no row of the group uses any more stays, so it can be cleared.
+    // A marked item no row of the group uses any more stays, so it can be cleared. A raw resource
+    // marked in an older or hand-edited save (such as Water) can never be made on site (#921), so
+    // its note says that instead.
     const stale = saved.value.filter(item => !offered.includes(item));
     return [
-      ...offered.map(item => ({ item, unused: false })),
-      ...stale.map(item => ({ item, unused: true })),
+      ...offered.map(item => ({ item, note: '' })),
+      ...stale.map(item => ({
+        item,
+        note: onSitePlannable(item) ? '(no line here uses it now)' : "(can't be made on site)",
+      })),
     ];
   }),
 );
@@ -100,8 +106,7 @@ async function apply(event: Event) {
             :checked="chosen.includes(entry.item)"
             @change="toggle(entry.item, ($event.target as HTMLInputElement).checked)"
           /><ItemIcon :name="entry.item" /><span
-            >{{ entry.item
-            }}<small v-if="entry.unused" class="muted"> (no line here uses it now)</small></span
+            >{{ entry.item }}<small v-if="entry.note" class="muted"> {{ entry.note }}</small></span
           ></label
         >
       </div>

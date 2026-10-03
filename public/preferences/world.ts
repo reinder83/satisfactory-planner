@@ -24,6 +24,25 @@ export const purities: Choice[] = [
   ['random', 'Random'],
   ['custom', 'Custom / manual'],
 ];
+// The raw resources the planner extracts (RAW in planner/data.ts, which plans with this list).
+// Kept here, outside the planner, so the interface can apply the planner's rules about them
+// without loading recipes.json: an item made on site is never one of them (onSitePlannable in
+// public/app/on-site.ts, #921). The order is the Resources table's row order (`catalog().raw`).
+export const rawResources: readonly string[] = [
+  'Iron Ore',
+  'Copper Ore',
+  'Limestone',
+  'Coal',
+  'Caterium Ore',
+  'Raw Quartz',
+  'Sulfur',
+  'Bauxite',
+  'Uranium',
+  'SAM',
+  'Crude Oil',
+  'Nitrogen Gas',
+  'Water',
+];
 // Original map: impure / normal / pure, from the official resource-node and well tables.
 // Known facts, not estimates. Nitrogen Gas counts resource-well satellites, not nodes.
 // Crude Oil counts oil nodes only; its wells are not in this table.
