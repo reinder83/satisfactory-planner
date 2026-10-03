@@ -20,7 +20,7 @@
 //   generator gives its output times the augmenter boost, and the spare part is what the stage's
 //   availableMW holds beyond its own generation. Phase 1 runs on hand-fed biomass and has no
 //   power constraint, so it is never flagged.
-import type { ItemRates, StoredStage } from '../types/index.ts';
+import type { CalcRow, ItemRates, StoredStage } from '../types/index.ts';
 
 export interface RowStatus {
   id: string;
@@ -139,12 +139,14 @@ export function stageSupply(
 }
 
 // `checks` is the profile's progress checks and `stageKey` the stage's key in the plan ('1'-'5'),
-// as in the build plan's step ids.
+// as in the build plan's step ids. `buildOrder` is the stage's rows in the order the build plan
+// lists them (groupedRows in group-order.ts, #869), which decides ties for the next step.
 export function buildStatus(
   stage: StoredStage,
   checks: Record<string, boolean>,
   stageKey: string,
   sparePowerMW = 0,
+  buildOrder: readonly CalcRow[] = stage.rows || [],
 ): BuildStatus {
   const rows = stage.rows || [];
   const built = new Set(rows.filter(r => checks[`calc-${stageKey}-${r.id}`]).map(r => r.id));
@@ -191,7 +193,7 @@ export function buildStatus(
   // The unbuilt row whose completion adds the most delivery, then the one that frees the most
   // built machines; ties go to build order. With neither, the first unbuilt row in build order.
   let next: BuildStatus['next'] = null;
-  for (const row of rows) {
+  for (const row of buildOrder) {
     if (built.has(row.id)) continue;
     const trial = new Set(built).add(row.id);
     const trialShares = shares(stage, trial);

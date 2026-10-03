@@ -42,6 +42,9 @@ export interface AdaFacts {
   customTasks: number;
   removedSteps: number;
   groups: number;
+  // The open phase's production steps go group by group (#869): it has factory groups and rows,
+  // and the user has not put its steps in an order of their own.
+  groupedSteps: boolean;
   feasible: boolean;
   reason: string;
   // Raw resources over their budget.
@@ -549,6 +552,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.storage?.total && facts.storage.done === facts.storage.total,
     text: facts =>
       `All ${facts.storage.total} container positions are verified. A labelled, connected, verified storage hall. Somewhere, an efficiency auditor is briefly happy.`,
+  },
+  {
+    id: 'grouped-steps',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => facts.groupedSteps,
+    text: () =>
+      'The production steps follow your factory groups: one site as far as its suppliers allow, then the next. Fewer trips across the map. The belts between sites remain exactly as long.',
   },
   {
     id: 'groups-some',

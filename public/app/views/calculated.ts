@@ -3,7 +3,8 @@
 // setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
-import { phaseSteps } from '../../progression.ts';
+import { groupedRows, groupedSteps } from '../group-order.ts';
+import { phaseSteps, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
 import { itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
@@ -46,13 +47,25 @@ const outputList = (row: CalcRow): string =>
 export const rowIcon = (row: CalcRow): string =>
   row.generationMW > 0 ? row.machine : Object.keys(row.outputs || {})[0] || '';
 
+// The generated steps of the open calculated profile for phase `shownPhase` (the current phase
+// unless given), as phaseSteps in progression.ts lists them with the production steps put in
+// order by the profile's factory groups (groupedSteps in group-order.ts, #869). calcTasks below
+// and generatedTaskIds (tasks.ts) both read them, so the steps and their ids agree.
+export function orderedPhaseSteps(shownPhase: Phase = phase()): PhaseStep[] {
+  if (!calculated) return [];
+  return groupedSteps(
+    phaseSteps(calculated, state, progressionData, shownPhase),
+    state.factoryGroups,
+  );
+}
+
 // The generated checklist of a calculated profile for phase `shownPhase` (the current phase
 // unless given), before the user's step edits and personal tasks (tasks.ts adds those): the
-// steps phaseSteps in progression.ts lists, with each production row's step described.
+// steps orderedPhaseSteps lists, with each production row's step described.
 export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
-  return phaseSteps(calculated, state, progressionData, shownPhase).map(({ row, ...step }) =>
+  return orderedPhaseSteps(shownPhase).map(({ row, ...step }) =>
     row ? { ...step, body: rowStepBody(row) } : step,
   );
 }
@@ -253,12 +266,18 @@ export function currentBuildStatus(): BuildStatus | null {
   const snapshot = calcStage();
   if (!calculated || !snapshot?.rows?.length) return null;
   const prefix = 'calc-' + stage() + '-';
+  // The rows in the build plan's order, which a change of factory groups can change (#869).
+  const ordered = groupedRows(snapshot.rows, state.factoryGroups);
   const key =
-    stage() + '|' + snapshot.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('');
+    stage() +
+    '|' +
+    snapshot.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('') +
+    '|' +
+    ordered.map(r => r.id).join(',');
   if (buildPlan !== calculated || buildCache?.key !== key) {
     buildPlan = calculated;
     const spareMW = (calculated.settings.availablePowerGW || 0) * 1000;
-    buildCache = { key, status: buildStatus(snapshot, state.checks, stage(), spareMW) };
+    buildCache = { key, status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered) };
   }
   return buildCache.status;
 }

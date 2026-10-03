@@ -33,7 +33,7 @@ import {
 } from './session.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
-import { planTasks, removedPlanTasks } from './tasks.ts';
+import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { currentBuildStatus } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
@@ -207,6 +207,12 @@ function adaFacts(): AdaFacts {
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
+    groupedSteps:
+      factoryGroupsState().groups.length > 0 &&
+      !calculated?.guide &&
+      !milestoneOnly() &&
+      (calcStage()?.rows?.length || 0) > 1 &&
+      !taskEditsState().order[phase()]?.length,
     feasible: calculated ? storedStage.feasible !== false : true,
     reason: calculated ? storedStage.reason || '' : '',
     // Raw resources this stage uses beyond the profile's resource limits.

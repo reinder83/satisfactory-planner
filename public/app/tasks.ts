@@ -4,18 +4,8 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
-import { phaseSteps } from '../progression.ts';
-import {
-  calcStage,
-  calculated,
-  checked,
-  hideDone,
-  phase,
-  progressionData,
-  query,
-  state,
-} from './session.ts';
-import { calcTasks, rowIcon } from './views/calculated.ts';
+import { calcStage, calculated, checked, hideDone, phase, query, state } from './session.ts';
+import { calcTasks, orderedPhaseSteps, rowIcon } from './views/calculated.ts';
 import type { Phase, TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
@@ -159,12 +149,10 @@ export function generatedTasks(shownPhase: Phase = phase()): Step[] {
 }
 
 // The ids of generatedTasks(shownPhase), in the same order, without describing the steps: they
-// come straight from phaseSteps in progression.ts, which calcTasks describes, so no production
-// row's step text is written only to be dropped (#768).
+// come straight from orderedPhaseSteps (views/calculated.ts), which calcTasks describes, so no
+// production row's step text is written only to be dropped (#768).
 export function generatedTaskIds(shownPhase: Phase = phase()): string[] {
-  return calculated
-    ? phaseSteps(calculated, state, progressionData, shownPhase).map(step => step.id)
-    : [];
+  return calculated ? orderedPhaseSteps(shownPhase).map(step => step.id) : [];
 }
 
 // Phase `shownPhase`'s steps before edits (the current phase unless given): its generated steps,
