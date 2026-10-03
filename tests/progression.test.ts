@@ -433,7 +433,9 @@ test('hardDriveTasks counts the alternates not yet confirmed', () => {
 });
 
 test('powerTasks keeps the Phase 1 start-up order phaseSteps interleaves', () => {
-  const context = guideContext(calculate({}), { checks: {} }, data, '1');
+  // A profile made for Phase 1: one made for a later phase lists the biomass start-up in its
+  // start phase (#872), and its Phase 1 is milestone-only (#759).
+  const context = guideContext(calculate({ phase: '1' }), { checks: {} }, data, '1');
   assert.deepEqual(
     powerTasks(context)
       .slice(0, 4)
