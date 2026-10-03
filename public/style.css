@@ -1145,7 +1145,11 @@ p {
     text-decoration: underline 1px rgba(248, 156, 28, 0.5);
     text-underline-offset: 5px;
   }
+  /* A factory's ✕ per group is also at least 24px wide, centred (#842): the minimum WCAG 2.5.8
+     asks, as for the storage slot's ✕ (#838). 44px would take 32px more from the group name
+     column, which at 320px is about 70px wide and already wraps a two-word name. */
   .assign-row .btn.quiet.danger {
+    min-width: 24px;
     text-decoration-color: rgba(224, 85, 58, 0.5);
   }
 }
@@ -2195,9 +2199,11 @@ tr.muted td:first-child {
   color: var(--bright);
 }
 /* On a phone the bay's buttons (Complete room, ← →, Hide bay, Remove bay) are 44px touch
-   targets (#832). They are quiet buttons drawn as boxes, so they have no underline to keep. */
+   targets (#832). They are quiet buttons drawn as boxes, so they have no underline to keep.
+   "Move to…" beside them, a select, is a 44px touch target too (#842). Height only. */
 @media (max-width: 720px) {
-  .bay-actions .btn.quiet {
+  .bay-actions .btn.quiet,
+  .bay-actions .move-bay {
     min-height: 44px;
   }
 }
