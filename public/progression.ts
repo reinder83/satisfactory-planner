@@ -310,6 +310,16 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   return [...required.values()];
 }
 
+// A step's "Prerequisites: …" or "First unlock: …" sentence, naming only the unlocks
+// progression.json lists. One it does not list (the HUB tutorial upgrades before HUB Upgrade 6,
+// the alternate schematic Turbo Heavy Fuel and others name for Compacted Coal) is left out, as
+// requiredMilestones leaves it out, rather than shown as its raw class id (#812); with none
+// listed there is no sentence.
+function listedNames(ids: string[], data: Progression, label: string): string {
+  const names = ids.flatMap(id => data.entries.find(entry => entry.id === id)?.name ?? []);
+  return names.length ? `${label}: ${names.join(', ')}. ` : '';
+}
+
 // The phase an unlock belongs to, the first in which it can be researched: a HUB milestone its
 // tier's phase, a MAM node the latest first-available phase of its cost items, collectibles aside.
 export function milestonePhase(entry: ProgressionEntry, data: Progression): number {
@@ -401,7 +411,7 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
     (entry): GuideTask => ({
       id: 'unlock-' + entry.id,
       title: `${entry.mam ? 'MAM' : 'Tier ' + entry.tier}: ${entry.name}`,
-      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${entry.requires.length ? 'Prerequisites: ' + entry.requires.map(id => data.entries.find(prerequisite => prerequisite.id === id)?.name || id).join(', ') + '. ' : ''}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
+      body: `${entry.mam ? 'Follow this MAM branch and complete its parent research nodes first.' : 'Unlock at the HUB before using its machines or recipes.'} ${listedNames(entry.requires, data, 'Prerequisites')}Cost (base game; adjust if your milestone-cost settings differ): ${funding(entry) || 'No item cost listed'}. Production checkmarks do not confirm inventory or spare capacity.`,
     }),
   );
 }
@@ -425,7 +435,7 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
       return {
         id: 'recipe-unlock-' + row.id,
         title: 'Unlock ' + row.name,
-        body: `Required by this profile’s ${row.machine} line. ${alternate?.requires.length ? 'First unlock: ' + alternate.requires.map(id => data.entries.find(entry => entry.id === id)?.name || id).join(', ') + '. ' : ''}Choose it when offered by hard-drive research. Confirm here only after unlocking it in game; selecting “all alternates” in the profile is a planning allowance, not an in-game unlock.`,
+        body: `Required by this profile’s ${row.machine} line. ${listedNames(alternate?.requires ?? [], data, 'First unlock')}Choose it when offered by hard-drive research. Confirm here only after unlocking it in game; selecting “all alternates” in the profile is a planning allowance, not an in-game unlock.`,
       };
     }),
   ];
