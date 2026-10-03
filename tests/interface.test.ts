@@ -126,16 +126,13 @@ function ui() {
     uniformPurities,
   });
   vm.runInContext(source, context);
-  context.fixture = JSON.parse(
-    fs.readFileSync(new URL('../public/plan.json', import.meta.url), 'utf8'),
-  );
   context.catalogData = catalog();
   context.progressionFixture = JSON.parse(
     fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   );
   context.generated = calculate({});
   vm.runInContext(
-    `plan=fixture;progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'original',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,
+    `progressionData=progressionFixture;workspace={user:{id:'owner',username:'Pioneer'},accountsEnabled:false,catalog:catalogData,saves:[]};currentSave={id:'s',name:'World <one>'};currentProfile={id:'original',kind:'calculated',name:'Original'};state={settings:{phase:'3'},checks:{},notes:{},deliveries:{},customTasks:[]};`,
     context,
   );
   return context;
@@ -248,22 +245,25 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
     /planning draft, not a plan[^]*Iron Ore budget exceeded\./,
     'ADA repeats the planner’s own reason',
   );
-  vm.runInContext(
-    "delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.taskEdits=undefined;adaSignature='';",
-    context,
-  );
-  // The handbook's Phase 3 Versatile Framework delivery was already handed in when it was written.
-  // A duplicated or imported original profile has a new id but the same handbook, so ADA counts
-  // the same open deliveries for it.
-  const openDeliveries = () => vm.runInContext('adaFacts().deliveries.open', context);
-  assert.equal(openDeliveries(), 2);
-  vm.runInContext("currentProfile={id:'copy-uuid',kind:'original',name:'Copy'};", context);
-  assert.equal(openDeliveries(), 2, 'a copied original profile starts from the handbook counts');
   // Back to the migrated profile, whose remarks were seen above.
   vm.runInContext(
-    "calculated=migrated;currentProfile={id:'original',kind:'calculated',name:'Original'};",
+    "delete calculated.stages['3'].feasible;delete calculated.stages['3'].reason;calculated=migrated;currentProfile={id:'original',kind:'calculated',name:'Original'};state.taskEdits=undefined;adaSignature='';",
     context,
   );
+  // A delivery is open until its saved count reaches the target, and one with no saved count has
+  // none yet, as ui/plan/DeliveryCounter.vue reads it. (The migration saved the handbook's starting
+  // counts, migrateHandbookState, so a migrated profile reads them like any saved count.)
+  const openDeliveries = () =>
+    JSON.parse(vm.runInContext('JSON.stringify(adaFacts().deliveries)', context));
+  const total = vm.runInContext('Object.keys(calcStage().delivery).length', context);
+  assert.ok(total >= 2, 'the migrated Phase 3 has deliveries');
+  assert.deepEqual(openDeliveries(), { open: total, total }, 'nothing saved: every one is open');
+  vm.runInContext(
+    "const [handedIn, delivery] = Object.entries(calcStage().delivery)[0];state.deliveries={[stage()+'-'+slug(handedIn)]: delivery.target};",
+    context,
+  );
+  assert.deepEqual(openDeliveries(), { open: total - 1, total }, 'a saved count that reaches it');
+  vm.runInContext('state.deliveries={};', context);
   // Cycling past the last remark is answered rather than silently repeated.
   const count = vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length', context);
   assert.match(
@@ -647,15 +647,9 @@ test('a profile plans production from the phase it was created for', () => {
     'a phase 1 profile offers everything',
   );
 
-  vm.runInContext(
-    `calculated=null;currentProfile={id:'original',kind:'original',name:'Original'};state.settings.phase='3';`,
-    context,
-  );
-  assert.equal(
-    vm.runInContext('JSON.stringify(phaseOptions())', context),
-    '["3","4","5","post"]',
-    'the preserved handbook still starts at phase 3',
-  );
+  // With no plan open (the empty workspace's placeholder) the start is Phase 1.
+  vm.runInContext(`calculated=null;state.settings.phase='3';`, context);
+  assert.equal(vm.runInContext('startPhase()', context), '1');
 
   // the expansion table follows the same bound
   vm.runInContext(

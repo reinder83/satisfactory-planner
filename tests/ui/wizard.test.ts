@@ -133,18 +133,18 @@ const submit = async () => {
 };
 
 test('#wizard shows the survey, the guided questions or the five steps, by the draft', () => {
-  assert.equal(vuePage('wizard', null, null), WizardPage, 'no draft: offer to create a save');
-  assert.equal(vuePage('wizard', null, { mode: 'extraction' } as WizardDraft), SurveyPage);
+  assert.equal(vuePage('wizard', null), WizardPage, 'no draft: offer to create a save');
+  assert.equal(vuePage('wizard', { mode: 'extraction' } as WizardDraft), SurveyPage);
   assert.equal(
-    vuePage('wizard', null, {} as WizardDraft),
+    vuePage('wizard', {} as WizardDraft),
     WizardPage,
     'a draft from before the guided start',
   );
-  assert.equal(vuePage('wizard', null, { mode: 'advanced' } as WizardDraft), WizardPage);
+  assert.equal(vuePage('wizard', { mode: 'advanced' } as WizardDraft), WizardPage);
   guidedAt(1);
-  assert.equal(vuePage('wizard', null, wizard), GuidedPage);
+  assert.equal(vuePage('wizard', wizard), GuidedPage);
   wizard!.guidedStep = guidedFlow().length + 1;
-  assert.equal(vuePage('wizard', null, wizard), WizardPage, 'answered: the five steps’ Review');
+  assert.equal(vuePage('wizard', wizard), WizardPage, 'answered: the five steps’ Review');
 });
 
 test('without a draft the wizard offers to create a save', () => {
@@ -820,7 +820,7 @@ test('past the last question the plan is calculated and Review takes over', asyn
   await submit();
   assert.equal(calls.length, 1);
   assert.equal(wizard!.step, 5);
-  assert.equal(vuePage('wizard', null, wizard), WizardPage);
+  assert.equal(vuePage('wizard', wizard), WizardPage);
   assert.match($('#main h2')!.textContent, /^Step 5 of 5: Review /);
 });
 
@@ -869,7 +869,7 @@ test('a failed calculation with no topics ticked stays on the "what is different
   stubFetch({}); // /api/preview answers 500
   await submit();
   await settle();
-  assert.equal(vuePage('wizard', null, wizard), GuidedPage);
+  assert.equal(vuePage('wizard', wizard), GuidedPage);
   assert.ok($('.guided-topics'), 'the topic picker is still on screen');
   assert.match(text('#wizard-form .form-error'), /unexpected \/api\/preview/);
   // SP-34: the guided start's error is the same notice above its buttons, and takes focus.
@@ -888,9 +888,9 @@ test('"← Guided start" after All settings with no topics ticked returns to the
   guidedAt(1, { saveId: 's', saveName: 'World', carryFrom: 'p' });
   await change('input[name=topic][value=phase]', false);
   await click('[data-guided-advanced]');
-  assert.equal(vuePage('wizard', null, wizard), WizardPage, 'All settings shows the five steps');
+  assert.equal(vuePage('wizard', wizard), WizardPage, 'All settings shows the five steps');
   await click('[data-guided-start]');
-  assert.equal(vuePage('wizard', null, wizard), GuidedPage);
+  assert.equal(vuePage('wizard', wizard), GuidedPage);
   assert.ok($('.guided-topics'), 'back on "What is different this time?"');
   assert.deepEqual(
     $$<HTMLInputElement>('input[name=topic]:checked').map(el => el.value),

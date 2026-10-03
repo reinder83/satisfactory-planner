@@ -127,16 +127,14 @@ export function answerConfirms(reply: boolean | ((question: string) => boolean))
   return asked;
 }
 
-// Opens the handbook profile (calculated: false), a small calculated one (true), the given
-// calculated plan, or a profile migrated from the handbook (migrated: true, the plan of
-// migratedPlan() below). `workspace` and `state` fields override the defaults. The handbook
-// stays the default until the last handbook pages go (#800).
+// Opens a profile migrated from the handbook (the default: the plan of migratedPlan() below),
+// a small calculated one (calculated: true) or the given calculated plan. `workspace` and
+// `state` fields override the defaults.
 interface OpenOptions {
   name?: string;
-  migrated?: boolean;
-  calculated?: boolean | StoredCalculatedPlan;
+  calculated?: true | StoredCalculatedPlan;
   phase?: Phase;
-  // The original profile's id: a duplicated or imported copy has its own.
+  // The open profile's id; a profile migrated from the handbook kept its 'original'.
   profileId?: string;
   notes?: Record<string, string>;
   workspace?: Partial<WorkspaceSummary>;
@@ -144,17 +142,14 @@ interface OpenOptions {
 }
 export function open({
   name = evil,
-  migrated = false,
-  calculated = migrated ? migratedPlan() : false,
+  calculated = migratedPlan(),
   phase = '3',
-  profileId = 'original',
+  profileId = 'p',
   notes = {},
   workspace,
   state,
 }: OpenOptions = {}) {
-  const profile: ContextReply['profile'] = calculated
-    ? { id: 'p', kind: 'calculated', name }
-    : { id: profileId, kind: 'original', name };
+  const profile: ContextReply['profile'] = { id: profileId, kind: 'calculated', name };
   setWorkspace({
     user: { id: 'owner', username: evil },
     accountsEnabled: false,
@@ -166,7 +161,16 @@ export function open({
         name,
         activeProfile: profile.id,
         profiles: [
-          { id: 'original', kind: 'original', name, completed: 2, phase: '3' },
+          // A profile migrated from the handbook keeps its id.
+          {
+            id: 'original',
+            kind: 'calculated',
+            name,
+            completed: 2,
+            phase: '3',
+            settings: transcribed().plan.settings,
+            transcribed: true,
+          },
           {
             id: 'p',
             kind: 'calculated',
@@ -199,15 +203,12 @@ export function open({
     plan:
       typeof calculated === 'object'
         ? calculated
-        : calculated
-          ? ({
-              createdAt: '2026-09-24T10:00:00Z',
-              settings: { phase: '3', purity: 'normal', multiplier: 1, powerFactor: 1 },
-              stages: {},
-              warnings: [evil, 'Second assumption'],
-            } as StoredCalculatedPlan)
-          : null,
-    handbook,
+        : ({
+            createdAt: '2026-09-24T10:00:00Z',
+            settings: { phase: '3', purity: 'normal', multiplier: 1, powerFactor: 1 },
+            stages: {},
+            warnings: [evil, 'Second assumption'],
+          } as StoredCalculatedPlan),
   });
 }
 
@@ -224,7 +225,7 @@ export const transcribed = (): HandbookConversion =>
 export const migratedPlan = () => structuredClone(transcribed().plan);
 export const migratedRow = (factoryId: string, stage = '3') =>
   transcribed().rows[stage]![factoryId]!;
-export const openMigrated = (options: OpenOptions = {}) => open({ migrated: true, ...options });
+export const openMigrated = open;
 export const migratedState = (progress: Partial<ProgressState> = {}): ProgressState =>
   migrateHandbookState(
     {

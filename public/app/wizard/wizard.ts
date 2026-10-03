@@ -116,41 +116,12 @@ function openWizard(saveId: string | null) {
 }
 
 // The settings a new draft starts from. A new profile for an existing save starts from a
-// copy of its active profile's settings (the workspace summary exposes plan.settings), the
-// preserved handbook profile ('original') from handbookSettings; anything else from
-// freshSettings.
+// copy of its active profile's settings (the workspace summary exposes plan.settings); anything
+// else from freshSettings.
 function startingSettings(existing: SaveSummary | undefined): WizardSettings {
   const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
-  const previous: WizardSettings | null =
-    selected?.settings || (selected?.kind === 'original' ? handbookSettings() : null);
+  const previous: WizardSettings | undefined = selected?.settings;
   return previous ? structuredClone(previous) : freshSettings();
-}
-
-// The handbook profile has no calculated settings, so this literal stands in for the
-// handbook's own assumptions.
-function handbookSettings(): WizardSettings {
-  return {
-    phase: '3',
-    purity: 'pure',
-    distribution: 'randomized',
-    multiplier: 50,
-    powerFactor: 0.5,
-    availablePowerGW: 0,
-    recipes: 'all',
-    pureIngots: true,
-    sam: 'needed',
-    nuclear: 'recycle',
-    uraniumReactors: 1,
-    storage: 'all',
-    storageRate: 1,
-    cellsPerMinute: 20,
-    goal: 'timed',
-    hours: 8,
-    roundRates: true,
-    wholeMachines: true,
-    limitsConfirmed: false,
-    limits: { ...workspace.catalog.pureLimits },
-  };
 }
 
 // A fresh plan's settings. Concrete starts pre-ticked as a guided top-up, and both

@@ -17,7 +17,7 @@ import {
   viewOf,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, $$, answerConfirms, evil, go, handbook, open, page, stubFetch } from './setup.ts';
+import { $, $$, answerConfirms, evil, go, migratedPlan, open, page, stubFetch } from './setup.ts';
 import type { ContextReply, WorkspaceSummary } from '../../public/types/index.ts';
 
 const settle = async () => {
@@ -39,7 +39,8 @@ const onHash = () => {
 beforeAll(() => window.addEventListener('hashchange', onHash));
 afterAll(() => window.removeEventListener('hashchange', onHash));
 
-// Three profiles in the open save, the handbook one open; another save's profile is not listed.
+// Three profiles in the open save, the first open (a profile migrated from the handbook keeps the
+// id 'original'); another save's profile is not listed.
 const saves = (accountsEnabled = false): Partial<WorkspaceSummary> => ({
   accountsEnabled,
   saves: [
@@ -48,9 +49,9 @@ const saves = (accountsEnabled = false): Partial<WorkspaceSummary> => ({
       name: evil,
       activeProfile: 'original',
       profiles: [
-        { id: 'original', kind: 'original', name: evil, completed: 2, phase: '3' },
-        { id: 'copy', kind: 'original', name: 'Second try', completed: 0, phase: '3' },
-        { id: 'third', kind: 'original', name: 'Third try', completed: 0, phase: '3' },
+        { id: 'original', kind: 'calculated', name: evil, completed: 2, phase: '3' },
+        { id: 'copy', kind: 'calculated', name: 'Second try', completed: 0, phase: '3' },
+        { id: 'third', kind: 'calculated', name: 'Third try', completed: 0, phase: '3' },
       ],
     },
     {
@@ -58,7 +59,7 @@ const saves = (accountsEnabled = false): Partial<WorkspaceSummary> => ({
       name: 'Other save',
       activeProfile: 'elsewhere',
       profiles: [
-        { id: 'elsewhere', kind: 'original', name: 'Elsewhere', completed: 0, phase: '3' },
+        { id: 'elsewhere', kind: 'calculated', name: 'Elsewhere', completed: 0, phase: '3' },
       ],
     },
   ],
@@ -67,15 +68,14 @@ const saves = (accountsEnabled = false): Partial<WorkspaceSummary> => ({
 const summary = () => ({ user: { id: 'owner', username: 'Pioneer' }, catalog: {}, ...saves() });
 const opened = (id: string, name: string): ContextReply => ({
   save: { id: 's', name: evil },
-  profile: { id, kind: 'original', name },
+  profile: { id, kind: 'calculated', name },
   state: structuredClone(state),
-  plan: null,
-  handbook,
+  plan: migratedPlan(),
 });
 
 beforeEach(() => {
   page();
-  open({ workspace: saves() });
+  open({ workspace: saves(), profileId: 'original' });
   answerConfirms(true);
   history.replaceState(null, '', '#storage');
   acceptRoute();

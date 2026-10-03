@@ -197,7 +197,7 @@ onBeforeUnmount(() => wide?.removeEventListener?.('change', widened));
 const savedShortWidest = browserMode ? 'Saved in browser' : 'No save yet';
 
 // The sidebar footer: the open profile's name and the game settings it was planned for, as
-// lines. The original handbook's settings are fixed, so they are written out.
+// lines.
 function profileFooter() {
   if (calculated) {
     const settings = calculated.settings;
@@ -219,13 +219,6 @@ function profileFooter() {
           ]),
     ];
   }
-  if (currentProfile?.kind === 'original')
-    return [
-      currentProfile.name,
-      'Pure nodes · 50× elevator parts',
-      'Half power consumption',
-      'Plan revised 13 September 2026',
-    ];
   return ['Create or select a profile'];
 }
 

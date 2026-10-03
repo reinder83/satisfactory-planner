@@ -91,7 +91,8 @@ beforeEach(() => page());
 
 const PAGES: View[] = ['plan', 'factories', 'logistics', 'storage', 'resources', 'backup'];
 
-test('the handbook profile draws each notice in its tone', () => {
+// open() opens a profile migrated from the handbook (#387), with its plan guide.
+test('a profile migrated from the handbook draws each notice in its tone', () => {
   const all: [string, string][] = [];
   for (const view of PAGES) {
     page();
@@ -109,9 +110,9 @@ test('the handbook profile draws each notice in its tone', () => {
     all.push(...tones());
   }
   setFloor('ground');
-  assert.equal(toneOf(all, /nitrogen wells can supply/), 'warn');
-  assert.equal(toneOf(all, /preliminary requirement/), 'info');
-  assert.equal(toneOf(all, /has no calculated plan/), 'info');
+  assert.equal(toneOf(all, /transcribed from the original handbook/), 'warn');
+  assert.equal(toneOf(all, /Whole-machine production/), 'info');
+  assert.equal(toneOf(all, /until the factories are in groups/), 'info');
 });
 
 test('a calculated profile draws its draft and headroom as warnings, guidance as info', () => {
