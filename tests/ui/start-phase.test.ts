@@ -35,7 +35,6 @@ async function bootEmpty(browser: boolean) {
       catalog: setup.catalog(),
       saves: [],
     },
-    '/plan.json': setup.handbook,
     '/progression.json': {},
   });
   // The Pages edition fetches the static files beside the page, so match by the path's end.

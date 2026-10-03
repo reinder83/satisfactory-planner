@@ -14,12 +14,13 @@ beforeEach(() => {
   go('plan');
 });
 
-for (const [kind, calculated] of [
-  ['calculated', true],
-  ['original', false],
+// A small calculated profile, and one migrated from the handbook (open()'s default, #800).
+for (const [kind, options] of [
+  ['calculated', { name: LONG, calculated: true }],
+  ['migrated', { name: LONG }],
 ] as const)
   test(`the whole name of the ${kind} profile stays on the switcher, on a line of its own`, () => {
-    open({ name: LONG, calculated });
+    open(options);
     render();
     const button = $('[data-profile-switcher]')!;
     const name = button.querySelector('.profile-switcher-name')!;

@@ -52,7 +52,6 @@ import {
   evil,
   generated,
   go,
-  handbook,
   open,
   page,
   stubFetch,
@@ -1085,7 +1084,6 @@ test('signing out or reaching an empty workspace closes the previous view state'
   setLayoutEditing(true);
   stubFetch({
     '/api/workspace': { user: { id: 'u2', username: 'next' }, accountsEnabled: true, saves: [] },
-    '/plan.json': handbook,
     '/progression.json': {},
   });
   await boot();
