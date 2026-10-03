@@ -106,7 +106,8 @@ async function apply(event: Event) {
             :checked="chosen.includes(entry.item)"
             @change="toggle(entry.item, ($event.target as HTMLInputElement).checked)"
           /><ItemIcon :name="entry.item" /><span
-            >{{ entry.item }}<small v-if="entry.note" class="muted"> {{ entry.note }}</small></span
+            >{{ entry.item
+            }}<small v-if="entry.note" class="muted">{{ ' ' + entry.note }}</small></span
           ></label
         >
       </div>
