@@ -12,7 +12,6 @@ import { showSignedOut, unmountShell } from './ui/mount.ts';
 import { startWizard, type WizardDraft } from './wizard/wizard.ts';
 import type {
   ContextReply,
-  Handbook,
   Phase,
   ProfileKind,
   Progression,
@@ -41,8 +40,9 @@ export type View = (typeof VIEWS)[number];
 export const viewOf = (hash: string): View =>
   (VIEWS as readonly string[]).includes(hash) ? (hash as View) : 'plan';
 
-// The open save and profile. kind is 'original' for the preserved handbook and 'calculated'
-// for a wizard-made profile; the empty workspace's placeholder profile has none.
+// The open save and profile. A profile opened is 'calculated': the retired handbook kind
+// ('original') is migrated before it reaches the interface (#387). The empty workspace's
+// placeholder profile has no kind.
 export interface OpenSave {
   id: string;
   name: string;
@@ -59,8 +59,8 @@ export let progressionData: Progression;
 export let workspace: WorkspaceSummary;
 export let currentSave: OpenSave;
 export let currentProfile: OpenProfile;
-// The open profile's frozen calculated plan, or null for the original handbook.
-// Views branch on this to pick the calculated or the handbook rendering.
+// The open profile's frozen calculated plan; null only while no save is open (the empty
+// workspace's placeholder profile).
 export let calculated: StoredCalculatedPlan | null = null;
 // The open profile's stored hard-drive payoff ranking (#203), while it matches the plan.
 export let payoff: StoredPayoff | null = null;
@@ -68,10 +68,6 @@ export let payoff: StoredPayoff | null = null;
 export let wizard: WizardDraft | null = null;
 // Which form the signed-out screen shows; see ui/SignedOut.vue.
 export let authMode: 'login' | 'register' = 'login';
-// plan.json as fetched at boot; the fallback when a profile carries no handbook of its own.
-let basePlan: Handbook | undefined;
-// The handbook in use: the profile's own copy for an original profile, otherwise plan.json.
-export let plan: Handbook;
 // The open profile's saved progress (settings, checks, notes, deliveries, customTasks,
 // taskEdits, ...). Replaced wholesale by every successful save() in api.ts. Unset until boot()
 // opens a profile and blank while signed out: `stateLoaded` says whether it is a profile's.
@@ -191,14 +187,13 @@ export function setFactoryEditing(value: boolean) {
 
 // A profile records the phase it was created for: its production is planned from there on.
 // Earlier phases are already behind the user, so their production lines and targets are not
-// theirs to build. The original handbook (no calculated plan) covers Phase 3 onward.
-export const startPhase = (): StageKey =>
-  calculated ? (String(calculated.settings?.phase || '1') as StageKey) : '3';
+// theirs to build. With no profile open (the empty workspace) it is Phase 1.
+export const startPhase = (): StageKey => String(calculated?.settings?.phase || '1') as StageKey;
 
 // The first phase the profile offers. A calculated profile offers the phases before its start
 // phase as milestone-only phases (#759, milestoneOnlyPhase in progression.ts): their build plan
 // lists the milestones that belong there and nothing else. A plan guide (a profile moved from
-// the handbook) and the original handbook have no such phases, so they start at the start phase.
+// the handbook) has no such phases, so it starts at the start phase.
 // The save list works it out the same way for every profile (firstPlanPhase in progression.ts).
 export const firstPhase = (): StageKey => (calculated ? firstPlanPhase(calculated) : startPhase());
 
@@ -288,9 +283,9 @@ function openOnPhase() {
   }
 }
 
-// Makes an /api/context reply the open save and profile ({ save, profile, state, plan,
-// handbook }): its state, its calculated plan (null for the handbook) and the handbook it
-// reads, and resets the per-page UI state. Also used by the component tests.
+// Makes an /api/context reply the open save and profile ({ save, profile, state, plan }): its
+// state and its calculated plan, and resets the per-page UI state. Also used by the component
+// tests.
 export function setContext(reply: ContextReply) {
   currentSave = reply.save;
   currentProfile = reply.profile;
@@ -298,7 +293,6 @@ export function setContext(reply: ContextReply) {
   stateLoaded = true;
   calculated = reply.plan;
   payoff = reply.payoff ?? null;
-  plan = reply.handbook || basePlan || plan;
   query = '';
   openedOn = null;
   endEditing();
@@ -349,11 +343,7 @@ export async function boot() {
       showSignedOut(required('#app'));
       return;
     }
-    [plan, progressionData] = await Promise.all([
-      request<Handbook>('/plan.json'),
-      request<Progression>('/progression.json'),
-    ]);
-    basePlan = plan;
+    progressionData = await request<Progression>('/progression.json');
     // Open the workspace's active save at its active profile, then honour a deep link.
     const save = workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
     if (save) {

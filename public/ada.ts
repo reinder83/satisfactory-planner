@@ -16,7 +16,7 @@ export interface AdaFacts {
   guidedTotal: number;
   tutorialDone: boolean;
   supplyDeclared: number;
-  // 'original', 'calculated', or 'none' without an open save.
+  // 'calculated', or 'none' without an open save.
   kind: string;
   save: string;
   profile: string;
@@ -446,15 +446,7 @@ const RULES: AdaRule[] = [
     text: () =>
       `Existing power means spare capacity, not everything you have installed. Overstate it and the plan fails politely, later, at scale.`,
   },
-  // Profile kind and editing modes.
-  {
-    id: 'handbook',
-    on: ['profiles'],
-    tone: 'calm',
-    when: facts => facts.kind === 'original',
-    text: () =>
-      `This is the preserved handbook profile; its targets are frozen on purpose. If you want to experiment, duplicate it and be reckless over there.`,
-  },
+  // Editing modes.
   {
     id: 'editing',
     on: ['plan'],

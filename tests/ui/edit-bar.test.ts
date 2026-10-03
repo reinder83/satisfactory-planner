@@ -47,7 +47,7 @@ const MODES: {
     name: 'migrated steps',
     view: 'plan',
     calculated: true,
-    migrated: true,
+
     toggle: '[data-toggle-plan-edit]',
     label: 'Editing steps',
     on: () => planEditing,
@@ -64,7 +64,7 @@ const MODES: {
     name: 'migrated groups',
     view: 'factories',
     calculated: true,
-    migrated: true,
+
     toggle: '[data-toggle-factory-edit]',
     label: 'Editing groups',
     on: () => factoryEditing,
@@ -81,7 +81,7 @@ const MODES: {
     name: 'storage layout',
     view: 'storage',
     calculated: true,
-    migrated: true,
+
     toggle: '[data-toggle-layout]',
     label: 'Editing the layout',
     on: () => layoutEditing,

@@ -1,15 +1,15 @@
 // The top bar's phase track (SP-44, #279, ui/Shell.vue): one segment per phase the phase picker
 // offers (phaseOptions()), each with how far its checklist has come. A calculated profile counts
 // its build-plan steps ticked, at most 99% while one is open (#770), as the profile card does
-// (profilePhases in state/summary.ts, #746); the handbook counts its phase steps. Post-game has
-// no checklist of its own, so its segment shows no progress. Only saved checks are read.
+// (profilePhases in state/summary.ts, #746). Post-game has no checklist of its own, and nothing
+// has one while no profile is open, so their segments show no progress. Only saved checks are
+// read.
 import { phaseStepIds } from '../opening-phase.ts';
 import {
   calculated,
   checked,
   phaseLabel,
   phaseOptions,
-  plan,
   progressionData,
   state,
 } from '../session.ts';
@@ -62,10 +62,6 @@ export function phaseTrack(): PhaseSegment[] {
       const ids = stepIdsOf(phase);
       done = ids.filter(checked).length;
       total = ids.length;
-    } else if (phase !== 'post') {
-      const steps = plan?.phases?.[phase] ?? [];
-      done = steps.filter(t => checked(t.id)).length;
-      total = steps.length;
     }
     return { phase, label: phaseLabel(phase), pct: share(done, total) };
   });

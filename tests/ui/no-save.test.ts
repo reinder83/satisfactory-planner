@@ -7,7 +7,7 @@ import { beforeEach, test } from 'vitest';
 import { setContext, setWorkspace, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { initialState } from '../../public/state.ts';
-import { $, $$, go, handbook, open, page } from './setup.ts';
+import { $, $$, go, open, page } from './setup.ts';
 import type { View } from '../../public/app/session.ts';
 import type { Catalog, ProgressState } from '../../public/types/index.ts';
 
@@ -21,10 +21,9 @@ function emptyWorkspace() {
   });
   setContext({
     save: { id: '', name: 'New save' },
-    profile: { id: '', kind: 'original', name: 'Choose a profile' },
+    profile: { id: '', kind: 'calculated', name: 'Choose a profile' },
     state: { ...initialState(), settings: { phase: '3' } } as ProgressState,
     plan: null,
-    handbook,
   });
 }
 
@@ -105,7 +104,7 @@ test('with no save the status claims nothing, and its dot is left out', async ()
   assert.equal($('#saved-short')!.textContent, 'No save yet');
   assert.equal($$('.save-status .dot').length, 0);
   // An open save reads as before (a profile migrated from the handbook, #387).
-  open({ migrated: true });
+  open();
   render();
   await nextTick();
   assert.equal($('#saved')!.textContent, 'Saved on server');

@@ -47,7 +47,7 @@ export function toast(message: string, error = false) {
 
 // The one request path for the whole UI. Resolves to the parsed JSON body; rejects with
 // the server's error message. In the browser edition /api/* never reaches the network:
-// browser-api.ts answers it from IndexedDB. Static files (plan.json, ...) are fetched
+// browser-api.ts answers it from IndexedDB. Static files (progression.json, ...) are fetched
 // relative to appRoot there, because GitHub Pages serves the app under a subpath.
 // The caller names the reply's type (T); it is not checked at run time.
 export async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {

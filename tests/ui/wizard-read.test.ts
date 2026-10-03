@@ -1,7 +1,7 @@
 // How the five-step wizard reads its form into the draft (readWizard) and how a new draft
 // starts (startWizard), in public/app/wizard/wizard.ts: the field-to-setting mapping, the
 // per-step checkboxes, the readers that only run when their section is on screen, the
-// world-preset reset, and the fresh, copied and handbook starting settings. The forms here
+// world-preset reset, and the fresh and copied starting settings (a migrated handbook profile's too). The forms here
 // are plain DOM forms, not the step components (tests/ui/wizard.test.ts draws those).
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'vitest';
@@ -11,7 +11,7 @@ import { setWizard, wizard, workspace } from '../../public/app/session.ts';
 import { readWizard, startWizard } from '../../public/app/wizard/wizard.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { Catalog, StoredSettings } from '../../public/types/index.ts';
-import { catalog, generated, open, page } from './setup.ts';
+import { catalog, generated, migratedPlan, open, page } from './setup.ts';
 
 let items: Catalog;
 
@@ -219,10 +219,36 @@ test("a save's next profile starts from a copy of its active profile's settings"
   assert.deepEqual(draft.settings.storageOverrides, active.storageOverrides, 'no top-up added');
 });
 
-test('the handbook profile starts from the handbook assumptions', () => {
-  // open() makes the handbook profile ('original') the save's active one.
+// A profile migrated from the handbook (#387) carries the handbook's assumptions as its plan's
+// settings, so the next profile starts from them like any other profile's.
+test('a profile migrated from the handbook starts from the handbook assumptions', () => {
+  const migrated = migratedPlan().settings;
+  open({
+    workspace: {
+      catalog: items,
+      saves: [
+        {
+          id: 's',
+          name: 'World',
+          activeProfile: 'original',
+          profiles: [
+            {
+              id: 'original',
+              kind: 'calculated',
+              name: 'Handbook',
+              completed: 0,
+              phase: '3',
+              settings: migrated,
+              transcribed: true,
+            },
+          ],
+        },
+      ],
+    },
+  });
   startWizard('s');
   const settings = wizard!.settings;
+  assert.deepEqual(settings, migrated);
   assert.deepEqual(
     [
       settings.purity,
@@ -234,6 +260,5 @@ test('the handbook profile starts from the handbook assumptions', () => {
     ],
     ['pure', 'randomized', 50, 'recycle', 'timed', 20],
   );
-  assert.deepEqual(settings.limits, workspace.catalog.pureLimits);
   assert.equal(settings.storageOverrides, undefined, 'no top-up added');
 });

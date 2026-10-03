@@ -22,7 +22,6 @@ import {
   payoff,
   phase,
   phaseLabel,
-  plan,
   planEditing,
   query,
   stage,
@@ -159,25 +158,17 @@ function adaFacts(): AdaFacts {
   // as feasible, with nothing in it.
   const milestones = milestoneOnly();
   const storedStage: StoredStage = calcStage() ?? { feasible: milestones };
-  const rows: { id: string }[] = calculated
-    ? storedStage.rows || []
-    : plan.factories.filter(f => f.stages[stage()]);
-  const runningKey = (row: { id: string }) =>
-    (calculated ? 'calc-' : 'factory-') + stage() + '-' + row.id;
+  const rows: { id: string }[] = storedStage.rows || [];
+  const runningKey = (row: { id: string }) => 'calc-' + stage() + '-' + row.id;
   const slots = storageBays()
     .flatMap(b => b.items)
     .filter(i => i.name);
   // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.ts.
-  const deliveries = calculated
-    ? Object.entries<StageDelivery>(storedStage.delivery || {}).map(([item, delivery]) => ({
-        id: stage() + '-' + slug(item),
-        target: delivery.target,
-        initial: 0,
-      }))
-    : plan.deliveries.filter(d => d.phase === phase());
-  // Same default as ui/plan/DeliveryCounter.vue: the original handbook starts from its recorded amounts.
-  const delivered = (delivery: { id: string; initial: number }) =>
-    state.deliveries[delivery.id] ?? (currentProfile.kind === 'original' ? delivery.initial : 0);
+  const deliveries = Object.entries<StageDelivery>(storedStage.delivery || {}).map(
+    ([item, delivery]) => ({ id: stage() + '-' + slug(item), target: delivery.target }),
+  );
+  // Same default as ui/plan/DeliveryCounter.vue: a delivery with no saved count has none yet.
+  const delivered = (delivery: { id: string }) => state.deliveries[delivery.id] ?? 0;
   const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
   const headroom = calculated ? storedStage.additionalHeadroomMW || 0 : 0;
   // What the stage's power is balanced against, as build-status.ts measures it (#334).
@@ -194,7 +185,7 @@ function adaFacts(): AdaFacts {
     guidedTotal: wizard ? guidedFlow().length : 0,
     tutorialDone: wizard?.tutorial === 'done',
     supplyDeclared: Object.keys(wizard?.settings?.existingSupply || {}).length,
-    kind: currentSave.id ? currentProfile?.kind || 'original' : 'none',
+    kind: currentSave.id ? 'calculated' : 'none',
     save: currentSave.name || 'this save',
     profile: currentProfile?.name || 'Pioneer',
     steps: { done: steps.filter(t => checked(t.id)).length, total: steps.length },

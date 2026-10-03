@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { createApp, h, nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
 import { pending, save } from '../../public/app/api.ts';
-import { boot, currentSave, state, workspace } from '../../public/app/session.ts';
+import { boot, currentSave, setContext, state, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
 import { num } from '../../public/app/format.ts';
@@ -15,7 +15,6 @@ import { showSignedOut } from '../../public/app/ui/mount.ts';
 import { vuePage } from '../../public/app/ui/pages.ts';
 import { phaseProgress } from '../../public/state.ts';
 import CalculatedResourcesPage from '../../public/app/ui/pages/CalculatedResourcesPage.vue';
-import ResourcesPage from '../../public/app/ui/pages/ResourcesPage.vue';
 import { resourceUse, tightestFirst } from '../../public/app/views/resources.ts';
 import {
   answerConfirms,
@@ -25,7 +24,7 @@ import {
   evil,
   generated,
   go,
-  handbook,
+  migratedPlan,
   open,
   page,
   stubFetch,
@@ -43,9 +42,10 @@ import type {
 const noMarkup = () =>
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 
+// A profile migrated from the handbook (#387), which kept its id 'original'.
 beforeEach(() => {
   page();
-  open();
+  open({ profileId: 'original' });
 });
 
 // #418: the page's tick counts and phases came from the summary loaded at start. Opening it now
@@ -104,7 +104,7 @@ test('a calculated profile card shows a segmented phase bar that reads in words 
         name: 'World',
         activeProfile: 'original',
         profiles: [
-          { id: 'original', kind: 'original', name: 'Handbook', completed: 2, phase: '3' },
+          { id: 'original', kind: 'calculated', name: 'No counts', completed: 2, phase: '3' },
           {
             id: 'p',
             kind: 'calculated',
@@ -294,8 +294,13 @@ test('Saves & profiles lists every profile, escaped, with its actions', () => {
   const cards = $$('.profile-card');
   assert.equal(cards.length, 2);
   assert.ok(cards[0]!.classList.contains('selected'), 'the open profile is marked');
-  assert.equal(cards[0]!.querySelector('.eyebrow')!.textContent, 'PRESERVED HANDBOOK');
-  assert.equal(cards[1]!.querySelector('.eyebrow')!.textContent, 'CALCULATED PROFILE');
+  for (const card of cards)
+    assert.equal(card.querySelector('.eyebrow')!.textContent, 'CALCULATED PROFILE');
+  assert.equal(
+    cards[0]!.querySelector('p')!.textContent,
+    `pure purity · 50× elevator · ${num(0.5)}× power`,
+    'the handbook’s assumptions, as its migrated plan’s settings',
+  );
   assert.equal(
     cards[1]!.querySelector('p')!.textContent,
     evil + ' purity · 2× elevator · 3× power',
@@ -443,6 +448,15 @@ test('Duplicate says "Copying…" on ⋯ while it runs, and ⋯ stays focused an
 // SP-31 (#266): ✎ swaps a name for an input; Enter saves, Esc cancels, and focus goes back to ✎.
 // Any save or profile can be renamed, not only the open one: the request names it in its scope
 // headers. The open save's new name reaches the breadcrumb and the open profile's the sidebar.
+// The open profile's calculated plan gone, as while render() swaps the page after the last save
+// was removed and the empty workspace's placeholder opened.
+const closePlan = () =>
+  setContext({
+    save: { id: '', name: 'New save' },
+    profile: { id: '', kind: 'calculated', name: 'Choose a profile' },
+    state: structuredClone(state),
+    plan: null,
+  });
 const settle = async () => {
   await new Promise(resolve => setTimeout(resolve, 20));
   await nextTick();
@@ -456,7 +470,7 @@ const renameReply = (names: { save?: string; original?: string; p?: string }) =>
       profiles: [
         {
           id: 'original',
-          kind: 'original',
+          kind: 'calculated',
           name: names.original ?? evil,
           completed: 2,
           phase: '3',
@@ -629,10 +643,10 @@ test('a failed sign-in says why in the form', async () => {
 });
 
 // #243: the save-wide note moved to the Notes page (tests/ui/notes.test.ts); Backup links there.
-for (const kind of ['handbook', 'calculated'] as const)
+for (const kind of ['migrated', 'calculated'] as const)
   test(`the ${kind} backup page has no notes box and links to the Notes page`, () => {
     const notes = { global: 'Kept', 'phase-3': 'Kept too' };
-    open({ calculated: kind === 'calculated', notes });
+    open(kind === 'calculated' ? { calculated: true, notes } : { notes });
     go('backup');
     render();
     assert.equal($$('#main textarea').length, 0, 'no notes editor on Backup');
@@ -641,20 +655,31 @@ for (const kind of ['handbook', 'calculated'] as const)
     assert.deepEqual({ ...state.notes }, notes, 'the notes are untouched');
   });
 
-test('the handbook backup page lists the sources and its transfer controls', () => {
+// A profile migrated from the handbook (#387) gets the server page every profile gets: its own
+// download, restore and the transfer controls, and its plan's assumptions.
+test('a migrated profile’s backup page has its download, restore and transfer controls', () => {
   go('backup');
   render();
   noMarkup();
   assert.equal($('a[download]')!.getAttribute('href'), '/api/export?save=s&profile=original');
-  assert.equal($$('.list-links a').length, handbook.sources!.length);
   assert.ok($('#import-file') && $('#import-saves') && $('[data-export-saves]'));
+  assert.deepEqual(
+    $$('#main .panel h2').map(h2 => h2.textContent),
+    [
+      'Full saves & transfer',
+      'Download this profile',
+      'Restore this profile',
+      'Calculation assumptions',
+    ],
+  );
+  assert.equal($('.list-links'), null, 'the handbook’s source list went with its page');
 });
 
 // SP-41 (#276): the page is "Backup" everywhere, with the same four actions on both profile
 // kinds. The browser edition's page and its links (the notice, the profiles page, the switcher
 // menu, ADA) are checked as source, since browserMode is fixed when browser-api.ts loads.
 test('the Backup page and its links say "Backup", with plainly named actions (SP-41)', () => {
-  for (const calculated of [false, true]) {
+  for (const calculated of [undefined, true] as const) {
     open({ calculated });
     go('backup');
     render();
@@ -666,7 +691,7 @@ test('the Backup page and its links say "Backup", with plainly named actions (SP
       'Export all saves',
       'Import saves…',
     ])
-      assert.ok(actions.includes(name), `${calculated ? 'calculated' : 'handbook'}: "${name}"`);
+      assert.ok(actions.includes(name), `${calculated ? 'calculated' : 'migrated'}: "${name}"`);
   }
   const sources = [
     'public/ada.ts',
@@ -683,11 +708,11 @@ test('the Backup page and its links say "Backup", with plainly named actions (SP
 // Tab never reached them. Each is now a button in the tab order, named by its text, that opens
 // the file input (which stays rendered but out of sight and out of the tab order).
 for (const [kind, restoreName] of [
-  ['handbook', 'Restore this profile…'],
+  ['migrated', 'Restore this profile…'],
   ['calculated', 'Restore this profile…'],
 ] as const)
   test(`the ${kind} backup page's file controls are buttons the keyboard reaches`, () => {
-    open({ calculated: kind === 'calculated' });
+    open(kind === 'calculated' ? { calculated: true } : {});
     go('backup');
     render();
     // What Tab can reach on the page, by its accessible text.
@@ -891,9 +916,9 @@ test('the calculated backup page names the profile and lists its assumptions', (
 
 // #309: on the server the "Full saves & transfer" panel came before the page header, so the page
 // opened on a panel with no title. The header comes first in both server versions.
-for (const kind of ['handbook', 'calculated'] as const)
+for (const kind of ['migrated', 'calculated'] as const)
   test(`the ${kind} backup page opens with its header, then the full-saves panel`, () => {
-    open({ calculated: kind === 'calculated' });
+    open(kind === 'calculated' ? { calculated: true } : {});
     go('backup');
     render();
     const [first, second] = [...$('#main')!.children];
@@ -902,12 +927,13 @@ for (const kind of ['handbook', 'calculated'] as const)
     assert.equal($$('#main h1').length, 1, 'one header');
   });
 
-test('the handbook resources page shows every resource with its icon, and the power checks', async () => {
-  go('resources');
-  render();
+// A profile migrated from the handbook (#387) has the calculated resources page: every budget with
+// its icon, and the handbook's power commissioning checks from its plan guide.
+test('a migrated profile’s resources page shows every budget with its icon, and the power checks', async () => {
+  const plan = migratedPlan();
+  openCalculatedResources(plan);
   const rows = $$('#main tbody tr');
-  const resources = Object.keys(handbook.resources['3']!);
-  assert.equal(rows.length, resources.length);
+  assert.equal(rows.length, Object.keys(plan.settings.limits).length);
   for (const row of rows) {
     // The resource column stays in view when the table scrolls sideways (#358).
     assert.ok(row.firstElementChild!.classList.contains('resource-cell'));
@@ -920,8 +946,6 @@ test('the handbook resources page shows every resource with its icon, and the po
   }
   assert.equal($$('[data-check^="power-"]').length, 9);
   assert.equal($<HTMLInputElement>('[data-check="power-u4"]')!.checked, false);
-  open({ phase: '3' });
-  const { state } = await import('../../public/app/session.ts');
   state.checks['power-u4'] = true;
   render();
   await nextTick();
@@ -932,25 +956,20 @@ test('the handbook resources page shows every resource with its icon, and the po
   );
 });
 
-// #354: the handbook page stays mounted until render() swaps it out, so it can be drawn while
-// the session's stage is one the handbook has no plan for (a phase 1 or 2 calculated profile).
-// It draws nothing then rather than throwing.
-test('the handbook resources page draws nothing for a phase the handbook has no plan for', async () => {
-  const plan = generated();
-  plan.settings.phase = '1';
-  for (const phase of ['1', '2'] as const) {
-    open({ calculated: plan, phase });
-    assert.equal(handbook.plans[phase], undefined, 'the handbook has no plan for this phase');
-    const el = document.createElement('div');
-    const errors: unknown[] = [];
-    const app = createApp({ render: () => h(ResourcesPage) });
-    app.config.errorHandler = error => void errors.push(error);
-    app.mount(el);
-    await nextTick();
-    assert.deepEqual(errors, [], 'phase ' + phase + ' draws without an error');
-    assert.equal(el.querySelector('h1, table'), null, 'phase ' + phase + ' draws nothing');
-    app.unmount();
-  }
+// #354: a page stays mounted until render() swaps it out, so the resources page can be drawn once
+// more after the profile it was drawn for has gone and no calculated plan is open. It draws
+// nothing then rather than throwing.
+test('the resources page draws nothing while no calculated plan is open', async () => {
+  closePlan();
+  const el = document.createElement('div');
+  const errors: unknown[] = [];
+  const app = createApp({ render: () => h(CalculatedResourcesPage) });
+  app.config.errorHandler = error => void errors.push(error);
+  app.mount(el);
+  await nextTick();
+  assert.deepEqual(errors, [], 'it draws without an error');
+  assert.equal(el.querySelector('table, [data-guide-power]'), null, 'it draws no resources');
+  app.unmount();
 });
 
 test('moving between pages leaves nothing behind', async () => {
@@ -969,9 +988,8 @@ test('moving between pages leaves nothing behind', async () => {
   render();
   assert.equal($$('#main h1').length, 1);
   assert.equal($('#main h1')!.textContent, 'Power & resources');
-  // Any plan object means a calculated profile; the page reads none of its fields, and
   // #resources ignores the wizard draft.
-  assert.equal(vuePage('resources', {} as StoredCalculatedPlan, null), CalculatedResourcesPage);
+  assert.equal(vuePage('resources', null), CalculatedResourcesPage);
 });
 
 // A calculated profile's resources page, with the catalog's raw resources as the server
@@ -1327,10 +1345,10 @@ test('the calculated resources page renders a plan saved before existing product
   assert.doesNotMatch($('#main .backup-grid')!.textContent, /does not build these lines/);
 });
 
-// Opening the handbook from a calculated profile's page: anything that redraws before render()
-// swaps the page (a save finishing, the save indicator) reaches the calculated page and dialog
-// once more, with no calculated plan open.
-test('a calculated page survives a redraw after the handbook is opened', async () => {
+// Leaving a calculated profile's page for no profile at all (the empty workspace once the last
+// save is removed): anything that redraws before render() swaps the page (a save finishing, the
+// save indicator) reaches the calculated page and dialog once more, with no calculated plan open.
+test('a calculated page survives a redraw after its plan has gone', async () => {
   const errors: unknown[] = [];
   const onError = (event: { reason?: unknown; error?: unknown }) =>
     errors.push(event.reason ?? event.error);
@@ -1343,16 +1361,13 @@ test('a calculated page survives a redraw after the handbook is opened', async (
       go(view);
       render();
       openCalculatedFactory(plan.stages['3'].rows![0]!.id);
-      open();
+      closePlan();
       invalidate();
       await nextTick();
       await new Promise(resolve => setTimeout(resolve, 0));
       render();
       await nextTick();
-      // The build plan has no handbook page any more (#799): the calculated one stays and draws
-      // nothing for a profile without a calculated plan.
-      if (view === 'plan') assert.equal($('#main h1'), null, 'plan draws nothing after render()');
-      else assert.ok($('#main h1'), view + ' shows the handbook page after render()');
+      assert.ok($('#main h1'), view + ' still has its header after render()');
     }
   } finally {
     process.off('unhandledRejection', onError);
@@ -1444,28 +1459,13 @@ test('a refused browser record offers its stored data as a download on the error
   assert.ok($('#retry'));
 });
 
-// Nitrogen Gas is a fluid, so the handbook's well check names its rate in m³/min (#363).
-test('the handbook resources page asks for the nitrogen rate in m³/min (#363)', () => {
-  open({ phase: '4' });
-  go('resources');
-  render();
-  const warn = $$('#main .notice.warn').find(n => /nitrogen wells/.test(n.textContent))!;
-  assert.ok(warn, 'Phase 4 has the nitrogen notice');
-  assert.match(
-    warn.textContent.replace(/ /g, ' ').replace(/\s+/g, ' '),
-    new RegExp(
-      `can supply ${num(handbook.resources['4']!['Nitrogen Gas']!).replace(/\./g, '\\.')} m³/min at this stage`,
-    ),
-  );
-});
-
-// The handbook's fixed copy measures water, crude and nitrogen in m³ as well (#367).
-test('the handbook resources page writes its fluid amounts in m³ (#367)', () => {
-  open({ phase: '5' });
+// The handbook's fixed copy, carried into a migrated profile's plan guide, measures crude, nitrogen
+// and water in m³ (#367).
+test('a migrated profile’s resources page writes the handbook’s fluid amounts in m³ (#367)', () => {
+  open({ phase: '5', workspace: { catalog: { raw: [] as string[] } as Catalog } });
   go('resources');
   render();
   const text = $('#main')!.textContent.replace(/ /g, ' ').replace(/\s+/g, ' ');
-  assert.match(text, /Water includes a 2,000 m³\/min reserve/);
   assert.match(text, /300 m³ Crude, 800 Sulfur, 400 Coal, 600 m³ Nitrogen and 1,000 m³ Water\./);
   assert.match(text, /cooling needs 42,000 m³ Water\/min/);
   assert.doesNotMatch(text, /\d Water\/min|\d\/min reserve/);
@@ -1516,38 +1516,6 @@ test('the calculated resources table writes each rate with its own unit (#363)',
   assert.equal(nbsp(use.querySelector('[data-over]')!.textContent.trim()), '⚠ Over by 300 m³/min');
   assert.equal(use.firstChild!.textContent!.trim(), num(125) + '%');
   assert.equal(rows['Iron Ore']![3], num(48) + '%');
-});
-
-test('the handbook resources table writes each rate with its own unit (#363)', () => {
-  go('resources');
-  render();
-  assert.deepEqual(
-    $$('#main thead th').map(th => th.textContent),
-    ['Fresh resource', 'Required', 'Available', 'Remaining', 'Use'],
-    'no header names a unit',
-  );
-  const required = handbook.resources['3']!,
-    capacity = handbook.capacities;
-  const rows = unitRows();
-  // Crude oil has a capacity: all three rates in m³/min, and Use a percentage.
-  assert.deepEqual(rows['Crude Oil']!.slice(0, 3), [
-    num(required['Crude Oil']) + ' m³/min',
-    num(capacity['Crude Oil']) + ' m³/min',
-    num(capacity['Crude Oil']! - required['Crude Oil']!) + ' m³/min',
-  ]);
-  const oil = $$('#main tbody tr').find(row => /Crude Oil/.test(row.textContent))!;
-  assert.match(oil.querySelectorAll('td')[4]!.textContent.trim(), /^[\d.,]+%$/);
-  assert.deepEqual(rows['Iron Ore']!.slice(0, 3), [
-    num(required['Iron Ore']) + '/min',
-    num(capacity['Iron Ore']) + '/min',
-    num(capacity['Iron Ore']! - required['Iron Ore']!) + '/min',
-  ]);
-  // Water has no capacity: its requirement is in m³/min, the words beside it carry no unit.
-  assert.deepEqual(rows.Water!.slice(0, 3), [
-    num(required.Water) + ' m³/min',
-    'Extraction limited',
-    '—',
-  ]);
 });
 
 // A plan with a guide (#393, #469; a migrated handbook profile) adds its power section to the

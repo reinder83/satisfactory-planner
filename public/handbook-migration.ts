@@ -75,8 +75,8 @@ const SETTINGS: Omit<StoredSettings, 'limits'> = {
   modNotes: '',
 };
 
-// The handbook's power commissioning checklist (ResourcesPage.vue draws it from here): saved
-// check key, label.
+// The handbook's power commissioning checklist, which the migration carries into the plan guide:
+// saved check key, label.
 export const POWER_CHECKS: { id: string; label: string }[] = [
   { id: 'power-retained', label: 'Retained turbofuel: 44.425 GW' },
   { id: 'power-rocket-1', label: 'Rocket-fuel block 1: +72 GW' },

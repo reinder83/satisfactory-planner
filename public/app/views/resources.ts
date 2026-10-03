@@ -1,7 +1,7 @@
-// How much of a resource budget a plan uses, for both resources pages (ui/pages/ResourcesPage.vue
-// against the handbook's capacities, ui/pages/CalculatedResourcesPage.vue against a calculated
-// profile's entered budgets), so they agree on the figure, the bar and when a resource is tight
-// or over (SP-27, #262). Display only: it reads the numbers the page already has.
+// How much of a resource budget a plan uses, for the resources page
+// (ui/pages/CalculatedResourcesPage.vue, against the profile's entered budgets): the figure, the
+// bar and when a resource is tight or over (SP-27, #262). Display only: it reads the numbers the
+// page already has.
 import { num } from '../format.ts';
 
 export interface ResourceUse {

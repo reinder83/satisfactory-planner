@@ -28,7 +28,7 @@ import {
   catalog,
   generated,
   go,
-  handbook,
+  migratedPlan,
   migratedRow,
   open,
   openMigrated,
@@ -210,7 +210,7 @@ test('removing an added floor or hiding a built-in one moves focus to the floor 
 test('removing a profile moves focus to the next profile’s ⋯ menu', async () => {
   const profiles = ['original', 'second', 'third'].map(id => ({
     id,
-    kind: 'original' as const,
+    kind: 'calculated' as const,
     name: 'Profile ' + id,
     completed: 0,
     phase: '3' as const,
@@ -229,14 +229,12 @@ test('removing a profile moves focus to the next profile’s ⋯ menu', async ()
   stubFetch({
     '/api/remove-profile': () => ((removed = true), {}),
     '/api/workspace': () => (removed ? after : before),
-    '/plan.json': handbook,
     '/progression.json': JSON.parse(fs.readFileSync('public/progression.json', 'utf8')),
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
-      profile: { id: 'original', kind: 'original', name: 'Profile original' },
+      profile: { id: 'original', kind: 'calculated', name: 'Profile original' },
       state: structuredClone(state),
-      plan: null,
-      handbook,
+      plan: migratedPlan(),
     }),
   });
   // boot() after the removal opens the page the address names, as on a reload.

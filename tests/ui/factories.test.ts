@@ -43,7 +43,6 @@ import {
   generated,
   generatedWith,
   go,
-  handbook,
   open,
   migratedPlan,
   migratedRow,
@@ -56,6 +55,16 @@ import {
 import type { UpdateOp } from '../../public/types/index.ts';
 
 const plan = generated();
+// The open profile's calculated plan gone, as while render() swaps the page after the profile
+// was left (the progress state stays).
+const closePlan = () =>
+  setContext({
+    save: { id: 's', name: evil },
+    profile: { id: 'p', kind: 'calculated', name: evil },
+    state: structuredClone(state),
+    plan: null,
+  });
+
 // A profile migrated from the retired handbook (#387, openMigrated in setup.ts): `row(id)` is the
 // row a handbook factory became in a phase.
 const transcription = transcribed();
@@ -2174,12 +2183,6 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
       item,
     );
   }
-  // The handbook profile has no such panel.
-  open();
-  go('plan');
-  render();
-  await nextTick();
-  assert.equal($('[data-build-status]'), null);
 });
 
 test('between groups: a card per group with what comes in and goes out, names escaped (#213)', async () => {
@@ -2356,13 +2359,18 @@ test('between groups has its own Logistics page, with a way forward when there i
   render();
   await nextTick();
   assert.equal($('[data-logistics-link]'), null, 'no pointer to an empty page');
-  // The handbook profile has no calculated plan to work from.
-  open();
+  noMarkup();
+  // With no calculated plan open (the page is drawn once more after its profile has gone, #356),
+  // it draws its header and nothing else.
   go('logistics');
   render();
   await nextTick();
-  assert.equal($('[data-logistics-empty="handbook"] a')!.getAttribute('href'), '#profiles');
-  noMarkup();
+  closePlan();
+  render();
+  await nextTick();
+  assert.equal($('#main h1')!.textContent, 'Logistics');
+  assert.equal($('#main .notice'), null);
+  assert.equal($('[data-group-links]'), null);
 });
 
 test('between groups: a link can go by truck, train or back to belts, with the vehicle math (#205)', async () => {
@@ -2736,7 +2744,6 @@ test('a jump brings the section into view and focuses its heading', async () => 
 
 test('a group folds with its toggle, is remembered, and still counts in the chips', async () => {
   openMigrated({
-    profileId: 'original',
     state: { factoryGroups: structuredClone(GROUPS), checks: { ['calc-3-' + row('wire')]: true } },
   });
   unfoldAll();
@@ -2895,10 +2902,9 @@ test('folded sections survive a page refresh, and anything unreadable opens them
     const session = await import('../../public/app/session.ts');
     session.setContext({
       save: { id: 's', name: 'World' },
-      profile: { id: 'original', kind: 'original', name: 'World' },
+      profile: { id: 'original', kind: 'calculated', name: 'World' },
       state: structuredClone(state),
-      plan: null,
-      handbook,
+      plan: migratedPlan(),
     });
     return session;
   };
@@ -2923,6 +2929,7 @@ test('the factories page draws nothing while no calculated plan is open', async 
   const el = document.createElement('div');
   const errors: unknown[] = [];
   open({ state: { factoryGroups: structuredClone(GROUPS) } });
+  closePlan();
   setFactoryEditing(true);
   const app = createApp({ render: () => h(CalculatedFactoriesPage) });
   app.config.errorHandler = error => void errors.push(error);

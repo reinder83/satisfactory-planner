@@ -1,9 +1,10 @@
 <!--
   #logistics (#229): what moves between a calculated profile's factory groups in the current
   phase, and by which belt, pipe or vehicle (GroupLinks.vue, which used to sit at the foot of the
-  calculated factories page). The handbook profile has no calculated plan to work from, and a
-  calculated one without groups has nothing between them yet: each gets a short explanation with
-  the way forward instead of an empty page.
+  calculated factories page). A phase without production lines, or a profile without groups, has
+  nothing between them yet: each gets a short explanation with the way forward instead of an
+  empty page. With no calculated plan open (only while render() swaps the page after leaving a
+  profile) it draws its header alone.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -33,11 +34,7 @@ const page = computed(() =>
         : ''
     "
   />
-  <div v-if="!page.calculated" class="notice info" data-logistics-empty="handbook">
-    Logistics works from a calculated plan's factory groups: what each group sends the others, by
-    belt, pipe or vehicle. The handbook profile has no calculated plan.
-    <a href="#profiles">Create or open a calculated profile</a> under Saves &amp; profiles.
-  </div>
+  <template v-if="!page.calculated" />
   <div v-else-if="!page.rows" class="notice info" data-logistics-empty="phase">
     This phase has no production lines, so nothing moves between groups yet.
   </div>

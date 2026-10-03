@@ -3,9 +3,9 @@
 //
 // How the frontend fits together (read this first):
 // 1. boot() in app/session.ts fetches /api/workspace (the saves and their profiles), then
-//    plan.json and progression.json, and calls loadContext() for the active save/profile.
+//    progression.json, and calls loadContext() for the active save/profile.
 //    loadContext() fetches /api/context, which returns that profile's state (checks, notes,
-//    deliveries, edits) and, for a calculated profile, its frozen calculated plan.
+//    deliveries, edits) and its frozen calculated plan.
 // 2. render() in app/shell.ts refreshes the frame (app/ui/Shell.vue: sidebar, ADA, header,
 //    phase picker) and mounts the page for the current hash route (#plan, #factories, ...)
 //    into <main>. Every page is a Vue component in app/ui/pages/, listed by route in

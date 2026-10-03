@@ -5,47 +5,15 @@ import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-panel.ts';
-import { phase, setContext, setView, setWorkspace } from '../../public/app/session.ts';
+import { phase, setView, setWorkspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { showSignedOut, unmountShell } from '../../public/app/ui/mount.ts';
-import { $$, applyUpdate, generated, open as openProfile, stubFetch } from './setup.ts';
-import type {
-  Handbook,
-  Phase,
-  ProgressState,
-  TaskEdits,
-  WorkspaceSummary,
-} from '../../public/types/index.ts';
+import { $$, applyUpdate, generated, handbook, open as openProfile, stubFetch } from './setup.ts';
+import type { TaskEdits, WorkspaceSummary } from '../../public/types/index.ts';
 
-// Vitest runs from the repository root.
-const handbook: Handbook = JSON.parse(fs.readFileSync('public/plan.json', 'utf8'));
 const evil = '<x-evil onclick=alert(1)> & "quoted"';
 const $ = <E extends Element = HTMLElement>(selector: string) =>
   document.querySelector<E>(selector);
-
-function open({ name = evil, phase = '3' }: { name?: string; phase?: Phase } = {}) {
-  // Partial fixtures: only the fields the frame reads.
-  setWorkspace({
-    user: { id: 'owner', username: 'Pioneer' },
-    accountsEnabled: false,
-    catalog: {},
-    saves: [{ id: 's', name, profiles: [{ id: 'original', kind: 'original', name }] }],
-  } as WorkspaceSummary);
-  const state: Partial<ProgressState> = {
-    settings: { phase },
-    checks: {},
-    notes: {},
-    deliveries: {},
-    customTasks: [],
-  };
-  setContext({
-    save: { id: 's', name },
-    profile: { id: 'original', kind: 'original', name },
-    state: state as ProgressState,
-    plan: null,
-    handbook,
-  });
-}
 
 beforeEach(() => {
   unmountShell();
@@ -54,12 +22,11 @@ beforeEach(() => {
   setAdaIndex(0);
   adaClearFault();
   setView('plan');
-  open();
+  // A profile migrated from the handbook (#387), whose build plan has a page to draw.
+  openProfile();
 });
 
 test('the frame shows the open save and profile, escaped, around the page', () => {
-  // A profile migrated from the handbook (#387), whose build plan has a page to draw.
-  openProfile({ migrated: true });
   render();
   assert.equal($('.breadcrumbs a')!.textContent, evil);
   assert.ok($('.breadcrumbs')!.innerHTML.includes('&lt;x-evil'), 'the save name is escaped');
@@ -77,7 +44,6 @@ test('the frame shows the open save and profile, escaped, around the page', () =
 });
 
 test('the Docker edition shows no backup age: its saves are on the server (SP-40)', () => {
-  open();
   render();
   assert.equal($('[data-backup-age]'), null);
 });
@@ -89,8 +55,8 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
     [
       ['#plan', '◫Build plan'],
       ['#factories', '▥Factories'],
-      // The handbook profile has no calculated plan, so Logistics says what it needs (SP-09).
-      ['#logistics', '⇄Logisticsneeds a calculated plan'],
+      // The profile has no factory groups yet, so Logistics says what it needs (SP-09).
+      ['#logistics', '⇄Logisticsneeds factory groups'],
       ['#storage', '▦Storage room'],
       ['#resources', '↗Power & resources'],
       ['#notes', '✎Notes'],
@@ -115,7 +81,7 @@ test('navigation marks the current page', async () => {
 });
 
 test('the phase picker offers the profile’s phases and shows the working one', () => {
-  open({ phase: '4' });
+  openProfile({ phase: '4' });
   render();
   const picker = $<HTMLSelectElement>('#phase-picker')!;
   assert.equal(picker.value, '4');
@@ -289,13 +255,11 @@ test('the phone ticker keeps the remark announced while folded (style.css, SP-38
 });
 
 test('ADA repeats a renamed step escaped', async () => {
-  open();
   render();
   setAdaIndex(0);
   // A profile migrated from the handbook (#387): its guide keeps the handbook's steps.
   const plan = handbook.phases['3']!;
   openProfile({
-    migrated: true,
     state: { taskEdits: { titles: { [plan[0]!.id]: 'Weld the <boat>' } } as TaskEdits },
   });
   render();
@@ -322,7 +286,7 @@ test('the sign-in screen replaces the frame, and the next render brings it back'
   showSignedOut($('#app')!);
   assert.equal($('.layout'), null);
   assert.ok($('#auth-form'), 'the sign-in form is shown');
-  openProfile({ migrated: true });
+  openProfile();
   render();
   assert.ok($('.layout'), 'the frame is mounted again');
   assert.ok($('#main .heading-row'));
@@ -429,17 +393,13 @@ test('Logistics is dimmed with its reason until there is something to show (SP-0
     const id = link().getAttribute('aria-describedby');
     return id ? document.getElementById(id)!.textContent : null;
   };
-  // The handbook profile: no calculated plan.
-  render();
-  assert.ok(link().classList.contains('dim'));
-  assert.equal(reason(), 'needs a calculated plan');
-  assert.equal(link().querySelector('.nav-needs')!.getAttribute('aria-hidden'), 'true');
   // A calculated profile without groups.
   openProfile({ calculated: generated(), name: 'Plan' });
   render();
   await nextTick();
   assert.ok(link().classList.contains('dim'));
   assert.equal(reason(), 'needs factory groups');
+  assert.equal(link().querySelector('.nav-needs')!.getAttribute('aria-hidden'), 'true');
   // With groups: a normal link, no reason.
   openProfile({
     calculated: generated(),

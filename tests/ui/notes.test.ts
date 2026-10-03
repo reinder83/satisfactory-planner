@@ -28,8 +28,8 @@ beforeEach(() => {
   go('notes');
 });
 
-for (const calculated of [false, true])
-  test(`the notes page shows every note under its own key (${calculated ? 'calculated' : 'handbook'})`, () => {
+for (const calculated of [undefined, true] as const)
+  test(`the notes page shows every note under its own key (${calculated ? 'calculated' : 'migrated'})`, () => {
     const notes = {
       global: evil + '\n  second line',
       'phase-3': 'Iron at the lake',

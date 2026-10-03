@@ -1,9 +1,8 @@
 <!--
-  #backup, in three versions: the browser edition (saves live in this browser, so there is no
-  progress download), a calculated profile on the server, and the original handbook on the
-  server with its plan assumptions and sources. The save-wide note (key `global`) moved to
-  the Notes page with the phase notes (NotesPage.vue, #243); the two server versions point
-  there where it used to be.
+  #backup, in two versions: the browser edition (saves live in this browser, so there is no
+  progress download) and the server edition, with this profile's progress download and restore.
+  The save-wide note (key `global`) moved to the Notes page with the phase notes (NotesPage.vue,
+  #243); the server version points there where it used to be.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -24,7 +23,6 @@ import {
   calculated,
   currentProfile,
   currentSave,
-  plan,
   setWorkspace,
   state,
   workspace,
@@ -37,12 +35,11 @@ import PageHeader from '../PageHeader.vue';
 
 const page = computed(() =>
   legacy(() => ({
-    kind: browserMode ? 'browser' : calculated ? 'calculated' : 'handbook',
+    kind: browserMode ? 'browser' : 'server',
     saveName: currentSave.name,
     profileName: currentProfile.name,
     exportUrl: `/api/export?save=${currentSave.id}&profile=${currentProfile.id}`,
     warnings: calculated?.warnings || [],
-    sources: plan?.sources || [],
     // For "Choose saves to export": every save of this user with its profile count.
     saves: workspace.saves.map(save => ({
       id: save.id,
@@ -62,7 +59,7 @@ const chosen = ref<string[]>([]);
 // sight (.visually-hidden) and out of the tab order, so they can be reached with Tab and
 // pressed with Enter or Space (#307): a label around a `hidden` input could only be clicked.
 // The input keeps its id and change handler, so what happens after a file is chosen is
-// unchanged. Only one restore input exists at a time (calculated or handbook page).
+// unchanged. Only the server version of the page has the restore input.
 const importSavesInput = ref<HTMLInputElement>();
 const restoreInput = ref<HTMLInputElement>();
 
@@ -142,8 +139,8 @@ async function importSaves(event: Event) {
 }
 
 // "Restore this profile…": replace this profile's progress with a progress-only backup. Only the
-// two server versions of the page bind it (calculated and handbook); the browser edition's page
-// has no progress download or restore, and moves saves with Export/Import saves instead, though
+// server version of the page binds it; the browser edition's page has no progress download or
+// restore, and moves saves with Export/Import saves instead, though
 // browser-api.ts answers /api/import the same way for parity.
 // After a confirmation it goes through queuedWrite, like save(): after
 // the saves already queued, before any made meanwhile, shown as "Saving…", and its reply only
@@ -196,8 +193,8 @@ async function persistStorage() {
 </script>
 
 <template>
-  <!-- The page header comes first in every version, before the full-saves panel all three
-       share (#309). -->
+  <!-- The page header comes first in both versions, before the full-saves panel they share
+       (#309). -->
   <template v-if="page.kind === 'browser'">
     <PageHeader
       eyebrow="SAVED ON THIS DEVICE"
@@ -207,18 +204,12 @@ async function persistStorage() {
     <BrowserNotice />
   </template>
   <PageHeader
-    v-else-if="page.kind === 'calculated'"
+    v-else
     eyebrow="THIS PROFILE"
     title="Backup"
     :subtitle="
       'Checkmarks, deliveries and notes belong to ' + page.saveName + ' / ' + page.profileName
     "
-  />
-  <PageHeader
-    v-else
-    eyebrow="YOUR PROGRESS"
-    title="Backup"
-    subtitle="Progress is stored on the server, so the same Docker instance works across your devices."
   />
   <!-- Full-save export and import (the satisfactory-planner-saves format), in both editions.
        Import always adds copies; it never replaces a save. -->
@@ -310,7 +301,7 @@ async function persistStorage() {
     </p>
   </section>
 
-  <template v-else-if="page.kind === 'calculated'">
+  <template v-else>
     <div class="backup-grid">
       <section class="panel">
         <h2>Download this profile</h2>
@@ -346,70 +337,6 @@ async function persistStorage() {
       <a href="https://github.com/greeny/SatisfactoryTools" target="_blank" rel="noreferrer"
         >Recipe data source</a
       >
-    </section>
-  </template>
-
-  <template v-else>
-    <div class="backup-grid">
-      <section class="panel">
-        <h2>Download this profile</h2>
-        <p>Save a copy of your checkmarks, delivery counts, personal tasks and notes.</p>
-        <a class="btn primary" :href="page.exportUrl" download>Download this profile</a>
-        <p class="small muted">
-          The Docker volume keeps progress through container updates. This download gives you a
-          separate copy.
-        </p>
-      </section>
-      <section class="panel">
-        <h2>Restore this profile</h2>
-        <p>
-          Import a backup from this planner. It replaces current progress after confirmation;
-          factory-plan data stays unchanged.
-        </p>
-        <button type="button" class="btn" data-restore-backup @click="restoreInput?.click()">
-          Restore this profile…</button
-        ><input
-          id="import-file"
-          ref="restoreInput"
-          class="visually-hidden"
-          type="file"
-          accept="application/json,.json"
-          tabindex="-1"
-          aria-hidden="true"
-          @change="restoreProgress"
-        />
-        <p class="small muted">
-          Up to 2 MB. The previous state is also retained as workspace.json.bak on the server. The
-          original progress file is kept during migration.
-        </p>
-      </section>
-    </div>
-    <p class="small muted" data-notes-moved>
-      Save-wide and phase notes are on the <a href="#notes">Notes</a> page.
-    </p>
-    <section class="panel">
-      <h2>Plan assumptions</h2>
-      <p class="small">
-        All tiers through 6 unlocked. Phase 3 Versatile Frameworks delivered. Pure nodes, 50×
-        elevator costs, half consumption. Retire coal and temporary fuel; retain turbofuel. Phase 5
-        resource conversion and extra Reanimated SAM are included. Ground-floor storage shell is
-        already built; individual containers are not assumed connected.
-      </p>
-      <p class="small">
-        The final extra storage modules need additional input allocations. After Phase 5, storage
-        takes priority over maintaining full elevator-export rates for sinking. Gathered items
-        require collection; equipment and inhalers are manually crafted.
-      </p>
-      <div class="list-links">
-        <a
-          v-for="source in page.sources"
-          :key="source.url"
-          :href="source.url"
-          target="_blank"
-          rel="noreferrer"
-          >{{ source.title }} ↗</a
-        >
-      </div>
     </section>
   </template>
 </template>

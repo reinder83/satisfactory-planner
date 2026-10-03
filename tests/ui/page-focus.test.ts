@@ -100,13 +100,13 @@ beforeEach(() => {
 });
 
 test('every page heading can take focus by script, not by Tab', () => {
-  open({ migrated: true, workspace: { catalog: catalog() } });
+  open({ workspace: { catalog: catalog() } });
   show('plan');
   assert.equal($('#main h1')!.getAttribute('tabindex'), '-1');
 });
 
 test('the first page drawn leaves focus where it is', () => {
-  open({ migrated: true, workspace: { catalog: catalog() } });
+  open({ workspace: { catalog: catalog() } });
   show('plan');
   assert.equal(focused(), document.body);
 });

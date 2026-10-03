@@ -1,7 +1,6 @@
 <!--
-  #profiles: every save in the workspace with its profile cards. A card is marked
-  "PRESERVED HANDBOOK" for the original profile and "CALCULATED PROFILE" otherwise; only
-  calculated ones have `settings` to summarise. The browser edition links to backups
+  #profiles: every save in the workspace with its profile cards, each marked "CALCULATED
+  PROFILE" and summarising the settings its plan was made with. The browser edition links to backups
   instead of accounts. Actions that leave the open profile call allowSwitch() first, which
   asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
   use newSave in ui/actions.ts. Opening the page asks for the workspace summary again (#418), once
@@ -62,10 +61,9 @@ const page = computed(() =>
         id: profile.id,
         name: profile.name,
         open: save.id === currentSave.id && profile.id === currentProfile.id,
-        kind: profile.kind === 'original' ? 'PRESERVED HANDBOOK' : 'CALCULATED PROFILE',
         summary: profile.settings
           ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
-          : '50× elevator · pure ingots · nuclear recycling',
+          : '',
         // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
         progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
         bar: phaseBar(profile),
@@ -82,7 +80,7 @@ const page = computed(() =>
 // first earlier phase with open checks (phaseToOpen, #570), and the steps counted are the ones
 // it looks at. A phase with an open step reads at most 99%, so it never says "100% done". The
 // label says it without colour: "Phase 3 of 5, 22%", plus any earlier phase still open, "Phase 3
-// of 5, 0%; Phase 2 is 40% done". None without per-phase counts (a handbook profile).
+// of 5, 0%; Phase 2 is 40% done". None without per-phase counts.
 function phaseBar(profile: ProfileSummary) {
   if (!profile.phases?.length) return null;
   const at = profile.phase === 'post' ? 5 : Number(profile.phase);
@@ -297,7 +295,7 @@ async function rename(
         :key="profile.id"
         :class="['profile-card', profile.open ? 'selected' : '']"
       >
-        <div class="eyebrow">{{ profile.kind }}</div>
+        <div class="eyebrow">CALCULATED PROFILE</div>
         <InlineName
           :name="profile.name"
           what="profile"
@@ -305,7 +303,7 @@ async function rename(
           :hook="{ 'data-rename-profile': profile.id, 'data-rename-profile-save': save.id }"
           :save="name => rename('profile', save, profile, name)"
         />
-        <p>{{ profile.summary }}</p>
+        <p v-if="profile.summary">{{ profile.summary }}</p>
         <p class="small">{{ profile.progress }}</p>
         <div
           v-if="profile.bar"
