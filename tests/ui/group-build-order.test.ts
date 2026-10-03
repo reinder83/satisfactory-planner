@@ -5,12 +5,14 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
+import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { setHideDone, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { currentBuildStatus } from '../../public/app/views/calculated.ts';
+import { calcTasks, currentBuildStatus } from '../../public/app/views/calculated.ts';
+import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { $, $$, generated, go, open, page } from './setup.ts';
-import type { FactoryGroups, ProgressState, TaskEdits } from '../../public/types/index.ts';
+import type { FactoryGroups, Phase, ProgressState, TaskEdits } from '../../public/types/index.ts';
 
 const plan = generated();
 const rows = plan.stages['3'].rows!;
@@ -47,6 +49,8 @@ beforeEach(() => {
   setQuery('');
   setHideDone(false);
   go('plan');
+  setAdaIndex(0);
+  adaClearFault();
 });
 
 test('with groups the build plan lists the same steps, fewer group switches apart', async () => {
@@ -113,4 +117,37 @@ test('with nothing built, the build status names the first production step the p
   const first = ids().find(id => id.startsWith('calc-3-'));
   assert.equal(first, 'calc-3-Recipe_IngotCopper_C');
   assert.equal('calc-3-' + currentBuildStatus()?.next?.id, first);
+});
+
+// ADA's remarks on the build plan of `phase` of the plan above, by id.
+function planRemarks(phase: Phase, state: Partial<ProgressState>) {
+  open({ calculated: structuredClone(plan), phase, state });
+  go('plan');
+  const remarks = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    setAdaIndex(i);
+    const id = adaCurrent()?.id;
+    if (id) remarks.add(id);
+  }
+  return remarks;
+}
+
+test('ADA says the steps follow the groups only when the groups change their order', () => {
+  const defaults = defaultFactoryGroups(plan);
+  // Default groups keep the planner's order in Phases 1 and 2 of this plan, and change it in 3.
+  for (const phase of ['1', '2'] as const) {
+    const plain = calcTasks(phase).map(t => t.id);
+    open({ calculated: structuredClone(plan), phase, state: { factoryGroups: defaults } });
+    assert.deepEqual(
+      calcTasks(phase).map(t => t.id),
+      plain,
+      `Phase ${phase} keeps the planner's order`,
+    );
+    assert.equal(planRemarks(phase, { factoryGroups: defaults }).has('grouped-steps'), false);
+  }
+  assert.ok(planRemarks('3', { factoryGroups: defaults }).has('grouped-steps'));
+  // Groups with no rows assigned change nothing either.
+  const empty = { groups: factoryGroups.groups, assignments: {} };
+  assert.equal(planRemarks('3', { factoryGroups: empty }).has('grouped-steps'), false);
+  assert.ok(planRemarks('3', { factoryGroups }).has('grouped-steps'));
 });

@@ -136,14 +136,53 @@ export function groupedBuildOrder<T extends Pick<CalcRow, 'inputs' | 'outputs'>>
   return ordered;
 }
 
+// What groupedRows reads of `groups` for `rows`: the groups' ids in their order and each row's
+// memberships. Two calls with the same signature give the same order.
+const groupsSignature = (rows: readonly CalcRow[], groups: GroupsInput): string =>
+  JSON.stringify([
+    (groups?.groups || []).map(group => group.id),
+    rows.map(row => groups?.assignments?.[row.id] || 0),
+  ]);
+
+// The last few orders groupedRows worked out: the build status asks for its phase's order once
+// per factory card on every redraw (heldBack in views/calculated.ts), and the build plan and ADA
+// for theirs, so each is worked out once per change of rows or groups. An entry holds the rows
+// it was given, compared one by one, as a phase's steps list them in a new array each time.
+const ORDER_MEMO_SIZE = 8;
+const orderMemo: { rows: readonly CalcRow[]; signature: string; ordered: readonly CalcRow[] }[] =
+  [];
+const sameRows = (a: readonly CalcRow[], b: readonly CalcRow[]) =>
+  a.length === b.length && a.every((row, i) => row === b[i]);
+
 // The rows of a phase in the build plan's order for `groups` (groupedBuildOrder): each row by its
 // home group (homeGroup), the user's groups in their listed order for ties, then Ungrouped.
-export function groupedRows<T extends CalcRow>(rows: readonly T[], groups: GroupsInput): T[] {
-  return groupedBuildOrder(rows, row => homeGroup(row, groups), [
+// The answer may be shared with earlier calls (orderMemo above): callers never change it.
+export function groupedRows<T extends CalcRow>(
+  rows: readonly T[],
+  groups: GroupsInput,
+): readonly T[] {
+  const signature = groupsSignature(rows, groups);
+  const found = orderMemo.findIndex(
+    entry => entry.signature === signature && sameRows(entry.rows, rows),
+  );
+  if (found >= 0) {
+    const [entry] = orderMemo.splice(found, 1);
+    orderMemo.unshift(entry!);
+    return entry!.ordered as readonly T[];
+  }
+  const ordered = groupedBuildOrder(rows, row => homeGroup(row, groups), [
     ...(groups?.groups || []).map(group => group.id),
     UNGROUPED,
   ]);
+  orderMemo.unshift({ rows: [...rows], signature, ordered });
+  orderMemo.length = Math.min(orderMemo.length, ORDER_MEMO_SIZE);
+  return ordered;
 }
+
+// Whether `groups` change the build plan's order of `rows` (groupedRows): ADA mentions the
+// grouped order only then.
+export const groupsReorder = (rows: readonly CalcRow[], groups: GroupsInput): boolean =>
+  groupedRows(rows, groups).some((row, i) => row !== rows[i]);
 
 // A phase's generated build-plan steps (phaseSteps in progression.ts) with the production steps,
 // the ones that carry a row, in groupedRows order, each in the place of one of them: the other

@@ -38,7 +38,7 @@ const groups = (
   ids = ['fg-iron', 'fg-parts', 'fg-copper'],
 ): FactoryGroups => ({ groups: ids.map(id => ({ id, name: id })), assignments });
 const whole = (group: string) => [{ group, rate: null }];
-const ids = (rows: { id: string }[]) => rows.map(r => r.id);
+const ids = (rows: readonly { id: string }[]) => rows.map(r => r.id);
 
 // The planner's build order (suppliers first, depth first), which mixes the two sites.
 const ingot = row('ingot', { 'Iron Ore': 60 }, { 'Iron Ingot': 60 }),
@@ -130,7 +130,7 @@ test('a step never goes ahead of a step that makes one of its inputs', () => {
           );
     });
     // Fewer switches between groups than the planner's order.
-    const switches = (list: CalcRow[]) =>
+    const switches = (list: readonly CalcRow[]) =>
       list.filter((r, i) => i && homeGroup(r, assigned) !== homeGroup(list[i - 1]!, assigned))
         .length;
     assert.ok(switches(ordered) < switches(rows), `phase ${key}: fewer switches`);
@@ -187,4 +187,61 @@ test('groupedSteps reorders only the production steps, with the same ids', () =>
       assert.equal(step.id, `calc-${phase === 'post' ? '5' : phase}-${step.row!.id}`);
     if (rows.length > 3) assert.notDeepEqual(ids(grouped), ids(plain), `phase ${phase}: reordered`);
   }
+});
+
+test('the remembered order follows every change of the groups, their assignments or the rows', () => {
+  // groupedRows remembers its last orders (the build status asks once per factory card on each
+  // redraw), so the same call again gives the very same answer, and any change a fresh one. Each
+  // change below moves the order, so a stale answer fails. The changes are made in place, which
+  // a check on the groups' identity alone would miss.
+  const copper = row('copper', { 'Copper Ore': 30 }, { 'Copper Ingot': 30 });
+  const rows = [...mixed, copper];
+  const sites = groups({
+    ingot: whole('fg-iron'),
+    rod: whole('fg-iron'),
+    screw: whole('fg-iron'),
+    plate: whole('fg-parts'),
+    reinforced: whole('fg-parts'),
+    rotor: whole('fg-parts'),
+    copper: whole('fg-copper'),
+  });
+  const order = (list = rows) => ids([...groupedRows(list, sites)]);
+  const first = groupedRows(rows, sites);
+  assert.deepEqual(ids([...first]), [
+    'ingot',
+    'rod',
+    'screw',
+    'plate',
+    'reinforced',
+    'rotor',
+    'copper',
+  ]);
+  assert.equal(groupedRows([...rows], sites), first, 'the same rows and groups: remembered');
+  sites.assignments.screw = whole('fg-parts');
+  assert.deepEqual(order(), ['ingot', 'rod', 'plate', 'screw', 'reinforced', 'rotor', 'copper']);
+  sites.assignments.plate = [
+    { group: 'fg-iron', rate: 15 },
+    { group: 'fg-parts', rate: null },
+  ];
+  assert.deepEqual(
+    order(),
+    ['ingot', 'plate', 'rod', 'screw', 'reinforced', 'rotor', 'copper'],
+    'a split row goes with its larger share',
+  );
+  sites.groups.reverse();
+  assert.deepEqual(
+    order(),
+    ['copper', 'ingot', 'plate', 'rod', 'screw', 'reinforced', 'rotor'],
+    'the groups listed in another order',
+  );
+  sites.groups = sites.groups.filter(group => group.id !== 'fg-copper');
+  assert.deepEqual(
+    order(),
+    ['ingot', 'plate', 'rod', 'screw', 'reinforced', 'rotor', 'copper'],
+    'a group removed: its rows are ungrouped',
+  );
+  // Rows recalculated with the same ids are not taken for the remembered ones.
+  const recalculated = rows.map(r => ({ ...r }));
+  assert.ok(groupedRows(recalculated, sites).every(r => recalculated.includes(r)));
+  assert.deepEqual(ids([...groupedRows(rows, undefined)]), ids(rows), 'without groups again');
 });
