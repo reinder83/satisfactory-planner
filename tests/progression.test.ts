@@ -288,6 +288,14 @@ test('a profile with augmenters lists the MAM nodes its augmenter step asks for'
         s => s.id === 'alien-power-augmenter',
       )!;
       assert.ok(step, `a Phase ${start} profile builds augmenters in Phase 5`);
+      // The step names the node as its milestone step does and the phase listing it (#825).
+      assert.ok(
+        step.body.startsWith(
+          `Research ${augmenter.name} in the MAM (Alien Technology; its step is listed in Phase ${milestonePhase(augmenter, data)}), then build 2 Augmenters`,
+        ),
+        `the augmenter step of a Phase ${start} profile points at its milestone step: ${step.body}`,
+      );
+      assert.doesNotMatch(step.body, /Alien Power Augmentation/);
       assert.deepEqual(
         listing(plan, augmenter.id),
         [String(milestonePhase(augmenter, data))],

@@ -294,7 +294,7 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   // The augmenters are buildings, not rows, so their MAM node comes from the settings: Phase 5's
   // "Build N Alien Power Augmenters" step (endgameTasks) asks for it (#810). Fueled augmenters'
   // Alien Power Matrix node comes in through the fuel row's recipe above.
-  if (stage === 5 && (plan.settings.augmenters ?? 0) > 0) add(byName('Power Augmenter'));
+  if (stage === 5 && (plan.settings.augmenters ?? 0) > 0) add(byName(AUGMENTER_RESEARCH));
   if (rows.some(r => r.machine === 'Fuel Generator')) add(byName('Petroleum Power'));
   if (rows.some(r => r.machine === 'Nuclear Power Plant')) add(byName('Nuclear Power'));
   // Useful early research is reachable through Field Research; its dataset tier is not a HUB gate.
@@ -602,8 +602,24 @@ function preferredPowerTasks({ plan, stage }: GuideContext): GuideTask[] {
   ];
 }
 
+// The MAM node the Alien Power Augmenters need, by its name in progression.json
+// (Research_Alien_PowerBooster_C): requiredMilestones lists it, the augmenter step names it.
+const AUGMENTER_RESEARCH = 'Power Augmenter';
+
+// The augmenter step's research sentence, naming the MAM node as its milestone step does and the
+// phase that lists that step (milestonePhase: Phase 3 with the base-game costs, a milestone-only
+// phase before the start phase included), so the two read as one unlock (#825).
+function augmenterResearch({ byName, data, stage }: GuideContext): string {
+  const entry = byName(AUGMENTER_RESEARCH);
+  if (!entry) return `Research ${AUGMENTER_RESEARCH} in the MAM (Alien Technology)`;
+  const phase = milestonePhase(entry, data);
+  const listed = phase === stage ? 'this phase' : `Phase ${phase}`;
+  return `Research ${entry.name} in the MAM (Alien Technology; its step is listed in ${listed})`;
+}
+
 // Phase 5: the portals' Singularity Cell supply and the Alien Power Augmenters.
-function endgameTasks({ plan, stage }: GuideContext): GuideTask[] {
+function endgameTasks(context: GuideContext): GuideTask[] {
+  const { plan, stage } = context;
   if (stage !== 5) return [];
   const tasks: GuideTask[] = [];
   const cells = plan.settings.cellsPerMinute;
@@ -620,7 +636,7 @@ function endgameTasks({ plan, stage }: GuideContext): GuideTask[] {
     tasks.push({
       id: 'alien-power-augmenter',
       title: `Build ${count} Alien Power Augmenter${count > 1 ? 's' : ''}`,
-      body: `Research Alien Power Augmentation in the MAM (Alien Technology), then build ${count} Augmenter${count > 1 ? 's' : ''} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
+      body: `${augmenterResearch(context)}, then build ${count} Augmenter${count > 1 ? 's' : ''} at ${formatNumber(10)} Somersloops each — ${formatNumber(10 * count)} in total, and they are not recoverable. Each one generates 500 MW by itself and raises the whole connected grid's base production, so keep ${count > 1 ? 'them' : 'it'} on the main grid rather than an island. ${fueled ? `Feed ${fueled} of them ${formatNumber(5 * fueled)} Alien Power Matrix/min in total (5/min each) to take ${fueled > 1 ? 'those' : 'that one'} from a 10% to a 30% boost; the fuel line is in this phase's factory plan. An augmenter that runs dry falls back to 10%.` : 'Left unfueled each gives 10%. Feeding one 5 Alien Power Matrix/min raises it to 30%, which is worth doing only once your base production is large enough to repay the fuel line.'}`,
     });
   }
   return tasks;
