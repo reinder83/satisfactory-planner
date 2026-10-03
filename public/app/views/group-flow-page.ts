@@ -27,24 +27,31 @@ export const isLaneLink = (link: FlowLink) =>
   link.from.kind === 'line' && link.to.kind === 'line' && !isSelfLink(link);
 
 // The lane colours and dashes, from the :root tokens: one per item carried inside the group, in
-// the order its lane first appears, colours first and then the dashes for a seventh item on.
-const LANE_COLOURS = ['--accent', '--blue', '--green', '--gold', '--ink', '--red'];
+// the order its lane first appears. Lanes must not differ by colour alone (#909, WCAG 1.4.1), so
+// the dash turns with the colour from the first item on: two items in a row never share a dash,
+// and the first 18 items (6 colours × 3 dashes) never share both. The warm hues (--accent, --red,
+// --gold) take every other place and three different dashes, so among the first six close hues
+// are never neighbours and never share a pattern.
+const LANE_COLOURS = ['--accent', '--blue', '--red', '--green', '--gold', '--ink'];
 const LANE_DASHES = ['', '7 4', '2 3'];
 export interface LaneStyle {
   color: string;
   dash: string;
 }
+// The n-th item's style, from 0. The dash moves on one place per item and, after each round of
+// the colours, one place further, so the next round pairs every colour with another dash.
+export function laneStyleAt(n: number): LaneStyle {
+  const round = Math.floor(n / LANE_COLOURS.length);
+  return {
+    color: `var(${LANE_COLOURS[n % LANE_COLOURS.length]})`,
+    // The modulo keeps the index inside the list.
+    dash: LANE_DASHES[(n + round) % LANE_DASHES.length]!,
+  };
+}
 export function laneStyles(lanes: readonly FlowLane[]): Map<string, LaneStyle> {
   const styles = new Map<string, LaneStyle>();
-  for (const lane of lanes) {
-    if (styles.has(lane.item)) continue;
-    const n = styles.size;
-    styles.set(lane.item, {
-      color: `var(${LANE_COLOURS[n % LANE_COLOURS.length]})`,
-      // The modulo keeps the index inside the list.
-      dash: LANE_DASHES[Math.floor(n / LANE_COLOURS.length) % LANE_DASHES.length]!,
-    });
-  }
+  for (const lane of lanes)
+    if (!styles.has(lane.item)) styles.set(lane.item, laneStyleAt(styles.size));
   return styles;
 }
 
