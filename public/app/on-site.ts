@@ -2,6 +2,8 @@
 // profile's factory groups only when the user starts a recalculation, and then frozen with the new
 // plan like settings.transportFuel. Opening the app or updating never recalculates.
 import { LINK_DUST, rowShares, rowTotal } from './group-order.ts';
+import { rawResources } from '../preferences.ts';
+import { ITEM_NAMES } from '../state.ts';
 import { listNames } from '../wording.ts';
 import type {
   CalcRow,
@@ -13,6 +15,15 @@ import type {
 
 type OnSiteMembership = FactoryGroups['assignments'][string][number];
 
+// Whether the planner can make `item` on site: the planner's own rule for settings.onSite
+// (`suppliable` in planner/settings.ts), a known item that is not a raw resource. A saved state
+// may still mark one it cannot (validateState accepts any known item, so older and hand-edited
+// saves keep loading), and the planner refuses a request naming one, so onSiteSettings leaves
+// such marks out and a stored mark never blocks a recalculation (#921). A test checks the two
+// rules agree on every item name.
+export const onSitePlannable = (item: string): boolean =>
+  !rawResources.includes(item) && ITEM_NAMES.includes(item);
+
 // settings.onSite from the factory groups as they are now and `plan`, the plan being
 // recalculated: per group that marks items it makes on site (factoryGroups.local), its name, the
 // items, and per phase the share of each row its memberships give it. A consumer split over
@@ -21,16 +32,17 @@ type OnSiteMembership = FactoryGroups['assignments'][string][number];
 // split the rest. A row `plan` lacks in that phase has no total for a fixed rate to be measured
 // against, so only its null-rate memberships count, split evenly. Only rows that use one of the
 // group's items somewhere in `plan` are listed, and a group's own lines (`onSite` rows) are left
-// out: they belong wholly to their group. Returns undefined when no group marks an item, so the
-// setting stays absent.
+// out: they belong wholly to their group. A marked item the planner cannot make on site (a raw
+// resource such as Water, onSitePlannable) is left out, so the request is always one the planner
+// accepts. Returns undefined when no group marks an item, so the setting stays absent.
 export function onSiteSettings(
   plan: Pick<StoredCalculatedPlan, 'stages'>,
   groups: Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined,
 ): OnSiteSettings | undefined {
   const names = new Map((groups?.groups || []).map(group => [group.id, group.name]));
-  const marking = Object.entries(groups?.local || {}).filter(
-    ([group, items]) => names.has(group) && items.length,
-  );
+  const marking = Object.entries(groups?.local || {})
+    .map(([group, items]): [string, string[]] => [group, items.filter(onSitePlannable)])
+    .filter(([group, items]) => names.has(group) && items.length);
   if (!marking.length) return undefined;
   const stages = Object.entries(plan.stages) as [StageKey, { rows?: CalcRow[] }][];
   const inputsOf = onSiteRowInputs(stages);

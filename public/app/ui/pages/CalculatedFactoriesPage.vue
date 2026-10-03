@@ -6,7 +6,9 @@
   completion modules. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
-  for a recalculated profile revision and opens it; the previous profile stays as it is.
+  for a recalculated profile revision and opens it; the previous profile stays as it is. When the
+  items the groups make on site differ from the plan's, OnSiteRecalc.vue says the plan needs a
+  recalculation and offers one the user starts (#877).
   A milestone-only phase (#759) shows only the header and why it has no production lines, and
   so does the page with no calculated plan open (the profile just left, before render() swaps
   the page).
@@ -55,6 +57,7 @@ import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
 import JumpBar from '../factories/JumpBar.vue';
+import OnSiteRecalc from '../factories/OnSiteRecalc.vue';
 import PageHeader from '../PageHeader.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import SiteSection from '../factories/SiteSection.vue';
@@ -203,6 +206,7 @@ async function roundUp(event: Event) {
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
     <GroupEditBar />
+    <OnSiteRecalc />
     <div v-if="!page.whole" class="notice info round-up-offer">
       Prefer extra production over underclocking?
       <button class="btn quiet" data-round-up @click="roundUp">Round up production…</button>

@@ -41,6 +41,10 @@ export interface AdaFacts {
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
   siteReview?: number;
+  // The items the factory groups mark as made on site are not the ones the plan was calculated
+  // with (onSiteChange in app/on-site-picker.ts, #877): the plan waits for a recalculation the
+  // user starts.
+  onSitePending?: boolean;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -378,6 +382,14 @@ const RULES: AdaRule[] = [
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
       `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines factory groups make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
+  },
+  {
+    id: 'on-site-pending',
+    on: ['factories', 'plan', 'logistics'],
+    tone: 'warn',
+    when: facts => facts.onSitePending,
+    text: () =>
+      'You changed what your factory groups make on site, and this plan has not been told yet. Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
   },
   {
     id: 'notes',
