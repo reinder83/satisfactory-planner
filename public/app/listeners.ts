@@ -13,6 +13,7 @@ import { setQuery, setView, stateLoaded, viewOf } from './session.ts';
 import { render } from './shell.ts';
 import { watchToast } from './toast-place.ts';
 import { cancelDetail, closeDetail } from './ui/actions.ts';
+import { refocusAfterRefresh } from './ui/refocus.ts';
 import { noteWizardEdit } from './wizard/wizard.ts';
 
 // Custom container names may have no bundled artwork; keep the tile without a broken-image glyph.
@@ -71,8 +72,14 @@ for (const type of ['input', 'change'])
 
 // Coming back to this tab: pick up changes another tab or device saved meanwhile, so the
 // page does not show, or write from, an old copy (#165). A failed refresh changes nothing.
+// When the redraw takes away the control that had focus (a step ticked elsewhere moves to
+// "Done"), focus goes to the page's heading rather than to <body> (#809), as after a refused write.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') refreshState().catch(() => {});
+  if (document.visibilityState !== 'visible') return;
+  const refocus = refocusAfterRefresh(document.activeElement);
+  refreshState()
+    .then(changed => (changed ? refocus() : undefined))
+    .catch(() => {});
 });
 
 // A toast that would cover the focused control it is about goes to the top (#663).
