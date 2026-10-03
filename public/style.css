@@ -4813,6 +4813,9 @@ button.rail-tile:hover {
   display: grid;
   gap: 7px;
 }
+/* The rate field's 130px column leaves about 97px for its text in Chrome, which keeps room for
+   the number spinner: its placeholder is "all / rest", 72px in 12px IBM Plex Mono, because
+   "all / remainder" (108px) was cut off (#958). tests/ui/rate-placeholder.test.ts checks it. */
 .assign-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 130px auto;
