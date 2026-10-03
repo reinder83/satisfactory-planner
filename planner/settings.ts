@@ -139,6 +139,9 @@ const onSiteShares = (raw: unknown): OnSiteGroup['shares'] => {
   }
   return out;
 };
+// A known item that is not a raw resource: what existing supply and settings.onSite may name. The
+// interface applies the same rule to the marks it sends (onSitePlannable in
+// public/app/on-site.ts, #921); a test checks the two agree.
 const suppliable = (name: string) => !RAW.includes(name) && !!DATA.items[name];
 const supplyRates = (raw: unknown): ItemRates => {
   if (raw === undefined) return {};

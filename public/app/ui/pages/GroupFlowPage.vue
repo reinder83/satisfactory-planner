@@ -27,6 +27,7 @@ import {
   phaseLabel,
   stage,
 } from '../../session.ts';
+import { buildRowName } from '../../views/calculated.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { flowNames, laneStyles, type LaneWire } from '../../views/group-flow-page.ts';
 import { legacy } from '../bridge.ts';
@@ -45,7 +46,13 @@ const page = computed(() =>
     const stageKey = stage();
     const storedStage = calcStage();
     const flow = storedStage
-      ? groupFlow(storedStage, groups, groupId, (item, rate) => itemBelts(item, rate, stageKey))
+      ? groupFlow(
+          storedStage,
+          groups,
+          groupId,
+          (item, rate) => itemBelts(item, rate, stageKey),
+          row => buildRowName(row.id),
+        )
       : null;
     return {
       name: groups.groups.find(group => group.id === groupId)?.name ?? null,

@@ -118,6 +118,29 @@ test('a group is offered the items a plan row makes and one of its rows uses', (
   assert.ok(!onSiteOffers(later, groups(), MOTORS).includes('Steel Pipe'), 'only phase 3 used it');
 });
 
+test('a raw resource a plan row makes is never offered, and a saved mark of one says why (#921)', async () => {
+  // A Water Extractor row makes Water and the Stator line takes it: still not offered, whatever
+  // the plan's budgets list, because the planner cannot make Water on site (onSitePlannable).
+  const plan = generated();
+  const rows = plan.stages['3'].rows!;
+  const stator = rows.find(row => row.id === 'Recipe_Stator_C')!;
+  stator.inputs = { ...stator.inputs, Water: 10 };
+  rows.push({ ...stator, id: 'Recipe_WaterPump_C', inputs: {}, outputs: { Water: 10 } });
+  delete (plan.settings as { limits?: unknown }).limits;
+  assert.deepEqual(onSiteOffers(plan, groups(), MOTORS), ['Steel Pipe', 'Wire']);
+  // A Water mark from an older or hand-edited save stays listed so it can be cleared, with a note
+  // that it can't be made on site rather than that no line uses it.
+  await show(generated(), { factoryGroups: groups({ [MOTORS]: ['Water', 'Wire'] }) });
+  setFactoryEditing(true);
+  render();
+  await nextTick();
+  assert.ok(box('Water').checked);
+  // With a space between the name and the note (#934).
+  assert.match(box('Water').closest('label')!.textContent!, /Water \(can't be made on site\)$/);
+  assert.doesNotMatch(box('Water').closest('label')!.textContent!, /no line here/);
+  assert.doesNotMatch(box('Wire').closest('label')!.textContent!, /\(/);
+});
+
 test('the picker shows a box per offered item while editing, and the marks otherwise', async () => {
   await show(generated());
   assert.equal(picker(MOTORS), null, 'not outside edit mode');
@@ -142,14 +165,18 @@ test('the picker shows a box per offered item while editing, and the marks other
   render();
   await nextTick();
   assert.ok(box('Screws').checked);
-  assert.match(box('Screws').closest('label')!.textContent!, /no line here uses it now/);
+  assert.match(
+    box('Screws').closest('label')!.textContent!,
+    /Screws \(no line here uses it now\)$/,
+  );
   // Not editing: the group lists what it makes on site under its heading.
   setFactoryEditing(false);
   render();
   await nextTick();
   assert.equal(
     $(`#section-${MOTORS} [data-on-site-items]`)!.textContent!.trim(),
-    'Made on site: Screws and Wire',
+    // Neither mark gives it a line yet (#931).
+    'Marked, not made on site: Screws (no line here uses it now) and Wire (needs a recalculation)',
   );
 });
 

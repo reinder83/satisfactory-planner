@@ -1,9 +1,10 @@
 // Made on site (#877, part of #868) on the Factories page: which items a group's "Made on site"
-// picker offers, and whether the open plan was calculated with the items the groups mark now. A
+// picker offers, whether the open plan was calculated with the items the groups mark now, and
+// what a group's heading says it makes on site (#931). A
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
-import { onSiteSettings } from './on-site.ts';
+import { onSitePlannable, onSiteSettings } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { listNames } from '../wording.ts';
 import type {
@@ -18,14 +19,24 @@ import type {
 type PickerPlan = Pick<StoredCalculatedPlan, 'stages' | 'settings' | 'guide'>;
 type PickerGroups = Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined;
 
-// The items group `groupId` can mark as made on site in `plan`, sorted: in a phase the plan
-// builds (not a milestone-only phase, #759), an item some plan row makes that a row with a share
-// in the group uses (rowPlaces, so a group's own line made on site counts as the group's). Raw
-// resources (every key of the plan's budgets) are never offered: no plan row makes them, and the
-// planner ignores them (#875).
-export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: string): string[] {
-  const raw = new Set(Object.keys(plan.settings.limits || {}));
-  const offered = new Set<string>();
+// One use of an item the picker offers: the phase, and the name of the group's line that uses it
+// there.
+interface OfferUse {
+  phase: StageKey;
+  line: string;
+}
+
+// Each item group `groupId` can mark as made on site in `plan`, with where its lines use it: in
+// a phase the plan builds (not a milestone-only phase, #759), an item some plan row makes that a
+// row with a share in the group uses (rowPlaces, so a group's own line made on site counts as the
+// group's). Raw resources are never offered: the planner cannot make them on site
+// (onSitePlannable, its own rule, #921).
+function offerUses(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  groupId: string,
+): Map<string, OfferUse[]> {
+  const uses = new Map<string, OfferUse[]>();
   for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
     if (milestoneOnlyPhase(plan, phase)) continue;
     const rows = stage?.rows || [];
@@ -33,10 +44,52 @@ export function onSiteOffers(plan: PickerPlan, groups: PickerGroups, groupId: st
     for (const row of rows) {
       if ((rowPlaces(row, groups).get(groupId) || 0) <= LINK_DUST) continue;
       for (const item of Object.keys(row.inputs || {}))
-        if (made.has(item) && !raw.has(item)) offered.add(item);
+        if (made.has(item) && onSitePlannable(item))
+          uses.set(item, [...(uses.get(item) || []), { phase, line: row.name }]);
     }
   }
-  return [...offered].sort((a, b) => a.localeCompare(b));
+  return uses;
+}
+
+// The items group `groupId` can mark as made on site in `plan`, sorted (offerUses). Every phase
+// the plan builds counts, not only the one the page shows: a mark is the group's in every phase
+// (factoryGroups.local), and a recalculation gives the group a line wherever its rows use the
+// item (onSiteSettings).
+export const onSiteOffers = (plan: PickerPlan, groups: PickerGroups, groupId: string): string[] =>
+  [...offerUses(plan, groups, groupId).keys()].sort((a, b) => a.localeCompare(b));
+
+// One box of a group's "Made on site" picker: the item, and a note in brackets, or '' for none.
+export interface OnSiteOffer {
+  item: string;
+  note: string;
+}
+
+// The boxes of group `groupId`'s picker while the page shows phase `shown` (#941): the items its
+// lines in that phase use first, as the page's cards show them, then the ones only its lines in
+// other phases use, each with a note naming those lines and phases ("(used by Alternate: Turbo
+// Pressure Motor in Phases 4 and 5)"), so an item no card on the page uses says why it is
+// offered. Each part sorted. The same items as onSiteOffers.
+export function onSitePickerOffers(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  groupId: string,
+  shown: StageKey | undefined,
+): OnSiteOffer[] {
+  const here: OnSiteOffer[] = [],
+    elsewhere: OnSiteOffer[] = [];
+  const unique = (names: string[]) => [...new Set(names)];
+  for (const [item, uses] of offerUses(plan, groups, groupId)) {
+    if (uses.some(use => use.phase === shown)) {
+      here.push({ item, note: '' });
+      continue;
+    }
+    const lines = unique(uses.map(use => use.line)).sort((a, b) => a.localeCompare(b));
+    const phases = unique(uses.map(use => use.phase)).sort();
+    const where = (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
+    elsewhere.push({ item, note: `(used by ${listNames(lines)} in ${where})` });
+  }
+  const byItem = (a: OnSiteOffer, b: OnSiteOffer) => a.item.localeCompare(b.item);
+  return [...here.sort(byItem), ...elsewhere.sort(byItem)];
 }
 
 // The items each group makes on site in `onSite`, as sorted lists by group id.
@@ -90,3 +143,100 @@ export function onSiteRecalcSettings(
   const { onSite: _planned, ...rest } = settings;
   return change.want ? { ...rest, onSite: change.want } : rest;
 }
+
+// The picker's notes on a mark that gives the group no line (OnSitePicker.vue): an item none of
+// the group's lines uses now, and a raw resource, which the planner can never make on site (#921).
+export const UNUSED_NOTE = '(no line here uses it now)';
+export const RAW_NOTE = "(can't be made on site)";
+
+// One item under a group's heading, with a note in brackets, or '' for none.
+export interface OnSiteEntry {
+  item: string;
+  note: string;
+}
+
+// What a group's heading says outside edit mode (#931), for the phase `stage` shows: `made`, the
+// items of the group's own lines there (rows with `onSite`), and `marked`, the items it marks
+// that have no such line, each with why. Both sorted.
+export interface OnSiteSummary {
+  made: OnSiteEntry[];
+  marked: OnSiteEntry[];
+}
+
+// The heading summary of every group in `groups` for `plan` and its stage `stage` (the phase the
+// page shows), by group id. The plan's own lines say what is made on site, so a mark never reads
+// as made on site without one. A line for an item the groups' marks now would not ask for
+// (onSiteSettings, as the "needs a recalculation" notice compares) is made "until a
+// recalculation"; a mark without a line says why (markNote).
+export function onSiteSummaries(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  stage: StoredStage | undefined,
+): Record<string, OnSiteSummary> {
+  const want = onSiteSettings(plan, groups),
+    had = plan.settings.onSite;
+  const out: Record<string, OnSiteSummary> = {};
+  for (const { id } of groups?.groups || []) {
+    const lines = siteLineItems(stage, id, had?.[id]?.items);
+    const marks: GroupMarks = {
+      used: onSiteOffers(plan, groups, id),
+      wanted: want?.[id]?.items || [],
+      planned: had?.[id]?.items || [],
+      dropped: stage?.onSiteDropped?.[id] || [],
+    };
+    out[id] = {
+      made: lines.map(item => ({
+        item,
+        note: marks.wanted.includes(item) ? '' : '(until a recalculation)',
+      })),
+      marked: (groups?.local?.[id] || [])
+        .filter(item => !lines.includes(item))
+        .map(item => ({ item, note: markNote(item, marks) }))
+        .sort((a, b) => a.item.localeCompare(b.item)),
+    };
+  }
+  return out;
+}
+
+// What one group's marks come to: `used`, the items its lines use (the picker's offers),
+// `wanted`, the items a recalculation now would ask for (onSiteSettings), `planned`, the ones the
+// plan was calculated with, and `dropped`, the ones the planner made centrally in the phase shown.
+interface GroupMarks {
+  used: readonly string[];
+  wanted: readonly string[];
+  planned: readonly string[];
+  dropped: readonly string[];
+}
+
+// Why a group's mark of `item` gives it no line in the phase shown: the picker's notes for a raw
+// resource and for an item none of its lines uses (so a recalculation would give it no line
+// either), "needs a recalculation" when the plan was calculated without it, "made centrally in
+// this phase" when the planner fell back to central lines there, and otherwise "no line in this
+// phase", as when the group uses the item only in other phases.
+function markNote(item: string, marks: GroupMarks): string {
+  if (!onSitePlannable(item)) return RAW_NOTE;
+  if (!marks.used.includes(item) || !marks.wanted.includes(item)) return UNUSED_NOTE;
+  if (!marks.planned.includes(item)) return '(needs a recalculation)';
+  if (marks.dropped.includes(item)) return '(made centrally in this phase)';
+  return '(no line in this phase)';
+}
+
+// The items group `groupId`'s own lines make in `stage`, sorted: of each line's outputs, the ones
+// the plan was calculated to make on site for the group (`items`, its settings.onSite entry), so
+// a byproduct of the recipe is not listed; every output when the plan has no entry for it.
+function siteLineItems(
+  stage: StoredStage | undefined,
+  groupId: string,
+  items: readonly string[] | undefined,
+): string[] {
+  const made = new Set<string>();
+  for (const row of stage?.rows || [])
+    if (row.onSite?.group === groupId)
+      for (const item of Object.keys(row.outputs || {}))
+        if (!items || items.includes(item)) made.add(item);
+  return [...made].sort((a, b) => a.localeCompare(b));
+}
+
+// An entry as the heading words it: "Wire", or "Wire (needs a recalculation)".
+export const onSiteEntryText = (entry: OnSiteEntry): string =>
+  entry.note ? `${entry.item} ${entry.note}` : entry.item;
