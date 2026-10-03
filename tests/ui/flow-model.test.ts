@@ -10,6 +10,7 @@ import {
   flowNotes,
   flowOutputs,
   generatorOutputs,
+  itemBelts,
   lanePlan,
   rowEquivalent,
 } from '../../public/app/flow.ts';
@@ -59,6 +60,14 @@ test('beltTxt names the lanes a lane plan counts, plural past one', () => {
     ({ count, word, lane: { mark: 'Mk.3' } }) as LanePlan;
   assert.equal(beltTxt(lanes(1, 'belt')), '1 × Mk.3 belt');
   assert.equal(beltTxt(lanes(3, 'pipe')), '3 × Mk.3 pipes');
+});
+
+test('itemBelts words the belts or pipes of an item’s rate as the factory dialog does (#893)', () => {
+  // An item that travels by pipe gets pipes, any other item belts, of the mark lanePlan picks.
+  assert.equal(itemBelts('Iron Plate', 130, '1'), beltTxt(lanePlan(130, false, '1')));
+  assert.equal(itemBelts('Water', 700, '1'), beltTxt(lanePlan(700, true, '1')));
+  assert.match(itemBelts('Water', 700, '1'), / pipes$/);
+  assert.match(itemBelts('Screw', 50, '3'), /^1 × Mk\.\d belt$/);
 });
 
 test('rowEquivalent takes the planner figure, else the machines with the last clock', () => {

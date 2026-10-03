@@ -49,6 +49,20 @@ export function rowShares(
 // parts may be missing in an older state.
 export type GroupsInput = Partial<Pick<FactoryGroups, 'groups' | 'assignments'>> | undefined;
 
+// The share of `row` in each place (group id or UNGROUPED), as the Logistics page counts it
+// (groupLinks in group-links.ts) and a group's flow (group-flow.ts): rowShares of its
+// memberships, where a membership of a group that no longer exists counts as Ungrouped.
+export function rowPlaces(
+  row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW'>,
+  groups: GroupsInput,
+): Map<string, number> {
+  const known = new Set((groups?.groups || []).map(group => group.id));
+  const memberships = (groups?.assignments?.[row.id] || []).map(membership =>
+    known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
+  );
+  return rowShares(rowTotal(row), memberships);
+}
+
 // The group whose site a row's build-plan step belongs to: of the existing groups the row is in,
 // the one with the largest share of it (rowShares), the earlier membership on a tie, so a row
 // split 40/60 is built with the 60. A part no group takes does not count, so a row in any

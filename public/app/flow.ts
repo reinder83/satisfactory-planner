@@ -246,6 +246,11 @@ export const machinesLabel = (count: number, machine: string) =>
 export const beltTxt = (lanes: LanePlan) =>
   `${lanes.count} × ${lanes.lane.mark} ${lanes.word}${lanes.count > 1 ? 's' : ''}`;
 
+// The belts or pipes that carry `rate` of `item` at phase `stageKey`, as beltTxt words them
+// ("2 × Mk.3 belts", "1 × Mk.1 pipe"). A group's flow (group-flow.ts) takes it as its belts.
+export const itemBelts = (item: string, rate: number, stageKey?: string): string =>
+  beltTxt(lanePlan(rate, FLUIDS.has(item), stageKey));
+
 // Keeps a destination list to at most ten rows: past that, the first nine stay and the rest become
 // one "+ N more destinations" row carrying their summed rate. Order is the caller's, so whatever
 // sorts last is what gets folded.
