@@ -1,10 +1,15 @@
 // The planner's own types that several of its modules share: a recipe as run() plans with it,
 // run()'s result and its options.
-import type { Recipe, StageResult } from '../public/types/index.ts';
+import type { OnSiteLine, Recipe, StageResult } from '../public/types/index.ts';
 
 // A recipe as run() plans with it: from recipes.json, a generator, or an amplified twin, which
 // carries its somersloop `slots` per machine. Generators have no `alternate` flag.
-export type PoolRecipe = Omit<Recipe, 'alternate'> & { alternate?: boolean; slots?: number };
+// A per-group line made on site (#875) also carries `onSite`, its group and the recipe it copies.
+export type PoolRecipe = Omit<Recipe, 'alternate'> & {
+  alternate?: boolean;
+  slots?: number;
+  onSite?: OnSiteLine;
+};
 // run()'s result: a solved stage, or a failure with the solver's status when it has one.
 export type Solved = StageResult & { feasible: true };
 export type RunResult = Solved | { feasible: false; solverStatus?: string };

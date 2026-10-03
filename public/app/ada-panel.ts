@@ -41,7 +41,8 @@ import { factoryGroupsState } from './views/factories.ts';
 import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
-import type { StageDelivery, StoredStage } from '../types/index.ts';
+import { listNames } from '../wording.ts';
+import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
 const ADA_KEY = 'planner-ada';
@@ -126,6 +127,17 @@ function payoffFacts(): AdaFacts['payoff'] {
         ? `${num(gain)} ${gain === 1 ? 'hour' : 'hours'} sooner`
         : `${num(gain)} fewer ${gain === 1 ? 'building' : 'buildings'}`,
   };
+}
+
+// The items a stage makes centrally because its groups' own lines did not fit (#875), and those
+// groups by the names the plan was calculated with.
+function onSiteDroppedFacts(
+  dropped: Record<string, string[]>,
+  onSite: OnSiteSettings | undefined,
+): NonNullable<AdaFacts['onSiteDropped']> {
+  const items = [...new Set(Object.values(dropped).flat())].sort();
+  const groups = Object.keys(dropped).map(group => onSite?.[group]?.name || 'a factory group');
+  return { items: listNames(items), groups: listNames(groups) };
 }
 
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
@@ -253,6 +265,10 @@ function adaFacts(): AdaFacts {
             longer: (storedStage.hours || 0) > storedStage.fractionalAfterStop.target * 1.01,
             clocks: storedStage.fractionalAfterStop.clocks,
           }
+        : null,
+    onSiteDropped:
+      calculated && storedStage.feasible && storedStage.onSiteDropped
+        ? onSiteDroppedFacts(storedStage.onSiteDropped, calculated.settings.onSite)
         : null,
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
     backupDays: backupDays(workspace.lastBackup),

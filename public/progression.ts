@@ -15,6 +15,10 @@ export interface GuideTask {
   body: string;
 }
 
+// The recipe a row runs: its own id, or for a factory group's own line made on site (#875,
+// '<recipe>:<group>') the recipe it copies, so its unlock and milestone are the recipe's.
+const recipeIdOf = (row: Pick<CalcRow, 'id' | 'onSite'>) => row.onSite?.recipe ?? row.id;
+
 // What every task list of one phase's guide reads, built once by guideContext. `plan` is the
 // profile's calculation snapshot, `checks` its ticked checklist keys, `data` progression.json,
 // `stage` the phase planned (1-5) and `rows` that stage's production rows.
@@ -268,7 +272,7 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
     required.set(entry.id, entry);
     for (const id of entry.requires) add(data.entries.find(prerequisite => prerequisite.id === id));
   }
-  const wanted = new Set(rows.map(r => r.id));
+  const wanted = new Set(rows.map(recipeIdOf));
   for (const row of rows) {
     const building = data.buildings[row.machine];
     if (building) wanted.add(building);
@@ -425,9 +429,15 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
 export function hardDriveTasks(context: GuideContext): GuideTask[] {
   const { checks, data, stage, rows } = context;
   const earlier = earlierAlternates(context);
-  const alternates = rows.filter(r => r.alternate && !earlier.has(r.id));
+  const alternates = [
+    ...new Map(
+      rows
+        .filter(r => r.alternate && !earlier.has(recipeIdOf(r)))
+        .map(row => [recipeIdOf(row), row]),
+    ).values(),
+  ];
   if (!alternates.length) return [];
-  const missing = alternates.filter(r => !checks['recipe-unlock-' + r.id]);
+  const missing = alternates.filter(r => !checks['recipe-unlock-' + recipeIdOf(r)]);
   return [
     {
       id: 'hard-drives-' + stage,
@@ -436,10 +446,10 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
     },
     ...alternates.map(row => {
       const alternate = data.entries.find(
-        entry => entry.alternate && entry.recipes.includes(row.id),
+        entry => entry.alternate && entry.recipes.includes(recipeIdOf(row)),
       );
       return {
-        id: 'recipe-unlock-' + row.id,
+        id: 'recipe-unlock-' + recipeIdOf(row),
         title: 'Unlock ' + row.name,
         body: `Required by this profile’s ${row.machine} line. ${listedNames(alternate?.requires ?? [], data, 'First unlock')}Choose it when offered by hard-drive research. Confirm here only after unlocking it in game; selecting “all alternates” in the profile is a planning allowance, not an in-game unlock.`,
       };
@@ -452,7 +462,7 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
 function earlierAlternates({ plan, stage, stageOf }: GuideContext): Set<string> {
   const ids = new Set<string>();
   for (let phase = Number(plan.settings.phase || 1); phase < stage; phase++)
-    for (const row of stageOf(phase)?.rows || []) if (row.alternate) ids.add(row.id);
+    for (const row of stageOf(phase)?.rows || []) if (row.alternate) ids.add(recipeIdOf(row));
   return ids;
 }
 

@@ -21,6 +21,7 @@
 //   model.ts        run(): one phase's linear program, its demands, solve and check
 //   fit.ts          the two-step fit for whole machines and production amplification
 //   rounding.ts     the fallbacks after a stopped whole-machine search (#593, #694)
+//   on-site.ts      the factory groups' own lines for items they make on site (#875)
 //   stage.ts        a solved model read back into a stage
 //   calculate.ts    calculate(): every phase, then the adjustments and the warnings
 //   draft.ts        the draft of a phase that does not fit
