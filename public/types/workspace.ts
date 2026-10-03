@@ -141,7 +141,8 @@ export interface PhaseProgress {
   done: number;
   total: number;
   // The phase's build-plan steps (planStepIds in public/state/summary.ts) ticked, over all of
-  // them (#746). Absent where the summary had no progression.json, and in replies before #746.
+  // them (#746). Absent where the summary had no progression.json, in replies before #746, and
+  // for a phase after the one the profile works on, which the card draws empty (#804).
   steps?: { done: number; total: number };
 }
 

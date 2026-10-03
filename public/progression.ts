@@ -66,6 +66,14 @@ const phaseForTier = (tier: number) =>
 const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
 export const formatNumber = (value: unknown): string => numberFormat.format(Number(value));
 
+// What phaseSteps may keep between its calls for several phases of one plan and progress, when
+// neither changes in between (profilePhases in state/summary.ts, #804): the milestones every
+// planned phase needs, which each phase's milestone list starts from (milestonesListedIn). Pass a
+// new empty object per plan and progress; without one, nothing is kept.
+export interface StepsMemo {
+  planned?: ProgressionEntry[];
+}
+
 // The generated guidance steps of a calculated profile for one phase, called by phaseSteps below
 // (calcTasks in app/views/calculated.ts). `plan` is the profile's calculation snapshot, `state` its
 // progress (only `checks` is read), `data` is progression.json and `phase` '1'-'5' or
@@ -79,6 +87,7 @@ export function progression(
   state: { checks: Record<string, boolean> },
   data: Progression,
   phase: string,
+  memo: StepsMemo = {},
 ): {
   baseTasks: GuideTask[];
   powerTasks: GuideTask[];
@@ -92,7 +101,7 @@ export function progression(
     powerTasks: powerTasks(context),
     milestoneTasks: milestoneTasks(
       context,
-      phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage),
+      phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage, memo),
     ),
     hardDrives: hardDriveTasks(context),
     retire: retireTasks(context),
@@ -115,20 +124,22 @@ export interface PhaseStep extends GuideTask {
 // storage, then the lines this phase retires. Row steps use the saved key
 // `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
 // It reads only its arguments, so it works out any phase of a stored plan, not just the open one.
+// `memo` (StepsMemo) lets calls for several phases of the same plan and progress share work.
 export function phaseSteps(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
   state: { checks: Record<string, boolean> },
   data: Progression,
   phase: string,
+  memo: StepsMemo = {},
 ): PhaseStep[] {
   if (plan.guide) return (plan.guide.phases[phase] ?? []).map(step => ({ ...step }));
   if (milestoneOnlyPhase(plan, phase))
     return milestoneTasks(
       guideContext(plan, state, data, phase),
-      milestonesListedIn(plan, state, data, Number(phase)),
+      milestonesListedIn(plan, state, data, Number(phase), memo),
     );
   const stage = (phase === 'post' ? '5' : phase) as StageKey,
-    steps = progression(plan, state, data, phase);
+    steps = progression(plan, state, data, phase, memo);
   // Phase 1 interleaves base, power and milestone steps into a starting order; later
   // phases put power first, then milestones.
   const startup =
@@ -203,15 +214,25 @@ export function guideContext(
     checks = state.checks,
     start = Number(plan.settings.phase || 1);
   // Only stages the profile builds (its start phase on): one before it is never built, so a
-  // milestone-only phase (#759) has no planned source of its own.
-  const sources = (item: string) =>
-    (Object.entries(plan.stages) as [string, StoredStage][])
-      .filter(([key]) => Number(key) >= start && Number(key) <= stage)
-      .flatMap(([key, planned]) =>
+  // milestone-only phase (#759) has no planned source of its own. Worked out once per item and
+  // kept for this context, which reads one fixed state: the milestone order and funding text ask
+  // for the same items again and again, which was most of phaseSteps' time (#804).
+  const built = (Object.entries(plan.stages) as [string, StoredStage][]).filter(
+    ([key]) => Number(key) >= start && Number(key) <= stage,
+  );
+  const sourcesOf = new Map<string, { row: CalcRow; running: boolean }[]>();
+  const sources = (item: string) => {
+    let found = sourcesOf.get(item);
+    if (!found) {
+      found = built.flatMap(([key, planned]) =>
         (planned.rows || [])
           .filter(row => row.outputs[item])
           .map(row => ({ row, running: !!checks['calc-' + key + '-' + row.id] })),
       );
+      sourcesOf.set(item, found);
+    }
+    return found;
+  };
   const status = (item: string) =>
     sources(item).some(source => source.running)
       ? 'already producing (marked running; reserve a batch)'
@@ -303,11 +324,25 @@ const researchable = (entry: ProgressionEntry, data: Progression, stage: number)
 // listed in that phase, which the build plan offers as a milestone-only phase (#759). Post-game,
 // planned as Phase 5, lists none (progression() above): they are all in Phase 5. The check key
 // stays `unlock-<id>` whichever phase lists the step. milestoneTasks orders the list.
+// `memo` keeps the planned phases' milestones (plannedMilestones) for later calls with it.
 export function milestonesListedIn(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   state: { checks: Record<string, boolean> },
   data: Progression,
   stage: number,
+  memo: StepsMemo = {},
+): ProgressionEntry[] {
+  memo.planned ??= plannedMilestones(plan, state, data);
+  return memo.planned.filter(entry => milestonePhase(entry, data) === stage);
+}
+
+// Every milestone one of the profile's planned phases (its start phase on) needs and can
+// research by then, each once, in the order they were first needed: what milestonesListedIn
+// shares out over the phases.
+function plannedMilestones(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: { checks: Record<string, boolean> },
+  data: Progression,
 ): ProgressionEntry[] {
   const start = Number(plan.settings.phase || 1),
     listed = new Map<string, ProgressionEntry>();
@@ -317,7 +352,7 @@ export function milestonesListedIn(
   for (const key of planned)
     for (const entry of requiredMilestones(guideContext(plan, state, data, key)))
       if (!entry.alternate && researchable(entry, data, Number(key))) listed.set(entry.id, entry);
-  return [...listed.values()].filter(entry => milestonePhase(entry, data) === stage);
+  return [...listed.values()];
 }
 
 // Depth-first, so every prerequisite in the list comes before what needs it; otherwise keeps

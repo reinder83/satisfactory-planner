@@ -464,6 +464,8 @@ test('the Pages edition opens an upgraded browser with its original profile migr
             handbook,
             state: {
               ...initialState(),
+              // An original profile works on Phase 3 or later (checkPlanStart).
+              settings: { phase: '3' },
               revision: 4,
               checks: { ['factory-3-' + factory.id]: true, 'storage-ground-shell': true },
             },
@@ -490,8 +492,16 @@ test('the Pages edition opens an upgraded browser with its original profile migr
     const summary = (await browserRequest('/api/workspace')) as WorkspaceSummary;
     assert.deepEqual(fetched, ['catalog.json', 'progression.json', 'recipes.json']);
     const listed = summary.saves[0]!.profiles[0]!;
-    // The summary counts each phase's steps from progression.json (#746).
-    assert.ok(listed.phases!.every(entry => entry.steps));
+    // The summary counts each phase's steps from progression.json (#746), up to the phase
+    // worked on: the ones the card reads (#804).
+    assert.deepEqual(
+      listed.phases!.map(entry => [entry.phase, !!entry.steps]),
+      [
+        ['3', true],
+        ['4', false],
+        ['5', false],
+      ],
+    );
     assert.equal(listed.kind, 'calculated');
     assert.equal(listed.transcribed, true);
     assert.equal(listed.name, 'Original · 50× complete automation');

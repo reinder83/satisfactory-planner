@@ -2,7 +2,7 @@
 // save and profile a request is about. Both only ever read saves whose userId is the user's.
 import { readFileSync } from 'node:fs';
 import { isTranscribed } from '../public/handbook-migration.ts';
-import { profilePhases } from '../public/state.ts';
+import { profilePhasesCache } from '../public/state.ts';
 import { catalog } from '../planner.ts';
 import { publicUser } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -17,6 +17,11 @@ const progressionData = (): Progression =>
   (progression ??= JSON.parse(
     readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   ) as Progression);
+
+// Each profile's per-phase counts, kept until its plan or progress changes (#804): the summary is
+// asked for at boot, when Saves & profiles opens and after every save or profile change, and
+// working the step counts out again for every profile each time was most of its cost.
+const cachedPhases = profilePhasesCache();
 
 // What the interface needs to list saves: only this user's saves, and per profile its
 // settings and tick count rather than the full state.
@@ -43,7 +48,7 @@ export const summary = (
         ...(isTranscribed(profile.plan) ? { transcribed: true as const } : {}),
         completed: Object.values(profile.state.checks).filter(Boolean).length,
         phase: profile.state.settings.phase,
-        phases: profilePhases(profile.plan, profile.state, progressionData()),
+        phases: cachedPhases(profile.id, profile.plan, profile.state, progressionData()),
       })),
     })),
 });
