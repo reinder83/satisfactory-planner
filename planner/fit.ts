@@ -62,11 +62,12 @@ export function twoStepFit(context: PhaseContext): RunResult {
 const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) =>
   run({ ...variant, wholeMachines: false, amplifySloops: 0 }, phase, options);
 // The amplification candidates: the largest lines (at least one machine-equivalent) of an
-// exact solve, as { recipeId: equivalent }.
+// exact solve, as { recipeId: equivalent }. A group's own line made on site (#875) is never
+// amplified.
 const amplifyCandidates = (config: CurrentSettings, exactStage: Solved): Record<string, number> =>
   Object.fromEntries(
     [...exactStage.rows]
-      .filter(row => row.equivalent >= 1)
+      .filter(row => row.equivalent >= 1 && !row.onSite)
       .sort((a, b) => b.equivalent - a.equivalent)
       .slice(0, AMPLIFY_CANDIDATES[config.wholeMachines ? 'whole' : 'precise'])
       .map(row => [row.id, row.equivalent]),

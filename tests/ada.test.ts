@@ -535,3 +535,23 @@ test('ADA says when a phase got easy clocks after its whole-machine search stopp
   assert.ok(precise);
   assert.match(precise.text, /the exact plan with its precise clocks/);
 });
+
+test('ADA says when a phase makes its on-site items centrally (#875)', () => {
+  const find = (given: Partial<AdaFacts>) =>
+    adaRemarks(facts(given)).find(r => r.id === 'on-site-dropped');
+  assert.equal(find({}), undefined, 'a phase with its group lines says nothing');
+  assert.equal(find({ onSiteDropped: null }), undefined);
+  const dropped = find({ onSiteDropped: { items: 'Wire and Screws', groups: 'Alpha and Beta' } });
+  assert.ok(dropped);
+  assert.equal(dropped.tone, 'warn');
+  assert.match(
+    dropped.text,
+    /^Phase 3 makes Wire and Screws centrally: the whole-machine lines of Alpha and Beta need more than your budgets allow/,
+  );
+  assert.ok(
+    adaRemarks(
+      facts({ view: 'factories', onSiteDropped: { items: 'Wire', groups: 'Alpha' } }),
+    ).some(r => r.id === 'on-site-dropped'),
+    'also on the Factories page',
+  );
+});

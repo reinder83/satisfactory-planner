@@ -1,0 +1,152 @@
+// Made on site (#875, part of #868): a factory group that marks an item gets its own
+// whole-machine line for it, sized to that group's own consumers, and the central line covers the
+// rest. The input is `settings.onSite` (see settings.ts): per group, the items it makes on site,
+// and per phase the share of each plan row that group's consumers take. This module adds the
+// per-group copies of the recipes to a phase's pool and says which balance each item of a recipe
+// feeds or draws from; model.ts builds the constraints from that.
+import type { CurrentSettings, CurrentStage, OnSiteGroup } from '../public/types/index.ts';
+import type { PoolRecipe } from './types.ts';
+import { DATA, RAW } from './data.ts';
+import { recipePool, generators } from './recipes.ts';
+
+// A per-group line's row id: the recipe id, a colon and the group id. A check key
+// `calc-<phase>-<rowId>` must pass safeKey (public/state/validate.ts), which allows ':' but not
+// '@', so released versions keep accepting a save that ticks one (#876).
+export const siteRowId = (recipeId: string, group: string) => `${recipeId}:${group}`;
+// The name of a group's own balance of an item in the model, `item:<item>@<group>`. Internal to
+// the solve: rows and stages always name the plain item.
+export const siteBalance = (item: string, group: string) => `item:${item}@${group}`;
+
+// Items no group line is made for: raw resources (and so existing supply of them), radioactive
+// items and nuclear recipes, whose balances the whole-machine rounding never touches (#370).
+const NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
+const copyable = (recipe: PoolRecipe) =>
+  recipe.power > 0 &&
+  !recipe.slots &&
+  !recipe.onSite &&
+  !NUCLEAR.test(
+    [recipe.name, ...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].join(' '),
+  );
+const markable = (item: string) =>
+  !RAW.includes(item) && !!DATA.items[item] && !DATA.items[item].radioactive;
+
+// The groups with a share of a plan row in `phase`, as [group, entry, share].
+type Shares = Record<string, number>;
+const phaseShares = (entry: OnSiteGroup, phase: number): Shares =>
+  entry.shares[String(phase) as keyof OnSiteGroup['shares']] || {};
+// A row's share for a group: its own, or an amplified twin's unamplified line's.
+const shareOf = (shares: Shares, rowId: string) =>
+  shares[rowId] ?? (rowId.startsWith('amp:') ? shares[rowId.slice(4)] : undefined) ?? 0;
+
+// The copies of `pool`'s recipes a phase plans per on-site group (`pool` is the phase's whole
+// pool, before the network of the two-step fit narrows it, so every solve of the phase sees the
+// same copies). A group gets a copy of each recipe that makes an item it marks and has a consumer
+// of in this phase: a row it has a share of that uses the item, or one of its own copies that
+// does (Copper Ingot for its Wire line). No consumer, no line. A copy is the recipe as it is,
+// whole machines like it and never amplified, with the id `<recipe>:<group>` and `onSite`.
+export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRecipe[]) {
+  const copies: PoolRecipe[] = [];
+  for (const [group, entry] of Object.entries(config.onSite || {})) {
+    const shares = phaseShares(entry, phase);
+    const marked = new Set(entry.items.filter(markable));
+    const consumed = new Set<string>();
+    for (const recipe of pool)
+      if (shareOf(shares, recipe.id) > 0 || (shares['amp:' + recipe.id] ?? 0) > 0)
+        for (const item of Object.keys(recipe.inputs)) if (marked.has(item)) consumed.add(item);
+    const copied = new Set<string>();
+    // Each pass copies the makers of the items consumed so far; their inputs may add more.
+    for (let size = -1; size !== consumed.size; ) {
+      size = consumed.size;
+      for (const recipe of pool)
+        if (
+          !copied.has(recipe.id) &&
+          copyable(recipe) &&
+          Object.keys(recipe.outputs).some(item => consumed.has(item))
+        ) {
+          copied.add(recipe.id);
+          copies.push({
+            ...recipe,
+            id: siteRowId(recipe.id, group),
+            onSite: { group, recipe: recipe.id },
+          });
+          for (const item of Object.keys(recipe.inputs)) if (marked.has(item)) consumed.add(item);
+        }
+    }
+  }
+  return copies;
+}
+
+// Where each item of a recipe goes in the model: [balance, fraction] pairs, the fractions adding
+// up to 1. `item:<item>` is the central balance.
+export type Routes = (recipe: PoolRecipe, item: string, side: 'in' | 'out') => [string, number][];
+// The balances of the groups' own lines in `pool` (the pool a solve actually uses), as
+// `<group>|<item>` keys, and the routes into and out of them:
+// - a group's copy puts the marked items it makes in that group's balance, and takes the marked
+//   items it uses from it: a per-group line belongs wholly to its group;
+// - every other recipe takes a group's share (settings.onSite shares) of a marked item from that
+//   group's balance, and the rest from the central one;
+// - everything else (other inputs, byproducts, raw resources, existing supply and every demand)
+//   stays central.
+export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRecipe[]) {
+  const active = new Set<string>();
+  for (const recipe of pool)
+    if (recipe.onSite) {
+      const marked = config.onSite?.[recipe.onSite.group]?.items || [];
+      for (const item of Object.keys(recipe.outputs))
+        if (marked.includes(item)) active.add(recipe.onSite.group + '|' + item);
+    }
+  const balances = [...active].map(key => {
+    const [group, item] = key.split('|') as [string, string];
+    return { group, item, name: siteBalance(item, group) };
+  });
+  const groupsFor = (item: string) =>
+    balances.filter(balance => balance.item === item).map(balance => balance.group);
+  const routes: Routes = (recipe, item, side) => {
+    const central = 'item:' + item;
+    if (!active.size) return [[central, 1]];
+    if (recipe.onSite)
+      return active.has(recipe.onSite.group + '|' + item)
+        ? [[siteBalance(item, recipe.onSite.group), 1]]
+        : [[central, 1]];
+    if (side === 'out') return [[central, 1]];
+    const split: [string, number][] = [];
+    for (const group of groupsFor(item)) {
+      const share = shareOf(phaseShares(config.onSite![group]!, phase), recipe.id);
+      if (share > 0) split.push([siteBalance(item, group), share]);
+    }
+    // Shares from rowShares add up to at most 1; anything past that is scaled back.
+    const taken = split.reduce((total, [, share]) => total + share, 0);
+    if (taken > 1) for (const part of split) part[1] /= taken;
+    const rest = Math.max(0, 1 - Math.max(taken, 0));
+    return rest > 1e-9 ? [[central, rest], ...split] : split;
+  };
+  return { balances, routes };
+}
+
+// The groups and items a phase offers lines for, as { group: items } (onSiteDropped records them
+// when they do not fit). Empty without settings.onSite.
+export function plannedSites(config: CurrentSettings, phase: number) {
+  const sites: Record<string, string[]> = {};
+  if (!config.onSite) return sites;
+  const conversion = phase === 5 && config.sam !== 'avoid';
+  const pool = [...recipePool(config, phase, conversion), ...generators(config, phase)];
+  for (const copy of siteCopies(config, phase, pool)) {
+    const group = copy.onSite!.group;
+    const marked = config.onSite?.[group]?.items || [];
+    for (const item of Object.keys(copy.outputs))
+      if (marked.includes(item) && !sites[group]?.includes(item)) (sites[group] ??= []).push(item);
+  }
+  for (const items of Object.values(sites)) items.sort();
+  return sites;
+}
+
+// The settings with every item made centrally: what a phase falls back to when the groups' own
+// whole-machine lines do not fit (onSiteDropped), and what a re-solve of that phase uses.
+export function centralSettings(config: CurrentSettings): CurrentSettings {
+  const { onSite: _dropped, ...central } = config;
+  return central;
+}
+// The settings a re-solve of a finished stage uses (phaseTime 'final', the augmenter fuel
+// verdict): central when the stage had to make its items centrally.
+export const stageSettings = (config: CurrentSettings, stage: CurrentStage | undefined) =>
+  stage?.onSiteDropped ? centralSettings(config) : config;

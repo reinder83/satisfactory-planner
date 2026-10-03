@@ -9,6 +9,7 @@ import { DATA, RAW, DELIVERIES } from './data.ts';
 import { recipePool, amplifiable, amplified, nuclearPeriod, generators } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
 import { readStage } from './stage.ts';
+import { siteCopies, siteRoutes, type Routes } from './on-site.ts';
 
 // Plans one phase: builds the phase's LP (or MIP), solves it and turns the solution into a stage.
 // Each phase is a self-contained steady state; nothing is carried over from an earlier phase's
@@ -43,7 +44,9 @@ import { readStage } from './stage.ts';
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
 //   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
 // The two-step fit may add nuclearFractional, supplyDropped, amplificationDropped,
-// roundedAfterStop or fractionalAfterStop.
+// roundedAfterStop or fractionalAfterStop, and solvePhase in calculate.ts onSiteDropped (#875).
+// A factory group's own line for an item it makes on site (settings.onSite) is a row like any
+// other, with the id '<recipe>:<group>' and `onSite` (see planner/on-site.ts).
 // calculate() may add aheadOf (pullFinalPhaseForward), fuelVerdict (judgeAugmenterFuel), or turn
 // a failed phase into a draft with reason/shortfalls/minHours (draftStage). The interface reads
 // these fields through calcStage() in public/app/session.ts: mainly
@@ -129,21 +132,27 @@ export function phasePool({
   recipeIds,
   baseline,
 }: PhaseContext): PoolRecipe[] {
-  const selected: PoolRecipe[] = [
+  const whole: PoolRecipe[] = [
     ...recipePool(config, phase, conversion),
     ...generators(config, phase),
-  ].filter(
+  ];
+  // The groups' own lines (#875) are copies of whole-pool recipes, so every solve of the phase,
+  // narrowed or not, offers the same ones.
+  const selected = [...whole, ...siteCopies(config, phase, whole)].filter(
     recipe =>
       !recipeIds ||
       recipeIds.has(recipe.id) ||
       (conversion &&
+        !recipe.onSite &&
         Object.keys(recipe.outputs).some(item => RAW.includes(item) && item !== 'Water')),
   );
   return [
     ...selected,
     ...(config.amplifySloops > 0 && recipeIds
       ? selected
-          .filter(recipe => amplifiable(recipe) && baseline?.[recipe.id] !== undefined)
+          .filter(
+            recipe => amplifiable(recipe) && !recipe.onSite && baseline?.[recipe.id] !== undefined,
+          )
           .map(amplified)
       : []),
   ];
@@ -268,8 +277,12 @@ export function buildModel(
     variables: {},
   };
   addBalances(model, allItems, demands.demand);
+  // The groups' own balances of the items they make on site (#875), after the central ones.
+  const sites = siteRoutes(context.config, context.phase, pool);
+  for (const balance of sites.balances)
+    model.constraints[balance.name] = exactBalance(balance.item) ? { equal: 0 } : { min: 0 };
   addPower(model, context);
-  addRecipes(model, context, pool);
+  addRecipes(model, context, pool, sites.routes);
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
   return { model, period };
@@ -280,17 +293,17 @@ export function buildModel(
 // An item the AWESOME Sink cannot accept has nowhere to overflow: Power Shards would back a
 // Synthetic Power Shard line up and stall it. Balance those exactly, as fluids and waste are.
 function addBalances(model: LpModel, allItems: Set<string>, demand: ItemRates) {
-  for (const item of allItems) {
-    const equality =
-      DATA.items[item]?.fluid ||
-      DATA.items[item]?.radioactive ||
-      item.endsWith('Waste') ||
-      !((DATA.items[item]?.sink ?? 0) > 0);
-    model.constraints['item:' + item] = equality
+  for (const item of allItems)
+    model.constraints['item:' + item] = exactBalance(item)
       ? { equal: demand[item] || 0 }
       : { min: demand[item] || 0 };
-  }
 }
+// Whether an item balances exactly rather than overflowing to the sink (addBalances).
+const exactBalance = (item: string) =>
+  !!DATA.items[item]?.fluid ||
+  !!DATA.items[item]?.radioactive ||
+  item.endsWith('Waste') ||
+  !((DATA.items[item]?.sink ?? 0) > 0);
 // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
 // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
 // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
@@ -301,10 +314,10 @@ function addPower(model: LpModel, { phase, maximum, power }: PhaseContext) {
 }
 // One variable per recipe: its level is machine-equivalents at 100% clock (see
 // recipeCoefficients). Then the somersloop budget and, for phaseTime 'final', the caps.
-function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[]) {
+function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], routes: Routes) {
   const { config, caps, baseline } = context;
   for (const recipe of pool) {
-    const coefficients = recipeCoefficients(recipe, context);
+    const coefficients = recipeCoefficients(recipe, context, routes);
     // At least the requested number of uranium plants (settings.uraniumReactors) when nuclear
     // power is in the pool. Whole machines round them in roundNuclear.
     if (recipe.id === 'power-uranium') {
@@ -344,8 +357,9 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[]) {
     }
 }
 // A recipe variable's coefficients: its cost, its power, and its per-machine outputs (+) and
-// inputs (-) in each item balance.
-function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext) {
+// inputs (-) in each item balance: the central one, or split with the groups' own balances of the
+// items they make on site (`routes`, siteRoutes in on-site.ts).
+function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext, routes: Routes) {
   const coefficients: Record<string, number> = {
     cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
     power:
@@ -354,9 +368,11 @@ function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext)
         : recipe.power * config.powerFactor * power.utilityFactor,
   };
   for (const [item, rate] of Object.entries(recipe.outputs))
-    coefficients['item:' + item] = (coefficients['item:' + item] || 0) + rate;
+    for (const [balance, part] of routes(recipe, item, 'out'))
+      coefficients[balance] = (coefficients[balance] || 0) + rate * part;
   for (const [item, rate] of Object.entries(recipe.inputs))
-    coefficients['item:' + item] = (coefficients['item:' + item] || 0) - rate;
+    for (const [balance, part] of routes(recipe, item, 'in'))
+      coefficients[balance] = (coefficients[balance] || 0) - rate * part;
   return coefficients;
 }
 // Whole-machine rounding: with `wholeMachines`, a recipe is an integer variable when it makes

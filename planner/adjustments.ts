@@ -4,6 +4,7 @@ import { listNames } from '../public/wording.ts';
 import type { CurrentSettings, StageResult } from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { run } from './model.ts';
+import { stageSettings } from './on-site.ts';
 import type { PhaseStages } from './calculate.ts';
 
 // With the target time on the final phase, an earlier phase may run its lines as
@@ -41,7 +42,8 @@ function resolveEarlierPhases(config: CurrentSettings, stages: PhaseStages): num
     for (let later = phase; later <= 5; later++)
       for (const [id, machines] of Object.entries(built[later] || {}))
         caps[id] = Math.max(caps[id] || 0, machines);
-    const ahead = run(config, phase, { maximum: true, caps });
+    // A phase that makes its on-site items centrally (#875) is re-solved that way too.
+    const ahead = run(stageSettings(config, stages[phase]), phase, { maximum: true, caps });
     if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
       stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
     else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
@@ -76,7 +78,7 @@ function finalPhaseWarning(stages: PhaseStages, stopped: number[]): string {
 // 5's `fuelVerdict`, or returns the warning that no answer was proven.
 export function judgeAugmenterFuel(config: CurrentSettings, stages: PhaseStages): string[] {
   if (!config.fueledAugmenters || !stages[5]?.feasible) return [];
-  const unfueled = solveUnfueled(config);
+  const unfueled = solveUnfueled(stageSettings(config, stages[5]));
   // A search stopped at its limit ('Unknown' at the node limit, 'Time limit reached' at the
   // backstop or Phase 5's deadline) proves no shortage, so it must not read as "does not fit".
   // Only the attempt whose result is used counts: the retry with conversion allows every recipe

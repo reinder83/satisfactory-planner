@@ -20,6 +20,8 @@ import type {
   NodeCounts,
   Purity,
   SloopUse,
+  OnSiteGroup,
+  OnSiteSettings,
   StageKey,
   StorageChoice,
 } from '../public/types/index.ts';
@@ -78,6 +80,60 @@ const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> 
       if (!vehicleFuels.includes(name)) fail(`${name} is not a vehicle fuel.`);
       const perMinute = number(rate, 0, 100000, 0);
       if (perMinute > 0) clean[name] = perMinute;
+    }
+    if (Object.keys(clean).length) out[phase as StageKey] = clean;
+  }
+  return out;
+};
+// The items factory groups make on site (#875): { groupId: { name?, items, shares: { phase:
+// { rowId: share } } } }, worked out from factoryGroups.local and the memberships when the user
+// starts a recalculation (onSiteSettings in public/app/on-site.ts) and frozen with the plan.
+// Group ids are factory-group ids, items known items that are not raw resources, row ids check
+// key parts and shares fractions of a row from 0 to 1. Zero shares, phases without a share and
+// groups without an item or a share are dropped, and undefined is returned when nothing is left,
+// so settings without it stay as they were.
+const GROUP_ID = /^fg-[a-z0-9]{4,32}$/;
+const ROW_ID = /^[a-zA-Z0-9:_-]{1,160}$/;
+const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw) || Object.keys(raw).length > 60) fail('Invalid items made on site.');
+  const out: OnSiteSettings = {};
+  for (const [group, entry] of Object.entries(raw)) {
+    if (!GROUP_ID.test(group) || !isRecord(entry) || !Array.isArray(entry.items))
+      fail('Invalid items made on site.');
+    if (entry.name !== undefined && (typeof entry.name !== 'string' || entry.name.length > 80))
+      fail('Invalid items made on site.');
+    const items = [...new Set(entry.items as unknown[])];
+    if (items.length > 200 || items.some(item => typeof item !== 'string' || !suppliable(item)))
+      fail('Invalid items made on site.');
+    const shares = onSiteShares(entry.shares);
+    if (!items.length || !Object.keys(shares).length) continue;
+    out[group] = {
+      ...(typeof entry.name === 'string' && entry.name.trim() ? { name: entry.name.trim() } : {}),
+      items: (items as string[]).sort(),
+      shares,
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+};
+// { onSite } when there is any, else nothing, so the field is absent from settings without it.
+const onSiteSetting = (raw: unknown): { onSite?: OnSiteSettings } => {
+  const onSite = onSiteGroups(raw);
+  return onSite ? { onSite } : {};
+};
+const onSiteShares = (raw: unknown): OnSiteGroup['shares'] => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail('Invalid items made on site.');
+  const out: OnSiteGroup['shares'] = {};
+  for (const [phase, rows] of Object.entries(raw)) {
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(rows))
+      fail('Invalid items made on site.');
+    if (Object.keys(rows).length > 1000) fail('Invalid items made on site.');
+    const clean: Record<string, number> = {};
+    for (const [rowId, share] of Object.entries(rows)) {
+      if (!ROW_ID.test(rowId)) fail('Invalid items made on site.');
+      const part = number(share, 0, 1, 0);
+      if (part > 0) clean[rowId] = part;
     }
     if (Object.keys(clean).length) out[phase as StageKey] = clean;
   }
@@ -227,6 +283,7 @@ export function settings(input: unknown = {}): CurrentSettings {
     storageOverrides: rateOverrides(input.storageOverrides),
     existingSupply: supplyRates(input.existingSupply),
     transportFuel: transportFuelRates(input.transportFuel),
+    ...onSiteSetting(input.onSite),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

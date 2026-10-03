@@ -72,6 +72,9 @@ export interface AdaFacts {
   // with easy clocks (#694): the target as for `rounded`, whether it takes longer, and whether
   // the clocks are easy ('easy', 'rate') or the exact plan's own ('precise'). null otherwise.
   fractional: { target: string; longer: boolean; clocks: 'easy' | 'rate' | 'precise' } | null;
+  // The factory groups' own whole-machine lines did not fit the stage, so it makes those items
+  // centrally (stage.onSiteDropped, #875): the items and the groups, as name lists. null otherwise.
+  onSiteDropped?: { items: string; groups: string } | null;
   profiles: number;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
@@ -495,6 +498,14 @@ const RULES: AdaRule[] = [
           : `the exact plan with every solid-part line at 100% except the last machine, at 25%, 50% or 75%${clocks === 'rate' ? ' or at a whole number per minute' : ''}`;
       return `The whole-machine search for ${facts.phaseLabel} stopped before it could prove the best plan, and no rounding to whole machines fit, so this phase is not whole machines: it is ${how}${longer && facts.hours ? `, and it takes ${facts.hours} instead of ${target}` : ''}. Somewhat fiddly. Entirely buildable. Fewer alternates or precise balancing usually let the search finish.`;
     },
+  },
+  {
+    id: 'on-site-dropped',
+    on: ['plan', 'factories'],
+    tone: 'warn',
+    when: facts => facts.onSiteDropped,
+    text: facts =>
+      `${facts.phaseLabel} makes ${facts.onSiteDropped!.items} centrally: the whole-machine lines of ${facts.onSiteDropped!.groups} need more than your budgets allow, while central lines fit. Shared lines. Shared conveyor belts. Shared disappointment. Raise a budget a little, or make fewer items on site.`,
   },
   {
     id: 'hours',

@@ -14,6 +14,8 @@ import { run } from './model.ts';
 import { draftStage } from './draft.ts';
 import { pullFinalPhaseForward, judgeAugmenterFuel } from './adjustments.ts';
 import { planWarnings } from './warnings.ts';
+import { stoppedSearch } from './rounding.ts';
+import { plannedSites, centralSettings } from './on-site.ts';
 
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
 // interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
@@ -96,7 +98,21 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
 // A whole-machine search that stops at its limit is rounded from the exact plan instead
 // (`roundStopped`, #593) in every attempt whose failure the draft would explain: under 'needed'
 // the attempt without conversion is followed by one with it, so only that one rounds.
+// When the factory groups' own whole-machine lines (#875) make the phase proven infeasible while
+// it fits with those items made centrally, it is planned that way instead (the owner's decision
+// on #875), last and for the whole phase, and the stage records `onSiteDropped`: as with
+// amplification and existing supply, an optional input never costs a plan that fits. A search
+// that only stopped at a limit keeps the lines, through the fallbacks of the two-step fit.
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
+  const result = solveGoal(config, phase);
+  if (result.feasible || stoppedSearch(result) || !config.wholeMachines) return result;
+  const sites = plannedSites(config, phase);
+  if (!Object.keys(sites).length) return result;
+  const central = solveGoal(centralSettings(config), phase);
+  return central.feasible ? { ...central, onSiteDropped: sites } : result;
+}
+// solvePhase's solve under the profile's goal and SAM conversion.
+function solveGoal(config: CurrentSettings, phase: number): RunResult {
   const maximised = config.goal === 'maximum' && phase >= 2;
   const retried = phase === 5 && config.sam === 'needed';
   let result = run(

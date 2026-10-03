@@ -105,6 +105,9 @@ export interface CurrentSettings {
   existingSupply: ItemRates;
   // Vehicle fuel for the factory-group links per phase (#206): { phase: { fuel: rate/min } }.
   transportFuel: Partial<Record<StageKey, ItemRates>>;
+  // The items factory groups make on site (#875): absent unless a recalculation the user started
+  // planned per-group lines.
+  onSite?: OnSiteSettings;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;
@@ -124,6 +127,22 @@ export interface CurrentSettings {
   limits: ItemRates;
   alternateRecipes: string[];
   preferredRecipes: string[];
+}
+
+// One factory group's part of settings.onSite (#875), keyed by group id: the items it makes on
+// site, its name when the plan was calculated (for the warnings), and per phase the share of each
+// plan row (by row id) its consumers take, worked out from its memberships when the user starts a
+// recalculation (onSiteSettings in public/app/on-site.ts).
+export interface OnSiteGroup {
+  name?: string;
+  items: string[];
+  shares: Partial<Record<StageKey, Record<string, number>>>;
+}
+export type OnSiteSettings = Record<string, OnSiteGroup>;
+// A per-group line's group and the recipe it is a copy of (#875).
+export interface OnSiteLine {
+  group: string;
+  recipe: string;
 }
 
 // The settings fields a plan frozen by the first release (2026-09-12) already had.
@@ -177,6 +196,8 @@ export interface CalcRow {
   slots?: number;
   amplified?: boolean;
   sloops?: number;
+  // A factory group's own line for an item it makes on site (#875; id '<recipe>:<group>').
+  onSite?: OnSiteLine;
 }
 
 // A delivery the stage must hand in, and the rate it is made at.
@@ -267,6 +288,9 @@ export interface StageResult {
   // items per minute; 'precise' the exact plan's own clocks). Absent from older plans and from a
   // search that finished.
   fractionalAfterStop?: FractionalAfterStop;
+  // The factory groups' own whole-machine lines (#875) did not fit this phase's budgets, so it
+  // makes those items centrally: { group id: items }. Absent otherwise and from older plans.
+  onSiteDropped?: Record<string, string[]>;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;

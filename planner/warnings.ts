@@ -105,6 +105,40 @@ function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
     );
   return warnings;
 }
+// Items factory groups make on site (#875): which groups make what, and the phases whose
+// per-group whole-machine lines did not fit, so they make those items centrally.
+function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
+  const warnings: string[] = [];
+  const groupName = (group: string) => config.onSite?.[group]?.name || 'a factory group';
+  const made: Record<string, Set<string>> = {};
+  for (const stage of Object.values(stages))
+    for (const row of stage.rows || [])
+      if (row.onSite)
+        for (const item of Object.keys(row.outputs))
+          if (config.onSite?.[row.onSite.group]?.items.includes(item))
+            (made[row.onSite.group] ??= new Set()).add(item);
+  // In the order of settings.onSite.
+  const makers = Object.keys(config.onSite || {})
+    .filter(group => made[group])
+    .map((group): [string, Set<string>] => [group, made[group]!]);
+  if (makers.length)
+    warnings.push(
+      `Factory groups make items on site: ${makers
+        .map(([group, items]) => `${groupName(group)} makes ${listNames([...items].sort())}`)
+        .join(
+          '; ',
+        )}. Each such group has its own whole-machine line, sized to its own consumers as the groups were when this plan was calculated, and a central line makes the rest.`,
+    );
+  for (const [phase, stage] of Object.entries(stages)) {
+    const dropped = Object.entries(stage.onSiteDropped || {});
+    if (!dropped.length) continue;
+    const items = [...new Set(dropped.flatMap(([, list]) => list))].sort();
+    warnings.push(
+      `Phase ${phase} makes ${listNames(items)} centrally: the whole-machine lines of ${listNames(dropped.map(([group]) => groupName(group)))} for ${items.length > 1 ? 'those items' : 'that item'} need more than your budgets allow, while central lines fit. Raise a budget a little, or make fewer items on site.`,
+    );
+  }
+  return warnings;
+}
 // The fueled augmenters' Alien Power Matrix line.
 function augmenterFuelWarnings({ config }: FinishedPlan): string[] {
   if (!config.fueledAugmenters) return [];
@@ -283,6 +317,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   amplificationWarnings,
   existingSupplyWarnings,
   vehicleFuelWarnings,
+  onSiteWarnings,
   augmenterFuelWarnings,
   unsinkableWarnings,
   budgetWarnings,
