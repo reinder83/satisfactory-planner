@@ -1,6 +1,7 @@
 // Buttons (.btn) are 44px touch targets on a phone (#765), and unchanged on wider screens.
 // Quiet buttons have their own phone rules: the text links keep their underline on the text
 // (#832). Tabs and the wizard's step tabs grow to 44px too, the storage slot ⠿/✕ to 24px (#838).
+// The storage "Move to…" select grows to 44px and a factory's ✕ per group to 24px wide (#842).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -112,4 +113,22 @@ test('wider screens are unchanged: none of these controls has a min-height outsi
   for (const rule of outsideRules())
     if (rule.selectors.some(s => [...quietLinks, ...otherTargets].includes(s)))
       assert.doesNotMatch(rule.body, /min-height/, rule.selectors.join(', '));
+});
+
+test('the storage "Move to…" select is 44px tall on a phone, height only (#842)', () => {
+  const body = phoneRule('.bay-actions .move-bay');
+  assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/);
+  assert.doesNotMatch(body, /min-width/);
+  for (const rule of outsideRules())
+    if (rule.selectors.includes('.bay-actions .move-bay'))
+      assert.doesNotMatch(rule.body, /min-height/);
+});
+
+test("a factory's ✕ per group is at least 24px wide on a phone, and unchanged on wider screens (#842)", () => {
+  const body = phoneRule('.assign-row .btn.quiet.danger');
+  const width = Number(/(?:^|[;\s])min-width:\s*(\d+)px\s*;/.exec(body)?.[1]);
+  assert.ok(width >= 24, `min-width ${width}px is at least WCAG 2.5.8's 24px`);
+  for (const rule of outsideRules())
+    if (rule.selectors.includes('.assign-row .btn.quiet.danger'))
+      assert.doesNotMatch(rule.body, /min-width/);
 });
