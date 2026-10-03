@@ -2208,11 +2208,19 @@ tr.muted td:first-child {
     min-height: 44px;
   }
 }
-/* "Move to…" on a bay while editing the layout (#190): sized like the buttons beside it. */
+/* "Move to…" on a bay while editing the layout (#190): sized and drawn like the buttons beside
+   it (#852), not as the browser's own grey control. Its option list takes the same dark
+   background and light text. */
 .bay-actions .move-bay {
   width: auto;
   font-size: 11.5px;
   padding: 5px 8px;
+  border: 1px solid #343b41;
+  background: #1e2225;
+  color: var(--ink);
+}
+.bay-actions .move-bay:hover {
+  border-color: var(--accent);
 }
 .bay-items {
   display: grid;
@@ -4835,6 +4843,7 @@ button.rail-tile:hover {
   .dialog-head .close,
   .slot-remove,
   .bay-rename,
+  .bay-actions .move-bay,
   .delivery input,
   .notes,
   .inline-form input,
