@@ -3053,7 +3053,9 @@ button.rail-tile:hover {
 .rail-row.more {
   border-style: dashed;
 }
-.rail-row .rail-link {
+/* A link to a factory's dialog ("Copper Ingot ↗"): in a flow row and in a group's build order
+   (GroupChainDialog.vue, .chain-title), which got the browser's grey button without it (#886). */
+.rail-link {
   background: none;
   border: 0;
   padding: 0;
@@ -3065,9 +3067,26 @@ button.rail-tile:hover {
   border-bottom: 1px solid rgba(248, 156, 28, 0.4);
   cursor: pointer;
 }
-.rail-row .rail-link:hover {
+.rail-link:hover {
   color: var(--accent-hi);
   border-bottom-color: var(--accent-hi);
+}
+/* On a phone the build order's links are 44px touch targets, like the quiet links of #832: height
+   only, with the underline moved onto the text so it stays under the words in the taller box. The
+   stage number takes the same line height, so it stays level with the link text beside it. */
+@media (max-width: 720px) {
+  .chain-title .rail-link {
+    min-height: 44px;
+    border-bottom: 0;
+    text-decoration: underline 1px rgba(248, 156, 28, 0.4);
+    text-underline-offset: 5px;
+  }
+  .chain-title .rail-link:hover {
+    text-decoration-color: var(--accent-hi);
+  }
+  .chain-no {
+    line-height: 44px;
+  }
 }
 .rail-mach {
   flex: none;

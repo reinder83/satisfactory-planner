@@ -3,6 +3,8 @@
 // (#832). Tabs and the wizard's step tabs grow to 44px too, the storage slot ⠿/✕ to 24px (#838).
 // The storage "Move to…" select grows to 44px and a factory's ✕ per group to 24px wide (#842).
 // The "Move to…" select is drawn like the bay buttons beside it (#852).
+// A factory link ("Copper Ingot ↗") is drawn as a link wherever it is, and in a group's build
+// order it is a 44px target on a phone (#886).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -150,4 +152,32 @@ test('the storage "Move to…" select is drawn like the bay buttons beside it (#
   // option list must not end up dark text on the dark background.
   assert.ok(select.border && select.background && select.color, JSON.stringify(select));
   assert.deepEqual(select, look(declarations('.bay-actions .btn.quiet')));
+});
+
+test('a factory link is drawn as an accent link everywhere, not only in a flow row (#886)', () => {
+  // Without a rule of its own the build order's link was the browser's grey button.
+  const body = outsideRules()
+    .filter(r => r.selectors.includes('.rail-link'))
+    .map(r => r.body)
+    .join('\n');
+  assert.ok(body, 'style.css has a rule for .rail-link on its own');
+  assert.match(body, /(?:^|[;\s])background:\s*none\s*;/);
+  assert.match(body, /(?:^|[;\s])border:\s*0\s*;/);
+  assert.match(body, /(?:^|[;\s])color:\s*var\(--accent\)\s*;/);
+  assert.match(body, /(?:^|[;\s])border-bottom:\s*1px solid/);
+  // One look in both places: no rule draws the flow row's link apart from the others.
+  for (const rule of [...outsideRules(), ...phoneRules()])
+    assert.ok(!rule.selectors.includes('.rail-row .rail-link'), rule.selectors.join(', '));
+});
+
+test("the build order's factory links are 44px tall on a phone, height only (#886)", () => {
+  const body = phoneRule('.chain-title .rail-link');
+  assert.match(body, /(^|[;\s])min-height:\s*44px\s*;/);
+  assert.doesNotMatch(body, /min-width/);
+  // The underline stays on the text in the taller box, as for the quiet links (#832).
+  assert.match(body, /border-bottom:\s*0\s*;/);
+  assert.match(body, /text-decoration:\s*underline\b/);
+  for (const rule of outsideRules())
+    if (rule.selectors.some(s => s.endsWith('.rail-link')))
+      assert.doesNotMatch(rule.body, /min-height/, rule.selectors.join(', '));
 });
