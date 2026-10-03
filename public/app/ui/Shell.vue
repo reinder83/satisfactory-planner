@@ -15,7 +15,9 @@
   profiles page's Open, so it asks about unsaved notes first; signing out is the account page's
   signOut. The pages go through the address, as a sidebar link does, so the hash route asks too.
   Focus stays on the switcher after its choice, as it does on a followed sidebar link (the frame
-  stays).
+  stays). A long name shows one line, cut with an ellipsis (#792), so it never makes the sidebar
+  scroll; the whole name stays in the button's text (its accessible name), in its title, in the
+  menu and on the profiles page.
 
   At 720px and below (SP-37, #272) the sidebar is a drawer: a compact top bar holds ☰, the brand
   mark, the breadcrumb, the phase picker and the save status, and ☰ opens the sidebar full
@@ -360,8 +362,11 @@ async function pickTrack(event: Event) {
               height="14"
             >
               <path d="M1.5 5 5 1.5 8.5 5M1.5 9 5 12.5 8.5 9" /></svg
-            ><template v-for="(line, i) in frame.footer" :key="i"
-              ><br v-if="i" />{{ line }}</template
+            ><span class="profile-switcher-name" :title="frame.footer[0]">{{
+              frame.footer[0]
+            }}</span
+            ><template v-for="(line, i) in frame.footer.slice(1)" :key="i"
+              ><br />{{ line }}</template
             ></template
           >
           <div
