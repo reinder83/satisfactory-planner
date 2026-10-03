@@ -80,7 +80,7 @@ The Docker `planner-data` volume stores `/data/workspace.json`: accounts, named 
 - **Backup** exports the current profile’s progress. Restore only to its matching profile; other profiles are untouched.
 - For a complete backup, stop the container and back up its data volume, including `workspace.json`. This contains password hashes and session records; keep the backup private.
 - `workspace.json.bak` retains the previous successful workspace write. Writes are serialized and atomically replaced. Corrupted data causes startup to fail rather than silently reset progress.
-- `progress.json` remains the pre-migration backup and is no longer the live store. Another copy of `workspace.json` in the volume, when present, is the workspace as it was before an update migrated it; the planner keeps it as a backup and never reads it. Do not run old and new planner versions simultaneously against one volume.
+- `progress.json` remains the pre-migration backup and is no longer the live store. A `workspace.json.*` file other than `workspace.json.bak` and `workspace.json.tmp`, when present, is the workspace as it was before an update migrated it; the planner keeps it as a backup and never reads it. Do not run old and new planner versions simultaneously against one volume.
 
 ## Moving between Docker and the browser edition
 
