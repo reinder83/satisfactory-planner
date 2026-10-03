@@ -2,6 +2,7 @@
 // Quiet buttons have their own phone rules: the text links keep their underline on the text
 // (#832). Tabs and the wizard's step tabs grow to 44px too, the storage slot ⠿/✕ to 24px (#838).
 // The storage "Move to…" select grows to 44px and a factory's ✕ per group to 24px wide (#842).
+// The "Move to…" select is drawn like the bay buttons beside it (#852).
 // Layout is not measurable in happy-dom, so this checks the rule in style.css.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -131,4 +132,22 @@ test("a factory's ✕ per group is at least 24px wide on a phone, and unchanged 
   for (const rule of outsideRules())
     if (rule.selectors.includes('.assign-row .btn.quiet.danger'))
       assert.doesNotMatch(rule.body, /min-width/);
+});
+
+test('the storage "Move to…" select is drawn like the bay buttons beside it (#852)', () => {
+  const declarations = (selector: string) =>
+    outsideRules()
+      .filter(r => r.selectors.includes(selector))
+      .map(r => r.body)
+      .join('\n');
+  const look = (body: string) => ({
+    border: /(?:^|[;\s])border:\s*([^;]+);/.exec(body)?.[1]?.trim(),
+    background: /(?:^|[;\s])background:\s*([^;]+);/.exec(body)?.[1]?.trim(),
+    color: /(?:^|[;\s])color:\s*([^;]+);/.exec(body)?.[1]?.trim(),
+  });
+  const select = look(declarations('.bay-actions .move-bay'));
+  // Without its own border and background the browser draws a light grey control, and its
+  // option list must not end up dark text on the dark background.
+  assert.ok(select.border && select.background && select.color, JSON.stringify(select));
+  assert.deepEqual(select, look(declarations('.bay-actions .btn.quiet')));
 });
