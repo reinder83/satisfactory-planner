@@ -3440,15 +3440,18 @@ button.rail-tile:hover {
 }
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
    with the underline moved onto the text so it stays under the words in the taller box (#886).
+   So are the factory links in a factory dialog's flow rows (#891); their row grows around them.
    The line number takes the same line height, so it stays level with the link text beside it. */
 @media (max-width: 720px) {
-  .gf-head .rail-link {
+  .gf-head .rail-link,
+  .rail-row .rail-link {
     min-height: 44px;
     border-bottom: 0;
     text-decoration: underline 1px var(--accent-sh);
     text-underline-offset: 5px;
   }
-  .gf-head .rail-link:hover {
+  .gf-head .rail-link:hover,
+  .rail-row .rail-link:hover {
     text-decoration-color: var(--accent-hi);
   }
   .gf-head .chain-no {
