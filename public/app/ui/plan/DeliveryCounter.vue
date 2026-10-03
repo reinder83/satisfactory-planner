@@ -1,29 +1,25 @@
 <!--
   One Space Elevator delivery counter on the build plan. `delivery` is { id, name, target,
-  rate, initial }: a handbook delivery from plan.json, or a calculated one with the id
-  `<stage>-<item slug>` and initial 0. An unsaved count falls back to `initial` only on an
-  original (handbook) profile, by kind rather than id, so a duplicated or imported copy does
-  too. A committed entry must be a whole number from 0 to the target; an invalid one, or a
-  failed write, puts the saved count back.
+  rate }: a calculated plan's delivery, with the id `<stage>-<item slug>`. An unsaved count is 0
+  (a profile migrated from the handbook had the handbook's starting counts written as saved
+  counts by the migration, #387). A committed entry must be a whole number from 0 to the target;
+  an invalid one, or a failed write, puts the saved count back.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { save, toast } from '../../api.ts';
 import { duration, num } from '../../format.ts';
-import { currentProfile, state } from '../../session.ts';
+import { state } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
 import { leave, settle, useDraft } from '../draft.ts';
 
-// A delivery of the current phase: a handbook one (with the amount handed in when the
-// handbook was written) or a calculated plan's.
+// A delivery of the current phase in the calculated plan.
 const props = defineProps<{
-  delivery: { id: string; name: string; target: number; rate: number; initial?: number };
+  delivery: { id: string; name: string; target: number; rate: number };
 }>();
 
-const saved = () =>
-  state.deliveries[props.delivery.id] ??
-  (currentProfile.kind === 'original' ? (props.delivery.initial ?? 0) : 0);
+const saved = () => state.deliveries[props.delivery.id] ?? 0;
 
 const counter = computed(() =>
   legacy(() => {

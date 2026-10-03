@@ -12,7 +12,11 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { mutate } from '../../public/state.ts';
-import { handbookToPlan, type HandbookConversion } from '../../public/handbook-migration.ts';
+import {
+  handbookToPlan,
+  migrateHandbookState,
+  type HandbookConversion,
+} from '../../public/handbook-migration.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
 import type { View } from '../../public/app/session.ts';
 import type {
@@ -123,10 +127,13 @@ export function answerConfirms(reply: boolean | ((question: string) => boolean))
   return asked;
 }
 
-// Opens the handbook profile (calculated: false), a small calculated one (true) or the
-// given calculated plan. `workspace` and `state` fields override the defaults.
+// Opens the handbook profile (calculated: false), a small calculated one (true), the given
+// calculated plan, or a profile migrated from the handbook (migrated: true, the plan of
+// migratedPlan() below). `workspace` and `state` fields override the defaults. The handbook
+// stays the default until the last handbook pages go (#800).
 interface OpenOptions {
   name?: string;
+  migrated?: boolean;
   calculated?: boolean | StoredCalculatedPlan;
   phase?: Phase;
   // The original profile's id: a duplicated or imported copy has its own.
@@ -137,7 +144,8 @@ interface OpenOptions {
 }
 export function open({
   name = evil,
-  calculated = false,
+  migrated = false,
+  calculated = migrated ? migratedPlan() : false,
   phase = '3',
   profileId = 'original',
   notes = {},
@@ -207,14 +215,31 @@ export function open({
 // calculated plan with a guide, as the migration stores it, made once per test file.
 // `migratedRow(id, stage)` is the row a handbook factory became in a phase: its checks are
 // calc-<stage>-<row id> and its note factory-<row id>. `openMigrated` opens it like open().
+// `migratedState(state)` is the progress a handbook profile's `state` becomes in the migration
+// (migrateHandbookState): handbook factory keys re-keyed, and the handbook's starting delivery
+// counts and known checks written where none is saved.
 let transcription: HandbookConversion | undefined;
 export const transcribed = (): HandbookConversion =>
   (transcription ??= handbookToPlan(handbook, recipes, catalog().pureLimits));
 export const migratedPlan = () => structuredClone(transcribed().plan);
 export const migratedRow = (factoryId: string, stage = '3') =>
   transcribed().rows[stage]![factoryId]!;
-export const openMigrated = (options: OpenOptions = {}) =>
-  open({ calculated: migratedPlan(), ...options });
+export const openMigrated = (options: OpenOptions = {}) => open({ migrated: true, ...options });
+export const migratedState = (progress: Partial<ProgressState> = {}): ProgressState =>
+  migrateHandbookState(
+    {
+      version: 1,
+      revision: 0,
+      settings: { phase: '3' },
+      checks: {},
+      notes: {},
+      deliveries: {},
+      customTasks: [],
+      ...progress,
+    } as ProgressState,
+    handbook,
+    transcribed(),
+  );
 
 export function go(view: View) {
   setView(view);

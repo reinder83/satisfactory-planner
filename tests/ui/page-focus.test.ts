@@ -18,7 +18,7 @@ import {
   catalog,
   generated,
   go,
-  handbook,
+  migratedPlan,
   open,
   page,
   stubFetch,
@@ -54,13 +54,13 @@ const onHash = () => {
 beforeAll(() => window.addEventListener('hashchange', onHash));
 afterAll(() => window.removeEventListener('hashchange', onHash));
 
-// The handbook profile as /api/context answers it, with the state open() gave the page.
+// The profile migrated from the handbook (#387) as /api/context answers it, with the state
+// open() gave the page.
 const original = (name: string): ContextReply => ({
   save: { id: 's', name: 'World' },
-  profile: { id: 'original', kind: 'original', name },
+  profile: { id: 'original', kind: 'calculated', name },
   state: structuredClone(state),
-  plan: null,
-  handbook,
+  plan: migratedPlan(),
 });
 
 // Shows `route` the way a route does: the address first, then the page.
@@ -100,11 +100,13 @@ beforeEach(() => {
 });
 
 test('every page heading can take focus by script, not by Tab', () => {
+  open({ migrated: true, workspace: { catalog: catalog() } });
   show('plan');
   assert.equal($('#main h1')!.getAttribute('tabindex'), '-1');
 });
 
 test('the first page drawn leaves focus where it is', () => {
+  open({ migrated: true, workspace: { catalog: catalog() } });
   show('plan');
   assert.equal(focused(), document.body);
 });
@@ -116,7 +118,7 @@ test('Open profile moves focus to the heading of the plan it opens', async () =>
   assert.equal(view, 'plan');
   assert.equal(location.hash, '#plan');
   assert.ok(onHeading(), describeFocus());
-  assert.equal(heading(), 'Phase 3 field plan');
+  assert.equal(heading(), 'Phase 3');
 });
 
 test('Duplicate moves focus to the heading of the copy’s plan', async () => {
@@ -192,7 +194,7 @@ test('a link inside the page moves focus to the heading of the page it opens', a
 });
 
 test('the plan’s "Phase notes →" opens the Notes page and focuses its heading (#243)', async () => {
-  for (const calculated of [false, generated()]) {
+  for (const calculated of [migratedPlan(), generated()]) {
     open({ calculated, workspace: { catalog: catalog() } });
     show('plan');
     const link = $<HTMLAnchorElement>('#main [data-phase-notes-link]')!;

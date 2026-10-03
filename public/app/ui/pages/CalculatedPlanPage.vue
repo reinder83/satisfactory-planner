@@ -94,7 +94,6 @@ const page = computed(() =>
         id: stage() + '-' + slug(item),
         name: item,
         ...delivery,
-        initial: 0,
       })),
       warnings: calculated.warnings,
     };

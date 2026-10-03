@@ -10,7 +10,7 @@ import { adaClearFault, setAdaIndex, setAdaMuted } from '../../public/app/ada-pa
 import { setContext, setView, setWorkspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
-import { $, $$, handbook } from './setup.ts';
+import { $, $$, handbook, migratedPlan } from './setup.ts';
 import type { ProgressState, TaskEdits, WorkspaceSummary } from '../../public/types/index.ts';
 
 // A step title long enough to make ADA's first remark well over 240 characters.
@@ -18,13 +18,16 @@ const longTitle =
   'Build the north-east iron outpost with its own coal generators, a train station for the ' +
   'screws and rotors, and a second floor reserved for the steel line that comes in Phase 4';
 
+// A profile migrated from the handbook (#387), whose guide keeps the handbook's steps.
 function open() {
   // Partial fixtures: only the fields the frame reads.
   setWorkspace({
     user: { id: 'owner', username: 'Pioneer' },
     accountsEnabled: false,
     catalog: {},
-    saves: [{ id: 's', name: 'Save', profiles: [{ id: 'original', kind: 'original', name: 'P' }] }],
+    saves: [
+      { id: 's', name: 'Save', profiles: [{ id: 'original', kind: 'calculated', name: 'P' }] },
+    ],
   } as WorkspaceSummary);
   const plan = handbook.phases['3']!;
   const state: Partial<ProgressState> = {
@@ -37,10 +40,9 @@ function open() {
   };
   setContext({
     save: { id: 's', name: 'Save' },
-    profile: { id: 'original', kind: 'original', name: 'P' },
+    profile: { id: 'original', kind: 'calculated', name: 'P' },
     state: state as ProgressState,
-    plan: null,
-    handbook,
+    plan: migratedPlan(),
   });
 }
 

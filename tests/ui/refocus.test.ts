@@ -69,8 +69,10 @@ beforeEach(() => {
   answerConfirms(true);
 });
 
+// The build plan's steps on a profile migrated from the handbook (#387).
 test('removing a step moves focus to the next step’s Remove, else the previous one', async () => {
   stubFetch({ '/api/update': applyUpdate });
+  openMigrated();
   go('plan');
   setPlanEditing(true);
   render();
@@ -89,6 +91,7 @@ test('removing a step moves focus to the next step’s Remove, else the previous
 
 test('removing the only step shown moves focus to the personal task field', async () => {
   stubFetch({ '/api/update': applyUpdate });
+  openMigrated();
   go('plan');
   setPlanEditing(true);
   // The search leaves one step on screen.
@@ -108,7 +111,7 @@ test('deleting a personal task moves focus to the next step’s summary, or its 
     phase: '3' as const,
     title: 'Task ' + name,
   }));
-  open({ state: { customTasks } });
+  openMigrated({ state: { customTasks } });
   go('plan');
   render();
   // Outside edit mode Delete sits in the task's details; the next task's is in closed details.
@@ -252,6 +255,7 @@ test('removing a profile moves focus to the next profile’s ⋯ menu', async ()
 });
 
 test('Cancel, or a removal that fails, leaves focus on the control that asked', async () => {
+  openMigrated();
   go('plan');
   setPlanEditing(true);
   render();
@@ -276,7 +280,7 @@ test('Restore on a removed step moves focus to the next Restore, else the previo
   const taskEdits: Partial<TaskEdits> = {
     removed: ['phase-3-survey', 'phase-3-iron', 'phase-3-retire-power'],
   };
-  open({ state: { taskEdits: taskEdits as TaskEdits } });
+  openMigrated({ state: { taskEdits: taskEdits as TaskEdits } });
   go('plan');
   setPlanEditing(true);
   render();

@@ -7,10 +7,11 @@ import { beforeEach, test } from 'vitest';
 import { setHideDone, setQuery, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { generatedTasks, planTasks, withNewSteps } from '../../public/app/tasks.ts';
-import { $, $$, generated, go, open, page, stubFetch } from './setup.ts';
+import { $, $$, generated, go, open, openMigrated, page, stubFetch } from './setup.ts';
 import type { TaskEdits } from '../../public/types/index.ts';
 
-// The handbook's Phase 3 steps in their generated order.
+// The Phase 3 steps of a profile migrated from the handbook (#387), in their generated order:
+// the guide keeps the handbook's steps and ids.
 const [survey, retire, iron, construction, steel, oil, mechanical, project, delivery] = [
   'phase-3-survey',
   'phase-3-retire-power',
@@ -26,17 +27,17 @@ const [survey, retire, iron, construction, steel, oil, mechanical, project, deli
 const ids = () => planTasks().map(t => t.id);
 const shown = () => $$('#main .checklist [data-check]').map(e => e.dataset.check);
 const withEdits = (edits: Partial<TaskEdits>, extra: object = {}) =>
-  open({ state: { taskEdits: edits as TaskEdits, ...extra } });
+  openMigrated({ state: { taskEdits: edits as TaskEdits, ...extra } });
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setHideDone(false);
   go('plan');
 });
 
-test('the handbook phase 3 steps are the ones these tests name', () => {
+test('the migrated phase 3 steps are the ones these tests name', () => {
   assert.deepEqual(
     generatedTasks('3').map(t => t.id),
     [survey, retire, iron, construction, steel, oil, mechanical, project, delivery],

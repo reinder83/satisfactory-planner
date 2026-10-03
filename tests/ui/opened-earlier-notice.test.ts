@@ -9,7 +9,7 @@ import { phaseStepIds } from '../../public/app/opening-phase.ts';
 import { loadContext, openedFrom, phase, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
-import { $, applyUpdate, generatedWith, handbook, open, page, stubFetch } from './setup.ts';
+import { $, applyUpdate, generatedWith, migratedPlan, open, page, stubFetch } from './setup.ts';
 import type {
   ContextReply,
   CurrentCalculatedPlan,
@@ -128,14 +128,13 @@ test('picking the saved phase on the phase track also takes the notice away', as
   assert.equal(notice(), null);
 });
 
-test('the handbook, saved on Phase 5 and opened on Phase 3, shows the notice too', async () => {
+test('a profile migrated from the handbook, saved on Phase 5 and opened on Phase 3, shows the notice too', async () => {
   open();
   await openThrough({
     save: { id: 's', name: 'Save' },
-    profile: { id: 'original', kind: 'original', name: 'Handbook' },
+    profile: { id: 'original', kind: 'calculated', name: 'Handbook' },
     state: { ...structuredClone(state), settings: { phase: '5' }, checks: {}, customTasks: [] },
-    plan: null,
-    handbook,
+    plan: migratedPlan(),
   });
   assert.equal(phase(), '3');
   assert.match(

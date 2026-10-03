@@ -1349,7 +1349,10 @@ test('a calculated page survives a redraw after the handbook is opened', async (
       await new Promise(resolve => setTimeout(resolve, 0));
       render();
       await nextTick();
-      assert.ok($('#main h1'), view + ' shows the handbook page after render()');
+      // The build plan has no handbook page any more (#799): the calculated one stays and draws
+      // nothing for a profile without a calculated plan.
+      if (view === 'plan') assert.equal($('#main h1'), null, 'plan draws nothing after render()');
+      else assert.ok($('#main h1'), view + ' shows the handbook page after render()');
     }
   } finally {
     process.off('unhandledRejection', onError);

@@ -52,7 +52,9 @@ import {
 } from '../public/state.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { calculate, catalog } from '../planner.ts';
+import { handbookToPlan } from '../public/handbook-migration.ts';
 import { appSource } from './helpers/app-source.ts';
+import { handbook, recipes } from './helpers/data.ts';
 import type { calcExpansion } from '../public/app/views/calculated.ts';
 const source = appSource();
 function ui() {
@@ -206,6 +208,12 @@ test('machine instructions separate total, full-speed and adjustable machines', 
 // components, tested in tests/ui/factories.test.ts.
 test('ADA comments on the plan from the sidebar and can be muted', () => {
   const context = ui();
+  // A profile migrated from the handbook (#387): its guide keeps the handbook's steps.
+  context.migrated = handbookToPlan(handbook, recipes, catalog().pureLimits).plan;
+  vm.runInContext(
+    "calculated=migrated;currentProfile={id:'original',kind:'calculated',name:'Original'};",
+    context,
+  );
   // What the panel shows; its markup is covered by tests/ui/shell.test.ts.
   const ada = () => JSON.parse(vm.runInContext('JSON.stringify(adaView())', context));
   const panel = ada();
@@ -251,7 +259,11 @@ test('ADA comments on the plan from the sidebar and can be muted', () => {
   assert.equal(openDeliveries(), 2);
   vm.runInContext("currentProfile={id:'copy-uuid',kind:'original',name:'Copy'};", context);
   assert.equal(openDeliveries(), 2, 'a copied original profile starts from the handbook counts');
-  vm.runInContext("currentProfile={id:'original',kind:'original',name:'Original'};", context);
+  // Back to the migrated profile, whose remarks were seen above.
+  vm.runInContext(
+    "calculated=migrated;currentProfile={id:'original',kind:'calculated',name:'Original'};",
+    context,
+  );
   // Cycling past the last remark is answered rather than silently repeated.
   const count = vm.runInContext('adaCurrent();adaRemarks(adaFacts()).length', context);
   assert.match(

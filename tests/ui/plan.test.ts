@@ -1,6 +1,7 @@
-// The build plan on both profile kinds (public/app/ui/pages/PlanPage.vue and
-// CalculatedPlanPage.vue, with their parts in public/app/ui/plan/), mounted through render()
-// the way the app mounts them, in happy-dom.
+// The build plan (public/app/ui/pages/CalculatedPlanPage.vue, with its parts in
+// public/app/ui/plan/) on a calculated profile and on a profile migrated from the retired
+// handbook (#387, whose guide keeps the handbook's step ids), mounted through render() the way
+// the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
 import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
 import { nextTick } from 'vue';
@@ -24,7 +25,9 @@ import {
   generated as makeGenerated,
   go,
   handbook,
+  migratedPlan,
   migratedRow,
+  migratedState,
   open,
   openMigrated,
   page,
@@ -56,18 +59,18 @@ const kindOf = (title: string) =>
 
 beforeEach(() => {
   page();
-  open();
+  openMigrated();
   setQuery('');
   setHideDone(false);
   answerConfirms(true);
   go('plan');
 });
 
-test('the handbook plan shows the phase checklist, counters, notes link and deliveries', () => {
-  open({ notes: { 'phase-3': evil + '\n  second line' } });
+test('the migrated plan shows the phase checklist, counters, notes link and deliveries', () => {
+  openMigrated({ notes: { 'phase-3': evil + '\n  second line' }, state: migratedState() });
   render();
   noMarkup();
-  assert.equal($('#main h1')!.textContent, 'Phase 3 field plan');
+  assert.equal($('#main h1')!.textContent, 'Phase 3');
   assert.equal($$('#main .checklist .task').length, 9);
   // SP-43: one progress indicator, the bar with "n of total done"; the tiles are one line.
   assert.equal($('[data-plan-progress]')!.textContent, '0 of 9 done');
@@ -84,13 +87,13 @@ test('the handbook plan shows the phase checklist, counters, notes link and deli
   assert.equal(
     $<HTMLInputElement>(`#delivery-${deliveries[0]!.id}`)!.value,
     String(deliveries[0]!.initial),
-    'the original profile starts from the handbook counts',
+    'the migrated profile starts from the handbook counts the migration saved',
   );
 });
 
 // SP-43 (#278): progress shows once, as the bar with "n of total done"; the four tiles became
 // one summary line whose parts link to their pages.
-test('the plan shows one progress bar and a summary line linking to each page (SP-43)', () => {
+test('the plan shows one progress bar and a summary line linking to each page (SP-43)', async () => {
   const summary = () =>
     $$('#main [data-plan-summary] li').map(li => [
       li.dataset.summary,
@@ -98,7 +101,7 @@ test('the plan shows one progress bar and a summary line linking to each page (S
       li.textContent!.trim(),
     ]);
   state.checks['phase-3-survey'] = true;
-  state.checks['factory-3-wire'] = true;
+  state.checks['calc-3-' + migratedRow('wire')] = true;
   render();
   const bar = $('#main .plan-progress [role=progressbar]')!;
   assert.equal(bar.getAttribute('aria-valuenow'), '1');
@@ -108,22 +111,26 @@ test('the plan shows one progress bar and a summary line linking to each page (S
   // (The side column's delivery counters keep their own bars.)
   assert.equal($$('#main .split > section .progress-track').length, 1, 'one checklist bar');
   assert.ok(!$('#main')!.textContent!.includes('% complete'), 'no percentage beside it');
-  const handbookSummary = summary();
+  // Its lines and buildings, storage, new power and the delivery time, which has no page of
+  // its own.
+  const migratedSummary = summary();
   assert.deepEqual(
-    handbookSummary.map(([key, href]) => [key, href]),
+    migratedSummary.map(([key, href]) => [key, href]),
     [
       ['factories', '#factories'],
       ['storage', '#storage'],
       ['power', '#resources'],
+      ['hours', null],
     ],
   );
-  assert.match(handbookSummary[0]![2]!, /^1 of \d+ factories running$/);
-  assert.match(handbookSummary[1]![2]!, /^0 of \d+ storage positions verified$/);
-  assert.match(handbookSummary[2]![2]!, / GW planned power$/);
-  // The calculated plan: the same bar, its lines and buildings, storage, new power and the
-  // delivery time, which has no page of its own.
+  assert.match(migratedSummary[0]![2]!, /^1 of \d+ production lines running, [\d,.]+ buildings$/);
+  assert.match(migratedSummary[1]![2]!, /^0 of \d+ storage positions verified$/);
+  assert.match(migratedSummary[2]![2]!, / new power$/);
+  // A calculated plan: the same bar and summary. (The page is already shown, so it updates
+  // on the next tick.)
   open({ calculated: generated });
   render();
+  await nextTick();
   assert.ok($('#main .plan-progress [role=progressbar]'));
   assert.equal($('#main .stat'), null);
   const calculatedSummary = summary();
@@ -158,19 +165,44 @@ test('the plan header writes the delivery time in hours and minutes', () => {
   assert.equal(hoursText(0.75), 'Delivery in 45 minutes at steady state');
 });
 
-test('a duplicated or imported original profile also starts from the handbook counts', () => {
-  open({ profileId: 'copy-uuid' });
+// The handbook's starting counts are saved progress once migrated (#387): the counter shows the
+// saved count, and one with none saved starts at 0 rather than at the handbook's figure.
+test('a migrated profile counts deliveries from its saved counts, else 0', async () => {
+  const deliveries = handbookDeliveries('3'),
+    saved = migratedState();
+  assert.ok(
+    deliveries.some(d => d.initial > 0),
+    'the handbook handed some in already',
+  );
+  openMigrated({ state: saved });
   render();
-  for (const delivery of handbookDeliveries('3'))
-    assert.equal($<HTMLInputElement>(`#delivery-${delivery.id}`)!.value, String(delivery.initial));
+  for (const delivery of deliveries)
+    assert.equal(
+      $<HTMLInputElement>(`#delivery-${delivery.id}`)!.value,
+      String(saved.deliveries[delivery.id] ?? 0),
+    );
+  openMigrated();
+  render();
+  await nextTick();
+  for (const delivery of deliveries)
+    assert.equal($<HTMLInputElement>(`#delivery-${delivery.id}`)!.value, '0');
 });
 
-test('post-game reads the Phase 5 stage and swaps deliveries for its priority note', () => {
-  open({ phase: 'post' });
+test('post-game reads the Phase 5 stage and adds its priority notice', () => {
+  openMigrated({ phase: 'post' });
   render();
-  assert.equal($('#main h1')!.textContent, 'Post Phase 5 field plan');
-  assert.equal($$('#main [data-delivery]').length, 0);
-  assert.ok($$('#main .panel h2').some(h => h.textContent === 'Post-game priority'));
+  assert.equal($('#main h1')!.textContent, 'Post Phase 5');
+  assert.match($('#main .notice.info')!.textContent, /Retain these Phase 5 capacities/);
+  assert.deepEqual(
+    steps(),
+    handbook.phases.post!.map(step => step.id),
+    "the guide's post-game steps",
+  );
+  assert.equal(
+    $$('#main [data-delivery]').length,
+    Object.keys(migratedPlan().stages['5']!.delivery!).length,
+    "Phase 5's deliveries",
+  );
 });
 
 test('the checklist can be searched and can hide completed steps', async () => {
@@ -328,10 +360,10 @@ test('"Hide completed" survives a page refresh', async () => {
   assert.equal(await fresh(), false, 'off by default');
 });
 
-test('every step carries an icon for its kind of work, or the part it makes', () => {
+test('every step carries an icon for its kind of work, or the part it makes', async () => {
   // Only the edits this test needs; the plan reads the other fields as absent.
-  const taskEdits: Partial<TaskEdits> = { links: { 'phase-3-steel': 'wire' } };
-  open({ state: { taskEdits: taskEdits as TaskEdits } });
+  const taskEdits: Partial<TaskEdits> = { links: { 'phase-3-steel': migratedRow('wire') } };
+  openMigrated({ state: { taskEdits: taskEdits as TaskEdits } });
   render();
   assert.equal($$('#main .checklist .task-icon').length, 9);
   assert.equal(kindOf('Survey the iron site'), 'survey');
@@ -345,6 +377,7 @@ test('every step carries an icon for its kind of work, or the part it makes', ()
     assert.ok(glyph.innerHTML.includes('<'), 'every glyph resolves');
   open({ calculated: generated, phase: '3' });
   render();
+  await nextTick();
   assert.equal(kindOf('Tier '), 'milestone', 'HUB milestones read as unlocks');
   assert.equal(kindOf('Turn leaves and wood into Biomass'), 'biomass');
   assert.equal(kindOf('Power available now'), 'power');
@@ -439,7 +472,7 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
 test('a declined confirmation removes nothing', async () => {
   const calls = stubFetch({ '/api/update': () => state });
   answerConfirms(false);
-  open({
+  openMigrated({
     state: { customTasks: [{ id: 'custom-1', phase: '3', title: 'Mine' }] },
   });
   render();
@@ -470,6 +503,7 @@ test('adding a personal task saves it and empties the form', async () => {
 
 test('a delivery count must be a whole number up to the target', async () => {
   const calls = stubFetch({ '/api/update': () => state });
+  openMigrated({ state: migratedState() });
   render();
   const delivery = handbookDeliveries('3')[0]!;
   const input = $<HTMLInputElement>(`#delivery-${delivery.id}`)!;
@@ -491,7 +525,7 @@ test('a delivery count must be a whole number up to the target', async () => {
 
 test('with completed steps hidden, moving a step passes the neighbour on screen', async () => {
   const calls = stubFetch({ '/api/update': () => state });
-  open({ state: { checks: { 'phase-3-iron': true } } });
+  openMigrated({ state: { checks: { 'phase-3-iron': true } } });
   setHideDone(true);
   render();
   $('[data-toggle-plan-edit]')!.click();
@@ -523,7 +557,7 @@ test('a cleared step title restores the original, and an automatic link can be r
     return $<HTMLFormElement>(`[data-task-edit="${id}"]`)!;
   };
   const retitled: Partial<TaskEdits> = { titles: { 'phase-3-iron': 'Iron halls' } };
-  open({ state: { taskEdits: retitled as TaskEdits } });
+  openMigrated({ state: { taskEdits: retitled as TaskEdits } });
   render();
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
@@ -578,7 +612,7 @@ test('reordering keeps a removed step’s place, so restoring it puts it back', 
         : state,
   });
   const removed: Partial<TaskEdits> = { removed: ['phase-3-retire-power'] };
-  open({ state: { taskEdits: removed as TaskEdits } });
+  openMigrated({ state: { taskEdits: removed as TaskEdits } });
   render();
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
@@ -598,7 +632,7 @@ test('a reorder keeps the saved order within its 600-id limit', async () => {
   const ghosts = Array.from({ length: 600 }, (_, i) => 'gone-' + i);
   const real = planTasks().map(t => t.id);
   const full: Partial<TaskEdits> = { order: { '3': [...ghosts, ...real] }, removed: [real[0]!] };
-  open({ state: { taskEdits: full as TaskEdits } });
+  openMigrated({ state: { taskEdits: full as TaskEdits } });
   render();
   $('[data-toggle-plan-edit]')!.click();
   await nextTick();
@@ -691,9 +725,9 @@ test('the power headroom notice speaks of the phase shown, on every phase', () =
         assert.ok(text.includes(machine + 's'), `${label} names ${machine}: ${text}`);
     }
   }
-  // The handbook profile has no calculated power figures, so it draws no such notice.
+  // A profile migrated from the handbook has no calculated headroom, so it draws no such notice.
   page();
-  open();
+  openMigrated();
   go('plan');
   render();
   assert.equal(headroom(), undefined);
@@ -736,7 +770,7 @@ const handbookDeliveries = (phase: string): HandbookDelivery[] =>
   handbook.deliveries.filter((d: HandbookDelivery) => d.phase === phase);
 
 test('a step edit refused as stale keeps what was typed while the page catches up', async () => {
-  open();
+  openMigrated();
   state.revision = 7;
   render();
   // The other tab retitled the same step; this tab still shows the old wording.
