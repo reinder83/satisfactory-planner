@@ -4,8 +4,8 @@
   outputs (→), each with its item, where it comes from or goes, its rate and, under the rate,
   the belts or pipes it takes. Every row reaches the card's left border, where the page draws
   the lanes: a row's name (.gf-name) is what its dot or arrowhead points at, and each row
-  carries its id in the flow as data-row. An input row fed only from outside the group has a
-  blue side bar instead of an arrow.
+  carries its id in the flow as data-row. An input row fed from outside the group and by no
+  other line of it has a blue side bar instead of an arrow; one fed only by itself has neither.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -31,9 +31,10 @@ const machines = computed(() => {
   // A split row: the group's share of the machines.
   return line.share < 1 - 1e-6 ? `≈ ${num(line.machinesHere)} of ${all}` : all;
 });
-// An input row with no link from another line of the group: fed only from outside it (or by
-// itself).
-const fromOutside = (row: FlowRow) => !row.links.some(isLaneLink);
+// An input row fed from outside the group and by no other line of it (#908). A self link is
+// neither, so a row fed only by its own line gets no bar.
+const fromOutside = (row: FlowRow) =>
+  row.links.some(link => link.from.kind === 'place') && !row.links.some(isLaneLink);
 const loops = (row: FlowRow) => row.links.some(link => link.loop);
 </script>
 
