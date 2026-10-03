@@ -1132,9 +1132,9 @@ p {
   }
   /* The quiet buttons in these rows are 44px touch targets too (#832): All settings → and
      ← Guided start, a factory's ✕ per group and its Add (#856), ADA's tools and Unmute, and the
-     alternates' tools. Height only, as above. The underline moves from the box's bottom edge to the text
-     (text-decoration), so it stays under the words in the taller box. The storage bays' quiet
-     buttons are drawn as boxes and have their own rule (.bay-actions). */
+     alternates' tools. Height only, as above. The underline moves from the box's bottom edge to
+     the text (text-decoration), so it stays under the words in the taller box. The storage bays'
+     quiet buttons are drawn as boxes and have their own rule (.bay-actions). */
   .guided-escape .btn.quiet,
   .assign-row .btn.quiet,
   .assign-add .btn.quiet,
