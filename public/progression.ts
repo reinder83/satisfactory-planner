@@ -507,12 +507,25 @@ function powerReviewTask(
   };
 }
 
-// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet.
+// The phase a calculated plan starts building in: its settings' phase. The phases before it are
+// milestone-only (#759) and list no power steps.
+const startPhase = ({ plan }: GuideContext): number => Number(plan.settings.phase || 1);
+
+// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet. Gathering
+// Biomass and automating Solid Biofuel are done once in the game, so those two steps are listed
+// once, in the first planned phase that lists the start-up, which is always the start phase
+// (#872), as each milestone (#758) and alternate unlock (#870) is listed once: repeated in every
+// later phase with the same check keys, a tick made while working on Phase 3 made Phases 4 and 5
+// look started. Post-game plans Phase 5's stage, so it lists them too for a profile made for
+// Phase 5. The burner bank is sized for this phase's load and keyed per phase, so every phase
+// with the start-up keeps its own.
 function biomassStartupTasks(
-  { plan, stage, stageOf }: GuideContext,
+  context: GuideContext,
   { coal, petroleum, nuclear }: UnlockedPower,
 ): GuideTask[] {
+  const { plan, stage, stageOf } = context;
   if (!(stage === 1 || (!coal && !petroleum && !nuclear))) return [];
+  const first = stage === startPhase(context);
   const need = Math.max(
       0,
       (stageOf(stage)?.requiredMW || 0) - plan.settings.availablePowerGW * 1000,
@@ -520,7 +533,7 @@ function biomassStartupTasks(
     factor = plan.settings.powerFactor ?? 1;
   // Three starter constructors have their own draw; this is a manually supplied startup estimate.
   const burners = Math.ceil((need + 12 * factor) / 30);
-  return [
+  const once: GuideTask[] = [
     {
       id: 'startup-biomass',
       title: 'Turn leaves and wood into Biomass',
@@ -531,6 +544,9 @@ function biomassStartupTasks(
       title: 'Unlock Obstacle Clearing, then automate Solid Biofuel',
       body: 'Tier 2 Obstacle Clearing unlocks the Chainsaw and Solid Biofuel. One Constructor consumes 120 Biomass/min → 60 Solid Biofuel/min at 100%. Start with one, fed by the Biomass buffer; retain fuel for the chainsaw. With a Mk.1 input belt, limit it to 60 Biomass/min → 30 Solid Biofuel/min; unlock Logistics Mk.2 for a 120/min input and the full 60/min output. A full 360 Biomass/min from both source Constructors can supply three Solid Biofuel Constructors, making 180/min. Split the merge across belts as needed: Mk.1 carries 60/min and Mk.2 120/min, so do not try to put 360/min on one early belt.',
     },
+  ];
+  return [
+    ...(first ? once : []),
     {
       id: 'startup-burner-bank-' + stage,
       title: 'Size and feed the biomass burner bank',
@@ -540,11 +556,13 @@ function biomassStartupTasks(
 }
 
 // Moving to the generators the plan builds: coal, fuel, the preferred main power, aluminum
-// water recycling and nuclear.
+// water recycling and nuclear. "Unlock Coal Power" is one unlock, so it is listed once, in the
+// first planned phase from Phase 2 on (#872, as the biomass start-up above), and post-game with it
+// for a profile made for Phase 5.
 function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideTask[] {
   const { stage, rows } = context;
   const tasks: GuideTask[] = [];
-  if (stage >= 2 && !coal)
+  if (stage === Math.max(2, startPhase(context)) && !coal)
     tasks.push({
       id: 'startup-coal-unlock',
       title: 'Unlock Coal Power before switching to coal',

@@ -109,3 +109,21 @@ test('alternate unlocks ticked while on Phase 3 do not start Phase 4 on the trac
   assert.equal(segment('4').pct, 0, 'Phase 4 has not started');
   assert.ok(!phaseStepIds('4').some(id => unlocks.includes(id)), 'listed once, in Phase 3');
 });
+
+test('the biomass start-up ticked while on Phase 3 does not start Phase 4 on the track (#872)', () => {
+  const plan = generated();
+  plan.settings.phase = '3';
+  const startup = ['startup-biomass', 'startup-solid-biofuel', 'startup-coal-unlock'];
+  open({ calculated: plan, phase: '3' });
+  assert.deepEqual(
+    phaseStepIds('3').filter(id => startup.includes(id)),
+    startup,
+    'Phase 3 lists the start-up',
+  );
+  open({ calculated: plan, phase: '3', state: { checks: ticked(startup) } });
+  assert.ok(segment('3').pct! > 0, 'the ticks count in Phase 3');
+  for (const phase of ['4', '5'] as const) {
+    assert.equal(segment(phase).pct, 0, 'Phase ' + phase + ' has not started');
+    assert.ok(!phaseStepIds(phase).some(id => startup.includes(id)), 'listed once, in Phase 3');
+  }
+});
