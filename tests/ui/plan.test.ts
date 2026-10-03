@@ -341,7 +341,7 @@ test('every step carries an icon for its kind of work, or the part it makes', ()
   assert.equal(linked.querySelector('img')!.getAttribute('src'), './icons/wire.png');
   for (const glyph of $$('#main .task-icon svg'))
     assert.ok(glyph.innerHTML.includes('<'), 'every glyph resolves');
-  open({ calculated: generated, phase: '1' });
+  open({ calculated: generated, phase: '3' });
   render();
   assert.equal(kindOf('Tier '), 'milestone', 'HUB milestones read as unlocks');
   assert.equal(kindOf('Turn leaves and wood into Biomass'), 'biomass');

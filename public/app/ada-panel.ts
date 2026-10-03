@@ -17,6 +17,7 @@ import {
   checked,
   currentProfile,
   currentSave,
+  milestoneOnly,
   openedFrom,
   payoff,
   phase,
@@ -113,7 +114,7 @@ function buildFacts(storedStage: StoredStage): AdaFacts['build'] {
 // ADA's view of a stored hard-drive payoff ranking of this phase (app/payoff.ts): the best
 // alternate on what the profile's goal optimises, and by how much.
 function payoffFacts(): AdaFacts['payoff'] {
-  if (!calculated || payoff?.ranking.phase !== stage()) return null;
+  if (!calculated || milestoneOnly() || payoff?.ranking.phase !== stage()) return null;
   const column = payoffDefaultSort(calculated.settings.goal);
   const best = payoffBest(payoff.ranking, column);
   if (!best) return null;
@@ -153,8 +154,11 @@ function unplacedCount(): number {
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
   const next = steps.find(t => !checked(t.id));
-  // Read only with a calculated profile open; an empty stage stands in if its data is missing.
-  const storedStage: StoredStage = calcStage() ?? { feasible: false };
+  // Read only with a calculated profile open; an empty stage stands in if its data is missing. A
+  // milestone-only phase (#759) has no stage of its own, which is not a failed plan: it stands in
+  // as feasible, with nothing in it.
+  const milestones = milestoneOnly();
+  const storedStage: StoredStage = calcStage() ?? { feasible: milestones };
   const rows: { id: string }[] = calculated
     ? storedStage.rows || []
     : plan.factories.filter(f => f.stages[stage()]);
@@ -255,6 +259,7 @@ function adaFacts(): AdaFacts {
     backupDays: backupDays(workspace.lastBackup),
     post: phase() === 'post',
     startPhase: startPhase(),
+    milestoneOnly: milestones ? phaseLabel(startPhase()) : '',
     openedFrom: savedPhase ? phaseLabel(savedPhase) : '',
     assumptions: calculated ? (calculated.warnings || []).length : 0,
     build: buildFacts(storedStage),

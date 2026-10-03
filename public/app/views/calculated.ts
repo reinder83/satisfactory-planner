@@ -3,7 +3,7 @@
 // setup and expansion its factory dialog shows (ui/detail/CalcFactoryDialog.vue). Its
 // resources page is ui/pages/CalculatedResourcesPage.vue. Everything reads the profile's frozen calculation
 // snapshot through calcStage(); nothing here recalculates.
-import { progression } from '../../progression.ts';
+import { phaseSteps } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
 import { itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
@@ -46,50 +46,21 @@ const outputList = (row: CalcRow): string =>
 export const rowIcon = (row: CalcRow): string =>
   row.generationMW > 0 ? row.machine : Object.keys(row.outputs || {})[0] || '';
 
-// The generated checklist for a calculated profile's current phase, before the user's step
-// edits and custom tasks (tasks.ts adds those). Order: startup, power and milestone steps
-// from progression.ts, hard drives, one step per production row, storage, then the lines
-// this phase retires. Row steps use the saved key `calc-<stage>-<row id>` — the same key as
-// that factory card's Running box — and must stay stable.
-export function calcTasks(): PlanStepData[] {
+// The generated checklist of a calculated profile for phase `shownPhase` (the current phase
+// unless given), before the user's step edits and personal tasks (tasks.ts adds those): the
+// steps phaseSteps in progression.ts lists, with each production row's step described.
+export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
-  // A plan with a guide (#393, a migrated handbook profile) has the guide's steps for this phase
-  // instead, with their own check ids; a phase the guide leaves out has none (#466).
-  if (calculated.guide) return (calculated.guide.phases[phase()] ?? []).map(t => ({ ...t }));
-  const snapshot = calcStage(),
-    steps = progression(calculated, state, progressionData, phase());
-  // Phase 1 interleaves base, power and milestone steps into a starting order; later
-  // phases put power first, then milestones.
-  const startup =
-    stage() === '1'
-      ? [
-          // Phase 1 always has its seven base steps (progression.ts).
-          steps.baseTasks[0]!,
-          ...steps.powerTasks.slice(0, 2),
-          ...steps.baseTasks.slice(1, 5),
-          ...steps.milestoneTasks,
-          ...steps.powerTasks.slice(2),
-          ...steps.baseTasks.slice(5),
-        ]
-      : [...steps.powerTasks, ...steps.milestoneTasks];
-  return [
-    ...startup,
-    ...steps.hardDrives,
-    ...(snapshot?.rows || []).map(row => ({
-      id: 'calc-' + stage() + '-' + row.id,
-      title: row.name,
-      // The pointer to an easier rounded option only where the dialog shows one (#379).
-      body: `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`,
-    })),
-    {
-      id: 'calc-' + stage() + '-storage',
-      title: 'Connect protected storage and overflow',
-      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
-    },
-    ...(steps.retire || []),
-  ];
+  return phaseSteps(calculated, state, progressionData, shownPhase).map(({ row, ...step }) =>
+    row ? { ...step, body: rowStepBody(row) } : step,
+  );
 }
+
+// A production row's build-plan step text: its machines, inputs and outputs, with the pointer
+// to an easier rounded option only where the dialog shows one (#379).
+const rowStepBody = (row: CalcRow): string =>
+  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)
 // for stage `snapshot` shown as phase `shownPhase` (#331). Phase 1 has no generators in the plan
@@ -108,10 +79,11 @@ export function headroomAdvice(snapshot: StoredStage, shownPhase: Phase): string
   return `${label} plans ${list}; add generation beyond those, or count on existing spare power.`;
 }
 
-// Names as a sentence lists them: "2", "2 and 3", "2, 3 and 4" (#735).
-export function andList(names: readonly string[]): string {
-  return names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
-}
+// Names as a sentence lists them: "2", "2 and 3", "2, 3 and 4" (#735). The planner's warnings
+// use the same function, from public/wording.ts (#748). Imported here rather than with the
+// imports above only to keep this change apart from the import block.
+import { listNames } from '../../wording.ts';
+export const andList = listNames;
 
 // Whether the planner measured a budget problem for infeasible stage `snapshot`: shortfalls, the
 // hours it would fit in, or whole machines breaking it. draftHeading and the wizard Review's

@@ -26,10 +26,11 @@ import {
   currentSave,
   plan,
   setWorkspace,
+  state,
   workspace,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { backupAge } from '../../views/backup.ts';
+import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
@@ -147,7 +148,8 @@ async function importSaves(event: Event) {
 // After a confirmation it goes through queuedWrite, like save(): after
 // the saves already queued, before any made meanwhile, shown as "Saving…", and its reply only
 // shown if this profile is still open. It toasts its own errors; "Backup restored." only
-// follows a successful response.
+// follows a successful response, with how many records the restore newly kept for review in
+// Notes (restoreMessage, #760).
 async function restoreProgress(event: Event) {
   const input = event.target as HTMLInputElement,
     file = input.files?.[0];
@@ -164,9 +166,11 @@ async function restoreProgress(event: Event) {
       }))
     )
       return;
-    await queuedWrite('/api/import', data);
+    // The review list as it is before the restore, which replaces the state.
+    const before = { handbookOrigin: structuredClone(state.handbookOrigin) };
+    const restored = await queuedWrite('/api/import', data);
     render();
-    toast('Backup restored.');
+    toast(restoreMessage(before, restored));
   } catch (error) {
     toast((error as Error).message || 'Could not restore backup.', true);
   } finally {

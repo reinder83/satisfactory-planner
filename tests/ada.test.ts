@@ -228,6 +228,14 @@ test('ADA notices the states that are not just a number', () => {
     !ids(facts({ kind: 'original', startPhase: '3' })).includes('start-phase'),
     'the handbook profile is not a calculated one',
   );
+  // A milestone-only phase before the start phase (#759) says where production starts.
+  assert.match(
+    adaRemarks(facts({ phaseLabel: 'Phase 1', milestoneOnly: 'Phase 3' })).find(
+      r => r.id === 'milestone-only',
+    )!.text,
+    /Phase 1 is before this profile's production plan, which starts in Phase 3/,
+  );
+  assert.ok(!ids(facts({ milestoneOnly: '' })).includes('milestone-only'));
 });
 
 // A profile opened on an earlier phase than its saved one, which still has open checks (#570).

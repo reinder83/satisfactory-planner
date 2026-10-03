@@ -223,7 +223,7 @@ const handbookState = (): SavedState => {
 
 test('migrateHandbookState moves each record to its new key, or keeps it unmapped', () => {
   const migrated = migrateHandbookState(handbookState(), handbook, conversion);
-  assert.equal(migrated.version, 12);
+  assert.equal(migrated.version, 13);
   assert.equal(migrated.handbookOrigin!.version, handbook.version);
   // Factory ticks become their row's, per stage.
   assert.equal(migrated.checks[`calc-3-${rowOf('3', mapped.id)}`], true);

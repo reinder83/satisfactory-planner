@@ -12,7 +12,14 @@ const tsIn = (dir: string) =>
   readdirSync(path.join(root, dir))
     .filter(name => name.endsWith('.ts'))
     .map(name => `${dir}/${name}`);
-const checked = ['planner.ts', 'optimizer.ts', ...tsIn('public'), ...tsIn('public/state')];
+const checked = [
+  'planner.ts',
+  ...tsIn('planner'),
+  'optimizer.ts',
+  ...tsIn('public'),
+  ...tsIn('public/state'),
+  ...tsIn('public/preferences'),
+];
 
 // The comment text of `source`: whole-line comments, block comment lines and trailing `// `
 // comments. A `//` inside a string such as a URL is not followed by a space, so it is skipped.

@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { createApp } from '../server.ts';
 import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS } from '../planner.ts';
 import { nodeCounts } from '../public/preferences.ts';
-import { progression } from '../public/progression.ts';
+import { milestoneOnlyPhase, phaseSteps, progression } from '../public/progression.ts';
 import { adaRemarks, adaEncore, adaFault as makeFault } from '../public/ada.ts';
 import { appSource } from './helpers/app-source.ts';
 import type { AdaFacts } from '../public/ada.ts';
@@ -117,6 +117,8 @@ function ui() {
     adaEncore,
     makeFault,
     progression,
+    phaseSteps,
+    milestoneOnlyPhase,
     carryOptions,
     pickedRecipeUnlocks,
     bayCapacity,

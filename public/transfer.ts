@@ -1,4 +1,4 @@
-import { safeKey, validateState } from './state.ts';
+import { safeKey, shareState, validateState } from './state.ts';
 import {
   migrateOriginalProfile,
   usableHandbook,
@@ -9,6 +9,7 @@ import type {
   PlanGuide,
   ProfileKind,
   SaveExport,
+  SavedState,
   StoredCalculatedPlan,
 } from './types/index.ts';
 
@@ -327,4 +328,100 @@ export async function importableTransfer(
       }
     });
   return transfer;
+}
+
+// What GET /api/export-saves reads from its query, in both editions: the saves listed in
+// ?saves=<id>,<id> (the Backup page's selection, #160; an empty list selects none), one save
+// (?save=), one profile (?profile=) and whether it is a share (?share=1).
+export interface ExportQuery {
+  chosen?: string[];
+  saveId: string | null;
+  profileId: string | null;
+  share: boolean;
+}
+export const exportQuery = (params: URLSearchParams): ExportQuery => ({
+  chosen: params.get('saves')?.split(',').filter(Boolean),
+  saveId: params.get('save'),
+  profileId: params.get('profile'),
+  share: params.get('share') === '1',
+});
+// A save as an edition hands it to selectForExport: its own stored shape, which the export keeps
+// key for key, apart from a profile's payoff.
+interface ExportableSave {
+  id: string;
+  activeProfile: string;
+  profiles: { id: string; state: SavedState; payoff?: unknown }[];
+}
+type ExportedProfile<S extends ExportableSave> = Omit<S['profiles'][number], 'payoff'>;
+type ExportedSave<S extends ExportableSave> = Omit<S, 'profiles'> & {
+  profiles: ExportedProfile<S>[];
+};
+// The full-save export of `saves` (the caller's own, already limited to what its user owns) for
+// one request's query: the saves listed in `chosen`, then the one `saveId` names, then those
+// holding `profileId`, with only that profile; a save whose active profile is left out points at
+// its first one. A share runs every state through shareState, and a payoff ranking is always left
+// out, since it is derived and can be run again. Every other key is kept as it is, in its order.
+// An unknown id calls `notFound` with 'Save not found.' or 'Profile not found.', which must throw;
+// each edition reports it its own way. The saves are not changed, and the export shares their
+// plans and handbooks.
+// countsAsBackup says whether the export resets the browser edition's backup reminder: only an
+// unscoped full export, not a share, and not one past transferImportLimit, which the Backup page
+// refuses to download (#118). It is a function so the server, which keeps no reminder, never
+// measures the file.
+export function selectForExport<S extends ExportableSave>(
+  saves: S[],
+  { chosen, saveId, profileId, share }: ExportQuery,
+  notFound: (message: string) => never,
+) {
+  let selected = saves;
+  if (chosen) {
+    selected = selected.filter(s => chosen.includes(s.id));
+    if (selected.length !== new Set(chosen).size) notFound('Save not found.');
+  }
+  if (saveId) {
+    selected = selected.filter(s => s.id === saveId);
+    if (!selected.length) notFound('Save not found.');
+  }
+  if (profileId) {
+    selected = selected.filter(s => s.profiles.some(p => p.id === profileId));
+    if (!selected.length) notFound('Profile not found.');
+  }
+  const exportProfile = ({ payoff: _derived, ...profile }: S['profiles'][number]) =>
+    share ? { ...profile, state: shareState(profile.state) } : profile;
+  const exported = {
+    format: transferFormat,
+    version: 1 as const,
+    exportedAt: new Date().toISOString(),
+    saves: selected.map((save): ExportedSave<S> => {
+      const profiles = profileId ? save.profiles.filter(p => p.id === profileId) : save.profiles;
+      // The filters above keep only saves with a matching profile.
+      const activeProfile = profiles.some(p => p.id === save.activeProfile)
+        ? save.activeProfile
+        : profiles[0]!.id;
+      return { ...save, activeProfile, profiles: profiles.map(exportProfile) };
+    }),
+  };
+  const countsAsBackup = () =>
+    !chosen && !saveId && !profileId && !share && transferFileSize(exported) <= transferImportLimit;
+  return { exported, countsAsBackup };
+}
+
+// POST /api/import-saves in both editions: gives every save and profile of an import (checked
+// by importableTransfer) a new id from `newId`, the profiles of a save before the save itself,
+// and points each save's activeProfile at its profile's new id, so an import always adds copies
+// and never overwrites. Changes the saves in place and returns them; each edition then stores
+// them its own way.
+export function remapImportedIds<
+  S extends { id: string; activeProfile: string; profiles: { id: string }[] },
+>(imported: { saves: S[] }, newId: () => string): S[] {
+  for (const save of imported.saves) {
+    const oldActive = save.activeProfile;
+    for (const profile of save.profiles) {
+      const previous = profile.id;
+      profile.id = newId();
+      if (previous === oldActive) save.activeProfile = profile.id;
+    }
+    save.id = newId();
+  }
+  return imported.saves;
 }

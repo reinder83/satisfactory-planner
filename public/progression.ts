@@ -60,11 +60,14 @@ const COLLECTIBLES = [
 // Phase 2 and so on, with 9 in Phase 5.
 const phaseForTier = (tier: number) =>
   tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
-const formatNumber = (value: unknown) =>
-  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+// Locale-formatted with at most 2 decimals, exactly as Number(value).toLocaleString(undefined,
+// { maximumFractionDigits: 2 }) would, but with one shared formatter: toLocaleString with options
+// builds a new Intl.NumberFormat on every call, which was most of phaseSteps' time (#772).
+const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+export const formatNumber = (value: unknown): string => numberFormat.format(Number(value));
 
-// The generated guidance steps of a calculated profile for one phase, called by calcTasks in
-// app/views/calculated.ts. `plan` is the profile's calculation snapshot, `state` its
+// The generated guidance steps of a calculated profile for one phase, called by phaseSteps below
+// (calcTasks in app/views/calculated.ts). `plan` is the profile's calculation snapshot, `state` its
 // progress (only `checks` is read), `data` is progression.json and `phase` '1'-'5' or
 // 'post' (planned as Phase 5). Returns task lists of { id, title, body }; ids are checklist
 // keys, so they must stay stable. Nothing here changes the plan or the progress.
@@ -87,10 +90,87 @@ export function progression(
   return {
     baseTasks: baseTasks(context),
     powerTasks: powerTasks(context),
-    milestoneTasks: milestoneTasks(context, requiredMilestones(context)),
+    milestoneTasks: milestoneTasks(
+      context,
+      phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage),
+    ),
     hardDrives: hardDriveTasks(context),
     retire: retireTasks(context),
   };
+}
+
+// A generated build-plan step of a calculated profile. A production step carries the row it
+// builds, with an empty body: the build plan describes it (calcTasks in app/views/calculated.ts).
+export interface PhaseStep extends GuideTask {
+  row?: CalcRow;
+}
+
+// A calculated profile's generated build-plan steps for `phase` ('1'-'5', or 'post', which plans
+// Phase 5's stage), in the order the build plan shows them, before the user's step edits and
+// personal tasks. A plan with a guide (#393, a migrated handbook profile) has the guide's steps
+// for the phase instead, with their own check ids; a phase the guide leaves out has none (#466).
+// A phase before the profile's start phase is milestone-only (#759, milestoneOnlyPhase): its
+// milestone steps and nothing else, since production is planned from the start phase on.
+// Otherwise: startup, power and milestone steps, hard drives, one step per production row,
+// storage, then the lines this phase retires. Row steps use the saved key
+// `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
+// It reads only its arguments, so it works out any phase of a stored plan, not just the open one.
+export function phaseSteps(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
+  state: { checks: Record<string, boolean> },
+  data: Progression,
+  phase: string,
+): PhaseStep[] {
+  if (plan.guide) return (plan.guide.phases[phase] ?? []).map(step => ({ ...step }));
+  if (milestoneOnlyPhase(plan, phase))
+    return milestoneTasks(
+      guideContext(plan, state, data, phase),
+      milestonesListedIn(plan, state, data, Number(phase)),
+    );
+  const stage = (phase === 'post' ? '5' : phase) as StageKey,
+    steps = progression(plan, state, data, phase);
+  // Phase 1 interleaves base, power and milestone steps into a starting order; later
+  // phases put power first, then milestones.
+  const startup =
+    stage === '1'
+      ? [
+          // Phase 1 always has its seven base steps (baseTasks).
+          steps.baseTasks[0]!,
+          ...steps.powerTasks.slice(0, 2),
+          ...steps.baseTasks.slice(1, 5),
+          ...steps.milestoneTasks,
+          ...steps.powerTasks.slice(2),
+          ...steps.baseTasks.slice(5),
+        ]
+      : [...steps.powerTasks, ...steps.milestoneTasks];
+  return [
+    ...startup,
+    ...steps.hardDrives,
+    ...(plan.stages[stage]?.rows || []).map(row => ({
+      id: 'calc-' + stage + '-' + row.id,
+      title: row.name,
+      body: '',
+      row,
+    })),
+    {
+      id: 'calc-' + stage + '-storage',
+      title: 'Connect protected storage and overflow',
+      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
+    },
+    ...steps.retire,
+  ];
+}
+
+// Whether `phase` of a calculated plan is milestone-only (#759): a phase before the plan's start
+// phase (its settings' phase), which the build plan offers for the milestones listed there and
+// nothing else. The planner solves every phase from 1 (calculate() in planner.ts), but a stage
+// before the start phase is not this profile's to build: no production lines, storage, power,
+// hard drives or retirements. A plan with a guide has its own steps and no such phase.
+export function milestoneOnlyPhase(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>,
+  phase: string,
+): boolean {
+  return !plan.guide && phase !== 'post' && Number(phase) < Number(plan.settings.phase || 1);
 }
 
 // The context the task lists share, for `phase` '1'-'5' or 'post' (planned as Phase 5).
@@ -103,10 +183,13 @@ export function guideContext(
   const stageOf = (phaseNumber: number): StoredStage | undefined =>
     plan.stages[String(phaseNumber) as StageKey];
   const stage = Number(phase === 'post' ? 5 : phase),
-    checks = state.checks;
+    checks = state.checks,
+    start = Number(plan.settings.phase || 1);
+  // Only stages the profile builds (its start phase on): one before it is never built, so a
+  // milestone-only phase (#759) has no planned source of its own.
   const sources = (item: string) =>
     (Object.entries(plan.stages) as [string, StoredStage][])
-      .filter(([key]) => Number(key) <= stage)
+      .filter(([key]) => Number(key) >= start && Number(key) <= stage)
       .flatMap(([key, planned]) =>
         (planned.rows || [])
           .filter(row => row.outputs[item])
@@ -182,14 +265,42 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   return [...required.values()];
 }
 
-// Whether an unlock can be researched by `stage`: a HUB milestone by its tier, a MAM node by
-// the latest first-available phase of its cost items, collectibles aside.
-function researchable(entry: ProgressionEntry, data: Progression, stage: number): boolean {
-  if (!entry.mam) return phaseForTier(entry.tier) <= stage;
+// The phase an unlock belongs to, the first in which it can be researched: a HUB milestone its
+// tier's phase, a MAM node the latest first-available phase of its cost items, collectibles aside.
+export function milestonePhase(entry: ProgressionEntry, data: Progression): number {
+  if (!entry.mam) return phaseForTier(entry.tier);
   const phases = Object.keys(entry.cost)
     .filter(item => !COLLECTIBLES.includes(item))
     .map(item => data.availability[item] || 1);
-  return Math.max(1, ...phases) <= stage;
+  return Math.max(1, ...phases);
+}
+
+// Whether an unlock can be researched by `stage`.
+const researchable = (entry: ProgressionEntry, data: Progression, stage: number): boolean =>
+  milestonePhase(entry, data) <= stage;
+
+// The milestones whose unlock step phase `stage` (1-5) of the profile lists (#758). The profile
+// lists every milestone one of its planned phases (its start phase on) needs and can research by
+// then (requiredMilestones), each once, under its own phase (milestonePhase), so a Tier 2 unlock
+// only Phase 3's rows need is a Phase 1 step. A milestone of a phase before the start phase is
+// listed in that phase, which the build plan offers as a milestone-only phase (#759). Post-game,
+// planned as Phase 5, lists none (progression() above): they are all in Phase 5. The check key
+// stays `unlock-<id>` whichever phase lists the step. milestoneTasks orders the list.
+export function milestonesListedIn(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  state: { checks: Record<string, boolean> },
+  data: Progression,
+  stage: number,
+): ProgressionEntry[] {
+  const start = Number(plan.settings.phase || 1),
+    listed = new Map<string, ProgressionEntry>();
+  const planned = (['1', '2', '3', '4', '5'] as const).filter(
+    key => Number(key) >= start && plan.stages[key],
+  );
+  for (const key of planned)
+    for (const entry of requiredMilestones(guideContext(plan, state, data, key)))
+      if (!entry.alternate && researchable(entry, data, Number(key))) listed.set(entry.id, entry);
+  return [...listed.values()].filter(entry => milestonePhase(entry, data) === stage);
 }
 
 // Depth-first, so every prerequisite in the list comes before what needs it; otherwise keeps
@@ -210,7 +321,8 @@ function prerequisitesFirst(milestones: ProgressionEntry[]): ProgressionEntry[] 
   return ordered;
 }
 
-// One unlock step per required milestone this phase can research. Alternate recipes are left
+// One unlock step per milestone of `required` this phase can research (progression() passes the
+// phase's milestonesListedIn). Alternate recipes are left
 // out: they come from hard drives (hardDriveTasks). Prerequisites come before dependents;
 // among otherwise independent unlocks, costs with running supply come first.
 export function milestoneTasks(context: GuideContext, required: ProgressionEntry[]): GuideTask[] {
@@ -260,7 +372,7 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
   ];
 }
 
-// The power, fuel and endgame steps of the phase. calcTasks interleaves Phase 1's lists by
+// The power, fuel and endgame steps of the phase. phaseSteps interleaves Phase 1's lists by
 // position, so the order of the first steps (power review, biomass, Solid Biofuel, burner bank)
 // matters.
 export function powerTasks(context: GuideContext): GuideTask[] {
@@ -481,7 +593,7 @@ function droneFuelTasks({ plan, stage, stageOf }: GuideContext): GuideTask[] {
   ];
 }
 
-// Phase 1 only: the starter base, which calcTasks spreads around the power and milestone
+// Phase 1 only: the starter base, which phaseSteps spreads around the power and milestone
 // steps.
 export function baseTasks({ stage }: GuideContext): GuideTask[] {
   if (stage !== 1) return [];

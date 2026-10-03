@@ -7,6 +7,7 @@
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is.
+  A milestone-only phase (#759) shows only the header and why it has no production lines.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -18,6 +19,7 @@ import {
   factoryEditing,
   factoryFilter,
   loadContext,
+  milestoneOnly,
   phase,
   query,
   setQuery,
@@ -52,6 +54,7 @@ import GroupSections from '../factories/GroupSections.vue';
 import FilterChips from '../factories/FilterChips.vue';
 import JumpBar from '../factories/JumpBar.vue';
 import PageHeader from '../PageHeader.vue';
+import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import SiteSection from '../factories/SiteSection.vue';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import type { WorkspaceSummary } from '../../../types/index.ts';
@@ -132,6 +135,10 @@ const page = computed(() =>
   }),
 );
 
+// A milestone-only phase before the profile's start phase (#759) builds no production lines: the
+// page says so (MilestoneOnlyNotice.vue) instead of drawing an empty toolbar and filter.
+const milestones = computed(() => legacy(() => milestoneOnly()));
+
 function search(event: Event) {
   setQuery((event.target as HTMLInputElement).value);
   render();
@@ -183,7 +190,11 @@ async function roundUp(event: Event) {
 </script>
 
 <template>
-  <template v-if="page">
+  <template v-if="page && milestones">
+    <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factory targets" />
+    <MilestoneOnlyNotice />
+  </template>
+  <template v-else-if="page">
     <PageHeader
       eyebrow="CALCULATED PRODUCTION"
       title="Factory targets"

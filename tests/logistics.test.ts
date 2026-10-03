@@ -55,7 +55,7 @@ test('a link’s vehicle is saved as version 7 and going back to belts restores 
   assert.equal(state.version, 7, 'a version-6 planner must refuse it rather than drop the choice');
   const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 14 }), /newer planner version/);
   // Removing a group takes its links along; belts again forget the entry.
   state = mutate(state, { type: 'factoryGroupRemove', id: 'fg-motors1' });
   assert.deepEqual(Object.keys(state.factoryGroups.links!), ['mines:fg-plates1']);
@@ -74,7 +74,7 @@ test('a link to or from the vehicle fuel place marks version 9, which older rele
   const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.equal(round.version, 9);
   assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 14 }), /newer planner version/);
   // Back to belts, the link goes and the version with it.
   state = mutate(state, link({ from: 'fg-plates1', to: OUTSIDE.transport, mode: 'belt' }));
   assert.equal(state.version, 7);
@@ -106,7 +106,7 @@ test('a link from one source item marks version 11, and splits a mines link save
   assert.equal(state.version, 11, 'a release before #231 knows only the one mines place');
   const round = validateState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(round.factoryGroups.links, state.factoryGroups.links);
-  assert.throws(() => validateState({ ...round, version: 13 }), /newer planner version/);
+  assert.throws(() => validateState({ ...round, version: 14 }), /newer planner version/);
   // Belts again for both: nothing left, and the version drops.
   state = mutate(state, {
     type: 'factoryLinkTransport',

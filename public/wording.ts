@@ -1,0 +1,28 @@
+// Plain-English wording shared by the planner (planner.ts, in both editions) and the browser app,
+// so the plan's warnings and the pages it shows can never word the same thing differently (#748,
+// #763). It is its own module, not part of preferences.ts, because the VM interface tests load
+// public/app/ with the shared modules' exports supplied by hand (tests/helpers/app-source.ts),
+// and this one is followed and loaded with the app instead.
+
+// "A", "A and B", "A, B and C": names, phase numbers and items in prose (#611, #735). An empty
+// list gives ''.
+export const listNames = (names: readonly string[]): string =>
+  names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
+
+// A whole count as the pages show numbers (num in public/app/format.ts): locale-formatted.
+const count = (value: number) =>
+  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+// A wait of `minutes` as a plain duration (#624): "less than a minute", "1 minute", "52 minutes",
+// then hours and whole minutes from an hour on ("about 7 h 52 min", "about 8 h").
+export function duration(minutes: number): string {
+  if (minutes < 1) return 'less than a minute';
+  const whole = Math.round(minutes);
+  if (whole < 60) return `${count(whole)} minute${whole === 1 ? '' : 's'}`;
+  const rest = whole % 60;
+  return `about ${count(Math.floor(whole / 60))} h` + (rest ? ` ${count(rest)} min` : '');
+}
+
+// A phase's time, given in hours, in the same words (#643, #740): "about 7 h 52 min". The plan
+// header, the Review step, ADA and the planner's warnings all use it.
+export const durationOfHours = (hours: number): string => duration(hours * 60);

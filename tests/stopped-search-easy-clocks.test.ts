@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, DATA, RAW } from '../planner.ts';
 import type { CurrentStage } from '../public/types/index.ts';
+import { durationOfHours } from '../public/app/format.ts';
 
 // The settings of #593: with amplification off, whole machines do not fit Phase 5 even 50% longer.
 const settings = {
@@ -87,7 +88,7 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   assert.ok(warning, 'the plan says so');
   assert.match(warning, /stopped before it could prove the best plan/);
   assert.match(warning, /runs at 25%, 50% or 75%/);
-  assert.match(warning, /takes about \d+(\.\d+)? hours instead of 8\.33\./);
+  assert.match(warning, /takes about [\d.,]+ h( [\d.,]+ min)? instead of about 8 h 20 min\./);
   assert.doesNotMatch(
     warning,
     /keeps? a precise clock/,
@@ -121,10 +122,11 @@ test('easy clocks may take longer than the target where they do not fit at it (#
   const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));
   assert.ok(warning, 'the plan says so');
   assert.match(warning, /its exact plan with easy clocks/);
-  const hours = (value: number) => String(Math.round(value * 100) / 100).replace('.', '\\.');
-  assert.match(
+  assert.ok(
+    warning.includes(
+      `It takes ${durationOfHours(stage.hours!)} instead of ${durationOfHours(exact.hours!)}.`,
+    ),
     warning,
-    new RegExp(`It takes about ${hours(stage.hours!)} hours instead of ${hours(exact.hours!)}\\.`),
   );
   assert.deepEqual(withStoppedPhase(maximum, 5).stages['5'].rows, stage.rows, 'deterministic');
 });

@@ -2,6 +2,7 @@
 // boot() starts the app and loadContext() switches save/profile; both fill the bindings
 // below, which every view reads directly and other modules change through the setters.
 import { readStoredData } from '../browser-store.ts';
+import { milestoneOnlyPhase } from '../progression.ts';
 import { initialState } from '../state.ts';
 import { downloadJson, request, toast, writeQueue } from './api.ts';
 import { required } from './format.ts';
@@ -188,13 +189,23 @@ export function setFactoryEditing(value: boolean) {
   factoryEditing = value;
 }
 
-// A profile records the phase it was created for. Earlier phases are already
-// behind the user, so their steps and targets are not theirs to build.
-// The original handbook (no calculated plan) covers Phase 3 onward.
+// A profile records the phase it was created for: its production is planned from there on.
+// Earlier phases are already behind the user, so their production lines and targets are not
+// theirs to build. The original handbook (no calculated plan) covers Phase 3 onward.
 export const startPhase = (): StageKey =>
   calculated ? (String(calculated.settings?.phase || '1') as StageKey) : '3';
 
-// The phase being worked on: the saved setting, raised to the profile's start phase. With
+// The first phase the profile offers. A calculated profile offers the phases before its start
+// phase as milestone-only phases (#759, milestoneOnlyPhase in progression.ts): their build plan
+// lists the milestones that belong there and nothing else. A plan guide (a profile moved from
+// the handbook) and the original handbook have no such phases, so they start at the start phase.
+export const firstPhase = (): StageKey => (calculated && !calculated.guide ? '1' : startPhase());
+
+// Whether `shown` (the current phase unless given) is a milestone-only phase of the open profile.
+export const milestoneOnly = (shown: Phase = phase()): boolean =>
+  !!calculated && milestoneOnlyPhase(calculated, shown);
+
+// The phase being worked on: the saved setting, raised to the profile's first phase. With
 // no save open (the empty workspace's placeholder) there is no profile to raise it to, so
 // the top bar follows the phase picked in the open wizard draft, else the placeholder's (#561).
 export const phase = (): Phase => {
@@ -203,7 +214,7 @@ export const phase = (): Phase => {
   // Opened on an earlier phase with open checks (#570), while the saved phase is still the one
   // that was worked out from: another tab picking a phase shows that one.
   if (openedOn?.saved === saved) return openedOn.phase;
-  return saved !== 'post' && Number(saved) < Number(startPhase()) ? startPhase() : saved;
+  return saved !== 'post' && Number(saved) < Number(firstPhase()) ? firstPhase() : saved;
 };
 
 // The data key for the phase: post-game has no stage of its own and uses Phase 5's
@@ -214,14 +225,16 @@ export const stage = (): StageKey => {
 };
 
 // Choices for the phase picker in the header. Without an open save (fresh start) every
-// phase is offered; otherwise phases before the profile's start phase are left out.
+// phase is offered; otherwise phases before the profile's first phase (firstPhase) are left out,
+// so a calculated profile offers every phase, the ones before its start phase milestone-only.
 const PHASES: Phase[] = ['1', '2', '3', '4', '5', 'post'];
 export const phaseOptions = (): Phase[] =>
   !currentSave.id
     ? PHASES
-    : [...PHASES.filter(p => p !== 'post' && Number(p) >= Number(startPhase())), 'post'];
+    : [...PHASES.filter(p => p !== 'post' && Number(p) >= Number(firstPhase())), 'post'];
 
-// [phase, data] entries of a per-phase object, from the profile's start phase on.
+// [phase, data] entries of a per-phase object, from the profile's start phase on: the phases it
+// plans production for (a factory's expansion table), so milestone-only phases are left out.
 export const fromStart = <T>(stages: Partial<Record<string, T>> | undefined): [string, T][] =>
   (Object.entries(stages || {}) as [string, T][]).filter(
     ([phaseKey]) => Number(phaseKey) >= Number(startPhase()),
@@ -302,8 +315,10 @@ function endEditing() {
 
 // The calculated plan's data for the current stage (rows, delivery, power, raw use).
 // undefined while no calculated profile is open: a component of the profile just left can be
-// redrawn once more before render() swaps it for the new profile's page.
-export const calcStage = () => calculated?.stages[stage()];
+// redrawn once more before render() swaps it for the new profile's page. Also undefined in a
+// milestone-only phase (#759): the planner solved that stage too, but the profile does not build
+// it, so no page shows its production lines, deliveries, power or resources.
+export const calcStage = () => (milestoneOnly() ? undefined : calculated?.stages[stage()]);
 
 // Starts the app; run again after an import, profile removal, sign-in/out or a retry.
 // Signed out: shows the sign-in screen. No saves yet: opens the wizard with a blank

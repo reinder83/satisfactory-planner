@@ -128,7 +128,10 @@ test('the issue’s Phase 5 is rounded to whole machines and takes slightly long
   assert.ok((stage.sloopsUsed || 0) > 0, 'with somersloops placed');
   const warning = plan.warnings.find(line => line.startsWith('Phase 5: the whole-machine search'));
   assert.ok(warning);
-  assert.match(warning, /this phase takes about \d+(\.\d+)? hours instead of 8\.33\b/);
+  assert.match(
+    warning,
+    /this phase takes about [\d.,]+ h( [\d.,]+ min)? instead of about 8 h 20 min\b/,
+  );
   // The shortest time that fits is used: a smaller multiplier needs less extra time.
   const smaller = withStoppedPhase({ ...settings, multiplier: 4 }, 5).stages['5'];
   assertWholePlan(smaller, plan.settings.limits, 'Phase 5 at multiplier 4');

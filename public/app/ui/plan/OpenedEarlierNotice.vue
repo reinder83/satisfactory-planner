@@ -3,12 +3,22 @@
   its saved working phase because that phase still has open steps (#570, openedFrom() in
   session.ts): says so, with the open steps counted as the progress bar counts them (planTasks()),
   and offers the saved phase back (#666). ADA's `opened-earlier` remark says the same as flavour,
-  but ADA may be muted or showing another remark. Draws nothing on the saved phase.
+  but ADA may be muted or showing another remark. Draws nothing on the saved phase, and nothing in
+  a milestone-only phase (#759), where ui/plan/MilestoneOnlyNotice.vue says the same in its one
+  notice (#786).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { allowSwitch } from '../../api.ts';
-import { checked, openedFrom, phase, phaseLabel, setOpenedPhase, setQuery } from '../../session.ts';
+import {
+  checked,
+  milestoneOnly,
+  openedFrom,
+  phase,
+  phaseLabel,
+  setOpenedPhase,
+  setQuery,
+} from '../../session.ts';
 import { render } from '../../shell.ts';
 import { planTasks } from '../../tasks.ts';
 import { legacy } from '../bridge.ts';
@@ -17,7 +27,7 @@ import { refocusOnOpenedPage } from '../refocus.ts';
 const notice = computed(() =>
   legacy(() => {
     const saved = openedFrom();
-    if (!saved) return null;
+    if (!saved || milestoneOnly()) return null;
     const open = planTasks().filter(task => !checked(task.id)).length,
       shown = phaseLabel(phase());
     return {

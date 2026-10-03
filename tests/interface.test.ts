@@ -36,7 +36,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { progression } from '../public/progression.ts';
+import { milestoneOnlyPhase, phaseSteps, progression } from '../public/progression.ts';
 import {
   carryOptions,
   initialState,
@@ -76,6 +76,8 @@ function ui() {
     adaEncore,
     makeFault,
     progression,
+    phaseSteps,
+    milestoneOnlyPhase,
     carryOptions,
     initialState,
     pickedRecipeUnlocks,
@@ -571,22 +573,39 @@ test('the expansion table only claims an addition where there is one', () => {
   assert.deepEqual(cells[4], ['—', '—'], 'a phase that drops the line adds nothing');
 });
 
-test('a profile only offers the phases it was created for', () => {
+test('a profile plans production from the phase it was created for', () => {
   const context = ui();
   vm.runInContext(
     `calculated={...generated,settings:{...generated.settings,phase:'3'}};currentProfile={id:'p',kind:'calculated',name:'Balanced'};`,
     context,
   );
+  // The phases before the start phase are offered milestone-only (#759).
+  assert.equal(
+    vm.runInContext('JSON.stringify(phaseOptions())', context),
+    '["1","2","3","4","5","post"]',
+    'a phase 3 profile offers the phases behind it for their milestones',
+  );
+  assert.equal(
+    vm.runInContext(`state.settings.phase='1';phase()`, context),
+    '1',
+    'a stored phase behind the start is that milestone-only phase',
+  );
+  assert.equal(vm.runInContext(`milestoneOnly()`, context), true);
+  assert.equal(vm.runInContext(`calcStage()`, context), undefined, 'with no stage to build');
+  assert.equal(vm.runInContext(`state.settings.phase='3';milestoneOnly()`, context), false);
+  // A plan guide (a profile moved from the handbook) has its own steps and no such phases.
+  vm.runInContext(`calculated={...calculated,guide:{phases:{}}};`, context);
   assert.equal(
     vm.runInContext('JSON.stringify(phaseOptions())', context),
     '["3","4","5","post"]',
-    'a phase 3 profile hides the phases behind it',
+    'a guided phase 3 profile starts at phase 3',
   );
   assert.equal(
     vm.runInContext(`state.settings.phase='1';phase()`, context),
     '3',
-    'a stored phase behind the start reads as the start',
+    'and reads a stored phase behind it as the start',
   );
+  vm.runInContext(`calculated={...generated,settings:{...generated.settings,phase:'3'}};`, context);
   assert.equal(
     vm.runInContext(`state.settings.phase='4';phase()`, context),
     '4',

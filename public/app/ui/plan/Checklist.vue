@@ -31,11 +31,12 @@ import {
   taskLink,
   taskLinkChoices,
 } from '../../tasks.ts';
+import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
 import { legacy } from '../bridge.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
-import type { PlanStepView, RemovedStepView } from '../../tasks.ts';
+import type { PlanStepView, RemovedStepView, Step } from '../../tasks.ts';
 
 const list = computed(() =>
   legacy(() => {
@@ -71,14 +72,24 @@ const list = computed(() =>
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
-      removed: planEditing
-        ? removed.map(
-            (task): RemovedStepView => ({ id: task.id, title: task.title, icon: taskIcon(task) }),
-          )
-        : [],
+      removed: planEditing ? removedViews(removed) : [],
     };
   }),
 );
+
+// "Removed steps in this phase", each step noting the other phases that list it too (#744).
+function removedViews(removed: Step[]): RemovedStepView[] {
+  const shared = sharedStepPhases(removed.map(task => task.id));
+  return removed.map(task => {
+    const phases = shared.get(task.id);
+    return {
+      id: task.id,
+      title: task.title,
+      icon: taskIcon(task),
+      shared: phases ? sharedRemovedNote(phases) : undefined,
+    };
+  });
+}
 
 // Why the phase shows no steps at all: the user removed every one, or it never had any (a
 // handbook without steps for this phase, #646). Only the first points to Removed steps,

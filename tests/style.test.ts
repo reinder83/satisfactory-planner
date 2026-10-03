@@ -426,3 +426,16 @@ test('the missing-icon placeholder is a dashed square in the line colour (#463)'
   assert.equal(decls(placeholder.body, 'stroke-dasharray').length, 1);
   assert.deepEqual(decls(placeholder.body, 'fill'), ['none']);
 });
+
+// A long word in the open profile's name breaks inside the sidebar's profile switcher and its
+// menu, rather than running past the sidebar's edge (#713).
+test('a long profile name breaks inside the sidebar’s profile switcher and its menu (#713)', () => {
+  const css = rules(screenCss());
+  for (const selector of ['.profile-switcher', '.sidebar-foot .action-menu-list .btn']) {
+    const rule = css.find(r => r.selector === selector)!;
+    assert.deepEqual(decls(rule.body, 'overflow-wrap'), ['anywhere'], selector);
+  }
+  // The open profile's Open mark keeps its width beside a name that breaks anywhere.
+  const mark = css.find(r => r.selector === '.action-menu-mark')!;
+  assert.deepEqual(decls(mark.body, 'flex'), ['none']);
+});

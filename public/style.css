@@ -376,6 +376,9 @@ input[type='radio'] {
   line-height: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  /* A long word in the profile's name breaks inside the button rather than running past the
+     sidebar's edge (#713). */
+  overflow-wrap: anywhere;
 }
 .profile-switcher:hover,
 .profile-switcher[aria-expanded='true'] {
@@ -406,6 +409,7 @@ input[type='radio'] {
 }
 .sidebar-foot .action-menu-list .btn {
   white-space: normal;
+  overflow-wrap: anywhere;
   text-align: left;
   padding: 8px 12px;
 }
@@ -422,6 +426,7 @@ input[type='radio'] {
 }
 /* "Open" beside the open profile; aria-checked says so to a screen reader. */
 .action-menu-mark {
+  flex: none;
   margin-left: auto;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10.5px;
@@ -4479,7 +4484,8 @@ button.rail-tile:hover {
 }
 /* On a phone the step tools take their own row under the title, so the title keeps the row's
    full width instead of wrapping in a narrow column beside ↑ ↓ Edit Remove (#613). The tools
-   keep their order, and their buttons grow to 44px touch targets. */
+   keep their order, and their buttons grow to 44px touch targets, as does Restore under
+   "Removed steps in this phase" (#717). */
 @media (max-width: 720px) {
   .task.is-editing {
     grid-template-columns: 20px 26px minmax(0, 1fr);
@@ -4493,10 +4499,22 @@ button.rail-tile:hover {
     min-width: 44px;
     min-height: 44px;
   }
+  /* Height only: a min-width would let the row's flex layout shrink Restore below its text. */
+  .removed-step .btn {
+    min-height: 44px;
+  }
 }
 .task-link {
   display: inline-block;
   margin-top: 8px;
+}
+/* On a phone "Open factory: … ↗" under a step is a 44px touch target (#749). Height only: the
+   link is already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
+@media (max-width: 720px) {
+  .task-link {
+    display: inline-flex;
+    min-height: 44px;
+  }
 }
 .task-edit {
   display: block;
@@ -4675,6 +4693,8 @@ button.rail-tile:hover {
   .bay-head h3 {
     color: #101417;
   }
+  /* #toast.show too: the screen rule that shows the toast is more specific than #toast, so it
+     would win here and print a toast that is still up (#730). */
   .sidebar,
   .topbar,
   .toolbar,
@@ -4682,6 +4702,7 @@ button.rail-tile:hover {
   .checklist-tools,
   .btn,
   #toast,
+  #toast.show,
   .estimate-peek,
   .phase-track,
   .ada-ticker,
