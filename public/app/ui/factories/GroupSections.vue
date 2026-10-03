@@ -21,7 +21,7 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 
-// The factories to sort into groups (handbook factories or calculated rows), and the key
+// The factories to sort into groups (calculated rows), and the key
 // their memberships are saved under.
 const props = defineProps<{ items: T[]; keyOf: (item: T) => string }>();
 

@@ -1,5 +1,5 @@
-<!-- A shared site on a factories page (the handbook's oil campus and nuclear site, and a plan
-     guide's, #468): a collapsible section of the cards built together there. The page works out
+<!-- A shared site on the factories page (a plan guide's oil campus or nuclear site, #468): a
+     collapsible section of the cards built together there. The page works out
      the site (siteEntry in views/factories.ts) and draws its cards in the slot. -->
 <script setup lang="ts">
 import CollapseToggle from './CollapseToggle.vue';

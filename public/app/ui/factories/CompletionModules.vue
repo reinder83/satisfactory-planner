@@ -1,5 +1,5 @@
-<!-- Post Phase 5's additional completion modules on a factories page (the handbook's, and a plan
-     guide's, #468): one card per line with its check `completion-<id>`, its rate, machines and
+<!-- Post Phase 5's additional completion modules on the factories page (a plan guide's, #468):
+     one card per line with its check `completion-<id>`, its rate, machines and
      recipe, and its inputs and byproducts. completionView (views/factories.ts) prepares them. -->
 <script setup lang="ts">
 import { toggleCheck } from '../actions.ts';

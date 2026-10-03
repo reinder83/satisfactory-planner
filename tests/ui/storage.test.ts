@@ -9,6 +9,7 @@ import { beforeEach, test } from 'vitest';
 import { bayCapacity } from '../../public/state.ts';
 import { slug } from '../../public/app/format.ts';
 import {
+  calcStage,
   floor,
   layoutEditing,
   setFloor,
@@ -31,6 +32,7 @@ import {
   go,
   handbook,
   open,
+  openMigrated,
   page,
   stubFetch,
 } from './setup.ts';
@@ -842,8 +844,9 @@ test("a guided plan's storage checklist is the guide's tasks, with no ground-flo
   );
 });
 
+// On a profile migrated from the handbook (#387), whose room is the printed one.
 test('the container dialog shows its place, checks, factory link and note', async () => {
-  open({ state: { notes: { 'slot-A02': evil }, checks: { 'slot-A02-built': true } } });
+  openMigrated({ state: { notes: { 'slot-A02': evil }, checks: { 'slot-A02-built': true } } });
   render();
   $('[data-slot="A02"]')!.click();
   assert.ok($<HTMLDialogElement>('#detail')!.open);
@@ -861,7 +864,11 @@ test('the container dialog shows its place, checks, factory link and note', asyn
       ['slot-A02-verified', false],
     ],
   );
-  assert.ok($('#detail .detail-actions [data-factory]'), 'the item links to its factory');
+  const maker = calcStage()!.rows!.find(row => row.outputs[name!])!;
+  assert.ok(
+    $(`#detail .detail-actions [data-calc-factory="${maker.id}"]`),
+    'the item links to the row that makes it',
+  );
   assert.equal($<HTMLTextAreaElement>('#detail-note')!.value, evil);
   assert.equal($('#detail-note')!.getAttribute('aria-label'), 'Container notes');
   assert.equal($('#detail [data-save-note]')!.dataset.saveNote, 'slot-A02');

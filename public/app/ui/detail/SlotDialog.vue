@@ -1,13 +1,13 @@
 <!--
   The dialog for one storage container (address `id`): where it sits, its four saved checks
   `slot-<id>-<step>` (toggleCheck in ui/actions.ts), the factory that makes the item (a
-  factoryLink() to the calculated row or the handbook factory, which opens that factory's
-  dialog in its place) and the note saved under `slot-<id>`.
+  factoryLink() to the calculated row, which opens that factory's dialog in its place) and the
+  note saved under `slot-<id>`.
   Opened by openSlot in views/storage.ts.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { calcStage, calculated, checked, plan } from '../../session.ts';
+import { calcStage, checked } from '../../session.ts';
 import { SLOT_STEPS, storageBays, storageFloors } from '../../views/storage.ts';
 import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
@@ -23,9 +23,7 @@ const view = computed(() =>
     const slot = bay?.items.find(item => item.id === id);
     if (!bay || !slot?.name) return null;
     const name = slot.name;
-    const factory = calculated
-      ? calcStage()?.rows?.find(r => r.outputs[name])
-      : plan.factories.find(f => f.name === name);
+    const factory = calcStage()?.rows?.find(r => r.outputs[name]);
     const index = Number(id.slice(bay.id.length));
     return {
       name,
@@ -36,7 +34,7 @@ const view = computed(() =>
         const key = 'slot-' + id + '-' + step;
         return { key, label, done: checked(key) };
       }),
-      link: factory ? (calculated ? { calcFactory: factory.id } : { factory: factory.id }) : null,
+      link: factory ? { calcFactory: factory.id } : null,
     };
   }),
 );

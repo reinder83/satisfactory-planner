@@ -15,7 +15,7 @@ import {
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import type { View } from '../../public/app/session.ts';
-import { $, generated, go, open, page } from './setup.ts';
+import { $, generated, go, open, openMigrated, page } from './setup.ts';
 
 beforeEach(() => {
   setPlanEditing(false);
@@ -37,6 +37,8 @@ const MODES: {
   name: string;
   view: View;
   calculated: boolean;
+  // A profile migrated from the handbook (#387) rather than the default plan.
+  migrated?: true;
   toggle: string;
   label: string;
   on: () => boolean;
@@ -58,9 +60,10 @@ const MODES: {
     on: () => planEditing,
   },
   {
-    name: 'handbook groups',
+    name: 'migrated groups',
     view: 'factories',
-    calculated: false,
+    calculated: true,
+    migrated: true,
     toggle: '[data-toggle-factory-edit]',
     label: 'Editing groups',
     on: () => factoryEditing,
@@ -85,7 +88,8 @@ const MODES: {
 
 for (const mode of MODES)
   test(`${mode.name}: the edit bar shows while editing, and Done leaves with focus on the toggle (SP-13)`, async () => {
-    open(mode.calculated ? { calculated: generated() } : {});
+    if (mode.migrated) openMigrated();
+    else open(mode.calculated ? { calculated: generated() } : {});
     go(mode.view);
     render();
     assert.equal($('[data-edit-bar]'), null, 'no bar before editing');

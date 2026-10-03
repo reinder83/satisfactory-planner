@@ -1,16 +1,16 @@
-// Detail dialogs in the shared #detail <dialog>. The factory dialogs (handbook and calculated),
-// a factory group's build order and the storage container are components in ui/detail/, opened
-// by openFactory, openCalculatedFactory, openGroupChain and openSlot (views/storage.ts), as
-// is the wizard's alternate recipe (openAltRecipe in wizard/recipes.ts).
+// Detail dialogs in the shared #detail <dialog>. The factory dialog, a factory group's build
+// order and the storage container are components in ui/detail/, opened by
+// openCalculatedFactory, openGroupChain and openSlot (views/storage.ts), as is the wizard's
+// alternate recipe (openAltRecipe in wizard/recipes.ts).
 import { num } from './format.ts';
 import { itemRate } from './flow.ts';
-import { calcStage, calculated, plan, stage } from './session.ts';
+import { calcStage } from './session.ts';
 import { showDetail } from './ui/detail.ts';
 import { factoryGroupsState, membershipsOf } from './views/factories.ts';
 import type { FactoryLink } from './ui/actions.ts';
 import type { ItemRates } from '../types/index.ts';
 
-// A factory in a group's build order, in one shape for both profile kinds.
+// A factory in a group's build order.
 interface ChainNode {
   id: string;
   link: FactoryLink;
@@ -21,7 +21,6 @@ interface ChainNode {
   outputs: ItemRates;
   // A calculated generator's output, MW.
   mw?: number;
-  recipe?: string;
 }
 
 // One numbered stage of a group's build order (ui/detail/GroupChainDialog.vue).
@@ -36,12 +35,6 @@ export interface ChainStage {
   power: boolean;
 }
 
-// The dialog for one handbook factory (ui/detail/FactoryDialog.vue); nothing for an unknown id.
-export function openFactory(id: string) {
-  if (!plan.factories.some(x => x.id === id)) return;
-  showDetail({ kind: 'factory', id });
-}
-
 // The dialog for one row of a calculated plan (ui/detail/CalcFactoryDialog.vue).
 export function openCalculatedFactory(id: string) {
   if (!calcStage()?.rows?.some(r => r.id === id)) return;
@@ -54,43 +47,21 @@ export function openGroupChain(groupId: string) {
   showDetail({ kind: 'group', id: groupId });
 }
 
-// The factories assigned to group `groupId` that run in the current phase, in one shape for both
-// profile kinds: { id, link, name, machine, machines, inputs, outputs } with total rates.
-// Calculated rows also carry generationMW as `mw`; a handbook factory has a single output,
-// its own item.
+// The rows assigned to group `groupId` that run in the current phase: { id, link, name,
+// machine, machines, inputs, outputs } with total rates, and generationMW as `mw`.
 function groupChainNodes(groupId: string): ChainNode[] {
-  if (calculated) {
-    const storedStage = calcStage();
-    return (storedStage?.rows || [])
-      .filter(r => membershipsOf(r.id).some(m => m.group === groupId))
-      .map(row => ({
-        id: row.id,
-        link: { calcFactory: row.id },
-        name: row.name,
-        machine: row.machine,
-        machines: row.machines,
-        inputs: row.inputs || {},
-        outputs: row.outputs || {},
-        mw: row.generationMW,
-      }));
-  }
-  const stageKey = stage();
-  return plan.factories
-    .filter(f => f.stages[stageKey] && membershipsOf(f.id).some(m => m.group === groupId))
-    .map(factory => {
-      // The filter above keeps only factories with this stage.
-      const factoryStage = factory.stages[stageKey]!;
-      return {
-        id: factory.id,
-        link: { factory: factory.id },
-        name: factory.name,
-        machine: factoryStage.machine,
-        machines: factoryStage.machines,
-        inputs: factoryStage.inputs || {},
-        outputs: { [factory.name]: factoryStage.output },
-        recipe: factoryStage.recipe,
-      };
-    });
+  return (calcStage()?.rows || [])
+    .filter(r => membershipsOf(r.id).some(m => m.group === groupId))
+    .map(row => ({
+      id: row.id,
+      link: { calcFactory: row.id },
+      name: row.name,
+      machine: row.machine,
+      machines: row.machines,
+      inputs: row.inputs || {},
+      outputs: row.outputs || {},
+      mw: row.generationMW,
+    }));
 }
 
 // A factory group's build order at the current phase: its factories as numbered stages,
@@ -149,11 +120,7 @@ export function groupChain(
   // Stage numbers by node id (every node is placed, so each has one), and every factory in the
   // phase, to count consumers outside the group.
   const stageNo = new Map(placed.map((node, i) => [node.id, i + 1]));
-  const others: { id: string; inputs?: ItemRates }[] = calculated
-    ? calcStage()?.rows || []
-    : plan.factories
-        .filter(f => f.stages[stage()])
-        .map(f => ({ id: f.id, name: f.name, inputs: f.stages[stage()]!.inputs || {} }));
+  const others: { id: string; inputs?: ItemRates }[] = calcStage()?.rows || [];
   const stages = placed.map((node, i): ChainStage => {
     // Needs: each input with the earliest in-group stage making it, "outside the group" when
     // none does, or the loop marker.

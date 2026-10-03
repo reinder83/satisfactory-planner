@@ -29,7 +29,9 @@ import {
   generated,
   go,
   handbook,
+  migratedRow,
   open,
+  openMigrated,
   page,
   stubFetch,
 } from './setup.ts';
@@ -124,7 +126,7 @@ test('deleting a personal task moves focus to the next step’s summary, or its 
 
 test('removing a factory group moves focus to the next group, else the new group field', async () => {
   stubFetch({ '/api/update': applyUpdate });
-  open({
+  openMigrated({
     state: {
       factoryGroups: {
         groups: [
@@ -372,7 +374,8 @@ test('the last hidden bay or floor restored moves focus to its floor tab', async
 
 test('removing a factory from a group moves focus to its next ✕, else its Add to group', async () => {
   stubFetch({ '/api/update': applyUpdate });
-  open({
+  const wire = migratedRow('wire');
+  openMigrated({
     state: {
       factoryGroups: {
         groups: [
@@ -380,7 +383,7 @@ test('removing a factory from a group moves focus to its next ✕, else its Add 
           { id: 'fg-plates1', name: 'Stitched plates' },
         ],
         assignments: {
-          wire: [
+          [wire]: [
             { group: 'fg-cable01', rate: 300 },
             { group: 'fg-plates1', rate: null },
           ],
@@ -392,16 +395,18 @@ test('removing a factory from a group moves focus to its next ✕, else its Add 
   setFactoryEditing(true);
   render();
   // Wire's card in the cable factory's section goes with its first ✕.
-  const card = $('[data-unassign="wire"][data-group="fg-cable01"]')!.closest('.assign-editor')!;
-  press('[data-unassign="wire"][data-group="fg-cable01"]');
+  const inCables = `[data-unassign="${wire}"][data-group="fg-cable01"]`;
+  const inPlates = `[data-unassign="${wire}"][data-group="fg-plates1"]`;
+  const card = $(inCables)!.closest('.assign-editor')!;
+  press(inCables);
   await settle();
-  assert.ok(!$('[data-unassign="wire"][data-group="fg-cable01"]'), 'wire left the group');
+  assert.ok(!$(inCables), 'wire left the group');
   assert.equal(card.isConnected, false, 'that card went with it');
-  assert.ok(focusedOn('[data-unassign="wire"][data-group="fg-plates1"]'), describeFocus());
-  press('[data-unassign="wire"][data-group="fg-plates1"]');
+  assert.ok(focusedOn(inPlates), describeFocus());
+  press(inPlates);
   await settle();
-  assert.ok(!$('[data-unassign="wire"]'), 'wire is in no group');
-  assert.ok(focusedOn('[data-assign-add="wire"]'), describeFocus());
+  assert.ok(!$(`[data-unassign="${wire}"]`), 'wire is in no group');
+  assert.ok(focusedOn(`[data-assign-add="${wire}"]`), describeFocus());
 });
 
 test('removing a supply row moves focus to the next Remove, else the previous one, else the blank row', async () => {

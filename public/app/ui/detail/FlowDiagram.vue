@@ -69,8 +69,7 @@ const flow = computed(() => {
           ? null
           : {
               round: output.mach < 0.5 ? '<1' : num(Math.ceil(output.mach - 1e-9)),
-              exact:
-                num(output.mach) + ' at 100% · ' + (model.local ? 'build beside it' : 'round up'),
+              exact: num(output.mach) + ' at 100% · round up',
             },
       rateText: output.rateTxt ?? null,
       rateValue: output.rateTxt == null && output.rate !== undefined ? num(output.rate) : null,

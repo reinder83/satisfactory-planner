@@ -194,9 +194,7 @@ async function deletePersonal(event: Event) {
       ><button
         v-if="step.link"
         :class="['btn', lead ? '' : 'quiet', 'task-link']"
-        v-bind="
-          factoryLink(step.link.calc ? { calcFactory: step.link.id } : { factory: step.link.id })
-        "
+        v-bind="factoryLink({ calcFactory: step.link.id })"
       >
         Open factory: {{ step.link.name }} ↗</button
       ><button
