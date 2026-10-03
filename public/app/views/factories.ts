@@ -4,9 +4,17 @@
 import { itemRate } from '../flow.ts';
 import { num } from '../format.ts';
 import { rowShares } from '../group-links.ts';
-import { checked, sectionCollapsed, state } from '../session.ts';
+import { rowMemberships } from '../group-order.ts';
+import { calculated, checked, sectionCollapsed, state } from '../session.ts';
 import { inputText } from './storage.ts';
-import type { CompletionLine, FactoryGroups, GroupAssignment } from '../../types/index.ts';
+import type {
+  CalcRow,
+  CompletionLine,
+  FactoryGroups,
+  GroupAssignment,
+  OnSiteLine,
+  StoredCalculatedPlan,
+} from '../../types/index.ts';
 
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key
 // (a calculated row id; a handbook factory id on an original profile) to a list of { group,
@@ -18,11 +26,46 @@ export function factoryGroupsState(): FactoryGroups {
     groups: saved.groups || [],
     assignments: saved.assignments || {},
     ...(saved.links ? { links: saved.links } : {}),
+    // The items each group makes on site (#874); the Logistics page's books read them (#876).
+    ...(saved.local ? { local: saved.local } : {}),
   };
 }
 
+// The factory groups' own lines made on site in a plan (#875: row id '<recipe>:<group>' with
+// `onSite`), by row id, worked out once per plan. A line has the same id in every phase.
+const siteLinesMemo = new WeakMap<StoredCalculatedPlan, Map<string, OnSiteLine>>();
+function siteLines(plan: StoredCalculatedPlan): Map<string, OnSiteLine> {
+  let lines = siteLinesMemo.get(plan);
+  if (!lines) {
+    lines = new Map();
+    for (const stage of Object.values(plan.stages))
+      for (const row of stage?.rows || []) if (row.onSite) lines.set(row.id, row.onSite);
+    siteLinesMemo.set(plan, lines);
+  }
+  return lines;
+}
+
+// The group line made on site that factory key `key` names in the open plan, if it is one.
+export const siteLineOf = (key: string): OnSiteLine | undefined =>
+  calculated ? siteLines(calculated).get(key) : undefined;
+
+// A factory's memberships (rowMemberships in group-order.ts): a group's own line made on site
+// belongs wholly to its group (#876), so the cards, allocationText and the group build-order
+// dialog place it there; any other factory has its saved memberships.
 export const membershipsOf = (key: string): GroupAssignment[] =>
-  factoryGroupsState().assignments[key] || [];
+  rowMemberships({ id: key, onSite: siteLineOf(key) }, factoryGroupsState());
+
+// The name of the group a line made on site is for (#876): the group's name now, else the name
+// the plan was calculated with, else its id. '' for any other row.
+export function siteGroupName(row: Pick<CalcRow, 'onSite'>): string {
+  const group = row.onSite?.group;
+  if (!group) return '';
+  return (
+    factoryGroupsState().groups.find(known => known.id === group)?.name ??
+    calculated?.settings.onSite?.[group]?.name ??
+    group
+  );
+}
 
 // The line on a grouped card saying how much of the factory's output this group gets, or ''
 // when the factory sits whole in a single group. Shares follow rowShares (group-links.ts), so

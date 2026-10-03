@@ -2,7 +2,7 @@
 // put in order group by group (#869). Shared by the build plan and its build status
 // (orderedPhaseSteps and currentBuildStatus in views/calculated.ts) and the flows between groups
 // (group-links.ts).
-import type { CalcRow, FactoryGroups } from '../types/index.ts';
+import type { CalcRow, FactoryGroups, GroupAssignment } from '../types/index.ts';
 
 // The place of a row, or the part of one, that is in no factory group.
 export const UNGROUPED = 'ungrouped';
@@ -49,15 +49,30 @@ export function rowShares(
 // parts may be missing in an older state.
 export type GroupsInput = Partial<Pick<FactoryGroups, 'groups' | 'assignments'>> | undefined;
 
+// The memberships a row is placed by. A factory group's own line made on site (#875, #876: row
+// id '<recipe>:<group>' with `onSite`) belongs wholly to its group while that group exists,
+// whatever is saved for its id. Once its group is removed it is placed by its saved memberships
+// like any other row (none: Ungrouped). Every other row: its saved memberships.
+export function rowMemberships(
+  row: Pick<CalcRow, 'id' | 'onSite'>,
+  groups: GroupsInput,
+): GroupAssignment[] {
+  const group = row.onSite?.group;
+  if (group && (groups?.groups || []).some(known => known.id === group))
+    return [{ group, rate: null }];
+  return groups?.assignments?.[row.id] || [];
+}
+
 // The share of `row` in each place (group id or UNGROUPED), as the Logistics page counts it
 // (groupLinks in group-links.ts) and a group's flow (group-flow.ts): rowShares of its
-// memberships, where a membership of a group that no longer exists counts as Ungrouped.
+// memberships (rowMemberships), where a membership of a group that no longer exists counts as
+// Ungrouped.
 export function rowPlaces(
-  row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW'>,
+  row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,
 ): Map<string, number> {
   const known = new Set((groups?.groups || []).map(group => group.id));
-  const memberships = (groups?.assignments?.[row.id] || []).map(membership =>
+  const memberships = rowMemberships(row, groups).map(membership =>
     known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
   );
   return rowShares(rowTotal(row), memberships);
@@ -67,15 +82,14 @@ export function rowPlaces(
 // the one with the largest share of it (rowShares), the earlier membership on a tie, so a row
 // split 40/60 is built with the 60. A part no group takes does not count, so a row in any
 // group is never Ungrouped here. UNGROUPED for a row in no existing group: a membership of a
-// removed group counts as none, as on the Logistics page.
+// removed group counts as none, as on the Logistics page. A group's own line made on site is
+// built with its group (rowMemberships, #876).
 export function homeGroup(
-  row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW'>,
+  row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,
 ): string {
   const known = new Set((groups?.groups || []).map(group => group.id));
-  const memberships = (groups?.assignments?.[row.id] || []).filter(membership =>
-    known.has(membership.group),
-  );
+  const memberships = rowMemberships(row, groups).filter(membership => known.has(membership.group));
   if (!memberships.length) return UNGROUPED;
   let home = memberships[0]!.group,
     largest = 0;
@@ -97,12 +111,14 @@ export function homeGroup(
 // now (ties again by `places`). So groups that feed each other one way take one run each, in
 // dependency order, and a group comes back only when it needs a later group's output.
 // Steps that are all in one place keep the build order exactly, so a plan without groups is
-// unchanged. Only the order changes: every step is returned once, as given. Deterministic: it
-// reads only its arguments.
+// unchanged. Only the order changes: every step is returned once, as given. `feeds` says whether
+// a maker can supply a user at all (by default every maker can): a group's own line made on site
+// feeds only its group (sitesFeed). Deterministic: it reads only its arguments.
 export function groupedBuildOrder<T extends Pick<CalcRow, 'inputs' | 'outputs'>>(
   steps: readonly T[],
   placeOf: (step: T) => string,
   places: readonly string[],
+  feeds: (maker: T, user: T) => boolean = () => true,
 ): T[] {
   const count = steps.length,
     place = steps.map(placeOf);
@@ -111,12 +127,13 @@ export function groupedBuildOrder<T extends Pick<CalcRow, 'inputs' | 'outputs'>>
     const index = places.indexOf(name);
     return index < 0 ? places.length : index;
   };
-  // needs[i]: the earlier steps that make one of step i's inputs.
+  // needs[i]: the earlier steps that make one of step i's inputs and can feed it.
   const needs = steps.map((step, i) => {
     const inputs = Object.keys(step.inputs || {});
     const found: number[] = [];
     for (let j = 0; j < i; j++)
-      if (inputs.some(item => (steps[j]!.outputs || {})[item])) found.push(j);
+      if (inputs.some(item => (steps[j]!.outputs || {})[item]) && feeds(steps[j]!, step))
+        found.push(j);
     return found;
   });
   const placed = new Array<boolean>(count).fill(false),
@@ -148,6 +165,17 @@ export function groupedBuildOrder<T extends Pick<CalcRow, 'inputs' | 'outputs'>>
     }
   }
   return ordered;
+}
+
+// Whether `maker` can supply `user` in the build order (#876): a factory group's own line made on
+// site feeds only the rows with a share in its group (rowPlaces), so a row of another group never
+// waits for it. Once its group is removed it is a line like any other.
+export function sitesFeed(groups: GroupsInput) {
+  const known = new Set((groups?.groups || []).map(group => group.id));
+  return (maker: CalcRow, user: CalcRow): boolean => {
+    const site = maker.onSite?.group;
+    return !site || !known.has(site) || (rowPlaces(user, groups).get(site) || 0) > LINK_DUST;
+  };
 }
 
 // What groupedRows reads of `groups` for `rows`: the groups' ids in their order and each row's
@@ -184,10 +212,12 @@ export function groupedRows<T extends CalcRow>(
     orderMemo.unshift(entry!);
     return entry!.ordered as readonly T[];
   }
-  const ordered = groupedBuildOrder(rows, row => homeGroup(row, groups), [
-    ...(groups?.groups || []).map(group => group.id),
-    UNGROUPED,
-  ]);
+  const ordered = groupedBuildOrder(
+    rows,
+    row => homeGroup(row, groups),
+    [...(groups?.groups || []).map(group => group.id), UNGROUPED],
+    sitesFeed(groups),
+  );
   orderMemo.unshift({ rows: [...rows], signature, ordered });
   orderMemo.length = Math.min(orderMemo.length, ORDER_MEMO_SIZE);
   return ordered;

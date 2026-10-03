@@ -2,6 +2,7 @@
 // profile's factory groups only when the user starts a recalculation, and then frozen with the new
 // plan like settings.transportFuel. Opening the app or updating never recalculates.
 import { LINK_DUST, rowShares, rowTotal } from './group-order.ts';
+import { listNames } from '../wording.ts';
 import type {
   CalcRow,
   FactoryGroups,
@@ -78,4 +79,72 @@ function onSiteShare(
   if (row) return rowShares(rowTotal(row), memberships).get(group) || 0;
   const open = memberships.filter(membership => membership.rate == null);
   return open.some(membership => membership.group === group) ? 1 / open.length : 0;
+}
+
+// One tick a recalculation kept for review because of lines made on site (#876,
+// ProgressState.onSiteReview), as the Notes page lists it: `what` names the line and its phase,
+// `now` says where its machines are in the plan now.
+export interface SiteReviewEntry {
+  key: string;
+  ticked: boolean;
+  what: string;
+  now: string;
+}
+
+// The entries of `review` for `plan` and the profile's groups, in key order. A key the plan
+// cannot place any more (say, a phase recalculated again) is listed by its key, so every tick
+// is still shown.
+export function siteReviewEntries(
+  review: Record<string, boolean> | undefined,
+  plan: Pick<StoredCalculatedPlan, 'stages' | 'settings'> | null | undefined,
+  groups: Partial<Pick<FactoryGroups, 'groups'>> | undefined,
+): SiteReviewEntry[] {
+  const groupName = (id: string) =>
+    groups?.groups?.find(group => group.id === id)?.name ?? plan?.settings.onSite?.[id]?.name ?? id;
+  return Object.entries(review || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, ticked]) => {
+      const found = /^calc-([1-5])-(.+)$/.exec(key);
+      const fallback = { key, ticked, what: key, now: '' };
+      if (!found) return fallback;
+      // The pattern matched both groups.
+      const phase = found[1] as StageKey,
+        rowId = found[2]!;
+      const rows = plan?.stages[phase]?.rows || [];
+      const central = rows.find(row => row.id === rowId);
+      const lines = rows.filter(row => row.onSite?.recipe === rowId);
+      if (lines.length) {
+        // Every line here has `onSite` (the filter above).
+        const names = listNames(lines.map(row => groupName(row.onSite!.group)));
+        return {
+          key,
+          ticked,
+          what: `${(central ?? lines[0]!).name}, Phase ${phase}`,
+          now: `Now made on site for ${names}${central ? ', and on a central line' : ''}.`,
+        };
+      }
+      // The line itself is in this plan (a later recalculation brought it back).
+      if (central)
+        return {
+          key,
+          ticked,
+          what:
+            central.name +
+            (central.onSite ? ' for ' + groupName(central.onSite.group) : '') +
+            ', Phase ' +
+            phase,
+          now: 'This line is in this plan.',
+        };
+      // A group's own line the plan no longer has: its recipe's central line, '<recipe>:<group>'.
+      const recipe = rows
+        .filter(row => !row.onSite && rowId.startsWith(row.id + ':'))
+        .sort((a, b) => b.id.length - a.id.length)[0];
+      if (!recipe) return fallback;
+      return {
+        key,
+        ticked,
+        what: `${recipe.name} for ${groupName(rowId.slice(recipe.id.length + 1))}, Phase ${phase}`,
+        now: 'Now made on the central line.',
+      };
+    });
 }

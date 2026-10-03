@@ -15,6 +15,8 @@
 //   handbookOrigin where a migrated handbook profile came from and what the migration could
 //                  not place (validateOrigin), version 12; with what the migration mapped
 //                  (mapping, #606), version 13; no update op edits it
+//   onSiteReview   ticks a recalculation kept for review because of lines made on site
+//                  (validateOnSiteReview, #876), version 15; no update op edits it
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),
@@ -25,7 +27,8 @@
 // every importer, test and the server use, so none of them names a file under public/state/.
 //   state/validate.ts        blank state, validateState and the record rules
 //   state/mutate.ts          mutate (the /api/update operations) and checkBase
-//   state/carry.ts           newProfileState, carry options, carryGuide, shareState and the
+//   state/carry.ts           newProfileState (with siteTicksForReview), carry options,
+//                            carryGuide, shareState and the
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
 //                            roundUpState, wholeMachineProfile) and their refusals
 //                            (checkNewProfileKind, checkRoundUp)
@@ -62,6 +65,7 @@ export {
   roundUpNeedsCalculated,
   roundUpState,
   shareState,
+  siteTicksForReview,
   wholeMachineProfile,
 } from './state/carry.ts';
 export {

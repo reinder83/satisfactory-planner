@@ -39,6 +39,8 @@ export interface AdaFacts {
   hasPhaseNote: boolean;
   // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
   unplaced: number;
+  // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
+  siteReview?: number;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -368,6 +370,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.unplaced > 0,
     text: facts =>
       `${plural(facts.unplaced, 'record')} from the original plan had no place in this one. They are listed at the foot of Notes, exactly as they were. I throw nothing away. It is policy.`,
+  },
+  {
+    id: 'site-review',
+    on: ['plan', 'notes', 'factories'],
+    tone: 'calm',
+    when: facts => (facts.siteReview ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines factory groups make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
   },
   {
     id: 'notes',

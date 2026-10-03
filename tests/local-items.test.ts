@@ -80,7 +80,7 @@ test('items made on site are kept as version 14; without them the state keeps it
   assert.equal('local' in empty.factoryGroups, false);
   assert.equal(empty.version, 3);
   // A newer version is still refused with the update message.
-  assert.throws(() => validateState({ ...json(clean), version: 15 }), /newer planner version/);
+  assert.throws(() => validateState({ ...json(clean), version: 16 }), /newer planner version/);
   // The fixture of the new shape, on top of every earlier version's content.
   assert.equal(validateState(json(version14)).version, 14);
 });

@@ -19,6 +19,7 @@ import {
   state,
 } from '../session.ts';
 import { power } from '../wizard/fields.ts';
+import { siteGroupName } from './factories.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -73,7 +74,15 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
 // A production row's build-plan step text: its machines, inputs and outputs, with the pointer
 // to an easier rounded option only where the dialog shows one (#379).
 const rowStepBody = (row: CalcRow): string =>
+  siteLineText(row) +
   `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
+
+// The first sentence of a step for a factory group's own line made on site (#876), naming the
+// group; '' for any other row.
+const siteLineText = (row: CalcRow): string =>
+  row.onSite
+    ? `Made on site for ${siteGroupName(row)}: it feeds that group's own lines, and what they do not use goes to the AWESOME Sink. `
+    : '';
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)
 // for stage `snapshot` shown as phase `shownPhase` (#331). Phase 1 has no generators in the plan

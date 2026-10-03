@@ -217,6 +217,7 @@ function adaFacts(): AdaFacts {
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
     unplaced: unplacedCount(),
+    siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,

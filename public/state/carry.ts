@@ -23,6 +23,7 @@ import {
   safeKey,
   validateEdits,
   validateGroups,
+  validateOnSiteReview,
   validateOrigin,
   validateState,
   validateTaskEdits,
@@ -211,13 +212,66 @@ export function newProfileState(
       state.checks[key] = !grown;
       if (grown) reviewCount++;
     }
+    reviewCount += keepSiteTicks(state, plan, source, sourcePlan);
   }
   // What a handbook migration could not place is kept for review and never deleted (#485), so a
   // profile carried from a migrated one takes it along unchanged, whatever the picks (#489).
   const origin = validateOrigin(source.handbookOrigin);
   if (origin) state.handbookOrigin = origin;
+  // So are the ticks an earlier recalculation kept for review because of lines made on site.
+  const review = validateOnSiteReview(source.onSiteReview);
+  if (review) state.onSiteReview = { checks: { ...review.checks, ...state.onSiteReview?.checks } };
   const clean = validateState(state);
   return { state: clean, reviewCount, carried: Object.values(clean.checks).filter(Boolean).length };
+}
+// The source's ticks that factory groups' own lines made on site (#875, row id
+// '<recipe>:<group>' with `onSite`) leave without a single line to land on in the new plan
+// (#876), by check key:
+// - a ticked central line (`calc-<phase>-<recipe>`) whose phase gains a group line of that recipe
+//   the source plan lacks: its machines are now split between the central line and the groups'
+//   lines, and which of them stand is not known;
+// - a ticked group line the new plan no longer has (its group stopped making the item on site,
+//   or the group is gone): its machines now belong to the central line.
+export function siteTicksForReview(
+  plan: RowsPlan,
+  source: Pick<SavedState, 'checks'>,
+  sourcePlan: RowsPlan | null | undefined,
+): string[] {
+  const previous = planRows(sourcePlan),
+    next = planRows(plan);
+  const keys = new Set<string>();
+  for (const [key, row] of next)
+    if (row.onSite && !previous.has(key)) {
+      const central = key.slice(0, key.length - row.id.length) + row.onSite.recipe;
+      if (source.checks?.[central]) keys.add(central);
+    }
+  for (const [key, row] of previous)
+    if (row.onSite && !next.has(key) && source.checks?.[key]) keys.add(key);
+  return [...keys].filter(key => safeKey(key));
+}
+// Keeps siteTicksForReview's ticks in `state.onSiteReview`, exactly as the source has them, and
+// unticks a central line among them that the new plan still has, so it is reviewed rather than
+// guessed (a group's own line starts unticked, as any new line does). Returns how many lines it
+// unticked, for reviewCount.
+function keepSiteTicks(
+  state: ProgressState,
+  plan: RowsPlan,
+  source: Pick<SavedState, 'checks'>,
+  sourcePlan: RowsPlan | null | undefined,
+): number {
+  const keys = siteTicksForReview(plan, source, sourcePlan);
+  if (!keys.length) return 0;
+  const checks: Record<string, boolean> = {};
+  let unticked = 0;
+  for (const key of keys) {
+    checks[key] = true;
+    if (state.checks[key]) {
+      state.checks[key] = false;
+      unticked++;
+    }
+  }
+  state.onSiteReview = { checks };
+  return unticked;
 }
 // Keep the previous profile's group names and its assignments for rows the new
 // plan still builds, then place the plan's remaining rows with the defaults.
@@ -385,7 +439,8 @@ export function shareState(state: SavedState): ProgressState {
   clean.notes = {};
   clean.deliveries = {};
   clean.revision = 0;
-  // Its unmapped ticks and notes are progress too (#485).
+  // Its unmapped ticks and notes are progress too (#485), and so are ticks kept for review (#876).
   delete clean.handbookOrigin;
+  delete clean.onSiteReview;
   return validateState(clean);
 }

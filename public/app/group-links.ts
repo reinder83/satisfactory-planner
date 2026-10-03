@@ -12,6 +12,12 @@
 // among everything that asks for it in proportion to what each asks, as elsewhere in the
 // planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
 // left out: they are that group's own belts.
+//
+// A factory group's own line made on site (#875, #876: `onSite`) sits wholly in its group. For
+// the items that group marks (factoryGroups.local) it supplies only the group's own demand, its
+// share of each consumer, which is what the planner sized it to; what it makes beyond that goes
+// to the sink rather than to other groups (onSiteBooks). So two groups that both make Wire on site
+// have no Wire link between them, and a central Wire line serves the remaining consumers.
 import { LINK_DUST, rowPlaces, rowShares, UNGROUPED } from './group-order.ts';
 import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
 
@@ -74,9 +80,13 @@ export interface GroupLink {
 }
 
 // Per item, what each place makes (`supply`) and what each place asks for (`demand`), per minute.
+// `sunk`: per item, what a group's own lines made on site make beyond the group's own demand,
+// which goes straight to the sink (#876). A group's own lines' supply of an item it marks, and
+// the demand it meets, are left out of `supply` and `demand`: they stay inside the group.
 export interface ItemBooks {
   supply: Record<string, Map<string, number>>;
   demand: Record<string, Map<string, number>>;
+  sunk: Record<string, Map<string, number>>;
 }
 
 // The books groupLinks shares out: every row's inputs and outputs split by its places
@@ -85,6 +95,8 @@ export interface ItemBooks {
 export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks {
   const supply: Record<string, Map<string, number>> = {};
   const demand: Record<string, Map<string, number>> = {};
+  // What groups' own lines make of the items those groups mark, per item and group.
+  const onSite: Record<string, Map<string, number>> = {};
   const put = (
     books: Record<string, Map<string, number>>,
     item: string,
@@ -98,8 +110,9 @@ export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks 
   for (const row of stage.rows || []) {
     // A membership in a group that no longer exists counts as ungrouped.
     for (const [place, share] of rowPlaces(row, groups)) {
+      const marked = row.onSite?.group === place ? groups.local?.[place] || [] : [];
       for (const [item, rate] of Object.entries(row.outputs || {}))
-        put(supply, item, place, rate * share);
+        put(marked.includes(item) ? onSite : supply, item, place, rate * share);
       for (const [item, rate] of Object.entries(row.inputs || {}))
         put(demand, item, place, rate * share);
     }
@@ -116,7 +129,38 @@ export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks 
     put(demand, item, OUTSIDE.delivery, delivery.rate || 0);
   for (const [item, rate] of Object.entries(stage.surplus || {}))
     put(demand, item, OUTSIDE.surplus, rate);
-  return { supply, demand };
+  return { supply, demand, sunk: onSiteBooks(onSite, demand) };
+}
+
+// Each group's own lines made on site meet that group's own demand for the item first (#876):
+// that part leaves `demand`, and what the lines make beyond it is returned as going to the sink,
+// taken off the sink's demand (never below 0). Should the group ask for more than its lines make
+// (memberships changed since the plan was calculated), the rest of its demand stays in
+// `demand`, for the other supply of the item.
+function onSiteBooks(
+  onSite: Record<string, Map<string, number>>,
+  demand: Record<string, Map<string, number>>,
+): Record<string, Map<string, number>> {
+  const sunk: Record<string, Map<string, number>> = {};
+  const lower = (places: Map<string, number>, place: string, rate: number) => {
+    const left = (places.get(place) || 0) - rate;
+    if (left > LINK_DUST) places.set(place, left);
+    else places.delete(place);
+  };
+  for (const [item, groupsMaking] of Object.entries(onSite))
+    for (const [group, made] of groupsMaking) {
+      const asks = demand[item] ?? new Map<string, number>();
+      const met = Math.min(made, asks.get(group) || 0);
+      lower(asks, group, met);
+      const excess = made - met;
+      if (excess > LINK_DUST) {
+        (sunk[item] ??= new Map()).set(group, excess);
+        lower(asks, OUTSIDE.surplus, excess);
+      }
+      if (asks.size) demand[item] = asks;
+      else delete demand[item];
+    }
+  return sunk;
 }
 
 // What moves between two places of an item whose places make `made` and ask `asked` in all:
@@ -130,9 +174,15 @@ export const placeTotal = (places: Map<string, number> | undefined): number =>
   [...(places?.values() || [])].reduce((sum, rate) => sum + rate, 0);
 
 export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink[] {
-  const { supply, demand } = itemBooks(stage, groups);
-  // Share each item's supply out in proportion to demand.
+  const { supply, demand, sunk } = itemBooks(stage, groups);
   const links = new Map<string, GroupLink>();
+  const add = (from: string, to: string, item: string, rate: number) => {
+    const key = from + '\u0000' + to;
+    const link = links.get(key) ?? { from, to, items: [] };
+    link.items.push({ item, rate });
+    links.set(key, link);
+  };
+  // Share each item's supply out in proportion to demand.
   for (const [item, sources] of Object.entries(supply)) {
     const sinks = demand[item];
     if (!sinks) continue;
@@ -142,13 +192,12 @@ export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink
       for (const [to, wanted] of sinks) {
         if (from === to) continue;
         const rate = sharedRate(made, asked, supplied, wanted);
-        if (rate <= LINK_DUST) continue;
-        const key = from + '\u0000' + to;
-        const link = links.get(key) ?? { from, to, items: [] };
-        link.items.push({ item, rate });
-        links.set(key, link);
+        if (rate > LINK_DUST) add(from, to, item, rate);
       }
   }
+  // What a group's own lines made on site make beyond the group's demand goes to the sink.
+  for (const [item, groupsSinking] of Object.entries(sunk))
+    for (const [group, rate] of groupsSinking) add(group, OUTSIDE.surplus, item, rate);
   const total = (link: GroupLink) => link.items.reduce((sum, entry) => sum + entry.rate, 0);
   for (const link of links.values()) link.items.sort((a, b) => b.rate - a.rate);
   return [...links.values()].sort((a, b) => total(b) - total(a));
