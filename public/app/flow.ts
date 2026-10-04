@@ -102,16 +102,42 @@ export interface RecipeView {
   outs: RecipeCellData[];
 }
 
-// The note under a factory's destinations (flowNotes). `shared`: another line makes one of the
-// same items for the same consumers. `ownLine`: the row is the named group's own line made on
-// site, which delivers to that group alone (#956). `lessOnSite`: the demand leaves out what
-// groups' own lines make on site for themselves.
-export interface BankNote {
+// What a bank note says of the lines a row shares its plan-wide destinations with (supplyNote).
+// `shared`: another line makes one of the same items for the same consumers, which the note calls
+// "the other recipes producing it", or "the other lines making it" with `sameRecipe`, when one of
+// them follows the row's own recipe (a group's copy of it, #1002). `lessOnSite`: the demand leaves
+// out what groups' own lines make on site for themselves. `leftover`: after a group edit, groups
+// whose own lines' excess, offered to the other places (#918), meets a part of that demand too,
+// which the row's destinations leave out; the note names them rather than count those lines among
+// the other recipes (#1002).
+export interface SupplyNote {
   shared: boolean;
+  sameRecipe?: true;
+  lessOnSite?: true;
+  leftover?: LeftoverLines;
+}
+
+// The groups whose own lines made on site offer their excess (SupplyNote.leftover), by name, and
+// how many such lines there are in all.
+export interface LeftoverLines {
+  groups: string[];
+  lines: number;
+}
+
+// The note under a factory's destinations (flowNotes). For a group's own line made on site,
+// `ownLine` names the group, whose lines it delivers to alone (#956), and `shared` says only
+// whether another of that group's own lines makes the same item (#1001). Any other row's note is a
+// SupplyNote.
+export interface BankNote extends SupplyNote {
   ownLine?: string;
   // An own line's group offers what the sink has no room for to the other places (#918).
   offers?: true;
-  lessOnSite?: true;
+  // An own line's group asks for none of the item since a group edit, and offers none: all of it
+  // goes to the sink (#1002).
+  asksNone?: true;
+  // An own line's outputs its group does not mark, such as a byproduct (#1001): they go to the
+  // plan-wide demand for them, as any other line's do.
+  planWide?: SupplyNote & { items: string[] };
 }
 
 // A factory's flow at one phase (see the top of this file).
@@ -677,50 +703,92 @@ export interface FlowNotes {
   bankNote: BankNote | null;
 }
 
-// Whether another row makes `item` for the same consumers as `row`: any other row making it, or
-// for an item groups make on site (#956) another of the same group's own lines for an own line,
-// and another line that is no group's own line for any other row. After a group edit (#918) an
-// own line whose group offers its excess also shares the other consumers with those lines;
-// `ownOnly` asks only about the same group's own lines, which is what an own line's note says.
-function sharesItem(
-  row: CalcRow,
-  item: string,
-  context: CalcFlowContext,
-  ownOnly = false,
-): boolean {
-  const site = siteItemBooks(item, context);
-  const group = site && ownLineGroup(row, item, site);
-  // Whether a line serves the demand the groups' own lines leave (ordinaryShares).
-  const ordinary = (line: CalcRow) => {
-    const lineGroup = site && ownLineGroup(line, item, site);
-    return !lineGroup || !!site?.books.offered[item]?.has(lineGroup);
+// The recipe a row follows: a group's own line made on site follows the recipe it copies.
+const recipeOf = (row: CalcRow): string => row.onSite?.recipe ?? row.id;
+
+// The other rows of the phase making `item`.
+const otherMakers = (row: CalcRow, item: string, context: CalcFlowContext): CalcRow[] =>
+  (context.storedStage.rows || []).filter(other => other.id !== row.id && other.outputs?.[item]);
+
+// What the note of `row`, which is no group's own line for `items`, says of the lines it shares
+// their destinations with (SupplyNote): every other line making one of them, except a group's own
+// line for an item its group makes on site, which serves its group alone (#956), unless its group
+// offers its excess since a group edit (#918), when the note names the group (`leftover`).
+function supplyNote(row: CalcRow, items: string[], context: CalcFlowContext): SupplyNote {
+  let shared = false,
+    sameRecipe = false;
+  const leftover = new Map<string, number>();
+  for (const item of items) {
+    const site = siteItemBooks(item, context);
+    for (const other of otherMakers(row, item, context)) {
+      const group = site && ownLineGroup(other, item, site);
+      if (!group) {
+        shared = true;
+        sameRecipe ||= recipeOf(other) === recipeOf(row);
+      } else if (site.books.offered[item]?.has(group))
+        leftover.set(group, (leftover.get(group) || 0) + 1);
+    }
+  }
+  const site = context.site;
+  return {
+    shared,
+    ...(sameRecipe ? { sameRecipe: true as const } : {}),
+    ...(items.some(item => siteItemBooks(item, context)) ? { lessOnSite: true as const } : {}),
+    ...(site && leftover.size
+      ? {
+          leftover: {
+            groups: site.groups.groups
+              .filter(known => leftover.has(known.id))
+              .map(known => known.name),
+            lines: placeTotal(leftover),
+          },
+        }
+      : {}),
   };
-  return (context.storedStage.rows || []).some(
-    other =>
-      other.id !== row.id &&
-      other.outputs?.[item] &&
-      (!site ||
-        ownLineGroup(other, item, site) === group ||
-        (!ownOnly && ordinary(row) && ordinary(other))),
-  );
 }
 
-// The bank note's words for lines made on site (#956): the group's name when `row` is its own
-// line for one of its items (and whether its group offers its excess since a group edit, #918),
-// else whether groups make one of its items on site.
-function siteNote(row: CalcRow, context: CalcFlowContext): Omit<BankNote, 'shared'> {
+// The note of `row` as `group`'s own line made on site for `ownItems` (#956): the group's name;
+// `shared` only when another of the group's own lines makes one of those items (#1001), so a
+// byproduct another line makes counts for nothing there; whether the group offers its excess since
+// a group edit (#918) or asks for none of it (#1002); and the row's other outputs, which go to the
+// plan-wide demand as any other line's do (planWide).
+function ownLineNote(
+  row: CalcRow,
+  group: string,
+  ownItems: string[],
+  site: SiteBooks,
+  context: CalcFlowContext,
+): BankNote {
+  const offers = ownItems.some(item => site.books.offered[item]?.has(group));
+  // ownLineGroup found the group's lines in the books.
+  const asksNone = ownItems.every(item => site.books.local[item]!.get(group)!.asked <= LINK_DUST);
+  const rest = Object.keys(row.outputs || {}).filter(item => !ownItems.includes(item));
+  return {
+    shared: ownItems.some(item =>
+      otherMakers(row, item, context).some(other => ownLineGroup(other, item, site) === group),
+    ),
+    ownLine: site.groups.groups.find(known => known.id === group)?.name ?? group,
+    ...(offers ? { offers: true as const } : asksNone ? { asksNone: true as const } : {}),
+    ...(rest.length ? { planWide: { items: rest, ...supplyNote(row, rest, context) } } : {}),
+  };
+}
+
+// The bank note of a calculated row: its own line's note when it is a group's own line made on
+// site for one of its outputs (ownLineNote), else what it says of the lines it shares its
+// destinations with (supplyNote).
+function bankNoteOf(row: CalcRow, context: CalcFlowContext): BankNote {
+  const items = Object.keys(row.outputs || {});
   const site = context.site;
-  if (!site) return {};
-  const items = Object.keys(row.outputs || {}).filter(item => siteItemBooks(item, context));
-  const group = items.map(item => ownLineGroup(row, item, site)).find(Boolean);
-  if (group)
-    return {
-      ownLine: site.groups.groups.find(known => known.id === group)?.name ?? group,
-      ...(items.some(item => site.books.offered[item]?.has(group))
-        ? { offers: true as const }
-        : {}),
-    };
-  return items.length ? { lessOnSite: true } : {};
+  const group = site && items.map(item => ownLineGroup(row, item, site)).find(Boolean);
+  if (site && group)
+    return ownLineNote(
+      row,
+      group,
+      items.filter(item => ownLineGroup(row, item, site) === group),
+      site,
+      context,
+    );
+  return supplyNote(row, items, context);
 }
 
 // The notes for a calculated row whose (capped) destinations are `outputs`. With more than one
@@ -730,27 +798,21 @@ function siteNote(row: CalcRow, context: CalcFlowContext): Omit<BankNote, 'share
 // plan-wide demand, not this row's share: the bank note under the destinations says so, and
 // `shared` adds that another row makes one of the same items. A group's own line made on site
 // delivers to its group alone, and the other lines making its item leave that out (#956):
-// the note names the group, or says so (siteNote). No item destinations (none, or a generator's
-// power grid alone), no bank note (#560).
+// the note names the group, or says so (bankNoteOf). No item destinations (none, or a
+// generator's power grid alone), no bank note (#560).
 export function flowNotes(
   row: CalcRow,
   outputs: FlowOutput[],
   context: CalcFlowContext,
 ): FlowNotes {
   const splits = outputs.filter(o => o.mach !== undefined && o.kind !== 'sink');
-  const site = siteNote(row, context);
-  // An own line's note speaks of its group's other own lines only: the lines it shares an
-  // offered excess with (#918) are the other places, which the offer wording names.
-  const shared = Object.keys(row.outputs || {}).some(item =>
-    sharesItem(row, item, context, !!site.ownLine),
-  );
   return {
     split:
       splits.length > 1
         ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
         : '',
     clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
-    bankNote: outputs.some(o => !o.noItem) ? { shared, ...site } : null,
+    bankNote: outputs.some(o => !o.noItem) ? bankNoteOf(row, context) : null,
   };
 }
 
