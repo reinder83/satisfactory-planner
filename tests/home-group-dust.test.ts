@@ -70,8 +70,9 @@ test('the issue’s row: a fixed rate too small to count leaves the row Ungroupe
   const r = row('r', 240);
   const groups = groupsOf({ r: [{ group: 'g1', rate: 0.0001 }] });
   const places = rowPlaces(r, groups);
-  assert.deepEqual([...places.keys()], [UNGROUPED], 'the tiny share is dropped as dust');
-  assert.ok(Math.abs(places.get(UNGROUPED)! - (1 - 0.0001 / 240)) < 1e-12);
+  assert.deepEqual([...places.keys()], [UNGROUPED], 'the tiny share is no place of its own');
+  // It goes to the row's largest place, so the row's places add up to 1 (#906).
+  assert.ok(Math.abs(places.get(UNGROUPED)! - 1) < 1e-12);
   assert.equal(homeGroup(r, groups), UNGROUPED);
   assert.equal(mainHomeGroup(r, groups), 'g1', 'main built it with g1');
   // Several such rates, in any order, and one beside a removed group: still Ungrouped.
