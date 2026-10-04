@@ -1,7 +1,8 @@
 <!--
   "Made on site" for one factory group, while groups are edited (#877, part of #868): a checkbox
   per item the group can make on site (onSitePickerOffers in app/on-site-picker.ts: an item a plan
-  row makes and one of the group's rows uses in any phase; one only its lines in other phases use
+  row makes and one of the group's rows other than its lines made on site uses in any phase, or an
+  ingredient of a part ticked here, named after it, #967; one only its lines in other phases use
   comes last and names them, #941), and Save. Ticking a box only changes the choice on this
   page; Save sends the whole list as one `factoryLocal` update (factoryGroups.local). That is the
   explicit action (#854, #856): nothing is saved while a keyboard user moves through the boxes.
@@ -14,17 +15,24 @@
   So after a save the picker says "Saved." in a live region and, while the plan needs a
   recalculation, offers "Go to the recalculation", which brings that notice into view and focuses
   its button.
+
+  A choice not saved yet is never dropped without a word, and never saved by anything but Save
+  (#930). Discard, beside Save while there is something to save, puts the saved choice back.
+  The picker registers with api.ts (choiceDrafts): Done editing and folding the group keep it on
+  screen while its choice is unsaved, and it then says so in a live region and focuses Save, with
+  Discard beside it (holdUnsavedChoices); leaving the page, the profile or the phase asks first,
+  as for an unsaved note (allowSwitch), and closing the tab warns (listeners.ts).
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { save } from '../../api.ts';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { choiceDrafts, save, type ChoiceDraft } from '../../api.ts';
 import { calculated, stage } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { onSiteChange, onSitePickerOffers } from '../../on-site-picker.ts';
+import { onSiteChange, onSitePickerOffers, RAW_NOTE, UNUSED_NOTE } from '../../on-site-picker.ts';
 import { onSitePlannable } from '../../on-site.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
-import { whileBusy } from '../../busy.ts';
+import { isBusy, whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import ItemIcon from '../ItemIcon.vue';
 
@@ -44,6 +52,12 @@ const changed = computed(
 );
 // Set by a save from this picker, until a box is ticked or cleared again.
 const justSaved = ref(false);
+// Set by Discard, until a box is ticked or cleared again: the live region says so.
+const discarded = ref(false);
+// Set when Done editing or folding the group was held back by this unsaved choice (#930), until
+// it is saved or discarded: the picker says why, beside Save and Discard.
+const held = ref(false);
+const holding = computed(() => held.value && changed.value);
 // Whether the plan needs a recalculation for the marks as saved (OnSiteRecalc.vue shows it).
 const needsRecalc = computed(() =>
   legacy(() => !!calculated && !!onSiteChange(calculated, factoryGroupsState())),
@@ -51,21 +65,22 @@ const needsRecalc = computed(() =>
 
 const items = computed(() =>
   legacy(() => {
-    // The items its lines in this phase use, then those only its lines in other phases use, each
-    // with a note naming those lines (#941).
+    // The items its lines in this phase use, then the ingredients of the parts ticked here
+    // (#967), then those only its lines in other phases use, each with a note (#941). The boxes
+    // ticked count before they are saved, so ticking Wire offers Copper Ingot at once.
     const offered = calculated
-      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage())
+      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage(), chosen.value)
       : [];
-    // A marked item no row of the group uses any more stays, so it can be cleared. A raw resource
-    // marked in an older or hand-edited save (such as Water) can never be made on site (#921), so
-    // its note says that instead.
-    const stale = saved.value.filter(item => !offered.some(entry => entry.item === item));
+    // A marked or ticked item no row of the group uses any more (an ingredient whose part was
+    // cleared, #951) stays, so it can be cleared, with the heading's note. A raw resource marked
+    // in an older or hand-edited save (such as Water) can never be made on site (#921), so its
+    // note says that instead.
+    const stale = sorted([...new Set([...saved.value, ...chosen.value])]).filter(
+      item => !offered.some(entry => entry.item === item),
+    );
     return [
       ...offered,
-      ...stale.map(item => ({
-        item,
-        note: onSitePlannable(item) ? '(no line here uses it now)' : "(can't be made on site)",
-      })),
+      ...stale.map(item => ({ item, note: onSitePlannable(item) ? UNUSED_NOTE : RAW_NOTE })),
     ];
   }),
 );
@@ -77,6 +92,53 @@ function toggle(item: string, on: boolean) {
   else next.delete(item);
   draft.value = sorted([...next]);
   justSaved.value = false;
+  discarded.value = false;
+  if (!changed.value) held.value = false;
+}
+
+// The picker's element and its Save, for the registration below.
+const fieldset = ref<HTMLFieldSetElement | null>(null);
+const saveButton = ref<HTMLButtonElement | null>(null);
+
+// Done editing or folding the group while the choice is unsaved (holdUnsavedChoices in api.ts):
+// the picker says so, and the first one held comes into view with focus on its Save.
+async function hold(focus: boolean) {
+  held.value = true;
+  if (!focus) return;
+  await nextTick();
+  fieldset.value
+    ?.querySelector('[data-on-site-held]')
+    ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  saveButton.value?.focus({ preventScroll: true });
+}
+
+const registration: ChoiceDraft = {
+  el: () => fieldset.value,
+  label: () => 'Made on site in ' + props.groupName,
+  unsaved: () => changed.value,
+  hold: focus => void hold(focus),
+  discard: () => {
+    draft.value = null;
+    held.value = false;
+    justSaved.value = false;
+    discarded.value = true;
+  },
+};
+onMounted(() => choiceDrafts.add(registration));
+onBeforeUnmount(() => choiceDrafts.delete(registration));
+
+// Discard: the saved choice again, nothing sent. Discard goes and Save has nothing left to do,
+// so focus goes on to the first box, as after a save. Pressed while Save's write is on its way,
+// it does nothing: that write lands whatever this says.
+async function discard(event: Event) {
+  const button = event.currentTarget as HTMLButtonElement;
+  if (!changed.value || isBusy(saveButton.value)) return;
+  const refocus = refocusAfterRemoval(button, {
+    scope: button.closest('[data-on-site-picker]'),
+    fallback: ['input[type=checkbox]'],
+  });
+  registration.discard();
+  await refocus();
 }
 
 // "Go to the recalculation": the page's notice into view, and focus on its button.
@@ -100,6 +162,8 @@ async function apply(event: Event) {
       await save({ type: 'factoryLocal', id: props.groupId, items: chosen.value });
       draft.value = null;
       justSaved.value = true;
+      discarded.value = false;
+      held.value = false;
       return true;
     } catch {
       return false;
@@ -112,7 +176,12 @@ async function apply(event: Event) {
 </script>
 
 <template>
-  <fieldset class="on-site-picker" :data-on-site-picker="groupId" :aria-describedby="id + '-hint'">
+  <fieldset
+    ref="fieldset"
+    class="on-site-picker"
+    :data-on-site-picker="groupId"
+    :aria-describedby="id + '-hint'"
+  >
     <legend>Made on site in {{ groupName }}</legend>
     <p :id="id + '-hint'" class="small muted">
       Tick the parts this group makes for itself, next to the lines that use them, rather than
@@ -136,24 +205,45 @@ async function apply(event: Event) {
           ></label
         >
       </div>
+      <div :id="id + '-held'" class="on-site-held" role="status" data-on-site-held>
+        <p v-if="holding" class="notice warn">
+          This choice is not saved yet. Save it or discard it first.
+        </p>
+      </div>
       <div class="on-site-actions">
         <button
+          ref="saveButton"
           class="btn primary"
           type="button"
           :data-on-site-save="groupId"
           :aria-label="'Save made on site for ' + groupName"
+          :aria-describedby="holding ? id + '-held' : undefined"
           :class="{ unavailable: !changed }"
           :disabled="!changed"
           @click="apply"
         >
           Save
         </button>
-        <span v-if="changed" class="small muted" data-on-site-unsaved>Not saved yet.</span>
+        <button
+          v-if="changed"
+          class="btn"
+          type="button"
+          :data-on-site-discard="groupId"
+          :aria-label="'Discard made on site for ' + groupName"
+          @click="discard"
+        >
+          Discard
+        </button>
+        <span v-if="changed && !holding" class="small muted" data-on-site-unsaved
+          >Not saved yet.</span
+        >
         <span :id="id + '-saved'" class="small" role="status" data-on-site-saved
           ><template v-if="justSaved && !changed"
             >Saved.<template v-if="needsRecalc">
               This plan now needs a recalculation.</template
             ></template
+          ><template v-else-if="discarded && !changed"
+            >Discarded. The saved choice is back.</template
           ></span
         >
         <button

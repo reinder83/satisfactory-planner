@@ -3,17 +3,18 @@
   groups, or the storage layout), sticky at the top of the page as it scrolls, so Done never
   needs a scroll back to the page's own toggle, which stays the way in. A page draws it right
   after its header, as a child of <main>, which is what it sticks within. Done and Esc leave the
-  mode through `done`, then focus goes to the page's toggle (`toggle`, a selector). Esc is left
-  alone while typing in a field, while a dialog is open, or when something already handled it
-  (a menu, a step's own edit form).
+  mode through `done`, then focus goes to the page's toggle (`toggle`, a selector). A `done` that
+  returns false kept the mode on and put focus where the user must act first (an unsaved "Made on
+  site" choice, #930), so focus stays there. Esc is left alone while typing in a field, while a
+  dialog is open, or when something already handled it (a menu, a step's own edit form).
 -->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted } from 'vue';
 
-const props = defineProps<{ label: string; toggle: string; done: () => void }>();
+const props = defineProps<{ label: string; toggle: string; done: () => boolean | void }>();
 
 async function leave() {
-  props.done();
+  if (props.done() === false) return;
   await nextTick();
   document.querySelector<HTMLElement>(props.toggle)?.focus();
 }

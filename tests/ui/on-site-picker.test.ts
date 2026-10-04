@@ -100,7 +100,8 @@ test('a group is offered the items a plan row makes and one of its rows uses', (
   // Iron Ore is raw: no plan row makes it, so Plates is offered nothing.
   assert.deepEqual(onSiteOffers(plan, groups(), PLATES), []);
   assert.deepEqual(onSiteOffers(plan, groups(), 'fg-nothere1'), []);
-  // A group's own line made on site is the group's: its Wire line's Copper Ingot is offered too.
+  // A group's own line made on site is not a consumer a recalculation sizes a line to (#951): its
+  // Wire line's Copper Ingot is offered only while the group marks Wire (#967).
   const rows = plan.stages['3'].rows!;
   const wire = rows.find(row => row.id === WIRE)!;
   const line: CalcRow = {
@@ -109,7 +110,12 @@ test('a group is offered the items a plan row makes and one of its rows uses', (
     onSite: { group: MOTORS, recipe: WIRE },
   };
   rows.push(line);
-  assert.deepEqual(onSiteOffers(plan, groups(), MOTORS), ['Copper Ingot', 'Steel Pipe', 'Wire']);
+  assert.deepEqual(onSiteOffers(plan, groups(), MOTORS), ['Steel Pipe', 'Wire']);
+  assert.deepEqual(onSiteOffers(plan, groups({ [MOTORS]: ['Wire'] }), MOTORS), [
+    'Copper Ingot',
+    'Steel Pipe',
+    'Wire',
+  ]);
   // A phase before the start phase is milestone-only (#759): its rows offer nothing.
   const later = generated();
   later.settings.phase = '4';
@@ -175,8 +181,8 @@ test('the picker shows a box per offered item while editing, and the marks other
   await nextTick();
   assert.equal(
     $(`#section-${MOTORS} [data-on-site-items]`)!.textContent!.trim(),
-    // Neither mark gives it a line yet (#931).
-    'Marked, not made on site: Screws (no line here uses it now) and Wire (needs a recalculation)',
+    // Neither mark gives it a line yet (#931); each reason its own run (#955).
+    'Marked, not made on site: Screws (no line here uses it now); Wire (needs a recalculation)',
   );
 });
 

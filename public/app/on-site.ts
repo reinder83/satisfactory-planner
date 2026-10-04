@@ -24,6 +24,21 @@ type OnSiteMembership = FactoryGroups['assignments'][string][number];
 export const onSitePlannable = (item: string): boolean =>
   !rawResources.includes(item) && ITEM_NAMES.includes(item);
 
+// The names of a nuclear recipe, which the planner never copies for a group (NUCLEAR in
+// planner/on-site.ts).
+const SITE_NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
+
+// Whether a recalculation can give a group its own line of `row`'s recipe, as the planner
+// decides it for a part the group marks (copyable and markable in planner/on-site.ts): a machine
+// that takes power, not a nuclear recipe (so never one making a radioactive item). The Made on
+// site picker follows only these from a marked part to its ingredients (#967). A test checks
+// the two rules agree on every recipe.
+export const onSiteCopyable = (row: Pick<CalcRow, 'name' | 'power' | 'inputs' | 'outputs'>) =>
+  row.power > 0 &&
+  !SITE_NUCLEAR.test(
+    [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
+  );
+
 // settings.onSite from the factory groups as they are now and `plan`, the plan being
 // recalculated: per group that marks items it makes on site (factoryGroups.local), its name, the
 // items, and per phase the share of each row its memberships give it. A consumer split over
