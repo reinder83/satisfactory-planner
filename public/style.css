@@ -2686,6 +2686,34 @@ tr.muted td:first-child {
   gap: 8px;
   margin: 4px 0 8px;
 }
+/* Above every page when the user's other tabs or devices moved to another profile (#1052),
+   aligned with the page under it. */
+.group-moved-wrap {
+  padding: 16px clamp(14px, 2.4vw, 30px) 0;
+  max-width: 1660px;
+  margin: auto;
+}
+.group-moved {
+  margin: 0;
+}
+.group-moved p {
+  margin: 0 0 8px;
+}
+.group-moved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.group-moved-actions .btn {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+@media (max-width: 720px) {
+  .group-moved-wrap {
+    padding: 16px 16px 0;
+  }
+}
 /* Saves & profiles after an import (#1052): one Open button per copy, a long name wrapping inside
    its button. */
 .import-notice p {

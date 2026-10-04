@@ -652,3 +652,18 @@ test('ADA says an imported copy left the open profile alone (#1052)', () => {
   assert.ok(!ids(facts({ view: 'profiles', imported: '' })).includes('imported'));
   assert.ok(!ids(facts({ view: 'profiles' })).includes('imported'), 'absent means none');
 });
+
+test('ADA warns on every page when the others moved to another profile (#1052)', () => {
+  for (const view of ['plan', 'factories', 'notes', 'profiles']) {
+    const remarks = adaRemarks(facts({ view, groupMoved: '“Main · copy”' }));
+    const line = remarks.find(r => r.id === 'group-moved')!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /^Another tab or player moved to “Main · copy”\./);
+    assert.match(
+      line.text,
+      /This tab stays on “Balanced”, and everything you tick here is saved there/,
+    );
+    assert.ok(!ids(facts({ view, groupMoved: '' })).includes('group-moved'));
+    assert.ok(!ids(facts({ view })).includes('group-moved'), 'absent means none');
+  }
+});

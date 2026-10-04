@@ -12,6 +12,7 @@ import {
   editingTask,
   setState,
   setView,
+  setWorkspace,
   state,
   stateLoaded,
   wizard,
@@ -23,7 +24,7 @@ import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
 import { listNames } from '../wording.ts';
-import type { ProgressState, UpdateOp } from '../types/index.ts';
+import type { ProgressState, UpdateOp, WorkspaceSummary } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
 // (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves, and
@@ -181,6 +182,26 @@ export async function refreshState(force = false): Promise<boolean> {
   if (!same || next.revision === state.revision || (!force && !quiet())) return false;
   setState(next);
   render();
+  return true;
+}
+
+// Asks for the workspace summary again when the tab comes back into use (listeners.ts: the
+// window gains focus or the tab becomes visible), so a tab learns that the user opened another
+// save or profile in another tab or on another device, and says so (groupMoved in session.ts,
+// ui/GroupMovedNotice.vue, #1052). It only redraws; nothing is opened or saved. At most once
+// every few seconds; never while signed out or with no save open, and a reply for someone else
+// (signed out or in as another user meanwhile) is left for the next boot(). Returns whether the
+// summary was replaced.
+const WORKSPACE_REFRESH_MS = 5000;
+let workspaceAsked = -Infinity;
+export async function refreshWorkspace(): Promise<boolean> {
+  if (!stateLoaded || !currentSave?.id || !workspace?.user) return false;
+  if (Date.now() - workspaceAsked < WORKSPACE_REFRESH_MS) return false;
+  workspaceAsked = Date.now();
+  const next = await request<WorkspaceSummary>('/api/workspace');
+  if (!next.user || next.user.id !== workspace.user?.id) return false;
+  setWorkspace(next);
+  invalidate();
   return true;
 }
 

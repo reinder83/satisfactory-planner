@@ -43,6 +43,9 @@ export interface AdaFacts {
   // The saves the last import added while another save stayed open, as a name list (#1052), shown
   // on Saves & profiles until it is left; '' or absent otherwise.
   imported?: string;
+  // Where the user's other tabs or devices moved while this tab shows another profile (#1052):
+  // that profile's name in quotes, with its save's when it is another save; '' or absent otherwise.
+  groupMoved?: string;
   // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
@@ -424,6 +427,13 @@ const RULES: AdaRule[] = [
         ? "What your factories' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
         : 'What your factories make on site differs from this plan, and this plan has not been told yet. ') +
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
+  },
+  {
+    id: 'group-moved',
+    tone: 'warn',
+    when: facts => facts.groupMoved,
+    text: facts =>
+      `Another tab or player moved to ${facts.groupMoved}. This tab stays on “${facts.profile}”, and everything you tick here is saved there. Open theirs from the notice to follow, or stay. I do not take sides. Officially.`,
   },
   {
     id: 'note-conflict',

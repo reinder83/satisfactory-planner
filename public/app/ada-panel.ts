@@ -18,6 +18,7 @@ import {
   checked,
   currentProfile,
   currentSave,
+  groupMoved,
   importedSaves,
   milestoneOnly,
   openedFrom,
@@ -158,6 +159,13 @@ function onSitePendingFacts(): Pick<AdaFacts, 'onSitePending' | 'onSiteLinesOnly
   return { onSitePending: !!change, onSiteLinesOnly: !!change && !change.marksChanged };
 }
 
+// Where the user's other tabs or devices moved (#1052), as the notice names it.
+function groupMovedFact(): string {
+  const moved = groupMoved();
+  if (!moved) return '';
+  return `“${moved.profileName}”` + (moved.otherSave ? ` in “${moved.saveName}”` : '');
+}
+
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
 function guideFacts(): AdaFacts['guide'] {
   const guide = calculated?.guide;
@@ -235,6 +243,7 @@ function adaFacts(): AdaFacts {
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
     noteConflicts: noteConflicts(),
+    groupMoved: groupMovedFact(),
     imported: listNames(
       workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
     ),

@@ -6,7 +6,7 @@
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
-// cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange.
+// cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange, focus.
 import {
   acceptRoute,
   flushNotes,
@@ -14,6 +14,7 @@ import {
   hasUnsavedNotes,
   pending,
   refreshState,
+  refreshWorkspace,
 } from './api.ts';
 import { required } from './format.ts';
 import { onBackdropClick } from './backdrop.ts';
@@ -94,12 +95,21 @@ for (const type of ['input', 'change'])
 // page does not show, or write from, an old copy (#165). A failed refresh changes nothing.
 // When the redraw takes away the control that had focus (a step ticked elsewhere moves to
 // "Done"), focus goes to the page's heading rather than to <body> (#809), as after a refused write.
+// It also asks where the user's other tabs and devices are, so a tab left on a profile the
+// others have moved away from says so (refreshWorkspace, #1052).
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   const refocus = refocusAfterRefresh(document.activeElement);
   refreshState()
     .then(changed => (changed ? refocus() : undefined))
     .catch(() => {});
+  refreshWorkspace().catch(() => {});
+});
+
+// Coming back to this window from another one (the game, another browser window), which fires no
+// visibilitychange when the tab stayed visible beside it: the same check of where the others are.
+window.addEventListener('focus', () => {
+  refreshWorkspace().catch(() => {});
 });
 
 // A toast that would cover the focused control it is about goes to the top (#663).
