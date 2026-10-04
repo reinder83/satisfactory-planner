@@ -7,25 +7,37 @@ import type { CalcRow, FactoryGroups, GroupAssignment, OnSiteRate } from '../typ
 // The place of a row, or the part of one, that is in no factory group.
 export const UNGROUPED = 'ungrouped';
 
-// Rates this small are rounding dust.
+// Rates and shares this small are rounding dust: no link carries a rate at most this, and a part
+// of a row whose share is at most this is too small to count, so no group gets a line for it
+// (rowShares leaves it out; rowPlaces gives it to the row's largest place, #906).
 export const LINK_DUST = 1e-6;
 
 // What a row's group shares are measured against: its primary output, or a generator's MW.
 export const rowTotal = (row: Pick<CalcRow, 'outputs' | 'generationMW'>): number =>
   Object.values(row.outputs || {})[0] || row.generationMW || 0;
 
-// The share of a row that sits in each place (group id or UNGROUPED), adding up to 1.
-export function rowShares(
+// The share of a row that sits in each place (group id or UNGROUPED), adding up to 1 but for the
+// parts too small to count (at most LINK_DUST each), which are left out. The planner sizes a
+// group's own line by these shares (on-site.ts); the books place a row by rowPlaces below.
+export const rowShares = (
   total: number,
   memberships: { group: string; rate: number | null }[] | undefined,
-): Map<string, number> {
+): Map<string, number> => splitRow(total, memberships).shares;
+
+// rowShares, with what the parts too small to count come to (`dust`).
+function splitRow(
+  total: number,
+  memberships: { group: string; rate: number | null }[] | undefined,
+): { shares: Map<string, number>; dust: number } {
   const shares = new Map<string, number>();
+  let dust = 0;
   const add = (place: string, share: number) => {
     if (share > LINK_DUST) shares.set(place, (shares.get(place) || 0) + share);
+    else if (share > 0) dust += share;
   };
   if (!memberships?.length || total <= LINK_DUST) {
     shares.set(UNGROUPED, 1);
-    return shares;
+    return { shares, dust };
   }
   const fixed = memberships.filter(m => m.rate != null);
   let taken = 0;
@@ -42,7 +54,7 @@ export function rowShares(
   const open = memberships.filter(m => m.rate == null);
   if (open.length) for (const membership of open) add(membership.group, rest / open.length);
   else add(UNGROUPED, rest);
-  return shares;
+  return { shares, dust };
 }
 
 // rowShares' rule as each membership's part of a row of any total T, for a row with a fixed-rate
@@ -89,7 +101,8 @@ export function rowMemberships(
 // The share of `row` in each place (group id or UNGROUPED), as the Logistics page counts it
 // (groupLinks in group-links.ts) and a group's flow (group-flow.ts): rowShares of its
 // memberships (rowMemberships), where a membership of a group that no longer exists counts as
-// Ungrouped.
+// Ungrouped, and with the parts too small to count in the largest place (withDust), so the shares
+// add up to 1 and the books count the whole row (#906).
 export function rowPlaces(
   row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,
@@ -98,7 +111,20 @@ export function rowPlaces(
   const memberships = rowMemberships(row, groups).map(membership =>
     known.has(membership.group) ? membership : { ...membership, group: UNGROUPED },
   );
-  return rowShares(rowTotal(row), memberships);
+  const { shares, dust } = splitRow(rowTotal(row), memberships);
+  return withDust(shares, dust);
+}
+
+// `shares` with `dust`, the parts too small to count, added to the largest place (the first on a
+// tie), so a row's places add up to 1 (#906). Left out, a part too small to count could still
+// carry more than LINK_DUST of a large rate, and the rows of the lines sharing its items with it
+// would no longer add up to their rates. Unchanged when nothing was too small to count.
+function withDust(shares: Map<string, number>, dust: number): Map<string, number> {
+  if (dust <= 0) return shares;
+  let largest: [string, number] = [UNGROUPED, 0];
+  for (const entry of shares) if (entry[1] > largest[1]) largest = entry;
+  shares.set(largest[0], largest[1] + dust);
+  return shares;
 }
 
 // The group whose site a row's build-plan step belongs to: the group with the largest share of the
