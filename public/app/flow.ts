@@ -680,8 +680,14 @@ export interface FlowNotes {
 // Whether another row makes `item` for the same consumers as `row`: any other row making it, or
 // for an item groups make on site (#956) another of the same group's own lines for an own line,
 // and another line that is no group's own line for any other row. After a group edit (#918) an
-// own line whose group offers its excess also shares the other consumers with those lines.
-function sharesItem(row: CalcRow, item: string, context: CalcFlowContext): boolean {
+// own line whose group offers its excess also shares the other consumers with those lines;
+// `ownOnly` asks only about the same group's own lines, which is what an own line's note says.
+function sharesItem(
+  row: CalcRow,
+  item: string,
+  context: CalcFlowContext,
+  ownOnly = false,
+): boolean {
   const site = siteItemBooks(item, context);
   const group = site && ownLineGroup(row, item, site);
   // Whether a line serves the demand the groups' own lines leave (ordinaryShares).
@@ -693,7 +699,9 @@ function sharesItem(row: CalcRow, item: string, context: CalcFlowContext): boole
     other =>
       other.id !== row.id &&
       other.outputs?.[item] &&
-      (!site || ownLineGroup(other, item, site) === group || (ordinary(row) && ordinary(other))),
+      (!site ||
+        ownLineGroup(other, item, site) === group ||
+        (!ownOnly && ordinary(row) && ordinary(other))),
   );
 }
 
@@ -730,14 +738,19 @@ export function flowNotes(
   context: CalcFlowContext,
 ): FlowNotes {
   const splits = outputs.filter(o => o.mach !== undefined && o.kind !== 'sink');
-  const shared = Object.keys(row.outputs || {}).some(item => sharesItem(row, item, context));
+  const site = siteNote(row, context);
+  // An own line's note speaks of its group's other own lines only: the lines it shares an
+  // offered excess with (#918) are the other places, which the offer wording names.
+  const shared = Object.keys(row.outputs || {}).some(item =>
+    sharesItem(row, item, context, !!site.ownLine),
+  );
   return {
     split:
       splits.length > 1
         ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
         : '',
     clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
-    bankNote: outputs.some(o => !o.noItem) ? { shared, ...siteNote(row, context) } : null,
+    bankNote: outputs.some(o => !o.noItem) ? { shared, ...site } : null,
   };
 }
 

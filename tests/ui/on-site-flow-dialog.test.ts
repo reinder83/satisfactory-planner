@@ -342,7 +342,9 @@ test('after a group edit an own line sends the sink only the plan’s surplus, a
     [CABLE, STATOR],
   );
   const alphaNotes = flowNotes(rowOf(ownLine(ALPHA)), outputs.get(ownLine(ALPHA))!, context);
-  assert.deepEqual(alphaNotes.bankNote, { shared: true, ownLine: 'Alpha', offers: true });
+  // Alpha has one Wire line: the note does not speak of other own lines of the group, though
+  // the offered excess is shared with the central line (#918 review).
+  assert.deepEqual(alphaNotes.bankNote, { shared: false, ownLine: 'Alpha', offers: true });
   assert.deepEqual(modelOf(STATOR, plan, movedStator).inputs.find(i => i.name === 'Wire')!.link, {
     calcFactory: WIRE,
   });
@@ -356,10 +358,12 @@ test('the dialog says where an own line’s Wire goes beyond the sink after a gr
     $$('#detail .rail-row.consumer .rail-link').map(el => el.dataset.calcFactory),
     [CABLE, STATOR],
   );
+  const text = $('#detail')!.textContent || '';
   assert.match(
-    $('#detail')!.textContent || '',
-    /goes to the AWESOME Sink as far as the plan sinks the item, and the rest to the other places that ask for it\./,
+    text.replace(/\s+/g, ' '),
+    /Made on site for Alpha's lines, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and the rest goes to the other places that ask for it\./,
   );
+  assert.doesNotMatch(text, /other lines making it/);
 });
 
 // The factory dialog's flow of every row of the cases recorded before #918
