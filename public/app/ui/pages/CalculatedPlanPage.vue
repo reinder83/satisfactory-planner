@@ -83,7 +83,13 @@ const page = computed(() =>
             {
               key: 'power',
               href: '#resources',
-              text: `${power(stagePlan.generationMW)} new power`,
+              // The new generation, and the spare existing power it adds to (#1048), as the
+              // Resources page's bar names them; the power step says what the phase needs.
+              text:
+                `${power(stagePlan.generationMW)} new power` +
+                (calculated.settings.availablePowerGW > 0
+                  ? ` + ${power(calculated.settings.availablePowerGW * 1000)} existing spare power`
+                  : ''),
             },
             {
               key: 'hours',
