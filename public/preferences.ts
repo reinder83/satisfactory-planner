@@ -9,7 +9,8 @@
 //   fuels.ts       main power, vehicle and drone fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
 //   guided.ts      the guided start's questions
-//   extraction.ts  the node survey: extraction rates, yields and the budgets they give
+//   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
+//                  the Water Extractors a line's Water needs
 //   presets.ts     node counts prefilled from the world settings
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
@@ -38,13 +39,21 @@ export {
   tutorialKeys,
 } from './preferences/guided.ts';
 export {
+  EXTRACTOR_CLOCK_DECIMALS,
+  EXTRACTOR_MIN_RATE,
+  EXTRACTOR_RATE_STEP,
   MINER_BASE,
   OIL_BASE,
+  WATER_EXTRACTOR,
   WELL_BASE,
   blankCounts,
   blankExtraction,
   clockChoices,
   extractionLimits,
+  extractorClocks,
+  extractorMW,
+  extractorOption,
+  extractorShards,
   minedResources,
   minerMarks,
   nodeYield,
@@ -53,7 +62,9 @@ export {
   purityFactor,
   resourceAvailable,
   resourcePool,
+  settableRate,
   uncountedResources,
+  waterExtractors,
   wellResources,
   wellYield,
 } from './preferences/extraction.ts';

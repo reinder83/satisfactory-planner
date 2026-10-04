@@ -12,8 +12,14 @@
 // of different places is the link between those places shared by what each line sends into it
 // and takes from it.
 //
+// Every line that takes extracted Water also gets the Water Extractors for it (#1024): only the
+// Water no byproduct covers, in the owner's two options (waterExtractors in
+// preferences/extraction.ts), with the clocks adding up to exactly that Water.
+//
 // It reads only its arguments (no session), so the pages pass the stage of the phase they show.
-import { num } from './format.ts';
+import { num, plural } from './format.ts';
+import { EXTRACTOR_MIN_RATE, waterExtractors } from '../preferences.ts';
+import { power } from './wizard/fields.ts';
 import { homeGroup, LINK_DUST, rowPlaces, UNGROUPED } from './group-order.ts';
 import { groupLinks, isSource, itemBooks, OUTSIDE, placeName } from './group-links.ts';
 import { placeLinks } from './group-flow.ts';
@@ -149,13 +155,16 @@ export interface AdviceWords {
 // A piece of advice text: plain text, or another line's name linking to its dialog.
 export type AdvicePart = string | { row: string; text: string };
 
-// One paragraph: a byproduct of the line, or one of its inputs a byproduct covers, with the
-// item's whole rate on the line (`lead`, "Water 116.27 m³/min") and the sentence as parts.
+// One paragraph: a byproduct of the line, or one of its inputs a byproduct covers or that is
+// extracted Water, with the item's whole rate on the line (`lead`, "Water 116.27 m³/min") and
+// the sentence as parts; for extracted Water also the extractors for it (`extractors`,
+// extractorAdvice) as a sentence of its own.
 export interface AdviceLine {
   kind: 'byproduct' | 'input';
   item: string;
   lead: string;
   parts: AdvicePart[];
+  extractors?: string;
 }
 
 // One other end of a line's transfers of an item, summed: a line (by row id, in a place), or a
@@ -311,7 +320,9 @@ const andAfter = (phrase: AdvicePart[]): string =>
 // Where `row`'s inputs that a byproduct covers come from (#1022): one paragraph per such input,
 // each source line linked, the largest first ("recycled from" a line this one feeds, else "from
 // the byproduct of"; "from this line's own byproduct" for its own), then the rest: "extract the
-// other …" for a raw resource, "the other … from existing supply" otherwise.
+// other …" for a raw resource, "the other … from existing supply" otherwise. Extracted Water gets
+// a paragraph whether or not a byproduct covers some of it ("No byproduct covers it: extract all
+// of it." when none does), with the Water Extractors for what is extracted (#1024).
 export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWords): AdviceLine[] {
   const rows = new Map((model.stage.rows || []).map(other => [other.id, other]));
   return Object.keys(row.inputs || {}).flatMap(item => {
@@ -320,11 +331,12 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
     const lines = peers.filter(peer => peer.end.kind === 'line');
     const byproduct = (peer: Peer) =>
       peer.end.kind === 'line' && isByproductOf(rows.get(peer.end.id), item);
-    if (!lines.some(byproduct)) return [];
     const extracted = peers
       .filter(peer => peer.end.kind === 'place' && isSource(peer.end.id))
       .reduce((sum, peer) => sum + peer.rate, 0);
     const raw = (model.stage.raw?.[item] || 0) > LINK_DUST;
+    const water = item === WATER && raw && extracted > LINK_DUST;
+    if (!lines.some(byproduct) && !water) return [];
     const all = lines.length === 1 && extracted <= LINK_DUST;
     const parts = lines.flatMap((peer, i): AdvicePart[] => [
       ...(i ? [', '] : []),
@@ -341,10 +353,42 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
         kind: 'input' as const,
         item,
         lead: item + ' ' + words.itemRate(item, row.inputs[item]!),
-        parts: [...parts, rest],
+        parts: lines.length ? [...parts, rest] : [NO_COVER],
+        ...(water ? { extractors: extractorAdvice(extracted) } : {}),
       },
     ];
   });
+}
+
+// The raw resource Water Extractors pump (#1024).
+const WATER = 'Water';
+// The sentence for extracted Water no line gives this one.
+export const NO_COVER = 'No byproduct covers it: extract all of it.';
+
+// One of the two ways to build a line's extractors (ExtractorOption in preferences/extraction.ts).
+type ExtractorOption = NonNullable<ReturnType<typeof waterExtractors>>['plain'];
+
+// An option's extractors as the player sets them: "2 at 100% + 1 at 15.03%".
+const extractorRuns = (option: ExtractorOption): string =>
+  option.runs.map(run => `${run.count} at ${num(run.clock)}%`).join(' + ');
+
+// The Water Extractors for `rate` m³/min of Water, in the owner's two options (#1024): "Water
+// Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power
+// Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW)." One extractor at 100% or less
+// is the same either way, so it is one option. The clocks are written to 0.01% and add up to the
+// rate rounded down to what such clocks make (settableRate in preferences/extraction.ts), so the
+// extractors never make more than the line takes, and less than 0.012 m³/min less.
+export function extractorAdvice(rate: number): string {
+  const options = waterExtractors(rate);
+  if (!options)
+    return `That is less than one Water Extractor gives at its lowest clock (1%, ${num(EXTRACTOR_MIN_RATE)} m³/min): take it from another Water line's extractors.`;
+  const { plain, sharded } = options;
+  if (extractorRuns(plain) === extractorRuns(sharded))
+    return `Water Extractors: ${extractorRuns(plain)} (${power(plain.mw)}); no Power Shards needed.`;
+  return (
+    `Water Extractors at 100%: ${extractorRuns(plain)} (${plural(plain.extractors, 'extractor')}, ${power(plain.mw)}). ` +
+    `Or up to 250% with Power Shards: ${extractorRuns(sharded)} (${plural(sharded.extractors, 'extractor')}, ${plural(sharded.shards, 'Power Shard')}, ${power(sharded.mw)}).`
+  );
 }
 
 // One source of an input: "116.27 m³ recycled from Aluminum Scrap ↗", "10.21 from the byproduct of
@@ -370,15 +414,19 @@ export const adviceSentence = (line: AdviceLine): string =>
 // "Byproduct Water 116.27 m³/min: send all of it back to Alumina Solution, which feeds this line.
 // Water 381.81 m³/min: 116.27 m³ recycled from Aluminum Scrap; extract the other 258.04 m³." The
 // sentence for a byproduct no line uses has a colon of its own, so it follows its lead after a
-// full stop: "Byproduct Compacted Coal 10.4/min. No line uses it: …".
+// full stop: "Byproduct Compacted Coal 10.4/min. No line uses it: …", as does Water no byproduct
+// covers ("Water 253.75 m³/min. No byproduct covers it: …"). The Water Extractors follow their
+// paragraph's sentence (#1024).
 export const adviceText = (lines: AdviceLine[]): string =>
   lines
     .map(line => {
       const lead = (line.kind === 'byproduct' ? 'Byproduct ' : '') + line.lead;
       const sentence = adviceSentence(line);
-      return sentence === NO_LINE
-        ? `${lead}. ${sentence}`
-        : `${lead}: ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`;
+      const text =
+        sentence === NO_LINE || sentence === NO_COVER
+          ? `${lead}. ${sentence}`
+          : `${lead}: ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`;
+      return line.extractors ? `${text} ${line.extractors}` : text;
     })
     .join(' ');
 

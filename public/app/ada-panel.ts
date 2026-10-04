@@ -142,6 +142,12 @@ function onSiteDroppedFacts(
   return { items: listNames(items), groups: listNames(groups) };
 }
 
+// The Water the open phase extracts (#1024), written as the pages write a rate; none without.
+function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
+  const water = calcStage()?.raw?.Water ?? 0;
+  return water > 0 ? { waterExtracted: num(water) } : {};
+}
+
 // Whether the plan waits for a recalculation of the lines its groups make on site (onSiteChange,
 // #877), and whether that is only because a group's lines no longer use, or now use, an item it
 // marks, with no change to the marks (#985), so ADA words it as the notice does.
@@ -230,6 +236,7 @@ function adaFacts(): AdaFacts {
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
+    ...waterFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
