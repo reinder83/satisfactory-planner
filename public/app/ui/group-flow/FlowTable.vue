@@ -1,7 +1,8 @@
 <!--
   "The diagram as a table" on a factory group's flow page (#894): the text equivalent of the
   cards and lanes. The lines in build order with their machines and what they make, then every
-  link once, from where to where, with its rate and belts or pipes.
+  link once, from where to where, with its rate and belts or pipes. A cell naming a line or a place
+  (gf-cell-name) can hold a group's long name, which breaks inside the cell (#988).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -53,7 +54,7 @@ const connections = computed(() =>
         <tbody>
           <tr v-for="line in flow.lines" :key="line.id">
             <td>{{ lineNumber(line.no) }}</td>
-            <td>{{ line.name }}</td>
+            <td class="gf-cell-name">{{ line.name }}</td>
             <td>{{ machines(line) }}</td>
             <td>
               <template v-for="(output, n) in line.outputs" :key="output.id"
@@ -82,14 +83,14 @@ const connections = computed(() =>
         </thead>
         <tbody>
           <tr v-for="(connection, n) in connections" :key="n" data-gf-connection>
-            <td>{{ connection.from }}</td>
+            <td class="gf-cell-name">{{ connection.from }}</td>
             <td>
               {{ connection.link.item
               }}<template v-if="connection.note"> · {{ connection.note }}</template>
             </td>
             <td class="number">{{ itemRate(connection.link.item, connection.link.rate) }}</td>
             <td>{{ connection.link.belts }}</td>
-            <td>{{ connection.to }}</td>
+            <td class="gf-cell-name">{{ connection.to }}</td>
           </tr>
         </tbody>
       </table>
