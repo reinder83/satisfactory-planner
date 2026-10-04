@@ -8,10 +8,13 @@
 // much of the row's primary output (MW for a generator), null-rate memberships split evenly
 // whatever the fixed ones leave, and a row in no group, or the part no membership takes, is
 // Ungrouped. Every
-// input and output of the row is split by the same shares. An item's supply is then shared
-// among everything that asks for it in proportion to what each asks, as elsewhere in the
-// planner, so a balanced plan's flows add up to its rows exactly. Flows inside one place are
-// left out: they are that group's own belts.
+// input and output of the row is split by the same shares. An item's supply is then shared out
+// by one rule (shareOut, #1022, #1028): each place uses what its own lines make first; a place's
+// leftover goes to the group short of the most, then the next; what is still left goes to
+// protected storage, fuel, the Space Elevator and last the sink; and the raw resources and
+// existing supply cover what is still missing. So a balanced plan's flows add up to its rows
+// exactly, and no item goes both ways between two places. Flows inside one place are left out:
+// they are that group's own belts.
 //
 // A factory group's own line made on site (#875, #876: `onSite`) sits wholly in its group. For
 // the items the plan was calculated to make on site for that group (siteItems) it supplies only
@@ -223,13 +226,95 @@ function lowerDemand(places: Map<string, number>, place: string, rate: number) {
 
 // What moves between two places of an item whose places make `made` and ask `asked` in all:
 // the smaller of the two, split both ways by share. `supplied` and `wanted` are the two places'
-// parts. group-flow.ts shares a group's own lines out by the same rule.
+// parts. group-flow.ts shares a group's lines out among themselves by it, after each line's own
+// use, and flow.ts the leftover of groups' own lines made on site (#918).
 export const sharedRate = (made: number, asked: number, supplied: number, wanted: number): number =>
   (Math.min(made, asked) * supplied * wanted) / (made * asked);
 
 // The sum of a place map's rates.
 export const placeTotal = (places: Map<string, number> | undefined): number =>
   [...(places?.values() || [])].reduce((sum, rate) => sum + rate, 0);
+
+// One part of an item's supply going from one place to another (shareOut); `from` and `to` are
+// the same place for what a place uses of its own.
+export interface PlaceTransfer {
+  from: string;
+  to: string;
+  rate: number;
+}
+
+// The destinations that are not factory groups, in the order a leftover reaches them: protected
+// storage first and the sink last, which takes only what nothing else asks for.
+const OUTSIDE_ORDER: string[] = [
+  OUTSIDE.storage,
+  OUTSIDE.drone,
+  OUTSIDE.transport,
+  OUTSIDE.delivery,
+  OUTSIDE.surplus,
+];
+const isOutside = (place: string) => OUTSIDE_ORDER.includes(place);
+const isMaker = (place: string) => !isSource(place);
+
+// How one item's supply (`sources`, per place) meets what places ask for (`sinks`), by the rule
+// the Logistics page, a group's flow and the factory dialog share (#1022, #1028):
+// 1. each place uses what its own lines make, up to what it asks for;
+// 2. a group's (or Ungrouped's) leftover goes to the group short of the most, then the next, the
+//    largest leftover first, so each leftover takes as few links as it can;
+// 3. what is still left goes to the destinations in OUTSIDE_ORDER (storage first, the sink last);
+// 4. the raw resources and existing supply (sources, #231) cover what is still missing, the
+//    groups' shortfalls first, then the destinations.
+// So no item goes both ways between two places: a place with a leftover asks for nothing more.
+// Ties go by the maps' order. Each transfer is above LINK_DUST.
+export function shareOut(
+  sources: ReadonlyMap<string, number>,
+  sinks: ReadonlyMap<string, number>,
+): PlaceTransfer[] {
+  const left = new Map(sources),
+    short = new Map(sinks);
+  const transfers: PlaceTransfer[] = [];
+  const move = (from: string, to: string, rate: number) => {
+    if (rate > LINK_DUST) transfers.push({ from, to, rate });
+    lowerDemand(left, from, rate);
+    lowerDemand(short, to, rate);
+  };
+  for (const [place, made] of sources) {
+    const own = Math.min(made, short.get(place) || 0);
+    if (own > 0) move(place, place, own);
+  }
+  for (const giver of [isMaker, isSource]) {
+    pourLargest(left, short, giver, place => !isOutside(place), move);
+    for (const place of OUTSIDE_ORDER) pourLargest(left, short, giver, to => to === place, move);
+  }
+  return transfers;
+}
+
+// Moves the largest leftover among the places `from` accepts to the largest shortfall among those
+// `to` accepts, again and again until one side has none left (shareOut).
+function pourLargest(
+  left: Map<string, number>,
+  short: Map<string, number>,
+  from: (place: string) => boolean,
+  to: (place: string) => boolean,
+  move: (from: string, to: string, rate: number) => void,
+) {
+  for (;;) {
+    const giver = largestOf(left, from),
+      taker = largestOf(short, to);
+    if (!giver || !taker) return;
+    move(giver[0], taker[0], Math.min(giver[1], taker[1]));
+  }
+}
+
+// The place with the largest rate above LINK_DUST among those `accept` takes; the first on a tie.
+function largestOf(
+  places: Map<string, number>,
+  accept: (place: string) => boolean,
+): [string, number] | undefined {
+  let best: [string, number] | undefined;
+  for (const entry of places)
+    if (accept(entry[0]) && entry[1] > LINK_DUST && (!best || entry[1] > best[1])) best = entry;
+  return best;
+}
 
 // What moves between the places of a phase, from its books (itemBooks; `planned` is the plan's
 // settings.onSite).
@@ -246,18 +331,12 @@ export function groupLinks(
     link.items.push({ item, rate });
     links.set(key, link);
   };
-  // Share each item's supply out in proportion to demand.
+  // Share each item's supply out by the rule (shareOut); what a place uses of its own stays inside.
   for (const [item, sources] of Object.entries(supply)) {
     const sinks = demand[item];
     if (!sinks) continue;
-    const made = placeTotal(sources),
-      asked = placeTotal(sinks);
-    for (const [from, supplied] of sources)
-      for (const [to, wanted] of sinks) {
-        if (from === to) continue;
-        const rate = sharedRate(made, asked, supplied, wanted);
-        if (rate > LINK_DUST) add(from, to, item, rate);
-      }
+    for (const { from, to, rate } of shareOut(sources, sinks))
+      if (from !== to) add(from, to, item, rate);
   }
   // What a group's own lines made on site make beyond the group's demand goes to the sink.
   for (const [item, groupsSinking] of Object.entries(sunk))
