@@ -1,15 +1,30 @@
 // The handlers for the controls several components share: progress checkboxes, links to a
-// factory's dialog, the dialog's ×, "Create a save", opening a profile and signing out. Each
-// component binds
-// them itself (@change, @click, or v-bind with factoryLink()). The data-* attributes stay
+// factory's dialog, the dialog's ×, "Create a save", opening a profile, signing out and Done
+// editing on the factories pages. Each component binds them itself (@change, @click, or
+// v-bind with factoryLink()). The data-* attributes stay
 // on the elements: they carry the saved keys these handlers read, and browser-check.ts,
 // the tests and allowSwitch() in api.ts look for them.
 // Progress changes go through save() in api.ts: it queues the write, toasts a failure
 // itself and rejects. The empty `catch {}` blocks below therefore only skip the redraw
 // (or put the control back); a success toast never follows a failed write.
-import { allowSwitch, navigate, post, save, toast, writeQueue } from '../api.ts';
+import {
+  allowSwitch,
+  holdUnsavedChoices,
+  navigate,
+  post,
+  save,
+  toast,
+  writeQueue,
+} from '../api.ts';
 import { nextTick } from 'vue';
-import { boot, loadContext, setAuthMode, setFactoryFilter, setWorkspace } from '../session.ts';
+import {
+  boot,
+  loadContext,
+  setAuthMode,
+  setFactoryEditing,
+  setFactoryFilter,
+  setWorkspace,
+} from '../session.ts';
 import { openCalculatedFactory } from '../factory-detail.ts';
 import { render } from '../shell.ts';
 import { startWizard } from '../wizard/wizard.ts';
@@ -17,6 +32,18 @@ import { required } from '../format.ts';
 import { containerMove } from '../views/storage.ts';
 import { whileBusy } from '../busy.ts';
 import type { WorkspaceSummary } from '../../types/index.ts';
+
+// Done editing on the factories pages (EditGroupsToggle.vue and the edit bar, GroupEditBar.vue):
+// leaves group editing, unless a "Made on site" choice is not saved yet (#930). Then that picker
+// says so and offers Save and Discard, with focus on its Save (holdUnsavedChoices in api.ts),
+// edit mode stays on and this returns false: leaving would drop the choice without a word, and
+// saving it is for Save alone (#854, #856).
+export function finishGroupEditing(): boolean {
+  if (holdUnsavedChoices()) return false;
+  setFactoryEditing(false);
+  render();
+  return true;
+}
 
 // A link to a factory's dialog: a row of the calculated plan.
 export type FactoryLink = { calcFactory: string };
