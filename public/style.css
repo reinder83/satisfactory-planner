@@ -4845,12 +4845,19 @@ button.rail-tile:hover {
   color: var(--red);
   border-bottom-color: rgba(224, 85, 58, 0.5);
 }
-/* What a generator's rate is measured in, under its field, with the power it stands for (#374). */
-.assign-row .assign-unit {
+/* What a generator's rate is measured in, under its field, with the power it stands for (#374),
+   and the note under a rate below 0.001 (#942). */
+.assign-row .assign-unit,
+.assign-row .assign-tiny {
   grid-column: 2 / -1;
   margin-top: -4px;
   font-size: 11px;
   color: var(--muted);
+}
+/* The note wraps inside the field's and ✕'s columns: its full width would otherwise widen the ✕
+   column (the auto track it spans) and squeeze the group name. */
+.assign-row .assign-tiny {
+  contain: inline-size;
 }
 /* "+ Add to group…" fills the row; Add beside it joins the picked group (#856). */
 .assign-add {
