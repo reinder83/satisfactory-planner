@@ -45,7 +45,7 @@ const connections = computed(() =>
         <thead>
           <tr>
             <th scope="col">#</th>
-            <th scope="col">Recipe</th>
+            <th scope="col">Line</th>
             <th scope="col">Machines</th>
             <th scope="col">Makes</th>
           </tr>
