@@ -108,54 +108,73 @@ export const onSiteOffers = (
 ): string[] =>
   [...offerUses(plan, groups, groupId, marks).keys()].sort((a, b) => a.localeCompare(b));
 
-// One box of a group's "Made on site" picker: the item, and a note in brackets, or '' for none.
-export interface OnSiteOffer {
-  item: string;
-  note: string;
+// The boxes of group `groupId`'s "Made on site" picker while the page shows phase `shown` (#941,
+// #963), with `marks` the picker's choice, saved or not. `here`: the items its lines in that phase
+// use first, without a note, as the page's cards show them; then the ingredients of a part it
+// marks there, each naming the part ("(for Wire made on site)", #967). `elsewhere`: the items it
+// uses only in other phases, grouped by those phases, so the picker gives each group one heading
+// ("Used only by this group's lines in Phases 4 and 5") and each item a short note naming only
+// the lines ("(used by Alternate: Turbo Pressure Motor)") or the parts ("(for Wire made on
+// site)"), so an item no card on the page uses still says why it is offered. Groups in the order
+// of their phases, items sorted within each part. The same items as onSiteOffers.
+export interface OnSitePickerOffers {
+  here: OnSiteEntry[];
+  elsewhere: OnSiteElsewhere[];
 }
 
-// The boxes of group `groupId`'s picker while the page shows phase `shown` (#941), with `marks`
-// the picker's choice, saved or not: the items its lines in that phase use first, as the page's
-// cards show them; then the ingredients of a part it marks there, each naming the part ("(for
-// Wire made on site)", #967); then the ones it uses only in other phases, each with a note naming
-// those lines and phases ("(used by Alternate: Turbo Pressure Motor in Phases 4 and 5)") or those
-// parts and phases ("(for Wire made on site in Phase 4)"), so an item no card on the page uses
-// says why it is offered. Each part sorted. The same items as onSiteOffers.
+// The items the group uses only in `phases` (not the one shown), and those phases in words:
+// "Phase 4", or "Phases 4 and 5".
+export interface OnSiteElsewhere {
+  phases: StageKey[];
+  where: string;
+  entries: OnSiteEntry[];
+}
+
 export function onSitePickerOffers(
   plan: PickerPlan,
   groups: PickerGroups,
   groupId: string,
   shown: StageKey | undefined,
   marks: readonly string[] = groups?.local?.[groupId] || [],
-): OnSiteOffer[] {
-  const here: OnSiteOffer[] = [],
-    ingredients: OnSiteOffer[] = [],
-    elsewhere: OnSiteOffer[] = [];
+): OnSitePickerOffers {
+  const here: OnSiteEntry[] = [],
+    ingredients: OnSiteEntry[] = [],
+    elsewhere = new Map<string, OnSiteElsewhere>();
+  const addElsewhere = (uses: readonly OfferUse[], entry: OnSiteEntry) => {
+    const phases = uniqueSorted(uses.map(use => use.phase));
+    const key = phases.join(',');
+    const found = elsewhere.get(key);
+    if (found) found.entries.push(entry);
+    else elsewhere.set(key, { phases, where: phasesText(phases), entries: [entry] });
+  };
   for (const [item, uses] of offerUses(plan, groups, groupId, marks)) {
     const direct = uses.filter(use => !use.part),
       shownUses = uses.filter(use => use.phase === shown);
     if (direct.some(use => use.phase === shown)) here.push({ item, note: '' });
-    else if (shownUses.length) ingredients.push({ item, note: partNote(shownUses, '') });
+    else if (shownUses.length) ingredients.push({ item, note: partNote(shownUses) });
     else if (direct.length) {
       const lines = listNames(uniqueSorted(direct.map(use => use.line)));
-      elsewhere.push({ item, note: `(used by ${lines} in ${phasesText(direct)})` });
-    } else elsewhere.push({ item, note: partNote(uses, ' in ' + phasesText(uses)) });
+      addElsewhere(direct, { item, note: `(used by ${lines})` });
+    } else addElsewhere(uses, { item, note: partNote(uses) });
   }
-  const byItem = (a: OnSiteOffer, b: OnSiteOffer) => a.item.localeCompare(b.item);
-  return [...here.sort(byItem), ...ingredients.sort(byItem), ...elsewhere.sort(byItem)];
+  const byItem = (a: OnSiteEntry, b: OnSiteEntry) => a.item.localeCompare(b.item);
+  return {
+    here: [...here.sort(byItem), ...ingredients.sort(byItem)],
+    elsewhere: [...elsewhere.values()]
+      .sort((a, b) => a.phases.join(',').localeCompare(b.phases.join(',')))
+      .map(group => ({ ...group, entries: group.entries.sort(byItem) })),
+  };
 }
 
-const uniqueSorted = (names: string[]) => [...new Set(names)].sort((a, b) => a.localeCompare(b));
+const uniqueSorted = <Name extends string>(names: Name[]): Name[] =>
+  [...new Set(names)].sort((a, b) => a.localeCompare(b));
 // "Phase 4", or "Phases 4 and 5".
-function phasesText(uses: readonly OfferUse[]): string {
-  const phases = uniqueSorted(uses.map(use => use.phase));
-  return (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
-}
-// The note on an ingredient of marked parts, "(for Wire made on site)", with `where` after the
-// words.
-function partNote(uses: readonly OfferUse[], where: string): string {
+const phasesText = (phases: readonly StageKey[]) =>
+  (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
+// The note on an ingredient of marked parts: "(for Wire made on site)".
+function partNote(uses: readonly OfferUse[]): string {
   const parts = uniqueSorted(uses.flatMap(use => (use.part ? [use.part] : [])));
-  return `(for ${listNames(parts)} made on site${where})`;
+  return `(for ${listNames(parts)} made on site)`;
 }
 
 // The items each group makes on site in `onSite`, as sorted lists by group id.
@@ -215,7 +234,8 @@ export function onSiteRecalcSettings(
 export const UNUSED_NOTE = '(no line here uses it now)';
 export const RAW_NOTE = "(can't be made on site)";
 
-// One item under a group's heading, with a note in brackets, or '' for none.
+// One item under a group's heading, or one box of its picker (onSitePickerOffers), with a note in
+// brackets, or '' for none.
 export interface OnSiteEntry {
   item: string;
   note: string;
