@@ -6,14 +6,22 @@
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
-  factory-detail.ts.
+  factory-detail.ts. Headed as the row's build-plan step is titled (buildRowName), so a factory
+  group's own line made on site is "Wire for Alpha", as the links that open it say, and the
+  dialog's accessible name tells it from the central "Wire" line (#946).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
 import { calcFlowModel, FLUIDS } from '../../flow.ts';
 import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../session.ts';
-import { calcExpansion, easierSetup, machineSetup, rowIcon } from '../../views/calculated.ts';
+import {
+  buildRowName,
+  calcExpansion,
+  easierSetup,
+  machineSetup,
+  rowIcon,
+} from '../../views/calculated.ts';
 import { machineCounts } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
@@ -44,6 +52,7 @@ const view = computed(() =>
       generator = row.generationMW > 0;
     return {
       row,
+      title: buildRowName(row.id),
       check,
       done: checked(check),
       running: `Running at ${phaseLabel(stage())} target`,
@@ -99,7 +108,7 @@ const view = computed(() =>
 <template>
   <DialogFrame
     v-if="view"
-    :title="view.row.name"
+    :title="view.title"
     :subtitle="view.subtitle"
     :summary="view.summary"
     :icon="view.icon"
