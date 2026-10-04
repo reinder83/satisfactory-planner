@@ -9,7 +9,10 @@
 //   another recipe (#1002);
 // - an own line whose group asks for none of the item after a group edit, all of it sunk, says so
 //   rather than "Demand of Beta's lines" (#1002);
-// - a plan without lines made on site, and one whose groups were not edited, read as before.
+// - a plan without lines made on site, and one whose groups were not edited, read as before;
+// - an own line's byproduct of an item its group marks but the plan did not make on site for it
+//   (Water from Group 1's Aluminum Scrap line) goes to the whole plan's demand like any other
+//   byproduct, and an edit to the marks after the recalculation changes no note (#1003).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { beforeEach, test } from 'vitest';
@@ -20,19 +23,20 @@ import { onSiteSettings } from '../../public/app/on-site.ts';
 import { calcStage } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generatedWith, open, page } from './setup.ts';
-import type { FactoryGroups, StoredCalculatedPlan } from '../../public/types/index.ts';
+import type { FactoryGroups, StageKey, StoredCalculatedPlan } from '../../public/types/index.ts';
 
 const BASE = { phase: '3', wholeMachines: true, limitsConfirmed: true };
 const plain = generatedWith(BASE);
 
-// Opens `calculated` at Phase 3 with `factoryGroups`, and returns the flow model of row `id` and
+// Opens `calculated` at `phase` with `factoryGroups`, and returns the flow model of row `id` and
 // the text of the note its dialog draws under the destinations.
 function dialogOf(
   calculated: StoredCalculatedPlan,
   factoryGroups: FactoryGroups,
   id: string,
+  phase: StageKey = '3',
 ): { model: FlowModel; note: string } {
-  open({ calculated: structuredClone(calculated), phase: '3', state: { factoryGroups } });
+  open({ calculated: structuredClone(calculated), phase, state: { factoryGroups } });
   render();
   const row = calcStage()!.rows!.find(candidate => candidate.id === id);
   assert.ok(row, `the phase has row ${id}`);
@@ -240,4 +244,61 @@ test('the notes of a plan without lines made on site, and of groups not edited, 
     central.note,
     "Demand for the item across this phase's whole plan, less what factory groups make on site.",
   );
+});
+
+// #1003: Group 1 builds Pure Aluminum Ingot, Turbofuel and Nitric Acid in Phase 4, and marks
+// Aluminum Scrap, Compacted Coal and Water. The recalculation leaves Water out (a raw resource,
+// #921), so the plan makes no Water on site for Group 1, but its own Aluminum Scrap line makes 240
+// Water/min beside the scrap.
+const scrapGroups = (local: string[]): FactoryGroups => ({
+  groups: [{ id: G1, name: 'Group 1' }],
+  assignments: {
+    Recipe_PureAluminumIngot_C: [{ group: G1, rate: null }],
+    Recipe_Alternate_Turbofuel_C: [{ group: G1, rate: null }],
+    Recipe_NitricAcid_C: [{ group: G1, rate: null }],
+  },
+  local: { [G1]: local },
+});
+const scrapMarks = scrapGroups(['Aluminum Scrap', 'Compacted Coal', 'Water']);
+const PHASE4 = { phase: '4', wholeMachines: true, limitsConfirmed: true };
+const scrapPlan = generatedWith({
+  ...PHASE4,
+  onSite: onSiteSettings(generatedWith(PHASE4), scrapMarks),
+});
+const OWN_SCRAP = `Recipe_AluminumScrap_C:${G1}`;
+const SCRAP_NOTE =
+  "Demand of Group 1's lines, which this line makes the item for on site; what it makes beyond that goes to the AWESOME Sink. Water goes to the demand for it across this phase's whole plan, supplied together with the other lines making it.";
+
+test('an own line’s byproduct its group marks but the plan did not make on site goes to the whole plan (#1003)', () => {
+  assert.deepEqual(scrapPlan.settings.onSite?.[G1]?.items, ['Aluminum Scrap', 'Compacted Coal']);
+  const own = scrapPlan.stages['4'].rows!.find(row => row.id === OWN_SCRAP)!;
+  assert.equal(own.outputs.Water, 240);
+  const { model, note } = dialogOf(scrapPlan, scrapMarks, OWN_SCRAP, '4');
+  // Water is a byproduct like Heavy Oil Residue above, not Water made on site for Group 1.
+  assert.deepEqual(model.bankNote, {
+    shared: false,
+    ownLine: 'Group 1',
+    planWide: { items: ['Water'], shared: true, sameRecipe: true },
+  });
+  assert.equal(note, SCRAP_NOTE);
+  assert.doesNotMatch(note, /ask for less/);
+  // Its Water goes to every line using Water in the phase, Group 1's Nitric Acid among them.
+  const water = model.outputs.filter(output => output.pre === 'Water');
+  assert.ok(water.some(output => output.link?.calcFactory === 'Recipe_NitricAcid_C'));
+  assert.ok(water.some(output => output.link?.calcFactory === 'Recipe_AluminaSolution_C'));
+  assert.ok(water.every(output => output.kind !== 'sink'));
+});
+
+test('marks edited after the recalculation leave the notes as the plan was calculated (#1003)', () => {
+  // Group 1 clears Aluminum Scrap and marks Rocket Fuel, which its own Rocket Fuel line makes.
+  const edited = scrapGroups(['Compacted Coal', 'Rocket Fuel', 'Water']);
+  const { model, note } = dialogOf(scrapPlan, edited, OWN_SCRAP, '4');
+  assert.equal(note, SCRAP_NOTE);
+  assert.equal(model.bankNote?.ownLine, 'Group 1');
+  const rocket = dialogOf(scrapPlan, edited, `Recipe_RocketFuel_C:${G1}`, '4');
+  assert.deepEqual(
+    rocket.model.bankNote,
+    dialogOf(scrapPlan, scrapMarks, `Recipe_RocketFuel_C:${G1}`, '4').model.bankNote,
+  );
+  assert.deepEqual(rocket.model.bankNote?.planWide?.items, ['Rocket Fuel']);
 });

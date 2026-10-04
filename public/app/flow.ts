@@ -20,7 +20,13 @@ import { factoryGroupsState } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
 import type { ItemBooks } from './group-links.ts';
 import type { FactoryLink } from './ui/actions.ts';
-import type { CalcRow, FactoryGroups, StoredSettings, StoredStage } from '../types/index.ts';
+import type {
+  CalcRow,
+  FactoryGroups,
+  OnSiteSettings,
+  StoredSettings,
+  StoredStage,
+} from '../types/index.ts';
 
 // A belt or pipe mark: cap per lane, and the milestone that unlocks it.
 interface Lane {
@@ -333,26 +339,29 @@ export interface SiteBooks {
 }
 
 // The phase's books when some row of it is a group's own line made on site (#868), else
-// undefined, so a plan without such lines reads no groups at all.
-export function siteBooks(storedStage: StoredStage, groups: FactoryGroups): SiteBooks | undefined {
+// undefined, so a plan without such lines reads no groups at all. `planned` is the plan's
+// settings.onSite: the items made on site for each group (itemBooks, #1003).
+export function siteBooks(
+  storedStage: StoredStage,
+  groups: FactoryGroups,
+  planned?: OnSiteSettings,
+): SiteBooks | undefined {
   if (!(storedStage.rows || []).some(row => row.onSite)) return undefined;
-  return { groups, books: itemBooks(storedStage, groups) };
+  return { groups, books: itemBooks(storedStage, groups, planned) };
 }
 
 // The books when a group's own lines make `item` on site, else undefined.
 const siteItemBooks = (item: string, context: CalcFlowContext): SiteBooks | undefined =>
   context.site?.books.local[item] ? context.site : undefined;
 
-// The group whose own line made on site `row` is for `item`: the row's group, when that group
-// marks the item and so keeps the line's supply of it inside the group (itemBooks). Undefined for
-// any other row, which shares the item out with the central supply.
+// The group whose own line made on site `row` is for `item`: the row's group, when the books keep
+// the line's supply of the item inside the group, as made on site for it (ItemBooks.local: an
+// item the plan was calculated to make on site there, #1003, not merely one the group marks).
+// Undefined for any other row, and for a byproduct of the line made on site for no group (its
+// Water), which share the item out with the central supply.
 function ownLineGroup(row: CalcRow, item: string, site: SiteBooks): string | undefined {
   const group = row.onSite?.group;
-  return group &&
-    site.books.local[item]?.has(group) &&
-    (site.groups.local?.[group] || []).includes(item)
-    ? group
-    : undefined;
+  return group && site.books.local[item]?.has(group) ? group : undefined;
 }
 
 // How `consumer`'s demand for `item` is met (itemBooks): per group, what that group's own lines
@@ -872,7 +881,7 @@ function flowBar(row: CalcRow, notes: FlowNotes, stageKey: string): NonNullable<
 export function calcFlowModel(row: CalcRow): FlowModel {
   // A dialog of the profile just left can be drawn once more; it then shows no destinations.
   const storedStage = calcStage() ?? { feasible: false };
-  const site = siteBooks(storedStage, factoryGroupsState());
+  const site = siteBooks(storedStage, factoryGroupsState(), calculated?.settings.onSite);
   const context: CalcFlowContext = {
     storedStage,
     stageKey: stage(),

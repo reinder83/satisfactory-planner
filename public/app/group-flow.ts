@@ -33,7 +33,7 @@ import {
   UNGROUPED,
 } from './group-links.ts';
 import type { ItemBooks } from './group-links.ts';
-import type { CalcRow, FactoryGroups, StoredStage } from '../types/index.ts';
+import type { CalcRow, FactoryGroups, OnSiteSettings, StoredStage } from '../types/index.ts';
 
 // The belts or pipes that carry `rate` of `item`, in the factory dialog's words: the page
 // passes itemBelts (flow.ts) at the phase it shows, "2 × Mk.3 belts".
@@ -225,6 +225,7 @@ function crossingPorts(
   groups: FactoryGroups,
   groupId: string,
   belts: BeltsFor,
+  planned: OnSiteSettings | undefined,
 ): { ins: FlowPort[]; outs: FlowPort[] } {
   const ins: FlowPort[] = [],
     outs: FlowPort[] = [];
@@ -236,7 +237,7 @@ function crossingPorts(
     rate,
     belts: belts(item, rate),
   });
-  for (const link of groupLinks(stage, groups)) {
+  for (const link of groupLinks(stage, groups, planned)) {
     if (link.to === groupId)
       for (const entry of link.items) ins.push(port(link.from, entry.item, entry.rate));
     if (link.from === groupId)
@@ -379,7 +380,8 @@ function flowLine(
 }
 
 // The flow of group `groupId` in a calculated phase, null for a group the profile does not have.
-// `belts` words the belts or pipes of a rate (BeltsFor) and `name` names a line (LineName).
+// `belts` words the belts or pipes of a rate (BeltsFor), `name` names a line (LineName) and
+// `planned` is the plan's settings.onSite, the items made on site for each group (itemBooks).
 // Deterministic: it reads only its arguments.
 export function groupFlow(
   stage: StoredStage,
@@ -387,12 +389,13 @@ export function groupFlow(
   groupId: string,
   belts: BeltsFor,
   name: LineName = rowName,
+  planned?: OnSiteSettings,
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const parts = groupParts(stage, groups, groupId);
-  const books = itemBooks(stage, groups);
+  const books = itemBooks(stage, groups, planned);
   const inside = insideLinks(parts, books, belts, groupId);
-  const ports = crossingPorts(stage, groups, groupId, belts);
+  const ports = crossingPorts(stage, groups, groupId, belts, planned);
   const links = [...inside, ...portLinks(parts, ports, belts, inside, books.local, groupId)];
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts, name));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));

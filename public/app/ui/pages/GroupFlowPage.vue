@@ -52,6 +52,7 @@ const page = computed(() =>
           groupId,
           (item, rate) => itemBelts(item, rate, stageKey),
           row => buildRowName(row.id),
+          calculated.settings.onSite,
         )
       : null;
     return {
