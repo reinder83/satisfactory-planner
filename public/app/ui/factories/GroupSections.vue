@@ -9,7 +9,8 @@
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
   "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
-  it no line, each with why (onSiteSummaries in app/on-site-picker.ts, #931). The section's id
+  it no line, each with why, the ones that share a reason under one note (onSiteSummaries and
+  onSiteEntriesText in app/on-site-picker.ts, #931, #955). The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -31,15 +32,11 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 import OnSitePicker from './OnSitePicker.vue';
-import { onSiteEntryText, onSiteSummaries, type OnSiteEntry } from '../../on-site-picker.ts';
-import { listNames } from '../../../wording.ts';
+import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
 
 // The factories to sort into groups (calculated rows), and the key
 // their memberships are saved under.
 const props = defineProps<{ items: T[]; keyOf: (item: T) => string }>();
-
-// A group's entries under its heading in words: "Steel Pipe and Wire (until a recalculation)".
-const entriesText = (entries: OnSiteEntry[]) => listNames(entries.map(onSiteEntryText));
 
 const sections = computed(() =>
   legacy(() => {
@@ -54,9 +51,11 @@ const sections = computed(() =>
           membershipsOf(props.keyOf(item)).some(m => m.group === group.id),
         ),
         collapsed: sectionCollapsed(group.id),
-        // What it makes on site (#877) and the marks that give it no line (#931), under its heading.
-        made: entriesText(onSite[group.id]?.made || []),
-        marked: entriesText(onSite[group.id]?.marked || []),
+        // What it makes on site (#877) and the marks that give it no line (#931), under its heading,
+        // the items that share a note under it once (#955): "Iron Rod and Steel Pipe (needs a
+        // recalculation); Water (can't be made on site)".
+        made: onSiteEntriesText(onSite[group.id]?.made || []),
+        marked: onSiteEntriesText(onSite[group.id]?.marked || []),
       }))
       .filter(section => section.members.length || factoryEditing);
   }),
