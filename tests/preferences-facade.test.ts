@@ -63,6 +63,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'startingSurvey',
     'storageOptions',
     'storageRateFor',
+    'turbofuelRecipes',
     'tutorialKeys',
     'uncountedResources',
     'uniformPurities',

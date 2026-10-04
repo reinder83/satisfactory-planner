@@ -27,7 +27,7 @@
 // every importer, test and the server use, so none of them names a file under public/state/.
 //   state/validate.ts        blank state, validateState and the record rules
 //   state/mutate.ts          mutate (the /api/update operations) and checkBase
-//   state/carry.ts           newProfileState (with siteTicksForReview), carry options,
+//   state/carry.ts           newProfileState (with siteTicksForReview, UNLOCKED_WITH), carry options,
 //                            carryGuide, shareState and the
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
 //                            roundUpState, wholeMachineProfile) and their refusals
@@ -68,6 +68,7 @@ export {
   roundUpState,
   shareState,
   siteTicksForReview,
+  UNLOCKED_WITH,
   wholeMachineProfile,
 } from './state/carry.ts';
 export {

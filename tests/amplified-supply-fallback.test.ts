@@ -4,11 +4,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../planner.ts';
+import { STANDARD_BEFORE_1044 } from './helpers/standard-before-1040.ts';
 
 // Whole machines and 13.3 Circuit Boards a minute already running: the credit narrows Phase 3's
 // network so far that it no longer rounds to whole machines, and only the widened network fits.
+// On the standard recipes as they were before #1044: the case counts the solver's clock reads,
+// and the two recipes #1044 added to the standard pool, though no line of this plan, change how
+// its searches run (its amplified lines differ even on a real clock), so the credit was dropped.
 const settings = {
   phase: '3',
+  ...STANDARD_BEFORE_1044,
   goal: 'balanced',
   wholeMachines: true,
   limitsConfirmed: true,

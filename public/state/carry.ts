@@ -92,6 +92,16 @@ const carryPrefixes: Record<string, string[]> = {
     'power-retained',
   ],
 };
+// Alternates releases before #1044 planned as hard-drive alternates, each with its own unlock step
+// 'recipe-unlock-<recipe>', which the game unlocks with a MAM node or a HUB milestone instead: by
+// the id of that unlock, whose step ('unlock-<id>') a recalculated plan lists for the recipe now.
+// The recipe comes with that unlock and no other way, so a tick on the recipe's old step means
+// the unlock is done in game. tests/recipe-unlocks.test.ts checks the ids against
+// progression.json and MAM_RECIPES and MILESTONE_RECIPES in planner/data.ts.
+export const UNLOCKED_WITH: Record<string, string> = {
+  Recipe_Alternate_PolyesterFabric_C: 'Research_Mycelia_2_1_C',
+  Recipe_Alternate_Silica_Distilled_C: 'Schematic_7-5_C',
+};
 // Turns the client's carry choices into { option: boolean }. An absent choice carries
 // everything; anything else that is not an object carries nothing.
 export const carryPicks = (raw: unknown): Record<string, boolean> =>
@@ -179,6 +189,7 @@ export function newProfileState(
     .flatMap(([, list]) => list);
   for (const [key, value] of Object.entries(source.checks || {}))
     if (prefixes.some(prefix => key.startsWith(prefix))) state.checks[key] = value;
+  if (picks.unlocks) carryRecipeUnlocks(state, source);
   if (picks.deliveries) state.deliveries = { ...source.deliveries };
   if (picks.storage)
     for (const [key, value] of Object.entries(source.notes || {}))
@@ -225,6 +236,19 @@ export function newProfileState(
   if (review) state.onSiteReview = { checks: { ...review.checks, ...state.onSiteReview?.checks } };
   const clean = validateState(state);
   return { state: clean, reviewCount, carried: Object.values(clean.checks).filter(Boolean).length };
+}
+// The unlocks behind the source's ticked old recipe steps (UNLOCKED_WITH, #1044): a new profile
+// that carries the unlocks starts with each such unlock's step ticked, since its plan lists that
+// step for the recipe and no longer the recipe's own. The recipe's own record is copied as it is
+// (the unlocks option above), and a record the source holds for the unlock's step wins, ticked or
+// not, as every copied record does. Only a new profile gets this, once, so the source's own steps
+// and anything the user changes later stay as they are.
+function carryRecipeUnlocks(state: ProgressState, source: Pick<SavedState, 'checks'>): void {
+  for (const [recipe, unlock] of Object.entries(UNLOCKED_WITH)) {
+    const key = 'unlock-' + unlock;
+    if (source.checks?.['recipe-unlock-' + recipe] === true && source.checks[key] === undefined)
+      state.checks[key] = true;
+  }
 }
 // The source's ticks that factory groups' own lines made on site (#875, row id
 // '<recipe>:<group>' with `onSite`) leave without a single line to land on in the new plan

@@ -16,7 +16,12 @@ import { phaseSteps } from '../public/progression.ts';
 import { initialState, planStepIds, profilePhases, validateState } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import { recipes } from './helpers/data.ts';
-import { MAM_IDS, PURE_ALUMINUM, STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
+import {
+  MAM_IDS,
+  PURE_ALUMINUM,
+  STANDARD_BEFORE_1040,
+  STANDARD_BEFORE_1044,
+} from './helpers/standard-before-1040.ts';
 import type {
   CurrentCalculatedPlan,
   Progression,
@@ -144,9 +149,13 @@ test('#1040: with pure ingots required it is planned as an alternate with its un
 });
 
 test('#1040: the standard pool before #1040 is custom with Pure Aluminum Ingot and the MAM recipes', () => {
-  // tests/helpers/standard-before-1040.ts: the cases recorded on the old standard recipes.
+  // tests/helpers/standard-before-1040.ts: the cases recorded on the old standard recipes. The
+  // MAM recipes then were the two the catalog marks other than Polyester Fabric, which #1044
+  // made a MAM recipe, as it made Distilled Silica a milestone recipe.
+  const POLYESTER = 'Recipe_Alternate_PolyesterFabric_C',
+    DISTILLED = 'Recipe_Alternate_Silica_Distilled_C';
   assert.deepEqual(
-    MAM_IDS,
+    [...MAM_IDS, POLYESTER].sort(),
     catalog()
       .alternates.filter(alternate => alternate.mam)
       .map(alternate => alternate.id)
@@ -157,12 +166,25 @@ test('#1040: the standard pool before #1040 is custom with Pure Aluminum Ingot a
       .map(recipe => recipe.id)
       .sort();
   for (const phase of [1, 2, 3, 4, 5]) {
+    // Standard since #1044 has Polyester Fabric from Phase 3 and Distilled Silica from Phase 4.
+    const added = [...(phase >= 3 ? [POLYESTER] : []), ...(phase >= 4 ? [DISTILLED] : [])];
     const standard = ids({ recipes: 'standard' }, phase);
+    assert.deepEqual(
+      added.filter(id => standard.includes(id)),
+      added,
+      `Phase ${phase} standard`,
+    );
+    const between = ids(STANDARD_BEFORE_1044, phase);
+    assert.deepEqual(
+      between,
+      standard.filter(id => !added.includes(id)),
+      `Phase ${phase}, before #1044`,
+    );
     const before = ids(STANDARD_BEFORE_1040, phase);
     assert.deepEqual(
       before,
-      phase >= 4 ? [...standard, PURE_ALUMINUM].sort() : standard,
-      `Phase ${phase}`,
+      phase >= 4 ? [...between, PURE_ALUMINUM].sort() : between,
+      `Phase ${phase}, before #1040`,
     );
   }
 });

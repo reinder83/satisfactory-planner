@@ -1,0 +1,6072 @@
+{
+ "note": "Recorded on 2026-10-04 by the planner before #1044 (main at 07cf3a1): a Phase 4 custom profile that picked Polyester Fabric, Distilled Silica and Quartz Purification, with its build-plan step ids and titles per phase. tests/recipe-unlocks.test.ts",
+ "settings": {
+  "phase": "4",
+  "recipes": "custom",
+  "alternateRecipes": [
+   "Recipe_Alternate_PolyesterFabric_C",
+   "Recipe_Alternate_Quartz_Purified_C",
+   "Recipe_Alternate_Silica_Distilled_C"
+  ],
+  "storage": "supplies"
+ },
+ "plan": {
+  "engine": "2.0.0",
+  "settings": {
+   "utilityPercent": 20,
+   "droneFuel": "none",
+   "droneFuelRate": 10,
+   "droneBridgeRate": 10,
+   "worldSeed": "",
+   "mainPower": "auto",
+   "collectables": false,
+   "phase": "4",
+   "purity": "vanilla",
+   "distribution": "original",
+   "multiplier": 1,
+   "powerFactor": 1,
+   "availablePowerGW": 0,
+   "recipes": "custom",
+   "pureIngots": false,
+   "sam": "needed",
+   "nuclear": "none",
+   "uraniumReactors": 1,
+   "storage": "supplies",
+   "storageRate": 1,
+   "buildRate": 1,
+   "storageOverrides": {},
+   "existingSupply": {},
+   "transportFuel": {},
+   "extraction": null,
+   "cellsPerMinute": 0,
+   "installedPowerGW": 0,
+   "somersloops": 0,
+   "augmenters": 0,
+   "fueledAugmenters": 0,
+   "sloopReserved": [],
+   "amplifySloops": 0,
+   "goal": "balanced",
+   "phaseTime": "every",
+   "hours": 8,
+   "roundRates": true,
+   "wholeMachines": false,
+   "limitsConfirmed": false,
+   "modNotes": "",
+   "limits": {
+    "Iron Ore": 92100,
+    "Copper Ore": 36900,
+    "Limestone": 69300,
+    "Coal": 42300,
+    "Caterium Ore": 15000,
+    "Raw Quartz": 13500,
+    "Sulfur": 10800,
+    "Bauxite": 12300,
+    "Uranium": 2100,
+    "SAM": 10200,
+    "Crude Oil": 9900,
+    "Nitrogen Gas": 12000,
+    "Water": 1000000
+   },
+   "alternateRecipes": [
+    "Recipe_Alternate_PolyesterFabric_C",
+    "Recipe_Alternate_Quartz_Purified_C",
+    "Recipe_Alternate_Silica_Distilled_C"
+   ],
+   "preferredRecipes": []
+  },
+  "stages": {
+   "1": {
+    "feasible": true,
+    "rows": [
+     {
+      "id": "Recipe_IngotIron_C",
+      "name": "Iron Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Iron Ore": 43.150000000000006
+      },
+      "outputs": {
+       "Iron Ingot": 43.150000000000006
+      },
+      "power": 4,
+      "equivalent": 1.4383333333333335,
+      "machines": 2,
+      "lastClock": 43.83333333333334,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlate_C",
+      "name": "Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 25.800000000000004
+      },
+      "outputs": {
+       "Iron Plate": 17.200000000000003
+      },
+      "power": 4,
+      "equivalent": 0.8600000000000001,
+      "machines": 1,
+      "lastClock": 86.00000000000001,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronRod_C",
+      "name": "Iron Rod",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 17.35
+      },
+      "outputs": {
+       "Iron Rod": 17.35
+      },
+      "power": 4,
+      "equivalent": 1.1566666666666667,
+      "machines": 2,
+      "lastClock": 15.666666666666673,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Screw_C",
+      "name": "Screws",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 9.350000000000001
+      },
+      "outputs": {
+       "Screws": 37.400000000000006
+      },
+      "power": 4,
+      "equivalent": 0.9350000000000002,
+      "machines": 1,
+      "lastClock": 93.50000000000001,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlateReinforced_C",
+      "name": "Reinforced Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Plate": 16.200000000000003,
+       "Screws": 32.400000000000006
+      },
+      "outputs": {
+       "Reinforced Iron Plate": 2.7
+      },
+      "power": 15,
+      "equivalent": 0.54,
+      "machines": 1,
+      "lastClock": 54,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrame_C",
+      "name": "Modular Frame",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 1.5,
+       "Iron Rod": 6
+      },
+      "outputs": {
+       "Modular Frame": 1
+      },
+      "power": 15,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rotor_C",
+      "name": "Rotor",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rod": 1,
+       "Screws": 5
+      },
+      "outputs": {
+       "Rotor": 0.2
+      },
+      "power": 15,
+      "equivalent": 0.05,
+      "machines": 1,
+      "lastClock": 5.000000000000004,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCopper_C",
+      "name": "Copper Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Copper Ore": 3.5
+      },
+      "outputs": {
+       "Copper Ingot": 3.5
+      },
+      "power": 4,
+      "equivalent": 0.11666666666666667,
+      "machines": 1,
+      "lastClock": 11.66666666666667,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperSheet_C",
+      "name": "Copper Sheet",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 2
+      },
+      "outputs": {
+       "Copper Sheet": 1
+      },
+      "power": 4,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_1_C",
+      "name": "Smart Plating",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 0.2,
+       "Rotor": 0.2
+      },
+      "outputs": {
+       "Smart Plating": 0.2
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Concrete_C",
+      "name": "Concrete",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Limestone": 3
+      },
+      "outputs": {
+       "Concrete": 1
+      },
+      "power": 4,
+      "equivalent": 0.06666666666666667,
+      "machines": 1,
+      "lastClock": 6.666666666666665,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Wire_C",
+      "name": "Wire",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 1.5
+      },
+      "outputs": {
+       "Wire": 3
+      },
+      "power": 4,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Cable_C",
+      "name": "Cable",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Wire": 2
+      },
+      "outputs": {
+       "Cable": 1
+      },
+      "power": 4,
+      "equivalent": 0.03333333333333333,
+      "machines": 1,
+      "lastClock": 3.3333333333333326,
+      "peakMW": 4,
+      "generationMW": 0
+     }
+    ],
+    "raw": {
+     "Iron Ore": 43.150000000000006,
+     "Copper Ore": 3.5,
+     "Limestone": 3,
+     "Coal": 0,
+     "Caterium Ore": 0,
+     "Raw Quartz": 0,
+     "Sulfur": 0,
+     "Bauxite": 0,
+     "Uranium": 0,
+     "SAM": 0,
+     "Crude Oil": 0,
+     "Nitrogen Gas": 0,
+     "Water": 0
+    },
+    "supplied": {},
+    "storage": {
+     "Concrete": 1,
+     "Iron Plate": 1,
+     "Iron Rod": 1,
+     "Copper Sheet": 1,
+     "Wire": 1,
+     "Reinforced Iron Plate": 1,
+     "Cable": 1,
+     "Modular Frame": 1
+    },
+    "drone": {},
+    "transport": {},
+    "delivery": {
+     "Smart Plating": {
+      "target": 50,
+      "rate": 0.2
+     }
+    },
+    "surplus": {},
+    "plutoniumSink": 0,
+    "peakMW": 104,
+    "generationMW": 0,
+    "sloopsUsed": 0,
+    "augmenters": 0,
+    "fueledAugmenters": 0,
+    "boost": 0,
+    "augmenterMW": 0,
+    "matrixRate": 0,
+    "availableMW": 0,
+    "requiredMW": 124.8,
+    "additionalHeadroomMW": 124.8,
+    "hours": 4.166666666666667,
+    "conversions": []
+   },
+   "2": {
+    "feasible": true,
+    "rows": [
+     {
+      "id": "Recipe_IngotIron_C",
+      "name": "Iron Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Iron Ore": 139.02499999999998
+      },
+      "outputs": {
+       "Iron Ingot": 139.02499999999998
+      },
+      "power": 4,
+      "equivalent": 4.634166666666666,
+      "machines": 5,
+      "lastClock": 63.41666666666663,
+      "peakMW": 20,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlate_C",
+      "name": "Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 57.074999999999996
+      },
+      "outputs": {
+       "Iron Plate": 38.05
+      },
+      "power": 4,
+      "equivalent": 1.9024999999999999,
+      "machines": 2,
+      "lastClock": 90.24999999999999,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronRod_C",
+      "name": "Iron Rod",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 81.94999999999999
+      },
+      "outputs": {
+       "Iron Rod": 81.94999999999999
+      },
+      "power": 4,
+      "equivalent": 5.463333333333333,
+      "machines": 6,
+      "lastClock": 46.33333333333329,
+      "peakMW": 24,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotSteel_C",
+      "name": "Steel Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Foundry",
+      "inputs": {
+       "Iron Ore": 81.25,
+       "Coal": 81.25
+      },
+      "outputs": {
+       "Steel Ingot": 81.25
+      },
+      "power": 16,
+      "equivalent": 1.8055555555555556,
+      "machines": 2,
+      "lastClock": 80.55555555555556,
+      "peakMW": 32,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelBeam_C",
+      "name": "Steel Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 66.4
+      },
+      "outputs": {
+       "Steel Beam": 16.6
+      },
+      "power": 4,
+      "equivalent": 1.1066666666666667,
+      "machines": 2,
+      "lastClock": 10.666666666666668,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelPipe_C",
+      "name": "Steel Pipe",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 14.849999999999998
+      },
+      "outputs": {
+       "Steel Pipe": 9.899999999999999
+      },
+      "power": 4,
+      "equivalent": 0.49499999999999994,
+      "machines": 1,
+      "lastClock": 49.499999999999986,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Screw_C",
+      "name": "Screws",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 44.14999999999999
+      },
+      "outputs": {
+       "Screws": 176.59999999999997
+      },
+      "power": 4,
+      "equivalent": 4.414999999999999,
+      "machines": 5,
+      "lastClock": 41.499999999999915,
+      "peakMW": 20,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlateReinforced_C",
+      "name": "Reinforced Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Plate": 37.05,
+       "Screws": 74.1
+      },
+      "outputs": {
+       "Reinforced Iron Plate": 6.174999999999999
+      },
+      "power": 15,
+      "equivalent": 1.2349999999999999,
+      "machines": 2,
+      "lastClock": 23.499999999999986,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrame_C",
+      "name": "Modular Frame",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 3.0749999999999997,
+       "Iron Rod": 12.299999999999999
+      },
+      "outputs": {
+       "Modular Frame": 2.05
+      },
+      "power": 15,
+      "equivalent": 1.025,
+      "machines": 2,
+      "lastClock": 2.499999999999991,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_2_C",
+      "name": "Versatile Framework",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Modular Frame": 1.05,
+       "Steel Beam": 12.600000000000001
+      },
+      "outputs": {
+       "Versatile Framework": 2.1
+      },
+      "power": 15,
+      "equivalent": 0.42000000000000004,
+      "machines": 1,
+      "lastClock": 42.00000000000001,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_QuartzCrystal_C",
+      "name": "Quartz Crystal",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Raw Quartz": 5
+      },
+      "outputs": {
+       "Quartz Crystal": 3
+      },
+      "power": 4,
+      "equivalent": 0.13333333333333333,
+      "machines": 1,
+      "lastClock": 13.33333333333333,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Concrete_C",
+      "name": "Concrete",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Limestone": 21
+      },
+      "outputs": {
+       "Concrete": 7
+      },
+      "power": 4,
+      "equivalent": 0.4666666666666667,
+      "machines": 1,
+      "lastClock": 46.666666666666664,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_EncasedIndustrialBeam_C",
+      "name": "Encased Industrial Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Beam": 3,
+       "Concrete": 6
+      },
+      "outputs": {
+       "Encased Industrial Beam": 1
+      },
+      "power": 15,
+      "equivalent": 0.16666666666666666,
+      "machines": 1,
+      "lastClock": 16.666666666666664,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rotor_C",
+      "name": "Rotor",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rod": 20.5,
+       "Screws": 102.49999999999999
+      },
+      "outputs": {
+       "Rotor": 4.1
+      },
+      "power": 15,
+      "equivalent": 1.025,
+      "machines": 2,
+      "lastClock": 2.499999999999991,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCopper_C",
+      "name": "Copper Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Copper Ore": 18.7
+      },
+      "outputs": {
+       "Copper Ingot": 18.7
+      },
+      "power": 4,
+      "equivalent": 0.6233333333333333,
+      "machines": 1,
+      "lastClock": 62.33333333333333,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Wire_C",
+      "name": "Wire",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 16.7
+      },
+      "outputs": {
+       "Wire": 33.4
+      },
+      "power": 4,
+      "equivalent": 1.1133333333333333,
+      "machines": 2,
+      "lastClock": 11.333333333333329,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Stator_C",
+      "name": "Stator",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Pipe": 6.8999999999999995,
+       "Wire": 18.4
+      },
+      "outputs": {
+       "Stator": 2.3
+      },
+      "power": 15,
+      "equivalent": 0.45999999999999996,
+      "machines": 1,
+      "lastClock": 46,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Motor_C",
+      "name": "Motor",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Rotor": 2,
+       "Stator": 2
+      },
+      "outputs": {
+       "Motor": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Cable_C",
+      "name": "Cable",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Wire": 14
+      },
+      "outputs": {
+       "Cable": 7
+      },
+      "power": 4,
+      "equivalent": 0.23333333333333334,
+      "machines": 1,
+      "lastClock": 23.33333333333334,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_3_C",
+      "name": "Automated Wiring",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 0.3,
+       "Cable": 6
+      },
+      "outputs": {
+       "Automated Wiring": 0.3
+      },
+      "power": 15,
+      "equivalent": 0.12,
+      "machines": 1,
+      "lastClock": 12,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperSheet_C",
+      "name": "Copper Sheet",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 2
+      },
+      "outputs": {
+       "Copper Sheet": 1
+      },
+      "power": 4,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_1_C",
+      "name": "Smart Plating",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 2.1,
+       "Rotor": 2.1
+      },
+      "outputs": {
+       "Smart Plating": 2.1
+      },
+      "power": 15,
+      "equivalent": 1.05,
+      "machines": 2,
+      "lastClock": 5.000000000000004,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCaterium_C",
+      "name": "Caterium Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Smelter",
+      "inputs": {
+       "Caterium Ore": 3
+      },
+      "outputs": {
+       "Caterium Ingot": 1
+      },
+      "power": 4,
+      "equivalent": 0.06666666666666667,
+      "machines": 1,
+      "lastClock": 6.666666666666665,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Quickwire_C",
+      "name": "Quickwire",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Caterium Ingot": 1
+      },
+      "outputs": {
+       "Quickwire": 5
+      },
+      "power": 4,
+      "equivalent": 0.08333333333333333,
+      "machines": 1,
+      "lastClock": 8.333333333333337,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Gunpowder_C",
+      "name": "Black Powder",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Coal": 1,
+       "Sulfur": 1
+      },
+      "outputs": {
+       "Black Powder": 2
+      },
+      "power": 15,
+      "equivalent": 0.06666666666666667,
+      "machines": 1,
+      "lastClock": 6.666666666666665,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpikedRebar_C",
+      "name": "Iron Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 4
+      },
+      "outputs": {
+       "Iron Rebar": 4
+      },
+      "power": 4,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Stunshot_C",
+      "name": "Stun Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 1,
+       "Quickwire": 5
+      },
+      "outputs": {
+       "Stun Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Spreadshot_C",
+      "name": "Shatter Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Quartz Crystal": 3
+      },
+      "outputs": {
+       "Shatter Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Nobelisk_C",
+      "name": "Nobelisk",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Black Powder": 2,
+       "Steel Pipe": 2
+      },
+      "outputs": {
+       "Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "power-coal",
+      "name": "Coal power",
+      "machine": "Coal Generator",
+      "phase": 2,
+      "power": -75,
+      "inputs": {
+       "Coal": 49.398533333333326,
+       "Water": 148.19559999999998
+      },
+      "outputs": {},
+      "equivalent": 3.293235555555555,
+      "machines": 4,
+      "lastClock": 29.3235555555555,
+      "peakMW": 0,
+      "generationMW": 246.99266666666662
+     }
+    ],
+    "raw": {
+     "Iron Ore": 220.27499999999998,
+     "Copper Ore": 18.7,
+     "Limestone": 21,
+     "Coal": 131.64853333333332,
+     "Caterium Ore": 3,
+     "Raw Quartz": 5,
+     "Sulfur": 1,
+     "Bauxite": 0,
+     "Uranium": 0,
+     "SAM": 0,
+     "Crude Oil": 0,
+     "Nitrogen Gas": 0,
+     "Water": 148.19559999999998
+    },
+    "supplied": {},
+    "storage": {
+     "Concrete": 1,
+     "Iron Plate": 1,
+     "Iron Rod": 1,
+     "Steel Beam": 1,
+     "Steel Pipe": 1,
+     "Encased Industrial Beam": 1,
+     "Copper Sheet": 1,
+     "Iron Rebar": 1,
+     "Stun Rebar": 1,
+     "Shatter Rebar": 1,
+     "Nobelisk": 1,
+     "Wire": 1,
+     "Reinforced Iron Plate": 1,
+     "Cable": 1,
+     "Motor": 1,
+     "Modular Frame": 1
+    },
+    "drone": {},
+    "transport": {},
+    "delivery": {
+     "Smart Plating": {
+      "target": 1000,
+      "rate": 2.1
+     },
+     "Versatile Framework": {
+      "target": 1000,
+      "rate": 2.1
+     },
+     "Automated Wiring": {
+      "target": 100,
+      "rate": 0.3
+     }
+    },
+    "surplus": {},
+    "plutoniumSink": 0,
+    "peakMW": 411,
+    "generationMW": 246.99266666666662,
+    "sloopsUsed": 0,
+    "augmenters": 0,
+    "fueledAugmenters": 0,
+    "boost": 0,
+    "augmenterMW": 0,
+    "matrixRate": 0,
+    "availableMW": 246.99266666666662,
+    "requiredMW": 493.2,
+    "additionalHeadroomMW": 246.20733333333337,
+    "hours": 7.936507936507936,
+    "conversions": []
+   },
+   "3": {
+    "feasible": true,
+    "rows": [
+     {
+      "id": "Recipe_IngotIron_C",
+      "name": "Iron Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Iron Ore": 435.25
+      },
+      "outputs": {
+       "Iron Ingot": 435.25
+      },
+      "power": 4,
+      "equivalent": 14.508333333333333,
+      "machines": 15,
+      "lastClock": 50.833333333333286,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlate_C",
+      "name": "Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 174.82500000000002
+      },
+      "outputs": {
+       "Iron Plate": 116.55000000000001
+      },
+      "power": 4,
+      "equivalent": 5.827500000000001,
+      "machines": 6,
+      "lastClock": 82.75000000000006,
+      "peakMW": 24,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronRod_C",
+      "name": "Iron Rod",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 260.425
+      },
+      "outputs": {
+       "Iron Rod": 260.425
+      },
+      "power": 4,
+      "equivalent": 17.361666666666668,
+      "machines": 18,
+      "lastClock": 36.16666666666681,
+      "peakMW": 72,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCopper_C",
+      "name": "Copper Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Copper Ore": 112.29999999999998
+      },
+      "outputs": {
+       "Copper Ingot": 112.29999999999998
+      },
+      "power": 4,
+      "equivalent": 3.7433333333333327,
+      "machines": 4,
+      "lastClock": 74.33333333333327,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperSheet_C",
+      "name": "Copper Sheet",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 33.6
+      },
+      "outputs": {
+       "Copper Sheet": 16.8
+      },
+      "power": 4,
+      "equivalent": 1.6800000000000002,
+      "machines": 2,
+      "lastClock": 68.00000000000001,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Plastic_C",
+      "name": "Plastic",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 57.126583072100324
+      },
+      "outputs": {
+       "Plastic": 38.08438871473355,
+       "Heavy Oil Residue": 19.042194357366775
+      },
+      "power": 30,
+      "equivalent": 1.9042194357366775,
+      "machines": 2,
+      "lastClock": 90.42194357366775,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_LiquidFuel_C",
+      "name": "Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 124.69366771159878
+      },
+      "outputs": {
+       "Fuel": 83.12911180773253,
+       "Polymer Resin": 62.34683385579939
+      },
+      "power": 30,
+      "equivalent": 2.078227795193313,
+      "machines": 3,
+      "lastClock": 7.822779519331302,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ResidualPlastic_C",
+      "name": "Residual Plastic",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Polymer Resin": 60.346833855799375,
+       "Water": 20.115611285266457
+      },
+      "outputs": {
+       "Plastic": 20.115611285266457
+      },
+      "power": 30,
+      "equivalent": 1.0057805642633229,
+      "machines": 2,
+      "lastClock": 0.5780564263322852,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CircuitBoard_C",
+      "name": "Circuit Board",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Copper Sheet": 15.800000000000002,
+       "Plastic": 31.600000000000005
+      },
+      "outputs": {
+       "Circuit Board": 7.900000000000001
+      },
+      "power": 15,
+      "equivalent": 1.0533333333333335,
+      "machines": 2,
+      "lastClock": 5.3333333333333455,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rubber_C",
+      "name": "Rubber",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 26.25
+      },
+      "outputs": {
+       "Rubber": 17.5,
+       "Heavy Oil Residue": 17.5
+      },
+      "power": 30,
+      "equivalent": 0.875,
+      "machines": 1,
+      "lastClock": 87.5,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ResidualFuel_C",
+      "name": "Residual Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Heavy Oil Residue": 33.542194357366775
+      },
+      "outputs": {
+       "Fuel": 22.361462904911185
+      },
+      "power": 30,
+      "equivalent": 0.5590365726227796,
+      "machines": 1,
+      "lastClock": 55.90365726227796,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotSteel_C",
+      "name": "Steel Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Foundry",
+      "inputs": {
+       "Iron Ore": 315.25,
+       "Coal": 315.25
+      },
+      "outputs": {
+       "Steel Ingot": 315.25
+      },
+      "power": 16,
+      "equivalent": 7.0055555555555555,
+      "machines": 8,
+      "lastClock": 0.5555555555555536,
+      "peakMW": 128,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelBeam_C",
+      "name": "Steel Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 221.2
+      },
+      "outputs": {
+       "Steel Beam": 55.3
+      },
+      "power": 4,
+      "equivalent": 3.6866666666666665,
+      "machines": 4,
+      "lastClock": 68.66666666666666,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelPipe_C",
+      "name": "Steel Pipe",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 94.05000000000001
+      },
+      "outputs": {
+       "Steel Pipe": 62.7
+      },
+      "power": 4,
+      "equivalent": 3.1350000000000002,
+      "machines": 4,
+      "lastClock": 13.500000000000023,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Screw_C",
+      "name": "Screws",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 149.525
+      },
+      "outputs": {
+       "Screws": 598.1
+      },
+      "power": 4,
+      "equivalent": 14.9525,
+      "machines": 15,
+      "lastClock": 95.25000000000006,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlateReinforced_C",
+      "name": "Reinforced Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Plate": 113.55000000000001,
+       "Screws": 227.10000000000002
+      },
+      "outputs": {
+       "Reinforced Iron Plate": 18.925
+      },
+      "power": 15,
+      "equivalent": 3.785,
+      "machines": 4,
+      "lastClock": 78.50000000000001,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrame_C",
+      "name": "Modular Frame",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 15.225000000000001,
+       "Iron Rod": 60.900000000000006
+      },
+      "outputs": {
+       "Modular Frame": 10.15
+      },
+      "power": 15,
+      "equivalent": 5.075,
+      "machines": 6,
+      "lastClock": 7.500000000000018,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_2_C",
+      "name": "Versatile Framework",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Modular Frame": 2.6500000000000004,
+       "Steel Beam": 31.8
+      },
+      "outputs": {
+       "Versatile Framework": 5.300000000000001
+      },
+      "power": 15,
+      "equivalent": 1.06,
+      "machines": 2,
+      "lastClock": 6.000000000000005,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_QuartzCrystal_C",
+      "name": "Quartz Crystal",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Raw Quartz": 11
+      },
+      "outputs": {
+       "Quartz Crystal": 6.6
+      },
+      "power": 4,
+      "equivalent": 0.29333333333333333,
+      "machines": 1,
+      "lastClock": 29.333333333333332,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Wire_C",
+      "name": "Wire",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 78.69999999999999
+      },
+      "outputs": {
+       "Wire": 157.39999999999998
+      },
+      "power": 4,
+      "equivalent": 5.246666666666666,
+      "machines": 6,
+      "lastClock": 24.666666666666615,
+      "peakMW": 24,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Cable_C",
+      "name": "Cable",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Wire": 93.19999999999999
+      },
+      "outputs": {
+       "Cable": 46.599999999999994
+      },
+      "power": 4,
+      "equivalent": 1.5533333333333332,
+      "machines": 2,
+      "lastClock": 55.33333333333332,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CrystalOscillator_C",
+      "name": "Crystal Oscillator",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Quartz Crystal": 3.6,
+       "Cable": 2.8000000000000003,
+       "Reinforced Iron Plate": 0.5
+      },
+      "outputs": {
+       "Crystal Oscillator": 0.2
+      },
+      "power": 55,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Concrete_C",
+      "name": "Concrete",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Limestone": 138
+      },
+      "outputs": {
+       "Concrete": 46
+      },
+      "power": 4,
+      "equivalent": 3.066666666666667,
+      "machines": 4,
+      "lastClock": 6.666666666666687,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_EncasedIndustrialBeam_C",
+      "name": "Encased Industrial Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Beam": 22.5,
+       "Concrete": 45
+      },
+      "outputs": {
+       "Encased Industrial Beam": 7.5
+      },
+      "power": 15,
+      "equivalent": 1.25,
+      "machines": 2,
+      "lastClock": 25,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rotor_C",
+      "name": "Rotor",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rod": 43.00000000000001,
+       "Screws": 215.00000000000003
+      },
+      "outputs": {
+       "Rotor": 8.600000000000001
+      },
+      "power": 15,
+      "equivalent": 2.1500000000000004,
+      "machines": 3,
+      "lastClock": 15.000000000000036,
+      "peakMW": 45,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Stator_C",
+      "name": "Stator",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Pipe": 23.700000000000003,
+       "Wire": 63.2
+      },
+      "outputs": {
+       "Stator": 7.9
+      },
+      "power": 15,
+      "equivalent": 1.58,
+      "machines": 2,
+      "lastClock": 58.00000000000001,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Motor_C",
+      "name": "Motor",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Rotor": 6.4,
+       "Stator": 6.4
+      },
+      "outputs": {
+       "Motor": 3.2
+      },
+      "power": 15,
+      "equivalent": 0.64,
+      "machines": 1,
+      "lastClock": 64,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_3_C",
+      "name": "Automated Wiring",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 1.5,
+       "Cable": 30
+      },
+      "outputs": {
+       "Automated Wiring": 1.5
+      },
+      "power": 15,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Computer_C",
+      "name": "Computer",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Circuit Board": 6.4,
+       "Cable": 12.8,
+       "Plastic": 25.6
+      },
+      "outputs": {
+       "Computer": 1.6
+      },
+      "power": 55,
+      "equivalent": 0.64,
+      "machines": 1,
+      "lastClock": 64,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrameHeavy_C",
+      "name": "Heavy Modular Frame",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Modular Frame": 6.5,
+       "Steel Pipe": 26,
+       "Encased Industrial Beam": 6.5,
+       "Screws": 156
+      },
+      "outputs": {
+       "Heavy Modular Frame": 1.3
+      },
+      "power": 55,
+      "equivalent": 0.65,
+      "machines": 1,
+      "lastClock": 65,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_1_C",
+      "name": "Smart Plating",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 2.2,
+       "Rotor": 2.2
+      },
+      "outputs": {
+       "Smart Plating": 2.2
+      },
+      "power": 15,
+      "equivalent": 1.1,
+      "machines": 2,
+      "lastClock": 10.000000000000009,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_4_C",
+      "name": "Modular Engine",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Motor": 2.2,
+       "Rubber": 16.5,
+       "Smart Plating": 2.2
+      },
+      "outputs": {
+       "Modular Engine": 1.1
+      },
+      "power": 55,
+      "equivalent": 1.1,
+      "machines": 2,
+      "lastClock": 10.000000000000009,
+      "peakMW": 110,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_5_C",
+      "name": "Adaptive Control Unit",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Automated Wiring": 1.5,
+       "Circuit Board": 1.5,
+       "Heavy Modular Frame": 0.3,
+       "Computer": 0.6
+      },
+      "outputs": {
+       "Adaptive Control Unit": 0.3
+      },
+      "power": 55,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCaterium_C",
+      "name": "Caterium Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Smelter",
+      "inputs": {
+       "Caterium Ore": 3
+      },
+      "outputs": {
+       "Caterium Ingot": 1
+      },
+      "power": 4,
+      "equivalent": 0.06666666666666667,
+      "machines": 1,
+      "lastClock": 6.666666666666665,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Quickwire_C",
+      "name": "Quickwire",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Caterium Ingot": 1
+      },
+      "outputs": {
+       "Quickwire": 5
+      },
+      "power": 4,
+      "equivalent": 0.08333333333333333,
+      "machines": 1,
+      "lastClock": 8.333333333333337,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Gunpowder_C",
+      "name": "Black Powder",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Coal": 8,
+       "Sulfur": 8
+      },
+      "outputs": {
+       "Black Powder": 16
+      },
+      "power": 15,
+      "equivalent": 0.5333333333333333,
+      "machines": 1,
+      "lastClock": 53.333333333333336,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpikedRebar_C",
+      "name": "Iron Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 6
+      },
+      "outputs": {
+       "Iron Rebar": 6
+      },
+      "power": 4,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Stunshot_C",
+      "name": "Stun Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 1,
+       "Quickwire": 5
+      },
+      "outputs": {
+       "Stun Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_PolyesterFabric_C",
+      "name": "Alternate: Polyester Fabric",
+      "alternate": true,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Polymer Resin": 2,
+       "Water": 2
+      },
+      "outputs": {
+       "Fabric": 2
+      },
+      "power": 30,
+      "equivalent": 0.06666666666666667,
+      "machines": 1,
+      "lastClock": 6.666666666666665,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FilterGasMask_C",
+      "name": "Gas Filter",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Fabric": 2,
+       "Coal": 4,
+       "Iron Plate": 2
+      },
+      "outputs": {
+       "Gas Filter": 1
+      },
+      "power": 55,
+      "equivalent": 0.13333333333333333,
+      "machines": 1,
+      "lastClock": 13.33333333333333,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Nobelisk_C",
+      "name": "Nobelisk",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Black Powder": 10,
+       "Steel Pipe": 10
+      },
+      "outputs": {
+       "Nobelisk": 5
+      },
+      "power": 15,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskShockwave_C",
+      "name": "Pulse Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 1,
+       "Crystal Oscillator": 0.2
+      },
+      "outputs": {
+       "Pulse Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Spreadshot_C",
+      "name": "Shatter Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Quartz Crystal": 3
+      },
+      "outputs": {
+       "Shatter Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_GunpowderMK2_C",
+      "name": "Smokeless Powder",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Black Powder": 6,
+       "Heavy Oil Residue": 3
+      },
+      "outputs": {
+       "Smokeless Powder": 6
+      },
+      "power": 30,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Explosive_C",
+      "name": "Explosive Rebar",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Smokeless Powder": 2,
+       "Steel Pipe": 2
+      },
+      "outputs": {
+       "Explosive Rebar": 1
+      },
+      "power": 55,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskCluster_C",
+      "name": "Cluster Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 3,
+       "Smokeless Powder": 4
+      },
+      "outputs": {
+       "Cluster Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "power-fuel",
+      "name": "Fuel power",
+      "machine": "Fuel Generator",
+      "phase": 3,
+      "power": -250,
+      "inputs": {
+       "Fuel": 105.4905747126437
+      },
+      "outputs": {},
+      "equivalent": 5.2745287356321855,
+      "machines": 6,
+      "lastClock": 27.45287356321855,
+      "peakMW": 0,
+      "generationMW": 1318.6321839080463
+     }
+    ],
+    "raw": {
+     "Iron Ore": 750.5,
+     "Copper Ore": 112.29999999999998,
+     "Limestone": 138,
+     "Coal": 327.25,
+     "Caterium Ore": 3,
+     "Raw Quartz": 11,
+     "Sulfur": 8,
+     "Bauxite": 0,
+     "Uranium": 0,
+     "SAM": 0,
+     "Crude Oil": 208.0702507836991,
+     "Nitrogen Gas": 0,
+     "Water": 22.115611285266457
+    },
+    "supplied": {},
+    "storage": {
+     "Plastic": 1,
+     "Rubber": 1,
+     "Concrete": 1,
+     "Iron Plate": 1,
+     "Iron Rod": 1,
+     "Steel Beam": 1,
+     "Steel Pipe": 1,
+     "Encased Industrial Beam": 1,
+     "Copper Sheet": 1,
+     "Iron Rebar": 1,
+     "Stun Rebar": 1,
+     "Gas Filter": 1,
+     "Shatter Rebar": 1,
+     "Explosive Rebar": 1,
+     "Nobelisk": 1,
+     "Wire": 1,
+     "Cluster Nobelisk": 1,
+     "Reinforced Iron Plate": 1,
+     "Cable": 1,
+     "Motor": 1,
+     "Computer": 1,
+     "Modular Frame": 1,
+     "Pulse Nobelisk": 1,
+     "Heavy Modular Frame": 1
+    },
+    "drone": {},
+    "transport": {},
+    "delivery": {
+     "Versatile Framework": {
+      "target": 2500,
+      "rate": 5.3
+     },
+     "Modular Engine": {
+      "target": 500,
+      "rate": 1.1
+     },
+     "Adaptive Control Unit": {
+      "target": 100,
+      "rate": 0.3
+     }
+    },
+    "surplus": {},
+    "plutoniumSink": 0,
+    "peakMW": 1699,
+    "generationMW": 1318.6321839080463,
+    "sloopsUsed": 0,
+    "augmenters": 0,
+    "fueledAugmenters": 0,
+    "boost": 0,
+    "augmenterMW": 0,
+    "matrixRate": 0,
+    "availableMW": 1318.6321839080463,
+    "requiredMW": 2038.8,
+    "additionalHeadroomMW": 720.1678160919537,
+    "hours": 7.861635220125787,
+    "conversions": []
+   },
+   "4": {
+    "feasible": true,
+    "rows": [
+     {
+      "id": "Recipe_IngotIron_C",
+      "name": "Iron Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Iron Ore": 950.0864197530864
+      },
+      "outputs": {
+       "Iron Ingot": 950.0864197530864
+      },
+      "power": 4,
+      "equivalent": 31.66954732510288,
+      "machines": 32,
+      "lastClock": 66.95473251028794,
+      "peakMW": 128,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlate_C",
+      "name": "Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 381.89891975308643
+      },
+      "outputs": {
+       "Iron Plate": 254.59927983539097
+      },
+      "power": 4,
+      "equivalent": 12.729963991769548,
+      "machines": 13,
+      "lastClock": 72.9963991769548,
+      "peakMW": 52,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronRod_C",
+      "name": "Iron Rod",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 568.1875
+      },
+      "outputs": {
+       "Iron Rod": 568.1875
+      },
+      "power": 4,
+      "equivalent": 37.87916666666667,
+      "machines": 38,
+      "lastClock": 87.916666666667,
+      "peakMW": 152,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCopper_C",
+      "name": "Copper Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Copper Ore": 1167.0333333333333
+      },
+      "outputs": {
+       "Copper Ingot": 1167.0333333333333
+      },
+      "power": 4,
+      "equivalent": 38.90111111111111,
+      "machines": 39,
+      "lastClock": 90.11111111111134,
+      "peakMW": 156,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperSheet_C",
+      "name": "Copper Sheet",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 328.2
+      },
+      "outputs": {
+       "Copper Sheet": 164.1
+      },
+      "power": 4,
+      "equivalent": 16.41,
+      "machines": 17,
+      "lastClock": 41.000000000000014,
+      "peakMW": 68,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Plastic_C",
+      "name": "Plastic",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 690.3000000000001
+      },
+      "outputs": {
+       "Plastic": 460.20000000000005,
+       "Heavy Oil Residue": 230.10000000000002
+      },
+      "power": 30,
+      "equivalent": 23.01,
+      "machines": 24,
+      "lastClock": 1.0000000000001563,
+      "peakMW": 720,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CircuitBoard_C",
+      "name": "Circuit Board",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Copper Sheet": 121.4,
+       "Plastic": 242.8
+      },
+      "outputs": {
+       "Circuit Board": 60.7
+      },
+      "power": 15,
+      "equivalent": 8.093333333333334,
+      "machines": 9,
+      "lastClock": 9.333333333333371,
+      "peakMW": 135,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_LiquidFuel_C",
+      "name": "Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 479.43659993614284
+      },
+      "outputs": {
+       "Fuel": 319.6243999574285,
+       "Polymer Resin": 239.71829996807142
+      },
+      "power": 30,
+      "equivalent": 7.990609998935714,
+      "machines": 8,
+      "lastClock": 99.06099989357138,
+      "peakMW": 240,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rubber_C",
+      "name": "Rubber",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 69.45
+      },
+      "outputs": {
+       "Rubber": 46.3,
+       "Heavy Oil Residue": 46.3
+      },
+      "power": 30,
+      "equivalent": 2.315,
+      "machines": 3,
+      "lastClock": 31.499999999999993,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ResidualFuel_C",
+      "name": "Residual Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Heavy Oil Residue": 273.40000000000003
+      },
+      "outputs": {
+       "Fuel": 182.2666666666667
+      },
+      "power": 30,
+      "equivalent": 4.5566666666666675,
+      "machines": 5,
+      "lastClock": 55.66666666666676,
+      "peakMW": 150,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotSteel_C",
+      "name": "Steel Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Foundry",
+      "inputs": {
+       "Iron Ore": 585.0250000000001,
+       "Coal": 585.0250000000001
+      },
+      "outputs": {
+       "Steel Ingot": 585.0250000000001
+      },
+      "power": 16,
+      "equivalent": 13.000555555555557,
+      "machines": 14,
+      "lastClock": 0.055555555555741876,
+      "peakMW": 224,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelBeam_C",
+      "name": "Steel Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 328
+      },
+      "outputs": {
+       "Steel Beam": 82
+      },
+      "power": 4,
+      "equivalent": 5.466666666666667,
+      "machines": 6,
+      "lastClock": 46.66666666666668,
+      "peakMW": 24,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelPipe_C",
+      "name": "Steel Pipe",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 257.02500000000003
+      },
+      "outputs": {
+       "Steel Pipe": 171.35000000000002
+      },
+      "power": 4,
+      "equivalent": 8.5675,
+      "machines": 9,
+      "lastClock": 56.75000000000008,
+      "peakMW": 36,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Screw_C",
+      "name": "Screws",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 344.9375
+      },
+      "outputs": {
+       "Screws": 1379.75
+      },
+      "power": 4,
+      "equivalent": 34.49375,
+      "machines": 35,
+      "lastClock": 49.37499999999986,
+      "peakMW": 140,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlateReinforced_C",
+      "name": "Reinforced Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Plate": 246.375,
+       "Screws": 492.75
+      },
+      "outputs": {
+       "Reinforced Iron Plate": 41.0625
+      },
+      "power": 15,
+      "equivalent": 8.2125,
+      "machines": 9,
+      "lastClock": 21.250000000000036,
+      "peakMW": 135,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrame_C",
+      "name": "Modular Frame",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 34.3125,
+       "Iron Rod": 137.25
+      },
+      "outputs": {
+       "Modular Frame": 22.875
+      },
+      "power": 15,
+      "equivalent": 11.4375,
+      "machines": 12,
+      "lastClock": 43.75,
+      "peakMW": 180,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_2_C",
+      "name": "Versatile Framework",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Modular Frame": 1.375,
+       "Steel Beam": 16.5
+      },
+      "outputs": {
+       "Versatile Framework": 2.75
+      },
+      "power": 15,
+      "equivalent": 0.55,
+      "machines": 1,
+      "lastClock": 55.00000000000001,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NitricAcid_C",
+      "name": "Nitric Acid",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Nitrogen Gas": 38.69135802469134,
+       "Water": 9.672839506172835,
+       "Iron Plate": 3.224279835390945
+      },
+      "outputs": {
+       "Nitric Acid": 9.672839506172835
+      },
+      "power": 75,
+      "equivalent": 0.3224279835390945,
+      "machines": 1,
+      "lastClock": 32.24279835390945,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_Quartz_Purified_C",
+      "name": "Alternate: Quartz Purification",
+      "alternate": true,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Raw Quartz": 116.07407407407402,
+       "Nitric Acid": 9.672839506172835
+      },
+      "outputs": {
+       "Quartz Crystal": 72.54629629629626,
+       "Dissolved Silica": 58.03703703703701
+      },
+      "power": 30,
+      "equivalent": 0.9672839506172835,
+      "machines": 1,
+      "lastClock": 96.72839506172835,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_Silica_Distilled_C",
+      "name": "Alternate: Distilled Silica",
+      "alternate": true,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Dissolved Silica": 58.037037037037,
+       "Limestone": 24.182098765432084,
+       "Water": 48.36419753086417
+      },
+      "outputs": {
+       "Silica": 130.58333333333326,
+       "Water": 38.69135802469133
+      },
+      "power": 75,
+      "equivalent": 0.48364197530864167,
+      "machines": 1,
+      "lastClock": 48.36419753086416,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminaSolution_C",
+      "name": "Alumina Solution",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Bauxite": 156.7,
+       "Water": 235.04999999999998
+      },
+      "outputs": {
+       "Alumina Solution": 156.7,
+       "Silica": 65.29166666666666
+      },
+      "power": 30,
+      "equivalent": 1.3058333333333332,
+      "machines": 2,
+      "lastClock": 30.583333333333318,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumScrap_C",
+      "name": "Aluminum Scrap",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Alumina Solution": 156.7,
+       "Coal": 78.35
+      },
+      "outputs": {
+       "Aluminum Scrap": 235.04999999999998,
+       "Water": 78.35
+      },
+      "power": 30,
+      "equivalent": 0.6529166666666666,
+      "machines": 1,
+      "lastClock": 65.29166666666666,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotAluminum_C",
+      "name": "Aluminum Ingot",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Foundry",
+      "inputs": {
+       "Aluminum Scrap": 235.04999999999993,
+       "Silica": 195.87499999999994
+      },
+      "outputs": {
+       "Aluminum Ingot": 156.69999999999996
+      },
+      "power": 16,
+      "equivalent": 2.611666666666666,
+      "machines": 3,
+      "lastClock": 61.16666666666659,
+      "peakMW": 48,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumCasing_C",
+      "name": "Aluminum Casing",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Constructor",
+      "inputs": {
+       "Aluminum Ingot": 113.69999999999997
+      },
+      "outputs": {
+       "Aluminum Casing": 75.79999999999998
+      },
+      "power": 4,
+      "equivalent": 1.263333333333333,
+      "machines": 2,
+      "lastClock": 26.333333333333297,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumSheet_C",
+      "name": "Alclad Aluminum Sheet",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Aluminum Ingot": 42.99999999999999,
+       "Copper Ingot": 14.333333333333332
+      },
+      "outputs": {
+       "Alclad Aluminum Sheet": 42.99999999999999
+      },
+      "power": 15,
+      "equivalent": 1.4333333333333331,
+      "machines": 2,
+      "lastClock": 43.333333333333314,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Wire_C",
+      "name": "Wire",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 464.5
+      },
+      "outputs": {
+       "Wire": 929
+      },
+      "power": 4,
+      "equivalent": 30.966666666666665,
+      "machines": 31,
+      "lastClock": 96.6666666666665,
+      "peakMW": 124,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Cable_C",
+      "name": "Cable",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Wire": 724.4
+      },
+      "outputs": {
+       "Cable": 362.2
+      },
+      "power": 4,
+      "equivalent": 12.073333333333332,
+      "machines": 13,
+      "lastClock": 7.333333333333236,
+      "peakMW": 52,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CrystalOscillator_C",
+      "name": "Crystal Oscillator",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Quartz Crystal": 19.799999999999997,
+       "Cable": 15.399999999999999,
+       "Reinforced Iron Plate": 2.7499999999999996
+      },
+      "outputs": {
+       "Crystal Oscillator": 1.0999999999999999
+      },
+      "power": 55,
+      "equivalent": 1.0999999999999999,
+      "machines": 2,
+      "lastClock": 9.999999999999986,
+      "peakMW": 110,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Concrete_C",
+      "name": "Concrete",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Limestone": 390
+      },
+      "outputs": {
+       "Concrete": 130
+      },
+      "power": 4,
+      "equivalent": 8.666666666666666,
+      "machines": 9,
+      "lastClock": 66.6666666666666,
+      "peakMW": 36,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_EncasedIndustrialBeam_C",
+      "name": "Encased Industrial Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Beam": 64.5,
+       "Concrete": 129
+      },
+      "outputs": {
+       "Encased Industrial Beam": 21.5
+      },
+      "power": 15,
+      "equivalent": 3.5833333333333335,
+      "machines": 4,
+      "lastClock": 58.33333333333335,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rotor_C",
+      "name": "Rotor",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rod": 79,
+       "Screws": 395
+      },
+      "outputs": {
+       "Rotor": 15.8
+      },
+      "power": 15,
+      "equivalent": 3.95,
+      "machines": 4,
+      "lastClock": 95.00000000000001,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Stator_C",
+      "name": "Stator",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Pipe": 76.35000000000001,
+       "Wire": 203.60000000000002
+      },
+      "outputs": {
+       "Stator": 25.450000000000003
+      },
+      "power": 15,
+      "equivalent": 5.090000000000001,
+      "machines": 6,
+      "lastClock": 9.000000000000075,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Motor_C",
+      "name": "Motor",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Rotor": 12.8,
+       "Stator": 12.8
+      },
+      "outputs": {
+       "Motor": 6.4
+      },
+      "power": 15,
+      "equivalent": 1.28,
+      "machines": 2,
+      "lastClock": 28.000000000000004,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_3_C",
+      "name": "Automated Wiring",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 11,
+       "Cable": 220.00000000000003
+      },
+      "outputs": {
+       "Automated Wiring": 11
+      },
+      "power": 15,
+      "equivalent": 4.4,
+      "machines": 5,
+      "lastClock": 40.000000000000036,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCaterium_C",
+      "name": "Caterium Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Smelter",
+      "inputs": {
+       "Caterium Ore": 158.28
+      },
+      "outputs": {
+       "Caterium Ingot": 52.760000000000005
+      },
+      "power": 4,
+      "equivalent": 3.5173333333333336,
+      "machines": 4,
+      "lastClock": 51.73333333333336,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Quickwire_C",
+      "name": "Quickwire",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Caterium Ingot": 52.76
+      },
+      "outputs": {
+       "Quickwire": 263.8
+      },
+      "power": 4,
+      "equivalent": 4.3966666666666665,
+      "machines": 5,
+      "lastClock": 39.66666666666665,
+      "peakMW": 20,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AILimiter_C",
+      "name": "AI Limiter",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Copper Sheet": 16.5,
+       "Quickwire": 66
+      },
+      "outputs": {
+       "AI Limiter": 3.3000000000000003
+      },
+      "power": 15,
+      "equivalent": 0.66,
+      "machines": 1,
+      "lastClock": 66,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Computer_C",
+      "name": "Computer",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Circuit Board": 46.400000000000006,
+       "Cable": 92.80000000000001,
+       "Plastic": 185.60000000000002
+      },
+      "outputs": {
+       "Computer": 11.600000000000001
+      },
+      "power": 55,
+      "equivalent": 4.640000000000001,
+      "machines": 5,
+      "lastClock": 64.00000000000006,
+      "peakMW": 275,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrameHeavy_C",
+      "name": "Heavy Modular Frame",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Modular Frame": 20.5,
+       "Steel Pipe": 82,
+       "Encased Industrial Beam": 20.5,
+       "Screws": 491.99999999999994
+      },
+      "outputs": {
+       "Heavy Modular Frame": 4.1
+      },
+      "power": 55,
+      "equivalent": 2.05,
+      "machines": 3,
+      "lastClock": 4.999999999999982,
+      "peakMW": 165,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_1_C",
+      "name": "Smart Plating",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 3,
+       "Rotor": 3
+      },
+      "outputs": {
+       "Smart Plating": 3
+      },
+      "power": 15,
+      "equivalent": 1.5,
+      "machines": 2,
+      "lastClock": 50,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_4_C",
+      "name": "Modular Engine",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Motor": 3,
+       "Rubber": 22.5,
+       "Smart Plating": 3
+      },
+      "outputs": {
+       "Modular Engine": 1.5
+      },
+      "power": 55,
+      "equivalent": 1.5,
+      "machines": 2,
+      "lastClock": 50,
+      "peakMW": 110,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_5_C",
+      "name": "Adaptive Control Unit",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Automated Wiring": 11,
+       "Circuit Board": 11,
+       "Heavy Modular Frame": 2.2,
+       "Computer": 4.4
+      },
+      "outputs": {
+       "Adaptive Control Unit": 2.2
+      },
+      "power": 55,
+      "equivalent": 2.2,
+      "machines": 3,
+      "lastClock": 20.000000000000018,
+      "peakMW": 165,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FusedModularFrame_C",
+      "name": "Fused Modular Frame",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Heavy Modular Frame": 0.8999999999999999,
+       "Aluminum Casing": 45,
+       "Nitrogen Gas": 22.5
+      },
+      "outputs": {
+       "Fused Modular Frame": 0.8999999999999999
+      },
+      "power": 75,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_RadioControlUnit_C",
+      "name": "Radio Control Unit",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Aluminum Casing": 28.799999999999997,
+       "Crystal Oscillator": 0.8999999999999999,
+       "Computer": 1.7999999999999998
+      },
+      "outputs": {
+       "Radio Control Unit": 1.7999999999999998
+      },
+      "power": 55,
+      "equivalent": 0.72,
+      "machines": 1,
+      "lastClock": 72,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_PressureConversionCube_C",
+      "name": "Pressure Conversion Cube",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Fused Modular Frame": 0.3,
+       "Radio Control Unit": 0.6
+      },
+      "outputs": {
+       "Pressure Conversion Cube": 0.3
+      },
+      "power": 15,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperDust_C",
+      "name": "Copper Powder",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 360
+      },
+      "outputs": {
+       "Copper Powder": 60
+      },
+      "power": 4,
+      "equivalent": 1.2,
+      "machines": 2,
+      "lastClock": 19.999999999999996,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_9_C",
+      "name": "Nuclear Pasta",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Particle Accelerator",
+      "inputs": {
+       "Copper Powder": 60,
+       "Pressure Conversion Cube": 0.3
+      },
+      "outputs": {
+       "Nuclear Pasta": 0.3
+      },
+      "power": 1500,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 1500,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_HeatSink_C",
+      "name": "Heat Sink",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Alclad Aluminum Sheet": 41.99999999999999,
+       "Copper Sheet": 25.199999999999996
+      },
+      "outputs": {
+       "Heat Sink": 8.399999999999999
+      },
+      "power": 15,
+      "equivalent": 1.1199999999999999,
+      "machines": 2,
+      "lastClock": 11.99999999999999,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CoolingSystem_C",
+      "name": "Cooling System",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Heat Sink": 8.399999999999999,
+       "Rubber": 8.399999999999999,
+       "Water": 20.999999999999996,
+       "Nitrogen Gas": 104.99999999999997
+      },
+      "outputs": {
+       "Cooling System": 4.199999999999999
+      },
+      "power": 75,
+      "equivalent": 0.6999999999999998,
+      "machines": 1,
+      "lastClock": 69.99999999999999,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_HighSpeedConnector_C",
+      "name": "High-Speed Connector",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Quickwire": 184.8,
+       "Cable": 33.00000000000001,
+       "Circuit Board": 3.3000000000000003
+      },
+      "outputs": {
+       "High-Speed Connector": 3.3000000000000003
+      },
+      "power": 55,
+      "equivalent": 0.8800000000000001,
+      "machines": 1,
+      "lastClock": 88.00000000000001,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ComputerSuper_C",
+      "name": "Supercomputer",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Computer": 4.4,
+       "AI Limiter": 2.2,
+       "High-Speed Connector": 3.3,
+       "Plastic": 30.8
+      },
+      "outputs": {
+       "Supercomputer": 1.1
+      },
+      "power": 55,
+      "equivalent": 0.5866666666666667,
+      "machines": 1,
+      "lastClock": 58.666666666666664,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_7_C",
+      "name": "Assembly Director System",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Adaptive Control Unit": 2.2,
+       "Supercomputer": 1.1
+      },
+      "outputs": {
+       "Assembly Director System": 1.1
+      },
+      "power": 15,
+      "equivalent": 1.4666666666666668,
+      "machines": 2,
+      "lastClock": 46.66666666666668,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ElectromagneticControlRod_C",
+      "name": "Electromagnetic Control Rod",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 1.6500000000000001,
+       "AI Limiter": 1.1
+      },
+      "outputs": {
+       "Electromagnetic Control Rod": 1.1
+      },
+      "power": 15,
+      "equivalent": 0.275,
+      "machines": 1,
+      "lastClock": 27.500000000000004,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_6_C",
+      "name": "Magnetic Field Generator",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Versatile Framework": 2.75,
+       "Electromagnetic Control Rod": 1.1
+      },
+      "outputs": {
+       "Magnetic Field Generator": 1.1
+      },
+      "power": 15,
+      "equivalent": 1.1,
+      "machines": 2,
+      "lastClock": 10.000000000000009,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_MotorTurbo_C",
+      "name": "Turbo Motor",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Cooling System": 2.4,
+       "Radio Control Unit": 1.2,
+       "Motor": 2.4,
+       "Rubber": 14.4
+      },
+      "outputs": {
+       "Turbo Motor": 0.6
+      },
+      "power": 55,
+      "equivalent": 0.32,
+      "machines": 1,
+      "lastClock": 32.00000000000001,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_8_C",
+      "name": "Thermal Propulsion Rocket",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Modular Engine": 1.5,
+       "Turbo Motor": 0.6,
+       "Cooling System": 1.7999999999999998,
+       "Fused Modular Frame": 0.6
+      },
+      "outputs": {
+       "Thermal Propulsion Rocket": 0.6
+      },
+      "power": 55,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_PolyesterFabric_C",
+      "name": "Alternate: Polyester Fabric",
+      "alternate": true,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Polymer Resin": 4,
+       "Water": 4
+      },
+      "outputs": {
+       "Fabric": 4
+      },
+      "power": 30,
+      "equivalent": 0.13333333333333333,
+      "machines": 1,
+      "lastClock": 13.33333333333333,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FilterGasMask_C",
+      "name": "Gas Filter",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Fabric": 4,
+       "Coal": 8,
+       "Iron Plate": 4
+      },
+      "outputs": {
+       "Gas Filter": 2
+      },
+      "power": 55,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FilterHazmat_C",
+      "name": "Iodine-Infused Filter",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Gas Filter": 1,
+       "Quickwire": 8,
+       "Aluminum Casing": 1
+      },
+      "outputs": {
+       "Iodine-Infused Filter": 1
+      },
+      "power": 55,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Gunpowder_C",
+      "name": "Black Powder",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Coal": 8,
+       "Sulfur": 8
+      },
+      "outputs": {
+       "Black Powder": 16
+      },
+      "power": 15,
+      "equivalent": 0.5333333333333333,
+      "machines": 1,
+      "lastClock": 53.333333333333336,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpikedRebar_C",
+      "name": "Iron Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 6
+      },
+      "outputs": {
+       "Iron Rebar": 6
+      },
+      "power": 4,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Stunshot_C",
+      "name": "Stun Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 1,
+       "Quickwire": 5
+      },
+      "outputs": {
+       "Stun Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Nobelisk_C",
+      "name": "Nobelisk",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Black Powder": 10,
+       "Steel Pipe": 10
+      },
+      "outputs": {
+       "Nobelisk": 5
+      },
+      "power": 15,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskShockwave_C",
+      "name": "Pulse Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 1,
+       "Crystal Oscillator": 0.2
+      },
+      "outputs": {
+       "Pulse Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Spreadshot_C",
+      "name": "Shatter Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Quartz Crystal": 3
+      },
+      "outputs": {
+       "Shatter Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_GunpowderMK2_C",
+      "name": "Smokeless Powder",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Black Powder": 6,
+       "Heavy Oil Residue": 3
+      },
+      "outputs": {
+       "Smokeless Powder": 6
+      },
+      "power": 30,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Explosive_C",
+      "name": "Explosive Rebar",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Smokeless Powder": 2,
+       "Steel Pipe": 2
+      },
+      "outputs": {
+       "Explosive Rebar": 1
+      },
+      "power": 55,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskCluster_C",
+      "name": "Cluster Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 3,
+       "Smokeless Powder": 4
+      },
+      "outputs": {
+       "Cluster Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "power-fuel",
+      "name": "Fuel power",
+      "machine": "Fuel Generator",
+      "phase": 3,
+      "power": -250,
+      "inputs": {
+       "Fuel": 501.8910666240952
+      },
+      "outputs": {},
+      "equivalent": 25.094553331204757,
+      "machines": 26,
+      "lastClock": 9.455333120475728,
+      "peakMW": 0,
+      "generationMW": 6273.638332801189
+     }
+    ],
+    "raw": {
+     "Iron Ore": 1535.1114197530865,
+     "Copper Ore": 1167.0333333333333,
+     "Limestone": 414.1820987654321,
+     "Coal": 679.3750000000001,
+     "Caterium Ore": 158.28,
+     "Raw Quartz": 116.07407407407402,
+     "Sulfur": 8,
+     "Bauxite": 156.7,
+     "Uranium": 0,
+     "SAM": 0,
+     "Crude Oil": 1239.186599936143,
+     "Nitrogen Gas": 166.1913580246913,
+     "Water": 201.0456790123457
+    },
+    "supplied": {},
+    "storage": {
+     "Plastic": 1,
+     "Rubber": 1,
+     "Concrete": 1,
+     "Iron Plate": 1,
+     "Iron Rod": 1,
+     "Steel Beam": 1,
+     "Steel Pipe": 1,
+     "Aluminum Casing": 1,
+     "Alclad Aluminum Sheet": 1,
+     "Encased Industrial Beam": 1,
+     "Copper Sheet": 1,
+     "Iron Rebar": 1,
+     "Stun Rebar": 1,
+     "Gas Filter": 1,
+     "Shatter Rebar": 1,
+     "Explosive Rebar": 1,
+     "Nobelisk": 1,
+     "Wire": 1,
+     "Iodine-Infused Filter": 1,
+     "Cluster Nobelisk": 1,
+     "Reinforced Iron Plate": 1,
+     "Cable": 1,
+     "Motor": 1,
+     "Computer": 1,
+     "Modular Frame": 1,
+     "Pulse Nobelisk": 1,
+     "Heavy Modular Frame": 1
+    },
+    "drone": {},
+    "transport": {},
+    "delivery": {
+     "Assembly Director System": {
+      "target": 500,
+      "rate": 1.1
+     },
+     "Magnetic Field Generator": {
+      "target": 500,
+      "rate": 1.1
+     },
+     "Thermal Propulsion Rocket": {
+      "target": 250,
+      "rate": 0.6
+     },
+     "Nuclear Pasta": {
+      "target": 100,
+      "rate": 0.3
+     }
+    },
+    "surplus": {
+     "Polymer Resin": 235.71829996807142,
+     "Quartz Crystal": 49.746296296296265
+    },
+    "plutoniumSink": 0,
+    "peakMW": 6806,
+    "generationMW": 6273.638332801189,
+    "sloopsUsed": 0,
+    "augmenters": 0,
+    "fueledAugmenters": 0,
+    "boost": 0,
+    "augmenterMW": 0,
+    "matrixRate": 0,
+    "availableMW": 6273.638332801189,
+    "requiredMW": 8167.2,
+    "additionalHeadroomMW": 1893.561667198811,
+    "hours": 7.575757575757575,
+    "conversions": []
+   },
+   "5": {
+    "feasible": true,
+    "rows": [
+     {
+      "id": "Recipe_IngotIron_C",
+      "name": "Iron Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Iron Ore": 1176.9413580246915
+      },
+      "outputs": {
+       "Iron Ingot": 1176.9413580246915
+      },
+      "power": 4,
+      "equivalent": 39.23137860082305,
+      "machines": 40,
+      "lastClock": 23.13786008230494,
+      "peakMW": 160,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlate_C",
+      "name": "Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 550.0663580246915
+      },
+      "outputs": {
+       "Iron Plate": 366.7109053497943
+      },
+      "power": 4,
+      "equivalent": 18.335545267489714,
+      "machines": 19,
+      "lastClock": 33.55452674897137,
+      "peakMW": 76,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronRod_C",
+      "name": "Iron Rod",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Ingot": 626.875
+      },
+      "outputs": {
+       "Iron Rod": 626.875
+      },
+      "power": 4,
+      "equivalent": 41.791666666666664,
+      "machines": 42,
+      "lastClock": 79.16666666666643,
+      "peakMW": 168,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotSAM_C",
+      "name": "Reanimated SAM",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "SAM": 342
+      },
+      "outputs": {
+       "Reanimated SAM": 85.5
+      },
+      "power": 4,
+      "equivalent": 2.85,
+      "machines": 3,
+      "lastClock": 85.00000000000001,
+      "peakMW": 12,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_DarkEnergy_C",
+      "name": "Dark Matter Residue",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Converter",
+      "inputs": {
+       "Reanimated SAM": 51.5
+      },
+      "outputs": {
+       "Dark Matter Residue": 103
+      },
+      "power": 400,
+      "equivalent": 1.03,
+      "machines": 2,
+      "lastClock": 3.0000000000000027,
+      "peakMW": 800,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_QuantumEnergy_C",
+      "name": "Excited Photonic Matter",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Converter",
+      "inputs": {},
+      "outputs": {
+       "Excited Photonic Matter": 70
+      },
+      "power": 400,
+      "equivalent": 0.35,
+      "machines": 1,
+      "lastClock": 35,
+      "peakMW": 400,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Diamond_C",
+      "name": "Diamonds",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Particle Accelerator",
+      "inputs": {
+       "Coal": 812
+      },
+      "outputs": {
+       "Diamonds": 40.6
+      },
+      "power": 750,
+      "equivalent": 1.3533333333333333,
+      "machines": 2,
+      "lastClock": 35.33333333333333,
+      "peakMW": 1500,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_Silica_Distilled_C",
+      "name": "Alternate: Distilled Silica",
+      "alternate": true,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Dissolved Silica": 174.79629629629622,
+       "Limestone": 72.83179012345677,
+       "Water": 145.66358024691354
+      },
+      "outputs": {
+       "Silica": 393.2916666666665,
+       "Water": 116.53086419753082
+      },
+      "power": 75,
+      "equivalent": 1.4566358024691353,
+      "machines": 2,
+      "lastClock": 45.663580246913526,
+      "peakMW": 150,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminaSolution_C",
+      "name": "Alumina Solution",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Bauxite": 471.95000000000005,
+       "Water": 707.9250000000001
+      },
+      "outputs": {
+       "Alumina Solution": 471.95000000000005,
+       "Silica": 196.64583333333334
+      },
+      "power": 30,
+      "equivalent": 3.932916666666667,
+      "machines": 4,
+      "lastClock": 93.29166666666669,
+      "peakMW": 120,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumScrap_C",
+      "name": "Aluminum Scrap",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Alumina Solution": 471.95,
+       "Coal": 235.975
+      },
+      "outputs": {
+       "Aluminum Scrap": 707.925,
+       "Water": 235.975
+      },
+      "power": 30,
+      "equivalent": 1.9664583333333332,
+      "machines": 2,
+      "lastClock": 96.64583333333331,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NitricAcid_C",
+      "name": "Nitric Acid",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Nitrogen Gas": 116.53086419753083,
+       "Water": 29.132716049382708,
+       "Iron Plate": 9.710905349794235
+      },
+      "outputs": {
+       "Nitric Acid": 29.132716049382708
+      },
+      "power": 75,
+      "equivalent": 0.9710905349794235,
+      "machines": 1,
+      "lastClock": 97.10905349794236,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_Quartz_Purified_C",
+      "name": "Alternate: Quartz Purification",
+      "alternate": true,
+      "phase": 4,
+      "machine": "Refinery",
+      "inputs": {
+       "Raw Quartz": 349.5925925925925,
+       "Nitric Acid": 29.132716049382708
+      },
+      "outputs": {
+       "Quartz Crystal": 218.49537037037032,
+       "Dissolved Silica": 174.79629629629625
+      },
+      "power": 30,
+      "equivalent": 2.913271604938271,
+      "machines": 3,
+      "lastClock": 91.3271604938271,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCopper_C",
+      "name": "Copper Ingot",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Smelter",
+      "inputs": {
+       "Copper Ore": 3536.9500000000003
+      },
+      "outputs": {
+       "Copper Ingot": 3536.9500000000003
+      },
+      "power": 4,
+      "equivalent": 117.89833333333334,
+      "machines": 118,
+      "lastClock": 89.83333333333405,
+      "peakMW": 472,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Wire_C",
+      "name": "Wire",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 380.35
+      },
+      "outputs": {
+       "Wire": 760.7
+      },
+      "power": 4,
+      "equivalent": 25.35666666666667,
+      "machines": 26,
+      "lastClock": 35.66666666666691,
+      "peakMW": 104,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Cable_C",
+      "name": "Cable",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Wire": 622.5
+      },
+      "outputs": {
+       "Cable": 311.25
+      },
+      "power": 4,
+      "equivalent": 10.375,
+      "machines": 11,
+      "lastClock": 37.5,
+      "peakMW": 44,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Screw_C",
+      "name": "Screws",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 394.875
+      },
+      "outputs": {
+       "Screws": 1579.5
+      },
+      "power": 4,
+      "equivalent": 39.4875,
+      "machines": 40,
+      "lastClock": 48.749999999999716,
+      "peakMW": 160,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IronPlateReinforced_C",
+      "name": "Reinforced Iron Plate",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Plate": 327,
+       "Screws": 654
+      },
+      "outputs": {
+       "Reinforced Iron Plate": 54.5
+      },
+      "power": 15,
+      "equivalent": 10.9,
+      "machines": 11,
+      "lastClock": 90.00000000000003,
+      "peakMW": 165,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CrystalOscillator_C",
+      "name": "Crystal Oscillator",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Quartz Crystal": 83.7,
+       "Cable": 65.10000000000001,
+       "Reinforced Iron Plate": 11.625
+      },
+      "outputs": {
+       "Crystal Oscillator": 4.65
+      },
+      "power": 55,
+      "equivalent": 4.65,
+      "machines": 5,
+      "lastClock": 65.00000000000003,
+      "peakMW": 275,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotAluminum_C",
+      "name": "Aluminum Ingot",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Foundry",
+      "inputs": {
+       "Aluminum Scrap": 707.9249999999998,
+       "Silica": 589.9374999999999
+      },
+      "outputs": {
+       "Aluminum Ingot": 471.94999999999993
+      },
+      "power": 16,
+      "equivalent": 7.865833333333332,
+      "machines": 8,
+      "lastClock": 86.58333333333319,
+      "peakMW": 128,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumSheet_C",
+      "name": "Alclad Aluminum Sheet",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Aluminum Ingot": 50.4,
+       "Copper Ingot": 16.8
+      },
+      "outputs": {
+       "Alclad Aluminum Sheet": 50.4
+      },
+      "power": 15,
+      "equivalent": 1.68,
+      "machines": 2,
+      "lastClock": 68,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SuperpositionOscillator_C",
+      "name": "Superposition Oscillator",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Quantum Encoder",
+      "inputs": {
+       "Dark Matter Crystal": 9.6,
+       "Crystal Oscillator": 1.6,
+       "Alclad Aluminum Sheet": 14.4,
+       "Excited Photonic Matter": 40
+      },
+      "outputs": {
+       "Superposition Oscillator": 1.6,
+       "Dark Matter Residue": 40
+      },
+      "power": 2000,
+      "equivalent": 0.32,
+      "machines": 1,
+      "lastClock": 32.00000000000001,
+      "peakMW": 2000,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_TimeCrystal_C",
+      "name": "Time Crystal",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Converter",
+      "inputs": {
+       "Diamonds": 6
+      },
+      "outputs": {
+       "Time Crystal": 3
+      },
+      "power": 400,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 400,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperSheet_C",
+      "name": "Copper Sheet",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 319.8
+      },
+      "outputs": {
+       "Copper Sheet": 159.9
+      },
+      "power": 4,
+      "equivalent": 15.99,
+      "machines": 16,
+      "lastClock": 99.00000000000003,
+      "peakMW": 64,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Plastic_C",
+      "name": "Plastic",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 81.01540382271008
+      },
+      "outputs": {
+       "Plastic": 54.010269215140056,
+       "Heavy Oil Residue": 27.005134607570028
+      },
+      "power": 30,
+      "equivalent": 2.7005134607570027,
+      "machines": 3,
+      "lastClock": 70.05134607570027,
+      "peakMW": 90,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_LiquidFuel_C",
+      "name": "Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 2639.538384709161
+      },
+      "outputs": {
+       "Fuel": 1759.692256472774,
+       "Polymer Resin": 1319.7691923545806
+      },
+      "power": 30,
+      "equivalent": 43.99230641181935,
+      "machines": 44,
+      "lastClock": 99.23064118193494,
+      "peakMW": 1320,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ResidualPlastic_C",
+      "name": "Residual Plastic",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Polymer Resin": 1315.76919235458,
+       "Water": 438.58973078485997
+      },
+      "outputs": {
+       "Plastic": 438.58973078485997
+      },
+      "power": 30,
+      "equivalent": 21.929486539242998,
+      "machines": 22,
+      "lastClock": 92.94865392429976,
+      "peakMW": 660,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CircuitBoard_C",
+      "name": "Circuit Board",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Copper Sheet": 123.65,
+       "Plastic": 247.3
+      },
+      "outputs": {
+       "Circuit Board": 61.825
+      },
+      "power": 15,
+      "equivalent": 8.243333333333334,
+      "machines": 9,
+      "lastClock": 24.333333333333407,
+      "peakMW": 135,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Computer_C",
+      "name": "Computer",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Circuit Board": 53.2,
+       "Cable": 106.4,
+       "Plastic": 212.8
+      },
+      "outputs": {
+       "Computer": 13.3
+      },
+      "power": 55,
+      "equivalent": 5.32,
+      "machines": 6,
+      "lastClock": 32.00000000000003,
+      "peakMW": 330,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotCaterium_C",
+      "name": "Caterium Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Smelter",
+      "inputs": {
+       "Caterium Ore": 155.4
+      },
+      "outputs": {
+       "Caterium Ingot": 51.800000000000004
+      },
+      "power": 4,
+      "equivalent": 3.4533333333333336,
+      "machines": 4,
+      "lastClock": 45.33333333333336,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Quickwire_C",
+      "name": "Quickwire",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Caterium Ingot": 51.8
+      },
+      "outputs": {
+       "Quickwire": 259
+      },
+      "power": 4,
+      "equivalent": 4.316666666666666,
+      "machines": 5,
+      "lastClock": 31.666666666666643,
+      "peakMW": 20,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AILimiter_C",
+      "name": "AI Limiter",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Copper Sheet": 14.250000000000002,
+       "Quickwire": 57.00000000000001
+      },
+      "outputs": {
+       "AI Limiter": 2.8500000000000005
+      },
+      "power": 15,
+      "equivalent": 0.5700000000000001,
+      "machines": 1,
+      "lastClock": 57.00000000000001,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_HighSpeedConnector_C",
+      "name": "High-Speed Connector",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Quickwire": 189,
+       "Cable": 33.75,
+       "Circuit Board": 3.375
+      },
+      "outputs": {
+       "High-Speed Connector": 3.375
+      },
+      "power": 55,
+      "equivalent": 0.9,
+      "machines": 1,
+      "lastClock": 90,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ComputerSuper_C",
+      "name": "Supercomputer",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Computer": 4.5,
+       "AI Limiter": 2.25,
+       "High-Speed Connector": 3.375,
+       "Plastic": 31.5
+      },
+      "outputs": {
+       "Supercomputer": 1.125
+      },
+      "power": 55,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FicsiteIngot_AL_C",
+      "name": "Ficsite Ingot (Aluminum)",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Converter",
+      "inputs": {
+       "Reanimated SAM": 34,
+       "Aluminum Ingot": 68
+      },
+      "outputs": {
+       "Ficsite Ingot": 17
+      },
+      "power": 400,
+      "equivalent": 0.5666666666666667,
+      "machines": 1,
+      "lastClock": 56.666666666666664,
+      "peakMW": 400,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FicsiteMesh_C",
+      "name": "Ficsite Trigon",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Constructor",
+      "inputs": {
+       "Ficsite Ingot": 17
+      },
+      "outputs": {
+       "Ficsite Trigon": 51
+      },
+      "power": 4,
+      "equivalent": 1.7,
+      "machines": 2,
+      "lastClock": 70,
+      "peakMW": 8,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_TemporalProcessor_C",
+      "name": "Neural-Quantum Processor",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Quantum Encoder",
+      "inputs": {
+       "Time Crystal": 2.9999999999999996,
+       "Supercomputer": 0.6,
+       "Ficsite Trigon": 9,
+       "Excited Photonic Matter": 14.999999999999998
+      },
+      "outputs": {
+       "Neural-Quantum Processor": 0.6,
+       "Dark Matter Residue": 14.999999999999998
+      },
+      "power": 2000,
+      "equivalent": 0.19999999999999998,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 2000,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrame_C",
+      "name": "Modular Frame",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 39.375,
+       "Iron Rod": 157.5
+      },
+      "outputs": {
+       "Modular Frame": 26.25
+      },
+      "power": 15,
+      "equivalent": 13.125,
+      "machines": 14,
+      "lastClock": 12.5,
+      "peakMW": 210,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_IngotSteel_C",
+      "name": "Steel Ingot",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Foundry",
+      "inputs": {
+       "Iron Ore": 589.675,
+       "Coal": 589.675
+      },
+      "outputs": {
+       "Steel Ingot": 589.675
+      },
+      "power": 16,
+      "equivalent": 13.103888888888887,
+      "machines": 14,
+      "lastClock": 10.388888888888737,
+      "peakMW": 224,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelBeam_C",
+      "name": "Steel Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 346
+      },
+      "outputs": {
+       "Steel Beam": 86.5
+      },
+      "power": 4,
+      "equivalent": 5.766666666666667,
+      "machines": 6,
+      "lastClock": 76.66666666666666,
+      "peakMW": 24,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_2_C",
+      "name": "Versatile Framework",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Modular Frame": 0.75,
+       "Steel Beam": 9
+      },
+      "outputs": {
+       "Versatile Framework": 1.5
+      },
+      "power": 15,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SteelPipe_C",
+      "name": "Steel Pipe",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Steel Ingot": 243.67499999999995
+      },
+      "outputs": {
+       "Steel Pipe": 162.45
+      },
+      "power": 4,
+      "equivalent": 8.122499999999999,
+      "machines": 9,
+      "lastClock": 12.249999999999872,
+      "peakMW": 36,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Stator_C",
+      "name": "Stator",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Pipe": 51.449999999999996,
+       "Wire": 137.2
+      },
+      "outputs": {
+       "Stator": 17.15
+      },
+      "power": 15,
+      "equivalent": 3.4299999999999997,
+      "machines": 4,
+      "lastClock": 42.99999999999997,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ElectromagneticControlRod_C",
+      "name": "Electromagnetic Control Rod",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 0.8999999999999999,
+       "AI Limiter": 0.6
+      },
+      "outputs": {
+       "Electromagnetic Control Rod": 0.6
+      },
+      "power": 15,
+      "equivalent": 0.15,
+      "machines": 1,
+      "lastClock": 15.000000000000002,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_6_C",
+      "name": "Magnetic Field Generator",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Versatile Framework": 1.5,
+       "Electromagnetic Control Rod": 0.6
+      },
+      "outputs": {
+       "Magnetic Field Generator": 0.6
+      },
+      "power": 15,
+      "equivalent": 0.6,
+      "machines": 1,
+      "lastClock": 60,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_12_C",
+      "name": "AI Expansion Server",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Quantum Encoder",
+      "inputs": {
+       "Magnetic Field Generator": 0.6,
+       "Neural-Quantum Processor": 0.6,
+       "Superposition Oscillator": 0.6,
+       "Excited Photonic Matter": 15
+      },
+      "outputs": {
+       "AI Expansion Server": 0.6,
+       "Dark Matter Residue": 15
+      },
+      "power": 2000,
+      "equivalent": 0.15,
+      "machines": 1,
+      "lastClock": 15.000000000000002,
+      "peakMW": 2000,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_DarkMatter_C",
+      "name": "Dark Matter Crystal",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Particle Accelerator",
+      "inputs": {
+       "Diamonds": 34.6,
+       "Dark Matter Residue": 173
+      },
+      "outputs": {
+       "Dark Matter Crystal": 34.6
+      },
+      "power": 1500,
+      "equivalent": 1.1533333333333333,
+      "machines": 2,
+      "lastClock": 15.333333333333332,
+      "peakMW": 3000,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_3_C",
+      "name": "Automated Wiring",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Stator": 5.25,
+       "Cable": 105
+      },
+      "outputs": {
+       "Automated Wiring": 5.25
+      },
+      "power": 15,
+      "equivalent": 2.1,
+      "machines": 3,
+      "lastClock": 10.000000000000009,
+      "peakMW": 45,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Concrete_C",
+      "name": "Concrete",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Constructor",
+      "inputs": {
+       "Limestone": 612
+      },
+      "outputs": {
+       "Concrete": 204
+      },
+      "power": 4,
+      "equivalent": 13.6,
+      "machines": 14,
+      "lastClock": 59.999999999999964,
+      "peakMW": 56,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_EncasedIndustrialBeam_C",
+      "name": "Encased Industrial Beam",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Steel Beam": 76.5,
+       "Concrete": 153
+      },
+      "outputs": {
+       "Encased Industrial Beam": 25.5
+      },
+      "power": 15,
+      "equivalent": 4.25,
+      "machines": 5,
+      "lastClock": 25,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ModularFrameHeavy_C",
+      "name": "Heavy Modular Frame",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Modular Frame": 24.5,
+       "Steel Pipe": 98,
+       "Encased Industrial Beam": 24.5,
+       "Screws": 588
+      },
+      "outputs": {
+       "Heavy Modular Frame": 4.9
+      },
+      "power": 55,
+      "equivalent": 2.45,
+      "machines": 3,
+      "lastClock": 45.000000000000014,
+      "peakMW": 165,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_5_C",
+      "name": "Adaptive Control Unit",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Automated Wiring": 5.25,
+       "Circuit Board": 5.25,
+       "Heavy Modular Frame": 1.05,
+       "Computer": 2.1
+      },
+      "outputs": {
+       "Adaptive Control Unit": 1.05
+      },
+      "power": 55,
+      "equivalent": 1.05,
+      "machines": 2,
+      "lastClock": 5.000000000000004,
+      "peakMW": 110,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_7_C",
+      "name": "Assembly Director System",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Adaptive Control Unit": 1.05,
+       "Supercomputer": 0.525
+      },
+      "outputs": {
+       "Assembly Director System": 0.525
+      },
+      "power": 15,
+      "equivalent": 0.7000000000000001,
+      "machines": 1,
+      "lastClock": 70,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_10_C",
+      "name": "Biochemical Sculptor",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Blender",
+      "inputs": {
+       "Assembly Director System": 0.525,
+       "Ficsite Trigon": 42,
+       "Water": 10.5
+      },
+      "outputs": {
+       "Biochemical Sculptor": 2.1
+      },
+      "power": 75,
+      "equivalent": 1.05,
+      "machines": 2,
+      "lastClock": 5.000000000000004,
+      "peakMW": 150,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rubber_C",
+      "name": "Rubber",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Crude Oil": 58.125
+      },
+      "outputs": {
+       "Rubber": 38.75,
+       "Heavy Oil Residue": 38.75
+      },
+      "power": 30,
+      "equivalent": 1.9375,
+      "machines": 2,
+      "lastClock": 93.75,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_ResidualFuel_C",
+      "name": "Residual Fuel",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Heavy Oil Residue": 62.755134607570035
+      },
+      "outputs": {
+       "Fuel": 41.836756405046685
+      },
+      "power": 30,
+      "equivalent": 1.0459189101261672,
+      "machines": 2,
+      "lastClock": 4.591891012616722,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_AluminumCasing_C",
+      "name": "Aluminum Casing",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Constructor",
+      "inputs": {
+       "Aluminum Ingot": 353.55
+      },
+      "outputs": {
+       "Aluminum Casing": 235.7
+      },
+      "power": 4,
+      "equivalent": 3.9283333333333332,
+      "machines": 4,
+      "lastClock": 92.83333333333333,
+      "peakMW": 16,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rotor_C",
+      "name": "Rotor",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rod": 67.5,
+       "Screws": 337.5
+      },
+      "outputs": {
+       "Rotor": 13.5
+      },
+      "power": 15,
+      "equivalent": 3.375,
+      "machines": 4,
+      "lastClock": 37.5,
+      "peakMW": 60,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Motor_C",
+      "name": "Motor",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Rotor": 11,
+       "Stator": 11
+      },
+      "outputs": {
+       "Motor": 5.5
+      },
+      "power": 15,
+      "equivalent": 1.1,
+      "machines": 2,
+      "lastClock": 10.000000000000009,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_1_C",
+      "name": "Smart Plating",
+      "alternate": false,
+      "phase": 1,
+      "machine": "Assembler",
+      "inputs": {
+       "Reinforced Iron Plate": 2.5,
+       "Rotor": 2.5
+      },
+      "outputs": {
+       "Smart Plating": 2.5
+      },
+      "power": 15,
+      "equivalent": 1.25,
+      "machines": 2,
+      "lastClock": 25,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_4_C",
+      "name": "Modular Engine",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Motor": 2.5,
+       "Rubber": 18.75,
+       "Smart Plating": 2.5
+      },
+      "outputs": {
+       "Modular Engine": 1.25
+      },
+      "power": 55,
+      "equivalent": 1.25,
+      "machines": 2,
+      "lastClock": 25,
+      "peakMW": 110,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FusedModularFrame_C",
+      "name": "Fused Modular Frame",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Heavy Modular Frame": 2.85,
+       "Aluminum Casing": 142.5,
+       "Nitrogen Gas": 71.25
+      },
+      "outputs": {
+       "Fused Modular Frame": 2.85
+      },
+      "power": 75,
+      "equivalent": 1.9000000000000001,
+      "machines": 2,
+      "lastClock": 90.00000000000001,
+      "peakMW": 150,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_RadioControlUnit_C",
+      "name": "Radio Control Unit",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Aluminum Casing": 91.20000000000002,
+       "Crystal Oscillator": 2.8500000000000005,
+       "Computer": 5.700000000000001
+      },
+      "outputs": {
+       "Radio Control Unit": 5.700000000000001
+      },
+      "power": 55,
+      "equivalent": 2.2800000000000002,
+      "machines": 3,
+      "lastClock": 28.000000000000025,
+      "peakMW": 165,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_PressureConversionCube_C",
+      "name": "Pressure Conversion Cube",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Fused Modular Frame": 2.35,
+       "Radio Control Unit": 4.7
+      },
+      "outputs": {
+       "Pressure Conversion Cube": 2.35
+      },
+      "power": 15,
+      "equivalent": 2.35,
+      "machines": 3,
+      "lastClock": 35.00000000000001,
+      "peakMW": 45,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CopperDust_C",
+      "name": "Copper Powder",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Constructor",
+      "inputs": {
+       "Copper Ingot": 2820
+      },
+      "outputs": {
+       "Copper Powder": 470
+      },
+      "power": 4,
+      "equivalent": 9.4,
+      "machines": 10,
+      "lastClock": 40.000000000000036,
+      "peakMW": 40,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_9_C",
+      "name": "Nuclear Pasta",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Particle Accelerator",
+      "inputs": {
+       "Copper Powder": 470,
+       "Pressure Conversion Cube": 2.35
+      },
+      "outputs": {
+       "Nuclear Pasta": 2.35
+      },
+      "power": 1500,
+      "equivalent": 4.7,
+      "machines": 5,
+      "lastClock": 70.00000000000001,
+      "peakMW": 7500,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_HeatSink_C",
+      "name": "Heat Sink",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Assembler",
+      "inputs": {
+       "Alclad Aluminum Sheet": 35,
+       "Copper Sheet": 21
+      },
+      "outputs": {
+       "Heat Sink": 7
+      },
+      "power": 15,
+      "equivalent": 0.9333333333333333,
+      "machines": 1,
+      "lastClock": 93.33333333333333,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_CoolingSystem_C",
+      "name": "Cooling System",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Blender",
+      "inputs": {
+       "Heat Sink": 7,
+       "Rubber": 7,
+       "Water": 17.5,
+       "Nitrogen Gas": 87.5
+      },
+      "outputs": {
+       "Cooling System": 3.5
+      },
+      "power": 75,
+      "equivalent": 0.5833333333333334,
+      "machines": 1,
+      "lastClock": 58.333333333333336,
+      "peakMW": 75,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_MotorTurbo_C",
+      "name": "Turbo Motor",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Cooling System": 2,
+       "Radio Control Unit": 1,
+       "Motor": 2,
+       "Rubber": 12
+      },
+      "outputs": {
+       "Turbo Motor": 0.5
+      },
+      "power": 55,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_8_C",
+      "name": "Thermal Propulsion Rocket",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Modular Engine": 1.25,
+       "Turbo Motor": 0.5,
+       "Cooling System": 1.5,
+       "Fused Modular Frame": 0.5
+      },
+      "outputs": {
+       "Thermal Propulsion Rocket": 0.5
+      },
+      "power": 55,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SingularityCell_C",
+      "name": "Singularity Cell",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Nuclear Pasta": 0.25,
+       "Dark Matter Crystal": 5,
+       "Iron Plate": 25,
+       "Concrete": 50
+      },
+      "outputs": {
+       "Singularity Cell": 2.5
+      },
+      "power": 55,
+      "equivalent": 0.25,
+      "machines": 1,
+      "lastClock": 25,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpaceElevatorPart_11_C",
+      "name": "Ballistic Warp Drive",
+      "alternate": false,
+      "phase": 5,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Thermal Propulsion Rocket": 0.5,
+       "Singularity Cell": 2.5,
+       "Superposition Oscillator": 1,
+       "Dark Matter Crystal": 20
+      },
+      "outputs": {
+       "Ballistic Warp Drive": 0.5
+      },
+      "power": 55,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Alternate_PolyesterFabric_C",
+      "name": "Alternate: Polyester Fabric",
+      "alternate": true,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Polymer Resin": 4,
+       "Water": 4
+      },
+      "outputs": {
+       "Fabric": 4
+      },
+      "power": 30,
+      "equivalent": 0.13333333333333333,
+      "machines": 1,
+      "lastClock": 13.33333333333333,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FilterGasMask_C",
+      "name": "Gas Filter",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Fabric": 4,
+       "Coal": 8,
+       "Iron Plate": 4
+      },
+      "outputs": {
+       "Gas Filter": 2
+      },
+      "power": 55,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_FilterHazmat_C",
+      "name": "Iodine-Infused Filter",
+      "alternate": false,
+      "phase": 4,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Gas Filter": 1,
+       "Quickwire": 8,
+       "Aluminum Casing": 1
+      },
+      "outputs": {
+       "Iodine-Infused Filter": 1
+      },
+      "power": 55,
+      "equivalent": 0.26666666666666666,
+      "machines": 1,
+      "lastClock": 26.66666666666666,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Gunpowder_C",
+      "name": "Black Powder",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Coal": 8,
+       "Sulfur": 8
+      },
+      "outputs": {
+       "Black Powder": 16
+      },
+      "power": 15,
+      "equivalent": 0.5333333333333333,
+      "machines": 1,
+      "lastClock": 53.333333333333336,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_SpikedRebar_C",
+      "name": "Iron Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Constructor",
+      "inputs": {
+       "Iron Rod": 6
+      },
+      "outputs": {
+       "Iron Rebar": 6
+      },
+      "power": 4,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 4,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Stunshot_C",
+      "name": "Stun Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 1,
+       "Quickwire": 5
+      },
+      "outputs": {
+       "Stun Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.1,
+      "machines": 1,
+      "lastClock": 9.999999999999998,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Nobelisk_C",
+      "name": "Nobelisk",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Black Powder": 10,
+       "Steel Pipe": 10
+      },
+      "outputs": {
+       "Nobelisk": 5
+      },
+      "power": 15,
+      "equivalent": 0.5,
+      "machines": 1,
+      "lastClock": 50,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskShockwave_C",
+      "name": "Pulse Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 1,
+       "Crystal Oscillator": 0.2
+      },
+      "outputs": {
+       "Pulse Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Spreadshot_C",
+      "name": "Shatter Rebar",
+      "alternate": false,
+      "phase": 2,
+      "machine": "Assembler",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Quartz Crystal": 3
+      },
+      "outputs": {
+       "Shatter Rebar": 1
+      },
+      "power": 15,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_GunpowderMK2_C",
+      "name": "Smokeless Powder",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Refinery",
+      "inputs": {
+       "Black Powder": 6,
+       "Heavy Oil Residue": 3
+      },
+      "outputs": {
+       "Smokeless Powder": 6
+      },
+      "power": 30,
+      "equivalent": 0.3,
+      "machines": 1,
+      "lastClock": 30.000000000000004,
+      "peakMW": 30,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_Rebar_Explosive_C",
+      "name": "Explosive Rebar",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Manufacturer",
+      "inputs": {
+       "Iron Rebar": 2,
+       "Smokeless Powder": 2,
+       "Steel Pipe": 2
+      },
+      "outputs": {
+       "Explosive Rebar": 1
+      },
+      "power": 55,
+      "equivalent": 0.2,
+      "machines": 1,
+      "lastClock": 19.999999999999996,
+      "peakMW": 55,
+      "generationMW": 0
+     },
+     {
+      "id": "Recipe_NobeliskCluster_C",
+      "name": "Cluster Nobelisk",
+      "alternate": false,
+      "phase": 3,
+      "machine": "Assembler",
+      "inputs": {
+       "Nobelisk": 3,
+       "Smokeless Powder": 4
+      },
+      "outputs": {
+       "Cluster Nobelisk": 1
+      },
+      "power": 15,
+      "equivalent": 0.4,
+      "machines": 1,
+      "lastClock": 40,
+      "peakMW": 15,
+      "generationMW": 0
+     },
+     {
+      "id": "power-fuel",
+      "name": "Fuel power",
+      "machine": "Fuel Generator",
+      "phase": 3,
+      "power": -250,
+      "inputs": {
+       "Fuel": 1801.5290128778206
+      },
+      "outputs": {},
+      "equivalent": 90.07645064389104,
+      "machines": 91,
+      "lastClock": 7.645064389103595,
+      "peakMW": 0,
+      "generationMW": 22519.112660972758
+     }
+    ],
+    "raw": {
+     "Iron Ore": 1766.6163580246914,
+     "Copper Ore": 3536.9500000000003,
+     "Limestone": 684.8317901234568,
+     "Coal": 1653.65,
+     "Caterium Ore": 155.4,
+     "Raw Quartz": 349.5925925925925,
+     "Sulfur": 8,
+     "Bauxite": 471.95000000000005,
+     "Uranium": 0,
+     "SAM": 342,
+     "Crude Oil": 2778.6787885318713,
+     "Nitrogen Gas": 275.28086419753083,
+     "Water": 1000.8051628836255
+    },
+    "supplied": {},
+    "storage": {
+     "Plastic": 1,
+     "Rubber": 1,
+     "Concrete": 1,
+     "Iron Plate": 1,
+     "Iron Rod": 1,
+     "Steel Beam": 1,
+     "Steel Pipe": 1,
+     "Aluminum Casing": 1,
+     "Alclad Aluminum Sheet": 1,
+     "Encased Industrial Beam": 1,
+     "Copper Sheet": 1,
+     "Iron Rebar": 1,
+     "Stun Rebar": 1,
+     "Gas Filter": 1,
+     "Shatter Rebar": 1,
+     "Explosive Rebar": 1,
+     "Nobelisk": 1,
+     "Wire": 1,
+     "Iodine-Infused Filter": 1,
+     "Cluster Nobelisk": 1,
+     "Reinforced Iron Plate": 1,
+     "Cable": 1,
+     "Motor": 1,
+     "Computer": 1,
+     "Modular Frame": 1,
+     "Pulse Nobelisk": 1,
+     "Heavy Modular Frame": 1
+    },
+    "drone": {},
+    "transport": {},
+    "delivery": {
+     "Nuclear Pasta": {
+      "target": 1000,
+      "rate": 2.1
+     },
+     "Biochemical Sculptor": {
+      "target": 1000,
+      "rate": 2.1
+     },
+     "AI Expansion Server": {
+      "target": 256,
+      "rate": 0.6
+     },
+     "Ballistic Warp Drive": {
+      "target": 200,
+      "rate": 0.5
+     }
+    },
+    "surplus": {
+     "Quartz Crystal": 131.79537037037034
+    },
+    "plutoniumSink": 0,
+    "peakMW": 27667,
+    "generationMW": 22519.112660972758,
+    "sloopsUsed": 0,
+    "augmenters": 0,
+    "fueledAugmenters": 0,
+    "boost": 0,
+    "augmenterMW": 0,
+    "matrixRate": 0,
+    "availableMW": 22519.112660972758,
+    "requiredMW": 33200.4,
+    "additionalHeadroomMW": 10681.287339027243,
+    "hours": 7.936507936507936,
+    "conversions": []
+   }
+  },
+  "warnings": [
+   "Resource budgets are provisional. Confirm available extraction after reserving resources for existing factories.",
+   "Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.",
+   "Power includes new generators and their fuel chains, with a 20% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.",
+   "Maximum output optimizes elevator completion within the entered budgets and allowed recipes; it is not an unrestricted global game optimum."
+  ],
+  "createdAt": "2026-10-04T13:16:55.073Z"
+ },
+ "steps": {
+  "3": [
+   [
+    "unlock-Schematic_5-1_C",
+    "Tier 5: Oil Processing"
+   ],
+   [
+    "unlock-Schematic_5-5_C",
+    "Tier 5: Petroleum Power"
+   ],
+   [
+    "unlock-Schematic_5-2_C",
+    "Tier 6: Industrial Manufacturing"
+   ],
+   [
+    "unlock-Research_Sulfur_4_C",
+    "MAM: Cluster Nobelisk"
+   ],
+   [
+    "unlock-Research_Sulfur_4_2_C",
+    "MAM: Explosive Rebar"
+   ],
+   [
+    "unlock-Research_Quartz_3_4_C",
+    "MAM: Explosive Resonance Application"
+   ],
+   [
+    "unlock-Research_Mycelia_GasMask_C",
+    "MAM: Gas Mask"
+   ],
+   [
+    "unlock-Research_Caterium_5_C",
+    "MAM: High-Speed Connector"
+   ],
+   [
+    "unlock-Research_Sulfur_3_C",
+    "MAM: Smokeless Powder"
+   ],
+   [
+    "unlock-Research_Mycelia_2_1_C",
+    "MAM: Synthetic Polyester Fabric"
+   ]
+  ],
+  "4": [
+   [
+    "startup-4-power-review",
+    "Power available now"
+   ],
+   [
+    "startup-biomass",
+    "Turn leaves and wood into Biomass"
+   ],
+   [
+    "startup-solid-biofuel",
+    "Unlock Obstacle Clearing, then automate Solid Biofuel"
+   ],
+   [
+    "startup-burner-bank-4",
+    "Size and feed the biomass burner bank"
+   ],
+   [
+    "startup-coal-unlock",
+    "Unlock Coal Power before switching to coal"
+   ],
+   [
+    "startup-fuel-4",
+    "Unlock and commission the planned fuel power"
+   ],
+   [
+    "startup-aluminum-4",
+    "Commission aluminum water recycling"
+   ],
+   [
+    "unlock-Schematic_7-1_C",
+    "Tier 7: Bauxite Refinement"
+   ],
+   [
+    "unlock-Schematic_7-5_C",
+    "Tier 7: Control System Development"
+   ],
+   [
+    "unlock-Schematic_7-3_C",
+    "Tier 7: Hazmat Suit"
+   ],
+   [
+    "unlock-Schematic_8-2_C",
+    "Tier 8: Advanced Aluminum Production"
+   ],
+   [
+    "unlock-Schematic_8-4_C",
+    "Tier 8: Leading-Edge Production"
+   ],
+   [
+    "unlock-Schematic_8-1_C",
+    "Tier 8: Nuclear Power"
+   ],
+   [
+    "unlock-Schematic_8-5_C",
+    "Tier 8: Particle Enrichment"
+   ],
+   [
+    "hard-drives-4",
+    "Collect and scan hard drives for the selected alternates"
+   ],
+   [
+    "recipe-unlock-Recipe_Alternate_Quartz_Purified_C",
+    "Unlock Alternate: Quartz Purification"
+   ],
+   [
+    "recipe-unlock-Recipe_Alternate_Silica_Distilled_C",
+    "Unlock Alternate: Distilled Silica"
+   ],
+   [
+    "recipe-unlock-Recipe_Alternate_PolyesterFabric_C",
+    "Unlock Alternate: Polyester Fabric"
+   ],
+   [
+    "calc-4-Recipe_IngotIron_C",
+    "Iron Ingot"
+   ],
+   [
+    "calc-4-Recipe_IronPlate_C",
+    "Iron Plate"
+   ],
+   [
+    "calc-4-Recipe_IronRod_C",
+    "Iron Rod"
+   ],
+   [
+    "calc-4-Recipe_IngotCopper_C",
+    "Copper Ingot"
+   ],
+   [
+    "calc-4-Recipe_CopperSheet_C",
+    "Copper Sheet"
+   ],
+   [
+    "calc-4-Recipe_Plastic_C",
+    "Plastic"
+   ],
+   [
+    "calc-4-Recipe_CircuitBoard_C",
+    "Circuit Board"
+   ],
+   [
+    "calc-4-Recipe_LiquidFuel_C",
+    "Fuel"
+   ],
+   [
+    "calc-4-Recipe_Rubber_C",
+    "Rubber"
+   ],
+   [
+    "calc-4-Recipe_ResidualFuel_C",
+    "Residual Fuel"
+   ],
+   [
+    "calc-4-Recipe_IngotSteel_C",
+    "Steel Ingot"
+   ],
+   [
+    "calc-4-Recipe_SteelBeam_C",
+    "Steel Beam"
+   ],
+   [
+    "calc-4-Recipe_SteelPipe_C",
+    "Steel Pipe"
+   ],
+   [
+    "calc-4-Recipe_Screw_C",
+    "Screws"
+   ],
+   [
+    "calc-4-Recipe_IronPlateReinforced_C",
+    "Reinforced Iron Plate"
+   ],
+   [
+    "calc-4-Recipe_ModularFrame_C",
+    "Modular Frame"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_2_C",
+    "Versatile Framework"
+   ],
+   [
+    "calc-4-Recipe_NitricAcid_C",
+    "Nitric Acid"
+   ],
+   [
+    "calc-4-Recipe_Alternate_Quartz_Purified_C",
+    "Alternate: Quartz Purification"
+   ],
+   [
+    "calc-4-Recipe_Alternate_Silica_Distilled_C",
+    "Alternate: Distilled Silica"
+   ],
+   [
+    "calc-4-Recipe_AluminaSolution_C",
+    "Alumina Solution"
+   ],
+   [
+    "calc-4-Recipe_AluminumScrap_C",
+    "Aluminum Scrap"
+   ],
+   [
+    "calc-4-Recipe_IngotAluminum_C",
+    "Aluminum Ingot"
+   ],
+   [
+    "calc-4-Recipe_AluminumCasing_C",
+    "Aluminum Casing"
+   ],
+   [
+    "calc-4-Recipe_AluminumSheet_C",
+    "Alclad Aluminum Sheet"
+   ],
+   [
+    "calc-4-Recipe_Wire_C",
+    "Wire"
+   ],
+   [
+    "calc-4-Recipe_Cable_C",
+    "Cable"
+   ],
+   [
+    "calc-4-Recipe_CrystalOscillator_C",
+    "Crystal Oscillator"
+   ],
+   [
+    "calc-4-Recipe_Concrete_C",
+    "Concrete"
+   ],
+   [
+    "calc-4-Recipe_EncasedIndustrialBeam_C",
+    "Encased Industrial Beam"
+   ],
+   [
+    "calc-4-Recipe_Rotor_C",
+    "Rotor"
+   ],
+   [
+    "calc-4-Recipe_Stator_C",
+    "Stator"
+   ],
+   [
+    "calc-4-Recipe_Motor_C",
+    "Motor"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_3_C",
+    "Automated Wiring"
+   ],
+   [
+    "calc-4-Recipe_IngotCaterium_C",
+    "Caterium Ingot"
+   ],
+   [
+    "calc-4-Recipe_Quickwire_C",
+    "Quickwire"
+   ],
+   [
+    "calc-4-Recipe_AILimiter_C",
+    "AI Limiter"
+   ],
+   [
+    "calc-4-Recipe_Computer_C",
+    "Computer"
+   ],
+   [
+    "calc-4-Recipe_ModularFrameHeavy_C",
+    "Heavy Modular Frame"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_1_C",
+    "Smart Plating"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_4_C",
+    "Modular Engine"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_5_C",
+    "Adaptive Control Unit"
+   ],
+   [
+    "calc-4-Recipe_FusedModularFrame_C",
+    "Fused Modular Frame"
+   ],
+   [
+    "calc-4-Recipe_RadioControlUnit_C",
+    "Radio Control Unit"
+   ],
+   [
+    "calc-4-Recipe_PressureConversionCube_C",
+    "Pressure Conversion Cube"
+   ],
+   [
+    "calc-4-Recipe_CopperDust_C",
+    "Copper Powder"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_9_C",
+    "Nuclear Pasta"
+   ],
+   [
+    "calc-4-Recipe_HeatSink_C",
+    "Heat Sink"
+   ],
+   [
+    "calc-4-Recipe_CoolingSystem_C",
+    "Cooling System"
+   ],
+   [
+    "calc-4-Recipe_HighSpeedConnector_C",
+    "High-Speed Connector"
+   ],
+   [
+    "calc-4-Recipe_ComputerSuper_C",
+    "Supercomputer"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_7_C",
+    "Assembly Director System"
+   ],
+   [
+    "calc-4-Recipe_ElectromagneticControlRod_C",
+    "Electromagnetic Control Rod"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_6_C",
+    "Magnetic Field Generator"
+   ],
+   [
+    "calc-4-Recipe_MotorTurbo_C",
+    "Turbo Motor"
+   ],
+   [
+    "calc-4-Recipe_SpaceElevatorPart_8_C",
+    "Thermal Propulsion Rocket"
+   ],
+   [
+    "calc-4-Recipe_Alternate_PolyesterFabric_C",
+    "Alternate: Polyester Fabric"
+   ],
+   [
+    "calc-4-Recipe_FilterGasMask_C",
+    "Gas Filter"
+   ],
+   [
+    "calc-4-Recipe_FilterHazmat_C",
+    "Iodine-Infused Filter"
+   ],
+   [
+    "calc-4-Recipe_Gunpowder_C",
+    "Black Powder"
+   ],
+   [
+    "calc-4-Recipe_SpikedRebar_C",
+    "Iron Rebar"
+   ],
+   [
+    "calc-4-Recipe_Rebar_Stunshot_C",
+    "Stun Rebar"
+   ],
+   [
+    "calc-4-Recipe_Nobelisk_C",
+    "Nobelisk"
+   ],
+   [
+    "calc-4-Recipe_NobeliskShockwave_C",
+    "Pulse Nobelisk"
+   ],
+   [
+    "calc-4-Recipe_Rebar_Spreadshot_C",
+    "Shatter Rebar"
+   ],
+   [
+    "calc-4-Recipe_GunpowderMK2_C",
+    "Smokeless Powder"
+   ],
+   [
+    "calc-4-Recipe_Rebar_Explosive_C",
+    "Explosive Rebar"
+   ],
+   [
+    "calc-4-Recipe_NobeliskCluster_C",
+    "Cluster Nobelisk"
+   ],
+   [
+    "calc-4-power-fuel",
+    "Fuel power"
+   ],
+   [
+    "calc-4-storage",
+    "Connect protected storage and overflow"
+   ]
+  ],
+  "5": [
+   [
+    "startup-5-power-review",
+    "Power available now"
+   ],
+   [
+    "startup-burner-bank-5",
+    "Size and feed the biomass burner bank"
+   ],
+   [
+    "startup-fuel-5",
+    "Unlock and commission the planned fuel power"
+   ],
+   [
+    "startup-aluminum-5",
+    "Commission aluminum water recycling"
+   ],
+   [
+    "unlock-Schematic_9-1_C",
+    "Tier 9: Matter Conversion"
+   ],
+   [
+    "unlock-Schematic_9-2_C",
+    "Tier 9: Quantum Encoding"
+   ],
+   [
+    "unlock-Schematic_9-4_C",
+    "Tier 9: Spatial Energy Regulation"
+   ],
+   [
+    "calc-5-Recipe_IngotIron_C",
+    "Iron Ingot"
+   ],
+   [
+    "calc-5-Recipe_IronPlate_C",
+    "Iron Plate"
+   ],
+   [
+    "calc-5-Recipe_IronRod_C",
+    "Iron Rod"
+   ],
+   [
+    "calc-5-Recipe_IngotSAM_C",
+    "Reanimated SAM"
+   ],
+   [
+    "calc-5-Recipe_DarkEnergy_C",
+    "Dark Matter Residue"
+   ],
+   [
+    "calc-5-Recipe_QuantumEnergy_C",
+    "Excited Photonic Matter"
+   ],
+   [
+    "calc-5-Recipe_Diamond_C",
+    "Diamonds"
+   ],
+   [
+    "calc-5-Recipe_Alternate_Silica_Distilled_C",
+    "Alternate: Distilled Silica"
+   ],
+   [
+    "calc-5-Recipe_AluminaSolution_C",
+    "Alumina Solution"
+   ],
+   [
+    "calc-5-Recipe_AluminumScrap_C",
+    "Aluminum Scrap"
+   ],
+   [
+    "calc-5-Recipe_NitricAcid_C",
+    "Nitric Acid"
+   ],
+   [
+    "calc-5-Recipe_Alternate_Quartz_Purified_C",
+    "Alternate: Quartz Purification"
+   ],
+   [
+    "calc-5-Recipe_IngotCopper_C",
+    "Copper Ingot"
+   ],
+   [
+    "calc-5-Recipe_Wire_C",
+    "Wire"
+   ],
+   [
+    "calc-5-Recipe_Cable_C",
+    "Cable"
+   ],
+   [
+    "calc-5-Recipe_Screw_C",
+    "Screws"
+   ],
+   [
+    "calc-5-Recipe_IronPlateReinforced_C",
+    "Reinforced Iron Plate"
+   ],
+   [
+    "calc-5-Recipe_CrystalOscillator_C",
+    "Crystal Oscillator"
+   ],
+   [
+    "calc-5-Recipe_IngotAluminum_C",
+    "Aluminum Ingot"
+   ],
+   [
+    "calc-5-Recipe_AluminumSheet_C",
+    "Alclad Aluminum Sheet"
+   ],
+   [
+    "calc-5-Recipe_SuperpositionOscillator_C",
+    "Superposition Oscillator"
+   ],
+   [
+    "calc-5-Recipe_TimeCrystal_C",
+    "Time Crystal"
+   ],
+   [
+    "calc-5-Recipe_CopperSheet_C",
+    "Copper Sheet"
+   ],
+   [
+    "calc-5-Recipe_Plastic_C",
+    "Plastic"
+   ],
+   [
+    "calc-5-Recipe_LiquidFuel_C",
+    "Fuel"
+   ],
+   [
+    "calc-5-Recipe_ResidualPlastic_C",
+    "Residual Plastic"
+   ],
+   [
+    "calc-5-Recipe_CircuitBoard_C",
+    "Circuit Board"
+   ],
+   [
+    "calc-5-Recipe_Computer_C",
+    "Computer"
+   ],
+   [
+    "calc-5-Recipe_IngotCaterium_C",
+    "Caterium Ingot"
+   ],
+   [
+    "calc-5-Recipe_Quickwire_C",
+    "Quickwire"
+   ],
+   [
+    "calc-5-Recipe_AILimiter_C",
+    "AI Limiter"
+   ],
+   [
+    "calc-5-Recipe_HighSpeedConnector_C",
+    "High-Speed Connector"
+   ],
+   [
+    "calc-5-Recipe_ComputerSuper_C",
+    "Supercomputer"
+   ],
+   [
+    "calc-5-Recipe_FicsiteIngot_AL_C",
+    "Ficsite Ingot (Aluminum)"
+   ],
+   [
+    "calc-5-Recipe_FicsiteMesh_C",
+    "Ficsite Trigon"
+   ],
+   [
+    "calc-5-Recipe_TemporalProcessor_C",
+    "Neural-Quantum Processor"
+   ],
+   [
+    "calc-5-Recipe_ModularFrame_C",
+    "Modular Frame"
+   ],
+   [
+    "calc-5-Recipe_IngotSteel_C",
+    "Steel Ingot"
+   ],
+   [
+    "calc-5-Recipe_SteelBeam_C",
+    "Steel Beam"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_2_C",
+    "Versatile Framework"
+   ],
+   [
+    "calc-5-Recipe_SteelPipe_C",
+    "Steel Pipe"
+   ],
+   [
+    "calc-5-Recipe_Stator_C",
+    "Stator"
+   ],
+   [
+    "calc-5-Recipe_ElectromagneticControlRod_C",
+    "Electromagnetic Control Rod"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_6_C",
+    "Magnetic Field Generator"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_12_C",
+    "AI Expansion Server"
+   ],
+   [
+    "calc-5-Recipe_DarkMatter_C",
+    "Dark Matter Crystal"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_3_C",
+    "Automated Wiring"
+   ],
+   [
+    "calc-5-Recipe_Concrete_C",
+    "Concrete"
+   ],
+   [
+    "calc-5-Recipe_EncasedIndustrialBeam_C",
+    "Encased Industrial Beam"
+   ],
+   [
+    "calc-5-Recipe_ModularFrameHeavy_C",
+    "Heavy Modular Frame"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_5_C",
+    "Adaptive Control Unit"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_7_C",
+    "Assembly Director System"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_10_C",
+    "Biochemical Sculptor"
+   ],
+   [
+    "calc-5-Recipe_Rubber_C",
+    "Rubber"
+   ],
+   [
+    "calc-5-Recipe_ResidualFuel_C",
+    "Residual Fuel"
+   ],
+   [
+    "calc-5-Recipe_AluminumCasing_C",
+    "Aluminum Casing"
+   ],
+   [
+    "calc-5-Recipe_Rotor_C",
+    "Rotor"
+   ],
+   [
+    "calc-5-Recipe_Motor_C",
+    "Motor"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_1_C",
+    "Smart Plating"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_4_C",
+    "Modular Engine"
+   ],
+   [
+    "calc-5-Recipe_FusedModularFrame_C",
+    "Fused Modular Frame"
+   ],
+   [
+    "calc-5-Recipe_RadioControlUnit_C",
+    "Radio Control Unit"
+   ],
+   [
+    "calc-5-Recipe_PressureConversionCube_C",
+    "Pressure Conversion Cube"
+   ],
+   [
+    "calc-5-Recipe_CopperDust_C",
+    "Copper Powder"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_9_C",
+    "Nuclear Pasta"
+   ],
+   [
+    "calc-5-Recipe_HeatSink_C",
+    "Heat Sink"
+   ],
+   [
+    "calc-5-Recipe_CoolingSystem_C",
+    "Cooling System"
+   ],
+   [
+    "calc-5-Recipe_MotorTurbo_C",
+    "Turbo Motor"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_8_C",
+    "Thermal Propulsion Rocket"
+   ],
+   [
+    "calc-5-Recipe_SingularityCell_C",
+    "Singularity Cell"
+   ],
+   [
+    "calc-5-Recipe_SpaceElevatorPart_11_C",
+    "Ballistic Warp Drive"
+   ],
+   [
+    "calc-5-Recipe_Alternate_PolyesterFabric_C",
+    "Alternate: Polyester Fabric"
+   ],
+   [
+    "calc-5-Recipe_FilterGasMask_C",
+    "Gas Filter"
+   ],
+   [
+    "calc-5-Recipe_FilterHazmat_C",
+    "Iodine-Infused Filter"
+   ],
+   [
+    "calc-5-Recipe_Gunpowder_C",
+    "Black Powder"
+   ],
+   [
+    "calc-5-Recipe_SpikedRebar_C",
+    "Iron Rebar"
+   ],
+   [
+    "calc-5-Recipe_Rebar_Stunshot_C",
+    "Stun Rebar"
+   ],
+   [
+    "calc-5-Recipe_Nobelisk_C",
+    "Nobelisk"
+   ],
+   [
+    "calc-5-Recipe_NobeliskShockwave_C",
+    "Pulse Nobelisk"
+   ],
+   [
+    "calc-5-Recipe_Rebar_Spreadshot_C",
+    "Shatter Rebar"
+   ],
+   [
+    "calc-5-Recipe_GunpowderMK2_C",
+    "Smokeless Powder"
+   ],
+   [
+    "calc-5-Recipe_Rebar_Explosive_C",
+    "Explosive Rebar"
+   ],
+   [
+    "calc-5-Recipe_NobeliskCluster_C",
+    "Cluster Nobelisk"
+   ],
+   [
+    "calc-5-power-fuel",
+    "Fuel power"
+   ],
+   [
+    "calc-5-storage",
+    "Connect protected storage and overflow"
+   ]
+  ]
+ }
+}

@@ -147,7 +147,8 @@ test('a solid partly used is stored or sunk; one no line uses is stored or sent 
 });
 
 test('a line that uses its own byproduct pipes it back into itself first', () => {
-  assert.deepEqual(adviceOf('4', 'Alternate: Distilled Silica'), [
+  // Distilled Silica is a milestone recipe, planned under its own name since #1044.
+  assert.deepEqual(adviceOf('4', 'Distilled Silica'), [
     ['byproduct', 'Water 29.96 m³/min', 'Pipe all of it back into this line’s own Water input.'],
     [
       'input',
@@ -196,7 +197,7 @@ test('a receiving line covered fully, in part, and a line with neither', () => {
     [
       'input',
       'Silica 70.18/min',
-      '59.97 from Alternate: Distilled Silica in Concrete & quartz, 10.21 from the byproduct of Alumina Solution in Aluminum campus.',
+      '59.97 from Distilled Silica in Concrete & quartz, 10.21 from the byproduct of Alumina Solution in Aluminum campus.',
     ],
   ]);
   // Wet Concrete takes Water no byproduct covers: it is extracted, with the extractors (#1024).

@@ -18,6 +18,7 @@ import { render } from '../../shell.ts';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
 import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { turbofuelRecipes } from '../../../preferences.ts';
 import type { StoredCalculatedPlan } from '../../../types/index.ts';
 
 // A stable empty list, so a draft without picks does not look replaced on every redraw.
@@ -37,9 +38,14 @@ const view = computed(() =>
           name: alternate.name,
           outs,
           text: (alternate.name + ' ' + outs.join(' ')).toLowerCase(),
-          when: alternate.mam ? 'MAM research' : 'Phase ' + alternate.phase,
+          when: alternate.mam
+            ? 'MAM research'
+            : alternate.milestone
+              ? `Tier ${alternate.milestone} milestone`
+              : 'Phase ' + alternate.phase,
           why:
-            alternate.mam && !['auto', 'coal', 'fuel'].includes(settings.mainPower || 'auto')
+            turbofuelRecipes.includes(alternate.id) &&
+            !['auto', 'coal', 'fuel'].includes(settings.mainPower || 'auto')
               ? 'power preference'
               : alternate.pure && settings.pureIngots === true
                 ? 'ingot preference'
@@ -167,13 +173,15 @@ async function best() {
     </div>
     <p class="small muted">
       Only the recipes you tick are allowed in the plan. Hard-drive alternates are unlocked from
-      crash sites; Turbofuel and Compacted Coal are researched in the MAM instead. Recipes your
+      crash sites; Turbofuel, Compacted Coal and Polyester Fabric are researched in the MAM instead,
+      and Distilled Silica comes with the Tier 7 milestone Control System Development. Recipes your
       other choices depend on are selected automatically: a turbofuel-based power route locks its
       MAM recipes, and requiring pure ingots locks the pure recipes. Raw-resource conversion recipes
       are not alternates — they follow the SAM conversion setting and Tier 9 unlocks. Selecting none
       plans with standard recipes only. <b>Planner’s choice</b> recalculates with every alternate
-      allowed and ticks only the recipes the optimal plan actually uses — each ticked recipe costs
-      one hard drive. Select all and Clear all apply to the rows currently shown by the filter.
+      allowed and ticks only the recipes the optimal plan actually uses — each ticked hard-drive
+      alternate costs one hard drive. Select all and Clear all apply to the rows currently shown by
+      the filter.
     </p>
     <p class="alt-force-hint">
       <span class="alt-force-star">★</span

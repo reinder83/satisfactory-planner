@@ -10,7 +10,15 @@ import {
   powerOptions,
 } from '../public/preferences.ts';
 import type { Catalog } from '../public/types/index.ts';
-import { DATA, ENGINE, MAM_RECIPES, RAW, DEFAULT_LIMITS, PURE_LIMITS } from './data.ts';
+import {
+  DATA,
+  ENGINE,
+  MAM_RECIPES,
+  MILESTONE_RECIPES,
+  RAW,
+  DEFAULT_LIMITS,
+  PURE_LIMITS,
+} from './data.ts';
 import { storable, SLOOP_USES } from './settings.ts';
 import { pureNames } from './recipes.ts';
 
@@ -43,6 +51,7 @@ export const catalog = (): Catalog => ({
       inputs: recipe.inputs,
       outputs: recipe.outputs,
       ...(MAM_RECIPES.includes(recipe.id) ? { mam: true } : {}),
+      ...(MILESTONE_RECIPES[recipe.id] ? { milestone: MILESTONE_RECIPES[recipe.id] } : {}),
       ...(pureNames.includes(recipe.name) ? { pure: true } : {}),
     }))
     .sort((a, b) => a.name.localeCompare(b.name)),

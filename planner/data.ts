@@ -5,7 +5,7 @@
 // replaces them for the browser; keep those snippets unchanged.
 // Re-exported by ../planner.ts.
 import fs from 'node:fs';
-import { rawResources } from '../public/preferences.ts';
+import { rawResources, turbofuelRecipes } from '../public/preferences.ts';
 import type { ItemRates, RecipeData } from '../public/types/index.ts';
 
 // Game data. `recipes`: id, name, alternate, the elevator `phase` from which it is available,
@@ -18,10 +18,25 @@ export const DATA: RecipeData = JSON.parse(
 // Recorded as `plan.engine` in every calculated plan, so a stored snapshot says which engine
 // produced it. Nothing in the app reads it back at the moment.
 export const ENGINE = '2.0.0';
-// Turbofuel and Enriched Coal come from MAM research, not hard drives, so recipePool treats them
-// as standard recipes. Under 'custom' recipes they are opt-in like any alternate, and settings()
-// adds them itself when the power preference needs turbofuel.
-export const MAM_RECIPES = ['Recipe_Alternate_Turbofuel_C', 'Recipe_Alternate_EnrichedCoal_C'];
+// Alternates the game unlocks without a hard drive, which recipePool therefore treats as standard
+// recipes from the phase their unlock is available (the recipe's `phase`), relabelled without
+// "Alternate: ", so their lines get no hard-drive step but the unlock's milestone step. Under
+// 'custom' recipes they are opt-in like any alternate. The catalog marks them for the picker.
+// - MAM_RECIPES come from MAM research: Turbofuel and Compacted Coal (Enriched Coal; settings()
+//   adds those two itself when the power preference needs turbofuel, turbofuelRecipes in
+//   public/preferences/fuels.ts) and Polyester Fabric (Synthetic Polyester Fabric, #1044).
+// - MILESTONE_RECIPES come from a HUB milestone, by its tier: Distilled Silica from Tier 7,
+//   Control System Development (Schematic_7-5_C), #1044. The recorded SatisfactoryTools revision
+//   gives Distilled Silica no unlock at all, so public/progression.json lists it among that
+//   milestone's recipes as the wiki gives it: "Tier 7 - Control System Development"
+//   (https://satisfactory.wiki.gg/wiki/Silica, Distilled Silica's "Unlocked by").
+// tests/recipe-unlocks.test.ts keeps both lists in step with progression.json: they are exactly
+// the alternates a MAM node or a HUB milestone unlocks there.
+export const MAM_RECIPES = [...turbofuelRecipes, 'Recipe_Alternate_PolyesterFabric_C'];
+export const MILESTONE_RECIPES: Record<string, number> = {
+  Recipe_Alternate_Silica_Distilled_C: 7,
+};
+export const STANDARD_ALTERNATES = [...MAM_RECIPES, ...Object.keys(MILESTONE_RECIPES)];
 // Power preferences other than auto/coal/fuel run turbofuel generators (directly or as the Phase 3 bridge).
 export const powerNeedsTurbofuel = (mainPower: string | undefined) =>
   !['auto', 'coal', 'fuel'].includes(mainPower || 'auto');
