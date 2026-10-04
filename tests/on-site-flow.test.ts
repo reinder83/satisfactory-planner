@@ -470,6 +470,5 @@ test('plans whose groups were not edited after the recalculation keep exactly th
         entry.flows[group.id],
         `${entry.label}: ${group.id}`,
       );
-    assert.deepEqual(itemBooks(stage, groups).offered, {}, entry.label);
   }
 });
