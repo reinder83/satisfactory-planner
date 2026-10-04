@@ -1,6 +1,6 @@
 // The handlers for the controls several components share: progress checkboxes, links to a
 // factory's dialog, the dialog's ×, "Create a save", opening a profile, signing out and Done
-// editing on the factories pages. Each component binds them itself (@change, @click, or
+// editing on the factories pages and the build plan. Each component binds them itself (@change, @click, or
 // v-bind with factoryLink()). The data-* attributes stay
 // on the elements: they carry the saved keys these handlers read, and browser-check.ts,
 // the tests and allowSwitch() in api.ts look for them.
@@ -21,8 +21,10 @@ import {
   boot,
   loadContext,
   setAuthMode,
+  setEditingTask,
   setFactoryEditing,
   setFactoryFilter,
+  setPlanEditing,
   setWorkspace,
 } from '../session.ts';
 import { openCalculatedFactory } from '../factory-detail.ts';
@@ -41,6 +43,18 @@ import type { WorkspaceSummary } from '../../types/index.ts';
 export function finishGroupEditing(): boolean {
   if (holdUnsavedChoices()) return false;
   setFactoryEditing(false);
+  render();
+  return true;
+}
+
+// Done editing on the build plan (EditStepsToggle.vue and the edit bar, PlanEditBar.vue): leaves
+// step editing and closes any step's edit form, unless that form holds text not saved yet (#969).
+// Then the form says so, with focus on its Save step and Cancel beside it (holdUnsavedChoices),
+// edit mode stays on and this returns false, as for a "Made on site" choice above.
+export function finishStepEditing(): boolean {
+  if (holdUnsavedChoices()) return false;
+  setPlanEditing(false);
+  setEditingTask(null);
   render();
   return true;
 }

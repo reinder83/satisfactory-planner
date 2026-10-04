@@ -4841,6 +4841,11 @@ button.rail-tile:hover {
 .task-edit-actions {
   margin-top: 12px;
 }
+/* Why Done editing waited: the step's edits are not saved yet (#969). Right above Save step and
+   Cancel, which it names. */
+.task-edit-held .notice {
+  margin: 12px 0 0;
+}
 .removed-steps {
   margin: 14px 0;
 }

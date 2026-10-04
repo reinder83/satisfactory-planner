@@ -5,7 +5,7 @@
   after its header, as a child of <main>, which is what it sticks within. Done and Esc leave the
   mode through `done`, then focus goes to the page's toggle (`toggle`, a selector). A `done` that
   returns false kept the mode on and put focus where the user must act first (an unsaved "Made on
-  site" choice, #930), so focus stays there. Esc is left alone while typing in a field (a checkbox
+  site" choice, #930, or a step's edit form with unsaved text, #969), so focus stays there. Esc is left alone while typing in a field (a checkbox
   or radio takes no typing, so Esc on one still leaves, #981), while a dialog is open, or when
   something already handled it (a menu, a step's own edit form).
 -->
