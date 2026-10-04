@@ -106,9 +106,10 @@ test('each phase box saves under its own key', async () => {
   assert.deepEqual(
     calls.map(([, body]) => body),
     [
-      { type: 'note', key: 'global', value: 'Seed 4242' },
-      { type: 'note', key: 'phase-3', value: 'Coal first' },
-      { type: 'note', key: 'phase-post', value: 'Sink the rest' },
+      // Each write names the saved text it was typed over, none here (#1052).
+      { type: 'note', key: 'global', value: 'Seed 4242', base: '' },
+      { type: 'note', key: 'phase-3', value: 'Coal first', base: '' },
+      { type: 'note', key: 'phase-post', value: 'Sink the rest', base: '' },
     ],
   );
 });
@@ -182,6 +183,8 @@ test('leaving the page or changing phase asks before dropping an unsaved note', 
   acceptRoute();
 });
 
+// #1052: the draft is kept and both versions are shown, so the user picks which to keep
+// (tests/ui/note-conflict.test.ts covers the choices).
 test('another tab’s saved note never replaces an unsaved draft, but fills an untouched box', async () => {
   // Every save reply carries a phase note another tab saved meanwhile.
   const reply = () => ({ ...state, notes: { ...state.notes, 'phase-3': 'From the other tab' } });
@@ -201,7 +204,8 @@ test('another tab’s saved note never replaces an unsaved draft, but fills an u
   note().dispatchEvent(new Event('input'));
   await otherWrite('Seed');
   assert.equal(note().value, 'My draft', 'the draft is kept');
-  assert.match($('#toast')!.textContent!, /saved note changed while you were editing/);
+  assert.match($('#toast')!.textContent!, /changed in another tab or on another device while you/);
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3-theirs')!.value, 'From the other tab');
   // An untouched box simply shows the newer saved note.
   page();
   open();

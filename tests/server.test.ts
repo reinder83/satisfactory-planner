@@ -439,6 +439,47 @@ test('a whole-value write from a tab that missed a change is refused, small ones
   }
 });
 
+// #1052: a note write names the saved text it was typed over (`base`). It is refused when the note
+// now says something else, whatever revision it names, and goes through when only other records
+// changed meanwhile (a tick from someone else no longer blocks a note).
+test('a note write with its base text is refused only when that note changed', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'satisfactory-test-'));
+  const app = await start(dir);
+  try {
+    const revision = async () => (await (await fetch(app.url + '/api/state')).json()).revision;
+    const atRevision = (seen: number) => ({ 'X-Planner-Revision': String(seen) });
+    const note = (value: string, base: string) => ({ type: 'note', key: 'g', value, base });
+    const seen = await revision();
+    // Someone else ticks a box: the note is unchanged, so a note typed over '' still saves.
+    await post(app.url, '/api/update', { type: 'check', key: 'k', value: true });
+    assert.equal((await post(app.url, '/api/update', note('A', ''), atRevision(seen))).status, 200);
+    // Another tab, still showing '', writes its own: refused, with the note's own message.
+    const refused = await post(app.url, '/api/update', note('B', ''), atRevision(await revision()));
+    assert.equal(refused.status, 409);
+    assert.match((await refused.json()).error, /Both versions are shown under the note/);
+    let current = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(current.notes.g, 'A', 'the first note is kept');
+    // Typed over 'A' (the choice "Keep mine" sends that), it replaces it; whitespace is no note.
+    assert.equal((await post(app.url, '/api/update', note('B', 'A'))).status, 200);
+    assert.equal((await post(app.url, '/api/update', note(' ', 'B'))).status, 200);
+    assert.equal((await post(app.url, '/api/update', note('C', '  \n'))).status, 200);
+    current = await (await fetch(app.url + '/api/state')).json();
+    assert.equal(current.notes.g, 'C');
+    // A base that is not text is no base: the revision rule applies as before.
+    const old = await post(
+      app.url,
+      '/api/update',
+      { type: 'note', key: 'g', value: 'D', base: 7 },
+      atRevision(seen),
+    );
+    assert.equal(old.status, 409);
+    assert.match((await old.json()).error, /changed in another tab/);
+  } finally {
+    await close(app.server);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 // SP-33: the wizard's live estimates count against their own allowance (120 a minute), so
 // estimating while editing never uses up the 20 calculations Calculate plan needs, and the
 // other way round.

@@ -335,12 +335,14 @@ function stepsTaken() {
 // is its textarea while mounted; `flush` sends text still waiting for the pause in typing;
 // `unsaved` is true while the box shows text the saved note does not have yet (being typed,
 // on its way, or refused); `unsent` is true when no write carries that text either (a write
-// failed, or nothing has sent it yet), so leaving would lose it.
+// failed, or nothing has sent it yet), so leaving would lose it. `conflict` is true while the
+// box asks which version to keep, because the note was changed elsewhere meanwhile (#1052).
 export type NoteBox = {
   el: () => Element | null | undefined;
   flush: () => void;
   unsaved: () => boolean;
   unsent: () => boolean;
+  conflict?: () => boolean;
 };
 export const noteBoxes = new Set<NoteBox>();
 const boxesIn = (root: ParentNode) =>
@@ -355,6 +357,10 @@ const boxesIn = (root: ParentNode) =>
 export function flushNotes(root: ParentNode = document) {
   for (const box of boxesIn(root)) box.flush();
 }
+
+// How many notes boxes on screen ask which version to keep (#1052), for ADA.
+export const noteConflicts = () =>
+  [...noteBoxes].filter(box => box.el() && box.conflict?.()).length;
 
 // Whether a notes box in `root` shows text that is not saved yet. Holds back refreshing the
 // page and closing the tab, and keeps the page when a session ends. `root` narrows the

@@ -9,6 +9,7 @@ import {
   type AdaLine,
 } from '../ada.ts';
 import { browserMode } from '../browser-api.ts';
+import { noteConflicts } from './api.ts';
 import { stageSupply } from './build-status.ts';
 import { durationOfHours, num, slug } from './format.ts';
 import {
@@ -232,6 +233,7 @@ function adaFacts(): AdaFacts {
       total: deliveries.length,
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
+    noteConflicts: noteConflicts(),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),

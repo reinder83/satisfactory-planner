@@ -37,6 +37,9 @@ export interface AdaFacts {
   } | null;
   deliveries: { open: number; total: number };
   hasPhaseNote: boolean;
+  // Notes boxes on screen that ask which version to keep, because the note was changed in another
+  // tab or on another device while they held other text (#1052).
+  noteConflicts?: number;
   // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
@@ -418,6 +421,14 @@ const RULES: AdaRule[] = [
         ? "What your factories' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
         : 'What your factories make on site differs from this plan, and this plan has not been told yet. ') +
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
+  },
+  {
+    id: 'note-conflict',
+    on: ['notes', 'plan', 'factories', 'storage'],
+    tone: 'warn',
+    when: facts => facts.noteConflicts,
+    text: facts =>
+      `${facts.noteConflicts === 1 ? 'A note was' : `${facts.noteConflicts} notes were`} changed in another tab or on another device while you were typing. Both versions are under the note, and nothing is saved until you pick: keep yours, theirs or both. Choosing between two pioneers' notes is above my clearance.`,
   },
   {
     id: 'notes',

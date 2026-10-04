@@ -180,8 +180,9 @@ export interface SavedState {
 export type UpdateOp =
   | { type: 'check'; key: string; value: boolean }
   | { type: 'checks'; keys: string[]; value: boolean }
-  // An empty or blank value deletes the note.
-  | { type: 'note'; key: string; value: string }
+  // An empty or blank value deletes the note. `base` is the saved text the value was typed over
+  // (#1052): the write is refused (409) when the note now says something else (checkBase).
+  | { type: 'note'; key: string; value: string; base?: string }
   | { type: 'delivery'; key: string; value: number }
   | { type: 'phase'; value: Phase }
   | { type: 'addTask'; id: string; title: string; phase: Phase }

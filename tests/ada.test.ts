@@ -622,3 +622,19 @@ test('ADA says when a phase makes its on-site items centrally (#875)', () => {
     'also on the Factories page',
   );
 });
+
+test('ADA points at a note changed elsewhere that waits for a choice (#1052)', () => {
+  for (const view of ['notes', 'plan', 'factories', 'storage']) {
+    const line = adaRemarks(facts({ view, noteConflicts: 1 })).find(r => r.id === 'note-conflict')!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /^A note was changed in another tab or on another device/);
+    assert.match(line.text, /keep yours, theirs or both/);
+    assert.ok(!ids(facts({ view, noteConflicts: 0 })).includes('note-conflict'));
+    assert.ok(!ids(facts({ view })).includes('note-conflict'), 'absent means none');
+  }
+  assert.match(
+    adaRemarks(facts({ view: 'notes', noteConflicts: 2 })).find(r => r.id === 'note-conflict')!
+      .text,
+    /^2 notes were changed/,
+  );
+});

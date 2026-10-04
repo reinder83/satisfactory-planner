@@ -403,6 +403,15 @@ test('the browser edition refuses a stale whole-value write like the server', as
   const state = data.saves[0]!.profiles[0]!.state;
   assert.equal(state.notes.n, 'one');
   assert.equal(state.checks.k, true);
+  // #1052: a note write naming the text it was typed over is judged by that note alone.
+  const latest = () => data.saves[0]!.profiles[0]!.state.revision ?? 0;
+  await assert.rejects(
+    update({ type: 'note', key: 'n', value: 'two', base: '' }, latest()),
+    (error: Error & { status?: number }) =>
+      error.status === 409 && /Both versions are shown under the note/.test(error.message),
+  );
+  await update({ type: 'note', key: 'n', value: 'two', base: 'one' }, seen);
+  assert.equal(data.saves[0]!.profiles[0]!.state.notes.n, 'two');
 });
 
 // The Pages edition never made handbook profiles; like the server, it refuses the retired

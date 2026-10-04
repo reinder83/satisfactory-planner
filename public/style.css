@@ -2665,6 +2665,27 @@ tr.muted td:first-child {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+/* A note changed elsewhere while this box held other text (#1052): the other version, read-only,
+   and the three choices, wrapping onto lines of their own on a phone. */
+.note-conflict {
+  margin-top: 10px;
+}
+.note-conflict p {
+  margin: 0 0 8px;
+}
+.note-conflict label {
+  display: block;
+  margin-bottom: 4px;
+}
+.note-conflict .note-theirs {
+  min-height: 80px;
+}
+.note-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
 /* A failed note save is likeliest on a phone's connection: give Retry a 44px touch target,
    drawn around the link as it looks, so its underline stays under the word. */
 @media (max-width: 720px) {
