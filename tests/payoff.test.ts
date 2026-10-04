@@ -164,9 +164,16 @@ test('the browser edition ranks through its ranker and stores the result the sam
   const full = (await api('/api/export-saves')) as SaveExport;
   assert.ok(!JSON.stringify(full).includes('"payoff"'));
   assert.ok(data.saves[0]!.profiles[0]!.payoff);
-  // An import of that export starts without one.
+  // An import of that export starts without one. The import is a copy beside the open save,
+  // which stays the active one (#1052), so the copy is asked for by its id.
   await post('/api/import-saves', full);
-  assert.equal(((await api('/api/context')) as ContextReply).payoff, null);
+  assert.equal(data.activeSave, data.saves[0]!.id);
+  const copy = data.saves[1]!;
+  assert.equal(
+    ((await api(`/api/context?save=${copy.id}&profile=${copy.activeProfile}`)) as ContextReply)
+      .payoff,
+    null,
+  );
   await assert.rejects(post('/api/rank-alternates', { phase: 'x' }), /Choose a phase from 1 to 5/);
   // A ranking of another plan is not shown.
   data.saves[0]!.profiles[0]!.payoff!.planCreatedAt = 'older';

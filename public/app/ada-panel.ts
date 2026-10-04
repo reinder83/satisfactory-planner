@@ -18,6 +18,7 @@ import {
   checked,
   currentProfile,
   currentSave,
+  importedSaves,
   milestoneOnly,
   openedFrom,
   payoff,
@@ -234,6 +235,9 @@ function adaFacts(): AdaFacts {
     },
     hasPhaseNote: !!state.notes['phase-' + phase()],
     noteConflicts: noteConflicts(),
+    imported: listNames(
+      workspace.saves.filter(save => importedSaves.includes(save.id)).map(save => `“${save.name}”`),
+    ),
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),

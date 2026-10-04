@@ -2686,6 +2686,21 @@ tr.muted td:first-child {
   gap: 8px;
   margin: 4px 0 8px;
 }
+/* Saves & profiles after an import (#1052): one Open button per copy, a long name wrapping inside
+   its button. */
+.import-notice p {
+  margin: 0 0 8px;
+}
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-actions .btn {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 /* A failed note save is likeliest on a phone's connection: give Retry a 44px touch target,
    drawn around the link as it looks, so its underline stays under the word. */
 @media (max-width: 720px) {

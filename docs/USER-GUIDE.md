@@ -6,6 +6,8 @@ The full tour of the planner: every screen of profile creation, the ways to make
 
 Each **user → named save → profile** has independent progress. Trying another profile does not reset the original. Profiles store a calculation snapshot, so updating the software cannot silently change existing targets. Rename saves and profiles from **Saves & profiles**.
 
+**Importing** a full export or a share under **Backup → Import saves** adds each save in the file as a new copy, named after the file and the time it was exported, for example _Coop world (from anna.json, exported 2026-10-04 14:05)_; a copy that would get a name you already have is numbered (_· 2_). The profile you have open stays open, so what you tick next never lands in someone else's copy: **Saves & profiles** then lists the copies with an **Open** button for each. Rename a copy as you like; its name is only a label.
+
 ## Create a profile
 
 Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save.

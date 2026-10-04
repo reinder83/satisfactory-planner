@@ -1,6 +1,7 @@
 // The routes over the signed-in user's saves and profiles: full-save export and import,
 // creating, copying, selecting, removing and renaming profiles, and the calculator preview.
 import {
+  activeAfterImport,
   exportQuery,
   importableTransfer,
   remapImportedIds,
@@ -76,7 +77,8 @@ export function saveRoutes({
   }
   // Imports a full-save export as new saves owned by this user, with fresh save and
   // profile ids, so nothing existing is overwritten. Validated completely before the
-  // single commit, so a bad file adds nothing. The last imported save becomes active. An
+  // single commit, so a bad file adds nothing. The user's active save stays active (#1052), so
+  // nobody is moved into the copy; only a user without one gets the last imported save. An
   // original profile is stored already converted into a calculated one (importableTransfer).
   async function importSaves({ user, body }: UserRequest) {
     const imported = await importableTransfer(await body(), migrationData);
@@ -85,10 +87,16 @@ export function saveRoutes({
         fail('Import would exceed the save limit.');
       // importableTransfer ran every profile's progress through validateState; the owner is
       // added below.
-      for (const save of remapImportedIds(imported, randomId) as Save[]) {
+      const owner = draft.users.find(account => account.id === user.id)!;
+      const added = remapImportedIds(imported, randomId) as Save[];
+      owner.activeSave = activeAfterImport(
+        owner.activeSave,
+        draft.saves.filter(s => s.userId === user.id),
+        added,
+      );
+      for (const save of added) {
         save.userId = user.id;
         draft.saves.push(save);
-        draft.users.find(account => account.id === user.id)!.activeSave = save.id;
       }
     });
     return response(currentSummary(user));

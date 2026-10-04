@@ -428,3 +428,64 @@ export function remapImportedIds<
   }
   return imported.saves;
 }
+
+// The save a user opens by default after an import, in both editions (#1052): the one that was
+// active before, while it still exists, so an import never moves anyone off the save they are
+// on; only with none (an empty workspace) the last imported save, as before.
+export function activeAfterImport(
+  active: string | null | undefined,
+  owned: { id: string }[],
+  imported: { id: string }[],
+): string | null {
+  if (active && owned.some(save => save.id === active)) return active;
+  return imported.at(-1)?.id ?? active ?? null;
+}
+
+// The local time of an ISO timestamp as "2026-10-04 14:05", the same in every language, or ''
+// for a missing or unreadable one.
+function stamp(iso: unknown) {
+  const date = typeof iso === 'string' ? new Date(iso) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const two = (value: number) => String(value).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ` +
+    `${two(date.getHours())}:${two(date.getMinutes())}`
+  );
+}
+// Shortens text to `max` characters with an ellipsis.
+const clip = (text: string, max: number) =>
+  text.length <= max ? text : text.slice(0, Math.max(0, max - 1)).trimEnd() + '…';
+// The longest file name the label keeps whole.
+const LABEL_FILE_MAX = 32;
+
+// Names each save of a full-save file as a copy from that file (#1052), before the Backup page
+// imports it in either edition: "Coop world (from friend.json, exported 2026-10-04 14:05)", from
+// the file's name and its own `exportedAt`, so a copy is never mistaken for the user's own save
+// and two imports of saves with the same name read differently. A name the user's saves (`taken`)
+// or an earlier save of the file already has gets " · 2", " · 3" and so on. Every name stays
+// within the 80 characters a name may have: the save's own name is shortened first, then the
+// file's. Only the names change, and only where they are text: validateTransfer still checks
+// the rest, so a damaged file is refused exactly as before. Returns the data, changed in place.
+export function labelImport(data: unknown, file: string, taken: string[] = []): unknown {
+  if (!fields(data) || !Array.isArray(data.saves)) return data;
+  const exported = stamp(data.exportedAt);
+  const source = clip(file.trim(), LABEL_FILE_MAX);
+  const detail = [source && 'from ' + source, exported && 'exported ' + exported]
+    .filter(Boolean)
+    .join(', ');
+  const suffix = ` (${detail || 'imported'})`;
+  const used = new Set(taken);
+  for (const save of data.saves as unknown[]) {
+    if (!fields(save) || typeof save.name !== 'string' || !save.name.trim()) continue;
+    const name = save.name.trim();
+    let label = '';
+    for (let copy = 1; !label || used.has(label); copy++) {
+      const end = suffix + (copy > 1 ? ' · ' + copy : '');
+      // The suffix is at most 72 characters (a file name of 32, a date, ' · 99').
+      label = clip(name, 80 - end.length) + end;
+    }
+    used.add(label);
+    save.name = label;
+  }
+  return data;
+}

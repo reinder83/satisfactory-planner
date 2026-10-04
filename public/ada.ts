@@ -40,6 +40,9 @@ export interface AdaFacts {
   // Notes boxes on screen that ask which version to keep, because the note was changed in another
   // tab or on another device while they held other text (#1052).
   noteConflicts?: number;
+  // The saves the last import added while another save stayed open, as a name list (#1052), shown
+  // on Saves & profiles until it is left; '' or absent otherwise.
+  imported?: string;
   // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
@@ -457,6 +460,14 @@ const RULES: AdaRule[] = [
       `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
   // Page-specific hints: the profile list, factories, the wizard and Resources.
+  {
+    id: 'imported',
+    on: ['profiles'],
+    tone: 'calm',
+    when: facts => facts.imported,
+    text: facts =>
+      `The import added ${facts.imported} as a copy of its own. You are still on “${facts.profile}”, so your next ticks land there, not in the copy. Open the copy from the notice when you mean to. I will not ask whose factory it was.`,
+  },
   {
     id: 'one-profile',
     on: ['profiles'],

@@ -126,6 +126,9 @@ export let planEditing = false;
 // The id of the build-plan step whose edit form is open.
 export let editingTask: string | null = null;
 export let factoryEditing = false;
+// The saves the last import added while another save stayed open (#1052), by id, which Saves &
+// profiles names in a notice with a way to open each; emptied when that page goes. View state.
+export let importedSaves: string[] = [];
 
 // Other modules cannot assign imported bindings, so they change these through setters.
 export function setWorkspace(value: WorkspaceSummary) {
@@ -217,6 +220,9 @@ export function setEditingTask(value: string | null) {
 }
 export function setFactoryEditing(value: boolean) {
   factoryEditing = value;
+}
+export function setImportedSaves(value: string[]) {
+  importedSaves = value;
 }
 
 // A profile records the phase it was created for: its production is planned from there on.

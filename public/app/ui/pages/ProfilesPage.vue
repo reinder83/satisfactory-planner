@@ -8,7 +8,7 @@
   including changes made in another tab; until the reply the last summary is shown.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   allowSwitch,
@@ -24,11 +24,14 @@ import {
   boot,
   currentProfile,
   currentSave,
+  importedSaves,
   loadContext,
   phaseLabel,
+  setImportedSaves,
   setWorkspace,
   workspace,
 } from '../../session.ts';
+import { listNames } from '../../../wording.ts';
 import { render } from '../../shell.ts';
 import { startWizard } from '../../wizard/wizard.ts';
 import { invalidate, legacy } from '../bridge.ts';
@@ -50,10 +53,19 @@ onMounted(async () => {
     // The summary on screen stays; a failed request says nothing more here.
   }
 });
+// The notice about the last import is said once: leaving the page ends it.
+onBeforeUnmount(() => setImportedSaves([]));
 
 const page = computed(() =>
   legacy(() => ({
     accountsEnabled: workspace.accountsEnabled,
+    // The copies the last import added (#1052), with the profile each opens on, and the profile
+    // that stayed open.
+    imported: workspace.saves
+      .filter(save => importedSaves.includes(save.id))
+      .map(save => ({ id: save.id, name: save.name, profile: save.activeProfile })),
+    openSave: currentSave.name,
+    openProfile: currentProfile.name,
     saves: workspace.saves.map(save => ({
       id: save.id,
       name: save.name,
@@ -230,6 +242,13 @@ function openCard(save: SaveCard, profile: ProfileCard) {
   );
 }
 
+// "Open" on the import notice (#1052): opens the copy at the profile it was exported on.
+function openImported(save: { id: string; profile: string }) {
+  const action = 'open-imported:' + save.id;
+  if (busy.value === action) return;
+  return openProfile(save.id, save.profile, on => (busy.value = on ? action : ''));
+}
+
 // Renames any save or profile in place (SP-31, ui/InlineName.vue), naming it in the request's
 // scope headers; a save is scoped with any one of its profiles. The new names are copied into
 // the session's currentSave and currentProfile, so the sidebar footer and the breadcrumb follow.
@@ -275,6 +294,32 @@ async function rename(
     <a v-else class="btn" href="#account">{{
       page.accountsEnabled ? 'Your account' : 'Set up user accounts'
     }}</a>
+  </div>
+  <div v-if="page.imported.length" class="notice info import-notice" data-import-notice>
+    <p>
+      <strong>{{
+        page.imported.length === 1
+          ? 'Imported 1 save as a new copy:'
+          : `Imported ${page.imported.length} saves as new copies:`
+      }}</strong>
+      {{ listNames(page.imported.map(save => '“' + save.name + '”')) }}. You are still on “{{
+        page.openProfile
+      }}” in “{{ page.openSave }}”, and nothing in it changed. Open a copy when you want to work in
+      it.
+    </p>
+    <div class="import-actions">
+      <button
+        v-for="save in page.imported"
+        :key="save.id"
+        type="button"
+        class="btn"
+        :data-open-imported="save.id"
+        :aria-disabled="busy === 'open-imported:' + save.id || undefined"
+        @click="openImported(save)"
+      >
+        Open “{{ save.name }}”
+      </button>
+    </div>
   </div>
   <section v-for="save in page.saves" :key="save.id" class="panel save-panel">
     <div class="section-head">

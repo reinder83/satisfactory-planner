@@ -30,7 +30,13 @@ import {
   phaseProgress,
   wholeMachineProfile,
 } from './state.ts';
-import { exportQuery, importableTransfer, remapImportedIds, selectForExport } from './transfer.ts';
+import {
+  activeAfterImport,
+  exportQuery,
+  importableTransfer,
+  remapImportedIds,
+  selectForExport,
+} from './transfer.ts';
 import type {
   AlternateRanking,
   BrowserSave,
@@ -257,10 +263,10 @@ export function createBrowserApi(
     return store.transaction(data => {
       if (data.saves.length + imported.saves.length > 50)
         throw Error('Import would exceed the save limit.');
-      for (const save of remapImportedIds(imported, randomId)) {
-        data.saves.push(save);
-        data.activeSave = save.id;
-      }
+      // The active save stays (#1052): an import never moves this browser's tabs into the copy.
+      const added = remapImportedIds(imported, randomId);
+      data.activeSave = activeAfterImport(data.activeSave, data.saves, added);
+      data.saves.push(...added);
       return summary(data);
     });
   }
