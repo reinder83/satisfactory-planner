@@ -84,26 +84,20 @@ export function rowPlaces(
 // lists first: memberships with a fixed rate before open ones, each in saved order, so a fixed-rate
 // membership wins a tie even when it was saved later (#928). A part no group takes does not count,
 // so a row with a share in any group is never Ungrouped here: a row split 40/60 is built with the
-// 60, and one with 5 of 20 in a group and the rest in none is built with that group. When no group
-// has a share and a removed group's membership takes up the row, it is UNGROUPED, where rowPlaces
-// puts the row, whatever the order of the memberships. Otherwise (no memberships, a total of zero)
-// it is the place of the first membership: that group if it exists, else UNGROUPED. A group's own
-// line made on site is built with its group (rowMemberships, #876).
+// 60, and one with 5 of 20 in a group and the rest in none is built with that group. When no
+// existing group has a share above LINK_DUST, the row is UNGROUPED, where rowPlaces puts it: a row
+// with no memberships, with only memberships of removed groups, with fixed rates too small to
+// count, or with a total of zero (#942). A group's own line made on site is built with its group
+// (rowMemberships, #876).
 export function homeGroup(
   row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,
 ): string {
-  let home: string | undefined,
+  let home = UNGROUPED,
     largest = 0;
   for (const [place, share] of rowPlaces(row, groups))
     if (place !== UNGROUPED && share > largest + LINK_DUST) [home, largest] = [place, share];
-  if (home) return home;
-  const known = new Set((groups?.groups || []).map(group => group.id));
-  const memberships = rowMemberships(row, groups);
-  if (rowTotal(row) > LINK_DUST && memberships.some(membership => !known.has(membership.group)))
-    return UNGROUPED;
-  const first = memberships[0]?.group;
-  return first && known.has(first) ? first : UNGROUPED;
+  return home;
 }
 
 // `steps` (in the planner's build order: suppliers before consumers) put in order group by group,

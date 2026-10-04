@@ -8,7 +8,8 @@
   `unit` (a calculated generator's card, #374) names what a rate is measured in: a nuclear
   plant's first output, its waste per minute, with `mw` the power one of them stands for, shown
   beside the field while typing; an output-less generator's rate is in MW. Without it the field
-  is "Production per minute", the factory's output.
+  is "Production per minute", the factory's output. A rate typed or saved below 0.001 gets a soft
+  note under its field (tinyNote, #942); it is still saved.
 -->
 <script lang="ts">
 // Numbers each editor, so the ids of its hints are unique on the page.
@@ -58,6 +59,15 @@ function hint(unit: RateUnit, raw: string): string {
   );
 }
 
+// A soft note under a rate below 0.001 (#942): a share that small of the factory's output counts
+// as rounding dust, so the group's flow, the Logistics page and the build plan may leave the
+// factory out of the group. Such a rate is still saved; it is almost always a typo.
+function tinyNote(unit: RateUnit | undefined, raw: string): string {
+  const rate = raw.trim() === '' ? NaN : Number(raw);
+  if (!(rate > 0 && rate < 0.001)) return '';
+  return `Under 0.001${unit?.name === 'MW' ? ' MW' : '/min'}: so small this group may not count it.`;
+}
+
 const editor = computed(() =>
   legacy(() => {
     const groupsState = factoryGroupsState(),
@@ -68,7 +78,11 @@ const editor = computed(() =>
       any: groupsState.groups.length > 0,
       rows: memberships.map((membership, i) => {
         const name = nameOf(membership),
-          unit = props.unit;
+          unit = props.unit,
+          raw = rates[membership.group] ?? String(membership.rate ?? ''),
+          tiny = tinyNote(unit, raw),
+          hintId = unit ? uid + '-' + i : undefined,
+          tinyId = tiny ? uid + '-tiny-' + i : undefined;
         return {
           group: membership.group,
           name,
@@ -80,8 +94,11 @@ const editor = computed(() =>
               : 'Production per minute') +
             ' in ' +
             (name || 'this group'),
-          hint: unit ? hint(unit, rates[membership.group] ?? String(membership.rate ?? '')) : '',
-          hintId: unit ? uid + '-' + i : undefined,
+          hint: unit ? hint(unit, raw) : '',
+          hintId,
+          tiny,
+          tinyId,
+          describedBy: [hintId, tinyId].filter(Boolean).join(' ') || undefined,
         };
       }),
       avail:
@@ -206,7 +223,7 @@ async function add(event: Event) {
         placeholder="all / rest"
         :value="rates[row.group]"
         :aria-label="row.label"
-        :aria-describedby="row.hintId"
+        :aria-describedby="row.describedBy"
         @input="rates[row.group] = ($event.target as HTMLInputElement).value"
         @change="setRate($event, row.group)"
         @blur="leaveDraft(rates, row.group, $event)"
@@ -218,7 +235,10 @@ async function add(event: Event) {
         @click="unassign($event, row.group)"
       >
         ✕</button
-      ><small v-if="row.hintId" :id="row.hintId" class="assign-unit">{{ row.hint }}</small>
+      ><small v-if="row.hintId" :id="row.hintId" class="assign-unit">{{ row.hint }}</small
+      ><small v-if="row.tinyId" :id="row.tinyId" class="assign-tiny" data-tiny-rate>{{
+        row.tiny
+      }}</small>
     </div>
     <div v-if="editor.avail.length" class="assign-add">
       <select
