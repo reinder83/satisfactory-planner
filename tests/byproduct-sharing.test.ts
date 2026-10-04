@@ -6,11 +6,20 @@
 // between two places (#1028).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupLinks, itemBooks, OUTSIDE, shareOut, sourceOf } from '../public/app/group-links.ts';
+import {
+  groupLinks,
+  itemBooks,
+  linkTransportFor,
+  OUTSIDE,
+  shareOut,
+  sourceOf,
+} from '../public/app/group-links.ts';
+import { transportFuel } from '../public/app/logistics.ts';
+import { initialState, mutate, validateState } from '../public/state.ts';
 import { groupFlow } from '../public/app/group-flow.ts';
 import { UNGROUPED } from '../public/app/group-order.ts';
 import { defaultFactoryGroups } from '../public/state/factory-groups.ts';
-import { calculate } from '../planner.ts';
+import { calculate, settings } from '../planner.ts';
 import type { FactoryGroups, StoredStage } from '../public/types/index.ts';
 
 const places = (entries: [string, number][]) => new Map(entries);
@@ -259,4 +268,93 @@ test('Water in the all-alternates plan, Phase 4, default groups: one way only, a
     [],
     'no Water leaves Aluminum campus on its flow page',
   );
+});
+
+test('a vehicle saved on a link the rule no longer draws stays saved, and counts again once the link is back', () => {
+  // Iron works makes 30 ingots; Parts uses 30 of them in plates. A truck is saved on the link.
+  const chain: StoredStage = {
+    feasible: true,
+    rows: [
+      {
+        id: 'ingot',
+        name: 'Iron Ingot',
+        phase: 1,
+        machine: 'Smelter',
+        power: 4,
+        inputs: { 'Iron Ore': 30 },
+        outputs: { 'Iron Ingot': 30 },
+        equivalent: 1,
+        machines: 1,
+        lastClock: 100,
+        peakMW: 4,
+        generationMW: 0,
+      },
+      {
+        id: 'plate',
+        name: 'Iron Plate',
+        phase: 1,
+        machine: 'Constructor',
+        power: 4,
+        inputs: { 'Iron Ingot': 30 },
+        outputs: { 'Iron Plate': 20 },
+        equivalent: 1,
+        machines: 1,
+        lastClock: 100,
+        peakMW: 4,
+        generationMW: 0,
+      },
+    ],
+    raw: { 'Iron Ore': 30 },
+    delivery: { 'Iron Plate': { target: 100, rate: 20 } },
+  };
+  const truck = { mode: 'truck' as const, roundTripMin: 5, fuel: 'Packaged Fuel' };
+  const apart: FactoryGroups = {
+    groups: [
+      { id: 'fg-iron', name: 'Iron works' },
+      { id: 'fg-parts', name: 'Parts' },
+    ],
+    assignments: {
+      ingot: [{ group: 'fg-iron', rate: null }],
+      plate: [{ group: 'fg-parts', rate: null }],
+    },
+    links: { 'fg-iron:fg-parts': truck },
+  };
+  const none: StoredStage = { feasible: true, rows: [] };
+  const plan = {
+    settings: settings({ phase: '1' }),
+    stages: { '1': chain, '2': none, '3': none, '4': none, '5': none },
+  };
+  const fuelCatalog = {
+    stacks: { 'Iron Ingot': 100 },
+    packaged: {},
+    vehicleFuels: [{ name: 'Packaged Fuel', mj: 750 }],
+  };
+  const fuel = (groups: FactoryGroups) =>
+    transportFuel(plan, groups, fuelCatalog, new Set<string>())['1']?.['Packaged Fuel'] ?? 0;
+  assert.ok(fuel(apart) > 0, 'the truck burns fuel while it has a link');
+  // Both lines move to the iron works: no link, so no fuel, and the saved truck stays.
+  const together: FactoryGroups = {
+    ...apart,
+    assignments: { ...apart.assignments, plate: [{ group: 'fg-iron', rate: null }] },
+  };
+  assert.deepEqual(
+    groupLinks(chain, together).filter(link => link.to === 'fg-parts'),
+    [],
+  );
+  assert.equal(fuel(together), 0);
+  // Another link's choice is saved; the truck's entry is kept as it was.
+  const state = validateState({ ...initialState(), version: 7, factoryGroups: together });
+  const next = mutate(structuredClone(state), {
+    type: 'factoryLinkTransport',
+    from: sourceOf('Iron Ore'),
+    to: 'fg-iron',
+    mode: 'train',
+    roundTripMin: 9,
+  });
+  assert.deepEqual(next.factoryGroups.links?.['fg-iron:fg-parts'], truck);
+  assert.deepEqual(validateState(next).factoryGroups.links?.['fg-iron:fg-parts'], truck);
+  // The link comes back with the plates: so does the truck.
+  const back = { ...next.factoryGroups, assignments: apart.assignments };
+  assert.deepEqual(linkTransportFor(back.links, 'fg-iron', 'fg-parts'), truck);
+  assert.equal(fuel(back), fuel(apart));
 });
