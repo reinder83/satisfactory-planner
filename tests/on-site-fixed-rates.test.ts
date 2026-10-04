@@ -110,9 +110,8 @@ test('a shrinking Iron Plate line no longer leaves PLC3 a Smelter short (#984)',
 
 test("#1043's example: a fixed rate that is only part of its row leaves a central line for the rest", () => {
   // Group A marks Iron Ingot, holds the Iron Plate line and the Iron Rod line at a fixed 255/min;
-  // the rest of the Iron Rod line is B's. On the standard recipes ('custom' with the two MAM
-  // recipes and Pure Aluminum Ingot ticked plans with exactly the standard pool now, and keeps
-  // this case's plans once #1040 makes Pure Aluminum Ingot a hard-drive alternate).
+  // the rest of the Iron Rod line is B's. On the standard recipes as they were before #1040, which
+  // the issue's plans were made with.
   const groups: FactoryGroups = {
     groups: [
       { id: 'fg-alpha', name: 'A' },
@@ -131,12 +130,7 @@ test("#1043's example: a fixed rate that is only part of its row leaves a centra
     phase: '4',
     wholeMachines: true,
     limitsConfirmed: true,
-    recipes: 'custom',
-    alternateRecipes: [
-      'Recipe_Alternate_EnrichedCoal_C',
-      'Recipe_Alternate_Turbofuel_C',
-      'Recipe_PureAluminumIngot_C',
-    ],
+    ...STANDARD_BEFORE_1040,
   } as const;
   const plan = calculate({
     ...start,
@@ -163,8 +157,8 @@ test("#1043's example: a fixed rate that is only part of its row leaves a centra
 // The profiles the random configurations start from: the start phase, whole machines or not,
 // and the storage rate, so the rows' totals differ from configuration to configuration. All on
 // the standard recipes as they were before #1040 (with Pure Aluminum Ingot), so the seeds draw
-// the configurations they always drew: the standard recipes since #1040 draw others, and seed 34
-// then hits #1043 (a group's own line offering its rounding excess), which main has too.
+// the configurations they always drew: the standard recipes since #1040 draw others (seed 34 then
+// drew #1043, whose example is checked above).
 const STARTS = [
   { phase: '2', wholeMachines: true, limitsConfirmed: true },
   { phase: '3', wholeMachines: true, limitsConfirmed: true },

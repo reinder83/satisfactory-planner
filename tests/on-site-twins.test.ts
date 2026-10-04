@@ -180,7 +180,7 @@ test('right after a recalculation, a fixed rate on one twin offers nothing (#904
 // The profiles the random configurations start from, all with amplification on: the start phase,
 // whole machines or not, the storage rate and the somersloops for production. All on the standard
 // recipes as they were before #1040 (with Pure Aluminum Ingot), so the seeds draw the plans they
-// always drew, seed 36 among them (#1037 below).
+// always drew, seed 36 and the settle loop's cases among them (SETTLE_SEEDS below).
 const STARTS = [
   { ...ISSUE },
   { phase: '2', wholeMachines: true, limitsConfirmed: true, somersloops: 106, amplifySloops: 40 },
@@ -349,21 +349,14 @@ test('right after a recalculation with amplification on, each own line matches t
 // #1042's groups (tests/fixtures/on-site-settle-groups-2026-10-04.json): three groups holding rows
 // of a Phase 4 profile with amplification on, many at fixed rates and many twins apart. R1 marks
 // Copper Sheet and holds the Circuit Board line at a fixed 38.1/min, after R0's 6.8. On the
-// standard recipes ('custom' with the two MAM recipes and Pure Aluminum Ingot ticked plans with
-// exactly the standard pool now, and keeps this case's plans once #1040 makes Pure Aluminum Ingot
-// a hard-drive alternate).
+// standard recipes as they were before #1040, which the issue's plans were made with.
 const SETTLE_START = {
   phase: '4',
   wholeMachines: true,
   limitsConfirmed: true,
   somersloops: 106,
   amplifySloops: 80,
-  recipes: 'custom',
-  alternateRecipes: [
-    'Recipe_Alternate_EnrichedCoal_C',
-    'Recipe_Alternate_Turbofuel_C',
-    'Recipe_PureAluminumIngot_C',
-  ],
+  ...STANDARD_BEFORE_1040,
 } as const;
 
 test("#1042's example: the plan kept was settled at its own totals, so R1's line makes its part", () => {
