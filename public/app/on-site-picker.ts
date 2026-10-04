@@ -5,7 +5,7 @@
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
-import { onSiteCopyable, onSitePlannable, onSiteSettings } from './on-site.ts';
+import { onSiteCopyable, onSitePlannable, onSitePlannedItems, onSiteSettings } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { listNames } from '../wording.ts';
 import type {
@@ -166,29 +166,35 @@ const itemsByGroup = (onSite: OnSiteSettings | undefined): Record<string, string
       .sort(([a], [b]) => a.localeCompare(b)),
   );
 
-// The plan's marks against the groups' marks now.
+// The group lines a recalculation would give against the ones the plan has.
 export interface OnSiteChange {
   // settings.onSite for a recalculation with the marks as they are now (onSiteSettings), or
-  // undefined when no group marks an item any plan row of it uses.
+  // undefined when no group would get a line.
   want: OnSiteSettings | undefined;
-  // Each side in words: "Motors makes Screws and Wire on site; Cables makes Wire on site", or ''
-  // for none.
+  // Each side in words, the items of the group lines a recalculation would give (`now`) and the
+  // ones the plan has (`had`): "Motors makes Screws and Wire on site; Cables makes Wire on site",
+  // or '' for none.
   now: string;
   had: string;
+  // Why they differ (#985): `marksChanged` when a group marks an item now that the plan has no
+  // line for and was not calculated with, or no longer marks one it has a line for; `uses`, a
+  // sentence per group whose lines' use of an item it marks changed (lineUseSentences).
+  marksChanged: boolean;
+  uses: string[];
 }
 
-// Whether the items the groups mark now differ from the ones `plan` was calculated with
-// (settings.onSite), and so whether the plan needs a recalculation; null when they are the same.
-// Only the items are compared, not the shares: a recalculation sizes a group's line to its
-// consumers in the plan being recalculated, so the shares worked out from the new plan differ a
-// little from the ones it was made with, and comparing them would ask for a recalculation forever.
-// A group that marks items none of its rows uses gets no line (onSiteSettings leaves it out), so
-// it asks for nothing either.
+// Whether the group lines a recalculation would give now (onSiteSettings, decided per item) differ
+// from the ones `plan` has (onSitePlannedItems), and so whether the plan needs a recalculation;
+// null when they are the same (#938, #970, #985). Only the items are compared, not the shares: a
+// recalculation sizes a group's line to its consumers in the plan being recalculated, so the
+// shares worked out from the new plan differ a little from the ones it was made with, and
+// comparing them would ask for a recalculation forever. A mark no row of the group uses gets no
+// line on either side, so it asks for nothing, however the plan stored it.
 export function onSiteChange(plan: PickerPlan, groups: PickerGroups): OnSiteChange | null {
   const want = onSiteSettings(plan, groups),
     had = plan.settings.onSite;
   const wanted = itemsByGroup(want),
-    planned = itemsByGroup(had);
+    planned = onSitePlannedItems(plan);
   if (JSON.stringify(wanted) === JSON.stringify(planned)) return null;
   const nameOf = (group: string) =>
     groups?.groups?.find(known => known.id === group)?.name ?? had?.[group]?.name ?? group;
@@ -196,7 +202,78 @@ export function onSiteChange(plan: PickerPlan, groups: PickerGroups): OnSiteChan
     Object.entries(marks)
       .map(([group, items]) => `${nameOf(group)} makes ${listNames(items)} on site`)
       .join('; ');
-  return { want, now: words(wanted), had: words(planned) };
+  const causes = changeCauses(plan, groups, wanted, planned);
+  return {
+    want,
+    now: words(wanted),
+    had: words(planned),
+    marksChanged: causes.some(cause => cause.kind === 'marks'),
+    uses: lineUseSentences(causes, nameOf),
+  };
+}
+
+// Why one group's line of one item would come or go in a recalculation: `marks`, the group's
+// marks changed; `unused`, it still marks the item but none of its lines uses it now (a consumer
+// moved out); `used`, its lines now use an item it marked when the plan was calculated, which gave
+// it no line then (a consumer moved in).
+interface ChangeCause {
+  group: string;
+  item: string;
+  kind: 'marks' | 'unused' | 'used';
+}
+
+// The cause of each difference between `wanted` and `planned` (items by group). A line that would
+// go is `unused` while the group still marks its item, else `marks`. A line that would come is
+// `used` when the plan was calculated with the item for the group (settings.onSite), else `marks`.
+function changeCauses(
+  plan: PickerPlan,
+  groups: PickerGroups,
+  wanted: Record<string, string[]>,
+  planned: Record<string, string[]>,
+): ChangeCause[] {
+  const causes: ChangeCause[] = [];
+  const known = new Set((groups?.groups || []).map(group => group.id));
+  for (const group of uniqueSorted([...Object.keys(wanted), ...Object.keys(planned)])) {
+    const want = wanted[group] || [],
+      have = planned[group] || [];
+    const marks = known.has(group) ? groups?.local?.[group] || [] : [];
+    for (const item of have.filter(item => !want.includes(item)))
+      causes.push({ group, item, kind: marks.includes(item) ? 'unused' : 'marks' });
+    const calculatedWith = plan.settings.onSite?.[group]?.items || [];
+    for (const item of want.filter(item => !have.includes(item)))
+      causes.push({ group, item, kind: calculatedWith.includes(item) ? 'used' : 'marks' });
+  }
+  return causes;
+}
+
+// One sentence per group and kind of line-use cause, in group order (#985): "Alpha marks Wire,
+// but none of its lines uses it now; a recalculation would drop Alpha's Wire line" for `unused`,
+// "Alpha's lines now use Wire, which it marks; a recalculation would add Alpha's Wire line" for
+// `used`.
+function lineUseSentences(
+  causes: readonly ChangeCause[],
+  nameOf: (group: string) => string,
+): string[] {
+  const sentences: string[] = [];
+  for (const group of uniqueSorted(causes.map(cause => cause.group))) {
+    const name = nameOf(group),
+      own = name + (name.endsWith('s') ? "'" : "'s");
+    const itemsOf = (kind: ChangeCause['kind']) =>
+      causes.filter(cause => cause.group === group && cause.kind === kind).map(cause => cause.item);
+    const lines = (items: string[]) =>
+      `${own} ${listNames(items)} line${items.length > 1 ? 's' : ''}`;
+    const unused = itemsOf('unused'),
+      used = itemsOf('used');
+    if (unused.length)
+      sentences.push(
+        `${name} marks ${listNames(unused)}, but none of its lines uses ${unused.length > 1 ? 'them' : 'it'} now; a recalculation would drop ${lines(unused)}`,
+      );
+    if (used.length)
+      sentences.push(
+        `${own} lines now use ${listNames(used)}, which it marks; a recalculation would add ${lines(used)}`,
+      );
+  }
+  return sentences;
 }
 
 // The settings of the recalculation `change` asks for: the plan's own, with settings.onSite the
@@ -240,14 +317,15 @@ export function onSiteSummaries(
   stage: StoredStage | undefined,
 ): Record<string, OnSiteSummary> {
   const want = onSiteSettings(plan, groups),
-    had = plan.settings.onSite;
+    had = plan.settings.onSite,
+    planned = onSitePlannedItems(plan);
   const out: Record<string, OnSiteSummary> = {};
   for (const { id } of groups?.groups || []) {
     const lines = siteLineItems(stage, id, had?.[id]?.items);
     const marks: GroupMarks = {
       used: onSiteOffers(plan, groups, id),
       wanted: want?.[id]?.items || [],
-      planned: had?.[id]?.items || [],
+      planned: planned[id] || [],
       dropped: stage?.onSiteDropped?.[id] || [],
     };
     out[id] = {
@@ -266,7 +344,7 @@ export function onSiteSummaries(
 
 // What one group's marks come to: `used`, the items its lines use (the picker's offers),
 // `wanted`, the items a recalculation now would ask for (onSiteSettings), `planned`, the ones the
-// plan was calculated with, and `dropped`, the ones the planner made centrally in the phase shown.
+// plan has a line for (onSitePlannedItems), and `dropped`, the ones the planner made centrally in the phase shown.
 interface GroupMarks {
   used: readonly string[];
   wanted: readonly string[];
@@ -276,12 +354,15 @@ interface GroupMarks {
 
 // Why a group's mark of `item` gives it no line in the phase shown: the picker's notes for a raw
 // resource and for an item none of its lines uses (so a recalculation would give it no line
-// either), "needs a recalculation" when the plan was calculated without it, "made centrally in
-// this phase" when the planner fell back to central lines there, and otherwise "no line in this
-// phase", as when the group uses the item only in other phases.
+// either), the raw resource's note too for an item its lines use that no recipe the planner
+// copies for a group makes (a radioactive item, #933), "needs a recalculation" when the plan has
+// no line for it (#938, #970), "made centrally in this phase" when the planner fell back to
+// central lines there, and otherwise "no line in this phase", as when the group uses the item only
+// in other phases.
 function markNote(item: string, marks: GroupMarks): string {
   if (!onSitePlannable(item)) return RAW_NOTE;
-  if (!marks.used.includes(item) || !marks.wanted.includes(item)) return UNUSED_NOTE;
+  if (!marks.used.includes(item)) return UNUSED_NOTE;
+  if (!marks.wanted.includes(item)) return RAW_NOTE;
   if (!marks.planned.includes(item)) return '(needs a recalculation)';
   if (marks.dropped.includes(item)) return '(made centrally in this phase)';
   return '(no line in this phase)';

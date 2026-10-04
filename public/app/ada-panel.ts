@@ -141,6 +141,14 @@ function onSiteDroppedFacts(
   return { items: listNames(items), groups: listNames(groups) };
 }
 
+// Whether the plan waits for a recalculation of the lines its groups make on site (onSiteChange,
+// #877), and whether that is only because a group's lines no longer use, or now use, an item it
+// marks, with no change to the marks (#985), so ADA words it as the notice does.
+function onSitePendingFacts(): Pick<AdaFacts, 'onSitePending' | 'onSiteLinesOnly'> {
+  const change = calculated ? onSiteChange(calculated, factoryGroupsState()) : null;
+  return { onSitePending: !!change, onSiteLinesOnly: !!change && !change.marksChanged };
+}
+
 // A plan guide's checklists as ticked of all (#470), counted from the same keys the pages tick.
 function guideFacts(): AdaFacts['guide'] {
   const guide = calculated?.guide;
@@ -219,7 +227,7 @@ function adaFacts(): AdaFacts {
     hasPhaseNote: !!state.notes['phase-' + phase()],
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
-    onSitePending: !!calculated && !!onSiteChange(calculated, factoryGroupsState()),
+    ...onSitePendingFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,

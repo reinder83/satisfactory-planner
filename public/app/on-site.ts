@@ -3,6 +3,7 @@
 // plan like settings.transportFuel. Opening the app or updating never recalculates.
 import { LINK_DUST, rowShares, rowTotal } from './group-order.ts';
 import { rawResources } from '../preferences.ts';
+import { milestoneOnlyPhase } from '../progression.ts';
 import { ITEM_NAMES } from '../state.ts';
 import { listNames } from '../wording.ts';
 import type {
@@ -39,49 +40,154 @@ export const onSiteCopyable = (row: Pick<CalcRow, 'name' | 'power' | 'inputs' | 
     [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
   );
 
+// The plan onSiteSettings reads: its stages, and its settings and guide where it has them, which
+// say which phases are milestone-only (milestoneOnlyPhase).
+type OnSitePlan = Pick<StoredCalculatedPlan, 'stages'> &
+  Partial<Pick<StoredCalculatedPlan, 'settings' | 'guide'>>;
+type OnSiteStages = [StageKey, { rows?: CalcRow[] }][];
+type OnSiteShares = OnSiteSettings[string]['shares'];
+type OnSiteGroupsInput =
+  | Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>>
+  | undefined;
+
 // settings.onSite from the factory groups as they are now and `plan`, the plan being
 // recalculated: per group that marks items it makes on site (factoryGroups.local), its name, the
-// items, and per phase the share of each row its memberships give it. A consumer split over
-// several groups is attributed as the factory cards split it (rowShares): measured against that
-// row's total in the same phase of `plan`, fixed rates first, then the null-rate memberships
-// split the rest. A row `plan` lacks in that phase has no total for a fixed rate to be measured
-// against, so only its null-rate memberships count, split evenly. Only rows that use one of the
-// group's items somewhere in `plan` are listed, and a group's own lines (`onSite` rows) are left
-// out: they belong wholly to their group. A marked item the planner cannot make on site (a raw
-// resource such as Water, onSitePlannable) is left out, so the request is always one the planner
-// accepts. Returns undefined when no group marks an item, so the setting stays absent.
+// items a recalculation gives it a line for, and per phase the share of each row its memberships
+// give it. The items are decided per item (#938, #970, #985: onSiteLineItems), so a mark no row of
+// the group uses is left out, as the planner gives it no line, the picker no offer and the
+// heading no line either. A consumer split over several groups is attributed as the factory
+// cards split it (rowShares): measured against that row's total in the same phase of `plan`,
+// fixed rates first, then the null-rate memberships split the rest. A row `plan` lacks in that
+// phase has no total for a fixed rate to be measured against, so only its null-rate memberships
+// count, split evenly. Only rows that use one of the group's items somewhere in `plan` are listed,
+// and a group's own lines (`onSite` rows) are left out: they belong wholly to their group. A
+// marked item the planner cannot make on site (a raw resource such as Water, onSitePlannable) is
+// left out, so the request is always one the planner accepts. Returns undefined when no group
+// has an item, so the setting stays absent.
 export function onSiteSettings(
-  plan: Pick<StoredCalculatedPlan, 'stages'>,
-  groups: Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined,
+  plan: OnSitePlan,
+  groups: OnSiteGroupsInput,
 ): OnSiteSettings | undefined {
   const names = new Map((groups?.groups || []).map(group => [group.id, group.name]));
   const marking = Object.entries(groups?.local || {})
     .map(([group, items]): [string, string[]] => [group, items.filter(onSitePlannable)])
     .filter(([group, items]) => names.has(group) && items.length);
   if (!marking.length) return undefined;
-  const stages = Object.entries(plan.stages) as [StageKey, { rows?: CalcRow[] }][];
+  const stages = Object.entries(plan.stages) as OnSiteStages;
   const inputsOf = onSiteRowInputs(stages);
   const out: OnSiteSettings = {};
-  for (const [group, items] of marking) {
-    const shares: OnSiteSettings[string]['shares'] = {};
-    for (const [phase, stage] of stages) {
-      const phaseShares: Record<string, number> = {};
-      for (const [rowId, list] of Object.entries(groups?.assignments || {})) {
-        const memberships = list.filter(membership => names.has(membership.group));
-        if (!memberships.some(membership => membership.group === group)) continue;
-        if (!items.some(item => inputsOf.get(rowId)?.has(item))) continue;
-        const row = stage.rows?.find(candidate => candidate.id === rowId);
-        if (row?.onSite) continue;
-        const share = onSiteShare(group, memberships, row);
-        if (share > LINK_DUST) phaseShares[rowId] = share;
-      }
-      if (Object.keys(phaseShares).length) shares[phase] = phaseShares;
-    }
+  for (const [group, marks] of marking) {
+    const consumers = onSiteGroupShares(stages, groups, names, group, marks, inputsOf);
+    const items = onSiteLineItems(plan, consumers, marks);
+    const shares = sharesUsing(consumers, items, inputsOf);
     // names holds every marking group (the filter above).
-    if (Object.keys(shares).length)
-      out[group] = { name: names.get(group)!, items: [...items].sort(), shares };
+    if (items.length && Object.keys(shares).length)
+      out[group] = { name: names.get(group)!, items, shares };
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+// Per phase, `group`'s share of each row of its memberships that uses one of `marks` somewhere in
+// the plan, other than its own lines made on site (onSiteShare).
+function onSiteGroupShares(
+  stages: OnSiteStages,
+  groups: OnSiteGroupsInput,
+  names: ReadonlyMap<string, string>,
+  group: string,
+  marks: readonly string[],
+  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
+): OnSiteShares {
+  const shares: OnSiteShares = {};
+  for (const [phase, stage] of stages) {
+    const phaseShares: Record<string, number> = {};
+    for (const [rowId, list] of Object.entries(groups?.assignments || {})) {
+      const memberships = list.filter(membership => names.has(membership.group));
+      if (!memberships.some(membership => membership.group === group)) continue;
+      if (!marks.some(item => inputsOf.get(rowId)?.has(item))) continue;
+      const row = stage.rows?.find(candidate => candidate.id === rowId);
+      if (row?.onSite) continue;
+      const share = onSiteShare(group, memberships, row);
+      if (share > LINK_DUST) phaseShares[rowId] = share;
+    }
+    if (Object.keys(phaseShares).length) shares[phase] = phaseShares;
+  }
+  return shares;
+}
+
+// The items of `marks` a recalculation gives the group its own line for, sorted, decided per item
+// (#938, #970, #985) as the planner's siteCopies decides it from the shares, and as the picker
+// offers them (onSiteOffers, #951, #967): in a phase the plan builds (not a milestone-only phase,
+// #759), an item that a row of `plan` with a share in the group (`shares`) uses, then each marked
+// ingredient of a line of `plan` that makes such an item (Copper Ingot for Wire), down a chain of
+// marked parts. Only an item a line of that phase makes by a recipe the planner copies for a group
+// (onSiteCopyable) counts, so a radioactive item (#933) gets no line.
+function onSiteLineItems(
+  plan: OnSitePlan,
+  shares: OnSiteShares,
+  marks: readonly string[],
+): string[] {
+  const marked = new Set(marks);
+  const items = new Set<string>();
+  for (const [phase, stage] of Object.entries(plan.stages) as OnSiteStages) {
+    if (plan.settings && milestoneOnlyPhase({ settings: plan.settings, guide: plan.guide }, phase))
+      continue;
+    const rows = stage?.rows || [];
+    const makers = rows.filter(onSiteCopyable);
+    const makersOf = (item: string) => makers.filter(row => Object.hasOwn(row.outputs || {}, item));
+    const lined = (item: string) => marked.has(item) && makersOf(item).length > 0;
+    const found = [
+      ...new Set(
+        rows
+          .filter(row => (shares[phase]?.[row.id] ?? 0) > 0)
+          .flatMap(row => Object.keys(row.inputs || {}))
+          .filter(lined),
+      ),
+    ];
+    // `found` grows as marked ingredients turn up; each is followed once (i stays within it).
+    for (let i = 0; i < found.length; i++)
+      for (const row of makersOf(found[i]!))
+        for (const item of Object.keys(row.inputs || {}))
+          if (lined(item) && !found.includes(item)) found.push(item);
+    for (const item of found) items.add(item);
+  }
+  return [...items].sort();
+}
+
+// The items of the group lines `plan` has, as sorted lists by group id (#938, #970, #985): per
+// group of the plan's settings.onSite, its items that the same per-item rule gives a line for
+// from the shares it was calculated with (onSiteLineItems), so both sides of onSiteChange are
+// counted alike and the plan's own solve never makes it ask again. An item stored without a row
+// of the group using it (an earlier release stored every mark of a group with any consumer) is no
+// line, so such a plan matches the marks now without a recalculation, and so is a radioactive
+// item (#933), for which the planner made none.
+export function onSitePlannedItems(
+  plan: OnSitePlan & Pick<StoredCalculatedPlan, 'settings'>,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    Object.entries(plan.settings.onSite || {})
+      .map(([group, entry]): [string, string[]] => [
+        group,
+        onSiteLineItems(plan, entry.shares || {}, (entry.items || []).filter(onSitePlannable)),
+      ])
+      .filter(([, items]) => items.length)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+// `shares` with only the rows that use one of `items` somewhere in the plan.
+function sharesUsing(
+  shares: OnSiteShares,
+  items: readonly string[],
+  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
+): OnSiteShares {
+  const out: OnSiteShares = {};
+  for (const [phase, rows] of Object.entries(shares) as [StageKey, Record<string, number>][]) {
+    const kept = Object.entries(rows).filter(([rowId]) =>
+      items.some(item => inputsOf.get(rowId)?.has(item)),
+    );
+    if (kept.length) out[phase] = Object.fromEntries(kept);
+  }
+  return out;
 }
 
 // The items each row id uses in any phase of the plan.
