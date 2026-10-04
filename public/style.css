@@ -1862,6 +1862,15 @@ p.eyebrow {
 .build-status .notice {
   margin-top: 12px;
 }
+/* The build plan's side column (CalculatedPlanPage.vue): "Profile assumptions" can name a factory
+   group ("Factory groups make items on site: <group> makes …"), and the build-so-far panel a
+   factory ("Wire for <group>"). A group's name is one word of up to 80 characters (`label()` in
+   public/state/validate.ts): it breaks inside the text rather than widening the column, and on a
+   phone the whole plan, past the window (#996). */
+.split > aside .panel p,
+.split > aside .panel li {
+  overflow-wrap: anywhere;
+}
 /* Hard-drive payoff (ui/plan/PayoffPanel.vue): a sortable table of alternate recipes. */
 .payoff .section-head {
   align-items: center;
@@ -3140,6 +3149,12 @@ button.rail-tile:hover {
   /* At least 90px; a long fluid rate widens every row's rate column rather than wrap (#364). */
   min-width: 90px;
 }
+/* The notes under "Delivers" (FlowDiagram.vue: "Demand of <group>'s lines, …") can name a group,
+   one word of up to 80 characters: it breaks inside the note rather than making the dialog scroll
+   sideways on a phone (#988). */
+.rail-rows ~ p {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 640px) {
   .rail-recipe-body {
     grid-template-columns: 1fr;
@@ -3352,11 +3367,15 @@ button.rail-tile:hover {
 .gf-card.hot {
   border-color: var(--accent);
 }
+/* A port's heading names the other place, which can be a group's long name: one word of up to 80
+   characters (`label()` in public/state/validate.ts) breaks inside the box rather than running
+   past it and the page on a phone (#997). */
 .gf-port h3,
 .gf-port h4 {
   margin: 0 0 4px;
   font-size: 12px;
   color: var(--bright);
+  overflow-wrap: anywhere;
 }
 .gf-port h4 {
   margin-top: 8px;
@@ -3486,6 +3505,16 @@ button.rail-tile:hover {
 .gf-text caption {
   text-align: left;
   padding: 6px 14px;
+}
+/* The table's cells naming a line ("01 Wire for <group>") or a place (another group) that hold a
+   word over 20 characters (hasLongWord in FlowTable.vue), which only a group's long name has: it
+   breaks inside the cell rather than widening the table past its wrapper (#988). Only these cells
+   break, and each keeps room for an ordinary word ("Electronics"), so on a phone the table scrolls
+   inside its wrapper rather than splitting short words letter by letter. A table of ordinary names
+   has no such cell and is laid out as before. */
+.gf-text td.gf-cell-name {
+  min-width: 14ch;
+  overflow-wrap: anywhere;
 }
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
    with the underline moved onto the text so it stays under the words in the taller box (#886).
