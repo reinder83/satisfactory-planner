@@ -6,7 +6,7 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
-import { listNames } from './wording.ts';
+import { listNames, powerAmount } from './wording.ts';
 
 // A generated guidance step: its checklist key, title and text.
 export interface GuideTask {
@@ -54,8 +54,8 @@ export interface GuideContext {
   funding: (entry: ProgressionEntry) => string;
 }
 
-// The power unlocks the user has ticked; the power advice follows these, not the phase's
-// target generation.
+// The power unlocks the user has ticked. Without spare existing power in the settings the power
+// advice follows these, never advising a source below the one the phase plans (#1048).
 interface UnlockedPower {
   coal: boolean;
   petroleum: boolean;
@@ -338,7 +338,10 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   // "Build N Alien Power Augmenters" step (endgameTasks) asks for it (#810). Fueled augmenters'
   // Alien Power Matrix node comes in through the fuel row's recipe above.
   if (stage === 5 && (plan.settings.augmenters ?? 0) > 0) add(byName(AUGMENTER_RESEARCH));
-  if (rows.some(r => r.machine === 'Fuel Generator')) add(byName('Petroleum Power'));
+  // Petroleum Power from its own phase on, as Coal Power from Phase 2, whether or not this plan
+  // builds Fuel Generators (#1048): a player who already runs fuel power ticks it, and "Power
+  // available now" then stops advising coal.
+  if (stage >= 3) add(byName('Petroleum Power'));
   if (rows.some(r => r.machine === 'Nuclear Power Plant')) add(byName('Nuclear Power'));
   // Useful early research is reachable through Field Research; its dataset tier is not a HUB gate.
   for (const name of ['Blue Power Slugs', 'Overclock Production']) add(byName(name));
@@ -513,7 +516,7 @@ function earlierAlternates({ plan, stage, stageOf }: GuideContext): Set<string> 
 export function powerTasks(context: GuideContext): GuideTask[] {
   const power = unlockedPower(context);
   return [
-    powerReviewTask(context.stage, power),
+    powerReviewTask(context, power),
     ...biomassStartupTasks(context, power),
     ...generationTasks(context, power),
     ...endgameTasks(context),
@@ -535,34 +538,248 @@ function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
   };
 }
 
-function powerReviewTask(
-  stage: number,
-  { coal, petroleum, nuclear, solid }: UnlockedPower,
-): GuideTask {
-  const powerNow =
-    nuclear && stage >= 4
-      ? 'Nuclear power is marked unlocked. Commission all waste processing before loading fuel rods.'
-      : petroleum && stage >= 3
-        ? 'Fuel generators are marked unlocked. Use only the fuel recipes you have researched and connect their byproduct handling.'
-        : coal && stage >= 2
-          ? 'Coal Power is marked unlocked. Build coal extraction, water and generators, then verify sustained output.'
-          : solid
-            ? 'Use belt-fed Biomass Burners with Solid Biofuel; keep gathering leaves and wood.'
-            : 'Use HUB/built Biomass Burners with gathered fuel or Biomass. Unlock Obstacle Clearing for Solid Biofuel.';
+// "Power available now", the first step of every phase from 2 on (phaseSteps puts the power steps
+// first; its place and key stay). With spare existing power in the settings it builds on that
+// figure from Phase 2 on, where the plan's power is balanced against it: what the phase needs
+// beyond it and the generation the plan builds for it, or that it covers the phase (#1048).
+// Without, and in Phase 1's biomass start, it follows the ticked power unlocks, as it always has.
+function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideTask {
+  const figures = phasePower(context);
   return {
-    id: 'startup-' + stage + '-power-review',
+    id: 'startup-' + context.stage + '-power-review',
     title: 'Power available now',
     body:
-      powerNow +
-      ' Full-phase generation shown in the calculator is a future target, not power already unlocked. Tick the relevant HUB/MAM unlocks to update this advice.',
+      figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
+        ? existingPowerText(context, figures, unlocked)
+        : unlockText(context, figures, unlocked),
   };
+}
+
+// A phase's power as the planner solved it (planner/stage.ts), in MW: what it needs (its
+// whole-machine peak with the utility allowance, requiredMW), the spare existing power the
+// settings enter (availablePowerGW, as the Resources page's bar shows it), what Phase 5's Alien
+// Power Augmenters add to it (their 500 MW each and their boost on installed generation), the
+// new generation its generator lines build with the augmenters' boost, and what is left once the
+// need is met (availableMW less requiredMW; negative when short). These split availableMW the way
+// stageSupply in app/build-status.ts does, so the text matches the plan as solved (#1050 review).
+// The generator lines come highest source first (SOURCE_ORDER).
+interface PhasePowerFigures {
+  requiredMW: number;
+  existingMW: number;
+  augmenters: number;
+  augmenterMW: number;
+  newMW: number;
+  leftMW: number;
+  generators: CalcRow[];
+  // Phase 5 under 'recycle': the uranium plants come in multiples of the waste chain's period
+  // (nuclearPeriod, #370), so every waste line runs whole; 0 otherwise.
+  period: number;
+}
+
+function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFigures {
+  const planned = stageOf(stage),
+    existingMW = (plan.settings.availablePowerGW || 0) * 1000,
+    requiredMW = planned?.requiredMW || 0,
+    newMW = (planned?.generationMW || 0) * (1 + (planned?.boost || 0)),
+    augmenters = planned?.augmenters || 0;
+  const availableMW = planned?.availableMW ?? newMW + existingMW;
+  const rank = (row: CalcRow) => SOURCE_ORDER.indexOf(generatorSource(row));
+  return {
+    requiredMW,
+    existingMW,
+    augmenters,
+    augmenterMW: augmenters > 0 ? Math.max(0, availableMW - newMW - existingMW) : 0,
+    newMW,
+    leftMW: availableMW - requiredMW,
+    period: planned?.nuclearPeriod ?? 0,
+    generators: rows.filter(isGenerator).sort((first, second) => rank(first) - rank(second)),
+  };
+}
+
+// Power sources from the highest tier down, as generatorSource names them, and the HUB unlock
+// each needs. The unlocks are in tier order too (POWER_UNLOCKS), so a source ranks by its unlock.
+const SOURCE_ORDER = ['nuclear', 'rocket fuel', 'turbofuel', 'fuel', 'coal'];
+const POWER_UNLOCKS = ['Coal Power', 'Petroleum Power', 'Nuclear Power'] as const;
+const SOURCE_UNLOCK: Record<string, (typeof POWER_UNLOCKS)[number]> = {
+  coal: 'Coal Power',
+  fuel: 'Petroleum Power',
+  turbofuel: 'Petroleum Power',
+  'rocket fuel': 'Petroleum Power',
+  nuclear: 'Nuclear Power',
+};
+// A power unlock's tier: 1 for Coal Power up to 3 for Nuclear Power, 0 for none.
+const unlockTier = (name: string | undefined): number =>
+  POWER_UNLOCKS.indexOf(name as (typeof POWER_UNLOCKS)[number]) + 1;
+
+// The highest power unlock ticked that this phase can use (Coal Power from Phase 2, Petroleum
+// Power from 3, Nuclear Power from 4), as a tier; 0 for biomass only.
+const tickedTier = (stage: number, { coal, petroleum, nuclear }: UnlockedPower): number =>
+  nuclear && stage >= 4 ? 3 : petroleum && stage >= 3 ? 2 : coal && stage >= 2 ? 1 : 0;
+
+// The power sources of the phase's generator lines, highest first ("nuclear", "turbofuel").
+const plannedSources = (generators: CalcRow[]): string[] => [
+  ...new Set(generators.map(generatorSource)),
+];
+
+// The unlocks the planned sources need that are not ticked yet, in tier order.
+const missingUnlocks = (generators: CalcRow[], { coal, petroleum, nuclear }: UnlockedPower) => {
+  const ticked: Record<string, boolean> = {
+    'Coal Power': coal,
+    'Petroleum Power': petroleum,
+    'Nuclear Power': nuclear,
+  };
+  return POWER_UNLOCKS.filter(
+    name =>
+      !ticked[name] && plannedSources(generators).some(source => SOURCE_UNLOCK[source] === name),
+  );
+};
+
+// The text with spare existing power (#1048). It never names a source below the plan's.
+function existingPowerText(
+  { plan }: GuideContext,
+  figures: PhasePowerFigures,
+  unlocked: UnlockedPower,
+): string {
+  const { requiredMW, existingMW, augmenters, augmenterMW, generators } = figures;
+  // What the phase has before any new generation: the spare power, and what the augmenters add.
+  const haveMW = existingMW + augmenterMW;
+  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
+  const have =
+    augmenterMW <= 0.01
+      ? `You have ${powerAmount(existingMW)} of spare power available`
+      : existingMW <= 0.01
+        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
+        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
+  const allowance = `with the ${plan.settings.utilityPercent ?? 20}% utility allowance`;
+  const unlock = missingUnlocks(generators, unlocked);
+  const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
+  const check =
+    ' Before connecting the next factory, check the actual load against what your grid supplies.';
+  if (requiredMW - haveMW <= 0.01)
+    return (
+      `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)} (${allowance}): ` +
+      (generators.length
+        ? `nothing needs building for that. The plan still builds ${newGeneration(plan, figures, true)}.${unlockFirst}`
+        : 'nothing needs building for power in this phase.') +
+      check
+    );
+  const more = `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more (${powerAmount(requiredMW)} in all, ${allowance})`;
+  if (!generators.length)
+    return `${more}, and its plan builds no generators for it: see the power headroom on the Resources page.${check}`;
+  return `${more}: build ${newGeneration(plan, figures, false)}.${unlockFirst}${check}`;
+}
+
+// The generation the phase's lines add, highest source first, with what is left over once the
+// phase's need is met and why: "its nuclear power, 13 × Uranium power (Nuclear Power Plant), which
+// provides 32.5 GW, 643.9 MW spare from building whole plants". Where the spare power already
+// covers the phase (`covered`), all of it is left over: "which adds 2.5 GW because …".
+function newGeneration(
+  plan: GuideContext['plan'],
+  figures: PhasePowerFigures,
+  covered: boolean,
+): string {
+  const { newMW, leftMW, generators } = figures;
+  const lines = generators.map(
+    row => `${formatNumber(row.machines)} × ${row.name} (${row.machine})`,
+  );
+  const named = `its ${listNames(plannedSources(generators))} power, ${listNames(lines)}`;
+  if (covered)
+    return `${named}, which adds ${powerAmount(newMW)}${spareCause(plan, figures, newMW)}`;
+  const left =
+    leftMW > 0.01
+      ? `, ${powerAmount(leftMW)} spare${spareCause(plan, figures, leftMW)}`
+      : leftMW < -0.01
+        ? `, ${powerAmount(-leftMW)} short of the need: see the power headroom on the Resources page`
+        : '';
+  return `${named}, which provides ${powerAmount(newMW)}${left}`;
+}
+
+// Why the generator lines give more than the phase needs, where the plan shows it: the profile's
+// minimum of uranium reactors (settings.uraniumReactors, which the planner builds whatever the
+// need), else the waste chain's period in Phase 5 (the spare less than one block of plants), else
+// whole machines rounded up (every generator line whole, and the spare less than one machine of
+// the largest). Otherwise no reason is given.
+function spareCause(
+  plan: GuideContext['plan'],
+  { generators, period }: PhasePowerFigures,
+  leftMW: number,
+): string {
+  const minimum = plan.settings.uraniumReactors ?? 1;
+  const uranium = generators.find(row => row.id === 'power-uranium');
+  const perMachine = (row: CalcRow) => row.generationMW / Math.max(1, row.machines);
+  if (uranium && uranium.machines <= minimum && leftMW >= perMachine(uranium) - 0.01)
+    return ` because this profile's minimum is ${formatNumber(minimum)} uranium reactor${minimum === 1 ? '' : 's'}`;
+  // One block: the period's uranium plants with the plutonium and ficsonium plants they feed.
+  const nuclearMW = generators
+    .filter(row => row.machine === 'Nuclear Power Plant')
+    .reduce((total, row) => total + row.generationMW, 0);
+  if (uranium && period > 1 && leftMW < (nuclearMW * period) / Math.max(1, uranium.machines))
+    return ` from building the uranium plants in multiples of ${formatNumber(period)}, so every line of the waste chain runs whole`;
+  const whole = generators.every(row => Math.abs(row.machines - (row.equivalent ?? 0)) < 1e-6);
+  if (whole && leftMW < Math.max(...generators.map(perMachine)))
+    return generators.every(row => row.machine === 'Nuclear Power Plant')
+      ? ' from building whole plants'
+      : ' from building whole generators';
+  return '';
+}
+
+// The text without spare existing power: by the power unlocks ticked, as before #1048, except that
+// a phase planning a higher source than the one ticked says so instead of advising the lower one.
+function unlockText(
+  { stage }: GuideContext,
+  { generators }: PhasePowerFigures,
+  unlocked: UnlockedPower,
+): string {
+  const ticked = tickedTier(stage, unlocked);
+  const higher = generators.filter(row => unlockTier(SOURCE_UNLOCK[generatorSource(row)]) > ticked);
+  const missing = missingUnlocks(higher, unlocked);
+  // The higher source the plan builds, and the unlocks it still needs.
+  const plans = missing.length
+    ? `this phase's plan generates with ${listNames(plannedSources(higher))} power: unlock ${listNames(missing)} before building it`
+    : '';
+  const powerNow =
+    ticked === 3
+      ? 'Nuclear power is marked unlocked. Commission all waste processing before loading fuel rods.'
+      : ticked === 2
+        ? plans
+          ? `Fuel generators are marked unlocked, but ${plans}, and keep your fuel generators running until then.`
+          : 'Fuel generators are marked unlocked. Use only the fuel recipes you have researched and connect their byproduct handling.'
+        : ticked === 1
+          ? plans
+            ? `Coal Power is marked unlocked, but ${plans}, and keep your coal generators running until then.`
+            : 'Coal Power is marked unlocked. Build coal extraction, water and generators, then verify sustained output.'
+          : // Biomass bridges to the first unlock, which "Unlock Coal Power" and the fuel and
+            // nuclear steps ask for (generationTasks).
+            unlocked.solid
+            ? 'Use belt-fed Biomass Burners with Solid Biofuel; keep gathering leaves and wood.'
+            : 'Use HUB/built Biomass Burners with gathered fuel or Biomass. Unlock Obstacle Clearing for Solid Biofuel.';
+  return (
+    powerNow +
+    ' Full-phase generation shown in the calculator is a future target, not power already unlocked. Tick the relevant HUB/MAM unlocks to update this advice.'
+  );
 }
 
 // The phase a calculated plan starts building in: its settings' phase. The phases before it are
 // milestone-only (#759) and list no power steps.
 const startPhase = ({ plan }: GuideContext): number => Number(plan.settings.phase || 1);
 
-// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet. Gathering
+// Whether the settings enter spare existing power (availablePowerGW above 0).
+const hasSparePower = ({ plan }: GuideContext): boolean =>
+  (plan.settings.availablePowerGW || 0) > 0;
+
+// Whether the "Unlock Coal Power" step applies (#1048): Coal Power is not ticked, and either this
+// phase builds coal generators or coal is the next step up for the player, who has ticked no
+// higher power unlock and entered no spare existing power. Otherwise it would advise a source
+// below the one the player runs or the phase plans.
+function coalUnlockNeeded(context: GuideContext, { coal, petroleum, nuclear }: UnlockedPower) {
+  if (coal) return false;
+  if (context.rows.some(row => isGenerator(row) && generatorSource(row) === 'coal')) return true;
+  return !petroleum && !nuclear && !hasSparePower(context);
+}
+
+// Biomass start-up guidance: Phase 1, or any phase with no power unlock ticked yet and no spare
+// existing power in the settings (#1048: a player with spare power already runs more than biomass,
+// and "Power available now" builds on that figure instead). Gathering
 // Biomass and automating Solid Biofuel are done once in the game, so those two steps are listed
 // once, in the first planned phase that lists the start-up, which is always the start phase
 // (#872), as each milestone (#758) and alternate unlock (#870) is listed once: repeated in every
@@ -575,7 +792,7 @@ function biomassStartupTasks(
   { coal, petroleum, nuclear }: UnlockedPower,
 ): GuideTask[] {
   const { plan, stage, stageOf } = context;
-  if (!(stage === 1 || (!coal && !petroleum && !nuclear))) return [];
+  if (!(stage === 1 || (!coal && !petroleum && !nuclear && !hasSparePower(context)))) return [];
   const first = stage === startPhase(context);
   const need = Math.max(
       0,
@@ -610,10 +827,10 @@ function biomassStartupTasks(
 // water recycling and nuclear. "Unlock Coal Power" is one unlock, so it is listed once, in the
 // first planned phase from Phase 2 on (#872, as the biomass start-up above), and post-game with it
 // for a profile made for Phase 5.
-function generationTasks(context: GuideContext, { coal }: UnlockedPower): GuideTask[] {
+function generationTasks(context: GuideContext, unlocked: UnlockedPower): GuideTask[] {
   const { stage, rows } = context;
   const tasks: GuideTask[] = [];
-  if (stage === Math.max(2, startPhase(context)) && !coal)
+  if (stage === Math.max(2, startPhase(context)) && coalUnlockNeeded(context, unlocked))
     tasks.push({
       id: 'startup-coal-unlock',
       title: 'Unlock Coal Power before switching to coal',

@@ -13,6 +13,11 @@ export const listNames = (names: readonly string[]): string =>
 const count = (value: number) =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
+// A power figure as the pages show it: MW, or GW above 1,000 MW ("643.9 MW", "44.43 GW"). The
+// pages' power() (public/app/wizard/fields.ts) and the build plan's power step (#1048) use it.
+export const powerAmount = (mw: number): string =>
+  mw > 1000 ? count(mw / 1000) + ' GW' : count(mw) + ' MW';
+
 // A wait of `minutes` as a plain duration (#624): "less than a minute", "1 minute", "52 minutes",
 // then hours and whole minutes from an hour on ("about 7 h 52 min", "about 8 h").
 export function duration(minutes: number): string {
