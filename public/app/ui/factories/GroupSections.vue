@@ -7,14 +7,22 @@
   page (#factories/<group>/flow, GroupFlowPage.vue, #895). It is a link, not a button: it goes to
   another page, so it can open in a new tab and the address can be shared. Each group can be
   folded (CollapseToggle.vue, SP-17): its header stays, its cards go. Unfolded, a group shows its
-  "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise the
-  items it makes on site. The section's id
+  "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
+  the open plan makes on site for it in this phase, its own lines, then the items it marks that give
+  it no line, each with why, the ones that share a reason under one note (onSiteSummaries and
+  onSiteEntriesText in app/on-site-picker.ts, #931, #955). The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
 import { computed } from 'vue';
 import { save } from '../../api.ts';
-import { factoryEditing, flowRoute, sectionCollapsed } from '../../session.ts';
+import {
+  calcStage,
+  calculated,
+  factoryEditing,
+  flowRoute,
+  sectionCollapsed,
+} from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState, membershipsOf } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
@@ -24,26 +32,33 @@ import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
 import OnSitePicker from './OnSitePicker.vue';
-import { listNames } from '../../../wording.ts';
+import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
 
 // The factories to sort into groups (calculated rows), and the key
 // their memberships are saved under.
 const props = defineProps<{ items: T[]; keyOf: (item: T) => string }>();
 
 const sections = computed(() =>
-  legacy(() =>
-    factoryGroupsState()
-      .groups.map(group => ({
+  legacy(() => {
+    const groups = factoryGroupsState();
+    // Only drawn outside edit mode, where the picker is not.
+    const onSite =
+      calculated && !factoryEditing ? onSiteSummaries(calculated, groups, calcStage()) : {};
+    return groups.groups
+      .map(group => ({
         ...group,
         members: props.items.filter(item =>
           membershipsOf(props.keyOf(item)).some(m => m.group === group.id),
         ),
         collapsed: sectionCollapsed(group.id),
-        // The items it makes on site (#877), listed under its heading.
-        local: listNames(factoryGroupsState().local?.[group.id] || []),
+        // What it makes on site (#877) and the marks that give it no line (#931), under its heading,
+        // the items that share a note under it once (#955): "Iron Rod and Steel Pipe (needs a
+        // recalculation); Water (can't be made on site)".
+        made: onSiteEntriesText(onSite[group.id]?.made || []),
+        marked: onSiteEntriesText(onSite[group.id]?.marked || []),
       }))
-      .filter(section => section.members.length || factoryEditing),
-  ),
+      .filter(section => section.members.length || factoryEditing);
+  }),
 );
 const editing = computed(() => legacy(() => factoryEditing));
 
@@ -144,8 +159,15 @@ async function remove(event: Event, id: string) {
     </header>
     <template v-if="!section.collapsed">
       <OnSitePicker v-if="editing" :group-id="section.id" :group-name="section.name" />
-      <p v-else-if="section.local" class="small muted on-site-summary" data-on-site-items>
-        Made on site: {{ section.local }}
+      <p
+        v-else-if="section.made || section.marked"
+        class="small muted on-site-summary"
+        data-on-site-items
+      >
+        <span v-if="section.made" data-on-site-made>Made on site: {{ section.made }}</span>
+        <span v-if="section.marked" data-on-site-marked
+          >Marked, not made on site: {{ section.marked }}</span
+        >
       </p>
     </template>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">

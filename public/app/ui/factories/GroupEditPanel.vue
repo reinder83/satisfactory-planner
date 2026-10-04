@@ -39,9 +39,9 @@ async function add(event: Event) {
     </form>
     <p class="small muted">
       Group production into the physical sites of your world. A factory can join several groups with
-      a production split — for example Wire: 300/min at the cable factory and the remainder beside
-      stitched plates. Leave the rate empty for the whole output or the remainder. Removing a group
-      keeps every factory and its progress.
+      a production split — for example Wire: 300/min at the cable factory and the rest beside
+      stitched plates. Leave the rate empty for the whole output or the rest. Removing a group keeps
+      every factory and its progress.
     </p>
   </section>
 </template>

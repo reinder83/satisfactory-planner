@@ -127,7 +127,7 @@ test('the cards follow the build order, inputs before outputs, belts under the r
 
 test('the key lists one colour and dash per item that rides a lane, in lane order', async () => {
   await show('fg-iron01');
-  const styles = laneStyles(flowOf().lanes);
+  const styles = laneStyles(flowOf());
   assert.ok(styles.size > 6, 'the iron group needs dashes too');
   const items = $$('[data-gf-key] .gf-key-item').map(item => item.textContent?.trim());
   assert.deepEqual(items, [...styles.keys()]);

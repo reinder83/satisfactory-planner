@@ -405,6 +405,16 @@ export function groupFlow(
   };
 }
 
+// Each row's place down the one-column cards, from 0: each card's input rows, then its output
+// rows. A lane's trunk spans the places of its output row and of the input rows it feeds, so two
+// lanes overlap on the page exactly where their spans of places do.
+export function rowSlots(lines: readonly FlowLine[]): Map<string, number> {
+  const slot = new Map<string, number>();
+  for (const line of lines)
+    for (const row of [...line.inputs, ...line.outputs]) slot.set(row.id, slot.size);
+  return slot;
+}
+
 // The lanes of a group's links (#883 round 3). Every output row with a link to another line of
 // the group gets one lane (a line's self link, #898, rides none), a trunk spanning from that row to the furthest input row it feeds,
 // counted in rows down the one-column cards (each card's input rows, then its output rows).
@@ -412,9 +422,7 @@ export function groupFlow(
 // so a group needs as few lanes as its overlapping trunks. Deterministic: ties go by span, then
 // the higher trunk, then the earlier output row. Lanes are returned in the output rows' order.
 export function assignLanes(lines: readonly FlowLine[]): FlowLane[] {
-  const slot = new Map<string, number>();
-  for (const line of lines)
-    for (const row of [...line.inputs, ...line.outputs]) slot.set(row.id, slot.size);
+  const slot = rowSlots(lines);
   const trunks = lines.flatMap(line =>
     line.outputs.flatMap(row => {
       const links = row.links.filter(link => link.to.kind === 'line' && !link.self);

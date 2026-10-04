@@ -3,7 +3,7 @@
 // model says what moves where and which lane each output row's links ride; this module says how
 // the page names a link's ends, which colour and dash each item's lanes take, and, once the page
 // has measured where its rows sit, the paths it draws.
-import { laneOffset } from '../group-flow.ts';
+import { laneOffset, rowSlots } from '../group-flow.ts';
 import type {
   FlowLane,
   FlowLine,
@@ -26,33 +26,205 @@ export const isSelfLink = (link: FlowLink): boolean =>
 export const isLaneLink = (link: FlowLink) =>
   link.from.kind === 'line' && link.to.kind === 'line' && !isSelfLink(link);
 
-// The lane colours and dashes, from the :root tokens: one per item carried inside the group, in
-// the order its lane first appears. Lanes must not differ by colour alone (#909, WCAG 1.4.1), so
-// the dash turns with the colour from the first item on: two items in a row never share a dash,
-// and the first 18 items (6 colours × 3 dashes) never share both. The warm hues (--accent, --red,
-// --gold) take every other place and three different dashes, so among the first six close hues
-// are never neighbours and never share a pattern.
-const LANE_COLOURS = ['--accent', '--blue', '--red', '--green', '--gold', '--ink'];
+// The lane colours and dashes, from the :root tokens: one style per item carried inside the
+// group, listed in the key in the order its lane first appears. Lanes must not differ by colour
+// alone (#909, WCAG 1.4.1), and red-green colour blindness turns --accent, --red, --gold and
+// --green into one run of yellows and olives (#920; Chrome's protanopia emulation makes --green
+// and --gold nearly one colour in the dark theme): those four are one hue family, told apart
+// only by the dash. --blue and --ink are a family each.
+const LANE_COLOURS = ['--accent', '--blue', '--red', '--green', '--gold', '--ink'] as const;
+type LaneColour = (typeof LANE_COLOURS)[number];
+const RED_GREEN = new Set<LaneColour>(['--accent', '--red', '--green', '--gold']);
+const familyOf = (colour: LaneColour): string => (RED_GREEN.has(colour) ? 'red-green' : colour);
 const LANE_DASHES = ['', '7 4', '2 3'];
 export interface LaneStyle {
   color: string;
   dash: string;
 }
-// The n-th item's style, from 0. The dash moves on one place per item and, after each round of
-// the colours, one place further, so the next round pairs every colour with another dash.
-export function laneStyleAt(n: number): LaneStyle {
-  const round = Math.floor(n / LANE_COLOURS.length);
-  return {
-    color: `var(${LANE_COLOURS[n % LANE_COLOURS.length]})`,
-    // The modulo keeps the index inside the list.
-    dash: LANE_DASHES[(n + round) % LANE_DASHES.length]!,
-  };
+
+// The n-th item's preferred colour and dash, from 0 (#909): the colours in turn, and a dash that
+// moves on one place per item and, after each round of the colours, one place further, so that
+// in this order neighbouring items differ in dash and the first 18 never share both.
+const preferredColour = (n: number) => n % LANE_COLOURS.length;
+const preferredDash = (n: number) => (n + Math.floor(n / LANE_COLOURS.length)) % LANE_DASHES.length;
+// The modulos keep both indexes inside their lists.
+const styleOf = (colour: number, dash: number): LaneStyle => ({
+  color: `var(${LANE_COLOURS[colour]!})`,
+  dash: LANE_DASHES[dash]!,
+});
+export const laneStyleAt = (n: number): LaneStyle => styleOf(preferredColour(n), preferredDash(n));
+
+// Which items' lanes run alongside which on the page. `beside`: a lane in the next gutter column
+// whose rows overlap; `overlapping`: a lane whose rows overlap, in any column. An item is never
+// its own neighbour. A lane whose rows are not in the flow's lines has no neighbours.
+export interface LaneNeighbours {
+  beside: Map<string, Set<string>>;
+  overlapping: Map<string, Set<string>>;
 }
-export function laneStyles(lanes: readonly FlowLane[]): Map<string, LaneStyle> {
-  const styles = new Map<string, LaneStyle>();
-  for (const lane of lanes)
-    if (!styles.has(lane.item)) styles.set(lane.item, laneStyleAt(styles.size));
-  return styles;
+export type LaneFlow = Pick<GroupFlow, 'lines' | 'lanes'>;
+export function laneNeighbours(flow: LaneFlow): LaneNeighbours {
+  const slot = rowSlots(flow.lines);
+  const spans = flow.lanes.flatMap(lane => {
+    const ends = [lane.from, ...lane.to].flatMap(id => slot.get(id) ?? []);
+    return ends.length ? [{ ...lane, lo: Math.min(...ends), hi: Math.max(...ends) }] : [];
+  });
+  const neighbours: LaneNeighbours = { beside: new Map(), overlapping: new Map() };
+  const link = (kind: Map<string, Set<string>>, a: string, b: string) => {
+    kind.set(a, (kind.get(a) ?? new Set()).add(b));
+    kind.set(b, (kind.get(b) ?? new Set()).add(a));
+  };
+  for (const [i, a] of spans.entries())
+    for (const b of spans.slice(i + 1)) {
+      if (a.item === b.item || a.hi < b.lo || b.hi < a.lo) continue;
+      link(neighbours.overlapping, a.item, b.item);
+      if (Math.abs(a.lane - b.lane) === 1) link(neighbours.beside, a.item, b.item);
+    }
+  return neighbours;
+}
+
+// Each item's style (#920), the same for the same lanes. First a dash per item such that items
+// whose lanes run beside each other never share one, whenever some choice of dashes allows that:
+// always when every item rides one lane, as lanes beside each other then lie in an even and an
+// odd column. Then a colour per item, in the key's order: a red-green colour only where no
+// overlapping lane of that family has the item's dash; a family no lane beside it with the same
+// dash has (only where the dashes could not differ); else the style fewest items have, starting
+// from the preferred colour.
+export function laneStyles(flow: LaneFlow): Map<string, LaneStyle> {
+  const items = [...new Set(flow.lanes.map(lane => lane.item))];
+  const neighbours = laneNeighbours(flow);
+  const dashes = laneDashes(items, neighbours.beside);
+  const chosen = new Map<string, { colour: number; dash: number }>();
+  for (const [n, item] of items.entries()) {
+    // laneDashes gives every item a dash.
+    const dash = dashes.get(item)!;
+    chosen.set(item, { colour: laneColour(n, item, dash, chosen, neighbours), dash });
+  }
+  return new Map(
+    [...chosen].map(([item, choice]) => [item, styleOf(choice.colour, choice.dash)] as const),
+  );
+}
+
+// How many dashes the search below may try before it settles for the fewest shared dashes: far
+// more than any group needs, and a bound on the work for a group it cannot separate.
+const SEARCH_STEPS = 20000;
+// The dashes, per group of items connected by lanes beside each other.
+function laneDashes(
+  items: readonly string[],
+  beside: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, number> {
+  const order = new Map(items.map((item, n) => [item, n]));
+  const dashes = new Map<string, number>();
+  for (const part of besideParts(items, beside, order))
+    if (!differentDashes(part, beside, order, dashes)) fewestShared(part, beside, order, dashes);
+  return dashes;
+}
+const dashesFrom = (n: number) =>
+  LANE_DASHES.map((_, k) => (preferredDash(n) + k) % LANE_DASHES.length);
+
+// The items connected by lanes beside each other, each part in the order a walk from its first
+// item reaches them, so every item but the first meets a neighbour that already has a dash.
+function besideParts(
+  items: readonly string[],
+  beside: ReadonlyMap<string, ReadonlySet<string>>,
+  order: ReadonlyMap<string, number>,
+): string[][] {
+  const seen = new Set<string>();
+  const parts: string[][] = [];
+  for (const first of items) {
+    if (seen.has(first)) continue;
+    const part = [first];
+    seen.add(first);
+    for (let i = 0; i < part.length; i++) {
+      // part[i] exists: i < part.length.
+      const next = [...(beside.get(part[i]!) ?? [])].filter(item => !seen.has(item));
+      next.sort((a, b) => order.get(a)! - order.get(b)!);
+      for (const item of next) {
+        seen.add(item);
+        part.push(item);
+      }
+    }
+    parts.push(part);
+  }
+  return parts;
+}
+
+// Gives the part's items dashes no item beside them shares, trying each item's preferred dash
+// first; false, with none given, when there are none or the search runs out of steps.
+function differentDashes(
+  part: readonly string[],
+  beside: ReadonlyMap<string, ReadonlySet<string>>,
+  order: ReadonlyMap<string, number>,
+  dashes: Map<string, number>,
+): boolean {
+  let steps = SEARCH_STEPS;
+  const place = (i: number): boolean => {
+    const item = part[i];
+    if (item === undefined) return true;
+    for (const dash of dashesFrom(order.get(item)!)) {
+      if (--steps < 0) return false;
+      if ([...(beside.get(item) ?? [])].some(other => dashes.get(other) === dash)) continue;
+      dashes.set(item, dash);
+      if (place(i + 1)) return true;
+      dashes.delete(item);
+    }
+    return false;
+  };
+  return place(0);
+}
+
+// The fallback: each item in turn takes the dash the fewest items beside it have.
+function fewestShared(
+  part: readonly string[],
+  beside: ReadonlyMap<string, ReadonlySet<string>>,
+  order: ReadonlyMap<string, number>,
+  dashes: Map<string, number>,
+) {
+  for (const item of part) {
+    const shared = (dash: number) =>
+      [...(beside.get(item) ?? [])].filter(other => dashes.get(other) === dash).length;
+    const [best] = dashesFrom(order.get(item)!).sort((a, b) => shared(a) - shared(b));
+    // dashesFrom lists every dash; the sort is stable, so ties keep the preferred one.
+    dashes.set(item, best!);
+  }
+}
+
+// The n-th item's colour, given its dash and the items styled before it: lowest of, in turn,
+// the overlapping lanes of the red-green family on the same dash (if the colour is of it), the
+// lanes beside it of the same family on the same dash, and the items with the same style; ties
+// go to the colour nearest after the preferred one.
+function laneColour(
+  n: number,
+  item: string,
+  dash: number,
+  chosen: ReadonlyMap<string, { colour: number; dash: number }>,
+  neighbours: LaneNeighbours,
+): number {
+  const count = (others: Iterable<string>, test: (colour: number) => boolean) =>
+    [...others].filter(other => {
+      const style = chosen.get(other);
+      return style !== undefined && style.dash === dash && test(style.colour);
+    }).length;
+  const costs = (colour: number) => {
+    const family = familyOf(LANE_COLOURS[colour]!);
+    const sameFamily = (other: number) => familyOf(LANE_COLOURS[other]!) === family;
+    return [
+      family === 'red-green' ? count(neighbours.overlapping.get(item) ?? [], sameFamily) : 0,
+      count(neighbours.beside.get(item) ?? [], sameFamily),
+      count(chosen.keys(), other => other === colour),
+    ];
+  };
+  let best = preferredColour(n),
+    bestCosts = costs(best);
+  for (let k = 1; k < LANE_COLOURS.length; k++) {
+    const colour = (preferredColour(n) + k) % LANE_COLOURS.length,
+      next = costs(colour);
+    const at = next.findIndex((cost, i) => cost !== bestCosts[i]);
+    if (at >= 0 && next[at]! < bestCosts[at]!) {
+      best = colour;
+      bestCosts = next;
+    }
+  }
+  return best;
 }
 
 // How the page names the far end of a link: a line by its number (with its name where there
