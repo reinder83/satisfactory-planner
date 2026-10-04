@@ -61,8 +61,9 @@ test('a rounded phase after a stopped search states its time in hours and minute
 });
 
 test('easy clocks after a stopped search state their time in hours and minutes (#740)', () => {
-  // With 30% more power per machine, so the easy clocks slow the phase (#935 lowered its power).
-  const plan = withStoppedPhase({ ...settings, amplifySloops: 0, powerFactor: 1.3 }, 5);
+  // With 40% more power per machine, so the easy clocks slow the phase (#935 lowered its power;
+  // 30% was enough until #1040 took Pure Aluminum Ingot out of the standard recipes).
+  const plan = withStoppedPhase({ ...settings, amplifySloops: 0, powerFactor: 1.4 }, 5);
   const stage = plan.stages['5'];
   assert.equal(stage.fractionalAfterStop?.target, 25 / 3);
   const warning = plan.warnings.find(line => line.startsWith('Phase 5 is not whole machines'));

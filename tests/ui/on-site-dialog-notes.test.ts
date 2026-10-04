@@ -24,6 +24,7 @@ import { calcStage } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, generatedWith, open, page } from './setup.ts';
 import type { FactoryGroups, StageKey, StoredCalculatedPlan } from '../../public/types/index.ts';
+import { STANDARD_BEFORE_1040 } from '../helpers/standard-before-1040.ts';
 
 const BASE = { phase: '3', wholeMachines: true, limitsConfirmed: true };
 const plain = generatedWith(BASE);
@@ -260,7 +261,8 @@ const scrapGroups = (local: string[]): FactoryGroups => ({
   local: { [G1]: local },
 });
 const scrapMarks = scrapGroups(['Aluminum Scrap', 'Compacted Coal', 'Water']);
-const PHASE4 = { phase: '4', wholeMachines: true, limitsConfirmed: true };
+// On the standard recipes as they were before #1040, with Pure Aluminum Ingot allowed.
+const PHASE4 = { phase: '4', wholeMachines: true, limitsConfirmed: true, ...STANDARD_BEFORE_1040 };
 const scrapPlan = generatedWith({
   ...PHASE4,
   onSite: onSiteSettings(generatedWith(PHASE4), scrapMarks),

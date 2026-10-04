@@ -62,8 +62,10 @@ function assertBalanced(stage: CurrentStage, label: string) {
 
 // #935 lowered Phase 5's power (the Space Elevator parts' Manufacturer and Blender lines), and at
 // the settings of #593 the easy clocks now fit at the exact plan's own time. With 30% more power
-// per machine they slow it again, the case these tests describe.
-const slower = { ...settings, powerFactor: 1.3 };
+// per machine they slowed it again, the case these tests describe; since #1040 (Pure Aluminum
+// Ingot is no longer a standard recipe, so Phase 5 makes its Aluminum Ingot in Foundries) it
+// takes 40%.
+const slower = { ...settings, powerFactor: 1.4 };
 
 test('a phase no rounded plan fits gets easy clocks on its last machines (#694)', () => {
   const plan = withStoppedPhase(slower, 5);

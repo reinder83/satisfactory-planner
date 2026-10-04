@@ -81,8 +81,9 @@ test('a phase rounded after a stopped search is compared with its exact plan’s
 
 test('easy clocks after a stopped search are compared with the exact plan’s time (#708)', () => {
   // #935 lowered Phase 5's power: at the settings of #593 the easy clocks now fit at the exact
-  // plan's own time. With 30% more power per machine they slow it again.
-  const slower = { ...settings, amplifySloops: 0, powerFactor: 1.3 };
+  // plan's own time. With more power per machine they slow it again: 30% did until #1040 (Pure
+  // Aluminum Ingot no longer a standard recipe), 40% since.
+  const slower = { ...settings, amplifySloops: 0, powerFactor: 1.4 };
   const plan = withStoppedPhase(slower, 5);
   const stage = plan.stages['5'];
   const exact = calculate({ ...slower, wholeMachines: false }).stages['5'];
