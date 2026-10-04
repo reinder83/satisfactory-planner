@@ -155,7 +155,9 @@ interface GroupPart {
   share: number;
 }
 
-// The rows with a share in the group, in the build plan's order (groupedRows, #869).
+// The rows with a share in the group, in the build plan's order (groupedRows, #869). rowPlaces
+// gives no place a share too small to count (LINK_DUST, #906), so the books (itemBooks) count
+// exactly these lines' shares.
 const groupParts = (stage: StoredStage, groups: FactoryGroups, groupId: string): GroupPart[] =>
   groupedRows(stage.rows || [], groups)
     .map(row => ({ row, share: rowPlaces(row, groups).get(groupId) || 0 }))
