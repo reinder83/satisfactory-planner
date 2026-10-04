@@ -12,6 +12,7 @@ import {
   editingTask,
   setState,
   setView,
+  setWorkspace,
   state,
   stateLoaded,
   wizard,
@@ -23,7 +24,7 @@ import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
 import { listNames } from '../wording.ts';
-import type { ProgressState, UpdateOp } from '../types/index.ts';
+import type { ProgressState, UpdateOp, WorkspaceSummary } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
 // (calcProgress in wizard/wizard.ts), which browser-api.ts calls with each phase it solves, and
@@ -184,6 +185,26 @@ export async function refreshState(force = false): Promise<boolean> {
   return true;
 }
 
+// Asks for the workspace summary again when the tab comes back into use (listeners.ts: the
+// window gains focus or the tab becomes visible), so a tab learns that the user opened another
+// save or profile in another tab or on another device, and says so (groupMoved in session.ts,
+// ui/GroupMovedNotice.vue, #1052). It only redraws; nothing is opened or saved. At most once
+// every few seconds; never while signed out or with no save open, and a reply for someone else
+// (signed out or in as another user meanwhile) is left for the next boot(). Returns whether the
+// summary was replaced.
+const WORKSPACE_REFRESH_MS = 5000;
+let workspaceAsked = -Infinity;
+export async function refreshWorkspace(): Promise<boolean> {
+  if (!stateLoaded || !currentSave?.id || !workspace?.user) return false;
+  if (Date.now() - workspaceAsked < WORKSPACE_REFRESH_MS) return false;
+  workspaceAsked = Date.now();
+  const next = await request<WorkspaceSummary>('/api/workspace');
+  if (!next.user || next.user.id !== workspace.user?.id) return false;
+  setWorkspace(next);
+  invalidate();
+  return true;
+}
+
 // Refreshes the sidebar save status ("Saving…" while a write is pending), which
 // ui/Shell.vue reads from `pending`.
 export function saveIndicator() {
@@ -335,12 +356,14 @@ function stepsTaken() {
 // is its textarea while mounted; `flush` sends text still waiting for the pause in typing;
 // `unsaved` is true while the box shows text the saved note does not have yet (being typed,
 // on its way, or refused); `unsent` is true when no write carries that text either (a write
-// failed, or nothing has sent it yet), so leaving would lose it.
+// failed, or nothing has sent it yet), so leaving would lose it. `conflict` is true while the
+// box asks which version to keep, because the note was changed elsewhere meanwhile (#1052).
 export type NoteBox = {
   el: () => Element | null | undefined;
   flush: () => void;
   unsaved: () => boolean;
   unsent: () => boolean;
+  conflict?: () => boolean;
 };
 export const noteBoxes = new Set<NoteBox>();
 const boxesIn = (root: ParentNode) =>
@@ -355,6 +378,10 @@ const boxesIn = (root: ParentNode) =>
 export function flushNotes(root: ParentNode = document) {
   for (const box of boxesIn(root)) box.flush();
 }
+
+// How many notes boxes on screen ask which version to keep (#1052), for ADA.
+export const noteConflicts = () =>
+  [...noteBoxes].filter(box => box.el() && box.conflict?.()).length;
 
 // Whether a notes box in `root` shows text that is not saved yet. Holds back refreshing the
 // page and closing the tab, and keeps the page when a session ends. `root` narrows the

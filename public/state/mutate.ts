@@ -53,9 +53,27 @@ export const staleWrite =
   'This profile was changed in another tab or on another device, so your last change was not ' +
   'saved. The page now shows the latest version; text you typed is kept, and saving it again ' +
   'replaces the other version.';
+// A note write that names the saved text it was typed over (`base`, #1052) is refused when the
+// note now says something else, so neither person's text replaces the other's without a choice:
+// the notes box then shows both versions and asks which to keep (ui/note-draft.ts).
+export const noteConflict =
+  'This note was changed in another tab or on another device, so your text was not saved. ' +
+  'Both versions are shown under the note: choose which to keep.';
+// Whitespace alone is no note: a blank note is saved by deleting it (setRecord below).
+const noteText = (text: unknown) => (typeof text === 'string' && text.trim() ? text : '');
 // `base` is the X-Planner-Revision header: the revision the tab's state had when it sent
-// the write. Without the header (an older page, a script) nothing is compared.
+// the write. Without the header (an older page, a script) nothing is compared. A note write
+// with its own `base` text (#1052) is compared by that text instead, whatever the header says:
+// only that note's change can be undone by it, and a tick saved meanwhile elsewhere cannot.
 export function checkBase(current: SavedState, update: unknown, base: string | null | undefined) {
+  if (plain(update) && update.type === 'note' && typeof update.base === 'string') {
+    const key = update.key;
+    const saved =
+      typeof key === 'string' && Object.hasOwn(current.notes ?? {}, key) ? current.notes[key] : '';
+    if (noteText(saved) !== noteText(update.base))
+      throw Object.assign(Error(noteConflict), { status: 409 });
+    return;
+  }
   if (base === null || base === undefined || base === '') return;
   const type = (update as { type?: unknown } | null)?.type;
   if (typeof type !== 'string' || !baseSensitive.includes(type)) return;

@@ -37,6 +37,15 @@ export interface AdaFacts {
   } | null;
   deliveries: { open: number; total: number };
   hasPhaseNote: boolean;
+  // Notes boxes on screen that ask which version to keep, because the note was changed in another
+  // tab or on another device while they held other text (#1052).
+  noteConflicts?: number;
+  // The saves the last import added while another save stayed open, as a name list (#1052), shown
+  // on Saves & profiles until it is left; '' or absent otherwise.
+  imported?: string;
+  // Where the user's other tabs or devices moved while this tab shows another profile (#1052):
+  // that profile's name in quotes, with its save's when it is another save; '' or absent otherwise.
+  groupMoved?: string;
   // Records the move from the original plan could not place (handbookOrigin.unmapped, #499).
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
@@ -420,6 +429,21 @@ const RULES: AdaRule[] = [
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
   },
   {
+    id: 'group-moved',
+    tone: 'warn',
+    when: facts => facts.groupMoved,
+    text: facts =>
+      `Another tab or player moved to ${facts.groupMoved}. This tab stays on “${facts.profile}”, and everything you tick here is saved there. Open theirs from the notice to follow, or stay. I do not take sides. Officially.`,
+  },
+  {
+    id: 'note-conflict',
+    on: ['notes', 'plan', 'factories', 'storage'],
+    tone: 'warn',
+    when: facts => facts.noteConflicts,
+    text: facts =>
+      `${facts.noteConflicts === 1 ? 'A note was' : `${facts.noteConflicts} notes were`} changed in another tab or on another device while you were typing. Both versions are under the note, and nothing is saved until you pick: keep yours, theirs or both. Choosing between two pioneers' notes is above my clearance.`,
+  },
+  {
     id: 'notes',
     on: ['plan', 'notes'],
     tone: 'calm',
@@ -446,6 +470,14 @@ const RULES: AdaRule[] = [
       `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
   // Page-specific hints: the profile list, factories, the wizard and Resources.
+  {
+    id: 'imported',
+    on: ['profiles'],
+    tone: 'calm',
+    when: facts => facts.imported,
+    text: facts =>
+      `The import added ${facts.imported} as a copy of its own. You are still on “${facts.profile}”, so your next ticks land there, not in the copy. Open the copy from the notice when you mean to. I will not ask whose factory it was.`,
+  },
   {
     id: 'one-profile',
     on: ['profiles'],

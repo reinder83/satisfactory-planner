@@ -199,7 +199,8 @@ test('typing a phase note saves it once, after the pause, and says when', async 
   release();
   await settle();
   assert.deepEqual(noteWrites(calls), [
-    ['/api/update', { type: 'note', key: 'phase-3', value: 'Remember the coal' }],
+    // The write names the saved text it was typed over, none here (#1052).
+    ['/api/update', { type: 'note', key: 'phase-3', value: 'Remember the coal', base: '' }],
   ]);
   assert.equal(state.notes['phase-3'], 'Remember the coal');
   await nextTick();
@@ -218,7 +219,7 @@ test('leaving a notes box saves it at once, and a later reply does not undo more
   typeInto('#phase-note-3', 'First and second');
   await settle();
   assert.deepEqual(noteWrites(calls), [
-    ['/api/update', { type: 'note', key: 'phase-3', value: 'First' }],
+    ['/api/update', { type: 'note', key: 'phase-3', value: 'First', base: '' }],
   ]);
   assert.equal(state.notes['phase-3'], 'First');
   assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'First and second');
@@ -245,7 +246,7 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
   acceptRoute();
   typeInto('#phase-note-3', '  ').dispatchEvent(new Event('blur'));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'phase-3', value: '  ' });
+  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: 'phase-3', value: '  ', base: 'Old' });
   assert.equal(state.notes['phase-3'], undefined);
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), true, 'leaving the plan page after the save');
@@ -257,7 +258,7 @@ test('a blank note saves without asking about unsaved notes afterwards', async (
   openCalculatedFactory(WIRE);
   typeInto('#detail-note', '  ').dispatchEvent(new Event('blur'));
   await settle();
-  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: WIRE_NOTE, value: '  ' });
+  assert.deepEqual(calls.at(-1)![1], { type: 'note', key: WIRE_NOTE, value: '  ', base: 'Old' });
   assert.equal($<HTMLDialogElement>('#detail')!.open, true, 'saving no longer closes the dialog');
   $('#detail .close[data-close]')!.click();
   assert.equal($<HTMLDialogElement>('#detail')!.open, false);
@@ -288,6 +289,7 @@ test('a factory link opens its dialog; the × sends a note still being typed and
     type: 'note',
     key: WIRE_NOTE,
     value: 'Needs a second copper line',
+    base: '',
   });
   assert.equal(state.notes[WIRE_NOTE], 'Needs a second copper line');
   await pause();
@@ -318,7 +320,9 @@ test('"Create a save" on the profiles page starts the wizard', () => {
   assert.equal(wizard.saveId, null, 'for a new save');
 });
 
-test('a note refused as stale shows the latest state, keeps the typed text and offers Retry', async () => {
+// #1052: a refused note no longer offers Retry, which replaced the other tab's version without
+// showing it; the box shows both versions and only "Keep mine" replaces it.
+test('a note refused as stale shows the latest state, keeps the typed text and asks which to keep', async () => {
   state.revision = 4;
   const headers: Record<string, string>[] = [];
   const newer = {
@@ -360,8 +364,9 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   assert.match($('#toast')!.textContent, /changed in another tab/);
   assert.ok($('#toast')!.classList.contains('error'));
   assert.equal($<HTMLTextAreaElement>('#phase-note-3')!.value, 'Mine', 'the typed note survives');
-  assert.equal($('#phase-note-3-status')!.textContent, 'Not saved —');
-  assert.equal($('[data-note-retry]')!.textContent!.trim(), 'Retry');
+  assert.match($('#phase-note-3-status')!.textContent, /^Not saved — this note was changed/);
+  assert.equal($('[data-note-retry]'), null);
+  assert.equal($<HTMLTextAreaElement>('#phase-note-3-theirs')!.value, 'From the other tab');
 
   // Leaving now would lose it, so the page asks, and stays when the answer is no.
   history.replaceState(null, '', '#storage');
@@ -371,17 +376,17 @@ test('a note refused as stale shows the latest state, keeps the typed text and o
   assert.match(asked[0]!, /could not be saved/, 'asked in the app (#confirm)');
   assert.equal(location.hash, '#plan');
 
-  // Retry sends the kept text again; it replaces the other tab's version.
+  // "Keep mine" sends the kept text again; it replaces the other tab's version.
   refuse = false;
-  $<HTMLButtonElement>('[data-note-retry]')!.focus();
-  $('[data-note-retry]')!.click();
+  $<HTMLButtonElement>('[data-note-keep="mine"]')!.focus();
+  $('[data-note-keep="mine"]')!.click();
   await settle();
   assert.equal(headers.at(-1)!.path, '/api/update');
-  // The button goes once the note is saved; focus goes back to the note, not to <body> (#283).
+  // The choice goes once it is made; focus goes back to the note, not to <body> (#283).
   assert.equal(focused(), 'textarea#phase-note-3');
   assert.equal(state.notes['phase-3'], 'Mine');
   assert.match($('#phase-note-3-status')!.textContent, /^Saved · /);
-  assert.equal($('[data-note-retry]'), null);
+  assert.equal($('[data-note-conflict]'), null);
   history.replaceState(null, '', '#storage');
   assert.equal(acceptRoute(), true, 'nothing left to ask about');
   await settle();
@@ -408,7 +413,7 @@ test('Retry in a dialog keeps the keyboard in its notes box once the note is sav
   retry.click();
   await settle();
   assert.deepEqual(noteWrites(calls), [
-    ['/api/update', { type: 'note', key: WIRE_NOTE, value: 'Second copper line' }],
+    ['/api/update', { type: 'note', key: WIRE_NOTE, value: 'Second copper line', base: '' }],
   ]);
   assert.equal(state.notes[WIRE_NOTE], 'Second copper line');
   assert.equal($('#detail [data-note-retry]'), null);

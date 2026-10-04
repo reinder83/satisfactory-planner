@@ -52,7 +52,7 @@ export {
   slotPosition,
   validateState,
 } from './state/validate.ts';
-export { checkBase, mutate, staleWrite } from './state/mutate.ts';
+export { checkBase, mutate, noteConflict, staleWrite } from './state/mutate.ts';
 export {
   alreadyWholeMachines,
   calculatedProfile,

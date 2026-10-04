@@ -863,8 +863,15 @@ try {
   assert.ok(migrated.plan?.guide, 'the migrated plan carries the guide');
   assert.equal(backup.users, undefined);
   assert.equal(backup.sessions, undefined);
-  await api('/api/import-saves', backup);
-  await page.goto(base + '#plan');
+  // An import leaves the tab on the profile it has open (#1052): the copy is opened from Saves &
+  // profiles, and a reload then keeps it, since each tab keeps the profile it opened.
+  const withCopy = await api<WorkspaceSummary>('/api/import-saves', backup);
+  const serverCopy = withCopy.saves.at(-1)!;
+  await page.goto(base + '#profiles');
+  await page
+    .locator(`[data-open-save="${serverCopy.id}"][data-open-profile="${serverCopy.activeProfile}"]`)
+    .click();
+  await page.waitForFunction(() => location.hash === '#plan');
   await page.reload();
   await page.getByText('Build the first three iron halls', { exact: true }).waitFor();
   await checkStorage();

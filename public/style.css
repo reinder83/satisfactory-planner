@@ -2665,6 +2665,70 @@ tr.muted td:first-child {
   margin-top: 10px;
   flex-wrap: wrap;
 }
+/* A note changed elsewhere while this box held other text (#1052): the other version, read-only,
+   and the three choices, wrapping onto lines of their own on a phone. */
+.note-conflict {
+  margin-top: 10px;
+}
+.note-conflict p {
+  margin: 0 0 8px;
+}
+.note-conflict label {
+  display: block;
+  margin-bottom: 4px;
+}
+.note-conflict .note-theirs {
+  min-height: 80px;
+}
+.note-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+/* Above every page when the user's other tabs or devices moved to another profile (#1052),
+   aligned with the page under it. */
+.group-moved-wrap {
+  padding: 16px clamp(14px, 2.4vw, 30px) 0;
+  max-width: 1660px;
+  margin: auto;
+}
+.group-moved {
+  margin: 0;
+}
+.group-moved p {
+  margin: 0 0 8px;
+}
+.group-moved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.group-moved-actions .btn {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+@media (max-width: 720px) {
+  .group-moved-wrap {
+    padding: 16px 16px 0;
+  }
+}
+/* Saves & profiles after an import (#1052): one Open button per copy, a long name wrapping inside
+   its button. */
+.import-notice p {
+  margin: 0 0 8px;
+}
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-actions .btn {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 /* A failed note save is likeliest on a phone's connection: give Retry a 44px touch target,
    drawn around the link as it looks, so its underline stays under the word. */
 @media (max-width: 720px) {

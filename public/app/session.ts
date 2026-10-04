@@ -126,6 +126,9 @@ export let planEditing = false;
 // The id of the build-plan step whose edit form is open.
 export let editingTask: string | null = null;
 export let factoryEditing = false;
+// The saves the last import added while another save stayed open (#1052), by id, which Saves &
+// profiles names in a notice with a way to open each; emptied when that page goes. View state.
+export let importedSaves: string[] = [];
 
 // Other modules cannot assign imported bindings, so they change these through setters.
 export function setWorkspace(value: WorkspaceSummary) {
@@ -218,6 +221,9 @@ export function setEditingTask(value: string | null) {
 export function setFactoryEditing(value: boolean) {
   factoryEditing = value;
 }
+export function setImportedSaves(value: string[]) {
+  importedSaves = value;
+}
 
 // A profile records the phase it was created for: its production is planned from there on.
 // Earlier phases are already behind the user, so their production lines and targets are not
@@ -284,7 +290,8 @@ export const phaseLabel = (phaseKey: string) =>
 
 // Opens a save/profile: fetches its state and plan from /api/context and resets the
 // per-page UI state and the factory dialog. Does not render; callers render or navigate.
-// Waits for queued saves first so they land in the profile they were made in.
+// Waits for queued saves first so they land in the profile they were made in. The tab remembers
+// what it opened (rememberTab), so a reload opens it again (#1052).
 export async function loadContext(saveId: string, profileId: string) {
   await writeQueue;
   setContext(
@@ -295,8 +302,97 @@ export async function loadContext(saveId: string, profileId: string) {
         encodeURIComponent(profileId),
     ),
   );
+  rememberTab();
   required<HTMLDialogElement>('#detail').close();
   openOnPhase();
+}
+
+// Each tab keeps the save and profile it opened (#1052). The server (and the browser edition's
+// record) remembers only the one a user opened last (`activeSave` and each save's
+// `activeProfile`), which a new tab opens; a tab that is already open, or reloaded, stays on its
+// own, so one player's Duplicate or new profile never moves the others' tabs, and every write
+// names the profile its tab shows (scopeHeaders in api.ts). The tab's choice is view state,
+// kept in sessionStorage for this tab only, like the folded sections in localStorage: never
+// saved with a profile, and nothing stored, or anything unreadable, means the remembered one.
+// `stay` is the save and profile ("<save>/<profile>") others moved to that this tab chose to
+// stay away from, so the notice about it is not shown again until they move on.
+const TAB_KEY = 'planner-tab-profile';
+interface TabMemory {
+  user: string;
+  save: string;
+  profile: string;
+  stay?: string;
+}
+function tabMemory(): TabMemory | null {
+  try {
+    const stored: unknown = JSON.parse(sessionStorage.getItem(TAB_KEY) || 'null');
+    if (!stored || typeof stored !== 'object') return null;
+    const { user, save, profile, stay } = stored as Record<string, unknown>;
+    if (typeof user !== 'string' || typeof save !== 'string' || typeof profile !== 'string')
+      return null;
+    return { user, save, profile, ...(typeof stay === 'string' ? { stay } : {}) };
+  } catch {
+    return null;
+  }
+}
+function writeTabMemory(memory: TabMemory) {
+  try {
+    sessionStorage.setItem(TAB_KEY, JSON.stringify(memory));
+  } catch {}
+}
+// Records the save and profile now open as this tab's own. A stay that was about others moving
+// is kept while the tab stays where it is.
+function rememberTab() {
+  if (!workspace?.user || !currentSave?.id) return;
+  const before = tabMemory();
+  const same = before?.save === currentSave.id && before.profile === currentProfile.id;
+  writeTabMemory({
+    user: workspace.user.id,
+    save: currentSave.id,
+    profile: currentProfile.id,
+    ...(same && before?.stay ? { stay: before.stay } : {}),
+  });
+}
+// The save and profile this tab had open, while they still exist for the signed-in user.
+function tabOpened(summary: WorkspaceSummary) {
+  const memory = tabMemory();
+  if (!memory || memory.user !== summary.user?.id) return null;
+  const save = summary.saves.find(s => s.id === memory.save);
+  return save?.profiles.some(p => p.id === memory.profile)
+    ? { save, profile: memory.profile }
+    : null;
+}
+// Where the others are when it is not where this tab is (#1052): the save and profile the user
+// last opened in another tab or on another device, by the workspace summary this tab last
+// fetched, unless this tab chose to stay. null when they are here, when this tab has nothing
+// open, or when it is signed out.
+export function groupMoved(): {
+  saveId: string;
+  saveName: string;
+  profileId: string;
+  profileName: string;
+  otherSave: boolean;
+} | null {
+  if (!workspace?.user || !currentSave?.id || !stateLoaded) return null;
+  const save = workspace.saves.find(s => s.id === workspace.activeSave);
+  const profile = save?.profiles.find(p => p.id === save.activeProfile);
+  if (!save || !profile) return null;
+  if (save.id === currentSave.id && profile.id === currentProfile.id) return null;
+  if (tabMemory()?.stay === save.id + '/' + profile.id) return null;
+  return {
+    saveId: save.id,
+    saveName: save.name,
+    profileId: profile.id,
+    profileName: profile.name,
+    otherSave: save.id !== currentSave.id,
+  };
+}
+// "Stay on …" in that notice: this tab stays, and is not told about that move again.
+export function stayOnTabProfile() {
+  const moved = groupMoved();
+  const memory = tabMemory();
+  if (!moved || !memory) return;
+  writeTabMemory({ ...memory, stay: moved.saveId + '/' + moved.profileId });
 }
 
 // The phase the profile just opened shows (#570, app/opening-phase.ts): the saved working phase,
@@ -402,10 +498,13 @@ export async function boot() {
       return;
     }
     progressionData = await request<Progression>('/progression.json');
-    // Open the workspace's active save at its active profile, then honour a deep link.
-    const save = workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
+    // Open the save and profile this tab had open (#1052), else the workspace's active save at
+    // its active profile, then honour a deep link.
+    const own = tabOpened(workspace);
+    const save =
+      own?.save || workspace.saves.find(s => s.id === workspace.activeSave) || workspace.saves[0];
     if (save) {
-      await loadContext(save.id, save.activeProfile);
+      await loadContext(save.id, own?.profile ?? save.activeProfile);
       view = viewOf(location.hash.slice(1));
       showRoutePhase(location.hash.slice(1));
       // The wizard lives only in memory, so #wizard after a reload lands on the profiles page.

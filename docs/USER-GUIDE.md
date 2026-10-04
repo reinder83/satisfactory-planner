@@ -6,6 +6,10 @@ The full tour of the planner: every screen of profile creation, the ways to make
 
 Each **user → named save → profile** has independent progress. Trying another profile does not reset the original. Profiles store a calculation snapshot, so updating the software cannot silently change existing targets. Rename saves and profiles from **Saves & profiles**.
 
+**Importing** a full export or a share under **Backup → Import saves** adds each save in the file as a new copy, named after the file and the time it was exported, for example _Coop world (from anna.json, exported 2026-10-04 14:05)_; a copy that would get a name you already have is numbered (_· 2_). The profile you have open stays open, so what you tick next never lands in someone else's copy: **Saves & profiles** then lists the copies with an **Open** button for each. Rename a copy as you like; its name is only a label.
+
+**Each browser tab keeps the profile it opened.** A new tab opens the profile you (or anyone using your account, or the server without accounts) opened last; a tab that is already open, or that you reload, stays on its own profile, and everything you tick or write there is saved to the profile that tab shows. When someone opens another profile in another tab or on another device, for example with **Duplicate** or **Try another profile**, a tab still showing the old one says so at the top of the page: _Another tab or player moved to “Main · copy”_, with **Open “Main · copy”** to follow them and **Stay on “Main”** to keep working where you are.
+
 ## Create a profile
 
 Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save.
@@ -75,7 +79,7 @@ The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs
 
 ## Storage room and notes
 
-On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Notes save themselves as you type, everywhere in the planner — the line under each notes box says when it was saved, or offers Retry if a save failed; emptying a note deletes it. Existing container addresses and progress keys are unchanged.
+On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Notes save themselves as you type, everywhere in the planner — the line under each notes box says when it was saved, or offers Retry if a save failed; emptying a note deletes it. If someone changes the same note in another tab or on another device while you are typing in it, nothing is overwritten: the other version appears under your note, and you choose **Keep mine**, **Keep theirs** or **Keep both** (theirs first, yours under it). Until you choose, your text stays in the box unsaved, and leaving the page asks first. Existing container addresses and progress keys are unchanged.
 
 **Notes** keeps the save-wide notes and every phase's notes on one page: the save-wide notes first, then the phase you are working on, open, and the other phases folded underneath. The build plan links there with **Phase notes →**.
 

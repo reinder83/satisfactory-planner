@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
-import { transferFileSize, transferImportLimit } from '../../../transfer.ts';
+import { labelImport, transferFileSize, transferImportLimit } from '../../../transfer.ts';
 import { confirmAction } from '../confirm.ts';
 import {
   downloadJson,
@@ -23,6 +23,7 @@ import {
   calculated,
   currentProfile,
   currentSave,
+  setImportedSaves,
   setWorkspace,
   state,
   workspace,
@@ -32,6 +33,7 @@ import { backupAge, restoreMessage } from '../../views/backup.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import PageHeader from '../PageHeader.vue';
+import type { WorkspaceSummary } from '../../../types/index.ts';
 
 const page = computed(() =>
   legacy(() => ({
@@ -105,10 +107,12 @@ async function exportSaves(selection?: string[]) {
 }
 
 // "Import saves": import every save in the file as new copies with new ids, after a
-// confirmation, so existing saves are never replaced. It waits for queued saves, then
-// reloads the whole workspace with boot() and shows the profiles page. The success toast
-// only follows a successful import; any failure (too large, not JSON, refused by the
-// server) is a toast.
+// confirmation, so existing saves are never replaced. Each copy is named after the file and
+// its export date (labelImport, #1052). It waits for queued saves, then shows the profiles
+// page, where a notice names the copies and offers to open each: the open profile stays open,
+// so nothing ticked next lands in someone else's copy. With no save open (an empty workspace)
+// boot() opens the imported one, as before. The success toast only follows a successful
+// import; any failure (too large, not JSON, refused by the server) is a toast.
 async function importSaves(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -120,16 +124,34 @@ async function importSaves(event: Event) {
     if (
       !(await confirmAction({
         title: 'Import these saves?',
-        body: 'Import these saves as new copies? Existing saves will be kept.',
+        body: 'Import these saves as new copies? Existing saves will be kept, and you stay on the profile you have open.',
         confirmLabel: 'Import saves',
       }))
     )
       return;
     await writeQueue;
-    await post('/api/import-saves', data, false);
-    await boot();
+    // The saves as they are now, another tab's included, to tell the copies apart afterwards.
+    if (currentSave.id) setWorkspace(await request<WorkspaceSummary>('/api/workspace'));
+    const before = new Set(workspace.saves.map(save => save.id));
+    labelImport(
+      data,
+      file.name,
+      workspace.saves.map(save => save.name),
+    );
+    const reply = await post<WorkspaceSummary>('/api/import-saves', data, false);
+    if (!currentSave.id) {
+      await boot();
+      navigate('profiles');
+      toast('Imported saves. Existing progress was kept.');
+      return;
+    }
+    setWorkspace(reply);
+    const added = reply.saves.filter(save => !before.has(save.id));
+    setImportedSaves(added.map(save => save.id));
     navigate('profiles');
-    toast('Imported saves. Existing progress was kept.');
+    toast(
+      `Imported ${added.length === 1 ? 'a copy' : added.length + ' copies'}. You are still on “${currentProfile.name}”.`,
+    );
   } catch (error) {
     toast((error as Error).message, true);
   } finally {

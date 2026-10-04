@@ -622,3 +622,48 @@ test('ADA says when a phase makes its on-site items centrally (#875)', () => {
     'also on the Factories page',
   );
 });
+
+test('ADA points at a note changed elsewhere that waits for a choice (#1052)', () => {
+  for (const view of ['notes', 'plan', 'factories', 'storage']) {
+    const line = adaRemarks(facts({ view, noteConflicts: 1 })).find(r => r.id === 'note-conflict')!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /^A note was changed in another tab or on another device/);
+    assert.match(line.text, /keep yours, theirs or both/);
+    assert.ok(!ids(facts({ view, noteConflicts: 0 })).includes('note-conflict'));
+    assert.ok(!ids(facts({ view })).includes('note-conflict'), 'absent means none');
+  }
+  assert.match(
+    adaRemarks(facts({ view: 'notes', noteConflicts: 2 })).find(r => r.id === 'note-conflict')!
+      .text,
+    /^2 notes were changed/,
+  );
+});
+
+test('ADA says an imported copy left the open profile alone (#1052)', () => {
+  const line = adaRemarks(
+    facts({ view: 'profiles', imported: '“Coop world (from anna.json)”' }),
+  ).find(r => r.id === 'imported')!;
+  assert.equal(line.tone, 'calm');
+  assert.match(
+    line.text,
+    /^The import added “Coop world \(from anna\.json\)” as a copy of its own\./,
+  );
+  assert.match(line.text, /You are still on “Balanced”, so your next ticks land there/);
+  assert.ok(!ids(facts({ view: 'profiles', imported: '' })).includes('imported'));
+  assert.ok(!ids(facts({ view: 'profiles' })).includes('imported'), 'absent means none');
+});
+
+test('ADA warns on every page when the others moved to another profile (#1052)', () => {
+  for (const view of ['plan', 'factories', 'notes', 'profiles']) {
+    const remarks = adaRemarks(facts({ view, groupMoved: '“Main · copy”' }));
+    const line = remarks.find(r => r.id === 'group-moved')!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /^Another tab or player moved to “Main · copy”\./);
+    assert.match(
+      line.text,
+      /This tab stays on “Balanced”, and everything you tick here is saved there/,
+    );
+    assert.ok(!ids(facts({ view, groupMoved: '' })).includes('group-moved'));
+    assert.ok(!ids(facts({ view })).includes('group-moved'), 'absent means none');
+  }
+});

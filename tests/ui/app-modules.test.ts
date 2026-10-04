@@ -49,6 +49,8 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'document input',
     'document change',
     'document visibilitychange',
+    // #1052: coming back to the window asks where the user's other tabs are.
+    'window focus',
     'rendered',
   ]);
   // Importing the entry point compiles every component through Vite, cold: no other test file
