@@ -2,8 +2,10 @@
 // Opens the browser edition's database; browserRequest in browser-api.ts is the caller (tests
 // hand createBrowserApi a stand-in store instead). The name, store `workspace` and key `main`
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI. A
-// second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497).
+// second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497), and
+// a third, PRE_901, as it was before an amplified twin's unlock records were merged (#901).
 import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
+import { holdsAmplifiedUnlocks, mergeAmplifiedUnlocks } from './state.ts';
 import type { BrowserWorkspace, StoredProfile } from './types/index.ts';
 
 // What an older planner says about saves a newer one wrote, whether the database itself or the
@@ -80,6 +82,13 @@ const needsMigration = (workspace: BrowserWorkspace) =>
 // the planner reads it. It is the pre-migration copy AGENTS.md requires, the counterpart of the
 // server's workspace.json.pre-handbook.
 export const PRE_HANDBOOK = 'pre-handbook';
+// The third key (#901): the record as it was read before the first write that merged an amplified
+// twin's unlock records (mergeAmplifiedUnlocks), from releases before #901. Written in that write's
+// own transaction, only when the key is empty, so it is never replaced; nothing in the planner
+// reads it. The counterpart of the server's workspace.json.pre-901.
+export const PRE_901 = 'pre-901';
+const holdsUnmerged = (workspace: BrowserWorkspace) =>
+  workspace.saves.some(s => s.profiles.some(p => holdsAmplifiedUnlocks(p.state)));
 // What the migration needs (MigrationData): browser-api.ts loads it, and only when there is
 // something to migrate. The same loader converts an imported original profile (#605).
 export type { MigrationData };
@@ -265,7 +274,9 @@ export function openBrowserStore(
   return {
     // Without `change`, a readonly read of the whole workspace record. With it, one readwrite
     // transaction: read `main` (or a blank workspace), let `change` mutate it in place and return
-    // the response, then put it back. IndexedDB serializes readwrite transactions on a store, so
+    // the response, then put it back. When the record still holds unmerged unlock records, the
+    // same transaction first keeps it as read under PRE_901, unless that key holds a copy already;
+    // an abort drops both puts. IndexedDB serializes readwrite transactions on a store, so
     // concurrent tabs cannot interleave a read-modify-write. `change` must be synchronous: the
     // transaction commits once no request is pending.
     async transaction<T>(change?: (data: BrowserWorkspace) => T): Promise<T> {
@@ -291,15 +302,9 @@ export function openBrowserStore(
         // Without change, the answer is the record itself.
         let answer: T | undefined, failure: unknown;
         const request = store.get('main');
-        request.onsuccess = () => {
+        // Serves (and with change, writes) `found`, a workspace record or undefined.
+        const serve = (found: BrowserWorkspace | undefined) => {
           try {
-            // Saved data is unknown until checked (AGENTS.md).
-            const found: unknown = request.result;
-            // Version 1 is the only workspace format so far; a later one is refused unread.
-            if (newer(found)) throw refused(NEWER);
-            // Only a missing record (a new browser) starts blank; anything else not shaped like
-            // a workspace, falsy values included, is refused unread.
-            if (found !== undefined && !workspaceRecord(found)) throw refused(UNREADABLE);
             const data: BrowserWorkspace = found ?? {
               version: 1,
               activeSave: null,
@@ -309,8 +314,39 @@ export function openBrowserStore(
             // Records written before lastBackup existed have no such field: read it as null
             // ("never exported"), as the type says. A change writes the field back (#72).
             data.lastBackup ??= null;
+            // Progress is served as stored here, not through validateState as the server loads
+            // it, so an amplified twin's unlock records from before #901 are merged into their
+            // recipe's step as the record is read; a change writes them back merged.
+            for (const save of data.saves)
+              for (const profile of save.profiles) mergeAmplifiedUnlocks(profile.state);
             answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
+          } catch (error) {
+            failure = error;
+            transaction.abort();
+          }
+        };
+        request.onsuccess = () => {
+          try {
+            // Saved data is unknown until checked (AGENTS.md).
+            const found: unknown = request.result;
+            // Version 1 is the only workspace format so far; a later one is refused unread.
+            if (newer(found)) throw refused(NEWER);
+            // Only a missing record (a new browser) starts blank; anything else not shaped like
+            // a workspace, falsy values included, is refused unread.
+            if (found !== undefined && !workspaceRecord(found)) throw refused(UNREADABLE);
+            if (!change || found === undefined || !holdsUnmerged(found)) return serve(found);
+            // A write that will merge: keep the record as read first (put() copies it now).
+            const kept = store.get(PRE_901);
+            kept.onsuccess = () => {
+              try {
+                if (kept.result === undefined) store.put(found, PRE_901);
+              } catch (error) {
+                failure = error;
+                return transaction.abort();
+              }
+              serve(found);
+            };
           } catch (error) {
             failure = error;
             transaction.abort();

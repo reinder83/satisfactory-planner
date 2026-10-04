@@ -41,6 +41,7 @@ import {
   milestoneOnlyPhase,
   phaseSteps,
   progression,
+  recipeIdOf,
   rowStepTitle,
 } from '../public/progression.ts';
 import {
@@ -86,6 +87,7 @@ function ui() {
     progression,
     phaseSteps,
     milestoneOnlyPhase,
+    recipeIdOf,
     rowStepTitle,
     firstPlanPhase,
     carryOptions,
@@ -475,6 +477,15 @@ test('Planner’s choice collects the alternates a plan uses', () => {
     ),
     '["Recipe_Alternate_Turbofuel_C"]',
     'MAM recipes count as used alternates even though plans mark them standard',
+  );
+  // An amplified twin and a group's own line pick their recipe, which the planner accepts (#901).
+  assert.equal(
+    vm.runInContext(
+      `JSON.stringify(alternatesUsed({stages:{a:{rows:[{id:'amp:x',alternate:true},{id:'amp:Recipe_Alternate_Turbofuel_C',alternate:false},{id:'z:fg-alpha1',alternate:true,onSite:{group:'fg-alpha1',recipe:'z'}}]}}}))`,
+      context,
+    ),
+    '["Recipe_Alternate_Turbofuel_C","x","z"]',
+    'amplified and on-site lines count as their recipe',
   );
 });
 

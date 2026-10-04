@@ -18,6 +18,7 @@ import {
   type FrozenMapping,
   type MigrationData,
 } from '../public/handbook-migration.ts';
+import { holdsAmplifiedUnlocks } from '../public/state.ts';
 import { errorCode } from './errors.ts';
 import type {
   Handbook,
@@ -92,8 +93,27 @@ const newer = () =>
     { newer: true },
   );
 
+// A workspace loaded from a workspace.json whose progress still holds an amplified twin's unlock
+// records from releases before #901 (holdsAmplifiedUnlocks), with that file as it was read.
+// validateState merges them in memory (mergeAmplifiedUnlocks), so the first write of the
+// workspace would replace the only copy of the unmerged records, and workspace.json.bak then
+// holds the merged workspace too. keepPreMerge writes it first.
+const preMerge = new WeakMap<Workspace, string>();
+// Keeps the file as read in workspace.json.pre-901 before the first write of such a workspace:
+// written once and never replaced ('wx'), like workspace.json.pre-handbook. A failure throws,
+// so the write that needed the copy does not happen, and the next write tries again.
+async function keepPreMerge(file: string, workspace: Workspace) {
+  const raw = preMerge.get(workspace);
+  if (raw === undefined) return;
+  await fs.writeFile(file + '.pre-901', raw, { flag: 'wx', mode: 0o600 }).catch(error => {
+    if (errorCode(error) !== 'EEXIST') throw error;
+  });
+  preMerge.delete(workspace);
+}
+
 // Parses workspace.json and validates every profile's progress, throwing for anything that is
-// not a workspace this release can open.
+// not a workspace this release can open. A workspace holding unmerged unlock records is marked
+// for keepPreMerge.
 function parseWorkspace(raw: string, validateState: ValidateState): Workspace {
   const workspace: Workspace = JSON.parse(raw);
   if (typeof workspace.version === 'number' && workspace.version > 2) throw newer();
@@ -114,7 +134,11 @@ function parseWorkspace(raw: string, validateState: ValidateState): Workspace {
       throw Error();
     for (const profile of save.profiles)
       try {
-        profile.state = validateState(profile.state);
+        // Checked before validateState, which merges the records.
+        const state: unknown = profile.state;
+        if (state && typeof state === 'object' && holdsAmplifiedUnlocks(state))
+          preMerge.set(workspace, raw);
+        profile.state = validateState(state);
       } catch (error) {
         throw /newer planner version/.test((error as Error).message) ? newer() : error;
       }
@@ -200,6 +224,7 @@ async function migrateHandbookProfiles(file: string, raw: string, workspace: Wor
   await fs.writeFile(file + '.pre-handbook', raw, { flag: 'wx', mode: 0o600 }).catch(error => {
     if (errorCode(error) !== 'EEXIST') throw error;
   });
+  await keepPreMerge(file, workspace);
   const next = structuredClone(workspace);
   await migrateOriginals(next.saves);
   next.revision = workspace.revision + 1;
@@ -243,10 +268,12 @@ export type Commit = <T>(change: (draft: Workspace) => T) => Promise<T>;
 // The workspace in memory and the queue every write goes through, one at a time in queue
 // order. change edits a deep copy of the workspace; if it throws, nothing is written and the
 // workspace stays as it was. Otherwise the previous in-memory workspace is kept as
-// workspace.json.bak, the new one goes to .tmp and renamed over workspace.json, and only then
-// does the workspace become the copy. So a crash leaves either the old or the new workspace,
-// never a half-written one. commit returns change's result; a failed commit does not block the
-// ones queued after it. current() is the workspace as the last finished commit left it.
+// workspace.json.bak (the first write of a workspace loaded with unmerged unlock records keeps
+// the file as read first, keepPreMerge), the new one goes to .tmp and renamed over
+// workspace.json, and only then does the workspace become the copy. So a crash leaves either
+// the old or the new workspace, never a half-written one. commit returns change's result; a
+// failed commit does not block the ones queued after it. current() is the workspace as the
+// last finished commit left it.
 export function createCommitQueue(dataDir: string, loaded: Workspace) {
   const file = path.join(dataDir, 'workspace.json');
   let workspace = loaded;
@@ -256,6 +283,7 @@ export function createCommitQueue(dataDir: string, loaded: Workspace) {
       const next = structuredClone(workspace);
       const result = change(next);
       next.revision = workspace.revision + 1;
+      await keepPreMerge(file, workspace);
       await fs.writeFile(file + '.bak', JSON.stringify(workspace), { mode: 0o600 });
       await fs.writeFile(file + '.tmp', JSON.stringify(next), { mode: 0o600 });
       await fs.rename(file + '.tmp', file);
