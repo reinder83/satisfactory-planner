@@ -28,7 +28,13 @@ export {
   rawResources,
   resourceDefaults,
 } from './preferences/world.ts';
-export { droneFuels, droneSupply, powerOptions, vehicleFuels } from './preferences/fuels.ts';
+export {
+  droneFuels,
+  droneSupply,
+  powerOptions,
+  turbofuelRecipes,
+  vehicleFuels,
+} from './preferences/fuels.ts';
 export { helpText } from './preferences/help.ts';
 export {
   GUIDED_TOPUP_RATE,

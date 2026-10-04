@@ -7,7 +7,8 @@ import type {
   PhaseFigures,
   StageKey,
 } from '../public/types/index.ts';
-import { DATA, MAM_RECIPES } from './data.ts';
+import { DATA, STANDARD_ALTERNATES } from './data.ts';
+import { turbofuelRecipes } from '../public/preferences.ts';
 import { fail, settings } from './settings.ts';
 import { pureNames } from './recipes.ts';
 import { calculate } from './calculate.ts';
@@ -16,13 +17,18 @@ import { calculate } from './calculate.ts';
 // the plan again with it allowed and compare one phase with the profile's own plan. `input` is
 // the profile's settings (normalised by settings() like calculate's). Candidates are the
 // alternates available by `phase` that the recipe setting leaves out: every one for 'standard'
-// (the two MAM recipes it already has aside), the unticked ones for 'custom', none for 'all';
-// the pure ingot alternates are skipped while `pureIngots` brings them in anyway. Each trial runs
+// (the alternates it already has, STANDARD_ALTERNATES, aside), the unticked ones for 'custom',
+// none for 'all'; the pure ingot alternates are skipped while `pureIngots` brings them in anyway.
+// Alternates no hard drive buys are never candidates (NO_HARD_DRIVE below). Each trial runs
 // under recipes: 'custom' with the owned list plus the candidate, so nothing else changes.
 // A trial that throws or does not fit is reported, not thrown. `onProgress(done, total)` runs
 // after each trial; past `budgetMs` the rest are skipped and `stopped` is set. `onPhase(phase)`
 // is called as each phase of the base plan and of every trial starts, which the browser worker
 // forwards as progress so its timeout restarts per phase, as for a calculation (#633).
+// The alternates the game unlocks with neither a hard drive nor research that costs one (#1044):
+// Polyester Fabric's MAM research and Distilled Silica's milestone. The MAM research for Turbofuel
+// and Compacted Coal costs a Hard Drive each, so a custom profile without them still ranks them.
+const NO_HARD_DRIVE = STANDARD_ALTERNATES.filter(id => !turbofuelRecipes.includes(id));
 export function rankAlternates(
   input: unknown,
   {
@@ -43,7 +49,7 @@ export function rankAlternates(
     config.recipes === 'custom'
       ? config.alternateRecipes
       : config.recipes === 'standard'
-        ? MAM_RECIPES
+        ? STANDARD_ALTERNATES
         : null;
   const phaseNumber = Number(phase);
   const candidates = owned
@@ -52,6 +58,7 @@ export function rankAlternates(
           recipe.alternate &&
           recipe.phase <= phaseNumber &&
           !owned.includes(recipe.id) &&
+          !NO_HARD_DRIVE.includes(recipe.id) &&
           !(config.pureIngots && pureNames.includes(recipe.name)),
       )
     : [];

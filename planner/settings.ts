@@ -9,6 +9,7 @@ import {
   purities,
   powerOptions,
   resourceDefaults,
+  turbofuelRecipes,
 } from '../public/preferences.ts';
 import type {
   CurrentSettings,
@@ -26,7 +27,7 @@ import type {
   StageKey,
   StorageChoice,
 } from '../public/types/index.ts';
-import { DATA, MAM_RECIPES, powerNeedsTurbofuel, ALT_IDS, RAW } from './data.ts';
+import { DATA, powerNeedsTurbofuel, ALT_IDS, RAW } from './data.ts';
 
 // An untrusted object: a record whose fields are not checked yet.
 type Raw = Record<string, unknown>;
@@ -377,7 +378,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     ? [...new Set(input.alternateRecipes.filter((id): id is string => ALT_IDS.has(id)))].sort()
     : [];
   if (config.recipes === 'custom' && powerNeedsTurbofuel(config.mainPower))
-    config.alternateRecipes = [...new Set([...config.alternateRecipes, ...MAM_RECIPES])].sort();
+    config.alternateRecipes = [
+      ...new Set([...config.alternateRecipes, ...turbofuelRecipes]),
+    ].sort();
   config.preferredRecipes = Array.isArray(input.preferredRecipes)
     ? [
         ...new Set(

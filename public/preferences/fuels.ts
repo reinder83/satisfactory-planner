@@ -19,6 +19,14 @@ export const powerOptions: Choice[] = [
   ['turbofuel-nuclear', 'Turbofuel + nuclear'],
   ['rocket-nuclear', 'Rocket fuel + nuclear'],
 ];
+// The two MAM recipes a turbofuel power route needs, Turbofuel and Compacted Coal: a main power
+// other than auto, coal and fuel burns turbofuel (powerNeedsTurbofuel in planner/data.ts), so
+// settings() adds them to a custom pick list and the alternate picker shows them locked on. The
+// other MAM recipes (MAM_RECIPES there: Polyester Fabric, #1044) stay ordinary picks.
+export const turbofuelRecipes: readonly string[] = [
+  'Recipe_Alternate_Turbofuel_C',
+  'Recipe_Alternate_EnrichedCoal_C',
+];
 
 // What a truck, tractor or explorer on a factory-group link can burn (#205): the solid and
 // packaged fuels a vehicle's fuel slot takes. Stored per link in factoryGroups.links, so the

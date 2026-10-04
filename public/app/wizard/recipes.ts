@@ -9,7 +9,9 @@ import type { StoredCalculatedPlan } from '../../types/index.ts';
 
 // The alternate ids a calculated plan actually uses, sorted. "Planner's choice"
 // (AltPicker.vue) calculates with every alternate allowed and ticks these.
-// MAM recipes (Turbofuel, Compacted Coal) appear in plans with alternate:false, so match catalog ids too.
+// The alternates the game unlocks without a hard drive (the MAM recipes Turbofuel, Compacted Coal
+// and Polyester Fabric, and Distilled Silica's milestone, #1044) appear in plans with
+// alternate:false, so match catalog ids too.
 // Each row counts as its recipe (recipeIdOf): an amplified twin ('amp:<recipe>') or a group's own
 // line ('<recipe>:<group>') picks the recipe, never its row id, which the planner would drop (#901).
 export const alternatesUsed = (plan: StoredCalculatedPlan | null | undefined): string[] => {

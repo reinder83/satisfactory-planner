@@ -1,5 +1,8 @@
 // public/progression.json: the game's milestones and MAM research, generated from the game
-// data. public/progression.ts turns it into the unlock steps of a calculated plan.
+// data. public/progression.ts turns it into the unlock steps of a calculated plan. Two corrections
+// to the data, each tested: Compacted Coal's alternates require its MAM research (#828), and
+// Control System Development (Schematic_7-5_C) also unlocks Distilled Silica, as the wiki gives it
+// and the data leaves out (#1044, MILESTONE_RECIPES in planner/data.ts).
 import type { ItemRates } from './common.ts';
 
 // A milestone, MAM research node or hard-drive alternate.

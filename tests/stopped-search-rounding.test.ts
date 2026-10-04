@@ -7,11 +7,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, DATA, RAW } from '../planner.ts';
 import type { CurrentStage, StageKey } from '../public/types/index.ts';
+import { STANDARD_BEFORE_1044 } from './helpers/standard-before-1040.ts';
 
-// The issue's settings.
+// The issue's settings, on the standard recipes as they were before #1044: the two recipes it
+// added to them (Polyester Fabric and Distilled Silica) are no line of these plans, but the wider
+// pool lets the solver settle on another of its equal plans, and #714's Phase 5 then rounds
+// without the Rubber line these tests describe.
 const settings = {
   phase: '4',
-  recipes: 'standard',
+  ...STANDARD_BEFORE_1044,
   goal: 'balanced',
   nuclear: 'sink',
   wholeMachines: true,
