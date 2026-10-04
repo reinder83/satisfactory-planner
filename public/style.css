@@ -2085,6 +2085,13 @@ tr.muted td:first-child {
 }
 
 /* ── Storage floor ─────────────────────────────────────── */
+/* A floor's tab (StoragePage.vue) is the user's name for the floor, one word of up to 80
+   characters (`label()` in public/state/validate.ts): a long word breaks inside the tab rather
+   than running past the page on a phone (#987). A word breaks only where it cannot fit its line,
+   so a short name stays on one line, and on a phone the tab keeps its 44px height (#838). */
+.tab[data-floor] {
+  overflow-wrap: anywhere;
+}
 /* The storage search's results on every floor (StoragePage.vue, #240): one button per
    container, leading to it on its floor. */
 .storage-results {
@@ -2098,6 +2105,7 @@ tr.muted td:first-child {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 8px;
 }
+/* A result names its floor, and a long word in that name breaks inside the button (#987). */
 .storage-result {
   display: flex;
   align-items: center;
@@ -2109,6 +2117,7 @@ tr.muted td:first-child {
   background: var(--panel);
   text-align: left;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .storage-result:hover {
   border-color: var(--accent);
@@ -2163,11 +2172,15 @@ tr.muted td:first-child {
   font-weight: 700;
   flex: none;
 }
+/* A bay's heading is the user's name for it, one word of up to 80 characters
+   (`label()` in public/state/validate.ts): a long word breaks inside the heading rather than
+   running past the bay and the page on a phone (#987). */
 .bay-head h3 {
   font-size: 14.5px;
   letter-spacing: 0.1em;
   margin: 0;
   color: var(--bright);
+  overflow-wrap: anywhere;
 }
 /* A bay's progress under its title (SP-23, #258): a thin strip the width of the bay. */
 .bay > .progress-track {
@@ -2501,6 +2514,12 @@ tr.muted td:first-child {
 }
 .edit-grid .inline-form {
   margin: 0;
+}
+/* "Hidden bays and floors" while editing the layout (StoragePage.vue, #166, #168): each row names
+   a bay or floor, and a long word in that name breaks inside the row, keeping its Restore in
+   view and whole (#987). */
+.hidden-bays .check-row > span:first-child {
+  overflow-wrap: anywhere;
 }
 .add-container {
   margin: 0;
