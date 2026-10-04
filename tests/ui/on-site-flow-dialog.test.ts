@@ -11,7 +11,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { beforeEach, test } from 'vitest';
 import { openCalculatedFactory } from '../../public/app/factory-detail.ts';
-import { calcFlowModel, flowNotes, flowOutputs, siteBooks } from '../../public/app/flow.ts';
+import {
+  calcFlowModel,
+  flowInputs,
+  flowNotes,
+  flowOutputs,
+  siteBooks,
+} from '../../public/app/flow.ts';
 import type { CalcFlowContext, FlowModel, FlowOutput } from '../../public/app/flow.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { calcStage } from '../../public/app/session.ts';
@@ -282,6 +288,142 @@ test('a plan without lines made on site keeps exactly the flow it had', () => {
     for (const factoryGroups of [noGroups, marked])
       for (const [id, model] of Object.entries(recorded))
         assert.deepEqual(snapshot(modelOf(id, frozen, factoryGroups)), model, id);
+  } finally {
+    Number.prototype.toLocaleString = toLocale;
+  }
+});
+
+// After the recalculation Stator leaves Alpha for Gamma (#918), so Alpha asks for no Wire and its
+// own line's 120 Wire are all beyond its demand: the sink takes only the plan's surplus of it, and
+// the rest goes with the central line's Wire to Stator, Gamma's half of Cable and storage.
+const movedStator: FactoryGroups = {
+  ...groups,
+  assignments: { ...groups.assignments, [STATOR]: [{ group: GAMMA, rate: null }] },
+};
+
+test('after a group edit an own line sends the sink only the plan’s surplus, and the rest to the other places (#918)', () => {
+  const storedStage = plan.stages['3'];
+  const context: CalcFlowContext = {
+    storedStage,
+    stageKey: '3',
+    settings: undefined,
+    site: siteBooks(storedStage, movedStator)!,
+  };
+  const wireLines = [WIRE, ownLine(ALPHA), ownLine(BETA)];
+  const outputs = new Map(wireLines.map(id => [id, flowOutputs(rowOf(id), context)]));
+  // Each Wire line's destinations add up to what it makes.
+  for (const id of wireLines)
+    assert.ok(
+      near(total(outputs.get(id)!), rowOf(id).outputs.Wire!),
+      `${id}: ${total(outputs.get(id)!)} of ${rowOf(id).outputs.Wire}`,
+    );
+  // The sink takes no more than the plan's surplus, all of it from Alpha's line.
+  const sinks = (id: string) => total(outputs.get(id)!.filter(output => output.kind === 'sink'));
+  const surplus = storedStage.surplus!.Wire!;
+  assert.ok(near(sinks(ownLine(ALPHA)), surplus), `${sinks(ownLine(ALPHA))} of ${surplus}`);
+  assert.ok(sinks(WIRE) <= 0.002 && sinks(ownLine(BETA)) <= 0.002);
+  // Every consumer and storage get what they ask for from the Wire lines together.
+  const delivered = (to: (output: FlowOutput) => boolean) =>
+    wireLines.reduce((sum, id) => sum + total(outputs.get(id)!.filter(to)), 0);
+  const consumer = (id: string) => (output: FlowOutput) => output.link?.calcFactory === id;
+  for (const id of [STATOR, CABLE])
+    assert.ok(
+      near(delivered(consumer(id)), rowOf(id).inputs.Wire!),
+      `${id}: ${delivered(consumer(id))}`,
+    );
+  const stored = delivered(output => output.kind === 'store');
+  assert.ok(near(stored, storedStage.storage!.Wire!), `storage: ${stored}`);
+  // Alpha's line now shares Stator and Cable with the central line.
+  assert.deepEqual(
+    outputs
+      .get(ownLine(ALPHA))!
+      .filter(output => output.kind === 'consumer')
+      .map(output => output.link?.calcFactory),
+    [CABLE, STATOR],
+  );
+  const alphaNotes = flowNotes(rowOf(ownLine(ALPHA)), outputs.get(ownLine(ALPHA))!, context);
+  assert.deepEqual(alphaNotes.bankNote, { shared: true, ownLine: 'Alpha', offers: true });
+  assert.deepEqual(modelOf(STATOR, plan, movedStator).inputs.find(i => i.name === 'Wire')!.link, {
+    calcFactory: WIRE,
+  });
+});
+
+test('the dialog says where an own line’s Wire goes beyond the sink after a group edit (#918)', () => {
+  open({ calculated: structuredClone(plan), phase: '3', state: { factoryGroups: movedStator } });
+  render();
+  openCalculatedFactory(ownLine(ALPHA));
+  assert.deepEqual(
+    $$('#detail .rail-row.consumer .rail-link').map(el => el.dataset.calcFactory),
+    [CABLE, STATOR],
+  );
+  assert.match(
+    $('#detail')!.textContent || '',
+    /goes to the AWESOME Sink as far as the plan sinks the item, and the rest to the other places that ask for it\./,
+  );
+});
+
+// The factory dialog's flow of every row of the cases recorded before #918
+// (tests/fixtures/on-site-books-2026-10-04.json; tests/on-site-flow.test.ts checks their books):
+// plans with lines made on site whose groups leave every marking group asking for what its own
+// lines were sized to, and a plan without such lines, keep exactly the flow they had.
+interface RecordedDialog {
+  outputs: unknown[];
+  inputs: unknown[];
+  notes: unknown;
+}
+const recordedBooks: {
+  cases: {
+    label: string;
+    stage: StoredStage;
+    groups: FactoryGroups;
+    dialog: Record<string, RecordedDialog>;
+  }[];
+} = JSON.parse(fs.readFileSync('tests/fixtures/on-site-books-2026-10-04.json', 'utf8'));
+
+test('rows of plans whose groups were not edited after the recalculation keep exactly their flow (#918)', () => {
+  assert.equal(recordedBooks.cases.length, 6);
+  // The recording's numbers read as in en-US, as in the test above.
+  const toLocale = Number.prototype.toLocaleString;
+  Number.prototype.toLocaleString = function (
+    _locale?: unknown,
+    options?: Intl.NumberFormatOptions,
+  ) {
+    return toLocale.call(this, 'en-US', options);
+  };
+  try {
+    for (const entry of recordedBooks.cases) {
+      const site = siteBooks(entry.stage, entry.groups);
+      const context: CalcFlowContext = {
+        storedStage: entry.stage,
+        stageKey: '3',
+        settings: undefined,
+        ...(site ? { site } : {}),
+      };
+      for (const row of entry.stage.rows!) {
+        const outputs = flowOutputs(row, context);
+        assert.deepEqual(
+          JSON.parse(
+            JSON.stringify({
+              outputs: outputs.map(o => [
+                o.kind,
+                o.label,
+                o.rate,
+                o.mach ?? null,
+                o.link?.calcFactory ?? null,
+              ]),
+              inputs: flowInputs(row, context).map(i => [
+                i.name,
+                i.rate,
+                i.link?.calcFactory ?? null,
+              ]),
+              notes: flowNotes(row, outputs, context),
+            }),
+          ),
+          entry.dialog[row.id],
+          `${entry.label}: ${row.id}`,
+        );
+      }
+    }
   } finally {
     Number.prototype.toLocaleString = toLocale;
   }

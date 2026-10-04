@@ -17,7 +17,10 @@
 // the items that group marks (factoryGroups.local) it supplies only the group's own demand, its
 // share of each consumer, which is what the planner sized it to; what it makes beyond that goes
 // to the sink rather than to other groups (onSiteBooks). So two groups that both make Wire on site
-// have no Wire link between them, and a central Wire line serves the remaining consumers.
+// have no Wire link between them, and a central Wire line serves the remaining consumers. Should
+// a group edit after the recalculation leave the group asking for less than that (#918), the sink
+// still takes only the plan's surplus, and the rest is offered to the other places as ordinary
+// supply, so the books keep balancing without a recalculation.
 import { LINK_DUST, rowPlaces, rowShares, UNGROUPED } from './group-order.ts';
 import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
 
@@ -81,8 +84,12 @@ export interface GroupLink {
 
 // Per item, what each place makes (`supply`) and what each place asks for (`demand`), per minute.
 // `sunk`: per item, what a group's own lines made on site make beyond the group's own demand,
-// which goes straight to the sink (#876). A group's own lines' supply of an item it marks, and
-// the demand it meets, are left out of `supply` and `demand`: they stay inside the group.
+// which goes straight to the sink (#876), up to the plan's surplus for the item. A group's own
+// lines' supply of an item it marks, and the demand it meets, are left out of `supply` and
+// `demand`: they stay inside the group.
+// `offered`: per item, the part of a group's own lines' excess the sink has no room for (#918:
+// the group asks for less since a group edit). It is in `supply` too, at the group, as ordinary
+// supply the other places share; empty while the groups are as the plan was calculated for.
 // `local`: per item and group, what that group's own lines make of an item it marks (`made`) and
 // what the group asked for it before they met it (`asked`), so a group's flow (group-flow.ts)
 // shares those lines out inside the group by the same rule.
@@ -90,6 +97,7 @@ export interface ItemBooks {
   supply: Record<string, Map<string, number>>;
   demand: Record<string, Map<string, number>>;
   sunk: Record<string, Map<string, number>>;
+  offered: Record<string, Map<string, number>>;
   local: Record<string, Map<string, { made: number; asked: number }>>;
 }
 
@@ -137,38 +145,56 @@ export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks 
   for (const [item, groupsMaking] of Object.entries(onSite))
     for (const [group, made] of groupsMaking)
       (local[item] ??= new Map()).set(group, { made, asked: demand[item]?.get(group) || 0 });
-  return { supply, demand, sunk: onSiteBooks(onSite, demand), local };
+  return { supply, demand, ...onSiteBooks(onSite, supply, demand), local };
 }
 
 // Each group's own lines made on site meet that group's own demand for the item first (#876):
-// that part leaves `demand`, and what the lines make beyond it is returned as going to the sink,
-// taken off the sink's demand (never below 0). Should the group ask for more than its lines make
+// that part leaves `demand`, and what the lines make beyond it is returned as going to the sink
+// (`sunk`), taken off the sink's demand. Should the group ask for more than its lines make
 // (memberships changed since the plan was calculated), the rest of its demand stays in
-// `demand`, for the other supply of the item.
+// `demand`, for the other supply of the item. Should the groups' excess be more than the sink's
+// demand (#918: a group asks for less since a group edit), the sink takes only its demand, from
+// each group in proportion to its excess, and the rest is `offered`: added to `supply` at the
+// group, so the places that now ask for it more get it.
 function onSiteBooks(
   onSite: Record<string, Map<string, number>>,
+  supply: Record<string, Map<string, number>>,
   demand: Record<string, Map<string, number>>,
-): Record<string, Map<string, number>> {
-  const sunk: Record<string, Map<string, number>> = {};
-  const lower = (places: Map<string, number>, place: string, rate: number) => {
-    const left = (places.get(place) || 0) - rate;
-    if (left > LINK_DUST) places.set(place, left);
-    else places.delete(place);
-  };
-  for (const [item, groupsMaking] of Object.entries(onSite))
+): Pick<ItemBooks, 'sunk' | 'offered'> {
+  const sunk: ItemBooks['sunk'] = {};
+  const offered: ItemBooks['offered'] = {};
+  for (const [item, groupsMaking] of Object.entries(onSite)) {
+    const asks = demand[item] ?? new Map<string, number>();
+    const excess = new Map<string, number>();
     for (const [group, made] of groupsMaking) {
-      const asks = demand[item] ?? new Map<string, number>();
       const met = Math.min(made, asks.get(group) || 0);
-      lower(asks, group, met);
-      const excess = made - met;
-      if (excess > LINK_DUST) {
-        (sunk[item] ??= new Map()).set(group, excess);
-        lower(asks, OUTSIDE.surplus, excess);
-      }
-      if (asks.size) demand[item] = asks;
-      else delete demand[item];
+      lowerDemand(asks, group, met);
+      if (made - met > LINK_DUST) excess.set(group, made - met);
     }
-  return sunk;
+    const room = asks.get(OUTSIDE.surplus) || 0,
+      over = placeTotal(excess);
+    for (const [group, rate] of excess) {
+      // The sink's room is all of the excess, unless the groups changed since the plan.
+      const sinks = over - room > LINK_DUST ? (rate * room) / over : rate;
+      if (sinks > LINK_DUST) (sunk[item] ??= new Map()).set(group, sinks);
+      lowerDemand(asks, OUTSIDE.surplus, sinks);
+      if (rate - sinks > LINK_DUST) {
+        (offered[item] ??= new Map()).set(group, rate - sinks);
+        const places = (supply[item] ??= new Map());
+        places.set(group, (places.get(group) || 0) + rate - sinks);
+      }
+    }
+    if (asks.size) demand[item] = asks;
+    else delete demand[item];
+  }
+  return { sunk, offered };
+}
+
+// Takes `rate` off what `place` asks for, dropping the place once nothing is left (never below 0).
+function lowerDemand(places: Map<string, number>, place: string, rate: number) {
+  const left = (places.get(place) || 0) - rate;
+  if (left > LINK_DUST) places.set(place, left);
+  else places.delete(place);
 }
 
 // What moves between two places of an item whose places make `made` and ask `asked` in all:
