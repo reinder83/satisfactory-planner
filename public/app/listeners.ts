@@ -66,8 +66,9 @@ onBackdropClick(required('#detail'), closeDetail);
 required('#detail').addEventListener('cancel', cancelDetail);
 
 // Ask before closing or reloading the tab while a save is still in flight (pending in
-// api.ts), a notes box holds unsaved text or a "Made on site" choice is not saved (#930,
-// hasUnsavedChoices; only its Save stores it, so nothing is sent here). A note still waiting
+// api.ts), a notes box holds unsaved text, or a "Made on site" choice (#930) or a step's edit
+// form (#969) is not saved (hasUnsavedChoices; only their Save stores them, so nothing is sent
+// here). A note still waiting
 // for its pause in typing is sent first, so staying on the page lets it finish.
 window.addEventListener('beforeunload', event => {
   flushNotes();
