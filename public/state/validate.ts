@@ -216,12 +216,16 @@ const amplifiedUnlockBase = (key: unknown): string | undefined =>
 // and its id stays in the list. Run on every state validateState returns, and by the browser
 // edition on each record it reads (browser-store.ts), since that edition serves stored progress
 // without validating it; so it takes any saved shape and leaves what it does not recognise (a
-// malformed value) for validateState to refuse.
-export function mergeAmplifiedUnlocks(state: { checks?: unknown; taskEdits?: unknown }): void {
-  if (plain(state.checks)) mergeAmplifiedChecks(state.checks);
-  if (plain(state.taskEdits)) mergeAmplifiedEdits(state.taskEdits);
+// malformed value) for validateState to refuse. Returns whether it changed anything, which is when
+// the stored data needs its pre-merge copy (workspace.json.pre-901 and the browser edition's
+// pre-901 key).
+export function mergeAmplifiedUnlocks(state: { checks?: unknown; taskEdits?: unknown }): boolean {
+  const checks = plain(state.checks) && mergeAmplifiedChecks(state.checks);
+  const edits = plain(state.taskEdits) && mergeAmplifiedEdits(state.taskEdits);
+  return checks || edits;
 }
 function mergeAmplifiedChecks(checks: Raw) {
+  let changed = false;
   for (const [key, ticked] of Object.entries(checks)) {
     const base = amplifiedUnlockBase(key);
     const own = base === undefined ? undefined : checks[base];
@@ -229,9 +233,12 @@ function mergeAmplifiedChecks(checks: Raw) {
     if (own !== undefined && typeof own !== 'boolean') continue;
     checks[base] = own === true || ticked;
     delete checks[key];
+    changed = true;
   }
+  return changed;
 }
 function mergeAmplifiedEdits(edits: Raw) {
+  let changed = false;
   for (const kind of ['titles', 'bodies', 'links']) {
     const map = edits[kind];
     if (!plain(map)) continue;
@@ -240,17 +247,24 @@ function mergeAmplifiedEdits(edits: Raw) {
       if (base === undefined || Object.hasOwn(map, base)) continue;
       map[base] = value;
       delete map[key];
+      changed = true;
     }
   }
-  if (!plain(edits.order)) return;
+  if (!plain(edits.order)) return changed;
   for (const ids of Object.values(edits.order)) {
     if (!Array.isArray(ids)) continue;
     ids.forEach((id: unknown, i) => {
       const base = amplifiedUnlockBase(id);
-      if (base !== undefined && !ids.includes(base)) ids[i] = base;
+      if (base === undefined || ids.includes(base)) return;
+      ids[i] = base;
+      changed = true;
     });
   }
+  return changed;
 }
+// Whether mergeAmplifiedUnlocks would change this saved state, without changing it.
+export const holdsAmplifiedUnlocks = (state: { checks?: unknown; taskEdits?: unknown }) =>
+  mergeAmplifiedUnlocks(structuredClone({ checks: state.checks, taskEdits: state.taskEdits }));
 // Returns a clean copy of factoryGroups, or a blank one when absent. Every assignment must
 // name a group from the same list, each group at most once per row. The items a group makes on
 // site (local, #874) must each be a known item (items.ts), at most once per group, and the group

@@ -43,6 +43,7 @@ export {
   fuelledModes,
   handbookBay,
   handbookFloor,
+  holdsAmplifiedUnlocks,
   initialState,
   linkPlaces,
   mappingFits,
