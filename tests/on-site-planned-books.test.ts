@@ -86,9 +86,10 @@ test('an item the plan made on site for the group is still counted as made on si
 });
 
 test('marks edited after the recalculation leave the books as the plan was calculated (#1003)', () => {
-  // Group 1 clears Aluminum Scrap and marks Rocket Fuel, which its own Rocket Fuel line (made for
-  // its Compacted Coal) makes; no recalculation yet.
-  const rocket = phase4().rows?.find(row => row.id === `Recipe_RocketFuel_C:${G1}`);
+  // Group 1 clears Aluminum Scrap and marks Rocket Fuel, which the plan makes on a central line
+  // (a group never copies Rocket Fuel for its Compacted Coal byproduct, #1012); no recalculation
+  // yet.
+  const rocket = phase4().rows?.find(row => row.id === 'Recipe_RocketFuel_C');
   assert.ok((rocket?.outputs['Rocket Fuel'] || 0) > 0);
   const edited = marking(['Compacted Coal', 'Rocket Fuel', 'Water']);
   const books = itemBooks(phase4(), edited, planned());

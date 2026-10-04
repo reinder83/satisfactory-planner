@@ -290,15 +290,17 @@ test('an own line’s byproduct its group marks but the plan did not make on sit
 });
 
 test('marks edited after the recalculation leave the notes as the plan was calculated (#1003)', () => {
-  // Group 1 clears Aluminum Scrap and marks Rocket Fuel, which its own Rocket Fuel line makes.
+  // Group 1 clears Aluminum Scrap and marks Rocket Fuel, which the plan makes on a central line (a
+  // group never copies Rocket Fuel for its Compacted Coal byproduct, #1012).
   const edited = scrapGroups(['Compacted Coal', 'Rocket Fuel', 'Water']);
   const { model, note } = dialogOf(scrapPlan, edited, OWN_SCRAP, '4');
   assert.equal(note, SCRAP_NOTE);
   assert.equal(model.bankNote?.ownLine, 'Group 1');
-  const rocket = dialogOf(scrapPlan, edited, `Recipe_RocketFuel_C:${G1}`, '4');
+  assert.deepEqual(model.bankNote, dialogOf(scrapPlan, scrapMarks, OWN_SCRAP, '4').model.bankNote);
+  const rocket = dialogOf(scrapPlan, edited, 'Recipe_RocketFuel_C', '4');
+  assert.ok(rocket.model.outputs.some(output => output.pre === 'Rocket Fuel'));
   assert.deepEqual(
     rocket.model.bankNote,
-    dialogOf(scrapPlan, scrapMarks, `Recipe_RocketFuel_C:${G1}`, '4').model.bankNote,
+    dialogOf(scrapPlan, scrapMarks, 'Recipe_RocketFuel_C', '4').model.bankNote,
   );
-  assert.deepEqual(rocket.model.bankNote?.planWide?.items, ['Rocket Fuel']);
 });

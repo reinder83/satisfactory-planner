@@ -73,8 +73,9 @@ function offerUses(
 
 // The ingredients the group's own lines of its marked parts would take in one phase: for each
 // item of `used` (the inputs of the group's rows) that it marks, the inputs of each of `rows`
-// that makes it and that a recalculation can copy for a group (onSiteCopyable), then the same
-// for each such input it marks too, as siteCopies chains them.
+// that makes it as its primary product and that a recalculation can copy for a group
+// (onSiteCopyable; never a row that makes it only as a byproduct, #1012), then the same for each
+// such input it marks too, as siteCopies chains them.
 function partIngredients(
   rows: readonly CalcRow[],
   used: readonly string[],
@@ -86,7 +87,7 @@ function partIngredients(
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
     for (const row of rows) {
-      if (!Object.keys(row.outputs || {}).includes(part) || !onSiteCopyable(row)) continue;
+      if (!onSiteCopyable(row, part)) continue;
       for (const item of Object.keys(row.inputs || {})) {
         found.push({ item, part, line: row.name });
         if (marked.has(item) && !parts.includes(item)) parts.push(item);
@@ -375,10 +376,13 @@ interface GroupMarks {
 // Why a group's mark of `item` gives it no line in the phase shown: the picker's notes for a raw
 // resource and for an item none of its lines uses (so a recalculation would give it no line
 // either), the raw resource's note too for an item its lines use that no recipe the planner
-// copies for a group makes (a radioactive item, #933), "needs a recalculation" when the plan has
+// copies for a group makes (a radioactive item, #933, or one the plan makes only as a byproduct,
+// such as Dark Matter Residue, #1012), "needs a recalculation" when the plan has
 // no line for it (#938, #970), "made centrally in this phase" when the planner fell back to
 // central lines there, and otherwise "no line in this phase", as when the group uses the item only
-// in other phases.
+// in other phases, or when the central lines' byproduct of a fluid covers all the group uses there
+// and its line drops to nothing (siteFeeds in planner/on-site.ts, #1012), which a recalculation
+// would plan the same way, so the notice asks for none.
 function markNote(item: string, marks: GroupMarks): string {
   if (!onSitePlannable(item)) return RAW_NOTE;
   if (!marks.used.includes(item)) return UNUSED_NOTE;

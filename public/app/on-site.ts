@@ -30,12 +30,18 @@ export const onSitePlannable = (item: string): boolean =>
 // planner/on-site.ts).
 const SITE_NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
 
-// Whether a recalculation can give a group its own line of `row`'s recipe, as the planner
-// decides it for a part the group marks (copyable and markable in planner/on-site.ts): a machine
-// that takes power, not a nuclear recipe (so never one making a radioactive item). The Made on
-// site picker follows only these from a marked part to its ingredients (#967). A test checks
-// the two rules agree on every recipe.
-export const onSiteCopyable = (row: Pick<CalcRow, 'name' | 'power' | 'inputs' | 'outputs'>) =>
+// Whether a recalculation can give a group its own line of `row`'s recipe for `item`, a part the
+// group marks, as the planner decides it (siteCopies, copyable and markable in
+// planner/on-site.ts): `item` is the row's primary product, its first output (#1012, the
+// planner's primaryOutput, read from a plan row here), so a recipe that makes it only as a
+// byproduct stays central; and the recipe is a machine that takes power, not a nuclear one (so
+// never one making a radioactive item). The Made on site picker follows only these from a marked
+// part to its ingredients (#967). A test checks the two rules agree on every recipe and output.
+export const onSiteCopyable = (
+  row: Pick<CalcRow, 'name' | 'power' | 'inputs' | 'outputs'>,
+  item: string,
+) =>
+  Object.keys(row.outputs || {})[0] === item &&
   row.power > 0 &&
   !SITE_NUCLEAR.test(
     [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
@@ -156,8 +162,9 @@ function ratesOf(
 // offers them (onSiteOffers, #951, #967): in a phase the plan builds (not a milestone-only phase,
 // #759), an item that a row of `plan` with a share in the group (`shares`) uses, then each marked
 // ingredient of a line of `plan` that makes such an item (Copper Ingot for Wire), down a chain of
-// marked parts. Only an item a line of that phase makes by a recipe the planner copies for a group
-// (onSiteCopyable) counts, so a radioactive item (#933) gets no line.
+// marked parts. Only an item a line of that phase makes as its primary product by a recipe the
+// planner copies for a group (onSiteCopyable) counts, so a radioactive item (#933) gets no line,
+// and nor does one the phase makes only as a byproduct (Heavy Oil Residue from Plastic, #1012).
 function onSiteLineItems(
   plan: OnSitePlan,
   shares: OnSiteShares,
@@ -169,8 +176,7 @@ function onSiteLineItems(
     if (plan.settings && milestoneOnlyPhase({ settings: plan.settings, guide: plan.guide }, phase))
       continue;
     const rows = stage?.rows || [];
-    const makers = rows.filter(onSiteCopyable);
-    const makersOf = (item: string) => makers.filter(row => Object.hasOwn(row.outputs || {}, item));
+    const makersOf = (item: string) => rows.filter(row => onSiteCopyable(row, item));
     const lined = (item: string) => marked.has(item) && makersOf(item).length > 0;
     const found = [
       ...new Set(
@@ -196,7 +202,10 @@ function onSiteLineItems(
 // counted alike and the plan's own solve never makes it ask again. An item stored without a row
 // of the group using it (an earlier release stored every mark of a group with any consumer) is no
 // line, so such a plan matches the marks now without a recalculation, and so is a radioactive
-// item (#933), for which the planner made none.
+// item (#933), for which the planner made none. A plan calculated before #1012 may hold a group's
+// copy of a recipe that makes a marked item only as a byproduct: by this rule the copy is no line
+// of that item on either side, so the plan loads and asks nothing for it, and the next
+// recalculation drops the copy.
 export function onSitePlannedItems(
   plan: OnSitePlan & Pick<StoredCalculatedPlan, 'settings'>,
 ): Record<string, string[]> {
