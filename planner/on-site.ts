@@ -45,11 +45,17 @@ const markable = (item: string) =>
 type Shares = Record<string, number>;
 const phaseShares = (entry: OnSiteGroup, phase: number): Shares =>
   entry.shares[String(phase) as keyof OnSiteGroup['shares']] || {};
-// A row's share for a group: its own, or an amplified twin's unamplified line's.
-const shareOf = (shares: Shares, rowId: string) =>
-  shares[rowId] ?? (rowId.startsWith('amp:') ? shares[rowId.slice(4)] : undefined) ?? 0;
+// A row's share for a group, by the row's own id only (#904). An amplified twin (`amp:X`) and
+// its unamplified line (`X`) are separate rows everywhere else: each has its own memberships
+// (factoryGroups.assignments by row id), its own card and its own check key, a recalculation
+// carries memberships by the exact id (mergeGroups in public/state/carry.ts), and the books place
+// a row by its own memberships alone (rowPlaces in public/app/group-order.ts). So neither twin
+// borrows the other's share, nor its part (phaseRate), and a group's line is never drawn on for
+// a row the books do not credit the group with.
+const shareOf = (shares: Shares, rowId: string) => shares[rowId] ?? 0;
 // A group's part of a recipe's row in `phase` as it follows the row's total, for a row with a
-// fixed-rate membership (#984), or undefined: then its share sizes it.
+// fixed-rate membership (#984), or undefined: then its share sizes it. By the row's own id only,
+// as shareOf (#904).
 const phaseRate = (entry: OnSiteGroup, phase: number, rowId: string): OnSiteRate | undefined => {
   const parts = entry.rates?.[String(phase) as StageKey];
   return parts && Object.hasOwn(parts, rowId) ? parts[rowId] : undefined;
@@ -63,8 +69,10 @@ export const totalPerMachine = (recipe: PoolRecipe) =>
 // pool, before the network of the two-step fit narrows it, so every solve of the phase sees the
 // same copies). A group gets a copy of each recipe whose primary product (primaryOutput) is an
 // item it marks and has a consumer of in this phase: a row it has a share or a part (#984) of
-// that uses the item, or one of its own copies that does (Copper Ingot for its Wire line). No
-// consumer, no line. A recipe that makes the item only as a byproduct stays central (#1012): a
+// that uses the item, or one of its own copies that does (Copper Ingot for its Wire line). A
+// recipe's amplified twin is a row of its own with its own share or part (#904), but only the
+// inner fit's pool holds it (phasePool in model.ts), so here the recipe stands in for its twin.
+// No consumer, no line. A recipe that makes the item only as a byproduct stays central (#1012): a
 // copy of it would run the whole recipe for the group, take over the group's own consumer row
 // (Rocket Fuel, copied for its Compacted Coal) and so drop and re-add the group's lines at every
 // recalculation. A copy is the recipe as it is, whole machines like it and never amplified, with
@@ -75,12 +83,9 @@ export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRec
     const shares = phaseShares(entry, phase);
     const marked = new Set(entry.items.filter(markable));
     const consumed = new Set<string>();
+    const held = (rowId: string) => shareOf(shares, rowId) > 0 || !!phaseRate(entry, phase, rowId);
     for (const recipe of pool)
-      if (
-        shareOf(shares, recipe.id) > 0 ||
-        (shares['amp:' + recipe.id] ?? 0) > 0 ||
-        phaseRate(entry, phase, recipe.id)
-      )
+      if (held(recipe.id) || held('amp:' + recipe.id))
         for (const item of Object.keys(recipe.inputs)) if (marked.has(item)) consumed.add(item);
     const copied = new Set<string>();
     // Each pass copies the makers of the items consumed so far; their inputs may add more.
