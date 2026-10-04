@@ -69,10 +69,7 @@ test('a toast over the focused field goes to the top, and comes back down when i
   phone = false;
   field.getBoundingClientRect = () => new DOMRect(179, 720, 130, 33);
   field.focus();
-  toast(
-    'Enter a rate above 0, or leave the field empty for the whole output or the remainder.',
-    true,
-  );
+  toast('Enter a rate above 0, or leave the field empty for the whole output or the rest.', true);
   await settle();
   assert.equal(strip.dataset.place, 'top', 'the field under the bottom strip moves it up');
 

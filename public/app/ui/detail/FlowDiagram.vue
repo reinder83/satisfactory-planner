@@ -159,8 +159,16 @@ const flow = computed(() => {
           >
         </div>
       </div>
-      <p v-if="flow.model.bankNote" class="small muted">
+      <p v-if="flow.model.bankNote?.ownLine" class="small muted">
+        Demand of {{ flow.model.bankNote.ownLine }}'s lines, which this line makes the item for on
+        site{{
+          flow.model.bankNote.shared ? ' together with the group’s other lines making it' : ''
+        }}; what it makes beyond that goes to the AWESOME Sink.
+      </p>
+      <p v-else-if="flow.model.bankNote" class="small muted">
         Demand for the item across this phase's whole plan{{
+          flow.model.bankNote.lessOnSite ? ', less what factory groups make on site' : ''
+        }}{{
           flow.model.bankNote.shared
             ? ', supplied together with the other recipes producing it'
             : ''

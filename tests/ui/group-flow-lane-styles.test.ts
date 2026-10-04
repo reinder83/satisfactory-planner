@@ -1,22 +1,24 @@
 // The colour and dash of each item's lanes on a factory group's flow page (#909): lanes must
 // not differ by colour alone (WCAG 1.4.1), so neighbouring items differ in dash from the first
 // item on, the first items never share both colour and dash, and the same lanes always get the
-// same styles.
+// same styles. Lanes that never run beside each other or overlap keep this preferred order;
+// tests/ui/group-flow-lane-neighbours.test.ts covers lanes that do (#920).
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import type { FlowLane } from '../../public/app/group-flow.ts';
-import { laneStyleAt, laneStyles } from '../../public/app/views/group-flow-page.ts';
+import { laneStyleAt, laneStyles, type LaneFlow } from '../../public/app/views/group-flow-page.ts';
 
-// A lane per item, in the given order; laneStyles only reads the item.
-const lanesOf = (items: readonly string[]): FlowLane[] =>
-  items.map((item, lane) => ({
+// A lane per item, in the given order, on rows no line has: no two lanes meet.
+const lanesOf = (items: readonly string[]): LaneFlow => ({
+  lines: [],
+  lanes: items.map((item, lane) => ({
     lane,
     line: `l${lane}`,
     item,
     from: `out|${lane}`,
     to: [],
     links: [],
-  }));
+  })),
+});
 const items = (n: number) => Array.from({ length: n }, (_, i) => `Item ${i}`);
 
 // The six colours times the three dashes.
