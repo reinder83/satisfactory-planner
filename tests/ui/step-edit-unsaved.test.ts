@@ -4,7 +4,8 @@
 // outside a field) keeps edit mode on and the form open, which says so in a live region and
 // focuses Save step, with Cancel beside it (holdUnsavedChoices in api.ts); leaving the page or
 // changing the phase asks first (allowSwitch); closing the tab warns (listeners.ts). A form whose
-// fields are the saved step holds nothing back. Escape inside the form stays Cancel (#601).
+// fields are the saved step holds nothing back, and Edit on another step is held back too
+// (#1029). Escape inside the form stays Cancel (#601).
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
@@ -191,6 +192,23 @@ test('a cleared title on a renamed step would restore the plan’s text: held ba
   await settle();
   assert.equal(planEditing, true);
   assert.equal(document.activeElement, saveStep());
+  assert.deepEqual(sent, []);
+});
+
+test('Edit on another step is held back too; with no typed text it opens that step (#1029)', async () => {
+  const other = () => $<HTMLButtonElement>('#main [data-edit-task="phase-3-survey"]')!;
+  type('title', 'Typed but not saved');
+  other().click();
+  await assertHeld('Edit on another step');
+  assert.equal(editingTask, id, 'the open form stays the one being edited');
+  assert.equal($('#main [data-task-edit="phase-3-survey"]'), null);
+  // Put back to the saved text: Edit on the other step opens it, as before.
+  type('title', savedTitle);
+  other().click();
+  await settle();
+  assert.equal(editingTask, 'phase-3-survey');
+  assert.equal(form(), null, 'the first form closed');
+  assert.ok($('#main [data-task-edit="phase-3-survey"] [name=title]'));
   assert.deepEqual(sent, []);
 });
 
