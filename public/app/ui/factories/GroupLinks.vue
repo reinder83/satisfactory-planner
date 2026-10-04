@@ -65,7 +65,7 @@ const view = computed(() =>
       groupsState = factoryGroupsState();
     if (!calculated || !stage?.rows?.length || !groupsState.groups.length) return null;
     const name = (id: string) => placeName(id, groupsState.groups, stage.raw);
-    const links = groupLinks(stage, groupsState).map(link => {
+    const links = groupLinks(stage, groupsState, calculated.settings.onSite).map(link => {
       const key = link.from + ':' + link.to,
         transport = linkTransportFor(groupsState.links, link.from, link.to);
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
@@ -167,7 +167,7 @@ async function setTransport(
   const update = linkTransportUpdate(
     link,
     change,
-    linkSiblings(calculated?.stages, factoryGroupsState(), link),
+    linkSiblings(calculated?.stages, factoryGroupsState(), link, calculated?.settings.onSite),
   );
   // Busy while it saves (app/busy.ts, #299). A select changed by a key meanwhile saves nothing and
   // shows the saved choice again.
