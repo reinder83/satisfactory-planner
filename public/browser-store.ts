@@ -4,6 +4,7 @@
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI. A
 // second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497).
 import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
+import { mergeAmplifiedUnlocks } from './state.ts';
 import type { BrowserWorkspace, StoredProfile } from './types/index.ts';
 
 // What an older planner says about saves a newer one wrote, whether the database itself or the
@@ -309,6 +310,11 @@ export function openBrowserStore(
             // Records written before lastBackup existed have no such field: read it as null
             // ("never exported"), as the type says. A change writes the field back (#72).
             data.lastBackup ??= null;
+            // Progress is served as stored here, not through validateState as the server loads
+            // it, so an amplified twin's unlock records from before #901 are merged into their
+            // recipe's step as the record is read; a change writes them back merged.
+            for (const save of data.saves)
+              for (const profile of save.profiles) mergeAmplifiedUnlocks(profile.state);
             answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
           } catch (error) {

@@ -2,6 +2,7 @@
 // recipes": the picker is ui/wizard/AltPicker.vue and its "recipe ↗" dialog
 // ui/detail/AltRecipeDialog.vue. This module keeps what they share with the rest of the
 // app.
+import { recipeIdOf } from '../../progression.ts';
 import { workspace } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { StoredCalculatedPlan } from '../../types/index.ts';
@@ -9,12 +10,16 @@ import type { StoredCalculatedPlan } from '../../types/index.ts';
 // The alternate ids a calculated plan actually uses, sorted. "Planner's choice"
 // (AltPicker.vue) calculates with every alternate allowed and ticks these.
 // MAM recipes (Turbofuel, Compacted Coal) appear in plans with alternate:false, so match catalog ids too.
+// Each row counts as its recipe (recipeIdOf): an amplified twin ('amp:<recipe>') or a group's own
+// line ('<recipe>:<group>') picks the recipe, never its row id, which the planner would drop (#901).
 export const alternatesUsed = (plan: StoredCalculatedPlan | null | undefined): string[] => {
   const altIds = new Set((workspace?.catalog?.alternates || []).map(a => a.id));
   return [
     ...new Set(
       Object.values(plan?.stages || {}).flatMap(snapshot =>
-        (snapshot.rows || []).filter(r => r.alternate || altIds.has(r.id)).map(r => r.id),
+        (snapshot.rows || [])
+          .filter(r => r.alternate || altIds.has(recipeIdOf(r)))
+          .map(r => recipeIdOf(r)),
       ),
     ),
   ].sort();

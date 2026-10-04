@@ -46,6 +46,7 @@ export {
   initialState,
   linkPlaces,
   mappingFits,
+  mergeAmplifiedUnlocks,
   safeKey,
   slotPosition,
   validateState,

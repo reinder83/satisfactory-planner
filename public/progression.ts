@@ -15,9 +15,23 @@ export interface GuideTask {
   body: string;
 }
 
-// The recipe a row runs: its own id, or for a factory group's own line made on site (#875,
-// '<recipe>:<group>') the recipe it copies, so its unlock and milestone are the recipe's.
-const recipeIdOf = (row: Pick<CalcRow, 'id' | 'onSite'>) => row.onSite?.recipe ?? row.id;
+// The id prefix and name suffix of an amplified twin (amplified() in planner/recipes.ts, which a
+// test keeps in step): a row of its own, 'amp:<recipe>', with its own progress key.
+export const AMPLIFIED_ID = 'amp:';
+const AMPLIFIED_NAME = ' (somersloop amplified)';
+// The recipe a row runs: its own id; for a factory group's own line made on site (#875,
+// '<recipe>:<group>') the recipe it copies; for an amplified twin (#901, 'amp:<recipe>') the
+// recipe it doubles. So a line's unlock and milestone are always its recipe's. Every place that
+// needs a recipe from a row goes through this (the unlock steps and milestones here, the picked
+// unlocks a new profile carries, the wizard's "Planner's choice").
+export const recipeIdOf = (row: Pick<CalcRow, 'id' | 'onSite'>): string =>
+  row.onSite?.recipe ??
+  (row.id.startsWith(AMPLIFIED_ID) ? row.id.slice(AMPLIFIED_ID.length) : row.id);
+// The recipe's own name for a row: an amplified twin's without " (somersloop amplified)".
+const recipeNameOf = (row: Pick<CalcRow, 'id' | 'name'>): string =>
+  row.id.startsWith(AMPLIFIED_ID) && row.name.endsWith(AMPLIFIED_NAME)
+    ? row.name.slice(0, -AMPLIFIED_NAME.length)
+    : row.name;
 
 // What every task list of one phase's guide reads, built once by guideContext. `plan` is the
 // profile's calculation snapshot, `checks` its ticked checklist keys, `data` progression.json,
@@ -449,7 +463,10 @@ export function milestoneTasks(context: GuideContext, required: ProgressionEntry
 // again (#870), as each milestone is listed once (#758). An unlock is a fact about the world, so a
 // step repeated in every phase that uses the recipe made a later phase look started while the
 // profile was still on the first. The check key stays `recipe-unlock-<recipe>` whichever phase
-// lists it, so a tick made in a later phase's list counts in the phase that lists it now.
+// lists it, so a tick made in a later phase's list counts in the phase that lists it now. The
+// recipe is recipeIdOf's, so an amplified twin or a group's own line shares its recipe's one step
+// (#875, #901); keys an earlier release gave an amplified twin, 'recipe-unlock-amp:<recipe>', are
+// merged into it by validateState (mergeAmplifiedUnlocks in state/validate.ts).
 export function hardDriveTasks(context: GuideContext): GuideTask[] {
   const { checks, data, stage, rows } = context;
   const earlier = earlierAlternates(context);
@@ -474,7 +491,7 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
       );
       return {
         id: 'recipe-unlock-' + recipeIdOf(row),
-        title: 'Unlock ' + row.name,
+        title: 'Unlock ' + recipeNameOf(row),
         body: `Required by this profile’s ${row.machine} line. ${listedNames(alternate?.requires ?? [], data, 'First unlock')}Choose it when offered by hard-drive research. Confirm here only after unlocking it in game; selecting “all alternates” in the profile is a planning allowance, not an in-game unlock.`,
       };
     }),

@@ -14,6 +14,7 @@ import type {
   StoredCalculatedPlan,
   StoredProfile,
 } from '../types/index.ts';
+import { recipeIdOf } from '../progression.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
 import {
   type RowsPlan,
@@ -106,11 +107,12 @@ const planRows = (plan: RowsPlan | null | undefined): Map<string, CalcRow> => {
 };
 // Hand-picking alternates states which recipes you own: the recipes ticked in
 // the picker plus the ones a pure-ingot or power preference locks in for you,
-// which reach the plan as alternate rows rather than as picks.
+// which reach the plan as alternate rows rather than as picks. A row's recipe is recipeIdOf's, so
+// an amplified twin or a group's own line ticks its recipe's step (#901).
 export function pickedRecipeUnlocks(plan: RowsPlan | null | undefined): string[] {
   if (plan?.settings?.recipes !== 'custom') return [];
   const ids = new Set(plan.settings.alternateRecipes || []);
-  for (const row of planRows(plan).values()) if (row.alternate) ids.add(row.id);
+  for (const row of planRows(plan).values()) if (row.alternate) ids.add(recipeIdOf(row));
   return [...ids].filter(id => safeKey('recipe-unlock-' + id));
 }
 // What a new profile may be told is already standing in the world. The guided
