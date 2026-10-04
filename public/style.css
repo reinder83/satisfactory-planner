@@ -4863,8 +4863,10 @@ button.rail-tile:hover {
 
 /* ── Made on site (#877) ───────────────────────────────── */
 /* A group's "Made on site" picker while groups are edited (OnSitePicker.vue): a box per item,
-   wrapping into columns, then Save. On a phone each box's label is a 44px touch target, as the
-   page's other phone targets; Save is one through the .btn rule. */
+   wrapping into columns, then the items only other phases use under a heading of their own
+   (#963), then Save. Each box sits at the top of its cell, level with the item's name, and a
+   note goes on its own line under the name (after it on a phone). On a phone each box's label
+   is a 44px touch target, as the page's other phone targets; Save is one through the .btn rule. */
 .on-site-picker {
   border: 1px dashed var(--line);
   margin: 0 0 14px;
@@ -4890,18 +4892,44 @@ button.rail-tile:hover {
 }
 .on-site-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 9px;
   min-width: 0;
   font-size: 12.5px;
   cursor: pointer;
   overflow-wrap: anywhere;
 }
+/* The box and the name's first line centred on the 26px icon. */
 .on-site-item input {
   width: 18px;
   height: 18px;
   flex: none;
-  margin: 0;
+  margin: 4px 0 0;
+}
+.on-site-item > span {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-top: 3px;
+}
+.on-site-item small {
+  display: block;
+}
+/* The items only the group's lines in other phases use (#963): a dashed rule and a small heading
+   naming those phases, and wider columns, since each of them has a note. */
+.on-site-elsewhere {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.on-site-sub {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--kicker);
+}
+.on-site-elsewhere .on-site-items {
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
 }
 .on-site-item .item-icon {
   width: 26px;
@@ -4929,11 +4957,20 @@ button.rail-tile:hover {
   display: block;
 }
 @media (max-width: 720px) {
-  .on-site-items {
+  .on-site-items,
+  .on-site-elsewhere .on-site-items {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Each label is at least 44px. Its one line of box, icon and text is centred in that (a wrapping
+     flex line, so align-content applies); a taller one is the 44px or more, the box on top. The
+     note follows the name, as a one-column list has room for it there. */
   .on-site-item {
     min-height: 44px;
+    flex-wrap: wrap;
+    align-content: center;
+  }
+  .on-site-item small {
+    display: inline;
   }
 }
 

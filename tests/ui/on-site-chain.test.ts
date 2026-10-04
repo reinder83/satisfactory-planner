@@ -137,10 +137,10 @@ test('#967: a ticked part offers the ingredients of its recipe, named after it',
   assert.deepEqual(onSiteOffers(plan, alpha(), ALPHA), plain);
   // Wire ticked (saved or not): Copper Ingot, which the plan's Wire line takes and a plan line
   // makes, after the items the cards use. Copper Ore is raw, so never offered.
-  assert.deepEqual(onSitePickerOffers(plan, alpha(), ALPHA, '3', ['Wire']), [
-    ...plain.map(item => ({ item, note: '' })),
-    { item: 'Copper Ingot', note: FOR_WIRE },
-  ]);
+  assert.deepEqual(onSitePickerOffers(plan, alpha(), ALPHA, '3', ['Wire']), {
+    here: [...plain.map(item => ({ item, note: '' })), { item: 'Copper Ingot', note: FOR_WIRE }],
+    elsewhere: [],
+  });
   assert.deepEqual(onSiteOffers(plan, alpha(['Wire']), ALPHA), ['Copper Ingot', ...plain]);
   // A part the group's lines do not use offers nothing more: Cable is not Alpha's.
   assert.deepEqual(onSiteOffers(plan, alpha(['Cable']), ALPHA), plain);
@@ -148,10 +148,11 @@ test('#967: a ticked part offers the ingredients of its recipe, named after it',
   // ores. An ingredient a card uses as well keeps no note.
   const chain = onSitePickerOffers(plan, alpha(), ALPHA, '3', ['Steel Ingot', 'Steel Pipe']);
   assert.deepEqual(
-    chain.find(offer => offer.item === 'Steel Ingot'),
+    chain.here.find(offer => offer.item === 'Steel Ingot'),
     { item: 'Steel Ingot', note: '(for Steel Pipe made on site)' },
   );
-  assert.ok(chain.every(offer => !['Iron Ore', 'Coal'].includes(offer.item)));
+  assert.ok(chain.here.every(offer => !['Iron Ore', 'Coal'].includes(offer.item)));
+  assert.deepEqual(chain.elsewhere, []);
 });
 
 test('#967: tick Wire and Copper Ingot is offered at once; one recalculation plans the chain', async () => {
@@ -361,18 +362,23 @@ test('raw resources and nuclear recipes are never followed (#921, #933)', async 
   assert.deepEqual(onSiteOffers(plan, held, ALPHA, ['Encased Uranium Cell']), offers);
 });
 
-test('a part used only in other phases names them with its ingredients (#941)', () => {
+test('a part used only in other phases is listed under them with its ingredients (#941, #963)', () => {
   const plan = generated();
   // Alpha's Stator line is not in the Phase 3 plan: Wire is used in other phases only.
   plan.stages['3'].rows = plan.stages['3'].rows!.filter(row => row.id !== 'Recipe_Stator_C');
   const offers = onSitePickerOffers(plan, alpha(), ALPHA, '3', ['Wire']);
-  const noteFor = (item: string) => offers.find(offer => offer.item === item)?.note;
-  assert.equal(noteFor('Wire'), '(used by Stator in Phases 4 and 5)');
-  assert.equal(noteFor('Copper Ingot'), '(for Wire made on site in Phases 4 and 5)');
-  // The ingredients come after the items the Phase 3 cards use, among the other phases' items.
-  assert.equal(offers[0]!.note, '');
+  // The ingredients come after the items the Phase 3 cards use, among the other phases' items,
+  // under those phases, each naming only its line or part.
+  assert.ok(offers.here.length && offers.here.every(offer => offer.note === ''));
+  assert.equal(offers.elsewhere.length, 1);
+  // The one group, checked just above.
+  const later = offers.elsewhere[0]!;
+  assert.equal(later.where, 'Phases 4 and 5');
   assert.deepEqual(
-    offers.filter(offer => offer.note).map(offer => offer.item),
+    later.entries.map(offer => offer.item),
     ['Copper Ingot', 'Stator', 'Steel Pipe', 'Wire'],
   );
+  const noteFor = (item: string) => later.entries.find(offer => offer.item === item)?.note;
+  assert.equal(noteFor('Wire'), '(used by Stator)');
+  assert.equal(noteFor('Copper Ingot'), FOR_WIRE);
 });
