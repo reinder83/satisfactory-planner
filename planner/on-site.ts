@@ -304,6 +304,12 @@ export function siteFloors(
 // and when no settled plan was measured at its own totals, the plan with the shares stands if it
 // was (its shares are those rowShares gives at its totals), else the last plan that fits, as
 // before. A phase without parts is planned once, as before #984.
+// A part of a row the plan being recalculated lacked in the phase (`ifBuilt`, #1038) counts only
+// where a plan builds the row. The solver never reads it, so the first plan sizes the group's
+// line by the row's share, as before, and a plan that leaves the row out stands as it did, with
+// no extra solve. When the first plan builds such a row and every part of `rates` holds there,
+// the parts are settled at the first plan's totals as above, and the first plan stands when no
+// settled plan was measured at its own totals.
 const RATE_ROUNDS = 4;
 export function withinRates(
   config: CurrentSettings,
@@ -313,33 +319,51 @@ export function withinRates(
   const parts = partsOf(config, phase);
   const first = solve(config);
   if (!parts.size) return first;
-  if (first.feasible && !first.onSiteDropped && holdAll(config, phase, rowTotals(first.rows)))
-    return first;
+  const fits = first.feasible && !first.onSiteDropped;
+  if (fits && measured(config, phase, config, first)) return first;
+  if (fits && holdAll(config, phase, rowTotals(first.rows)))
+    return settle(config, phase, parts, first, solve).measured ?? first;
   const frozen = withParts(config, phase, parts, () => null);
   const shared = solve(frozen);
   if (!shared.feasible) return first.feasible ? first : shared;
-  let result: Solved = shared,
-    totals = rowTotals(shared.rows);
+  const settled = settle(config, phase, parts, shared, solve);
+  return settled.measured ?? (measured(config, phase, frozen, shared) ? shared : settled.last);
+}
+// withinRates' rounds from `start`: the parts settled at its totals, and again at each settled
+// plan's totals, at most RATE_ROUNDS times. `measured` is the first settled plan whose parts were
+// measured at its own totals, if any, and `last` the last plan that fits (`start` when none
+// does). The rounds end early when a settled plan does not fit, or fits only by making the items
+// centrally or by rounding a stopped search where `start` did not (fallsBack).
+function settle(
+  config: CurrentSettings,
+  phase: number,
+  parts: ReadonlySet<string>,
+  start: Solved,
+  solve: (settings: CurrentSettings) => RunResult,
+): { measured?: Solved; last: Solved } {
+  let last = start,
+    totals = rowTotals(start.rows);
   for (let round = 0; round < RATE_ROUNDS; round++) {
     const settings = settledParts(config, phase, parts, totals);
     const settled = solve(settings);
-    if (!settled.feasible || fallsBack(settled, shared)) break;
-    if (measured(config, phase, settings, settled)) return settled;
-    result = settled;
+    if (!settled.feasible || fallsBack(settled, start)) break;
+    if (measured(config, phase, settings, settled)) return { measured: settled, last: settled };
+    last = settled;
     totals = rowTotals(settled.rows);
   }
-  return measured(config, phase, frozen, shared) ? shared : result;
+  return { last };
 }
 // Whether `plan`, planned with `settings`, sizes each group's part of a row as the books count it
 // at the plan's own totals (rowPlaces): a part that follows the row's total (rowParts) where the
 // row makes at least the fixed rates it comes after, any other as the share rowShares gives it
 // at the row's total (settledShare, within rounding: the shares the plan was calculated with are
-// rowShares' own sums), and any share of a row the plan does not build.
+// rowShares' own sums), and any share of a row the plan does not build. The parts of `ifBuilt`
+// count alike (#1038), so one whose row the plan does not build asks nothing.
 function measured(config: CurrentSettings, phase: number, settings: CurrentSettings, plan: Solved) {
   const key = String(phase) as StageKey;
   const totals = rowTotals(plan.rows);
   return Object.entries(config.onSite || {}).every(([group, entry]) =>
-    Object.entries(entry.rates?.[key] || {}).every(([rowId, part]) => {
+    phaseParts(entry, key).every(([rowId, part]) => {
       const total = totals.get(rowId) ?? 0;
       const used = settings.onSite?.[group];
       if (used?.rates?.[key]?.[rowId]) return holds(part, total);
@@ -348,7 +372,8 @@ function measured(config: CurrentSettings, phase: number, settings: CurrentSetti
     }),
   );
 }
-// Whether every row with a part makes at least the fixed rates its parts come after, at `totals`.
+// Whether every row with a part makes at least the fixed rates its parts come after, at `totals`:
+// the parts of `rates`, which the solver takes whether the row is built or not.
 const holdAll = (config: CurrentSettings, phase: number, totals: ReadonlyMap<string, number>) =>
   Object.values(config.onSite || {}).every(entry =>
     Object.entries(entry.rates?.[String(phase) as StageKey] || {}).every(([rowId, part]) =>
@@ -362,15 +387,17 @@ const holdAll = (config: CurrentSettings, phase: number, totals: ReadonlyMap<str
 // total, which is what the two-step fit's exact LP sizes the group's line by (sharedSettings): with
 // the share it was calculated with there, a row of which a fixed rate is now only a part could
 // leave the network no central line for the rest, and the settled plan no fit with the groups'
-// lines (#1037, #1043).
+// lines (#1037, #1043). A part of `ifBuilt` (#1038) is settled only where its row is built at
+// `totals`; elsewhere it stays as it was: the row's share as calculated, and no part.
 const settledParts = (
   config: CurrentSettings,
   phase: number,
   parts: ReadonlySet<string>,
   totals: ReadonlyMap<string, number>,
 ) =>
-  withParts(config, phase, parts, (rowId, part) => {
+  withParts(config, phase, parts, (rowId, part, ifBuilt) => {
     const total = totals.get(rowId) ?? 0;
+    if (ifBuilt && total <= 0) return undefined;
     const share = settledShare(part, total);
     return holds(part, total) ? { part: { ...part, floor: true }, share } : { share };
   });
@@ -389,14 +416,24 @@ const fallsBack = (plan: Solved, shared: Solved) =>
 // Each row's total: its primary output per minute, or a generator's MW (rowTotal).
 const rowTotals = (rows: CalcRow[]) =>
   new Map(rows.map(row => [row.id, Object.values(row.outputs)[0] || row.generationMW || 0]));
-// The parts of `config`'s rates in `phase`, as `group|rowId`.
+// The parts of `config`'s rates and ifBuilt in `phase`, as `group|rowId`.
 function partsOf(config: CurrentSettings, phase: number): Set<string> {
   const parts = new Set<string>();
   for (const [group, entry] of Object.entries(config.onSite || {}))
-    for (const rowId of Object.keys(entry.rates?.[String(phase) as StageKey] || {}))
+    for (const [rowId] of phaseParts(entry, String(phase) as StageKey))
       parts.add(group + '|' + rowId);
   return parts;
 }
+// A group's parts in a phase as [row id, part, whether it is one of `ifBuilt`]: those of `rates`,
+// then those of `ifBuilt` (#1038). settings() keeps a row out of `ifBuilt` where `rates` has it.
+const phaseParts = (entry: OnSiteGroup, key: StageKey): [string, OnSiteRate, boolean][] => [
+  ...Object.entries(entry.rates?.[key] || {}).map(
+    ([rowId, part]): [string, OnSiteRate, boolean] => [rowId, part, false],
+  ),
+  ...Object.entries(entry.ifBuilt?.[key] || {}).map(
+    ([rowId, part]): [string, OnSiteRate, boolean] => [rowId, part, true],
+  ),
+];
 // Whether a row of `total` makes at least the fixed rates `part` comes after (and its own).
 const holds = (part: OnSiteRate, total: number) =>
   total >= part.after + part.rate - 1e-6 * Math.max(1, total);
@@ -408,21 +445,29 @@ const cappedPart = (part: OnSiteRate, total: number) =>
     : part.open * Math.max(0, total - part.after);
 // `config` with each part in `parts` (`group|rowId`) of `phase` replaced as `change` says: by
 // another part (`part`) or by none, with the row's `share` (of which 0 drops it), or (null) by
-// the share it was calculated with and no part.
+// the share it was calculated with and no part, or (undefined) not at all. `change` learns
+// whether the part is one of `ifBuilt` (#1038); a part it gives in place of one goes to `rates`.
 function withParts(
   config: CurrentSettings,
   phase: number,
   parts: ReadonlySet<string>,
-  change: (rowId: string, part: OnSiteRate) => { part?: OnSiteRate; share: number } | null,
+  change: (
+    rowId: string,
+    part: OnSiteRate,
+    ifBuilt: boolean,
+  ) => { part?: OnSiteRate; share: number } | null | undefined,
 ): CurrentSettings {
   const key = String(phase) as StageKey;
   const onSite: NonNullable<CurrentSettings['onSite']> = {};
   for (const [group, entry] of Object.entries(config.onSite || {})) {
     const shares: Record<string, number> = { ...entry.shares[key] },
-      rates: Record<string, OnSiteRate> = { ...entry.rates?.[key] };
-    for (const [rowId, part] of Object.entries(rates)) {
+      rates: Record<string, OnSiteRate> = { ...entry.rates?.[key] },
+      ifBuilt: Record<string, OnSiteRate> = { ...entry.ifBuilt?.[key] };
+    for (const [rowId, part, conditional] of phaseParts(entry, key)) {
       if (!parts.has(group + '|' + rowId)) continue;
-      const replaced = change(rowId, part);
+      const replaced = change(rowId, part, conditional);
+      if (replaced === undefined) continue;
+      delete ifBuilt[rowId];
       if (replaced?.part) rates[rowId] = replaced.part;
       else delete rates[rowId];
       if (replaced && replaced.share > 1e-6) shares[rowId] = replaced.share;
@@ -432,6 +477,7 @@ function withParts(
       ...entry,
       shares: { ...entry.shares, [key]: shares },
       rates: { ...entry.rates, [key]: rates },
+      ifBuilt: { ...entry.ifBuilt, [key]: ifBuilt },
     };
   }
   return { ...config, onSite };

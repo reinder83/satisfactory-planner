@@ -141,6 +141,12 @@ export interface OnSiteGroup {
   // row's total in the plan the recalculation produces (#984), beside its share there. Absent
   // in plans made before #984 and for rows without a fixed rate, which the share sizes.
   rates?: Partial<Record<StageKey, Record<string, OnSiteRate>>>;
+  // Per phase, the group's part of each row with a fixed-rate membership that the plan being
+  // recalculated lacks in that phase (#1038), as `rates` gives it for a row that plan has. It
+  // counts only where the plan the recalculation produces builds the row (withinRates in
+  // planner/on-site.ts); until then the row's share sizes the line, as before #1038. Absent in
+  // plans made before #1038, whose planner never read it.
+  ifBuilt?: Partial<Record<StageKey, Record<string, OnSiteRate>>>;
 }
 // A group's part of a row of total T (its primary output per minute, MW for a generator), as
 // rowShares gives it while the row makes at least what its fixed rates take: `rate` per minute

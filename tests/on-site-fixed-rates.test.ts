@@ -6,7 +6,8 @@
 // row's total changes: nothing is offered and the sink takes no more than the plan's surplus.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculate } from '../planner.ts';
+import { calculate, run, settings } from '../planner.ts';
+import { withinRates } from '../planner/on-site.ts';
 import { onSiteSettings } from '../public/app/on-site.ts';
 import { itemBooks } from '../public/app/group-links.ts';
 import { lineProblems, random, rowsOf } from './helpers/on-site-books.ts';
@@ -14,6 +15,8 @@ import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
   CurrentCalculatedPlan,
   FactoryGroups,
+  OnSiteRate,
+  OnSiteSettings,
   StageKey,
   StoredStage,
 } from '../public/types/index.ts';
@@ -276,4 +279,103 @@ test('right after a recalculation with fixed and open memberships, each own line
   assert.ok(changed >= 30, `${changed} rows with a fixed rate changed their total`);
   assert.ok(short >= 40, `${short} rows make less than their fixed rates`);
   assert.ok(left.count * 10 <= lines, `${left.count} fluids left out`);
+});
+
+// #1038: Alpha holds the Steel Beam line at a fixed 10/min and Beta the rest, and both make Steel
+// Ingot on site. The plan being recalculated (Phase 4 start, amplification on) has no Steel Beam
+// line in Phase 3; the recalculation with a higher storage rate builds one there, of 15/min.
+const ALPHA = 'fg-alpha',
+  BETA = 'fg-beta';
+const BEAM = 'Recipe_SteelBeam_C';
+const beams: FactoryGroups = {
+  groups: [
+    { id: ALPHA, name: 'Alpha' },
+    { id: BETA, name: 'Beta' },
+  ],
+  assignments: {
+    [BEAM]: [
+      { group: ALPHA, rate: 10 },
+      { group: BETA, rate: null },
+    ],
+  },
+  local: { [ALPHA]: ['Steel Ingot'], [BETA]: ['Steel Ingot'] },
+};
+const AMPLIFIED = {
+  phase: '4',
+  wholeMachines: true,
+  limitsConfirmed: true,
+  somersloops: 106,
+  amplifySloops: 80,
+} as const;
+let amplifiedPlan: CurrentCalculatedPlan | undefined;
+const beamsBefore = () => (amplifiedPlan ??= calculate(AMPLIFIED));
+// `onSite` without its parts of rows the plan being recalculated lacked (as stored before #1038),
+// or with them as parts of `rates`, which count whether the row is built or not.
+const ifBuiltAs = (onSite: OnSiteSettings, as: 'none' | 'rates'): OnSiteSettings =>
+  Object.fromEntries(
+    Object.entries(onSite).map(([group, { ifBuilt, ...entry }]) => {
+      if (as === 'none' || !ifBuilt) return [group, entry];
+      const rates = { ...entry.rates };
+      for (const [phase, rows] of Object.entries(ifBuilt) as [
+        StageKey,
+        Record<string, OnSiteRate>,
+      ][])
+        rates[phase] = { ...rates[phase], ...rows };
+      return [group, { ...entry, rates }];
+    }),
+  );
+
+test('a fixed rate on a row the plan being recalculated lacks counts where the recalculation builds it (#1038)', () => {
+  const before = beamsBefore();
+  assert.equal(row(before.stages['3'], BEAM), undefined, 'no Steel Beam line in Phase 3');
+  const onSite = onSiteSettings(before, beams)!;
+  // Phase 3's share has no total to be measured against: Beta's is the even split of the
+  // null-rate memberships, all of the row, and Alpha has none. The parts are stored apart.
+  assert.equal(onSite[ALPHA]!.shares['3']?.[BEAM], undefined);
+  assert.equal(onSite[BETA]!.shares['3']![BEAM], 1);
+  assert.deepEqual(onSite[ALPHA]!.ifBuilt!['3'], { [BEAM]: { rate: 10, open: 0, after: 0 } });
+  assert.deepEqual(onSite[BETA]!.ifBuilt!['3'], { [BEAM]: { rate: 0, open: 1, after: 10 } });
+  assert.equal(onSite[ALPHA]!.ifBuilt!['4'], undefined, 'Phase 4 has the row: a part of rates');
+  assert.deepEqual(onSite[ALPHA]!.rates!['4'], { [BEAM]: { rate: 10, open: 0, after: 0 } });
+  const plan = calculate({ ...AMPLIFIED, storageRate: 3, onSite });
+  const stage = plan.stages['3'];
+  assert.equal(row(stage, BEAM)!.outputs['Steel Beam'], 15);
+  // The books give Alpha its 10 Steel Beam/min and Beta the other 5, at 4 Steel Ingot each, and
+  // each group's line makes that in one Foundry. Alpha used to have no line in Phase 3, and Beta's
+  // was sized to the whole row: 2 Foundries making 90 Steel Ingot/min for its 20, 40 of them
+  // offered.
+  const books = itemBooks(stage, beams);
+  assert.deepEqual(books.local['Steel Ingot']?.get(ALPHA), { made: 45, asked: 40 });
+  const beta = books.local['Steel Ingot']!.get(BETA)!;
+  assert.ok(near(beta.asked, 20), `Beta asks ${beta.asked}`);
+  assert.equal(beta.made, 45);
+  assert.equal(books.offered['Steel Ingot'], undefined, 'nothing offered');
+  const problems: string[] = [];
+  for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][])
+    problems.push(...lineProblems(stage, beams, `phase ${phase}`, { count: 0 }));
+  assert.deepEqual(problems, []);
+});
+
+test('a part of a row the recalculation leaves out changes nothing and costs no solve (#1038)', () => {
+  // Recalculated with the storage rate it had, the plan still has no Steel Beam line in Phase 3.
+  const onSite = onSiteSettings(beamsBefore(), beams)!;
+  assert.ok(onSite[ALPHA]!.ifBuilt!['3']![BEAM], 'a part of the row in Phase 3');
+  const plan = calculate({ ...AMPLIFIED, onSite });
+  assert.equal(row(plan.stages['3'], BEAM), undefined);
+  // Every phase is planned exactly as without the parts (as stored before #1038).
+  const before1038 = calculate({ ...AMPLIFIED, onSite: ifBuiltAs(onSite, 'none') });
+  assert.equal(JSON.stringify(plan.stages), JSON.stringify(before1038.stages));
+  // And once: the parts take nothing from the groups' balances while the row is left out. As
+  // parts of `rates`, which take their fixed amount whether the row is built or not, the first
+  // plan breaks the fixed rates and the phase is planned again.
+  const solves = (config: OnSiteSettings) => {
+    let count = 0;
+    withinRates(settings({ ...AMPLIFIED, onSite: config }), 3, phaseSettings => {
+      count++;
+      return run(phaseSettings, 3, { roundStopped: true });
+    });
+    return count;
+  };
+  assert.equal(solves(onSite), 1);
+  assert.ok(solves(ifBuiltAs(onSite, 'rates')) > 1, 'parts of rates are planned again');
 });
