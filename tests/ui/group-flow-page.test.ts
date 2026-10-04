@@ -214,6 +214,34 @@ test('an address naming no group says so, and the group name is text', async () 
   assert.equal(document.querySelector('x-evil'), null, 'no user text is inserted as markup');
 });
 
+test('the table breaks only the cells holding a group’s long name (#988)', async () => {
+  // Ordinary names: no cell breaks, so the table is laid out as it was before #988.
+  await show('fg-iron01');
+  assert.ok($$('[data-gf-connection]').length, 'the table lists connections');
+  assert.equal($$('[data-gf-table] .gf-cell-name').length, 0);
+  // The other groups take the longest one-word name label() allows: the cells naming them break,
+  // and no other cell does.
+  const longName = 'Pars' + 'A'.repeat(76);
+  const renamed: FactoryGroups = {
+    ...groups,
+    groups: groups.groups.map(group =>
+      group.id === 'fg-iron01' ? group : { ...group, name: longName },
+    ),
+  };
+  await show('fg-iron01', { factoryGroups: renamed });
+  const cells = $$('[data-gf-table] td');
+  assert.ok(
+    cells.some(cell => cell.textContent === longName),
+    'a connection names another group',
+  );
+  for (const cell of cells)
+    assert.equal(
+      cell.classList.contains('gf-cell-name'),
+      cell.textContent!.includes(longName),
+      cell.textContent!,
+    );
+});
+
 test('a line’s ↗ opens that factory’s dialog, and closing it returns to the link (#886, #895)', async () => {
   // The page replaced the group's build-order dialog, whose stages linked to their factories.
   await show('fg-iron01');

@@ -4,13 +4,15 @@
 // group's flow page, headed by the other place's name (#997); the cells of the flow page's
 // "The diagram as a table" that name a line or a place, and the notes under "Delivers" in a factory
 // dialog (#988); the build plan's side column, whose "Profile assumptions" names the groups that
-// make items on site (#996). The table breaks only those cells, each keeping room for an ordinary
-// word, so a short word is never split letter by letter. Layout is not measurable in happy-dom, so
-// this checks the rules in style.css and that the templates still draw the elements they name; the
-// browser measurements are in the pull request.
+// make items on site (#996). The table breaks only those cells that hold a word over 20 characters
+// (hasLongWord), each keeping room for an ordinary word, so a short word is never split letter by
+// letter and a table of ordinary names is laid out as before. Layout is not measurable in
+// happy-dom, so this checks the rules in style.css, which text counts as long, and that the
+// templates still draw the elements they name; the browser measurements are in the pull request.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { hasLongWord } from '../public/app/views/group-flow-page.ts';
 
 const read = (file: string) =>
   fs.readFileSync(new URL(file, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -94,6 +96,38 @@ test('the flow table breaks only the cells naming a line or a place, each wide e
   }
 });
 
+test('a cell breaks only for a word over 20 characters, as only a group’s long name has (#988)', () => {
+  const longName = 'Pars' + 'A'.repeat(76);
+  assert.equal(longName.length, 80, 'the longest name label() allows');
+  // Up to 20 characters a word stays whole; from 21 it is long.
+  assert.equal(hasLongWord('A'.repeat(20)), false);
+  assert.equal(hasLongWord('A'.repeat(21)), true);
+  // Every word counts, wherever it stands and whatever space separates it.
+  assert.equal(hasLongWord(`Wire for ${longName}`), true);
+  assert.equal(hasLongWord(`01 Wire for ${longName}`), true);
+  assert.equal(hasLongWord(`${'B'.repeat(21)} and more`), true);
+  assert.equal(hasLongWord(`one\t${'C'.repeat(21)}\nthree`), true);
+  assert.equal(hasLongWord(`${'A'.repeat(20)} ${'B'.repeat(20)} ${'C'.repeat(20)}`), false);
+  // Ordinary names: lines, places and the words the table uses for them. The longest words of any
+  // item, recipe or machine name have 15 characters.
+  for (const text of [
+    '',
+    '01 Iron Ingot',
+    '03 Electromagnetic Control Rod',
+    'Crystallization',
+    'Wire for Industrial parts',
+    'Raw resource',
+    'Existing supply',
+    'AWESOME Sink',
+    'itself',
+    'Neural-Quantum Processor',
+  ])
+    assert.equal(hasLongWord(text), false, text);
+  // Characters, not UTF-16 units: 20 emoji are 40 units but one 20-character word.
+  assert.equal(hasLongWord('🏭'.repeat(20)), false);
+  assert.equal(hasLongWord('🏭'.repeat(21)), true);
+});
+
 test('the templates still draw the elements those rules name', () => {
   const ports = read('../public/app/ui/group-flow/FlowPorts.vue'),
     table = read('../public/app/ui/group-flow/FlowTable.vue'),
@@ -106,12 +140,20 @@ test('the templates still draw the elements those rules name', () => {
     /<section v-for="place in places"[^>]*class="gf-port">\s*<h3>\{\{ place\.label \}\}<\/h3>/,
   );
   assert.match(ports, /class="gf-port gf-fold"[\s\S]*?<h4>\{\{ place\.label \}\}<\/h4>/);
-  // The table's cells naming a line, where a link comes from and where it goes.
+  // The table's cells naming a line, where a link comes from and where it goes, when they hold a
+  // long word (tests/ui/group-flow-page.test.ts checks the drawn table).
   assert.match(table, /<details class="gf-text"/);
-  assert.match(table, /<td class="gf-cell-name">\{\{ line\.name \}\}<\/td>/);
-  assert.match(table, /<td class="gf-cell-name">\{\{ connection\.from \}\}<\/td>/);
-  assert.match(table, /<td class="gf-cell-name">\{\{ connection\.to \}\}<\/td>/);
-  assert.equal(table.match(/class="gf-cell-name"/g)?.length, 3);
+  for (const text of ['line.name', 'connection.from', 'connection.to']) {
+    const name = text.replace('.', '\\.');
+    assert.match(
+      table,
+      new RegExp(
+        `<td :class="\\{ 'gf-cell-name': hasLongWord\\(${name}\\) \\}">\\{\\{ ${name} \\}\\}</td>`,
+      ),
+      text,
+    );
+  }
+  assert.equal(table.match(/'gf-cell-name'/g)?.length, 3);
   // The notes naming a group follow the "Delivers" rows as their siblings.
   assert.match(
     diagram,

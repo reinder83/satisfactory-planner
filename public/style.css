@@ -3486,10 +3486,12 @@ button.rail-tile:hover {
   text-align: left;
   padding: 6px 14px;
 }
-/* The table's cells naming a line ("01 Wire for <group>") or a place (another group) (FlowTable.vue):
-   a group's long name breaks inside the cell rather than widening the table past its wrapper
-   (#988). Only these cells break, and each keeps room for an ordinary word ("Electronics"), so on
-   a phone the table scrolls inside its wrapper rather than splitting short words letter by letter. */
+/* The table's cells naming a line ("01 Wire for <group>") or a place (another group) that hold a
+   word over 20 characters (hasLongWord in FlowTable.vue), which only a group's long name has: it
+   breaks inside the cell rather than widening the table past its wrapper (#988). Only these cells
+   break, and each keeps room for an ordinary word ("Electronics"), so on a phone the table scrolls
+   inside its wrapper rather than splitting short words letter by letter. A table of ordinary names
+   has no such cell and is laid out as before. */
 .gf-text td.gf-cell-name {
   min-width: 14ch;
   overflow-wrap: anywhere;
