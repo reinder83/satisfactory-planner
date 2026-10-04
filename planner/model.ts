@@ -10,12 +10,17 @@ import { recipePool, amplifiable, amplified, nuclearPeriod, generators } from '.
 import { twoStepFit } from './fit.ts';
 import { readStage } from './stage.ts';
 import {
+  BYPRODUCT_FIRST,
+  feedCap,
+  feedRoute,
+  siteBalance,
   siteCopies,
   siteFloors,
   siteRoutes,
   totalPerMachine,
   type Routes,
   type SiteDraw,
+  type SiteFeed,
 } from './on-site.ts';
 
 // Plans one phase: builds the phase's LP (or MIP), solves it and turns the solution into a stage.
@@ -263,7 +268,9 @@ function phasePower(config: CurrentSettings, phase: number): PhasePower {
 }
 // The phase's LP (or MIP), in the order its constraints and variables are added: item balances,
 // power, recipe variables with the somersloop budget and caps, the rows held to their fixed rates
-// (#984, only in a re-solve that needs them), raw resources, existing supply,
+// (#984, only in a re-solve that needs them), the routes of central byproducts into the groups'
+// balances (#1012, only for an item a group makes on site that some line makes as a byproduct and
+// that balances exactly), raw resources, existing supply,
 // the plutonium sink, the goal, then whole nuclear plants. The solver's result can depend on
 // that order, so keep it. `period` is the nuclear rounding (see roundNuclear).
 export function buildModel(
@@ -293,6 +300,7 @@ export function buildModel(
   addPower(model, context);
   addRecipes(model, context, pool, sites.routes);
   addSiteFloors(model, context, pool);
+  addSiteFeeds(model, sites.feeds);
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
   return { model, period };
@@ -332,6 +340,25 @@ function addSiteFloors(model: LpModel, { config, phase }: PhaseContext, pool: Po
     if (floor === undefined) continue;
     model.constraints['floor:' + recipe.id] = { min: floor };
     model.variables[recipe.id]!['floor:' + recipe.id] = totalPerMachine(recipe);
+  }
+}
+// The routes of a central byproduct into the groups' balances of it (#1012, siteFeeds in
+// on-site.ts): per item, 'byproducts:<item>' holds the routes together to at most what the
+// central lines make of it as a byproduct, and each route 'byproduct:<item>@<group>' takes from
+// the central balance what it gives the group's, at a cost a little below nothing, so the
+// byproduct meets the group's need before the group's own line does.
+function addSiteFeeds(model: LpModel, feeds: SiteFeed[]) {
+  for (const { item, groups, makers } of feeds) {
+    const cap = feedCap(item);
+    model.constraints[cap] = { max: 0 };
+    for (const [recipeId, rate] of makers) model.variables[recipeId]![cap] = -rate;
+    for (const group of groups)
+      model.variables[feedRoute(item, group)] = {
+        cost: -BYPRODUCT_FIRST,
+        ['item:' + item]: -1,
+        [siteBalance(item, group)]: 1,
+        [cap]: 1,
+      };
   }
 }
 // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new

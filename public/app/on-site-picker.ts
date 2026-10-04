@@ -380,7 +380,9 @@ interface GroupMarks {
 // such as Dark Matter Residue, #1012), "needs a recalculation" when the plan has
 // no line for it (#938, #970), "made centrally in this phase" when the planner fell back to
 // central lines there, and otherwise "no line in this phase", as when the group uses the item only
-// in other phases.
+// in other phases, or when the central lines' byproduct of a fluid covers all the group uses there
+// and its line drops to nothing (siteFeeds in planner/on-site.ts, #1012), which a recalculation
+// would plan the same way, so the notice asks for none.
 function markNote(item: string, marks: GroupMarks): string {
   if (!onSitePlannable(item)) return RAW_NOTE;
   if (!marks.used.includes(item)) return UNUSED_NOTE;

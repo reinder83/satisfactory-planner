@@ -9,9 +9,10 @@ import type {
   ItemRates,
   StageKey,
 } from '../public/types/index.ts';
-import { DATA, RAW } from './data.ts';
+import { DATA, RAW, exactBalance } from './data.ts';
 import { roundsToWholeMachines } from './model.ts';
 import { productRate } from './rounding.ts';
+import { primaryOutput } from './recipes.ts';
 import type { PhaseStages } from './calculate.ts';
 
 // What each group of warnings reads: the settings, and the stages after the adjustments.
@@ -105,8 +106,9 @@ function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
     );
   return warnings;
 }
-// Items factory groups make on site (#875): which groups make what, and the phases whose
-// per-group whole-machine lines did not fit, so they make those items centrally.
+// Items factory groups make on site (#875): which groups make what (and which of those items the
+// central lines make as a byproduct that goes to the group first, byproductFeeds), and the phases
+// whose per-group whole-machine lines did not fit, so they make those items centrally.
 function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
   const warnings: string[] = [];
   const groupName = (group: string) => config.onSite?.[group]?.name || 'a factory group';
@@ -127,7 +129,8 @@ function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
         .map(([group, items]) => `${groupName(group)} makes ${listNames([...items].sort())}`)
         .join(
           '; ',
-        )}. Each such group has its own whole-machine line, sized to its own consumers as the groups were when this plan was calculated, and a central line makes the rest.`,
+        )}. Each such group has its own whole-machine line, sized to its own consumers as the groups were when this plan was calculated, and a central line makes the rest.` +
+        feedSentences(config, stages, groupName),
     );
   for (const [phase, stage] of Object.entries(stages)) {
     const dropped = Object.entries(stage.onSiteDropped || {});
@@ -138,6 +141,49 @@ function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
     );
   }
   return warnings;
+}
+// A sentence per item byproductFeeds finds, each starting with a space; '' for none.
+function feedSentences(
+  config: CurrentSettings,
+  stages: PhaseStages,
+  groupName: (group: string) => string,
+): string {
+  return byproductFeeds(config, stages)
+    .map(([item, groups]) => {
+      const lines =
+        groups.length > 1
+          ? "each group's own line makes"
+          : possessive(groupName(groups[0]!)) + ' own line makes'; // byproductFeeds: never empty
+      return ` Central lines also make ${item} as a byproduct, which cannot go to the sink: it goes to ${listNames(groups.map(groupName))} first, and ${lines} only the rest.`;
+    })
+    .join('');
+}
+// "Gamma's", or "Alpha Works'".
+const possessive = (name: string) => name + (name.endsWith('s') ? "'" : "'s");
+// The items a group's own line makes in some phase while another line there makes them as a
+// byproduct that balances exactly (a fluid): the planner sends that byproduct to the group first
+// (siteFeeds in on-site.ts, #1012), so the group's line makes only the rest. As [item, groups],
+// sorted, the groups in the order of settings.onSite.
+function byproductFeeds(config: CurrentSettings, stages: PhaseStages): [string, string[]][] {
+  const fed = new Map<string, Set<string>>();
+  for (const stage of Object.values(stages)) {
+    const rows = stage.rows || [];
+    for (const row of rows) {
+      const group = row.onSite?.group;
+      if (!group) continue;
+      for (const item of Object.keys(row.outputs))
+        if (
+          exactBalance(item) &&
+          config.onSite?.[group]?.items.includes(item) &&
+          rows.some(other => other.outputs[item] && primaryOutput(other) !== item)
+        )
+          fed.set(item, (fed.get(item) ?? new Set()).add(group));
+    }
+  }
+  const order = Object.keys(config.onSite || {});
+  return [...fed]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([item, groups]) => [item, order.filter(group => groups.has(group))]);
 }
 // The fueled augmenters' Alien Power Matrix line.
 function augmenterFuelWarnings({ config }: FinishedPlan): string[] {

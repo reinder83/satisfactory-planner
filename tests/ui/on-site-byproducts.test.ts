@@ -4,6 +4,9 @@
 // follows the same rule (onSiteCopyable): from a marked part it offers only the ingredients of the
 // lines that make the part as their product, and a mark the plan makes only as a byproduct gets
 // no line, so the notice does not ask for one and the heading says it can't be made on site.
+// The central byproduct of a marked fluid feeds the group first: its line makes only the rest,
+// and none when the byproduct covers all the group uses, which the heading words as a mark with
+// no line in this phase, and the notice does not ask for one.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -11,7 +14,7 @@ import { setFactoryEditing, setFactoryFilter, setQuery } from '../../public/app/
 import { render } from '../../public/app/shell.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { onSiteChange, onSitePickerOffers, RAW_NOTE } from '../../public/app/on-site-picker.ts';
-import { $, $$, generated, go, open, page } from './setup.ts';
+import { $, $$, generated, generatedWith, go, open, page } from './setup.ts';
 import type { FactoryGroups, StageKey, StoredCalculatedPlan } from '../../public/types/index.ts';
 
 const ALPHA = 'fg-alpha1';
@@ -102,4 +105,45 @@ test('#1012: a mark the plan makes only as a byproduct gets no line, and the pag
   assert.equal(notice(), null, 'no recalculation is offered for it');
   assert.equal(made(ALPHA), null);
   assert.equal(marked(ALPHA), `Marked, not made on site: Heavy Oil Residue ${RAW_NOTE}`);
+});
+
+// Gamma holds the Dark Matter Crystal line (all of it, or a third with Delta and Epsilon) and
+// marks Dark Matter Residue, which the Space Elevator part lines make as a byproduct.
+const GAMMA = 'fg-gamma1';
+const gammaGroups = (split: boolean): FactoryGroups => ({
+  groups: [
+    { id: GAMMA, name: 'Gamma' },
+    { id: 'fg-delta1', name: 'Delta' },
+    { id: 'fg-epsil1', name: 'Epsilon' },
+  ],
+  assignments: {
+    Recipe_DarkMatter_C: (split ? [GAMMA, 'fg-delta1', 'fg-epsil1'] : [GAMMA]).map(group => ({
+      group,
+      rate: null,
+    })),
+  },
+  local: { [GAMMA]: ['Dark Matter Residue'] },
+});
+const recalculated = (groups: FactoryGroups) => {
+  const plan = generated();
+  return generatedWith({ ...plan.settings, onSite: onSiteSettings(plan, groups) });
+};
+
+test('#1012: the central byproduct feeds Gamma first, and its line makes the rest', async () => {
+  const groups = gammaGroups(false);
+  await show(recalculated(groups), groups, '5');
+  assert.equal(notice(), null);
+  assert.equal(made(GAMMA), 'Made on site: Dark Matter Residue');
+  assert.equal(marked(GAMMA), null);
+});
+
+test('#1012: a mark the central byproduct covers gets no line, and asks for none', async () => {
+  const groups = gammaGroups(true);
+  await show(recalculated(groups), groups, '5');
+  assert.equal(notice(), null, 'no recalculation is offered');
+  assert.equal(made(GAMMA), null);
+  assert.equal(
+    marked(GAMMA),
+    'Marked, not made on site: Dark Matter Residue (no line in this phase)',
+  );
 });

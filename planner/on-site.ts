@@ -121,7 +121,8 @@ export type Routes = (recipe: PoolRecipe, item: string, side: 'in' | 'out') => [
 //   withinRates covers a row that ends up making less than its fixed rates (followedParts says
 //   where a part counts);
 // - everything else (other inputs, byproducts, raw resources, existing supply and every demand)
-//   stays central.
+//   stays central, except that the central byproduct of a marked item that balances exactly
+//   feeds the groups' balances first (`feeds`, siteFeeds, #1012).
 export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRecipe[]) {
   const active = new Set<string>();
   for (const recipe of pool)
@@ -159,7 +160,61 @@ export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRec
     const rest = Math.max(0, 1 - Math.max(taken, 0));
     return rest > 1e-9 ? [[central, rest], ...split] : split;
   };
-  return { balances, routes, draws: siteDraws(pool, balances, follows) };
+  return {
+    balances,
+    routes,
+    draws: siteDraws(pool, balances, follows),
+    feeds: siteFeeds(pool, balances, routes),
+  };
+}
+
+// The central byproduct of an item a group makes on site that balances exactly (a fluid), as
+// buildModel offers it to the groups' balances (#1012, the owner's decision there): a recipe that
+// makes such an item only as a byproduct stays central (siteCopies), so a group that marks Dark
+// Matter Residue gets its own line of the Residue's recipe while the central Space Elevator part
+// lines still make Dark Matter Residue, which nothing central may use and a fluid cannot overflow
+// to the sink. So per such item a route from the central balance into each group's balance of it,
+// `byproduct:<item>@<group>`, carries at most what the central lines make of it as a byproduct
+// (`makers`: per recipe of the pool, its output of the item as a byproduct that goes to the
+// central balance, per machine), and is preferred to the group's own line (BYPRODUCT_FIRST): the
+// group's line makes only the rest, and none when the byproduct covers the group's need, as a
+// player pipes the byproduct to the site. A solid byproduct has the sink, so its group's line
+// makes all the group uses, as before (a route for it would let the sink-bound byproduct stand in
+// for a line the group asked to make on site, and plans without it calculate as they did).
+// Empty unless a pool recipe makes such an item as a byproduct, so every other plan's model is
+// exactly as before.
+export interface SiteFeed {
+  item: string;
+  groups: string[];
+  makers: [recipeId: string, rate: number][];
+}
+// What the route takes off the cost per unit it carries, below the 0.0001 of a unit of a raw
+// resource and far below a machine (1): it decides only between the group's own line and the
+// central lines making the same item, which cost the same machines.
+export const BYPRODUCT_FIRST = 0.00001;
+// The variable of a route of the central byproduct of `item` into `group`'s balance, and the
+// constraint that caps every group's route of it together.
+export const feedRoute = (item: string, group: string) => `byproduct:${item}@${group}`;
+export const feedCap = (item: string) => `byproducts:${item}`;
+function siteFeeds(
+  pool: PoolRecipe[],
+  balances: { group: string; item: string }[],
+  routes: Routes,
+): SiteFeed[] {
+  const feeds: SiteFeed[] = [];
+  for (const item of new Set(balances.map(balance => balance.item))) {
+    if (!exactBalance(item)) continue;
+    const makers: [string, number][] = [];
+    for (const recipe of pool) {
+      const rate = recipe.outputs[item];
+      if (!rate || primaryOutput(recipe) === item) continue;
+      const central = routes(recipe, item, 'out').find(([balance]) => balance === 'item:' + item);
+      if (central) makers.push([recipe.id, rate * central[1]]);
+    }
+    const groups = balances.filter(balance => balance.item === item).map(({ group }) => group);
+    if (makers.length) feeds.push({ item, groups, makers });
+  }
+  return feeds;
 }
 // The group's part of a recipe's row that the group's balance of `item` follows the row's total
 // by (#984): a part of a row with a total, for an item that overflows to the sink. An item that

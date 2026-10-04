@@ -3,10 +3,17 @@
 // as a byproduct stays central. Copying it ran the whole recipe for the group: the copy took over
 // the group's own consumer row (Rocket Fuel, copied for its Compacted Coal), so the interface no
 // longer saw a consumer and every recalculation dropped and re-added the group's lines.
+//
+// The central byproduct of a marked fluid feeds the group first (option 2, the owner's decision on
+// #1012): with the byproduct makers central, a group that marks Dark Matter Residue gets its own
+// line of the Residue's recipe while the Space Elevator part lines still make it as a byproduct,
+// which a fluid cannot sink. That byproduct now goes to the group's site, and the group's line
+// makes only the rest, or nothing when the byproduct covers all the group uses.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, recipePool, settings } from '../planner.ts';
-import { siteCopies } from '../planner/on-site.ts';
+import { siteCopies, siteRoutes } from '../planner/on-site.ts';
+import { groupLinks, itemBooks, UNGROUPED } from '../public/app/group-links.ts';
 import { onSitePlannable, onSiteSettings } from '../public/app/on-site.ts';
 import { onSiteChange, onSiteSummaries, RAW_NOTE } from '../public/app/on-site-picker.ts';
 import { newProfileState, validateState } from '../public/state.ts';
@@ -55,6 +62,53 @@ const alpha = (local: string[], rows: string[]): FactoryGroups => ({
 });
 // The issue's group: Alpha holds the Rocket Fuel line and marks Compacted Coal and Turbofuel.
 const rocketGroup = () => alpha(['Compacted Coal', 'Turbofuel'], [ROCKET]);
+
+const GAMMA = 'fg-gamma1',
+  DELTA = 'fg-delta1',
+  EPSILON = 'fg-epsil1';
+const DMR = 'Dark Matter Residue',
+  CRYSTAL = 'Recipe_DarkMatter_C',
+  RESIDUE = 'Recipe_DarkEnergy_C';
+// The decision's group: Gamma holds the Dark Matter Crystal line, the only line using Dark Matter
+// Residue, and marks Dark Matter Residue. With `split`, Delta and Epsilon hold a third of that
+// line each, so Gamma uses a third of it.
+const gammaGroups = (split = false): FactoryGroups => ({
+  groups: [
+    { id: GAMMA, name: 'Gamma' },
+    { id: DELTA, name: 'Delta' },
+    { id: EPSILON, name: 'Epsilon' },
+  ],
+  assignments: {
+    [CRYSTAL]: (split ? [GAMMA, DELTA, EPSILON] : [GAMMA]).map(group => ({ group, rate: null })),
+  },
+  local: { [GAMMA]: [DMR] },
+});
+// What `rows` make of Dark Matter Residue: as a byproduct (the Space Elevator part and processor
+// lines), on Gamma's own line, on a central Residue line, and what they use of it.
+function residue(rows: CalcRow[]) {
+  const sum = (list: CalcRow[], side: 'inputs' | 'outputs') =>
+    list.reduce((total, row) => total + (row[side][DMR] || 0), 0);
+  return {
+    byproduct: sum(
+      rows.filter(row => Object.keys(row.outputs)[0] !== DMR),
+      'outputs',
+    ),
+    own: sum(
+      rows.filter(row => row.id === `${RESIDUE}:${GAMMA}`),
+      'outputs',
+    ),
+    central: sum(
+      rows.filter(row => row.id === RESIDUE),
+      'outputs',
+    ),
+    used: sum(rows, 'inputs'),
+  };
+}
+const near = (actual: number, expected: number, label: string) =>
+  assert.ok(
+    Math.abs(actual - expected) < 1e-6 * Math.max(1, expected),
+    `${label}: ${actual} vs ${expected}`,
+  );
 
 test('#1012: Rocket Fuel stays central when its group marks its byproduct Compacted Coal', () => {
   const plan = plainPlan();
@@ -252,4 +306,128 @@ test('#1012 property: no copy of a byproduct maker, and a second recalculation k
     assert.deepEqual(ownLines(recalculated(first, groups)), ownLines(first), label);
   }
   assert.ok(checked >= 10, `${checked} cases with lines made on site`);
+});
+
+// The decision's case on a plan: Gamma marks Dark Matter Residue and holds all of the Dark Matter
+// Crystal line. Three recalculations in a row plan Phase 5 with Gamma's own line, which makes only
+// what the central lines' byproduct leaves; that byproduct goes to Gamma's site.
+function checkByproductFirst(base: CurrentCalculatedPlan) {
+  const groups = gammaGroups();
+  const before = residue(rowsOf(base, '5'));
+  assert.ok(before.byproduct > 0 && before.central > 0, 'the plan makes it both ways');
+  const first = recalculated(base, groups);
+  assert.deepEqual(first.settings.onSite?.[GAMMA]?.items, [DMR]);
+  const stage = first.stages['5'];
+  assert.equal(stage.feasible, true);
+  assert.equal(stage.onSiteDropped, undefined, 'not made centrally');
+  const made = residue(rowsOf(first, '5'));
+  assert.equal(made.central, 0, 'no central Residue line: nothing central uses it');
+  assert.ok(made.byproduct > 0);
+  assert.ok(made.own > 0);
+  near(made.own, made.used - made.byproduct, "Gamma's line makes only the rest");
+  assert.deepEqual(ownLines(first)['5'], [`${RESIDUE}:${GAMMA}`]);
+  // The books: Gamma's line meets its part of Gamma's demand, and the central byproduct (on the
+  // ungrouped Space Elevator part lines) is piped to Gamma's site for the rest.
+  const books = itemBooks(stage, groups);
+  const local = books.local[DMR]!.get(GAMMA)!;
+  near(local.made, made.own, 'made on site');
+  near(local.asked, made.used, 'asked');
+  assert.equal(books.sunk[DMR], undefined, 'nothing to the sink');
+  const link = groupLinks(stage, groups).find(
+    found => found.from === UNGROUPED && found.to === GAMMA,
+  );
+  near(link?.items.find(entry => entry.item === DMR)?.rate ?? 0, made.byproduct, 'piped to Gamma');
+  assert.ok(
+    first.warnings.some(warning =>
+      warning.includes(
+        "Central lines also make Dark Matter Residue as a byproduct, which cannot go to the sink: it goes to Gamma first, and Gamma's own line makes only the rest.",
+      ),
+    ),
+  );
+  // No notice, and the heading lists the line.
+  assert.equal(onSiteChange(first, groups), null);
+  assert.deepEqual(onSiteSummaries(first, groups, stage)[GAMMA], {
+    made: [{ item: DMR, note: '' }],
+    marked: [],
+  });
+  // Stable: two more recalculations plan the same lines and the same Residue.
+  const second = recalculated(first, groups);
+  const third = recalculated(second, groups);
+  for (const plan of [second, third]) {
+    assert.deepEqual(plan.settings.onSite?.[GAMMA]?.items, [DMR]);
+    assert.equal(plan.stages['5'].onSiteDropped, undefined);
+    assert.deepEqual(ownLines(plan), ownLines(first));
+    const again = residue(rowsOf(plan, '5'));
+    near(again.own, made.own, 'the same line');
+    near(again.byproduct, made.byproduct, 'the same byproduct');
+    assert.equal(onSiteChange(plan, groups), null);
+  }
+}
+
+test('#1012: on a precise plan the central Dark Matter Residue byproduct feeds Gamma first', () => {
+  checkByproductFirst(plainPlan());
+});
+
+let whole: CurrentCalculatedPlan | undefined;
+// The wizard's default, whole machines.
+const wholePlan = () => (whole ??= calculate({ wholeMachines: true, limitsConfirmed: true }));
+
+test('#1012: on a whole-machine plan the central Dark Matter Residue byproduct feeds Gamma first', () => {
+  checkByproductFirst(wholePlan());
+});
+
+// Gamma uses a third of the Dark Matter Crystal line, less than the central byproduct: Gamma's
+// line drops to nothing, so none is built; the mark reads as one with no line in this phase, and
+// the notice asks for nothing, recalculation after recalculation.
+function checkFullyCovered(base: CurrentCalculatedPlan) {
+  const groups = gammaGroups(true);
+  const first = recalculated(base, groups);
+  assert.deepEqual(first.settings.onSite?.[GAMMA]?.items, [DMR], 'the recalculation asks');
+  const stage = first.stages['5'];
+  assert.equal(stage.feasible, true);
+  assert.equal(stage.onSiteDropped, undefined);
+  const made = residue(rowsOf(first, '5'));
+  assert.equal(made.own, 0, 'no line for Gamma');
+  assert.ok(made.byproduct >= made.used / 3, 'the byproduct covers what Gamma uses');
+  assert.deepEqual(ownLines(first), ownLines(base), 'no own line in any phase');
+  assert.ok(
+    !first.warnings.some(warning => warning.startsWith('Factory groups make items on site')),
+  );
+  for (const plan of [first, recalculated(first, groups)]) {
+    assert.equal(onSiteChange(plan, groups), null, 'no notice');
+    assert.deepEqual(onSiteSummaries(plan, groups, plan.stages['5'])[GAMMA], {
+      made: [],
+      marked: [{ item: DMR, note: '(no line in this phase)' }],
+    });
+    assert.deepEqual(ownLines(plan), ownLines(first));
+    near(residue(rowsOf(plan, '5')).central, made.central, 'the same central line');
+  }
+}
+
+test('#1012: a group whose need the central byproduct covers gets no line (precise)', () => {
+  checkFullyCovered(plainPlan());
+});
+
+test('#1012: a group whose need the central byproduct covers gets no line (whole machines)', () => {
+  checkFullyCovered(wholePlan());
+});
+
+test('#1012: only a marked item that balances exactly gets the central byproduct route', () => {
+  const route = (items: string[], shares: Record<string, number>, phase: number) => {
+    const config = settings({
+      ...plainPlan().settings,
+      onSite: { [ALPHA]: { items, shares: { [phase]: shares } } },
+    });
+    const pool = recipePool(config, phase, false);
+    return siteRoutes(config, phase, [...pool, ...siteCopies(config, phase, pool)]).feeds;
+  };
+  // Dark Matter Residue, a fluid: the Space Elevator part and processor lines' byproduct.
+  const [feed, ...more] = route([DMR], { [CRYSTAL]: 1 }, 5);
+  assert.equal(more.length, 0);
+  assert.equal(feed?.item, DMR);
+  assert.deepEqual(feed?.groups, [ALPHA]);
+  assert.ok(feed?.makers.some(([id]) => id === 'Recipe_SpaceElevatorPart_12_C'));
+  assert.ok(!feed?.makers.some(([id]) => id === RESIDUE || id.includes(':')), 'byproducts only');
+  // Compacted Coal, a solid Rocket Fuel makes as a byproduct, has the sink: no route.
+  assert.deepEqual(route(['Compacted Coal'], { Recipe_Alternate_Turbofuel_C: 1 }, 4), []);
 });
