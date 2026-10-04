@@ -422,6 +422,18 @@ test("ADA counts the phase's byproducts on the factories page, calmly, and point
   assert.ok(!ids(facts({ view: 'factories' })).includes('recycle-byproducts'), 'absent means none');
 });
 
+test("ADA says how much Water the phase extracts and points at the lines' extractor counts (#1024)", () => {
+  const line = adaRemarks(facts({ view: 'factories', waterExtracted: '1,234.5' })).find(
+    r => r.id === 'water-extractors',
+  )!;
+  assert.equal(line.tone, 'calm');
+  assert.match(
+    line.text,
+    /^Phase 3 extracts 1,234.5 m³ of Water a minute. Each line that takes it says how many Water Extractors to build, at 100% or with Power Shards/,
+  );
+  assert.ok(!ids(facts({ view: 'factories' })).includes('water-extractors'), 'absent means none');
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

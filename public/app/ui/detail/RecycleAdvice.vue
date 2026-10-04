@@ -2,7 +2,9 @@
   The byproduct advice in a calculated factory's dialog (#1022), under the flow: one paragraph
   per byproduct of the line (where to send it) and per input of the line a byproduct covers
   (where it comes from), from rowAdvice (views/calculated.ts, worded by recycle.ts) for the phase
-  shown. Each other line it names is a link to that line's dialog (factoryLink), kept on one line
+  shown. A paragraph for extracted Water ends with the Water Extractors for it on a line of its
+  own (#1024), and the heading says Water when the notice has any: "Water" when that is all it
+  has, else "Byproducts and water". Each other line it names is a link to that line's dialog (factoryLink), kept on one line
   with the punctuation right after it, since a button wraps as a whole. Group and line names are
   user text, rendered as text. Draws nothing for a line without either.
 -->
@@ -12,6 +14,7 @@ import { calcStage } from '../../session.ts';
 import { rowAdvice } from '../../views/calculated.ts';
 import { legacy } from '../bridge.ts';
 import { factoryLink } from '../actions.ts';
+import { NO_COVER } from '../../recycle.ts';
 import type { AdvicePart } from '../../recycle.ts';
 
 const props = defineProps<{ id: string }>();
@@ -37,11 +40,18 @@ const lines = computed(() =>
     return (row ? rowAdvice(row) : []).map(line => ({ ...line, pieces: pieces(line.parts) }));
   }),
 );
+// Only extracted Water no byproduct covers: "Water". Extractors with anything else: "Byproducts
+// and water". Otherwise "Byproducts".
+const heading = computed(() => {
+  const water = lines.value.some(line => line.extractors);
+  const recycled = lines.value.some(line => line.parts[0] !== NO_COVER);
+  return water ? (recycled ? 'Byproducts and water' : 'Water') : 'Byproducts';
+});
 </script>
 
 <template>
   <template v-if="lines.length"
-    ><h3>Byproducts</h3>
+    ><h3>{{ heading }}</h3>
     <div class="notice info recycle-advice" data-recycle-advice>
       <p v-for="line in lines" :key="line.kind + '|' + line.item" :data-advice="line.kind">
         <b>{{ line.kind === 'byproduct' ? 'Byproduct' : 'Input' }} · {{ line.lead }}</b
@@ -56,6 +66,8 @@ const lines = computed(() =>
             ></button
             >{{ piece.tail }}</span
           ></template
+        ><template v-if="line.extractors"
+          ><br /><span data-extractors>{{ line.extractors }}</span></template
         >
       </p>
     </div></template

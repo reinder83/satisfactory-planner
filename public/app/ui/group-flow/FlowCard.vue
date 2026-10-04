@@ -8,7 +8,9 @@
   carries its id in the flow as data-row. An input row fed from outside the group and by no
   other line of it has a blue side bar instead of an arrow; one fed only by itself has neither.
   Under a byproduct's output row, and under an input row a byproduct covers, a ♻ line repeats
-  the factory dialog's advice for the whole line (rowAdvice, #1022) as text.
+  the factory dialog's advice for the whole line (rowAdvice, #1022) as text. Under an input row of
+  extracted Water, the line's Water Extractors end that line (#1024), which has no ♻ when no
+  byproduct covers any of it ("No byproduct covers it: extract all of it. Water Extractors …").
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -24,7 +26,7 @@ import {
 } from '../../views/group-flow-page.ts';
 import { machineLine } from '../../views/factories.ts';
 import { rowAdvice } from '../../views/calculated.ts';
-import { adviceSentence } from '../../recycle.ts';
+import { adviceSentence, NO_COVER } from '../../recycle.ts';
 import { calcStage } from '../../session.ts';
 import { legacy } from '../bridge.ts';
 import { power } from '../../wizard/fields.ts';
@@ -44,13 +46,22 @@ const fromOutside = (row: FlowRow) =>
   row.links.some(link => link.from.kind === 'place') && !row.links.some(isLaneLink);
 const loops = (row: FlowRow) => row.links.some(link => link.loop);
 // The dialog's byproduct advice for this line as text, by item: for its byproducts (`out`) and
-// for its inputs a byproduct covers (`in`).
+// for its inputs a byproduct covers or that are extracted Water (`in`), with the Water
+// Extractors after the sentence. `recycled` is false for Water no byproduct covers, which is
+// not drawn as recycling.
+interface RowAdvice {
+  text: string;
+  recycled: boolean;
+}
 const advice = computed(() =>
   legacy(() => {
-    const byItem = { in: new Map<string, string>(), out: new Map<string, string>() };
+    const byItem = { in: new Map<string, RowAdvice>(), out: new Map<string, RowAdvice>() };
     const row = calcStage()?.rows?.find(candidate => candidate.id === props.line.id);
     for (const line of row ? rowAdvice(row) : [])
-      byItem[line.kind === 'byproduct' ? 'out' : 'in'].set(line.item, adviceSentence(line));
+      byItem[line.kind === 'byproduct' ? 'out' : 'in'].set(line.item, {
+        text: [adviceSentence(line), line.extractors].filter(Boolean).join(' '),
+        recycled: line.parts[0] !== NO_COVER,
+      });
     return byItem;
   }),
 );
@@ -79,7 +90,8 @@ const advice = computed(() =>
           <small v-if="loops(row)" class="chain-loop">loop · seed a starter batch</small>
           <small class="muted">{{ sourcesText(row.links, names) }}</small
           ><small v-if="advice.in.has(row.item)" class="gf-advice" data-advice="input"
-            >♻ {{ advice.in.get(row.item) }}</small
+            >{{ advice.in.get(row.item)!.recycled ? '♻ ' : ''
+            }}{{ advice.in.get(row.item)!.text }}</small
           ></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b
@@ -91,7 +103,7 @@ const advice = computed(() =>
           ><span class="gf-name">→ {{ row.item }}</span>
           <small class="muted">{{ destinationsText(row.links, names) }}</small
           ><small v-if="advice.out.has(row.item)" class="gf-advice" data-advice="byproduct"
-            >♻ {{ advice.out.get(row.item) }}</small
+            >♻ {{ advice.out.get(row.item)!.text }}</small
           ></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b

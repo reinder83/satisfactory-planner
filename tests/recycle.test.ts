@@ -180,8 +180,10 @@ test('Dark Matter Residue in Phase 5 crosses groups to the trap, which names eve
 });
 
 test('a receiving line covered fully, in part, and a line with neither', () => {
+  // Its Water, which no byproduct covers, has a paragraph of its own (#1024).
   assert.deepEqual(adviceOf('4', 'Alternate: Diluted Fuel'), [
     ['input', 'Heavy Oil Residue 51.66 m³/min', 'All of it from the byproduct of Rubber.'],
+    ['input', 'Water 103.33 m³/min', 'No byproduct covers it: extract all of it.'],
   ]);
   assert.deepEqual(adviceOf('4', 'Alternate: Coated Cable'), [
     [
@@ -197,8 +199,12 @@ test('a receiving line covered fully, in part, and a line with neither', () => {
       '59.97 from Alternate: Distilled Silica in Concrete & quartz, 10.21 from the byproduct of Alumina Solution in Aluminum campus.',
     ],
   ]);
-  // Wet Concrete takes Water no byproduct covers: no advice in this pull request (#1024 adds it).
-  assert.deepEqual(adviceOf('4', 'Alternate: Wet Concrete'), []);
+  // Wet Concrete takes Water no byproduct covers: it is extracted, with the extractors (#1024).
+  assert.deepEqual(adviceOf('4', 'Alternate: Wet Concrete'), [
+    ['input', 'Water 253.75 m³/min', 'No byproduct covers it: extract all of it.'],
+  ]);
+  // A line with neither a byproduct nor an input a byproduct covers, nor Water, has none.
+  assert.deepEqual(adviceOf('4', 'Alclad Aluminum Sheet'), []);
 });
 
 test('the advice reads the stage it is given, so each phase gets its own numbers', () => {
@@ -314,9 +320,10 @@ test('the build plan writes the advice after the outputs, as text', () => {
     plain(adviceText(lineAdvice(nitro, modelOf('4'), words))),
     'Byproduct Compacted Coal 10.4/min. No line uses it: store it or send it to the AWESOME Sink.',
   );
+  // Its extracted Water follows, with the Water Extractors for it (#1024).
   assert.equal(
     plain(adviceText(inputAdvice(diluted, modelOf('4'), words))),
-    'Heavy Oil Residue 51.66 m³/min: all of it from the byproduct of Rubber.',
+    'Heavy Oil Residue 51.66 m³/min: all of it from the byproduct of Rubber. Water 103.33 m³/min. No byproduct covers it: extract all of it. Water Extractors: 1 at 86.1% (16.41 MW); no Power Shards needed.',
   );
   assert.equal(adviceText([]), '');
 });

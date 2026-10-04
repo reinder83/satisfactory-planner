@@ -31,10 +31,18 @@ const text = (element: Element | null) =>
   (element?.textContent || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 
 // A paragraph of the notice as "<its bold lead>|<the rest>": a line break parts them on the page.
+// The Water Extractors (#1024), on a line of their own after the rest, are left out (extractors).
 const paragraph = (element: Element) => {
   const lead = text(element.querySelector('b'));
-  return lead + '|' + text(element).slice(lead.length);
+  const water = text(element.querySelector('[data-extractors]'));
+  const rest = text(element).slice(lead.length);
+  return lead + '|' + (water ? rest.slice(0, -water.length) : rest);
 };
+// A paragraph's Water Extractors line, with plain spaces.
+const extractors = (element: Element | null | undefined) =>
+  text(element?.querySelector('[data-extractors]') ?? null).replace(/ /g, ' ');
+// Text with plain spaces for the no-break ones before a unit.
+const plainText = (element: Element | null) => text(element).replace(/ /g, ' ');
 
 const toLocale = Number.prototype.toLocaleString;
 beforeAll(() => {
@@ -100,12 +108,66 @@ test("a receiving line's dialog says where the inputs a byproduct covers come fr
   assert.equal(document.querySelector('x-evil'), null, 'the group name is text');
 });
 
-test('a line with neither a byproduct nor a recycled input has no notice', () => {
+test("a receiving line's dialog counts the Water Extractors for the Water no byproduct covers (#1024)", () => {
+  openPlan('4');
+  openCalculatedFactory(rowId('4', 'Alumina Solution'));
+  const notice = $('#detail [data-recycle-advice]')!;
+  assert.equal(text(notice.previousElementSibling), 'Byproducts and water');
+  const [silica, water] = [...notice.querySelectorAll('p')];
+  assert.equal(extractors(silica), '', 'a byproduct has none');
+  // For the 258.04 m³ extracted, not the 381.81 the line takes, on a line of its own.
+  assert.equal(
+    extractors(water),
+    'Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
+  );
+  assert.equal(water!.querySelector('[data-extractors]')!.previousElementSibling?.tagName, 'BR');
+  assert.equal(document.querySelector('x-evil'), null);
+});
+
+test('a line taking Water no byproduct covers is told to extract all of it, with the extractors (#1024)', () => {
   openPlan('4');
   openCalculatedFactory(rowId('4', 'Alternate: Wet Concrete'));
+  const notice = $('#detail [data-recycle-advice]')!;
+  assert.ok(notice.classList.contains('notice') && notice.classList.contains('info'));
+  assert.equal(text(notice.previousElementSibling), 'Water');
+  const water = notice.querySelector('p')!;
+  assert.equal(
+    paragraph(water),
+    'Input · Water 253.75 m³/min|No byproduct covers it: extract all of it.',
+  );
+  assert.equal(
+    extractors(water),
+    'Water Extractors at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW). Or up to 250% with Power Shards: 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW).',
+  );
+  assert.equal(notice.querySelectorAll('button.recycle-link').length, 0, 'no line to link to');
+});
+
+test('a line with neither a byproduct, a recycled input nor Water has no notice', () => {
+  openPlan('4');
+  openCalculatedFactory(rowId('4', 'Alclad Aluminum Sheet'));
   assert.ok($('#detail-title'));
   assert.equal($('#detail [data-recycle-advice]'), null);
-  assert.doesNotMatch(text($('#detail')), /Byproducts/);
+  assert.doesNotMatch(text($('#detail')), /Byproducts|Water Extractors/);
+});
+
+test("a coal generator's dialog counts the Water Extractors for its Water (#1024)", () => {
+  const coalPlan = generatedWith({ phase: '2' });
+  open({
+    calculated: coalPlan,
+    phase: '2',
+    state: { factoryGroups: defaultFactoryGroups(coalPlan) },
+  });
+  render();
+  openCalculatedFactory('power-coal');
+  const water = $('#detail [data-recycle-advice] p')!;
+  assert.equal(
+    paragraph(water),
+    'Input · Water 139.36 m³/min|No byproduct covers it: extract all of it.',
+  );
+  assert.equal(
+    extractors(water),
+    'Water Extractors at 100%: 1 at 100% + 1 at 16.13% (2 extractors, 21.79 MW). Or up to 250% with Power Shards: 1 at 116.13% (1 extractor, 1 Power Shard, 24.37 MW).',
+  );
 });
 
 test('a build-plan step carries the advice of the phase it is in, not of the phase saved', () => {
@@ -121,6 +183,15 @@ test('a build-plan step carries the advice of the phase it is in, not of the pha
     stepOf('4', 'Rubber').replace(/ /g, ' '),
     / Byproduct Heavy Oil Residue 83\.44 m³\/min: send 51\.66 m³ to Alternate: Diluted Fuel, 31\.56 m³ to Petroleum Coke and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
   );
+  // Alumina Solution extracts more Water in Phase 5, and its step there says so (#1024).
+  assert.match(
+    stepOf('4', 'Alumina Solution').replace(/ /g, ' '),
+    /; extract the other 258\.04 m³\. Water Extractors at 100%: 2 at 100% \+ 1 at 15\.03% \(3 extractors, 41\.63 MW\)\. Or up to 250% with Power Shards: 1 at 215\.03% \(1 extractor, 3 Power Shards, 55\.03 MW\)\.$/,
+  );
+  assert.match(
+    stepOf('5', 'Alumina Solution').replace(/ /g, ' '),
+    /; extract the other 587\.31 m³\. Water Extractors at 100%: 4 at 100% \+ 1 at 89\.42% \(5 extractors, [\d.]+ MW\)\. Or up to 250% with Power Shards: 1 at 250% \+ 1 at 239\.42% \(2 extractors, 6 Power Shards, [\d.]+ MW\)\.$/,
+  );
   assert.match(
     stepOf('3', 'Fuel').replace(/ /g, ' '),
     /Outputs: Fuel [\d.]+ m³\/min, Polymer Resin 41\.57\/min\. Byproduct Polymer Resin 41\.57\/min: send 39\.52 to Residual Plastic and store or sink the other 2\.05\.$/,
@@ -135,6 +206,14 @@ test('the build plan shows the advice in the step, and a step the user rewrote k
   assert.match(
     text(step.querySelector('p')),
     /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.27 m³\/min\. Byproduct Water 116\.27 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
+  );
+  // A line taking Water no byproduct covers (#1024).
+  const concrete = $(`[data-check="calc-4-${rowId('4', 'Alternate: Wet Concrete')}"]`)!.closest(
+    '.task',
+  )!;
+  assert.match(
+    plainText(concrete.querySelector('p')),
+    /Outputs: Concrete [\d.,]+\/min\. Water 253\.75 m³\/min\. No byproduct covers it: extract all of it\. Water Extractors at 100%: 2 at 100% \+ 1 at 11\.46% \(3 extractors, 41\.14 MW\)\. Or up to 250% with Power Shards: 1 at 211\.46% \(1 extractor, 3 Power Shards, 53\.82 MW\)\.$/,
   );
   page();
   openPlan('4', { bodies: { [`calc-4-${scrap}`]: 'My own words.' } });
@@ -164,9 +243,10 @@ test("a group's flow page has the advice under the rows it concerns, and its lan
     '♻ Send all of it back to Alumina Solution, which feeds this line.',
   );
   const solutionWater = card('Alumina Solution').querySelector('.gf-in[data-row$="|Water"]')!;
+  // The line's Water Extractors end its ♻ line (#1024).
   assert.equal(
-    text(solutionWater.querySelector('.gf-advice')),
-    `♻ 116.27 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 258.04 m³.`,
+    plainText(solutionWater.querySelector('.gf-advice')),
+    `♻ 116.27 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 258.04 m³. Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).`,
   );
   // A row the advice does not concern has no ♻ line: the line's main product.
   assert.equal(
@@ -176,5 +256,30 @@ test("a group's flow page has the advice under the rows it concerns, and its lan
   // No Water leaves the group; it comes in from Battery's group and the well only.
   const ports = $$('#main [data-port]').map(text).join(' | ');
   assert.doesNotMatch(ports, /Water[^|]*Concrete & quartz/);
+  assert.equal(document.querySelector('x-evil'), null);
+});
+
+test("a line card on a group's flow page counts its own Water Extractors, with no ♻ when no byproduct covers any (#1024)", async () => {
+  // Concrete & quartz under a hostile name, which stays text on the page.
+  const hostile: FactoryGroups = {
+    ...groups,
+    groups: groups.groups.map(group =>
+      group.id === 'fg-stone1' ? { ...group, name: evil } : group,
+    ),
+  };
+  open({ calculated: structuredClone(plan), phase: '4', state: { factoryGroups: hostile } });
+  location.hash = '#' + flowRoute('fg-stone1');
+  go(viewOf(location.hash.slice(1)));
+  render();
+  await nextTick();
+  await nextTick();
+  const concrete = rowId('4', 'Alternate: Wet Concrete');
+  const water = $(`#main .gf-card[data-line="${concrete}"] .gf-in[data-row$="|Water"] .gf-advice`);
+  assert.equal(
+    plainText(water),
+    'No byproduct covers it: extract all of it. Water Extractors at 100%: 2 at 100% + 1 at 11.46% (3 extractors, 41.14 MW). Or up to 250% with Power Shards: 1 at 211.46% (1 extractor, 3 Power Shards, 53.82 MW).',
+  );
+  assert.equal(water!.getAttribute('data-advice'), 'input');
+  assert.ok(text($('#main')).includes(evil), 'the group is named, as text');
   assert.equal(document.querySelector('x-evil'), null);
 });

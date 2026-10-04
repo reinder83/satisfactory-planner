@@ -51,6 +51,9 @@ export interface AdaFacts {
   // How many byproducts the open phase's lines make, one per line and byproduct (byproductCount
   // in app/recycle.ts, #1022); each factory dialog says where to send its own.
   byproducts?: number;
+  // The Water the open phase extracts, m³/min as the pages write it (the stage's raw Water,
+  // #1024), absent for none; each line taking it says how many Water Extractors to build.
+  waterExtracted?: string;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -396,6 +399,14 @@ const RULES: AdaRule[] = [
     when: facts => (facts.byproducts ?? 0) > 0,
     text: facts =>
       `${plural(facts.byproducts!, 'byproduct')} to recycle in ${facts.phaseLabel}. Each line's dialog says where to send its own, and the build plan's step says the same. I did the sums. The plumbing is yours.`,
+  },
+  {
+    id: 'water-extractors',
+    on: ['factories'],
+    tone: 'calm',
+    when: facts => !!facts.waterExtracted,
+    text: facts =>
+      `${facts.phaseLabel} extracts ${facts.waterExtracted} m³ of Water a minute. Each line that takes it says how many Water Extractors to build, at 100% or with Power Shards, with the clocks adding up to exactly what it needs. A full pipe stops the pumps, and I would rather it did not.`,
   },
   {
     id: 'on-site-pending',

@@ -128,3 +128,121 @@ export function extractionLimits(
   }
   return limits;
 }
+
+// --- Water Extractors (#1024) ---
+//
+// Figures from the SatisfactoryTools dataset at the revision recipes.json records
+// (Desc_WaterPump_C): 120 m³/min at 100% (its description: "Default Extraction Rate: 120 m³ of
+// water per minute"), 20 MW (metadata powerConsumption) and the overclock exponent 1.321929
+// (metadata powerConsumptionExponent: log2 2.5, which the wiki's Patch 0.7.0.0 notes round to
+// 1.321928; both give the same MW to the hundredth). Three Power Shards allow 250%, one per 50%
+// above 100% (wiki, Clock speed and Water Extractor: 300 m³/min and 67.2 MW at 250%). The game
+// takes a clock from 1% to 250%, to four decimals (wiki, Clock speed).
+export const WATER_EXTRACTOR = {
+  rate: 120,
+  mw: 20,
+  exponent: 1.321929,
+  minClock: 1,
+  maxClock: 250,
+} as const;
+// The advice writes a clock to two decimals (0.01%), which the game's clock input takes.
+export const EXTRACTOR_CLOCK_DECIMALS = 2;
+// Less Water than one extractor gives at its lowest clock (1.2 m³/min).
+export const EXTRACTOR_MIN_RATE = (WATER_EXTRACTOR.rate * WATER_EXTRACTOR.minClock) / 100;
+// A rate this close to a whole number of extractors is that number (rounding noise, m³/min).
+const EXTRACTOR_DUST = 1e-6;
+
+// One Water Extractor's draw at `clock` percent: 20 MW × (clock / 100)^1.321929.
+export const extractorMW = (clock: number): number =>
+  WATER_EXTRACTOR.mw * (clock / 100) ** WATER_EXTRACTOR.exponent;
+
+// The Power Shards one extractor at `clock` percent needs: none up to 100%, then one per 50%
+// started, so 1 up to 150%, 2 up to 200% and 3 up to 250%.
+export const extractorShards = (clock: number): number =>
+  clock <= 100 ? 0 : Math.min(3, Math.ceil((clock - 100) / 50 - 1e-9));
+
+// The exact clocks (percent, unrounded) of the extractors that make `rate` m³/min of Water with
+// whole extractors at `full` percent (100, or 250 with three Power Shards each): the last one
+// underclocked to the remainder, never more than the rate (#1024: a fluid is never
+// overproduced). A remainder below the game's lowest clock (1%) is made by underclocking the
+// last full extractor by what the 1% one adds. [] for no Water, and null when the rate is
+// below what one extractor gives at 1% (EXTRACTOR_MIN_RATE), which no extractor can make
+// without overproducing.
+export function extractorClocks(rate: number, full: number): number[] | null {
+  if (!(rate > EXTRACTOR_DUST)) return [];
+  if (rate < EXTRACTOR_MIN_RATE - EXTRACTOR_DUST) return null;
+  const perFull = (WATER_EXTRACTOR.rate * full) / 100;
+  const whole = Math.floor((rate + EXTRACTOR_DUST) / perFull);
+  const rest = rate - whole * perFull;
+  const clocks: number[] = Array.from({ length: whole }, () => full);
+  if (rest <= EXTRACTOR_DUST) return clocks;
+  const last = (rest / WATER_EXTRACTOR.rate) * 100;
+  // A rate within rounding noise of the lowest clock is that clock.
+  if (last >= WATER_EXTRACTOR.minClock || !whole)
+    return [...clocks, Math.max(last, WATER_EXTRACTOR.minClock)];
+  // Below 1%: the extractor before it gives up what the 1% one makes beyond the remainder.
+  clocks[whole - 1] = full - (WATER_EXTRACTOR.minClock - last);
+  return [...clocks, WATER_EXTRACTOR.minClock];
+}
+
+// The Water one step of the written clock (0.01%) gives: 0.012 m³/min.
+export const EXTRACTOR_RATE_STEP = WATER_EXTRACTOR.rate / 100 / 10 ** EXTRACTOR_CLOCK_DECIMALS;
+
+// The Water the written clocks make: `rate` rounded down to a whole number of clock steps
+// (EXTRACTOR_RATE_STEP), so less than 0.012 m³/min under the rate and never over it. Every
+// clock extractorClocks gives for it is then a whole number of steps, so the clocks as written
+// add up to exactly this. The tolerance (a millionth of a step) only absorbs floating-point
+// noise.
+export const settableRate = (rate: number): number =>
+  Math.floor(rate / EXTRACTOR_RATE_STEP + 1e-6) * EXTRACTOR_RATE_STEP;
+
+// One way to build a line's Water Extractors: its runs of extractors at one clock in order
+// ("2 at 100% + 1 at 15.03%"), each clock as the player sets it, how many extractors, Power
+// Shards and MW in all, the whole-extractor clock it is built around (`full`) and the Water the
+// clocks make (`rate`, settableRate).
+export interface ExtractorOption {
+  full: number;
+  rate: number;
+  runs: { count: number; clock: number }[];
+  extractors: number;
+  shards: number;
+  mw: number;
+}
+
+// The extractors for `rate` m³/min at whole clock `full`, with the clocks written to two decimals:
+// extractorClocks of the rate rounded down to what such clocks can make (settableRate), or null
+// as there.
+export function extractorOption(rate: number, full: number): ExtractorOption | null {
+  const written = settableRate(rate);
+  const exact = extractorClocks(written, full);
+  if (!exact) return null;
+  // Whole steps already; the rounding only clears floating-point noise (15.030000000000001).
+  const scale = 10 ** EXTRACTOR_CLOCK_DECIMALS;
+  const clocks = exact.map(clock => Math.round(clock * scale) / scale);
+  const runs: ExtractorOption['runs'] = [];
+  for (const clock of clocks) {
+    const run = runs.at(-1);
+    if (run?.clock === clock) run.count++;
+    else runs.push({ count: 1, clock });
+  }
+  return {
+    full,
+    rate: written,
+    runs,
+    extractors: clocks.length,
+    shards: clocks.reduce((sum, clock) => sum + extractorShards(clock), 0),
+    mw: clocks.reduce((sum, clock) => sum + extractorMW(clock), 0),
+  };
+}
+
+// The owner's two options for `rate` m³/min of Water (#1024): whole extractors at 100%, and
+// whole extractors at 250% with three Power Shards each, each with the last one underclocked to
+// the remainder. null for no Water, or less than one extractor gives at its lowest clock.
+export function waterExtractors(
+  rate: number,
+): { plain: ExtractorOption; sharded: ExtractorOption } | null {
+  if (!(rate >= EXTRACTOR_MIN_RATE - EXTRACTOR_DUST)) return null;
+  const plain = extractorOption(rate, 100),
+    sharded = extractorOption(rate, WATER_EXTRACTOR.maxClock);
+  return plain && sharded ? { plain, sharded } : null;
+}
