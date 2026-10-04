@@ -88,10 +88,12 @@ const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> 
   return out;
 };
 // The items factory groups make on site (#875): { groupId: { name?, items, shares: { phase:
-// { rowId: share } }, rates? } }, worked out from factoryGroups.local and the memberships when the
-// user starts a recalculation (onSiteSettings in public/app/on-site.ts) and frozen with the plan.
+// { rowId: share } }, rates?, ifBuilt? } }, worked out from factoryGroups.local and the
+// memberships when the user starts a recalculation (onSiteSettings in public/app/on-site.ts) and
+// frozen with the plan.
 // Group ids are factory-group ids, items known items that are not raw resources, row ids check
-// key parts and shares fractions of a row from 0 to 1; rates (#984) are checked by onSiteRates.
+// key parts and shares fractions of a row from 0 to 1; rates (#984) and ifBuilt (#1038) are
+// checked by onSiteRates.
 // Zero shares, phases without a share and groups without an item or a share are dropped, and
 // undefined is returned when nothing is left, so settings without it stay as they were.
 const GROUP_ID = /^fg-[a-z0-9]{4,32}$/;
@@ -110,12 +112,14 @@ const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
       fail('Invalid items made on site.');
     const shares = onSiteShares(entry.shares);
     const rates = onSiteRates(entry.rates);
+    const ifBuilt = withoutRates(onSiteRates(entry.ifBuilt), rates);
     if (!items.length || !Object.keys(shares).length) continue;
     out[group] = {
       ...(typeof entry.name === 'string' && entry.name.trim() ? { name: entry.name.trim() } : {}),
       items: (items as string[]).sort(),
       shares,
       ...(Object.keys(rates).length ? { rates } : {}),
+      ...(Object.keys(ifBuilt).length ? { ifBuilt } : {}),
     };
   }
   return Object.keys(out).length ? out : undefined;
@@ -172,6 +176,20 @@ const onSiteRates = (raw: unknown): OnSiteRates => {
   return out;
 };
 type OnSiteRates = NonNullable<OnSiteGroup['rates']>;
+// A group's parts of the rows the plan being recalculated lacked in a phase (ifBuilt, #1038),
+// checked as onSiteRates checks `rates`, less any row that also has a part in `rates` in that
+// phase (the plan had the row there, so that part is the one that counts). Absent in plans made
+// before #1038, which keep planning exactly as before.
+const withoutRates = (ifBuilt: OnSiteRates, rates: OnSiteRates): OnSiteRates => {
+  const out: OnSiteRates = {};
+  for (const [phase, rows] of Object.entries(ifBuilt) as [StageKey, Record<string, OnSiteRate>][]) {
+    const kept = Object.entries(rows).filter(
+      ([rowId]) => !Object.hasOwn(rates[phase] || {}, rowId),
+    );
+    if (kept.length) out[phase] = Object.fromEntries(kept);
+  }
+  return out;
+};
 // A number of an OnSiteRate: absent is 0, anything but a number from 0 to `max` is refused.
 const sitePart = (value: unknown, max: number): number =>
   value === undefined

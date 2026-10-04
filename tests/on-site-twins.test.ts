@@ -268,22 +268,13 @@ function configuration(seed: number) {
   return { before, plan, groups: marking };
 }
 
-// A group's item whose consumers in `stage` include a row the plan being recalculated lacks in
-// that phase and that has a fixed-rate membership: onSiteSettings counts only such a row's
-// null-rate memberships (no total to measure a fixed rate against), so the group's line is sized
-// by an even split the books do not use (#1038, a limit of its own, not a twin's).
-function unmeasured(stage: StoredStage, previous: StoredStage | undefined, groups: FactoryGroups) {
-  const had = new Set((previous?.rows || []).map(line => line.id));
-  return (group: string, item: string) =>
-    rowsOf(stage).some(
-      line =>
-        !line.onSite &&
-        line.inputs[item] &&
-        !had.has(line.id) &&
-        groups.assignments[line.id]?.some(entry => entry.group === group) &&
-        groups.assignments[line.id]?.some(entry => entry.rate !== null),
-    );
-}
+// The parts of rows with a fixed-rate membership that the plan being recalculated lacks in
+// `phase` (settings.onSite[group].ifBuilt, #1038) and that `stage` builds: the planner counts
+// them only there, so the group's line follows the books there too.
+const builtParts = (plan: CurrentCalculatedPlan, phase: StageKey, stage: StoredStage) =>
+  Object.values(plan.settings.onSite || {}).flatMap(entry =>
+    Object.keys(entry.ifBuilt?.[phase] || {}).filter(id => row(stage, id)),
+  ).length;
 
 // The seeds checked: 1 to 40, and the settle loop's cases among seeds 41 to 600 (#1037, #1042),
 // where the first plan makes a row less than its fixed rates and withinRates used to keep a plan
@@ -293,10 +284,17 @@ function unmeasured(stage: StoredStage, previous: StoredStage | undefined, group
 // exact LP still sized the group's line by the share it was calculated with and left the network
 // no central line for the rest; in seeds 118, 135, 311, 345, 397, 455, 476, 531 and 590 (Phase 5)
 // it did not fit at all. Either way the plan with the shares stood. In seeds 420 (Phase 4) and
-// 489 (Phase 3) the rounds ran out on a plan settled at another plan's totals. Seeds 358, 429
-// and 595 still end on a plan whose parts were not measured at its own totals (listed on #1038).
+// 489 (Phase 3) the rounds ran out on a plan settled at another plan's totals. Seeds 326, 358,
+// 429 and 595 still end on a plan whose parts were not measured at its own totals (listed on
+// #1038). And cases of #1038 among seeds 41 to 600, where the recalculation builds a row the plan
+// being recalculated lacks in a phase and holds at a fixed rate: the group's line was sized by
+// the row's share alone, an even split of its null-rate memberships, so it made more than the
+// books give (seeds 44, 115, 152 and 530, Phase 2 to 5), offered the rest (seeds 346, 421, 504 and
+// 596, Phase 1 to 4) or made less (seed 247, Phase 1), as seed 16 offered 10.5 Steel Ingot/min in
+// Phase 5 and seed 10's lines made 7.8 of the 19.65 Steel Beam/min the books gave fg-twin2 there.
 const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571, 590];
-const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS];
+const IF_BUILT_SEEDS = [44, 115, 152, 247, 346, 421, 504, 530, 596];
+const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS, ...IF_BUILT_SEEDS];
 
 test('right after a recalculation with amplification on, each own line matches the books (#904)', () => {
   const problems: string[] = [];
@@ -304,9 +302,9 @@ test('right after a recalculation with amplification on, each own line matches t
     lines = 0,
     twins = 0,
     split = 0,
-    turned = 0;
-  const left = { count: 0 },
-    skipped = { count: 0 };
+    turned = 0,
+    built = 0;
+  const left = { count: 0 };
   for (const seed of SEEDS) {
     const { before, plan, groups } = configuration(seed);
     for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
@@ -316,12 +314,8 @@ test('right after a recalculation with amplification on, each own line matches t
       phases++;
       lines += own;
       const label = `seed ${seed}, phase ${phase}`;
-      const skip = unmeasured(stage, before.stages[phase], groups);
-      const counted = { count: 0 };
-      problems.push(...lineProblems(stage, groups, label, counted, skip));
-      for (const [item, places] of Object.entries(itemBooks(stage, groups).local))
-        for (const group of places.keys()) if (skip(group, item)) skipped.count++;
-      left.count += counted.count;
+      problems.push(...lineProblems(stage, groups, label, left));
+      built += builtParts(plan, phase, stage);
       // The pairs of twins in the phase, those whose lines are held by different groups or at
       // different rates, and the lines the recalculation turned amplified or back.
       const ids = new Set(rowsOf(stage).map(line => line.id));
@@ -342,7 +336,7 @@ test('right after a recalculation with amplification on, each own line matches t
   assert.ok(twins >= 600, `${twins} pairs of twins in a phase`);
   assert.ok(split >= 800, `${split} amplified lines held apart from their twin`);
   assert.ok(turned >= 150, `${turned} lines turned amplified or back`);
-  assert.ok(skipped.count * 10 <= lines, `${skipped.count} items with an unmeasured fixed rate`);
+  assert.ok(built >= 30, `${built} parts of rows the plan being recalculated lacked, built`);
   assert.ok(left.count * 5 <= lines, `${left.count} items left out`);
 });
 
@@ -377,12 +371,12 @@ test("#1042's example: the plan kept was settled at its own totals, so R1's line
   assert.ok(own && Math.abs(own.asked - 46.4) < 1e-6, `R1 asks ${own?.asked}`);
   assert.equal(own.made, 50);
   assert.ok(row(stage, 'Recipe_CircuitBoard_C'), 'the Circuit Board line');
-  // Phase 4 builds the Circuit Board line, which the plan being recalculated lacks there, so R1's
-  // fixed rate is not measured (#1038); every other own line matches the books.
+  // Phase 4 builds the Circuit Board line, which the plan being recalculated lacks there, and R1's
+  // fixed rate counts there too (#1038): every own line matches the books.
+  assert.ok(row(plan.stages['4'], 'Recipe_CircuitBoard_C'), 'the Circuit Board line in Phase 4');
+  assert.equal(row(before.stages['4'], 'Recipe_CircuitBoard_C'), undefined);
   const problems: string[] = [];
-  for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
-    const skip = unmeasured(stage, before.stages[phase], groups);
-    problems.push(...lineProblems(stage, groups, `phase ${phase}`, { count: 0 }, skip));
-  }
+  for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][])
+    problems.push(...lineProblems(stage, groups, `phase ${phase}`, { count: 0 }));
   assert.deepEqual(problems, []);
 });

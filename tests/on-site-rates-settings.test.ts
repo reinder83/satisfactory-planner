@@ -2,7 +2,10 @@
 // the planner follows to the row's total in the plan the recalculation produces. Checked by the
 // planner's settings(), never required: a plan stored before #984 has only `shares`, and keeps
 // loading, validating, importing and recalculating exactly as it did (recorded on main before
-// #984 in tests/fixtures/on-site-shares-2026-10-04.json).
+// #984 in tests/fixtures/on-site-shares-2026-10-04.json). Likewise settings.onSite[group].ifBuilt
+// (#1038), a group's parts of rows the plan being recalculated lacked in a phase: a plan stored
+// before #1038 has none and recalculates exactly as it did (recorded on main before #1038 in
+// tests/fixtures/on-site-rates-2026-10-04.json).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -108,6 +111,9 @@ test('onSiteSettings adds the parts of rows with a fixed rate beside the shares'
     assignments: { Recipe_IronRod_C: [{ group: ALPHA, rate: null }] },
   })!;
   assert.equal('rates' in open[ALPHA]!, false);
+  assert.equal('ifBuilt' in open[ALPHA]!, false);
+  // The plan has the Iron Plate line in every phase, so nothing is stored apart either (#1038).
+  assert.equal('ifBuilt' in onSite[ALPHA]!, false);
 });
 
 test('settings() checks the parts, and drops what plans nothing', () => {
@@ -187,6 +193,66 @@ test('settings() checks the parts, and drops what plans nothing', () => {
   );
 });
 
+test('settings() checks the parts of rows the plan lacked (ifBuilt) as it checks rates (#1038)', () => {
+  const entry = (ifBuilt: unknown, rates?: unknown) => ({
+    [ALPHA]: { items: ['Wire'], shares: { '3': { Recipe_Cable_C: 0.5 } }, rates, ifBuilt },
+  });
+  const checked = (ifBuilt: unknown, rates?: unknown) =>
+    settings({ onSite: entry(ifBuilt, rates) }).onSite![ALPHA]!.ifBuilt;
+  assert.deepEqual(
+    checked({
+      '2': { Recipe_Cable_C: { rate: 75 }, Recipe_Rotor_C: { rate: 0, open: 0, after: 3 } },
+      '3': { Recipe_Stator_C: { open: 0.5, after: 75, floor: true, note: 'x' } },
+      '4': {},
+    }),
+    {
+      '2': { Recipe_Cable_C: { rate: 75, open: 0, after: 0 } },
+      '3': { Recipe_Stator_C: { rate: 0, open: 0.5, after: 75 } },
+    },
+    'normalised as rates are',
+  );
+  assert.equal(checked(undefined), undefined, 'absent stays absent');
+  assert.equal(checked({ '3': { Recipe_Cable_C: { rate: 0 } } }), undefined, 'nothing left');
+  // A row with a part of rates in the phase keeps that one: the plan had the row there.
+  assert.deepEqual(
+    checked(
+      {
+        '3': { Recipe_Cable_C: { rate: 9 }, Recipe_Rotor_C: { rate: 4 } },
+        '4': { Recipe_Cable_C: { rate: 9 } },
+      },
+      { '3': { Recipe_Cable_C: { rate: 75 } } },
+    ),
+    {
+      '3': { Recipe_Rotor_C: { rate: 4, open: 0, after: 0 } },
+      '4': { Recipe_Cable_C: { rate: 9, open: 0, after: 0 } },
+    },
+  );
+  for (const ifBuilt of [
+    [],
+    'ifBuilt',
+    null,
+    7,
+    { post: {} },
+    { '3': [] },
+    { '3': { 'bad id': { rate: 1 } } },
+    { '3': { Recipe_Cable_C: 5 } },
+    { '3': { Recipe_Cable_C: { rate: -1 } } },
+    { '3': { Recipe_Cable_C: { rate: '47' } } },
+    { '3': { Recipe_Cable_C: { rate: 1e300 } } },
+    { '3': { Recipe_Cable_C: { open: 1.5 } } },
+    { '3': { Recipe_Cable_C: { after: -1 } } },
+    { '3': { Recipe_Cable_C: { rate: 47, open: 0.5 } } },
+    {
+      '3': Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`Recipe_${i}`, { rate: 1 }])),
+    },
+  ])
+    assert.throws(
+      () => settings({ onSite: entry(ifBuilt) }),
+      /Invalid items made on site/,
+      JSON.stringify(ifBuilt)?.slice(0, 80),
+    );
+});
+
 test('a plan stored with only shares recalculates exactly as before #984', () => {
   assert.equal(recorded.cases.length, 2);
   for (const entry of recorded.cases) {
@@ -200,8 +266,26 @@ test('a plan stored with only shares recalculates exactly as before #984', () =>
   }
 });
 
+test('a plan stored with rates and without ifBuilt recalculates exactly as before #1038', () => {
+  const before1038: { cases: RecordedCase[] } = JSON.parse(
+    fs.readFileSync('tests/fixtures/on-site-rates-2026-10-04.json', 'utf8'),
+  );
+  assert.equal(before1038.cases.length, 2);
+  for (const entry of before1038.cases) {
+    const onSite = entry.settings.onSite as OnSiteSettings;
+    assert.ok(
+      Object.values(onSite).some(group => 'rates' in group),
+      entry.label,
+    );
+    for (const group of Object.values(onSite)) assert.equal('ifBuilt' in group, false, entry.label);
+    const plan = calculate(json(entry.settings));
+    assert.deepEqual(rowsOf(plan), entry.rows, entry.label);
+    assert.deepEqual(plan.settings.onSite, onSite, entry.label);
+  }
+});
+
 // A full export holding a profile whose plan stores `settings.onSite`, as a release before #984
-// (shares only) or this one (with rates) froze it.
+// (shares only) or a later one (with rates, and since #1038 ifBuilt) froze it.
 function exported(plan: StoredCalculatedPlan): SaveExport {
   return {
     format: 'satisfactory-planner-saves',
@@ -222,7 +306,7 @@ function exported(plan: StoredCalculatedPlan): SaveExport {
 // The recorded case's plan, as the release before #984 stored it.
 const storedPlan = (entry: RecordedCase): StoredCalculatedPlan => json(calculate(entry.settings));
 
-test('a stored plan with only shares imports and loads unchanged, and so does one with rates', async () => {
+test('a stored plan with only shares imports and loads unchanged, and so does one with rates or ifBuilt', async () => {
   const entry = recorded.cases[0]!;
   const before = storedPlan(entry);
   const withRates = json(calculate({ ...entry.settings, onSite: undefined }));
@@ -232,7 +316,11 @@ test('a stored plan with only shares imports and loads unchanged, and so does on
       rates: { '4': { Recipe_IronPlate_C: { rate: 47, open: 0, after: 0 } } },
     },
   };
-  for (const plan of [before, withRates]) {
+  const withIfBuilt = json(withRates);
+  withIfBuilt.settings.onSite!['fg-plc3']!.ifBuilt = {
+    '1': { Recipe_IronPlate_C: { rate: 0, open: 1, after: 47 } },
+  };
+  for (const plan of [before, withRates, withIfBuilt]) {
     const file = exported(plan);
     // The import's check and conversion keep the plan byte for byte.
     const checked = validateTransfer(json(file)).saves[0]!.profiles[0]!.plan!;
