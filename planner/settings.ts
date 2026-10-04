@@ -21,6 +21,7 @@ import type {
   Purity,
   SloopUse,
   OnSiteGroup,
+  OnSiteRate,
   OnSiteSettings,
   StageKey,
   StorageChoice,
@@ -86,12 +87,12 @@ const transportFuelRates = (raw: unknown): Partial<Record<StageKey, ItemRates>> 
   return out;
 };
 // The items factory groups make on site (#875): { groupId: { name?, items, shares: { phase:
-// { rowId: share } } } }, worked out from factoryGroups.local and the memberships when the user
-// starts a recalculation (onSiteSettings in public/app/on-site.ts) and frozen with the plan.
+// { rowId: share } }, rates? } }, worked out from factoryGroups.local and the memberships when the
+// user starts a recalculation (onSiteSettings in public/app/on-site.ts) and frozen with the plan.
 // Group ids are factory-group ids, items known items that are not raw resources, row ids check
-// key parts and shares fractions of a row from 0 to 1. Zero shares, phases without a share and
-// groups without an item or a share are dropped, and undefined is returned when nothing is left,
-// so settings without it stay as they were.
+// key parts and shares fractions of a row from 0 to 1; rates (#984) are checked by onSiteRates.
+// Zero shares, phases without a share and groups without an item or a share are dropped, and
+// undefined is returned when nothing is left, so settings without it stay as they were.
 const GROUP_ID = /^fg-[a-z0-9]{4,32}$/;
 const ROW_ID = /^[a-zA-Z0-9:_-]{1,160}$/;
 const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
@@ -107,11 +108,13 @@ const onSiteGroups = (raw: unknown): OnSiteSettings | undefined => {
     if (items.length > 200 || items.some(item => typeof item !== 'string' || !suppliable(item)))
       fail('Invalid items made on site.');
     const shares = onSiteShares(entry.shares);
+    const rates = onSiteRates(entry.rates);
     if (!items.length || !Object.keys(shares).length) continue;
     out[group] = {
       ...(typeof entry.name === 'string' && entry.name.trim() ? { name: entry.name.trim() } : {}),
       items: (items as string[]).sort(),
       shares,
+      ...(Object.keys(rates).length ? { rates } : {}),
     };
   }
   return Object.keys(out).length ? out : undefined;
@@ -139,6 +142,42 @@ const onSiteShares = (raw: unknown): OnSiteGroup['shares'] => {
   }
   return out;
 };
+// A group's parts of the rows with a fixed-rate membership (#984), beside its shares: { phase:
+// { rowId: { rate, open, after } } } (OnSiteRate). `rate` is per minute up to a membership's
+// largest rate, `after` per minute up to twelve of them (the most memberships a row has), and
+// `open` a fraction from 0 to 1; an absent number is 0, and a part may not have both a `rate` and
+// an `open` above 0; a part with neither is dropped. A row may have a part without a share: its
+// fixed rates took all of its total in the plan being recalculated. Absent in plans made before
+// #984, which keep sizing every line by its shares.
+const onSiteRates = (raw: unknown): OnSiteRates => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail('Invalid items made on site.');
+  const out: OnSiteRates = {};
+  for (const [phase, rows] of Object.entries(raw)) {
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !isRecord(rows))
+      fail('Invalid items made on site.');
+    if (Object.keys(rows).length > 1000) fail('Invalid items made on site.');
+    const kept: [string, OnSiteRate][] = [];
+    for (const [rowId, part] of Object.entries(rows)) {
+      if (!ROW_ID.test(rowId) || !isRecord(part)) fail('Invalid items made on site.');
+      const rate = sitePart(part.rate, 10000000),
+        open = sitePart(part.open, 1),
+        after = sitePart(part.after, 120000000);
+      if (rate > 0 && open > 0) fail('Invalid items made on site.');
+      if (rate > 0 || open > 0) kept.push([rowId, { rate, open, after }]);
+    }
+    if (kept.length) out[phase as StageKey] = Object.fromEntries(kept);
+  }
+  return out;
+};
+type OnSiteRates = NonNullable<OnSiteGroup['rates']>;
+// A number of an OnSiteRate: absent is 0, anything but a number from 0 to `max` is refused.
+const sitePart = (value: unknown, max: number): number =>
+  value === undefined
+    ? 0
+    : typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max
+      ? value
+      : fail('Invalid items made on site.');
 // A known item that is not a raw resource: what existing supply and settings.onSite may name. The
 // interface applies the same rule to the marks it sends (onSitePlannable in
 // public/app/on-site.ts, #921); a test checks the two agree.

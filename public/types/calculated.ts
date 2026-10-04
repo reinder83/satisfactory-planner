@@ -137,6 +137,23 @@ export interface OnSiteGroup {
   name?: string;
   items: string[];
   shares: Partial<Record<StageKey, Record<string, number>>>;
+  // Per phase, the group's part of each row with a fixed-rate membership as it follows that
+  // row's total in the plan the recalculation produces (#984), beside its share there. Absent
+  // in plans made before #984 and for rows without a fixed rate, which the share sizes.
+  rates?: Partial<Record<StageKey, Record<string, OnSiteRate>>>;
+}
+// A group's part of a row of total T (its primary output per minute, MW for a generator), as
+// rowShares gives it while the row makes at least what its fixed rates take: `rate` per minute
+// for a fixed-rate membership, which `after` per minute of earlier fixed rates come before, or
+// for a membership without a rate `open` (1 / the number of such memberships) of T - `after`,
+// what all the fixed rates leave. One of `rate` and `open` is 0.
+export interface OnSiteRate {
+  rate: number;
+  open: number;
+  after: number;
+  // Only inside the planner, never stored (settings() leaves it out): plan the row to make at
+  // least `after` + `rate` (withinRates in planner/on-site.ts).
+  floor?: true;
 }
 export type OnSiteSettings = Record<string, OnSiteGroup>;
 // A per-group line's group and the recipe it is a copy of (#875).

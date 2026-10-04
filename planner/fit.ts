@@ -6,6 +6,7 @@ import type { Solved, RunResult, RunOptions } from './types.ts';
 import { AMPLIFY_CANDIDATES } from './recipes.ts';
 import { run, type PhaseContext } from './model.ts';
 import { stoppedSearch, ROUNDING_MS, roundedFallback, easyClockFallback } from './rounding.ts';
+import { sharedSettings } from './on-site.ts';
 
 // The options the two-step fit passes on to each of its solves unchanged.
 type FitOptions = Pick<RunOptions, 'maximum' | 'conversion' | 'ignoreLimits' | 'caps'>;
@@ -58,9 +59,10 @@ export function twoStepFit(context: PhaseContext): RunResult {
   }
   return fit!;
 }
-// The two-step fit's first step: the exact LP, with fractional machines and no amplification.
+// The two-step fit's first step: the exact LP, with fractional machines and no amplification, and
+// the groups' lines made on site sized by their shares (sharedSettings, #984).
 const exactFit = (variant: CurrentSettings, phase: number, options: FitOptions) =>
-  run({ ...variant, wholeMachines: false, amplifySloops: 0 }, phase, options);
+  run({ ...sharedSettings(variant), wholeMachines: false, amplifySloops: 0 }, phase, options);
 // The amplification candidates: the largest lines (at least one machine-equivalent) of an
 // exact solve, as { recipeId: equivalent }. A group's own line made on site (#875) is never
 // amplified.
