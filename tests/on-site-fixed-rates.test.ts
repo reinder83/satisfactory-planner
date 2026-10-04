@@ -20,7 +20,8 @@ import type {
 const PLC3 = 'fg-plc3',
   OTHER = 'fg-oth1';
 const PLATE = 'Recipe_IronPlate_C',
-  INGOT = 'Recipe_IngotIron_C';
+  INGOT = 'Recipe_IngotIron_C',
+  ROD = 'Recipe_IronRod_C';
 const OWN_INGOT = `${INGOT}:${PLC3}`;
 // A Smelter makes 30 Iron Ingot/min; an Iron Plate line uses 3 Iron Ingot for 2 Iron Plate.
 const SMELTER = 30;
@@ -104,6 +105,58 @@ test('a shrinking Iron Plate line no longer leaves PLC3 a Smelter short (#984)',
   assert.ok(near(fall.own.asked, 70.5));
   assert.equal(row(fall.stage, OWN_INGOT)!.machines, 3);
   assert.equal(fall.books.offered['Iron Ingot'], undefined);
+});
+
+test("#1043's example: a fixed rate that is only part of its row leaves a central line for the rest", () => {
+  // Group A marks Iron Ingot, holds the Iron Plate line and the Iron Rod line at a fixed 255/min;
+  // the rest of the Iron Rod line is B's. On the standard recipes ('custom' with the two MAM
+  // recipes and Pure Aluminum Ingot ticked plans with exactly the standard pool now, and keeps
+  // this case's plans once #1040 makes Pure Aluminum Ingot a hard-drive alternate).
+  const groups: FactoryGroups = {
+    groups: [
+      { id: 'fg-alpha', name: 'A' },
+      { id: 'fg-beta', name: 'B' },
+    ],
+    assignments: {
+      Recipe_IronPlate_C: [{ group: 'fg-alpha', rate: null }],
+      [ROD]: [
+        { group: 'fg-alpha', rate: 255 },
+        { group: 'fg-beta', rate: null },
+      ],
+    },
+    local: { 'fg-alpha': ['Iron Ingot'] },
+  };
+  const start = {
+    phase: '4',
+    wholeMachines: true,
+    limitsConfirmed: true,
+    recipes: 'custom',
+    alternateRecipes: [
+      'Recipe_Alternate_EnrichedCoal_C',
+      'Recipe_Alternate_Turbofuel_C',
+      'Recipe_PureAluminumIngot_C',
+    ],
+  } as const;
+  const plan = calculate({
+    ...start,
+    storageRate: 2,
+    onSite: onSiteSettings(calculate(start), groups),
+  });
+  // Phase 2's Iron Rod line makes 270/min, more than A's 255. The exact LP of the plan settled at
+  // that total still sized A's line by the share 1 it was calculated with, so the network had no
+  // central Iron Ingot line and the settled plan made the Iron Ingot centrally; the plan with the
+  // shares stood, whose A line (14 Smelters) also made B's 15 Iron Rod: 15 Iron Ingot/min offered.
+  const stage = plan.stages['2'];
+  assert.equal(row(stage, ROD)!.outputs['Iron Rod'], 270);
+  assert.ok(row(stage, INGOT), 'a central Iron Ingot line');
+  const books = itemBooks(stage, groups);
+  assert.deepEqual(books.local['Iron Ingot']?.get('fg-alpha'), { made: 420, asked: 405 });
+  assert.equal(books.offered['Iron Ingot'], undefined, 'nothing offered');
+  assert.equal(books.sunk['Iron Ingot']?.get('fg-alpha'), 15);
+  const problems: string[] = [];
+  for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][])
+    problems.push(...lineProblems(stage, groups, `phase ${phase}`, { count: 0 }));
+  assert.deepEqual(problems, []);
 });
 
 // The profiles the random configurations start from: the start phase, whole machines or not,

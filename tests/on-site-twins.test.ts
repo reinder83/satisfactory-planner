@@ -6,6 +6,7 @@
 // and its fixed-rate part of a row by the row's own id too (shareOf and phaseRate in
 // planner/on-site.ts), with no fallback from one twin to the other either way, and a group's line
 // is never drawn on for a twin the books do not credit it with.
+import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, recipePool, settings } from '../planner.ts';
@@ -281,10 +282,18 @@ function unmeasured(stage: StoredStage, previous: StoredStage | undefined, group
     );
 }
 
-// The phases where withinRates keeps the plan made with the frozen shares because the settled
-// plan drops the groups' lines, so a group's line is sized by a share the books do not use
-// (#1037, on main too). Remove each once that is fixed.
-const KNOWN = new Set(['seed 36, phase 2']);
+// The seeds checked: 1 to 40, and the settle loop's cases among seeds 41 to 600 (#1037, #1042),
+// where the first plan makes a row less than its fixed rates and withinRates used to keep a plan
+// whose parts were not measured at its own totals. In seeds 223 and 571 (Phase 3), as in seed 36
+// (Phase 2, 180 Copper Ingot/min for the 101.8 the books gave fg-twin1, 53.2 of it offered), the
+// plan settled at the totals of the plan with the shares made the items centrally, because the
+// exact LP still sized the group's line by the share it was calculated with and left the network
+// no central line for the rest; in seeds 118, 135, 311, 345, 397, 455, 476, 531 and 590 (Phase 5)
+// it did not fit at all. Either way the plan with the shares stood. In seeds 420 (Phase 4) and
+// 489 (Phase 3) the rounds ran out on a plan settled at another plan's totals. Seeds 358, 429
+// and 595 still end on a plan whose parts were not measured at its own totals (listed on #1038).
+const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571, 590];
+const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS];
 
 test('right after a recalculation with amplification on, each own line matches the books (#904)', () => {
   const problems: string[] = [];
@@ -295,7 +304,7 @@ test('right after a recalculation with amplification on, each own line matches t
     turned = 0;
   const left = { count: 0 },
     skipped = { count: 0 };
-  for (let seed = 1; seed <= 40; seed++) {
+  for (const seed of SEEDS) {
     const { before, plan, groups } = configuration(seed);
     for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
       if (!stage.feasible || stage.onSiteDropped) continue;
@@ -306,9 +315,7 @@ test('right after a recalculation with amplification on, each own line matches t
       const label = `seed ${seed}, phase ${phase}`;
       const skip = unmeasured(stage, before.stages[phase], groups);
       const counted = { count: 0 };
-      const found = lineProblems(stage, groups, label, counted, skip);
-      if (KNOWN.has(label)) assert.ok(found.length, `${label} is no longer a known exception`);
-      else problems.push(...found);
+      problems.push(...lineProblems(stage, groups, label, counted, skip));
       for (const [item, places] of Object.entries(itemBooks(stage, groups).local))
         for (const group of places.keys()) if (skip(group, item)) skipped.count++;
       left.count += counted.count;
@@ -334,4 +341,52 @@ test('right after a recalculation with amplification on, each own line matches t
   assert.ok(turned >= 150, `${turned} lines turned amplified or back`);
   assert.ok(skipped.count * 10 <= lines, `${skipped.count} items with an unmeasured fixed rate`);
   assert.ok(left.count * 5 <= lines, `${left.count} items left out`);
+});
+
+// #1042's groups (tests/fixtures/on-site-settle-groups-2026-10-04.json): three groups holding rows
+// of a Phase 4 profile with amplification on, many at fixed rates and many twins apart. R1 marks
+// Copper Sheet and holds the Circuit Board line at a fixed 38.1/min, after R0's 6.8. On the
+// standard recipes ('custom' with the two MAM recipes and Pure Aluminum Ingot ticked plans with
+// exactly the standard pool now, and keeps this case's plans once #1040 makes Pure Aluminum Ingot
+// a hard-drive alternate).
+const SETTLE_START = {
+  phase: '4',
+  wholeMachines: true,
+  limitsConfirmed: true,
+  somersloops: 106,
+  amplifySloops: 80,
+  recipes: 'custom',
+  alternateRecipes: [
+    'Recipe_Alternate_EnrichedCoal_C',
+    'Recipe_Alternate_Turbofuel_C',
+    'Recipe_PureAluminumIngot_C',
+  ],
+} as const;
+
+test("#1042's example: the plan kept was settled at its own totals, so R1's line makes its part", () => {
+  const groups: FactoryGroups = JSON.parse(
+    fs.readFileSync('tests/fixtures/on-site-settle-groups-2026-10-04.json', 'utf8'),
+  );
+  const before = calculate(SETTLE_START);
+  const plan = calculate({
+    ...SETTLE_START,
+    storageRate: 3,
+    onSite: onSiteSettings(before, groups),
+  });
+  // In Phase 3 the Circuit Board line is dropped by one settled plan (the amplified twin, which R1
+  // does not hold, makes the Circuit Boards) and built again by the next with no share for R1. The
+  // rounds used to end there: R1's Copper Sheet line made 20/min of the 46.4 the books give R1.
+  const stage = plan.stages['3'];
+  const own = itemBooks(stage, groups).local['Copper Sheet']?.get('fg-rev1');
+  assert.ok(own && Math.abs(own.asked - 46.4) < 1e-6, `R1 asks ${own?.asked}`);
+  assert.equal(own.made, 50);
+  assert.ok(row(stage, 'Recipe_CircuitBoard_C'), 'the Circuit Board line');
+  // Phase 4 builds the Circuit Board line, which the plan being recalculated lacks there, so R1's
+  // fixed rate is not measured (#1038); every other own line matches the books.
+  const problems: string[] = [];
+  for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
+    const skip = unmeasured(stage, before.stages[phase], groups);
+    problems.push(...lineProblems(stage, groups, `phase ${phase}`, { count: 0 }, skip));
+  }
+  assert.deepEqual(problems, []);
 });
