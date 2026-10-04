@@ -4,7 +4,7 @@ import { listNames } from '../public/wording.ts';
 import type { CurrentSettings, StageResult } from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { run } from './model.ts';
-import { stageSettings } from './on-site.ts';
+import { stageSettings, withinRates } from './on-site.ts';
 import type { PhaseStages } from './calculate.ts';
 
 // With the target time on the final phase, an earlier phase may run its lines as
@@ -42,8 +42,11 @@ function resolveEarlierPhases(config: CurrentSettings, stages: PhaseStages): num
     for (let later = phase; later <= 5; later++)
       for (const [id, machines] of Object.entries(built[later] || {}))
         caps[id] = Math.max(caps[id] || 0, machines);
-    // A phase that makes its on-site items centrally (#875) is re-solved that way too.
-    const ahead = run(stageSettings(config, stages[phase]), phase, { maximum: true, caps });
+    // A phase that makes its on-site items centrally (#875) is re-solved that way too, and a row
+    // that makes less than its fixed rates as solvePhase plans it (#984).
+    const ahead = withinRates(stageSettings(config, stages[phase]), phase, settings =>
+      run(settings, phase, { maximum: true, caps }),
+    );
     if (ahead.feasible && ahead.hours < stages[phase]!.hours! - 1e-6)
       stages[phase] = { ...ahead, aheadOf: stages[phase]!.hours! };
     else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))

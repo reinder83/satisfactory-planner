@@ -25,6 +25,13 @@ export const MAM_RECIPES = ['Recipe_Alternate_Turbofuel_C', 'Recipe_Alternate_En
 // Power preferences other than auto/coal/fuel run turbofuel generators (directly or as the Phase 3 bridge).
 export const powerNeedsTurbofuel = (mainPower: string | undefined) =>
   !['auto', 'coal', 'fuel'].includes(mainPower || 'auto');
+// Whether an item balances exactly rather than overflowing to the sink (addBalances in model.ts):
+// fluids, radioactive items, waste and anything the AWESOME Sink does not take.
+export const exactBalance = (item: string) =>
+  !!DATA.items[item]?.fluid ||
+  !!DATA.items[item]?.radioactive ||
+  item.endsWith('Waste') ||
+  !((DATA.items[item]?.sink ?? 0) > 0);
 // Every alternate recipe id: the whitelist for a profile's `alternateRecipes`.
 export const ALT_IDS = new Set(DATA.recipes.filter(r => r.alternate).map(r => r.id));
 // Extracted resources. Each is supplied by a `raw:` LP variable capped by the profile's budget in
