@@ -95,6 +95,8 @@ export interface CatalogRecipe {
   // A MAM research alternate, and one of the pure ingot alternates.
   mam?: boolean;
   pure?: boolean;
+  // An alternate a HUB milestone unlocks, not a hard drive: the milestone's tier (#1044).
+  milestone?: number;
 }
 
 // planner.ts catalog(): the choices and defaults the wizard offers.

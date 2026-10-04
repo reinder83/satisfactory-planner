@@ -30,7 +30,9 @@ const view = computed(() =>
       name: alternate.name,
       subtitle: alternate.mam
         ? `MAM research · unlocked in the MAM, not from hard drives · ${alternate.machine}`
-        : `Alternate recipe · available from Phase ${alternate.phase} · ${alternate.machine}`,
+        : alternate.milestone
+          ? `Tier ${alternate.milestone} milestone · unlocked at the HUB, not from hard drives · ${alternate.machine}`
+          : `Alternate recipe · available from Phase ${alternate.phase} · ${alternate.machine}`,
       primary,
       recipe: panel(alternate),
       standards: (workspace.catalog.standardRecipes || [])

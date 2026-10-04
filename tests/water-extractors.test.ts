@@ -273,8 +273,9 @@ test('only the Water no byproduct covers is extracted, and counted in extractors
     'Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
   );
   assert.notEqual(solution.extractors, extractorAdvice(381.81), 'not the whole input');
-  // Its own byproduct covers most of Distilled Silica's.
-  const distilled = waterOf(alternates, '4', 'Alternate: Distilled Silica')!;
+  // Its own byproduct covers most of Distilled Silica's (a milestone recipe, named without
+  // "Alternate: " since #1044).
+  const distilled = waterOf(alternates, '4', 'Distilled Silica')!;
   assert.equal(
     plainText(distilled.extractors!),
     'Water Extractors: 1 at 6.24% (0.51 MW); no Power Shards needed.',

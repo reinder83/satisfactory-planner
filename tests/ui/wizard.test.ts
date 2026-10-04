@@ -435,6 +435,34 @@ test('a preference that requires recipes locks them on', async () => {
   assert.ok($('input[name=alt][value="Recipe_Alternate_PureIronIngot_C"]'));
 });
 
+test('the picker marks the alternates no hard drive unlocks by their unlock (#1044)', async () => {
+  const POLYESTER = 'Recipe_Alternate_PolyesterFabric_C',
+    DISTILLED = 'Recipe_Alternate_Silica_Distilled_C';
+  const note = (id: string) =>
+    ($(`[data-alt-info="${id}"]`)!.closest('.alt-row')!.querySelector('small')!.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  // A turbofuel route locks its own two MAM recipes; Polyester Fabric stays a pick.
+  wizardAt(2, {}, { recipes: 'custom', mainPower: 'turbofuel' });
+  assert.equal(note(POLYESTER), '· Fabric · MAM research');
+  assert.ok($(`input[name=alt][value="${POLYESTER}"]`), 'a pick, not locked');
+  assert.equal(note(DISTILLED), '· Silica, Water · Tier 7 milestone');
+  assert.ok($(`input[name=alt][value="${DISTILLED}"]`));
+  assert.equal(
+    note('Recipe_Alternate_Turbofuel_C'),
+    '· Turbofuel · MAM research · required by your power preference',
+  );
+  assert.match(
+    main(),
+    /Polyester Fabric are researched in the MAM instead, and Distilled Silica comes with the Tier 7 milestone Control System Development\./,
+  );
+  await click(`[data-alt-info="${DISTILLED}"]`);
+  assert.match(
+    text('#detail'),
+    /Tier 7 milestone · unlocked at the HUB, not from hard drives · Blender/,
+  );
+});
+
 test('Planner’s choice ticks the alternates the planner uses', async () => {
   wizardAt(2, {}, { recipes: 'custom', alternateRecipes: [] });
   const calls = stubFetch<{ settings: WizardSettings }>({ '/api/preview': generated() });

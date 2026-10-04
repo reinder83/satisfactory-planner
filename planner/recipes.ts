@@ -3,7 +3,7 @@
 // Re-exported by ../planner.ts.
 import type { CurrentSettings, ItemRates, Recipe } from '../public/types/index.ts';
 import type { PoolRecipe } from './types.ts';
-import { DATA, MAM_RECIPES, RAW } from './data.ts';
+import { DATA, RAW, STANDARD_ALTERNATES } from './data.ts';
 
 export const pureNames = [
   'Alternate: Pure Iron Ingot',
@@ -27,10 +27,12 @@ export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefin
 // The recipes a phase may choose from, before power generators are added (generators() below).
 // `config` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
 // Converter recipes that make raw resources (SAM-based ore conversion) are allowed. Returns
-// recipe objects from recipes.json, MAM recipes relabelled as standard. Used only by `run`.
+// recipe objects from recipes.json, the alternates the game unlocks without a hard drive
+// (STANDARD_ALTERNATES in data.ts: the MAM recipes and Distilled Silica's milestone, #1044)
+// relabelled as standard. Used only by `run`.
 // The filters, in order:
-// 1. MAM recipes are always in, except under 'custom' where they must be selected; the map
-//    then relabels them as standard recipes.
+// 1. Those alternates are always in, except under 'custom' where they must be selected; the map
+//    then relabels them as standard recipes, so their rows get no hard-drive step.
 // 2. Available by this phase, and standard, or allowed by the recipe setting, or one of the
 //    pure ingot alternates when `pureIngots` is on.
 // 3. With `pureIngots`, from Phase 3 the pure alternates replace every other recipe for the four
@@ -44,12 +46,12 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
   return DATA.recipes
     .filter(
       recipe =>
-        !MAM_RECIPES.includes(recipe.id) ||
+        !STANDARD_ALTERNATES.includes(recipe.id) ||
         config.recipes !== 'custom' ||
         config.alternateRecipes.includes(recipe.id),
     )
     .map(recipe =>
-      MAM_RECIPES.includes(recipe.id)
+      STANDARD_ALTERNATES.includes(recipe.id)
         ? { ...recipe, alternate: false, name: recipe.name.replace('Alternate: ', '') }
         : recipe,
     )
