@@ -144,8 +144,9 @@ test('the factory card opens the same heading; the card keeps "Wire" and its sit
   assert.equal(own.link, 'Wire');
   assert.equal(own.heading, 'Wire for Alpha');
   assert.equal(own.name, 'Wire for Alpha');
-  // The dialog names the group once, in its heading, with no separate "Made on site" line.
-  assert.equal(($('#detail')!.textContent!.match(/Alpha/g) ?? []).length, 1);
+  // The heading names the group, and the dialog has no separate "Made on site for Alpha" line
+  // (the deliveries' note may name it too, #965).
+  assert.doesNotMatch($('#detail')!.textContent!, /Made on site for/);
   $<HTMLDialogElement>('#detail')!.close();
 
   const central = await openBy(cardLink(WIRE));
