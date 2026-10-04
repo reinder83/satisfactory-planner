@@ -295,6 +295,16 @@ export function flowConnections(flow: GroupFlow, names: FlowNames): FlowConnecti
   ];
 }
 
+// Whether a table cell's text has a word too long to keep whole (#988): longer than LONG_WORD
+// characters. No item, recipe or machine name has a word that long (the longest, "Electromagnetic"
+// and "Crystallization", have 15), but a factory group's name can be one word of up to 80
+// (`label()` in public/state/validate.ts), alone or in a line's name ("Wire for <group>"). Only a
+// cell holding such a word breaks it (gf-cell-name in FlowTable.vue), so a table of ordinary names
+// is laid out as before.
+const LONG_WORD = 20;
+export const hasLongWord = (text: string): boolean =>
+  text.split(/\s+/).some(word => [...word].length > LONG_WORD);
+
 // Where a row sits once laid out, in px from the top left of the lanes' drawing: `y` is the
 // middle of the row's first line, the item's name, so a row that wraps onto two lines is
 // pointed at by its name (#894); `x` is its card's left border.
