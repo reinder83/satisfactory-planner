@@ -1,7 +1,8 @@
 <!--
   "Made on site" for one factory group, while groups are edited (#877, part of #868): a checkbox
   per item the group can make on site (onSitePickerOffers in app/on-site-picker.ts: an item a plan
-  row makes and one of the group's rows uses in any phase; one only its lines in other phases use
+  row makes and one of the group's rows other than its lines made on site uses in any phase, or an
+  ingredient of a part ticked here, named after it, #967; one only its lines in other phases use
   comes last and names them, #941), and Save. Ticking a box only changes the choice on this
   page; Save sends the whole list as one `factoryLocal` update (factoryGroups.local). That is the
   explicit action (#854, #856): nothing is saved while a keyboard user moves through the boxes.
@@ -20,7 +21,7 @@ import { computed, ref } from 'vue';
 import { save } from '../../api.ts';
 import { calculated, stage } from '../../session.ts';
 import { render } from '../../shell.ts';
-import { onSiteChange, onSitePickerOffers } from '../../on-site-picker.ts';
+import { onSiteChange, onSitePickerOffers, RAW_NOTE, UNUSED_NOTE } from '../../on-site-picker.ts';
 import { onSitePlannable } from '../../on-site.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { legacy } from '../bridge.ts';
@@ -51,21 +52,22 @@ const needsRecalc = computed(() =>
 
 const items = computed(() =>
   legacy(() => {
-    // The items its lines in this phase use, then those only its lines in other phases use, each
-    // with a note naming those lines (#941).
+    // The items its lines in this phase use, then the ingredients of the parts ticked here
+    // (#967), then those only its lines in other phases use, each with a note (#941). The boxes
+    // ticked count before they are saved, so ticking Wire offers Copper Ingot at once.
     const offered = calculated
-      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage())
+      ? onSitePickerOffers(calculated, factoryGroupsState(), props.groupId, stage(), chosen.value)
       : [];
-    // A marked item no row of the group uses any more stays, so it can be cleared. A raw resource
-    // marked in an older or hand-edited save (such as Water) can never be made on site (#921), so
-    // its note says that instead.
-    const stale = saved.value.filter(item => !offered.some(entry => entry.item === item));
+    // A marked or ticked item no row of the group uses any more (an ingredient whose part was
+    // cleared, #951) stays, so it can be cleared, with the heading's note. A raw resource marked
+    // in an older or hand-edited save (such as Water) can never be made on site (#921), so its
+    // note says that instead.
+    const stale = sorted([...new Set([...saved.value, ...chosen.value])]).filter(
+      item => !offered.some(entry => entry.item === item),
+    );
     return [
       ...offered,
-      ...stale.map(item => ({
-        item,
-        note: onSitePlannable(item) ? '(no line here uses it now)' : "(can't be made on site)",
-      })),
+      ...stale.map(item => ({ item, note: onSitePlannable(item) ? UNUSED_NOTE : RAW_NOTE })),
     ];
   }),
 );

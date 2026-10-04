@@ -1,13 +1,15 @@
 // Made on site (#877, part of #868) on the Factories page: which items a group's "Made on site"
-// picker offers, whether the open plan was calculated with the items the groups mark now, and
-// what a group's heading says it makes on site (#931). A
+// picker offers, by the rule a recalculation follows (#951, #967), whether the open plan was
+// calculated with the items the groups mark now, and what a group's heading says it makes on
+// site (#931). A
 // change to the marks only marks the plan as needing a recalculation: the page offers one, which
 // the user starts (OnSiteRecalc.vue). Nothing here recalculates.
 import { LINK_DUST, rowPlaces } from './group-order.ts';
-import { onSitePlannable, onSiteSettings } from './on-site.ts';
+import { onSiteCopyable, onSitePlannable, onSiteSettings } from './on-site.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { listNames } from '../wording.ts';
 import type {
+  CalcRow,
   StoredSettings,
   FactoryGroups,
   OnSiteSettings,
@@ -20,43 +22,91 @@ type PickerPlan = Pick<StoredCalculatedPlan, 'stages' | 'settings' | 'guide'>;
 type PickerGroups = Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>> | undefined;
 
 // One use of an item the picker offers: the phase, and the name of the group's line that uses it
-// there.
+// there. For an ingredient of a part the group marks (#967), `part` is that part and `line` the
+// plan's line of it, whose recipe the group's own line would follow.
 interface OfferUse {
   phase: StageKey;
   line: string;
+  part?: string;
 }
 
-// Each item group `groupId` can mark as made on site in `plan`, with where its lines use it: in
-// a phase the plan builds (not a milestone-only phase, #759), an item some plan row makes that a
-// row with a share in the group uses (rowPlaces, so a group's own line made on site counts as the
-// group's). Raw resources are never offered: the planner cannot make them on site
-// (onSitePlannable, its own rule, #921).
+// Each item group `groupId` can mark as made on site in `plan`, with where it would be used, by
+// the rule a recalculation follows (onSiteSettings, then siteCopies in planner/on-site.ts; #951,
+// #967). In a phase the plan builds (not a milestone-only phase, #759), an item some plan row
+// makes that
+// - a row with a share in the group uses (rowPlaces), other than a line made on site: a
+//   recalculation sizes the group's lines to its other rows (onSiteSettings), so an item only a
+//   line made on site uses gets no line of its own, or
+// - a line of a part in `marks` would take, when such a row uses the part (Copper Ingot for
+//   Wire), and so on down a chain of marked parts: a recalculation gives the group its own line
+//   of the part, which takes the marked ingredients from the group's own lines, so one
+//   recalculation plans the whole chain.
+// `marks` are the items the group marks: the saved ones, or the picker's choice before it is
+// saved. Raw resources are never offered: the planner cannot make them on site (onSitePlannable,
+// its own rule, #921).
 function offerUses(
   plan: PickerPlan,
   groups: PickerGroups,
   groupId: string,
+  marks: readonly string[],
 ): Map<string, OfferUse[]> {
   const uses = new Map<string, OfferUse[]>();
+  const marked = new Set(marks.filter(onSitePlannable));
   for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
     if (milestoneOnlyPhase(plan, phase)) continue;
     const rows = stage?.rows || [];
     const made = new Set(rows.flatMap(row => Object.keys(row.outputs || {})));
-    for (const row of rows) {
-      if ((rowPlaces(row, groups).get(groupId) || 0) <= LINK_DUST) continue;
-      for (const item of Object.keys(row.inputs || {}))
-        if (made.has(item) && onSitePlannable(item))
-          uses.set(item, [...(uses.get(item) || []), { phase, line: row.name }]);
-    }
+    const add = (item: string, use: OfferUse) => {
+      if (made.has(item) && onSitePlannable(item)) uses.set(item, [...(uses.get(item) || []), use]);
+    };
+    const consumers = rows.filter(
+      row => !row.onSite && (rowPlaces(row, groups).get(groupId) || 0) > LINK_DUST,
+    );
+    for (const row of consumers)
+      for (const item of Object.keys(row.inputs || {})) add(item, { phase, line: row.name });
+    const used = consumers.flatMap(row => Object.keys(row.inputs || {}));
+    for (const { item, part, line } of partIngredients(rows, used, marked))
+      add(item, { phase, line, part });
   }
   return uses;
 }
 
-// The items group `groupId` can mark as made on site in `plan`, sorted (offerUses). Every phase
-// the plan builds counts, not only the one the page shows: a mark is the group's in every phase
-// (factoryGroups.local), and a recalculation gives the group a line wherever its rows use the
-// item (onSiteSettings).
-export const onSiteOffers = (plan: PickerPlan, groups: PickerGroups, groupId: string): string[] =>
-  [...offerUses(plan, groups, groupId).keys()].sort((a, b) => a.localeCompare(b));
+// The ingredients the group's own lines of its marked parts would take in one phase: for each
+// item of `used` (the inputs of the group's rows) that it marks, the inputs of each of `rows`
+// that makes it and that a recalculation can copy for a group (onSiteCopyable), then the same
+// for each such input it marks too, as siteCopies chains them.
+function partIngredients(
+  rows: readonly CalcRow[],
+  used: readonly string[],
+  marked: ReadonlySet<string>,
+): { item: string; part: string; line: string }[] {
+  const parts = [...new Set(used.filter(item => marked.has(item)))];
+  const found: { item: string; part: string; line: string }[] = [];
+  // `parts` grows as marked ingredients turn up; each is followed once (i stays within it).
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!;
+    for (const row of rows) {
+      if (!Object.keys(row.outputs || {}).includes(part) || !onSiteCopyable(row)) continue;
+      for (const item of Object.keys(row.inputs || {})) {
+        found.push({ item, part, line: row.name });
+        if (marked.has(item) && !parts.includes(item)) parts.push(item);
+      }
+    }
+  }
+  return found;
+}
+
+// The items group `groupId` can mark as made on site in `plan`, sorted (offerUses), with `marks`
+// its marks (by default the saved ones). Every phase the plan builds counts, not only the one the
+// page shows: a mark is the group's in every phase (factoryGroups.local), and a recalculation
+// gives the group a line wherever its rows use the item (onSiteSettings).
+export const onSiteOffers = (
+  plan: PickerPlan,
+  groups: PickerGroups,
+  groupId: string,
+  marks: readonly string[] = groups?.local?.[groupId] || [],
+): string[] =>
+  [...offerUses(plan, groups, groupId, marks).keys()].sort((a, b) => a.localeCompare(b));
 
 // One box of a group's "Made on site" picker: the item, and a note in brackets, or '' for none.
 export interface OnSiteOffer {
@@ -64,32 +114,48 @@ export interface OnSiteOffer {
   note: string;
 }
 
-// The boxes of group `groupId`'s picker while the page shows phase `shown` (#941): the items its
-// lines in that phase use first, as the page's cards show them, then the ones only its lines in
-// other phases use, each with a note naming those lines and phases ("(used by Alternate: Turbo
-// Pressure Motor in Phases 4 and 5)"), so an item no card on the page uses says why it is
-// offered. Each part sorted. The same items as onSiteOffers.
+// The boxes of group `groupId`'s picker while the page shows phase `shown` (#941), with `marks`
+// the picker's choice, saved or not: the items its lines in that phase use first, as the page's
+// cards show them; then the ingredients of a part it marks there, each naming the part ("(for
+// Wire made on site)", #967); then the ones it uses only in other phases, each with a note naming
+// those lines and phases ("(used by Alternate: Turbo Pressure Motor in Phases 4 and 5)") or those
+// parts and phases ("(for Wire made on site in Phase 4)"), so an item no card on the page uses
+// says why it is offered. Each part sorted. The same items as onSiteOffers.
 export function onSitePickerOffers(
   plan: PickerPlan,
   groups: PickerGroups,
   groupId: string,
   shown: StageKey | undefined,
+  marks: readonly string[] = groups?.local?.[groupId] || [],
 ): OnSiteOffer[] {
   const here: OnSiteOffer[] = [],
+    ingredients: OnSiteOffer[] = [],
     elsewhere: OnSiteOffer[] = [];
-  const unique = (names: string[]) => [...new Set(names)];
-  for (const [item, uses] of offerUses(plan, groups, groupId)) {
-    if (uses.some(use => use.phase === shown)) {
-      here.push({ item, note: '' });
-      continue;
-    }
-    const lines = unique(uses.map(use => use.line)).sort((a, b) => a.localeCompare(b));
-    const phases = unique(uses.map(use => use.phase)).sort();
-    const where = (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
-    elsewhere.push({ item, note: `(used by ${listNames(lines)} in ${where})` });
+  for (const [item, uses] of offerUses(plan, groups, groupId, marks)) {
+    const direct = uses.filter(use => !use.part),
+      shownUses = uses.filter(use => use.phase === shown);
+    if (direct.some(use => use.phase === shown)) here.push({ item, note: '' });
+    else if (shownUses.length) ingredients.push({ item, note: partNote(shownUses, '') });
+    else if (direct.length) {
+      const lines = listNames(uniqueSorted(direct.map(use => use.line)));
+      elsewhere.push({ item, note: `(used by ${lines} in ${phasesText(direct)})` });
+    } else elsewhere.push({ item, note: partNote(uses, ' in ' + phasesText(uses)) });
   }
   const byItem = (a: OnSiteOffer, b: OnSiteOffer) => a.item.localeCompare(b.item);
-  return [...here.sort(byItem), ...elsewhere.sort(byItem)];
+  return [...here.sort(byItem), ...ingredients.sort(byItem), ...elsewhere.sort(byItem)];
+}
+
+const uniqueSorted = (names: string[]) => [...new Set(names)].sort((a, b) => a.localeCompare(b));
+// "Phase 4", or "Phases 4 and 5".
+function phasesText(uses: readonly OfferUse[]): string {
+  const phases = uniqueSorted(uses.map(use => use.phase));
+  return (phases.length > 1 ? 'Phases ' : 'Phase ') + listNames(phases);
+}
+// The note on an ingredient of marked parts, "(for Wire made on site)", with `where` after the
+// words.
+function partNote(uses: readonly OfferUse[], where: string): string {
+  const parts = uniqueSorted(uses.flatMap(use => (use.part ? [use.part] : [])));
+  return `(for ${listNames(parts)} made on site${where})`;
 }
 
 // The items each group makes on site in `onSite`, as sorted lists by group id.
