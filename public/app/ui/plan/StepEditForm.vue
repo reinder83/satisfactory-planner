@@ -2,7 +2,7 @@
   The inline form that replaces a step while it is being edited (data-task-edit). It saves
   only what differs from the generated step: a title or details equal to the plan's own
   text are saved as empty, meaning "no override", and so is a cleared field and the link
-  when it is the automatic one. "No linked factory" on an automatically linked step is
+  when it is the automatic one. "No linked production line" on an automatically linked step is
   saved as '-' (stepLink in tasks.ts). The checkmark is untouched.
   The fields hold their own values, set once when the form opens, so a redraw while it is open
   does not put the saved text back over what was typed: after a save refused because another
@@ -148,8 +148,8 @@ function escape(event: KeyboardEvent) {
       >Details<textarea name="body" class="notes" maxlength="6000" v-model="body"></textarea>
     </label>
     <label class="field"
-      >Linked factory<select v-model="link" name="link">
-        <option value="">No linked factory</option>
+      >Linked production line<select v-model="link" name="link">
+        <option value="">No linked production line</option>
         <option v-for="[factoryId, name] in options" :key="factoryId" :value="factoryId">
           {{ name }}
         </option>

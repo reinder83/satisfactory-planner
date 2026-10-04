@@ -1,8 +1,8 @@
 <!--
   The dialog for one storage container (address `id`): where it sits, its four saved checks
-  `slot-<id>-<step>` (toggleCheck in ui/actions.ts), the factory that makes the item (a
-  factoryLink() to the calculated row, which opens that factory's dialog in its place) and the
-  note saved under `slot-<id>`.
+  `slot-<id>-<step>` (toggleCheck in ui/actions.ts), the production line that makes the item ("Open
+  production line →", a factoryLink() to the calculated row, which opens that line's dialog in its
+  place) and the note saved under `slot-<id>`.
   Opened by openSlot in views/storage.ts.
 -->
 <script setup lang="ts">

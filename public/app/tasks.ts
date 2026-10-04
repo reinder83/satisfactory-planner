@@ -4,9 +4,12 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
+import { placeName } from './group-links.ts';
+import { homeGroup, LINK_DUST, rowPlaces } from './group-order.ts';
 import { calcStage, calculated, checked, hideDone, phase, query, state } from './session.ts';
 import { buildRowName, calcTasks, orderedPhaseSteps, rowIcon } from './views/calculated.ts';
-import type { Phase, TaskEdits } from '../types/index.ts';
+import { factoryGroupsState } from './views/factories.ts';
+import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
 // personal tasks have no body.
@@ -16,17 +19,29 @@ export interface Step {
   body?: string;
 }
 
-// The row a step's "Open factory" button opens (taskLink).
+// The production line a step links to (taskLink): its "Production line ↗" button opens the
+// line's dialog, and "Open factory: <name> →" goes to `factory`'s flow page (#1047).
 export interface StepLink {
   id: string;
   name: string;
+  factory: StepFactory | null;
+}
+
+// The factory (a factory group) a step's production line is built with: its home group
+// (homeGroup in group-order.ts), the rule the build plan places the step by, so the link goes to
+// the factory whose build order lists the line. `others` names the other places the line is
+// split over (other factories, and Ungrouped for a part no factory takes); empty when it is whole.
+export interface StepFactory {
+  id: string;
+  name: string;
+  others: string[];
 }
 
 // A step's icon (taskIcon): an item's bundled icon, or a TASK_GLYPHS category glyph.
 export type StepIconData = { item: string; kind?: undefined } | { kind: string; item?: undefined };
 
 // A step as the checklist draws it (ui/plan/Checklist.vue): the step with its tick, icon,
-// "Open factory" link, and while it is being edited the edit form's choices. The storage
+// production-line and factory links, and while it is being edited the edit form's choices. The storage
 // page's fixed checklists (ui/storage/StorageChecklist.vue) have no personal tasks or edits.
 export interface PlanStepView extends Step {
   done: boolean;
@@ -191,27 +206,40 @@ export function removedPlanTasks(): Step[] {
     .map(t => withEditedWording(t, edits));
 }
 
-// A calculated production step (calc-<phase>-<rowId>) links to its own factory row.
+// A calculated production step (calc-<phase>-<rowId>) links to its own production line (row).
 // Returns that row id, or '' for any other step.
 export const autoTaskLink = (id: string) => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
 
-// The factory or row a step links to: its saved link, or else the automatic one. A saved
-// link of '-' (StepEditForm.vue's "No linked factory" on an automatically linked step)
+// The production line (row) a step links to: its saved link, or else the automatic one. A saved
+// link of '-' (StepEditForm.vue's "No linked production line" on an automatically linked step)
 // means none. No factory or row has that id, so releases before it also show no link.
 export const stepLink = (id: string) => {
   const saved = taskEditsState().links[id];
   return saved === '-' ? '' : saved || autoTaskLink(id);
 };
 
-// The calculated row a step links to, as { id, name } for its "Open factory" button (opened
-// by data-calc-factory), or null when the step has no link or the linked row is not part of
-// the current phase. It names the row as the dialog it opens is headed (buildRowName), so a
-// group's own line made on site is "Wire for Alpha" on both (#946).
+// The calculated row a step links to, as { id, name, factory } for its "Production line ↗"
+// button (opened by data-calc-factory) and its "Open factory: <name> →" link, or null when the
+// step has no link or the linked row is not part of the current phase. It names the row as the
+// dialog it opens is headed (buildRowName), so a group's own line made on site is "Wire for
+// Alpha" on both (#946).
 export function taskLink(step: Step): StepLink | null {
   const linked = stepLink(step.id);
   if (!linked) return null;
   const row = (calcStage()?.rows || []).find(r => r.id === linked);
-  return row ? { id: row.id, name: buildRowName(row.id) } : null;
+  return row ? { id: row.id, name: buildRowName(row.id), factory: rowFactory(row) } : null;
+}
+
+// The factory `row` is built with (StepFactory), or null for a row in no factory (Ungrouped).
+export function rowFactory(row: CalcRow): StepFactory | null {
+  const groups = factoryGroupsState();
+  const home = homeGroup(row, groups);
+  const factory = groups.groups.find(group => group.id === home);
+  if (!factory) return null;
+  const others = [...rowPlaces(row, groups)]
+    .filter(([place, share]) => place !== home && share > LINK_DUST)
+    .map(([place]) => placeName(place, groups.groups, undefined));
+  return { id: factory.id, name: factory.name, others };
 }
 
 // What a step's edit form offers: the production lines of this phase as [row id, name], and
