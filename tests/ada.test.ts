@@ -407,6 +407,21 @@ test('ADA points at ticks a recalculation kept for review because of lines made 
   assert.match(one.text, /^1 tick from/);
 });
 
+test("ADA counts the phase's byproducts on the factories page, calmly, and points at the dialogs (#1022)", () => {
+  const line = adaRemarks(facts({ view: 'factories', byproducts: 3 })).find(
+    r => r.id === 'recycle-byproducts',
+  )!;
+  assert.equal(line.tone, 'calm');
+  assert.match(line.text, /^3 byproducts to recycle in Phase 3\. Each line's dialog says where/);
+  assert.match(line.text, /build plan's step says the same/);
+  const one = adaRemarks(facts({ view: 'factories', byproducts: 1 })).find(
+    r => r.id === 'recycle-byproducts',
+  )!;
+  assert.match(one.text, /^1 byproduct to recycle/);
+  assert.ok(!ids(facts({ view: 'factories', byproducts: 0 })).includes('recycle-byproducts'));
+  assert.ok(!ids(facts({ view: 'factories' })).includes('recycle-byproducts'), 'absent means none');
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

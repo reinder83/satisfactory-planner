@@ -1578,6 +1578,27 @@ p.eyebrow {
 .notice .btn {
   margin: 6px 0;
 }
+/* A factory dialog's byproduct advice (#1022): a paragraph per byproduct or recycled input, each
+   other line it names an inline link to that line's dialog. */
+.recycle-advice p {
+  margin: 0;
+}
+.recycle-advice p + p {
+  margin-top: 10px;
+}
+.recycle-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.recycle-link:hover {
+  color: var(--accent-hi);
+}
 /* The calculated factories page's round-up offer (SP-18): one line, its explanation in the
    confirm dialog. */
 .notice.round-up-offer {
@@ -3499,6 +3520,14 @@ button.rail-tile:hover {
 .gf-in.outside {
   box-shadow: inset 2px 0 0 var(--blue);
   padding-left: 6px;
+}
+/* The factory dialog's byproduct advice under a row (#1022, "♻ Send all of it back to …"). */
+.gf-advice {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .gf-text {
   margin-top: 14px;

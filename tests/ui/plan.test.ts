@@ -822,7 +822,9 @@ test('a calculated step writes a fluid input or output in m³/min and a solid in
   const text = body(fuel.id);
   assert.match(text, /Inputs: Heavy Oil Residue [\d.,]+ m³\/min\./);
   assert.match(text, /Outputs: Fuel [\d.,]+ m³\/min\./);
-  assert.doesNotMatch(text, /\/min:/, 'no "Inputs /min:" heading any more');
+  // The old headings ("Inputs /min: …"). The byproduct advice after them (#1022) leads with an
+  // item's rate and a colon, "Heavy Oil Residue 46.6 m³/min: …", so only the headings are looked for.
+  assert.doesNotMatch(text, /(Inputs|Outputs) \/min:/, 'no "Inputs /min:" heading any more');
   // A solid keeps /min.
   const iron = rows.find(r => r.id === 'Recipe_IngotIron_C')!;
   assert.match(body(iron.id), /Inputs: Iron Ore [\d.,]+\/min\. Outputs: Iron Ingot [\d.,]+\/min\./);

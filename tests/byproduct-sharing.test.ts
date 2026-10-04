@@ -133,6 +133,9 @@ test('the raw resources and existing supply cover only what the groups still mis
   );
 });
 
+// A link's key "from>to>item" as its three parts.
+const ends = (key: string) => key.split('>') as [from: string, to: string, item: string];
+
 // A stage's links, keyed "from>to>item".
 const linkRates = (stage: StoredStage, groups: FactoryGroups) =>
   new Map(
@@ -175,27 +178,25 @@ test('on real plans no item goes both ways between two places, and each place ne
         ['default groups', defaultFactoryGroups(plan)],
         ['no groups', { groups: [], assignments: {} }],
         ['mixed groups', mixedGroups(stage)],
-      ] as const) {
+      ] satisfies [string, FactoryGroups][]) {
         const what = `${label}, Phase ${phase}, ${how}`;
         const links = linkRates(stage, groups);
         assert.ok(links.size, what);
         for (const key of links.keys()) {
-          const [from, to, item] = key.split('>');
+          const [from, to, item] = ends(key);
           assert.ok(!links.has(`${to}>${from}>${item}`), `${what}: ${key} goes both ways`);
         }
         // A place that sends an item receives none of it.
-        const sends = new Set(
-          [...links.keys()].map(key => key.split('>')[0] + '>' + key.split('>')[2]),
-        );
+        const sends = new Set([...links.keys()].map(key => ends(key)[0] + '>' + ends(key)[2]));
         for (const key of links.keys()) {
-          const [, to, item] = key.split('>');
+          const [, to, item] = ends(key);
           assert.ok(!sends.has(`${to}>${item}`), `${what}: ${to} both sends and receives ${item}`);
         }
         // What leaves and enters each place is what it makes beyond its own use, or misses.
         const { supply, demand } = itemBooks(stage, groups);
         const net = new Map<string, number>();
         for (const [key, rate] of links) {
-          const [from, to, item] = key.split('>');
+          const [from, to, item] = ends(key);
           net.set(`${from}>${item}`, (net.get(`${from}>${item}`) || 0) + rate);
           net.set(`${to}>${item}`, (net.get(`${to}>${item}`) || 0) - rate);
         }
@@ -213,11 +214,11 @@ test('on real plans no item goes both ways between two places, and each place ne
           }
         // A solid reaches storage or the sink only when no group still draws it from a source.
         for (const key of links.keys()) {
-          const [from, to, item] = key.split('>');
+          const [from, to, item] = ends(key);
           if (to !== OUTSIDE.surplus && to !== OUTSIDE.storage) continue;
           if (from.startsWith('supply/')) continue;
           const sourced = [...links.keys()].some(other => {
-            const [source, place, otherItem] = other.split('>');
+            const [source, place, otherItem] = ends(other);
             return otherItem === item && source === sourceOf(item) && !place.includes('sink');
           });
           assert.ok(!sourced, `${what}: ${item} goes to ${to} while a source still covers a group`);
@@ -230,7 +231,7 @@ test('without groups every row is in one place, so nothing moves between lines o
   const [, plan] = plans[1];
   const stage = plan.stages['4'];
   for (const key of linkRates(stage, { groups: [], assignments: {} }).keys()) {
-    const [from, to] = key.split('>');
+    const [from, to] = ends(key);
     assert.ok(from === UNGROUPED || from.startsWith('supply/'), key);
     assert.ok(to !== from, key);
     if (from === UNGROUPED) assert.ok(Object.values(OUTSIDE).includes(to as never), key);
