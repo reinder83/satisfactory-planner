@@ -1,0 +1,206 @@
+// A group's flow page keeps its phase in its address (#926): "Build order →" links to
+// #factories/<group>/flow?phase=<the phase shown>, so the page opened in a new tab, bookmarked
+// or reloaded shows the build order of the phase it was opened from, not the phase the profile
+// opens on (#570). The phase is only shown, never saved, as the opening phase is; an unknown
+// phase, or one after the working phase, falls back to the phase shown before; an address from
+// before #926 (no ?phase=) still opens the page. "← Factories" then shows the factories page in
+// that phase, with focus back on the group's "Build order →" (#917).
+// The profile is the planner's default, made for Phase 3, with Phase 1's milestones still open,
+// so it opens on Phase 1, a milestone-only phase without the group's lines (the issue's repro).
+// The hashchange listener is the app's own (listeners.ts). The focused element is compared by
+// what identifies it, never two elements with assert.equal (#287).
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { nextTick } from 'vue';
+import { beforeAll, beforeEach, test } from 'vitest';
+import { boot, flowPhaseOf, openedFrom, phase, setQuery, state } from '../../public/app/session.ts';
+import { initialState } from '../../public/state.ts';
+import { defaultFactoryGroups } from '../../public/state/factory-groups.ts';
+import { $, $$, applyUpdate, catalog, generated, page, stubFetch } from './setup.ts';
+import type {
+  ContextReply,
+  FactoryGroups,
+  Phase,
+  UpdateOp,
+  WorkspaceSummary,
+} from '../../public/types/index.ts';
+
+const plan = generated();
+const groups: FactoryGroups = defaultFactoryGroups(plan);
+const GROUP = 'fg-iron01';
+const progression: unknown = JSON.parse(fs.readFileSync('public/progression.json', 'utf8'));
+
+const settle = async () => {
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await nextTick();
+};
+const describeFocus = () => document.activeElement?.outerHTML.slice(0, 120) ?? 'null';
+const flowLink = (groupId = GROUP) => $<HTMLAnchorElement>(`#main [data-group-flow="${groupId}"]`);
+const subtitle = () => $('#main .subtitle')?.textContent?.trim() ?? '';
+const cards = () => $$('#main .gf-card').length;
+// Follows a route the way a link, a typed address or Back does: the address changes and the
+// app's hashchange listener draws the page.
+async function follow(hash: string) {
+  location.hash = hash;
+  await settle();
+}
+
+// Opens the app on `hash` the way a new tab, a bookmark or a reload does: boot() with the
+// profile saved on `saved` and Phase 1's milestones open. Returns the requests made.
+async function load(hash: string, saved: Phase = '3') {
+  page();
+  history.replaceState(null, '', '#' + hash);
+  const workspace = {
+    user: { id: 'owner', username: 'Pioneer' },
+    accountsEnabled: false,
+    catalog: catalog(),
+    activeSave: 's',
+    saves: [
+      {
+        id: 's',
+        name: 'World',
+        activeProfile: 'p',
+        profiles: [
+          {
+            id: 'p',
+            kind: 'calculated',
+            name: 'Main',
+            completed: 0,
+            phase: saved,
+            settings: plan.settings,
+          },
+        ],
+      },
+    ],
+  } as WorkspaceSummary;
+  const context: ContextReply = {
+    save: { id: 's', name: 'World' },
+    profile: { id: 'p', kind: 'calculated', name: 'Main' },
+    state: {
+      ...initialState(),
+      version: 3,
+      settings: { phase: saved },
+      factoryGroups: structuredClone(groups),
+    },
+    plan: structuredClone(plan),
+  };
+  const calls = stubFetch({
+    '/api/workspace': workspace,
+    '/api/context': context,
+    '/progression.json': progression,
+    '/api/update': (update: UpdateOp) => applyUpdate(update),
+  });
+  await boot();
+  await settle();
+  return calls;
+}
+const writes = (calls: [string, unknown][]) =>
+  calls.filter(([path]) => path.startsWith('/api/update'));
+
+beforeAll(async () => {
+  page();
+  // The hashchange listener is page-wide (listeners.ts), registered once on import.
+  await import('../../public/app/listeners.ts');
+});
+beforeEach(() => setQuery(''));
+
+test('the profile opens on Phase 1 without an address phase, as in the issue', async () => {
+  await load('factories');
+  assert.equal(phase(), '1', 'Phase 1 still has open milestones (#570)');
+  assert.equal(flowLink(), null, 'the milestone-only Phase 1 has no build order to link');
+});
+
+test('"Build order →" carries the phase shown, and follows the phase picked', async () => {
+  await load('factories');
+  $<HTMLButtonElement>('[data-go-to-start-phase]')!.click();
+  await settle();
+  assert.equal(phase(), '3');
+  assert.equal(flowLink()?.getAttribute('href'), `#factories/${GROUP}/flow?phase=3`);
+  const picker = $<HTMLSelectElement>('#phase-picker')!;
+  picker.value = '4';
+  picker.dispatchEvent(new Event('change'));
+  await settle();
+  assert.equal(phase(), '4');
+  assert.equal(flowLink()?.getAttribute('href'), `#factories/${GROUP}/flow?phase=4`);
+});
+
+test('the link followed in the same tab shows that phase’s build order', async () => {
+  await load('factories');
+  $<HTMLButtonElement>('[data-go-to-start-phase]')!.click();
+  await settle();
+  await follow(flowLink()!.getAttribute('href')!);
+  assert.match(subtitle(), /^Phase 3 · \d+ lines? in the order to build them/);
+  assert.ok(cards() > 0, 'the group’s lines are drawn');
+});
+
+test('opened in a new tab or reloaded, the address’s phase is shown, not the opening phase', async () => {
+  const calls = await load(`factories/${GROUP}/flow?phase=3`);
+  assert.equal(phase(), '3', 'Phase 3, not the Phase 1 the profile opens on');
+  assert.match(subtitle(), /^Phase 3 · \d+ lines? in the order to build them/);
+  assert.ok(cards() > 0, 'the group’s lines are drawn');
+  assert.equal($('[data-milestone-only]'), null, 'no "Go to Phase 3" notice');
+  assert.equal($<HTMLSelectElement>('#phase-picker')?.value, '3', 'the phase picker agrees');
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`);
+  assert.deepEqual(writes(calls), [], 'opening the address writes nothing');
+  assert.equal(state.settings.phase, '3');
+});
+
+test('an earlier phase in the address is shown, never saved', async () => {
+  const calls = await load(`factories/${GROUP}/flow?phase=3`, '4');
+  assert.equal(phase(), '3');
+  assert.match(subtitle(), /^Phase 3 · /);
+  assert.equal(state.settings.phase, '4', 'the working phase stays Phase 4');
+  assert.equal(openedFrom(), '4', 'the other pages say Phase 4 is the working phase');
+  assert.deepEqual(writes(calls), []);
+});
+
+test('an unknown or unavailable phase falls back to the phase the profile opens on', async () => {
+  for (const named of ['9', 'banana', '', '5', 'post']) {
+    await load(`factories/${GROUP}/flow?phase=${named}`);
+    assert.equal(phase(), '1', `?phase=${named}: the opening phase, as before`);
+    assert.ok($('[data-gf-back]'), `?phase=${named}: the flow page is drawn`);
+    assert.ok($('[data-milestone-only]'), `?phase=${named}: with the milestone-only notice`);
+    assert.equal(flowPhaseOf(location.hash.slice(1)), '1', 'the address names the phase shown');
+  }
+  // In a tab that shows Phase 3, an unknown phase leaves it on Phase 3.
+  await load(`factories/${GROUP}/flow?phase=3`);
+  await follow(`factories/${GROUP}/flow?phase=x`);
+  assert.equal(phase(), '3');
+  assert.match(subtitle(), /^Phase 3 · /);
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`);
+});
+
+test('"← Factories" goes to the factories page in that phase, focus on the group’s link', async () => {
+  await load(`factories/${GROUP}/flow?phase=3`);
+  const back = $('[data-gf-back]')!;
+  assert.equal(back.getAttribute('href'), '#factories');
+  back.focus();
+  await follow('factories');
+  assert.equal(phase(), '3', 'the factories page shows Phase 3');
+  assert.equal($('[data-milestone-only]'), null);
+  assert.ok(flowLink(), 'the group and its "Build order →" are shown');
+  assert.equal(
+    (document.activeElement as HTMLElement | null)?.dataset.groupFlow,
+    GROUP,
+    describeFocus(),
+  );
+});
+
+test('an address from before #926 still opens the flow page, and then keeps its phase', async () => {
+  await load(`factories/${GROUP}/flow`);
+  assert.ok($('[data-gf-back]'), 'the flow page is drawn');
+  assert.equal(phase(), '1', 'on the phase the profile opens on, as before');
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=1`, 'the address names it');
+  // Its "Go to Phase 3" shows Phase 3, and the address follows, so a reload stays there.
+  $<HTMLButtonElement>('[data-go-to-start-phase]')!.click();
+  await settle();
+  assert.equal(phase(), '3');
+  assert.match(subtitle(), /^Phase 3 · /);
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`);
+  // Followed in a tab that shows Phase 3, the old address shows Phase 3.
+  await follow('factories');
+  await follow(`factories/${GROUP}/flow`);
+  assert.equal(phase(), '3');
+  assert.match(subtitle(), /^Phase 3 · /);
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`);
+});

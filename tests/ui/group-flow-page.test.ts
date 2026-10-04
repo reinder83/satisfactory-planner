@@ -72,9 +72,9 @@ beforeEach(() => {
 });
 
 test('#factories/<group>/flow is the factories view and draws the group’s flow page', async () => {
-  assert.equal(flowRoute('fg-iron01'), 'factories/fg-iron01/flow');
+  assert.equal(flowRoute('fg-iron01', '3'), 'factories/fg-iron01/flow?phase=3');
   assert.equal(flowGroupOf('factories/fg-iron01/flow'), 'fg-iron01');
-  assert.equal(flowGroupOf(flowRoute('a/b c')), 'a/b c', 'an id is encoded and decoded');
+  assert.equal(flowGroupOf(flowRoute('a/b c', '3')), 'a/b c', 'an id is encoded and decoded');
   assert.equal(flowGroupOf('factories'), null);
   assert.equal(flowGroupOf('factories/%E0%A4%A/flow'), null, 'a broken escape is no group');
   // A reload reads the view from the hash (boot in session.ts), so it lands here again.

@@ -36,20 +36,32 @@ export const VIEWS = [
   'account',
 ] as const;
 export type View = (typeof VIEWS)[number];
-// #factories/<group>/flow, the flow page of one factory group (#883, #894): the group's id
-// from a hash (without its #), or null for any other route or an id that does not decode.
+// #factories/<group>/flow?phase=<phase>, the flow page of one factory group (#883, #894) in a
+// phase (#926). An address from before #926 has no ?phase=.
+const FLOW_ROUTE = /^factories\/([^/?]+)\/flow(?:\?(.*))?$/;
+// The group's id from a flow page's hash (without its #), or null for any other route or an id
+// that does not decode.
 export function flowGroupOf(hash: string): string | null {
-  const match = /^factories\/([^/]+)\/flow$/.exec(hash);
+  const match = FLOW_ROUTE.exec(hash);
   if (!match) return null;
   try {
-    // The pattern has one group, so a match has it.
+    // The id's group is not optional, so a match has it.
     return decodeURIComponent(match[1]!);
   } catch {
     return null;
   }
 }
-// The hash (without its #) of group `groupId`'s flow page.
-export const flowRoute = (groupId: string) => `factories/${encodeURIComponent(groupId)}/flow`;
+// The phase a flow page's hash names (?phase=3), or null when it names none or is no flow page.
+// Whether the profile offers that phase is showRoutePhase's question.
+export function flowPhaseOf(hash: string): string | null {
+  const query = FLOW_ROUTE.exec(hash)?.[2];
+  return query === undefined ? null : new URLSearchParams(query).get('phase');
+}
+// The hash (without its #) of group `groupId`'s flow page in phase `shown`, the phase on screen
+// unless given, so the page opened in a new tab, bookmarked or reloaded shows that phase's build
+// order (#926).
+export const flowRoute = (groupId: string, shown: Phase = phase()) =>
+  `factories/${encodeURIComponent(groupId)}/flow?phase=${encodeURIComponent(shown)}`;
 // The route a hash names: an unknown one shows the plan. A group's flow page belongs to the
 // factories page, so the sidebar marks Factories.
 export const viewOf = (hash: string): View =>
@@ -226,11 +238,17 @@ export const milestoneOnly = (shown: Phase = phase()): boolean =>
 export const phase = (): Phase => {
   const saved = state.settings.phase;
   if (!currentSave.id) return wizard?.settings.phase || saved;
-  // Opened on an earlier phase with open checks (#570), while the saved phase is still the one
-  // that was worked out from: another tab picking a phase shows that one.
+  // Opened on an earlier phase with open checks (#570), or shown by a flow page's address
+  // (#926), while the saved phase is still the one that was worked out from: another tab
+  // picking a phase shows that one.
   if (openedOn?.saved === saved) return openedOn.phase;
-  return saved !== 'post' && Number(saved) < Number(firstPhase()) ? firstPhase() : saved;
+  return workingPhase();
 };
+// The saved working phase, raised to the profile's first phase.
+function workingPhase(): Phase {
+  const saved = state.settings.phase;
+  return saved !== 'post' && Number(saved) < Number(firstPhase()) ? firstPhase() : saved;
+}
 
 // The data key for the phase: post-game has no stage of its own and uses Phase 5's
 // factories and calculated stage. Checklist ids like factory-<stage>-<id> use this.
@@ -281,7 +299,8 @@ export async function loadContext(saveId: string, profileId: string) {
 // The phase the profile just opened shows (#570, app/opening-phase.ts): the saved working phase,
 // or an earlier one that still has open checks. It is not saved: the saved phase stays the one the
 // user picked, so each opening looks again. The phase picker drops it (setOpenedPhase(null)) once
-// it has saved the phase picked, and opening another profile replaces it.
+// it has saved the phase picked, and opening another profile replaces it. A group's flow page's
+// address sets it too (showRoutePhase, #926).
 let openedOn: { saved: Phase; phase: Phase } | null = null;
 export function setOpenedPhase(value: typeof openedOn) {
   openedOn = value;
@@ -289,6 +308,23 @@ export function setOpenedPhase(value: typeof openedOn) {
 // The saved working phase while the profile shows an earlier one it opened on, else null (ADA).
 export const openedFrom = (): Phase | null =>
   openedOn?.saved === state.settings.phase ? openedOn.saved : null;
+// Shows the phase a group's flow page's address names (#926), for a route just followed or
+// opened (render() in shell.ts, and boot()). Like the phase a profile opens on, it is only shown,
+// never saved: a link opened in another tab, a bookmark or Back must not change the working phase
+// that other tabs and devices go by. Only the phase picker saves one, and the flow page's address
+// then follows the phase shown (shell.ts). A tab shows the working phase or an earlier one, which
+// is how the notices and ADA describe it, so an address is followed from the profile's first
+// phase up to the working phase; a later or unknown phase, an address without one, or no open
+// save leaves the phase shown as it was.
+export function showRoutePhase(route: string) {
+  const named = flowPhaseOf(route);
+  if (named === null || !stateLoaded || !currentSave.id) return;
+  const options = phaseOptions(),
+    working = workingPhase(),
+    shown = options.find(option => option === named);
+  if (!shown || options.indexOf(shown) > options.indexOf(working)) return;
+  openedOn = shown === working ? null : { saved: state.settings.phase, phase: shown };
+}
 // Works out where the profile just opened starts. A failure here must not stop it opening, so it
 // then shows the saved phase, as before.
 function openOnPhase() {
@@ -368,6 +404,7 @@ export async function boot() {
     if (save) {
       await loadContext(save.id, save.activeProfile);
       view = viewOf(location.hash.slice(1));
+      showRoutePhase(location.hash.slice(1));
       // The wizard lives only in memory, so #wizard after a reload lands on the profiles page.
       if (view === 'wizard' && !wizard) view = 'profiles';
       render();
