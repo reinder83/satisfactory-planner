@@ -5,7 +5,7 @@
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
 import { calcStage, calculated, checked, hideDone, phase, query, state } from './session.ts';
-import { calcTasks, orderedPhaseSteps, rowIcon } from './views/calculated.ts';
+import { buildRowName, calcTasks, orderedPhaseSteps, rowIcon } from './views/calculated.ts';
 import type { Phase, TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
@@ -205,12 +205,13 @@ export const stepLink = (id: string) => {
 
 // The calculated row a step links to, as { id, name } for its "Open factory" button (opened
 // by data-calc-factory), or null when the step has no link or the linked row is not part of
-// the current phase.
+// the current phase. It names the row as the dialog it opens is headed (buildRowName), so a
+// group's own line made on site is "Wire for Alpha" on both (#946).
 export function taskLink(step: Step): StepLink | null {
   const linked = stepLink(step.id);
   if (!linked) return null;
   const row = (calcStage()?.rows || []).find(r => r.id === linked);
-  return row ? { id: row.id, name: row.name } : null;
+  return row ? { id: row.id, name: buildRowName(row.id) } : null;
 }
 
 // What a step's edit form offers: the production lines of this phase as [row id, name], and

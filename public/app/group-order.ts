@@ -78,16 +78,17 @@ export function rowPlaces(
   return rowShares(rowTotal(row), memberships);
 }
 
-// The group whose site a row's build-plan step belongs to: the group with the largest share of
-// the row as the Logistics page and a group's flow place it (rowPlaces), so the build plan never
-// builds a row with a group they give a smaller share, or none at all (#900). On a tie, the one
-// rowShares lists first (#928). A part no group takes does not count, so a row with a share in
-// any group is never Ungrouped here: a row split 40/60 is built with the 60, and one with 5 of
-// 20 in a group and the rest in none is built with that group. When no group has a share and a
-// removed group's membership takes up the row, it is UNGROUPED, where rowPlaces puts the row,
-// whatever the order of the memberships. Otherwise (no memberships, a total of zero) it is the place
-// of the first membership: that group if it exists, else UNGROUPED. A group's own line made on
-// site is built with its group (rowMemberships, #876).
+// The group whose site a row's build-plan step belongs to: the group with the largest share of the
+// row as the Logistics page and a group's flow place it (rowPlaces), so the build plan never builds
+// a row with a group they give a smaller share, or none at all (#900). On a tie, the one rowShares
+// lists first: memberships with a fixed rate before open ones, each in saved order, so a fixed-rate
+// membership wins a tie even when it was saved later (#928). A part no group takes does not count,
+// so a row with a share in any group is never Ungrouped here: a row split 40/60 is built with the
+// 60, and one with 5 of 20 in a group and the rest in none is built with that group. When no group
+// has a share and a removed group's membership takes up the row, it is UNGROUPED, where rowPlaces
+// puts the row, whatever the order of the memberships. Otherwise (no memberships, a total of zero)
+// it is the place of the first membership: that group if it exists, else UNGROUPED. A group's own
+// line made on site is built with its group (rowMemberships, #876).
 export function homeGroup(
   row: Pick<CalcRow, 'id' | 'outputs' | 'generationMW' | 'onSite'>,
   groups: GroupsInput,

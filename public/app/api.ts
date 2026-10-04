@@ -21,6 +21,7 @@ import { render } from './shell.ts';
 import { invalidate } from './ui/bridge.ts';
 import { confirmAction } from './ui/confirm.ts';
 import { refocusAfterRefresh } from './ui/refocus.ts';
+import { listNames } from '../wording.ts';
 import type { ProgressState, UpdateOp } from '../types/index.ts';
 
 // Request options: fetch's, plus the browser edition's calculation progress callback
@@ -295,23 +296,99 @@ export function hasUnsavedNotes(root: ParentNode = document) {
   return boxesIn(root).some(b => b.unsaved());
 }
 
+// A choice only an explicit Save stores, unlike a note: the Factories page's "Made on site"
+// picker (ui/factories/OnSitePicker.vue, #930), whose ticks save nothing until Save (#854,
+// #856). Each one on screen registers here, so nothing that takes it away drops a choice without
+// a word, and nothing saves one by itself. `el` is its element while mounted; `label` names it
+// in a question ("Made on site in Alpha"); `unsaved` is true while it shows a choice that is not
+// saved; `hold` says so beside it and offers Save and Discard, bringing it into view with focus
+// on its Save when `focus` is set; `discard` puts the saved choice back.
+export type ChoiceDraft = {
+  el: () => Element | null | undefined;
+  label: () => string;
+  unsaved: () => boolean;
+  hold: (focus: boolean) => void;
+  discard: () => void;
+};
+export const choiceDrafts = new Set<ChoiceDraft>();
+const unsavedChoicesIn = (root: ParentNode) =>
+  [...choiceDrafts].filter(choice => {
+    const el = choice.el();
+    return !!el && root.contains(el) && choice.unsaved();
+  });
+
+// Whether `root` shows a choice that is not saved yet: the close-tab warning asks then.
+export function hasUnsavedChoices(root: ParentNode = document) {
+  return unsavedChoicesIn(root).length > 0;
+}
+
+// Before a part of the page goes away while the user stays on the page (Done editing, folding a
+// group): when it shows an unsaved choice, each such choice says so and offers Save and Discard,
+// with focus on the first one's Save, and this returns true, so the caller keeps that part.
+// Nothing is saved or dropped here: the user picks one, then goes on.
+export function holdUnsavedChoices(root: ParentNode = document): boolean {
+  const held = unsavedChoicesIn(root);
+  held.forEach((choice, i) => choice.hold(i === 0));
+  return held.length > 0;
+}
+
+// The question allowSwitch() asks: about notes a write could not carry, choices not saved, or
+// both. The names come from the user (group names); the dialog draws them as text.
+function leaveQuestion(notes: boolean, choices: string[]) {
+  if (!choices.length)
+    return {
+      title: 'Leave without saving notes?',
+      body: 'You have notes that could not be saved. Leave without saving those edits?',
+    };
+  const named = listNames(choices.map(label => '"' + label + '"'));
+  const choiceText =
+    choices.length > 1
+      ? 'your choices in ' + named + ' are not saved yet'
+      : 'your choice in ' + named + ' is not saved yet';
+  return notes
+    ? {
+        title: 'Leave without saving?',
+        body:
+          'You have notes that could not be saved, and ' +
+          choiceText +
+          '. Leave without saving those edits?',
+      }
+    : {
+        title: 'Leave without saving?',
+        body:
+          choiceText[0]!.toUpperCase() +
+          choiceText.slice(1) +
+          '. Leave without saving ' +
+          (choices.length > 1 ? 'them?' : 'it?'),
+      };
+}
+
 // Whether it is fine to leave the current page (or, with `root`, that part of it). Notes
 // waiting for their pause are sent first, and a write already on its way finishes by itself,
 // so this asks only when a note would be lost: its write failed (the box says "Not saved"),
-// or no write carries its text. It is true at once when there is nothing to ask, otherwise
-// the answer of the in-app confirmation (ui/confirm.ts), true when the user agrees to drop
-// those notes. So a caller that must act in the same event (Escape on the dialog, the hash
-// route) can tell "nothing to ask" apart; the others await it. Checked before switching
-// profile, starting the wizard, signing out, changing the working phase, following the hash
-// route and closing or replacing the detail dialog.
+// or no write carries its text; or when a choice is not saved (choiceDrafts above, #930). It is
+// true at once when there is nothing to ask, otherwise the answer of the in-app confirmation
+// (ui/confirm.ts), true when the user agrees to drop those notes and choices; the choices then
+// show their saved state again, since a phase change keeps the page they are on. So a caller
+// that must act in the same event (Escape on the dialog, the hash route) can tell "nothing to
+// ask" apart; the others await it. Checked before switching profile, starting the wizard,
+// signing out, changing the working phase, following the hash route and closing or replacing
+// the detail dialog.
 export function allowSwitch(root: ParentNode = document): true | Promise<boolean> {
   flushNotes(root);
-  if (!boxesIn(root).some(b => b.unsent())) return true;
+  const notes = boxesIn(root).some(b => b.unsent()),
+    choices = unsavedChoicesIn(root);
+  if (!notes && !choices.length) return true;
   return confirmAction({
-    title: 'Leave without saving notes?',
-    body: 'You have notes that could not be saved. Leave without saving those edits?',
+    ...leaveQuestion(
+      notes,
+      choices.map(choice => choice.label()),
+    ),
     confirmLabel: 'Leave without saving',
     danger: true,
+  }).then(ok => {
+    if (ok) for (const choice of choices) choice.discard();
+    return ok;
   });
 }
 
