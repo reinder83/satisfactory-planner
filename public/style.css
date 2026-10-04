@@ -741,6 +741,8 @@ input[type='radio'] {
 }
 
 /* ── Type ──────────────────────────────────────────────── */
+/* A page heading can be a user's name of up to 80 characters (a factory group's, on its flow
+   page): a long word breaks inside the heading rather than running past the page (#976). */
 h1 {
   font-family: var(--head);
   font-size: clamp(28px, 3.4vw, 38px);
@@ -749,6 +751,7 @@ h1 {
   line-height: 1.05;
   color: var(--bright);
   margin: 6px 0 8px;
+  overflow-wrap: anywhere;
 }
 h2 {
   font-family: var(--head);
@@ -772,11 +775,13 @@ p {
   line-height: 1.7;
   margin: 8px 0 14px;
 }
+/* A page's subtitle can be a profile's name (the build plan's), so a long word breaks too (#976). */
 .subtitle {
   color: var(--muted);
   font-size: 11.5px;
   max-width: 76ch;
   text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 .muted {
   color: var(--muted);
@@ -2660,11 +2665,14 @@ dialog::backdrop {
   top: 6px;
   z-index: 1;
 }
+/* A long word in the heading ("Wire for <group>") breaks inside it rather than running past the
+   dialog's edge (#976). On a phone the heading is one line cut with an ellipsis instead (#318). */
 .dialog-head h2 {
   font-size: 24px;
   letter-spacing: 0.05em;
   margin: 6px 0 0;
   text-transform: none;
+  overflow-wrap: anywhere;
 }
 .dialog-title {
   display: flex;
@@ -3054,7 +3062,8 @@ button.rail-tile:hover {
   border-style: dashed;
 }
 /* A link to a factory's dialog ("Copper Ingot ↗"): in a flow row and on a group's flow page
-   (FlowCard.vue, .gf-head). A button with no look of its own is the browser's grey one (#886). */
+   (FlowCard.vue, .gf-head). A button with no look of its own is the browser's grey one (#886).
+   A line's name can hold a group's long name ("Wire for <group>"), so a long word breaks (#976). */
 .rail-link {
   background: none;
   border: 0;
@@ -3065,6 +3074,7 @@ button.rail-tile:hover {
   letter-spacing: 0.04em;
   color: var(--accent);
   border-bottom: 1px solid rgba(248, 156, 28, 0.4);
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .rail-link:hover {
