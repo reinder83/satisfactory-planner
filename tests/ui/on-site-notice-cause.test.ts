@@ -8,7 +8,7 @@
 //   keeps one, asks for one that drops that line;
 // - #970: "Now: …" names only the items a recalculation would give a line for, as the heading does;
 // - #985: when only a group's lines changed, the notice says that ("Alpha marks Wire, but none of
-//   its lines uses it now; …"), and "the items … changed" is kept for a real change to the marks;
+//   its lines uses it now; …"), and a neutral "what … differs from this plan" covers a real change to the marks and a consumer moving in for a mark the plan did not record (#1006);
 // - a plan stored by an earlier release, whose settings.onSite lists a mark without a consumer,
 //   loads as it is and asks for nothing until a line would change.
 // Each recalculation here is the real planner's (generatedWith).
@@ -37,8 +37,9 @@ import type {
 const ALPHA = 'fg-alpha1';
 const BETA = 'fg-beta1';
 const GAMMA = 'fg-gamma1';
-const MARKS_CHANGED =
-  /The items your factory groups make on site changed since it was calculated\./;
+// Neutral, so it is true whether a mark changed or a consumer moved in for a mark the plan did not
+// record (#1006).
+const MARKS_CHANGED = /What your factory groups make on site differs from this plan\./;
 const ALPHA_DROPS_WIRE =
   "Alpha marks Wire, but none of its lines uses it now; a recalculation would drop Alpha's Wire line";
 
@@ -150,7 +151,7 @@ test("#985: a marking group's last consumer moved out: the notice says so, not t
   // ADA follows the same rule.
   const ada = adaSays('on-site-pending');
   assert.match(ada, /^What your factory groups' lines use changed/);
-  assert.doesNotMatch(ada, /You changed/);
+  assert.doesNotMatch(ada, /differs from this plan/);
   // The heading: Alpha's Wire line until a recalculation; the picker still has Wire ticked.
   assert.equal(made(ALPHA), 'Made on site: Wire (until a recalculation)');
   await show(first, moved, true);
@@ -168,7 +169,7 @@ test("#985: a marking group's last consumer moved out: the notice says so, not t
   });
 });
 
-test('a real change to the marks keeps "the items … changed", alone or beside a moved line', async () => {
+test('a real change to the marks gets the neutral words, alone or beside a moved line', async () => {
   const first = recalculated(generated(), trio());
   // Beta clears Wire.
   const cleared = trio(ALPHA, { [ALPHA]: ['Wire'] });
@@ -180,7 +181,10 @@ test('a real change to the marks keeps "the items … changed", alone or beside 
   assert.match(notice()!, /Now: Alpha makes Wire on site\./);
   assert.match(notice()!, /This plan: Alpha makes Wire on site; Beta makes Wire on site\./);
   assert.equal($('[data-on-site-use]'), null);
-  assert.match(adaSays('on-site-pending'), /^You changed what your factory groups make on site/);
+  assert.match(
+    adaSays('on-site-pending'),
+    /^What your factory groups make on site differs from this plan/,
+  );
   // A new mark on a plan without any: the same words.
   await show(generated(), trio());
   assert.match(notice()!, MARKS_CHANGED);
@@ -191,7 +195,7 @@ test('a real change to the marks keeps "the items … changed", alone or beside 
   assert.match(notice()!, MARKS_CHANGED);
   assert.match(notice()!, new RegExp(ALPHA_DROPS_WIRE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(notice()!, /Now no group makes anything on site\./);
-  assert.match(adaSays('on-site-pending'), /^You changed/);
+  assert.match(adaSays('on-site-pending'), /^What your factory groups make on site differs/);
 });
 
 test('#938 part 1: a mark no line of the group uses asks for no recalculation', async () => {
@@ -289,6 +293,24 @@ test('#970: "Now:" names only the items a recalculation gives a line, as the hea
   assert.deepEqual(onSiteSummaries(nuclear, rods, nuclear.stages['3'])[ALPHA]!.marked, [
     { item: 'Encased Uranium Cell', note: RAW_NOTE },
   ]);
+});
+
+test('#1006: a consumer moving in for a mark the plan did not record gets the neutral words', async () => {
+  // Alpha marks Wire while the Stator sits in Gamma: no Alpha row uses Wire, so the recalculated
+  // plan neither gives Alpha a line nor records the mark.
+  const first = recalculated(generated(), trio(GAMMA));
+  assert.deepEqual(lineItems(first, ALPHA), []);
+  assert.equal(first.settings.onSite?.[ALPHA], undefined);
+  // The Stator moves into Alpha. Nothing tells this apart from a new mark, so the notice says
+  // only that the groups' made-on-site lines differ from the plan, which is true either way.
+  const moved = trio(ALPHA);
+  const change = onSiteChange(first, moved)!;
+  assert.equal(change.marksChanged, true);
+  await show(first, moved);
+  assert.match(notice()!, MARKS_CHANGED);
+  assert.doesNotMatch(notice()!, /You changed|changed since it was calculated/);
+  assert.match(notice()!, /Now: Alpha makes Wire on site; Beta makes Wire on site\./);
+  assert.match(adaSays('on-site-pending'), /^What your factory groups make on site differs/);
 });
 
 test('compat: a plan an earlier release stored with a mark no line uses loads and asks nothing', async () => {

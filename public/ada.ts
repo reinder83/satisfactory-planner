@@ -394,7 +394,7 @@ const RULES: AdaRule[] = [
     text: facts =>
       (facts.onSiteLinesOnly
         ? "What your factory groups' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
-        : 'You changed what your factory groups make on site, and this plan has not been told yet. ') +
+        : 'What your factory groups make on site differs from this plan, and this plan has not been told yet. ') +
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
   },
   {

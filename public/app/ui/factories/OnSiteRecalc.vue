@@ -90,7 +90,7 @@ async function recalculate(event: Event) {
     <p>
       <strong>This plan needs a recalculation.</strong>
       <template v-if="change.marksChanged"
-        >The items your factory groups make on site changed since it was calculated.
+        >What your factory groups make on site differs from this plan.
       </template>
       <template v-for="use in change.uses" :key="use"
         ><span data-on-site-use>{{ use }}.</span>

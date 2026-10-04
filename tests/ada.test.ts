@@ -427,10 +427,13 @@ test("ADA words a pending recalculation for a group's lines, not its marks, as t
     )!.text;
   const lines = remark({ onSiteLinesOnly: true });
   assert.match(lines, /^What your factory groups' lines use changed/);
-  assert.doesNotMatch(lines, /You changed/);
+  assert.doesNotMatch(lines, /differs from this plan/);
   assert.match(lines, /Nothing recalculates by itself/);
-  assert.match(remark({ onSiteLinesOnly: false }), /^You changed what your factory groups make/);
-  assert.match(remark({}), /^You changed what your factory groups make/);
+  assert.match(
+    remark({ onSiteLinesOnly: false }),
+    /^What your factory groups make on site differs/,
+  );
+  assert.match(remark({}), /^What your factory groups make on site differs/);
 });
 
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
