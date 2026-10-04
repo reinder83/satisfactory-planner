@@ -122,6 +122,10 @@ test('the "Move to…" select is never wider than its row, and 44px tall on a ph
       assert.doesNotMatch(rule.body, /(?:^|[;\s])(?:min-)?width:(?!\s*auto\s*;)/, where);
     }
   assert.match(declarations(phoneRules, MOVE_TO), /(?:^|[;\s])min-height:\s*44px\s*;/);
+  // On desktop the bay sits in the floor grid's 1fr track, whose minimum is the bay's min-content
+  // width, the select's longest option included: the bay must be allowed to be narrower (#998
+  // review), or the select's 100% is of a bay as wide as that option.
+  assert.match(declarations(outsideRules, '.bay'), /(?:^|[;\s])min-width:\s*0\s*;/);
 });
 
 test('the Restore beside a hidden bay keeps its word whole', () => {

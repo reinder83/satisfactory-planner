@@ -2157,7 +2157,11 @@ tr.muted td:first-child {
   grid-template-columns: 1fr 44px 1fr;
   gap: 15px 0;
 }
+/* A bay never grows to its contents' min-content width in the floor grid: a 1fr track's minimum is
+   that width, and Chrome counts a select's longest option there, so a long floor name in "Move to…"
+   would widen the bay and the page on desktop (#998). */
 .bay {
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--line);
   box-shadow: var(--drop);
