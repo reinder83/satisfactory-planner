@@ -5,11 +5,18 @@ import { droneSupply, wantsStorage, storageRateFor } from '../public/preferences
 import { solve, type LpModel } from '../optimizer.ts';
 import type { CurrentSettings, ItemRates, StageDelivery, StageKey } from '../public/types/index.ts';
 import type { PoolRecipe, RunResult, RunOptions } from './types.ts';
-import { DATA, RAW, DELIVERIES } from './data.ts';
+import { DATA, RAW, DELIVERIES, exactBalance } from './data.ts';
 import { recipePool, amplifiable, amplified, nuclearPeriod, generators } from './recipes.ts';
 import { twoStepFit } from './fit.ts';
 import { readStage } from './stage.ts';
-import { siteCopies, siteRoutes, type Routes } from './on-site.ts';
+import {
+  siteCopies,
+  siteFloors,
+  siteRoutes,
+  totalPerMachine,
+  type Routes,
+  type SiteDraw,
+} from './on-site.ts';
 
 // Plans one phase: builds the phase's LP (or MIP), solves it and turns the solution into a stage.
 // Each phase is a self-contained steady state; nothing is carried over from an earlier phase's
@@ -255,7 +262,8 @@ function phasePower(config: CurrentSettings, phase: number): PhasePower {
   return { utilityFactor, augmenters, fueled, boost, spareMW };
 }
 // The phase's LP (or MIP), in the order its constraints and variables are added: item balances,
-// power, recipe variables with the somersloop budget and caps, raw resources, existing supply,
+// power, recipe variables with the somersloop budget and caps, the rows held to their fixed rates
+// (#984, only in a re-solve that needs them), raw resources, existing supply,
 // the plutonium sink, the goal, then whole nuclear plants. The solver's result can depend on
 // that order, so keep it. `period` is the nuclear rounding (see roundNuclear).
 export function buildModel(
@@ -281,8 +289,10 @@ export function buildModel(
   const sites = siteRoutes(context.config, context.phase, pool);
   for (const balance of sites.balances)
     model.constraints[balance.name] = exactBalance(balance.item) ? { equal: 0 } : { min: 0 };
+  addSiteDraws(model, sites.draws);
   addPower(model, context);
   addRecipes(model, context, pool, sites.routes);
+  addSiteFloors(model, context, pool);
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
   return { model, period };
@@ -298,12 +308,32 @@ function addBalances(model: LpModel, allItems: Set<string>, demand: ItemRates) {
       ? { equal: demand[item] || 0 }
       : { min: demand[item] || 0 };
 }
-// Whether an item balances exactly rather than overflowing to the sink (addBalances).
-const exactBalance = (item: string) =>
-  !!DATA.items[item]?.fluid ||
-  !!DATA.items[item]?.radioactive ||
-  item.endsWith('Waste') ||
-  !((DATA.items[item]?.sink ?? 0) > 0);
+// The fixed amounts groups' balances give rows whose part follows the row's total (#984,
+// siteDraws in on-site.ts): each is demand on the group's balance and comes off the central
+// balance's demand, so the group's own line makes it and the central lines do not.
+function addSiteDraws(model: LpModel, draws: SiteDraw[]) {
+  const shift = (name: string, rate: number) => {
+    const bound = model.constraints[name]!;
+    if (bound.equal !== undefined) bound.equal += rate;
+    else bound.min = (bound.min ?? 0) + rate;
+  };
+  for (const draw of draws) {
+    shift(draw.balance, draw.rate);
+    shift(draw.central, -draw.rate);
+  }
+}
+// The rows a re-solve holds to at least their fixed rates (#984, siteFloors in on-site.ts):
+// 'floor:<recipe>', the recipe's total per machine (its primary output, or a generator's MW)
+// times its level.
+function addSiteFloors(model: LpModel, { config, phase }: PhaseContext, pool: PoolRecipe[]) {
+  const floors = siteFloors(config, phase, pool);
+  for (const recipe of pool) {
+    const floor = floors.get(recipe.id);
+    if (floor === undefined) continue;
+    model.constraints['floor:' + recipe.id] = { min: floor };
+    model.variables[recipe.id]!['floor:' + recipe.id] = totalPerMachine(recipe);
+  }
+}
 // The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
 // generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
 // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are

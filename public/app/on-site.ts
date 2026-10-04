@@ -1,7 +1,7 @@
 // Made on site (#875, part of #868): the planner input `settings.onSite`, worked out from the
 // profile's factory groups only when the user starts a recalculation, and then frozen with the new
 // plan like settings.transportFuel. Opening the app or updating never recalculates.
-import { LINK_DUST, rowShares, rowTotal } from './group-order.ts';
+import { LINK_DUST, rowParts, rowShares, rowTotal } from './group-order.ts';
 import { rawResources } from '../preferences.ts';
 import { milestoneOnlyPhase } from '../progression.ts';
 import { ITEM_NAMES } from '../state.ts';
@@ -9,6 +9,7 @@ import { listNames } from '../wording.ts';
 import type {
   CalcRow,
   FactoryGroups,
+  OnSiteRate,
   OnSiteSettings,
   StageKey,
   StoredCalculatedPlan,
@@ -46,6 +47,7 @@ type OnSitePlan = Pick<StoredCalculatedPlan, 'stages'> &
   Partial<Pick<StoredCalculatedPlan, 'settings' | 'guide'>>;
 type OnSiteStages = [StageKey, { rows?: CalcRow[] }][];
 type OnSiteShares = OnSiteSettings[string]['shares'];
+type OnSiteRates = NonNullable<OnSiteSettings[string]['rates']>;
 type OnSiteGroupsInput =
   | Partial<Pick<FactoryGroups, 'groups' | 'assignments' | 'local'>>
   | undefined;
@@ -59,11 +61,14 @@ type OnSiteGroupsInput =
 // cards split it (rowShares): measured against that row's total in the same phase of `plan`,
 // fixed rates first, then the null-rate memberships split the rest. A row `plan` lacks in that
 // phase has no total for a fixed rate to be measured against, so only its null-rate memberships
-// count, split evenly. Only rows that use one of the group's items somewhere in `plan` are listed,
-// and a group's own lines (`onSite` rows) are left out: they belong wholly to their group. A
-// marked item the planner cannot make on site (a raw resource such as Water, onSitePlannable) is
-// left out, so the request is always one the planner accepts. Returns undefined when no group
-// has an item, so the setting stays absent.
+// count, split evenly. For a row with a fixed-rate membership that `plan` has, the group's part as
+// it follows the row's total (rowParts) is stored too (`rates`, #984), also where the fixed rates
+// take all of that total, so the planner sizes the line to the fixed rate in the plan it
+// produces. Only rows that use one of the group's items somewhere in `plan` are listed, and a
+// group's own lines (`onSite` rows) are left out: they belong wholly to their group. A marked item
+// the planner cannot make on site (a raw resource such as Water, onSitePlannable) is left out, so
+// the request is always one the planner accepts. Returns undefined when no group has an item, so
+// the setting stays absent.
 export function onSiteSettings(
   plan: OnSitePlan,
   groups: OnSiteGroupsInput,
@@ -78,17 +83,24 @@ export function onSiteSettings(
   const out: OnSiteSettings = {};
   for (const [group, marks] of marking) {
     const consumers = onSiteGroupShares(stages, groups, names, group, marks, inputsOf);
-    const items = onSiteLineItems(plan, consumers, marks);
-    const shares = sharesUsing(consumers, items, inputsOf);
+    const items = onSiteLineItems(plan, consumers.shares, marks);
+    const shares = sharesUsing(consumers.shares, items, inputsOf);
     // names holds every marking group (the filter above).
     if (items.length && Object.keys(shares).length)
-      out[group] = { name: names.get(group)!, items, shares };
+      out[group] = {
+        name: names.get(group)!,
+        items,
+        shares,
+        ...ratesOf(consumers.rates, items, inputsOf),
+      };
   }
   return Object.keys(out).length ? out : undefined;
 }
 
 // Per phase, `group`'s share of each row of its memberships that uses one of `marks` somewhere in
-// the plan, other than its own lines made on site (onSiteShare).
+// the plan, other than its own lines made on site (onSiteShare), and of each such row with a
+// fixed-rate membership that `plan` has in that phase, the group's part as it follows the row's
+// total (rowParts, #984).
 function onSiteGroupShares(
   stages: OnSiteStages,
   groups: OnSiteGroupsInput,
@@ -96,10 +108,12 @@ function onSiteGroupShares(
   group: string,
   marks: readonly string[],
   inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
-): OnSiteShares {
-  const shares: OnSiteShares = {};
+): { shares: OnSiteShares; rates: OnSiteRates } {
+  const shares: OnSiteShares = {},
+    rates: OnSiteRates = {};
   for (const [phase, stage] of stages) {
-    const phaseShares: Record<string, number> = {};
+    const phaseShares: Record<string, number> = {},
+      phaseRates: Record<string, OnSiteRate> = {};
     for (const [rowId, list] of Object.entries(groups?.assignments || {})) {
       const memberships = list.filter(membership => names.has(membership.group));
       if (!memberships.some(membership => membership.group === group)) continue;
@@ -108,10 +122,33 @@ function onSiteGroupShares(
       if (row?.onSite) continue;
       const share = onSiteShare(group, memberships, row);
       if (share > LINK_DUST) phaseShares[rowId] = share;
+      // Also where the fixed rates take all of the row's total in `plan`: the group's part grows
+      // with the total there.
+      const part = row && rowParts(memberships).get(group);
+      if (part) phaseRates[rowId] = part;
     }
     if (Object.keys(phaseShares).length) shares[phase] = phaseShares;
+    if (Object.keys(phaseRates).length) rates[phase] = phaseRates;
   }
-  return shares;
+  return { shares, rates };
+}
+
+// { rates } with the parts in `rates` of the rows that use one of `items` somewhere in the plan
+// (as sharesUsing keeps them), or nothing when none is left, so a group without a fixed-rate
+// membership stores what it stored before #984.
+function ratesOf(
+  rates: OnSiteRates,
+  items: readonly string[],
+  inputsOf: ReadonlyMap<string, ReadonlySet<string>>,
+): { rates?: OnSiteRates } {
+  const out: OnSiteRates = {};
+  for (const [phase, rows] of Object.entries(rates) as [StageKey, Record<string, OnSiteRate>][]) {
+    const kept = Object.entries(rows).filter(([rowId]) =>
+      items.some(item => inputsOf.get(rowId)?.has(item)),
+    );
+    if (kept.length) out[phase] = Object.fromEntries(kept);
+  }
+  return Object.keys(out).length ? { rates: out } : {};
 }
 
 // The items of `marks` a recalculation gives the group its own line for, sorted, decided per item
