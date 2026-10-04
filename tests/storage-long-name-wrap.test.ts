@@ -2,7 +2,10 @@
 // public/state/validate.ts). On the Storage room page it breaks inside the floor's tab, the bay's
 // heading, a search result naming its floor and a row of "Hidden bays and floors" rather than
 // running past the page on a phone (#987). A word breaks only where it cannot fit its line, so a
-// short name keeps its tab on one line, and on a phone the tab keeps its 44px height (#838).
+// short name keeps its tab on one line, and on a phone the tab keeps its 44px height (#838). So
+// does the bay's name in a container's dialog (#999), and the search's "No container holds <query>",
+// which repeats the query as typed (#1010). A bay's "Move to…" select lists the floors by name and
+// a select is as wide as its longest option, so it is capped at its row's width instead (#998).
 // Layout is not measurable in happy-dom, so this checks the rules in style.css and that the
 // templates still draw the elements they name; the browser measurements are in the pull request.
 import { test } from 'node:test';
@@ -69,9 +72,21 @@ test('a long word breaks inside the floor tab, the bay heading and the lists nam
   }
 });
 
+// The container dialog's bay name, and the search's empty state, where it repeats the query.
+const texts = ['.slot-place', '.storage-results .empty-state'];
+
+test('a long word breaks in the container dialog and the empty search (#999, #1010)', () => {
+  for (const selector of texts) {
+    const body = declarations(outsideRules, selector);
+    assert.ok(body, `style.css has a rule for ${selector} outside any media block`);
+    assert.match(body, WRAPS, selector);
+  }
+});
+
 test('no media block, print included, turns the breaking off again', () => {
+  const wrapped = [...names, ...texts, '.tab', '.empty-state', '.dialog-body p'];
   for (const rule of mediaRules)
-    if (rule.selectors.some(selector => names.includes(selector) || selector === '.tab'))
+    if (rule.selectors.some(selector => wrapped.includes(selector)))
       assert.doesNotMatch(
         rule.body,
         /(?:^|[;\s])(overflow-wrap|word-wrap):\s*normal\b|(?:^|[;\s])word-break:\s*keep-all\b/,
@@ -87,6 +102,26 @@ test('a floor tab stays a tab: one line for a short name, 44px tall on a phone (
       /(?:^|[;\s])word-break:\s*break-all\b/,
     );
   assert.match(declarations(phoneRules, '.tab'), /(?:^|[;\s])min-height:\s*44px\s*;/);
+});
+
+const MOVE_TO = '.bay-actions .move-bay';
+
+test('the "Move to…" select is never wider than its row, and 44px tall on a phone (#998, #842)', () => {
+  assert.match(declarations(outsideRules, MOVE_TO), /(?:^|[;\s])max-width:\s*100%\s*;/);
+  // That 100% is of the row of buttons holding it, a flex item that would otherwise never be
+  // narrower than its content, the select's longest option included.
+  assert.match(
+    declarations(outsideRules, '.bay-actions > span:last-child'),
+    /(?:^|[;\s])min-width:\s*0\s*;/,
+  );
+  // No rule, in a media block or not, lifts the cap or gives the select a fixed width.
+  for (const rule of [...outsideRules, ...mediaRules])
+    if (rule.selectors.includes(MOVE_TO)) {
+      const where = rule.selectors.join(', ');
+      assert.doesNotMatch(rule.body, /(?:^|[;\s])max-width:(?!\s*100%\s*;)/, where);
+      assert.doesNotMatch(rule.body, /(?:^|[;\s])(?:min-)?width:(?!\s*auto\s*;)/, where);
+    }
+  assert.match(declarations(phoneRules, MOVE_TO), /(?:^|[;\s])min-height:\s*44px\s*;/);
 });
 
 test('the Restore beside a hidden bay keeps its word whole', () => {
@@ -109,4 +144,19 @@ test('the templates still draw the elements those rules name', () => {
   assert.match(page, /class="check-row">\s*<span\s*><b>\{\{ hiddenFloor\.label \}\}/);
   // The bay's heading: an h3 in the bay's header showing its name.
   assert.match(bay, /<header class="bay-head">[\s\S]*?<h3 v-else>\{\{ bay\.name \}\}<\/h3>/);
+  // "Move to…": a select of class "move-bay" in the bay's actions, an option per floor's label.
+  assert.match(
+    bay,
+    /<div class="bay-actions">[\s\S]*?<select\s+class="move-bay"[\s\S]*?<option v-for="floor in view\.moveTo"[^>]*>\s*\{\{ floor\.label \}\}/,
+  );
+  // The empty search, inside the results section, repeating the query.
+  assert.match(
+    page,
+    /class="storage-results"[\s\S]*?<div v-else class="empty-state" data-search-empty>No container holds \{\{ page\.query \}\}<\/div>/,
+  );
+  // The container dialog: the paragraph naming the bay in bold.
+  assert.match(
+    read('../public/app/ui/detail/SlotDialog.vue'),
+    /<p class="slot-place">\s*<b>\{\{ view\.bay \}\}<\/b/,
+  );
 });
