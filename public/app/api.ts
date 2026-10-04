@@ -4,6 +4,7 @@
 import { appRoot } from '../app-root.ts';
 import { browserMode, browserRequest } from '../browser-api.ts';
 import { required } from './format.ts';
+import { entryPlace, placeEntry, placedState, startPlace } from './history-place.ts';
 import {
   boot,
   currentProfile,
@@ -223,16 +224,21 @@ export async function post<T = unknown>(
   });
 }
 
-// The address hash of the page on screen, which acceptRoute() puts back when the user keeps
-// their unsaved notes. navigating is set while navigate() changes the hash itself.
+// The address hash and history place (history-place.ts) of the page on screen, which
+// acceptRoute() goes back to when the user keeps their unsaved notes. navigating is set while
+// navigate() changes the hash itself, or acceptRoute() steps on to the address the user agreed
+// to leave for; undoing from acceptRoute() stepping back until that step's hashchange arrives.
 let shownHash = location.hash;
+let shownPlace = startPlace();
 let navigating = false;
+let undoing = false;
 
 // Rewrites the address of the page on screen to `route` (the hash without its #), as render()
 // in shell.ts does to keep a group's flow page's address naming the phase shown (#926), and
 // records it as the page on screen, so keeping unsaved notes on a later Back puts this address
 // back rather than the one it replaced (acceptRoute). replaceState adds no history entry and,
-// in a browser, fires no hashchange, so the hashchange listener never records it.
+// in a browser, fires no hashchange, so the hashchange listener never records it. The entry
+// keeps its state, and with it its place.
 export function replaceShownRoute(route: string) {
   history.replaceState(history.state, '', '#' + route);
   shownHash = location.hash;
@@ -251,16 +257,38 @@ export function navigate(nextView: View) {
   }
 }
 
-// The hashchange listener's check (listeners.ts): a sidebar link, a typed address or Back
-// leaves the page, so ask about unsaved notes first. While the question is open, and when the
-// user keeps the notes, the address goes back to the page still on screen (replaceState fires
-// no hashchange) and this returns false, so nothing is redrawn. Leaving anyway goes to the
-// address asked for, as navigate() would, without asking again.
+// The hashchange listener's check (listeners.ts): a sidebar link, a typed address, Back or
+// Forward leaves the page, so ask about unsaved notes first. While the question is open, and
+// when the user keeps the notes, the page stays and this returns false, so nothing is redrawn.
+// The move is taken back without rewriting the history (#980): history.go() steps back to the
+// page still on screen, by the places of the two entries, so the entry the user tried to reach
+// stays where it was (after a typed address or a link, as the next entry, which Forward
+// reaches), and the hashchange of that step is passed over, with no question, redraw or scroll
+// to the top. Leaving anyway steps to the address asked for again, without asking again. With
+// no other entry to step to, the address is put back in place.
 export function acceptRoute() {
+  const steppingBack = undoing;
+  undoing = false;
+  // The step back arriving on the page on screen, also when Leave anyway was pressed before it
+  // arrived (navigating stays set for the step forward that follows it).
+  if (steppingBack && location.hash === shownHash) {
+    shownPlace = entryPlace() ?? shownPlace;
+    return false;
+  }
   const asked = navigating || location.hash === shownHash ? true : allowSwitch();
-  if (asked !== true) {
-    const target = location.hash;
-    history.replaceState(history.state, '', shownHash || location.pathname + location.search);
+  if (asked === true) {
+    navigating = false;
+    showEntry();
+    return true;
+  }
+  const target = location.hash;
+  const steps = stepsTaken();
+  if (steps === 0) {
+    history.replaceState(
+      placedState(shownPlace),
+      '',
+      shownHash || location.pathname + location.search,
+    );
     void asked.then(ok => {
       if (!ok || location.hash === target) return;
       navigating = true;
@@ -268,9 +296,38 @@ export function acceptRoute() {
     });
     return false;
   }
-  navigating = false;
+  undoing = true;
+  history.go(-steps);
+  void asked.then(ok => {
+    if (!ok) return;
+    navigating = true;
+    history.go(steps);
+  });
+  return false;
+}
+
+// Records the current entry as the page on screen. An entry without a place is a new one,
+// straight after the page it was reached from, and is given that place.
+function showEntry() {
+  const place = entryPlace();
+  if (place !== undefined) shownPlace = place;
+  else {
+    if (location.hash !== shownHash) shownPlace++;
+    placeEntry(shownPlace);
+  }
   shownHash = location.hash;
-  return true;
+}
+
+// How many entries the user moved from the page on screen to the current one: back (below zero)
+// or forward. An entry without a place is a new address, one forward, and is given that place,
+// so a later Forward to it is known. 0 when there is no other entry to step to (a history of
+// one entry, where the interface tests change the address in place) or no way to tell.
+function stepsTaken() {
+  if (history.length < 2) return 0;
+  const place = entryPlace();
+  if (place !== undefined) return place - shownPlace;
+  placeEntry(shownPlace + 1);
+  return 1;
 }
 
 // Notes save themselves after a pause in typing (ui/note-draft.ts). Each notes box on screen
