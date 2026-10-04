@@ -112,7 +112,7 @@ test('a profile migrated from the handbook draws each notice in its tone', () =>
   setFloor('ground');
   assert.equal(toneOf(all, /transcribed from the original plan, not solved/), 'warn');
   assert.equal(toneOf(all, /Whole-machine production/), 'info');
-  assert.equal(toneOf(all, /until the factories are in groups/), 'info');
+  assert.equal(toneOf(all, /until the production lines are in factories/), 'info');
 });
 
 test('a calculated profile draws its draft and headroom as warnings, guidance as info', () => {

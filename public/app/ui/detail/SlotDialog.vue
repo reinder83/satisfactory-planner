@@ -57,7 +57,7 @@ const view = computed(() =>
       >
     </div>
     <div v-if="view.link" class="detail-actions">
-      <button class="btn" v-bind="factoryLink(view.link)">Open production target →</button>
+      <button class="btn" v-bind="factoryLink(view.link)">Open production line →</button>
     </div>
     <p v-else class="small muted">
       Collected or completion item. Reserve its own supply; this storage position does not add

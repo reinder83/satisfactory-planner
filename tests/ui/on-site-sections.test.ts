@@ -56,7 +56,7 @@ const USED_LATER = [
   'Rubber',
   'Sulfuric Acid',
 ];
-const HEADING = "Used only by this group's lines in Phases 4 and 5";
+const HEADING = "Used only by this factory's lines in Phases 4 and 5";
 
 const groups = (local: string[] = []): FactoryGroups => ({
   groups: [{ id: PARTS, name: 'Industrial parts' }],

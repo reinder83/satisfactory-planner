@@ -39,14 +39,14 @@ const caption = (output: FlowOutput) =>
 // long fluid rate keeps its unit beside the number (#364); .rail-rate is nowrap as well.
 const unitText = (unit: string | undefined) => (unit || '/min').replace(/^ /, '\u00a0');
 
-// The bank note's ", less what factory groups make on site" (flow.ts SupplyNote), naming the
+// The bank note's ", less what factories make on site" (flow.ts SupplyNote), naming the
 // lines made on site whose leftover since a group edit takes a part of the demand too (#1002):
 // the rates above leave it out.
 function lessOnSite(note: SupplyNote): string {
   const leftover = note.leftover;
   if (!note.lessOnSite) return '';
   return (
-    ', less what factory groups make on site' +
+    ', less what factories make on site' +
     (leftover
       ? `, including what is left over from the line${leftover.lines > 1 ? 's' : ''} made on site for ${listNames(leftover.groups)}`
       : '')
@@ -199,7 +199,7 @@ const flow = computed(() => {
       </div>
       <p v-if="flow.model.bankNote?.ownLine && flow.model.bankNote.offers" class="small muted">
         Made on site for {{ flow.model.bankNote.ownLine }}'s lines{{
-          flow.model.bankNote.shared ? ', together with the group’s other lines making it' : ''
+          flow.model.bankNote.shared ? ', together with the factory’s other lines making it' : ''
         }}, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and
         the rest goes to the other places that ask for it{{ planWideText(flow.model.bankNote) }}.
       </p>
@@ -213,7 +213,7 @@ const flow = computed(() => {
       <p v-else-if="flow.model.bankNote?.ownLine" class="small muted">
         Demand of {{ flow.model.bankNote.ownLine }}'s lines, which this line makes the item for on
         site{{
-          flow.model.bankNote.shared ? ' together with the group’s other lines making it' : ''
+          flow.model.bankNote.shared ? ' together with the factory’s other lines making it' : ''
         }}; what it makes beyond that goes to the AWESOME Sink{{
           planWideText(flow.model.bankNote)
         }}.

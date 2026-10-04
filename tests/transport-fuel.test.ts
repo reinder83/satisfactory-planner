@@ -48,7 +48,9 @@ test('the transport fuel setting is normalised and planned as extra demand where
   assert.equal(made(base, '3', 'Packaged Fuel'), 0);
   // Phase 1 cannot make Packaged Fuel: left out there, and the assumptions say so.
   assert.deepEqual(plan.stages['1'].transport, {});
-  assert.ok(plan.warnings.some(w => /Fuel for the vehicles on your factory-group links/.test(w)));
+  assert.ok(
+    plan.warnings.some(w => /Fuel for the vehicles on the links between your factories/.test(w)),
+  );
   assert.ok(plan.warnings.some(w => /cannot make Packaged Fuel in Phase 1/.test(w)));
   assert.ok(!base.warnings.some(w => /vehicle/i.test(w)));
   // The fuel shows in "Between groups" as going to the vehicles.

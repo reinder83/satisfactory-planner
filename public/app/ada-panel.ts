@@ -138,7 +138,7 @@ function onSiteDroppedFacts(
   onSite: OnSiteSettings | undefined,
 ): NonNullable<AdaFacts['onSiteDropped']> {
   const items = [...new Set(Object.values(dropped).flat())].sort();
-  const groups = Object.keys(dropped).map(group => onSite?.[group]?.name || 'a factory group');
+  const groups = Object.keys(dropped).map(group => onSite?.[group]?.name || 'a factory');
   return { items: listNames(items), groups: listNames(groups) };
 }
 

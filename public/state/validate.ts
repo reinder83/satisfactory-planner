@@ -271,25 +271,25 @@ export const holdsAmplifiedUnlocks = (state: { checks?: unknown; taskEdits?: unk
 // must exist. Anything else throws, like the rest of the groups.
 export function validateGroups(raw: unknown): FactoryGroups {
   if (raw === undefined) return blankGroups();
-  if (!plain(raw)) fail('Invalid factory groups in backup.');
+  if (!plain(raw)) fail('Invalid factories in backup.');
   const clean = blankGroups();
   if (raw.groups !== undefined) {
-    if (!Array.isArray(raw.groups) || raw.groups.length > 60) fail('Invalid factory groups.');
+    if (!Array.isArray(raw.groups) || raw.groups.length > 60) fail('Invalid factories.');
     const seen = new Set<string>();
     clean.groups = raw.groups.map((group: unknown) => {
       if (!plain(group) || !groupId(group.id) || seen.has(group.id) || !label(group.name))
-        fail('Invalid factory group.');
+        fail('Invalid factory.');
       seen.add(group.id);
       return { id: group.id, name: group.name.trim() };
     });
   }
   if (raw.assignments !== undefined) {
     if (!plain(raw.assignments) || Object.keys(raw.assignments).length > 1000)
-      fail('Invalid factory group assignments.');
+      fail('Invalid factory assignments.');
     const known = new Set(clean.groups.map(group => group.id));
     for (const [rowKey, list] of Object.entries(raw.assignments)) {
       if (!safeKey(rowKey) || !Array.isArray(list) || !list.length || list.length > 12)
-        fail('Invalid factory group assignment.');
+        fail('Invalid factory assignment.');
       const used = new Set<string>();
       clean.assignments[rowKey] = list.map((member: unknown): GroupAssignment => {
         if (
@@ -297,7 +297,7 @@ export function validateGroups(raw: unknown): FactoryGroups {
           !known.has(member.group as string) ||
           used.has(member.group as string)
         )
-          fail('Invalid factory group assignment.');
+          fail('Invalid factory assignment.');
         // known holds only group ids, so the check above leaves a string.
         const group = member.group as string;
         used.add(group);
@@ -306,19 +306,19 @@ export function validateGroups(raw: unknown): FactoryGroups {
           rate !== null &&
           (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 10000000)
         )
-          fail('Invalid group production split.');
+          fail('Invalid production split.');
         return { group, rate };
       });
     }
   }
   if (raw.links !== undefined) {
     if (!plain(raw.links) || Object.keys(raw.links).length > 500)
-      fail('Invalid factory group links.');
+      fail('Invalid links between factories.');
     const known = new Set(clean.groups.map(group => group.id));
     const links: Record<string, LinkTransport> = {};
     for (const [key, transport] of Object.entries(raw.links)) {
       const [from, to, extra] = key.split(':');
-      if (extra !== undefined || !linkKey(from, to, known)) fail('Invalid group link.');
+      if (extra !== undefined || !linkKey(from, to, known)) fail('Invalid link between factories.');
       links[key] = linkTransport(transport);
     }
     // Only kept when there is one, so a state without vehicle links keeps its old shape.
@@ -398,10 +398,10 @@ export function linkTransport(value: unknown): LinkTransport {
     value.roundTripMin < 0.1 ||
     value.roundTripMin > 1440
   )
-    fail('Invalid transport for a group link.');
+    fail('Invalid transport for a link between factories.');
   const mode = value.mode as LinkMode;
   if (fuelledModes.includes(mode) !== vehicleFuels.includes(value.fuel as string))
-    fail('Invalid vehicle fuel for a group link.');
+    fail('Invalid vehicle fuel for a link between factories.');
   return {
     mode,
     roundTripMin: value.roundTripMin,

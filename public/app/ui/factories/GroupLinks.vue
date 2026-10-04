@@ -1,5 +1,5 @@
 <!--
-  "Between groups" on the Logistics page (#184; on the calculated factories page until #229):
+  "Between factories" on the Logistics page (#184; on the calculated factories page until #229):
   what each factory group hands the next per minute, and the belt or pipe it needs, from
   groupLinks (group-links.ts). Only
   shown when the profile has groups; flows inside a group are the group's own belts and are
@@ -285,7 +285,7 @@ async function recalculate(event: Event) {
         'Created a profile that plans the vehicle fuel. ' +
           (result.reviewCount
             ? result.reviewCount +
-              ' completed factory checks need review; the previous profile is unchanged.'
+              ' completed production line checks need review; the previous profile is unchanged.'
             : 'The previous profile is unchanged.'),
       );
       void refocus();
@@ -299,13 +299,13 @@ async function recalculate(event: Event) {
 
 <template>
   <section v-if="view" class="panel group-links" data-group-links>
-    <h2>Between groups</h2>
+    <h2>Between factories</h2>
     <p class="small muted">
-      What comes into each group and what goes out per minute, with the best belt or pipe you have
-      unlocked. Flows inside a group are left out. Pick a vehicle on a group's outgoing link and
+      What comes into each factory and what goes out per minute, with the best belt or pipe you have
+      unlocked. Flows inside a factory are left out. Pick a vehicle on a factory's outgoing link and
       give its round trip to see how many it takes.
     </p>
-    <p v-if="!view.links.length" class="small">Nothing moves between groups yet.</p>
+    <p v-if="!view.links.length" class="small">Nothing moves between factories yet.</p>
     <div v-else class="group-cards">
       <article
         v-for="card in view.cards"

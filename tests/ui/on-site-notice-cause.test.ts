@@ -39,7 +39,7 @@ const BETA = 'fg-beta1';
 const GAMMA = 'fg-gamma1';
 // Neutral, so it is true whether a mark changed or a consumer moved in for a mark the plan did not
 // record (#1006).
-const MARKS_CHANGED = /What your factory groups make on site differs from this plan\./;
+const MARKS_CHANGED = /What your factories make on site differs from this plan\./;
 const ALPHA_DROPS_WIRE =
   "Alpha marks Wire, but none of its lines uses it now; a recalculation would drop Alpha's Wire line";
 
@@ -150,7 +150,7 @@ test("#985: a marking group's last consumer moved out: the notice says so, not t
   assert.ok($('[data-on-site-recalc] [data-recalc-on-site]'));
   // ADA follows the same rule.
   const ada = adaSays('on-site-pending');
-  assert.match(ada, /^What your factory groups' lines use changed/);
+  assert.match(ada, /^What your factories' lines use changed/);
   assert.doesNotMatch(ada, /differs from this plan/);
   // The heading: Alpha's Wire line until a recalculation; the picker still has Wire ticked.
   assert.equal(made(ALPHA), 'Made on site: Wire (until a recalculation)');
@@ -183,7 +183,7 @@ test('a real change to the marks gets the neutral words, alone or beside a moved
   assert.equal($('[data-on-site-use]'), null);
   assert.match(
     adaSays('on-site-pending'),
-    /^What your factory groups make on site differs from this plan/,
+    /^What your factories make on site differs from this plan/,
   );
   // A new mark on a plan without any: the same words.
   await show(generated(), trio());
@@ -194,8 +194,8 @@ test('a real change to the marks gets the neutral words, alone or beside a moved
   await show(first, trio(GAMMA, { [ALPHA]: ['Wire'] }));
   assert.match(notice()!, MARKS_CHANGED);
   assert.match(notice()!, new RegExp(ALPHA_DROPS_WIRE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(notice()!, /Now no group makes anything on site\./);
-  assert.match(adaSays('on-site-pending'), /^What your factory groups make on site differs/);
+  assert.match(notice()!, /Now no factory makes anything on site\./);
+  assert.match(adaSays('on-site-pending'), /^What your factories make on site differs/);
 });
 
 test('#938 part 1: a mark no line of the group uses asks for no recalculation', async () => {
@@ -310,7 +310,7 @@ test('#1006: a consumer moving in for a mark the plan did not record gets the ne
   assert.match(notice()!, MARKS_CHANGED);
   assert.doesNotMatch(notice()!, /You changed|changed since it was calculated/);
   assert.match(notice()!, /Now: Alpha makes Wire on site; Beta makes Wire on site\./);
-  assert.match(adaSays('on-site-pending'), /^What your factory groups make on site differs/);
+  assert.match(adaSays('on-site-pending'), /^What your factories make on site differs/);
 });
 
 test('compat: a plan an earlier release stored with a mark no line uses loads and asks nothing', async () => {

@@ -66,7 +66,7 @@ const MODES: {
     calculated: true,
 
     toggle: '[data-toggle-factory-edit]',
-    label: 'Editing groups',
+    label: 'Editing factories',
     on: () => factoryEditing,
   },
   {
@@ -74,7 +74,7 @@ const MODES: {
     view: 'factories',
     calculated: true,
     toggle: '[data-toggle-factory-edit]',
-    label: 'Editing groups',
+    label: 'Editing factories',
     on: () => factoryEditing,
   },
   {

@@ -96,9 +96,9 @@ async function remove(event: Event, id: string) {
   });
   if (
     !(await confirmAction({
-      title: 'Remove this group?',
-      body: 'Remove this group? The factories stay in the list and keep their progress.',
-      confirmLabel: 'Remove group',
+      title: 'Remove this factory?',
+      body: 'Remove this factory? Its production lines stay in the list and keep their progress.',
+      confirmLabel: 'Remove factory',
       danger: true,
     }))
   )
@@ -120,11 +120,11 @@ async function remove(event: Event, id: string) {
   >
     <header class="site-head">
       <div class="site-title">
-        <CollapseToggle :section-key="section.id" :label="'Factories in ' + section.name" />
+        <CollapseToggle :section-key="section.id" :label="'Production lines in ' + section.name" />
         <div>
           <span class="eyebrow"
-            >FACTORY GROUP · {{ section.members.length }}
-            {{ section.members.length === 1 ? 'FACTORY' : 'FACTORIES' }}</span
+            >FACTORY · {{ section.members.length }}
+            {{ section.members.length === 1 ? 'LINE' : 'LINES' }}</span
           ><input
             v-if="editing"
             class="bay-rename"
@@ -132,7 +132,7 @@ async function remove(event: Event, id: string) {
             data-section-heading
             :value="names[section.id]"
             maxlength="80"
-            :aria-label="'Rename group ' + section.name"
+            :aria-label="'Rename factory ' + section.name"
             @input="names[section.id] = ($event.target as HTMLInputElement).value"
             @change="rename($event, section.id)"
             @blur="leaveDraft(names, section.id, $event)"
@@ -146,7 +146,7 @@ async function remove(event: Event, id: string) {
         :data-remove-group="section.id"
         @click="remove($event, section.id)"
       >
-        Remove group
+        Remove factory
       </button>
       <a
         v-else-if="section.members.length > 1"
@@ -176,7 +176,7 @@ async function remove(event: Event, id: string) {
           ><slot name="card" :item="item" :group="section.id" /></template
       ></template>
       <div v-else class="empty-state">
-        Empty group. Add factories with the group selector on their cards.
+        Empty factory. Add production lines with the factory selector on their cards.
       </div>
     </div>
   </section>

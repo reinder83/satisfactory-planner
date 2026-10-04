@@ -84,7 +84,7 @@ function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
   const planned = Object.entries(config.transportFuel) as [StageKey, ItemRates][];
   if (planned.length)
     warnings.push(
-      `Fuel for the vehicles on your factory-group links is planned as extra demand: ${planned
+      `Fuel for the vehicles on the links between your factories is planned as extra demand: ${planned
         .map(
           ([phase, fuels]) =>
             `Phase ${phase} ${Object.entries(fuels)
@@ -111,7 +111,7 @@ function vehicleFuelWarnings({ config, stages }: FinishedPlan): string[] {
 // whose per-group whole-machine lines did not fit, so they make those items centrally.
 function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
   const warnings: string[] = [];
-  const groupName = (group: string) => config.onSite?.[group]?.name || 'a factory group';
+  const groupName = (group: string) => config.onSite?.[group]?.name || 'a factory';
   const made: Record<string, Set<string>> = {};
   for (const stage of Object.values(stages))
     for (const row of stage.rows || [])
@@ -125,11 +125,11 @@ function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
     .map((group): [string, Set<string>] => [group, made[group]!]);
   if (makers.length)
     warnings.push(
-      `Factory groups make items on site: ${makers
+      `Factories make items on site: ${makers
         .map(([group, items]) => `${groupName(group)} makes ${listNames([...items].sort())}`)
         .join(
           '; ',
-        )}. Each such group has its own whole-machine line, sized to its own consumers as the groups were when this plan was calculated, and a central line makes the rest.` +
+        )}. Each such factory has its own whole-machine line, sized to its own consumers as the factories were when this plan was calculated, and a central line makes the rest.` +
         feedSentences(config, stages, groupName),
     );
   for (const [phase, stage] of Object.entries(stages)) {
@@ -152,7 +152,7 @@ function feedSentences(
     .map(([item, groups]) => {
       const lines =
         groups.length > 1
-          ? "each group's own line makes"
+          ? "each factory's own line makes"
           : possessive(groupName(groups[0]!)) + ' own line makes'; // byproductFeeds: never empty
       return ` Central lines also make ${item} as a byproduct, which cannot go to the sink: it goes to ${listNames(groups.map(groupName))} first, and ${lines} only the rest.`;
     })

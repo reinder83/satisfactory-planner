@@ -71,7 +71,7 @@ const plasticGroups: FactoryGroups = {
 const plasticPlan = generatedWith({ ...BASE, onSite: onSiteSettings(plain, plasticGroups) });
 const OWN_PLASTIC = `Recipe_Plastic_C:${G2}`;
 
-test('an own line whose recipe has a byproduct does not claim the group’s other lines (#1001)', () => {
+test('an own line whose recipe has a byproduct does not claim the factory’s other lines (#1001)', () => {
   const rows = plasticPlan.stages['3'].rows!;
   const own = rows.find(row => row.id === OWN_PLASTIC);
   assert.deepEqual(own?.onSite, { group: G2, recipe: 'Recipe_Plastic_C' });
@@ -95,7 +95,7 @@ test('an own line whose recipe has a byproduct does not claim the group’s othe
     note,
     "Demand of Group 2's lines, which this line makes the item for on site; what it makes beyond that goes to the AWESOME Sink. Heavy Oil Residue goes to the demand for it across this phase's whole plan, supplied together with the other lines making it.",
   );
-  assert.doesNotMatch(note, /group’s other lines/);
+  assert.doesNotMatch(note, /factory’s other lines/);
 });
 
 test('a line sharing a byproduct with a group’s copy of its recipe says "other lines", not "other recipes" (#1002)', () => {
@@ -105,7 +105,7 @@ test('a line sharing a byproduct with a group’s copy of its recipe says "other
   assert.deepEqual(model.bankNote, { shared: true, sameRecipe: true, lessOnSite: true });
   assert.equal(
     note,
-    "Demand for the item across this phase's whole plan, less what factory groups make on site, supplied together with the other lines making it.",
+    "Demand for the item across this phase's whole plan, less what factories make on site, supplied together with the other lines making it.",
   );
   // Rubber shares Heavy Oil Residue with lines of other recipes only.
   assert.equal(
@@ -159,7 +159,7 @@ test('after a group edit the central line names the line whose leftover meets pa
   });
   assert.equal(
     note,
-    "Demand for the item across this phase's whole plan, less what factory groups make on site, including what is left over from the line made on site for Alpha.",
+    "Demand for the item across this phase's whole plan, less what factories make on site, including what is left over from the line made on site for Alpha.",
   );
   assert.doesNotMatch(note, /other recipes/);
   // Alpha's own line keeps the #918 sentence.
@@ -243,7 +243,7 @@ test('the notes of a plan without lines made on site, and of groups not edited, 
   assert.deepEqual(central.model.bankNote, { shared: false, lessOnSite: true });
   assert.equal(
     central.note,
-    "Demand for the item across this phase's whole plan, less what factory groups make on site.",
+    "Demand for the item across this phase's whole plan, less what factories make on site.",
   );
 });
 

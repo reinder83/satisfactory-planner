@@ -120,7 +120,7 @@ test('back from the flow page of a group that is gone, the factories page’s he
   $('[data-gf-back]')!.focus();
   await follow('factories');
   assert.equal(focused(), $('#main h1'), describeFocus());
-  assert.equal($('#main h1')?.textContent, 'Factory targets');
+  assert.equal($('#main h1')?.textContent, 'Factories');
 });
 
 test('a sidebar link followed from the flow page keeps focus, as it always has', async () => {

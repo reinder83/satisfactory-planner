@@ -151,7 +151,7 @@ test('invalid plan edits and group updates are rejected without corrupting the s
     );
   const bad = structuredClone(initialState());
   bad.factoryGroups = { groups: [], assignments: { wire: [{ group: 'fg-ghost1', rate: 1 }] } };
-  assert.throws(() => validateState(bad), /Invalid factory group assignment/);
+  assert.throws(() => validateState(bad), /Invalid factory assignment/);
 });
 
 test('a shared profile keeps plan-shaped content but starts with fresh progress', () => {
@@ -283,6 +283,6 @@ test('the first choice on a source splits a mines link saved before #231, keepin
           // @ts-expect-error: a sibling list the page never sends
           siblings,
         }),
-      /Invalid factory group link/,
+      /Invalid link between factories/,
     );
 });

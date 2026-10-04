@@ -294,7 +294,7 @@ test('Recalculate with items made on site makes a new profile from the marks now
   // Everything else is the plan's own settings.
   const { onSite: _sent, ...rest } = sent!.settings;
   assert.deepEqual(rest, plan.settings);
-  assert.match($('#toast')!.textContent!, /1 completed factory checks need review/);
+  assert.match($('#toast')!.textContent!, /1 completed production line checks need review/);
   // The new profile's plan has the marks, so there is nothing more to recalculate.
   assert.equal($('[data-on-site-recalc]'), null);
   assert.equal(onSiteChange(calculated!, state.factoryGroups), null);
@@ -314,7 +314,7 @@ test('clearing every mark asks for a plan without settings.onSite', async () => 
   saveButton().click();
   await settle();
   assert.equal(state.factoryGroups?.local, undefined, 'the field goes with its last item');
-  assert.match(notice(), /Now no group makes anything on site\./);
+  assert.match(notice(), /Now no factory makes anything on site\./);
   assert.match(notice(), /This plan: Motors makes Wire on site\./);
   let sent: { settings: StoredCalculatedPlan['settings'] } | undefined;
   stubFetch({
@@ -388,7 +388,7 @@ test('factoryLocal stores a sorted list, refuses bad input and keeps old states 
     assert.throws(
       // @ts-expect-error: refused input, as a request body may send it
       () => mutate(structuredClone(marked), { type: 'factoryLocal', ...bad }),
-      /Invalid items made on site|Unknown factory group/,
+      /Invalid items made on site|Unknown factory\./,
       JSON.stringify(bad),
     );
 });

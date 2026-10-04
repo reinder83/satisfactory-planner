@@ -171,6 +171,6 @@ test('the templates still draw the elements those rules name', () => {
   // …which names the groups that make items on site.
   assert.match(
     warnings,
-    /`Factory groups make items on site: \$\{makers\s*\.map\(\(\[group, items\]\) => `\$\{groupName\(group\)\}/,
+    /`Factories make items on site: \$\{makers\s*\.map\(\(\[group, items\]\) => `\$\{groupName\(group\)\}/,
   );
 });

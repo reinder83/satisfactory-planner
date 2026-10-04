@@ -177,7 +177,7 @@ const page = computed(() =>
         },
         {
           id: 'transport',
-          title: 'Vehicle fuel for group links',
+          title: 'Vehicle fuel for links between factories',
           rows: itemRateRows(stagePlan.transport || {}),
           empty: '',
         },

@@ -132,7 +132,7 @@ test('a link from one source item marks version 11, and splits a mines link save
   ])
     assert.throws(
       () => mutate(structuredClone(state), link({ from, to })),
-      /Unknown factory group link|Invalid/,
+      /Unknown link between factories|Invalid/,
       from + ' -> ' + to,
     );
   const bad = mutate(grouped(), link({ from: MINES, to: 'fg-plates1' }));
@@ -145,16 +145,16 @@ test('a link from one source item marks version 11, and splits a mines link save
         mode: 'belt',
         siblings: ['fg-plates1'],
       }),
-    /Invalid factory group link/,
+    /Invalid link between factories/,
   );
 });
 
 test('a malformed link choice is refused and changes nothing', () => {
   const state = grouped();
   for (const [update, why] of [
-    [link({ to: 'fg-gone001' }), /Unknown factory group link/],
-    [link({ to: 'fg-plates1' }), /Unknown factory group link/],
-    [link({ from: 'attic' }), /Unknown factory group link/],
+    [link({ to: 'fg-gone001' }), /Unknown link between factories/],
+    [link({ to: 'fg-plates1' }), /Unknown link between factories/],
+    [link({ from: 'attic' }), /Unknown link between factories/],
     [link({ mode: 'boat' as never }), /Invalid transport/],
     [link({ roundTripMin: 0 }), /Invalid transport/],
     [link({ roundTripMin: 2000 }), /Invalid transport/],

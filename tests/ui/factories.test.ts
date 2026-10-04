@@ -207,7 +207,7 @@ test('the status chips filter on the saved factory checks, and the Running boxes
   assert.equal($<HTMLInputElement>(`[data-check="${wire}"]`)!.checked, true);
   assert.ok($(`[data-check="${wire}"]`)!.closest('.factory-card')!.classList.contains('done'));
   assert.equal($('#factory-filter')!.getAttribute('role'), 'radiogroup');
-  assert.equal($('#factory-filter')!.getAttribute('aria-label'), 'Factory status');
+  assert.equal($('#factory-filter')!.getAttribute('aria-label'), 'Production line status');
   statusChip('done').click();
   await nextTick();
   assert.deepEqual(factoryIds('#main'), [row('wire')]);
@@ -407,7 +407,7 @@ test('groups show their share of a split factory, and edit mode offers the edito
     groups.map(g => g.querySelector('h2')!.textContent),
     ['Cable factory', 'Stitched plates'],
   );
-  assert.equal(groups[0]!.querySelector('.eyebrow')!.textContent, 'FACTORY GROUP · 1 FACTORY');
+  assert.equal(groups[0]!.querySelector('.eyebrow')!.textContent, 'FACTORY · 1 LINE');
   assert.match(groups[0]!.querySelector('.allocation')!.textContent, /^Here: 300\/min of /);
   assert.match(groups[1]!.querySelector('.allocation')!.textContent, /^Remaining here: /);
   assert.ok(
@@ -558,7 +558,7 @@ test('"+ Add to group…" only picks a group; Add joins it, once, and a failed a
     menu = () => $<HTMLSelectElement>(`[data-assign-add="${key}"]`)!,
     join = () => $<HTMLButtonElement>(`[data-assign-go="${key}"]`)!;
   assert.equal(join().disabled, true, 'Add has nothing to do before a group is picked');
-  assert.equal(join().getAttribute('aria-label'), 'Add to a group');
+  assert.equal(join().getAttribute('aria-label'), 'Add to a factory');
   // An arrow key on the closed menu, as Chrome and Edge on Windows handle it: the value changes
   // and `change` fires. That only picks the group; the factory joins nothing.
   menu().focus();
@@ -1643,7 +1643,7 @@ test('a coal plant’s flow, cells and step still give MW alone (#373)', () => {
 // A build-plan step points to an easier rounded option only where the factory dialog offers
 // one: not for a nuclear or waste line, nor when the profile runs whole machines (#379).
 test('a build-plan step offers the easier rounded option only when the dialog shows it (#379)', () => {
-  const HINT = 'Open factory details for an easier rounded option.';
+  const HINT = 'Open the production line for an easier rounded option.';
   const offered = (id: string) => {
     const step = calcTasks().find(t => t.id === 'calc-3-' + id)!;
     openCalculatedFactory(id);
@@ -2221,7 +2221,10 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
   noMarkup();
   const panel = () => $('[data-build-status]')!;
   assert.ok(panel(), 'the panel is on the calculated plan page');
-  assert.match(panel().textContent, new RegExp(`1 of ${rows.length} factories marked running`));
+  assert.match(
+    panel().textContent,
+    new RegExp(`1 of ${rows.length} production lines marked running`),
+  );
   assert.ok($('[data-build-none]'), 'nothing reaches the elevator yet');
   assert.match($('[data-build-waiting]')!.textContent, new RegExp(consumer.name));
   assert.match($('[data-build-waiting]')!.textContent, /running at 0%, short of /);
@@ -2249,7 +2252,7 @@ test('built so far: the plan panel and factory cards follow the rows marked runn
   assert.equal($('[data-build-waiting]'), null);
   assert.match(
     $('[data-build-next]')!.textContent,
-    /Every factory of this phase is marked running/,
+    /Every production line of this phase is marked running/,
   );
   for (const [item, delivery] of Object.entries(stage.delivery!)) {
     const line = $$('[data-build-rate]').find(rate =>
@@ -2721,7 +2724,7 @@ test('between groups: recalculating with transport fuel creates a revision that 
   assert.equal(sent!.carryFrom, 'p');
   assert.equal(sent!.name, `${evil} · transport fuel`);
   assert.deepEqual(Object.keys(sent!.settings.transportFuel), ['3', '4', '5']);
-  assert.match($('#toast')!.textContent!, /2 completed factory checks need review/);
+  assert.match($('#toast')!.textContent!, /2 completed production line checks need review/);
   assert.match(note(), /This plan already includes the vehicle fuel/);
   assert.equal($('[data-recalc-transport]'), null);
   noMarkup();
@@ -2759,7 +2762,7 @@ test('the jump bar lists each group and shared site with its running count', asy
   render();
   await nextTick();
   assert.equal($('#main .jump-bar')!.tagName, 'NAV');
-  assert.equal($('#main .jump-bar')!.getAttribute('aria-label'), 'Groups on this page');
+  assert.equal($('#main .jump-bar')!.getAttribute('aria-label'), 'Factories on this page');
   assert.ok($('#main .toolbar + .jump-bar'), 'right under the toolbar');
   // Groups first, then the shared sites, in the order the page draws them.
   assert.deepEqual(jumps(), [
@@ -2833,7 +2836,7 @@ test('a group folds with its toggle, is remembered, and still counts in the chip
   const toggle = toggleOf('fg-cable01');
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(toggle.getAttribute('aria-controls'), 'cards-fg-cable01');
-  assert.equal(toggle.getAttribute('aria-label'), 'Factories in Cable factory');
+  assert.equal(toggle.getAttribute('aria-label'), 'Production lines in Cable factory');
   assert.ok(cardsOf('fg-cable01').classList.contains('cards'));
   toggle.focus();
   toggle.click();
@@ -2923,7 +2926,7 @@ test('an empty group shows in the jump bar while editing, and user names stay te
   render();
   await nextTick();
   assert.deepEqual(jumps()[0]!.slice(0, 2), ['fg-a', '0/0']);
-  assert.equal(toggleOf('fg-a').getAttribute('aria-label'), 'Factories in ' + evil);
+  assert.equal(toggleOf('fg-a').getAttribute('aria-label'), 'Production lines in ' + evil);
   noMarkup();
 });
 

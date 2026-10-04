@@ -104,7 +104,7 @@ const sections = computed(() =>
       { key: '', heading: '', entries: [...offers.here, ...stale] },
       ...offers.elsewhere.map(group => ({
         key: group.phases.join('-'),
-        heading: "Used only by this group's lines in " + group.where,
+        heading: "Used only by this factory's lines in " + group.where,
         entries: group.entries,
       })),
     ].filter(section => section.entries.length);
@@ -210,12 +210,12 @@ async function apply(event: Event) {
   >
     <legend>Made on site in {{ groupName }}</legend>
     <p :id="id + '-hint'" class="small muted">
-      Tick the parts this group makes for itself, next to the lines that use them, rather than
+      Tick the parts this factory makes for itself, next to the lines that use them, rather than
       bringing them in from a central line. Saving does not change the plan: a recalculation you
       start does.
     </p>
     <p v-if="!sections.length" class="small muted" data-on-site-none>
-      None of this group's lines uses a part the plan makes.
+      None of this factory's lines uses a part the plan makes.
     </p>
     <template v-else>
       <div

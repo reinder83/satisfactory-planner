@@ -196,7 +196,7 @@ test('the milestone intro says production starts later, not that running factori
     intro,
     /Production starts in Phase 3, so gather, handcraft or build a starter supply/,
   );
-  assert.doesNotMatch(intro, /factories marked running/);
+  assert.doesNotMatch(intro, /production lines marked running/);
 });
 
 test('a profile opened on Phase 1 shows one notice that says both why and what', async () => {

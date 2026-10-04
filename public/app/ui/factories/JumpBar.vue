@@ -27,7 +27,7 @@ async function jump(key: string) {
 </script>
 
 <template>
-  <nav v-if="entries.length" class="jump-bar" aria-label="Groups on this page">
+  <nav v-if="entries.length" class="jump-bar" aria-label="Factories on this page">
     <button
       v-for="entry in entries"
       :key="entry.key"

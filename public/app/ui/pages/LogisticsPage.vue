@@ -26,22 +26,22 @@ const page = computed(() =>
 
 <template>
   <PageHeader
-    eyebrow="BETWEEN FACTORY GROUPS"
+    eyebrow="BETWEEN FACTORIES"
     title="Logistics"
     :subtitle="
       page.calculated
-        ? `What each factory group sends the others in ${page.phase}, and the belts, pipes or vehicles it takes.`
+        ? `What each factory sends the others in ${page.phase}, and the belts, pipes or vehicles it takes.`
         : ''
     "
   />
   <template v-if="!page.calculated" />
   <div v-else-if="!page.rows" class="notice info" data-logistics-empty="phase">
-    This phase has no production lines, so nothing moves between groups yet.
+    This phase has no production lines, so nothing moves between factories yet.
   </div>
   <div v-else-if="!page.groups" class="notice info" data-logistics-empty="groups">
-    Nothing to show until the factories are in groups.
-    <a href="#factories">Group them on the Factories page</a>, and what each group sends the others
-    appears here.
+    Nothing to show until the production lines are in factories.
+    <a href="#factories">Sort them into factories on the Factories page</a>, and what each factory
+    sends the others appears here.
   </div>
   <GroupLinks v-else />
 </template>

@@ -390,9 +390,7 @@ function checkFullyCovered(base: CurrentCalculatedPlan) {
   assert.equal(made.own, 0, 'no line for Gamma');
   assert.ok(made.byproduct >= made.used / 3, 'the byproduct covers what Gamma uses');
   assert.deepEqual(ownLines(first), ownLines(base), 'no own line in any phase');
-  assert.ok(
-    !first.warnings.some(warning => warning.startsWith('Factory groups make items on site')),
-  );
+  assert.ok(!first.warnings.some(warning => warning.startsWith('Factories make items on site')));
   for (const plan of [first, recalculated(first, groups)]) {
     assert.equal(onSiteChange(plan, groups), null, 'no notice');
     assert.deepEqual(onSiteSummaries(plan, groups, plan.stages['5'])[GAMMA], {

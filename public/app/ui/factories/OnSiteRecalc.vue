@@ -73,7 +73,7 @@ async function recalculate(event: Event) {
         'Created a profile that plans the items made on site. ' +
           (result.reviewCount
             ? result.reviewCount +
-              ' completed factory checks need review; the previous profile is unchanged.'
+              ' completed production line checks need review; the previous profile is unchanged.'
             : 'The previous profile is unchanged.'),
       );
       void refocus();
@@ -90,13 +90,13 @@ async function recalculate(event: Event) {
     <p>
       <strong>This plan needs a recalculation.</strong>
       <template v-if="change.marksChanged"
-        >What your factory groups make on site differs from this plan.
+        >What your factories make on site differs from this plan.
       </template>
       <template v-for="use in change.uses" :key="use"
         ><span data-on-site-use>{{ use }}.</span>
       </template>
       <template v-if="change.now">Now: {{ change.now }}.</template
-      ><template v-else>Now no group makes anything on site.</template>
+      ><template v-else>Now no factory makes anything on site.</template>
       <template v-if="change.had"> This plan: {{ change.had }}.</template
       ><template v-else> This plan makes everything on central lines.</template>
       Nothing changes until you start it.

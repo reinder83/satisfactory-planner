@@ -80,7 +80,7 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
 // byproduct advice in `snapshot`, the stage of the phase the step is in (#1022).
 const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
   siteLineText(row) +
-  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
+  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
   recycleStepText(row, snapshot);
 
 // A step's byproduct advice (adviceText in recycle.ts) after a space, or '' for none.
@@ -125,7 +125,7 @@ export const rowAdvice = (
 // group; '' for any other row.
 const siteLineText = (row: CalcRow): string =>
   row.onSite
-    ? `Made on site for ${siteGroupName(row)}: it feeds that group's own lines, and what they do not use goes to the AWESOME Sink. `
+    ? `Made on site for ${siteGroupName(row)}: it feeds that factory's own lines, and what they do not use goes to the AWESOME Sink. `
     : '';
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)

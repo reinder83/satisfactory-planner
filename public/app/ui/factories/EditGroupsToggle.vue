@@ -1,4 +1,4 @@
-<!-- "Edit groups" / "Done editing" on the factories pages: shows or hides the group editor.
+<!-- "Edit factories" / "Done editing" on the factories pages: shows or hides the group editor.
      View state only: nothing is saved. Done waits while a "Made on site" choice is not saved
      (finishGroupEditing in ui/actions.ts, #930). -->
 <script setup lang="ts">
@@ -22,6 +22,6 @@ function toggle() {
 
 <template>
   <button :class="['btn', editing ? 'primary' : '']" data-toggle-factory-edit @click="toggle">
-    {{ editing ? 'Done editing' : 'Edit groups' }}
+    {{ editing ? 'Done editing' : 'Edit factories' }}
   </button>
 </template>
