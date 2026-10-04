@@ -5,8 +5,9 @@
   after its header, as a child of <main>, which is what it sticks within. Done and Esc leave the
   mode through `done`, then focus goes to the page's toggle (`toggle`, a selector). A `done` that
   returns false kept the mode on and put focus where the user must act first (an unsaved "Made on
-  site" choice, #930), so focus stays there. Esc is left alone while typing in a field, while a
-  dialog is open, or when something already handled it (a menu, a step's own edit form).
+  site" choice, #930), so focus stays there. Esc is left alone while typing in a field (a checkbox
+  or radio takes no typing, so Esc on one still leaves, #981), while a dialog is open, or when
+  something already handled it (a menu, a step's own edit form).
 -->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted } from 'vue';
@@ -21,7 +22,13 @@ async function leave() {
 function key(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented) return;
   const target = event.target as HTMLElement | null;
-  if (target?.closest('input, textarea, select, [contenteditable], dialog, [role="menu"]')) return;
+  // A checkbox or radio takes no typing, so Esc on one still leaves the mode (#981).
+  if (
+    target?.closest(
+      'input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable], dialog, [role="menu"]',
+    )
+  )
+    return;
   if (document.querySelector('dialog[open]')) return;
   event.preventDefault();
   void leave();
