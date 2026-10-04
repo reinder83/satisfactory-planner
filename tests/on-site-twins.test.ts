@@ -15,6 +15,7 @@ import { amplified } from '../planner/recipes.ts';
 import { onSiteSettings } from '../public/app/on-site.ts';
 import { itemBooks } from '../public/app/group-links.ts';
 import { lineProblems, random, rowsOf } from './helpers/on-site-books.ts';
+import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
   CurrentCalculatedPlan,
   FactoryGroups,
@@ -177,7 +178,9 @@ test('right after a recalculation, a fixed rate on one twin offers nothing (#904
 });
 
 // The profiles the random configurations start from, all with amplification on: the start phase,
-// whole machines or not, the storage rate and the somersloops for production.
+// whole machines or not, the storage rate and the somersloops for production. All on the standard
+// recipes as they were before #1040 (with Pure Aluminum Ingot), so the seeds draw the plans they
+// always drew, seed 36 among them (#1037 below).
 const STARTS = [
   { ...ISSUE },
   { phase: '2', wholeMachines: true, limitsConfirmed: true, somersloops: 106, amplifySloops: 40 },
@@ -191,7 +194,7 @@ const STARTS = [
     storageRate: 2,
   },
   { phase: '4', wholeMachines: true, limitsConfirmed: true, somersloops: 106, amplifySloops: 80 },
-] as const;
+].map(start => ({ ...start, ...STANDARD_BEFORE_1040 }));
 const starts = new Map<number, CurrentCalculatedPlan>();
 const startPlan = (index: number) => {
   if (!starts.has(index)) starts.set(index, calculate(STARTS[index]!));

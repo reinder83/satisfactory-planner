@@ -15,6 +15,7 @@ import { rowParts, rowShares } from '../public/app/group-order.ts';
 import { initialState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
 import { loadWorkspace } from '../server/persistence.ts';
+import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
   CurrentSettings,
   FactoryGroups,
@@ -34,6 +35,13 @@ interface RecordedCase {
 const recorded: { cases: RecordedCase[] } = JSON.parse(
   fs.readFileSync('tests/fixtures/on-site-shares-2026-10-04.json', 'utf8'),
 );
+// Both cases were recorded with the standard recipes, which until #1040 held Pure Aluminum
+// Ingot. A recalculation of them now plans the standard Aluminum Ingot instead (as #1040 means
+// it to), so each case is solved with the recipes it was recorded with, to compare #984 alone.
+for (const entry of recorded.cases) {
+  assert.equal(entry.settings.recipes, 'standard', entry.label);
+  Object.assign(entry.settings, STANDARD_BEFORE_1040);
+}
 // A plan's rows as recorded: per phase, each row's id and whole machines.
 const rowsOf = (plan: Pick<StoredCalculatedPlan, 'stages'>) =>
   Object.fromEntries(

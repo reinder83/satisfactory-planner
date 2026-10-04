@@ -13,8 +13,11 @@ import { flowRoute, setQuery, viewOf } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { $, $$, generatedWith, go, open, page } from './setup.ts';
 import type { FactoryGroups } from '../../public/types/index.ts';
+import { STANDARD_BEFORE_1040 } from '../helpers/standard-before-1040.ts';
 
-const BASE = { phase: '4', wholeMachines: true, limitsConfirmed: true };
+// The standard recipes as they were before #1040, with Pure Aluminum Ingot allowed: Group 1's
+// Aluminum Scrap consumer is that line.
+const BASE = { phase: '4', wholeMachines: true, limitsConfirmed: true, ...STANDARD_BEFORE_1040 };
 const G1 = 'fg-rand1';
 const OWN_SCRAP = `Recipe_AluminumScrap_C:${G1}`;
 const marking = (local: string[]): FactoryGroups => ({
