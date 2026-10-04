@@ -5,7 +5,8 @@
 //   and words the byproduct, which goes to the whole plan's demand for it, in a sentence of its
 //   own (#1001);
 // - the central Wire line, after Stator moves out of Alpha, names the line made on site for Alpha
-//   whose leftover it shares its deliveries with, rather than calling it another recipe (#1002);
+//   whose leftover meets a part of the demand its deliveries leave out, rather than calling it
+//   another recipe (#1002);
 // - an own line whose group asks for none of the item after a group edit, all of it sunk, says so
 //   rather than "Demand of Beta's lines" (#1002);
 // - a plan without lines made on site, and one whose groups were not edited, read as before.
@@ -138,9 +139,14 @@ const movedStator: FactoryGroups = {
   assignments: { ...wireGroups.assignments, Recipe_Stator_C: [{ group: GAMMA, rate: null }] },
 };
 
-test('after a group edit the central line names the line whose leftover it shares, not "other recipes" (#1002)', () => {
+test('after a group edit the central line names the line whose leftover meets part of the demand, not "other recipes" (#1002)', () => {
   const { model, note } = dialogOf(wirePlan, movedStator, 'Recipe_Wire_C');
-  // Its deliveries are shared with "Wire for Alpha" alone, of the same recipe.
+  // It shares Stator and Gamma's half of Cable with "Wire for Alpha" alone, of the same recipe,
+  // and delivers them what Alpha's leftover leaves.
+  const stator = model.outputs.find(output => output.link?.calcFactory === 'Recipe_Stator_C')!;
+  const statorWire = wirePlan.stages['3'].rows!.find(row => row.id === 'Recipe_Stator_C')!.inputs
+    .Wire!;
+  assert.ok(stator.rate! < statorWire - 1, `${stator.rate} of Stator's ${statorWire}`);
   assert.deepEqual(model.bankNote, {
     shared: false,
     lessOnSite: true,
@@ -148,7 +154,7 @@ test('after a group edit the central line names the line whose leftover it share
   });
   assert.equal(
     note,
-    "Demand for the item across this phase's whole plan, less what factory groups make on site, supplied together with what is left over from the line made on site for Alpha.",
+    "Demand for the item across this phase's whole plan, less what factory groups make on site, including what is left over from the line made on site for Alpha.",
   );
   assert.doesNotMatch(note, /other recipes/);
   // Alpha's own line keeps the #918 sentence.

@@ -107,8 +107,9 @@ export interface RecipeView {
 // "the other recipes producing it", or "the other lines making it" with `sameRecipe`, when one of
 // them follows the row's own recipe (a group's copy of it, #1002). `lessOnSite`: the demand leaves
 // out what groups' own lines make on site for themselves. `leftover`: after a group edit, groups
-// whose own lines' excess, offered to the other places (#918), shares the row's destinations; the
-// note names them rather than count those lines among the other recipes (#1002).
+// whose own lines' excess, offered to the other places (#918), meets a part of that demand too,
+// which the row's destinations leave out; the note names them rather than count those lines among
+// the other recipes (#1002).
 export interface SupplyNote {
   shared: boolean;
   sameRecipe?: true;

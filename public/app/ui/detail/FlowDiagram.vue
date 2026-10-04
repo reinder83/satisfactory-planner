@@ -39,24 +39,29 @@ const caption = (output: FlowOutput) =>
 // long fluid rate keeps its unit beside the number (#364); .rail-rate is nowrap as well.
 const unitText = (unit: string | undefined) => (unit || '/min').replace(/^ /, '\u00a0');
 
+// The bank note's ", less what factory groups make on site" (flow.ts SupplyNote), naming the
+// lines made on site whose leftover since a group edit takes a part of the demand too (#1002):
+// the rates above leave it out.
+function lessOnSite(note: SupplyNote): string {
+  const leftover = note.leftover;
+  if (!note.lessOnSite) return '';
+  return (
+    ', less what factory groups make on site' +
+    (leftover
+      ? `, including what is left over from the line${leftover.lines > 1 ? 's' : ''} made on site for ${listNames(leftover.groups)}`
+      : '')
+  );
+}
+
 // The bank note's ", supplied together with ..." (flow.ts SupplyNote): "the other recipes
 // producing it", or "the other lines making it" when one of them follows this line's recipe (a
-// group's copy of it), and what is left over from the lines made on site for groups that offer
-// their excess since a group edit (#1002). `many`: the note speaks of several items.
+// group's copy of it, #1002). `many`: the note speaks of several items.
 function suppliedWith(note: SupplyNote, many = false): string {
+  if (!note.shared) return '';
   const it = many ? 'them' : 'it';
-  const leftover = note.leftover;
-  const parts = [
-    ...(note.shared
-      ? [note.sameRecipe ? `the other lines making ${it}` : `the other recipes producing ${it}`]
-      : []),
-    ...(leftover
-      ? [
-          `what is left over from the line${leftover.lines > 1 ? 's' : ''} made on site for ${listNames(leftover.groups)}`,
-        ]
-      : []),
-  ];
-  return parts.length ? ', supplied together with ' + parts.join(' and ') : '';
+  return note.sameRecipe
+    ? `, supplied together with the other lines making ${it}`
+    : `, supplied together with the other recipes producing ${it}`;
 }
 
 // An own line's sentence for its outputs its group does not mark, such as a byproduct (#1001):
@@ -68,7 +73,7 @@ function planWideText(note: BankNote): string {
   const planWide = note.planWide;
   if (!planWide) return '';
   const many = planWide.items.length > 1;
-  return `. ${listNames(planWide.items)} ${many ? 'go' : 'goes'} to the demand for ${many ? 'them' : 'it'} across this phase's whole plan${planWide.lessOnSite ? ', less what factory groups make on site' : ''}${suppliedWith(planWide, many)}`;
+  return `. ${listNames(planWide.items)} ${many ? 'go' : 'goes'} to the demand for ${many ? 'them' : 'it'} across this phase's whole plan${lessOnSite(planWide)}${suppliedWith(planWide, many)}`;
 }
 
 const flow = computed(() => {
@@ -214,8 +219,7 @@ const flow = computed(() => {
         }}.
       </p>
       <p v-else-if="flow.model.bankNote" class="small muted">
-        Demand for the item across this phase's whole plan{{
-          flow.model.bankNote.lessOnSite ? ', less what factory groups make on site' : ''
+        Demand for the item across this phase's whole plan{{ lessOnSite(flow.model.bankNote)
         }}{{ suppliedWith(flow.model.bankNote) }}.
       </p></template
     >
