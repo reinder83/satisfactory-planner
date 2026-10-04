@@ -8,7 +8,7 @@
 
 A production planner and progress notebook for **Satisfactory**. Tell it where you are in the game and what you want, and it calculates every phase up to the Space Elevator — then turns the plan into a build order you tick off as you go, with your progress kept per save.
 
-Most calculators stop at the numbers. This one keeps going: which milestone to unlock next, which factory to build first, where every item goes in storage, and what you have already done.
+Most calculators stop at the numbers. This one keeps going: which milestone to unlock next, which production line to build first, where every item goes in storage, and what you have already done.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Most calculators stop at the numbers. This one keeps going: which milestone to u
 - **Turns the plan into a checklist.** A chronological build order with HUB milestones, MAM research, hard drives and power upgrades in the order you need them.
 - **Whole machines.** Solid-part lines run at 100% by default, with the surplus listed; fluids and power stay precisely balanced.
 - **Storage map.** Every item gets a container address in a storage room you can rearrange.
-- **Yours to edit.** Reorder and rewrite steps, group factories into your own sites, add notes and personal tasks.
+- **Yours to edit.** Reorder and rewrite steps, sort production lines into factories at your own sites, add notes and personal tasks.
 - **Progress you keep.** Several saves, several profiles per save, each with its own progress. Updates never change an existing plan behind your back.
 - **ADA.** A sarcastic assistant who reads your plan and tells you what is actually next.
 

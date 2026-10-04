@@ -33,7 +33,12 @@ function move(event: KeyboardEvent, index: number) {
 </script>
 
 <template>
-  <div id="factory-filter" class="tabs filter-chips" role="radiogroup" aria-label="Factory status">
+  <div
+    id="factory-filter"
+    class="tabs filter-chips"
+    role="radiogroup"
+    aria-label="Production line status"
+  >
     <button
       v-for="(chip, i) in chips"
       :key="chip.value"

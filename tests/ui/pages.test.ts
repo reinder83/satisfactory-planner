@@ -979,7 +979,7 @@ test('moving between pages leaves nothing behind', async () => {
   go('factories');
   render();
   assert.equal($$('.profile-card').length, 0, 'the component page is gone');
-  assert.equal($('#main h1')!.textContent, 'Factory targets');
+  assert.equal($('#main h1')!.textContent, 'Factories');
   go('backup');
   render();
   assert.equal($$('#main h1').length, 1);
@@ -1115,7 +1115,7 @@ test('the calculated resources page lists items as icon rows, one panel per list
   await nextTick();
   assert.equal(
     $('#main [data-rate-list="transport"] h2')!.textContent,
-    'Vehicle fuel for group links',
+    'Vehicle fuel for links between factories',
   );
   assert.deepEqual(rows('transport'), [['Packaged Fuel', 'Packaged Fuel 3/min']]);
   assert.ok($('#main [data-rate-list="transport"] ul[data-transport-fuel]'));

@@ -1,6 +1,6 @@
 // The factory dialog of a factory group's own line made on site (#946, part of #868) is headed as
 // its build-plan step and its flow-page card name it, "Wire for Alpha" (buildRowName), however it
-// is opened: the flow page's "↗", the build-plan step's "Open factory" (whose label says the same)
+// is opened: the flow page's "↗", the build-plan step's "Production line ↗" (whose name says the same)
 // and the factory card. The dialog is named by that heading (aria-labelledby="detail-title"), so
 // its name tells the group's line from the central one, which keeps its plain "Wire". A renamed
 // group renames the heading, and a hostile group name stays text. The plan is the planner's own,
@@ -96,10 +96,12 @@ async function openBy(selector: string) {
       return el.textContent!.trim();
     })
     .join(' ');
-  return { link: link.textContent!.trim(), heading: $('#detail h2')!.textContent, name };
+  // A link's name: its aria-label where it has one (the build-plan step's "Production line ↗").
+  const linkName = link.getAttribute('aria-label') ?? link.textContent!.trim();
+  return { link: linkName, heading: $('#detail h2')!.textContent, name };
 }
 const flowLink = (id: string) => `#main .gf-card[data-line="${id}"] .gf-head .rail-link`;
-const stepLink = (id: string) => `#main [data-task="calc-3-${id}"] .task-link`;
+const stepLink = (id: string) => `#main [data-task="calc-3-${id}"] .task-link[data-calc-factory]`;
 const cardLink = (id: string) => `#main .factory-card button.name[data-calc-factory="${id}"]`;
 
 test('the flow page’s "Wire for Alpha ↗" opens a dialog headed and named "Wire for Alpha"', async () => {
@@ -123,16 +125,16 @@ test('the central line’s dialog keeps its plain heading, "Wire"', async () => 
   assert.equal(opened.name, 'Wire');
 });
 
-test('the build-plan step’s "Open factory" link and the dialog it opens name the same line', async () => {
+test('the build-plan step’s "Production line" button and the dialog it opens name the same line', async () => {
   await show('plan');
   const own = await openBy(stepLink(ownLine(ALPHA)));
-  assert.equal(own.link, 'Open factory: Wire for Alpha ↗');
+  assert.equal(own.link, 'Production line: Wire for Alpha');
   assert.equal(own.heading, 'Wire for Alpha');
   assert.equal(own.name, 'Wire for Alpha');
   $<HTMLDialogElement>('#detail')!.close();
 
   const central = await openBy(stepLink(WIRE));
-  assert.equal(central.link, 'Open factory: Wire ↗');
+  assert.equal(central.link, 'Production line: Wire');
   assert.equal(central.heading, 'Wire');
 });
 
@@ -167,7 +169,7 @@ test('a renamed group renames the heading, and a removed one keeps the plan’s 
   };
   await show('plan', without);
   const step = await openBy(stepLink(ownLine(ALPHA)));
-  assert.equal(step.link, 'Open factory: Wire for Alpha ↗');
+  assert.equal(step.link, 'Production line: Wire for Alpha');
   assert.equal(step.heading, 'Wire for Alpha');
 });
 
@@ -181,7 +183,7 @@ test('a hostile group name stays text in the heading and the dialog’s name', a
 
   await show('plan', renamed(evil));
   const step = await openBy(stepLink(ownLine(ALPHA)));
-  assert.equal(step.link, `Open factory: Wire for ${evil} ↗`);
+  assert.equal(step.link, `Production line: Wire for ${evil}`);
   assert.equal(step.heading, `Wire for ${evil}`);
   assert.equal($$('x-evil').length, 0);
 });

@@ -1,7 +1,7 @@
 <!--
   A factory card's group editor, shown while editing groups. `factoryKey` is the calculated row
   id. Each membership has a rate (empty: the whole output, or
-  the rest) and a ✕; "+ Add to group…" picks another and Add joins it (#856). Every change saves the factory's
+  the rest) and a ✕; "+ Add to factory…" picks another and Add joins it (#856). Every change saves the factory's
   whole membership list as one `factoryAssign`; the cap of 12 groups matches validation in
   state.ts. A rate field shows the saved rate, then what is typed (ui/draft.ts, #691), and is
   redrawn with the saved rate afterwards, whether or not the save worked.
@@ -65,7 +65,7 @@ function hint(unit: RateUnit, raw: string): string {
 function tinyNote(unit: RateUnit | undefined, raw: string): string {
   const rate = raw.trim() === '' ? NaN : Number(raw);
   if (!(rate > 0 && rate < 0.001)) return '';
-  return `Under 0.001${unit?.name === 'MW' ? ' MW' : '/min'}: so small this group may not count it.`;
+  return `Under 0.001${unit?.name === 'MW' ? ' MW' : '/min'}: so small this factory may not count it.`;
 }
 
 const editor = computed(() =>
@@ -93,7 +93,7 @@ const editor = computed(() =>
                 : unit.name + ' per minute'
               : 'Production per minute') +
             ' in ' +
-            (name || 'this group'),
+            (name || 'this factory'),
           hint: unit ? hint(unit, raw) : '',
           hintId,
           tiny,
@@ -179,13 +179,13 @@ async function unassign(event: Event, group: string) {
     await refocus();
 }
 
-// "+ Add to group…" only picks a group; Add beside it joins that group with no rate (#856).
+// "+ Add to factory…" only picks a group; Add beside it joins that group with no rate (#856).
 // Chrome and Edge on Windows change a closed select's value on each arrow key and fire `change`,
 // so a menu that added on `change` added the factory while a keyboard user was still reading the
 // groups (as the storage bays' "Move to…" moved a bay, #854). Add is disabled until a group is
 // picked, and busy while it saves (app/busy.ts): pressed again meanwhile, it sends nothing. A
 // factory that joins its first group moves to that group's section with its editor, so focus
-// goes after it: to its "+ Add to group…" there, else to the new group's rate field (#299). A
+// goes after it: to its "+ Add to factory…" there, else to the new group's rate field (#299). A
 // failed add keeps the group picked and focus on Add.
 const picked = ref('');
 // The picked group, while the factory can still join it.
@@ -210,7 +210,9 @@ async function add(event: Event) {
 </script>
 
 <template>
-  <p v-if="!editor.any" class="small muted">Create a group above to place this factory.</p>
+  <p v-if="!editor.any" class="small muted">
+    Create a factory above to place this production line.
+  </p>
   <div v-else class="assign-editor">
     <div v-for="row in editor.rows" :key="row.group" class="assign-row">
       <span>{{ row.name || '' }}</span
@@ -231,7 +233,7 @@ async function add(event: Event) {
         class="btn quiet danger"
         :data-unassign="factoryKey"
         :data-group="row.group"
-        :aria-label="'Remove from ' + (row.name || 'group')"
+        :aria-label="'Remove from ' + (row.name || 'factory')"
         @click="unassign($event, row.group)"
       >
         ✕</button
@@ -244,17 +246,17 @@ async function add(event: Event) {
       <select
         :data-assign-add="factoryKey"
         :value="target?.id ?? ''"
-        aria-label="Group to add this factory to"
+        aria-label="Factory to add this production line to"
         @change="picked = ($event.target as HTMLSelectElement).value"
       >
-        <option value="">+ Add to group…</option>
+        <option value="">+ Add to factory…</option>
         <option v-for="group in editor.avail" :key="group.id" :value="group.id">
           {{ group.name }}
         </option></select
       ><button
         class="btn quiet unavailable"
         :data-assign-go="factoryKey"
-        :aria-label="target ? 'Add to ' + target.name : 'Add to a group'"
+        :aria-label="target ? 'Add to ' + target.name : 'Add to a factory'"
         :disabled="!target"
         @click="add"
       >

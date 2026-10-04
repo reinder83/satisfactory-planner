@@ -165,7 +165,7 @@ function editTask(edits: TaskEdits, update: Raw) {
   if (update.link === undefined) return;
   if (update.link === '' || update.link === null) delete edits.links[id];
   else {
-    if (!safeKey(update.link)) fail('Invalid linked factory.');
+    if (!safeKey(update.link)) fail('Invalid linked production line.');
     edits.links[id] = update.link;
   }
 }
@@ -216,19 +216,19 @@ function addGroup(factory: FactoryGroups, update: Raw) {
     factory.groups.some(group => group.id === update.id) ||
     !label(update.name)
   )
-    fail('Invalid factory group.');
-  if (factory.groups.length >= 60) fail('You can keep up to 60 factory groups.');
+    fail('Invalid factory.');
+  if (factory.groups.length >= 60) fail('You can keep up to 60 factories.');
   factory.groups.push({ id: update.id, name: update.name.trim() });
 }
 function renameGroup(factory: FactoryGroups, update: Raw) {
-  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
-  if (!label(update.name)) fail('Invalid group name.');
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory.');
+  if (!label(update.name)) fail('Invalid factory name.');
   // The check above found it.
   factory.groups.find(group => group.id === update.id)!.name = update.name.trim();
 }
 // Removing a group also drops it from every row's assignment list.
 function removeGroup(factory: FactoryGroups, update: Raw) {
-  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory.');
   factory.groups = factory.groups.filter(group => group.id !== update.id);
   for (const [rowKey, list] of Object.entries(factory.assignments)) {
     const kept = list.filter(member => member.group !== update.id);
@@ -253,7 +253,7 @@ function splitLegacyMinesLink(links: Record<string, LinkTransport>, update: Raw)
   if (!sourcePlace(update.from) || !links[legacy]) return;
   const siblings = update.siblings ?? [];
   if (!Array.isArray(siblings) || siblings.length > 200 || !siblings.every(sourcePlace))
-    fail('Invalid factory group link.');
+    fail('Invalid link between factories.');
   for (const sibling of siblings as string[])
     if (sibling !== update.from) links[sibling + ':' + update.to] ??= links[legacy]!;
   delete links[legacy];
@@ -261,7 +261,7 @@ function splitLegacyMinesLink(links: Record<string, LinkTransport>, update: Raw)
 // The transport on the link from one place to another; belts, the default, are not stored.
 function setLinkTransport(factory: FactoryGroups, update: Raw) {
   if (!linkKey(update.from, update.to, new Set(factory.groups.map(group => group.id))))
-    fail('Unknown factory group link.');
+    fail('Unknown link between factories.');
   const key = update.from + ':' + update.to;
   const links = { ...factory.links };
   splitLegacyMinesLink(links, update);
@@ -272,19 +272,19 @@ function setLinkTransport(factory: FactoryGroups, update: Raw) {
       roundTripMin: update.roundTripMin,
       ...(update.fuel === undefined ? {} : { fuel: update.fuel }),
     });
-  if (Object.keys(links).length > 500) fail('You can set up to 500 group links.');
+  if (Object.keys(links).length > 500) fail('You can set up to 500 links between factories.');
   if (Object.keys(links).length) factory.links = links;
   else delete factory.links;
 }
 // The groups a row's machines work in, each with an optional production rate.
 function assignGroups(factory: FactoryGroups, update: Raw) {
   if (!safeKey(update.key) || !Array.isArray(update.groups) || update.groups.length > 12)
-    fail('Invalid factory group assignment.');
+    fail('Invalid factory assignment.');
   const known = new Set(factory.groups.map(group => group.id)),
     used = new Set<string>();
   const list = update.groups.map((member: unknown): GroupAssignment => {
     if (!plain(member) || !known.has(member.group as string) || used.has(member.group as string))
-      fail('Invalid factory group assignment.');
+      fail('Invalid factory assignment.');
     // known holds only group ids, so the check above leaves a string.
     const group = member.group as string;
     used.add(group);
@@ -306,7 +306,7 @@ function assignGroups(factory: FactoryGroups, update: Raw) {
 // app/on-site.ts); here an item only has to be a known one, as validateGroups checks it. The plan
 // is not touched: it changes only in a recalculation the user starts.
 function setLocalItems(factory: FactoryGroups, update: Raw) {
-  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory group.');
+  if (!factory.groups.some(group => group.id === update.id)) fail('Unknown factory.');
   const items: unknown = update.items;
   if (
     !Array.isArray(items) ||

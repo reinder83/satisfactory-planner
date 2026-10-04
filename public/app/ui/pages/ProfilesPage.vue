@@ -381,7 +381,7 @@ async function rename(
   </section>
   <p class="small muted">
     Duplicate copies a profile with its progress so you can try changes without touching the
-    original. Share downloads a file with the plan, storage layout, factory groups and step edits —
+    original. Share downloads a file with the plan, storage layout, factories and step edits —
     without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
     save or profile with ✎ beside its name; renaming does not change progress. Profiles keep a
     frozen calculation so later planner updates cannot silently change your targets.

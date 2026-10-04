@@ -279,7 +279,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.factories?.total && !facts.factories.done,
     text: facts =>
-      `${facts.factories.total} factory targets for ${facts.phaseLabel}, none marked running. I shall assume they are shy. Tick them as they come online — the milestone cost guidance reads those ticks.`,
+      `${facts.factories.total} production lines for ${facts.phaseLabel}, none marked running. I shall assume they are shy. Tick them as they come online — the milestone cost guidance reads those ticks.`,
   },
   {
     id: 'factories-part',
@@ -290,7 +290,7 @@ const RULES: AdaRule[] = [
       facts.factories.done &&
       facts.factories.done < facts.factories.total,
     text: facts =>
-      `${facts.factories.done} of ${facts.factories.total} factory targets marked running. The other ${facts.factories.total - facts.factories.done} remain, technically, a diagram.`,
+      `${facts.factories.done} of ${facts.factories.total} production lines marked running. The other ${facts.factories.total - facts.factories.done} remain, technically, a diagram.`,
   },
   // Build-so-far (#66): what the factories marked running actually deliver, from facts.build.
   {
@@ -307,7 +307,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.build?.built && !facts.build.share && facts.build.next,
     text: facts =>
-      `${facts.build!.built} ${facts.build!.built === 1 ? 'factory' : 'factories'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
+      `${facts.build!.built} ${facts.build!.built === 1 ? 'production line' : 'production lines'} marked running, and not one Space Elevator part moves yet. The chain is missing a link: ${facts.build!.next}.`,
   },
   {
     id: 'build-next',
@@ -390,7 +390,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
-      `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines factory groups make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
+      `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines your factories make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
   },
   {
     id: 'recycle-byproducts',
@@ -415,8 +415,8 @@ const RULES: AdaRule[] = [
     when: facts => facts.onSitePending,
     text: facts =>
       (facts.onSiteLinesOnly
-        ? "What your factory groups' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
-        : 'What your factory groups make on site differs from this plan, and this plan has not been told yet. ') +
+        ? "What your factories' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
+        : 'What your factories make on site differs from this plan, and this plan has not been told yet. ') +
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
   },
   {
@@ -445,7 +445,7 @@ const RULES: AdaRule[] = [
     text: facts =>
       `Last full backup: ${plural(facts.backupDays!, 'day')} ago. Not an emergency. Merely a slowly closing window.`,
   },
-  // Page-specific hints: the profile list, factory groups, the wizard and Resources.
+  // Page-specific hints: the profile list, factories, the wizard and Resources.
   {
     id: 'one-profile',
     on: ['profiles'],
@@ -460,7 +460,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.view === 'factories' && !facts.groups,
     text: () =>
-      `No factory groups, so every factory officially lives in the same place: everywhere. Group them by build site and the build order becomes readable.`,
+      `No factories, so every production line officially lives in the same place: everywhere. Sort them into factories by build site and the build order becomes readable.`,
   },
   {
     id: 'wizard',
@@ -620,7 +620,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.groupedSteps,
     text: () =>
-      'The production steps follow your factory groups: one site as far as its suppliers allow, then the next. Fewer trips across the map. The belts between sites remain exactly as long.',
+      'The production steps follow your factories: one site as far as its suppliers allow, then the next. Fewer trips across the map. The belts between sites remain exactly as long.',
   },
   {
     id: 'groups-some',
@@ -628,7 +628,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => facts.groups > 0,
     text: facts =>
-      `${plural(facts.groups, 'factory group')} on record. Open Build order on a group to see which supplier has to exist before the rest of it does anything at all.`,
+      `${facts.groups} ${facts.groups === 1 ? 'factory' : 'factories'} on record. Open Build order on a factory to see which supplier has to exist before the rest of it does anything at all.`,
   },
   {
     id: 'assumptions',

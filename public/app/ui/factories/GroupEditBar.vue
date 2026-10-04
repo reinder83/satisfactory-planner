@@ -1,4 +1,4 @@
-<!-- The sticky "Editing groups · Done editing" bar (ui/EditBar.vue, SP-13) while the factories
+<!-- The sticky "Editing factories · Done editing" bar (ui/EditBar.vue, SP-13) while the factories
      pages' groups are edited; Done does what EditGroupsToggle's Done does, waiting while a
      "Made on site" choice is not saved (finishGroupEditing in ui/actions.ts, #930). -->
 <script setup lang="ts">
@@ -14,7 +14,7 @@ const editing = computed(() => legacy(() => factoryEditing));
 <template>
   <EditBar
     v-if="editing"
-    label="Editing groups"
+    label="Editing factories"
     toggle="[data-toggle-factory-edit]"
     :done="finishGroupEditing"
   />

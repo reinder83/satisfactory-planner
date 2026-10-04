@@ -147,12 +147,38 @@ export function focusSection(section: HTMLElement) {
 // returns to where the user was (#917), as closing the build-order dialog it replaced did:
 // focus goes to that group's "Build order →", brought into view. When the group has no such
 // link any more (removed, down to one factory, groups being edited), the heading takes it.
+// A build-plan step's "Open factory: <name> →" (#1047) aims the flow page it opens at the step's
+// line (aimFlowLine): its card's name link takes focus, brought into view, in place of the
+// heading.
 export function focusOpenedPage(from = '') {
+  const aim = takeFlowAim();
   if (!lost()) return;
-  const link = flowLinkOf(from);
+  const link = flowLinkOf(from) ?? aimedLine(aim);
   if (!link) return focusHeading();
   link.focus({ preventScroll: true });
   link.scrollIntoView({ block: 'center' });
+}
+
+// The line a link to a factory's flow page asks that page to focus (#1047): { group, line }.
+// The next page change uses it or drops it, whatever page that is, and it counts only on that
+// group's flow page.
+let flowAim: { group: string; line: string } | null = null;
+export function aimFlowLine(group: string, line: string) {
+  flowAim = { group, line };
+}
+function takeFlowAim() {
+  const aim = flowAim;
+  flowAim = null;
+  return aim;
+}
+// The name link of the aimed line's card, when the page drawn is that group's flow page.
+function aimedLine(aim: { group: string; line: string } | null) {
+  if (!aim || flowGroupOf(location.hash.slice(1)) !== aim.group) return undefined;
+  return (
+    document.querySelector<HTMLElement>(
+      `#main .gf-card[data-line="${CSS.escape(aim.line)}"] .rail-link`,
+    ) ?? undefined
+  );
 }
 
 // The "Build order →" link on the page shown that opens the flow page at `route`, if any.

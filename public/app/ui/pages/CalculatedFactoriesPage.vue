@@ -161,7 +161,7 @@ async function roundUp(event: Event) {
   const confirmed = await confirmAction({
     title: 'Round up production?',
     body:
-      'Creates a recalculated profile revision that prefers extra production over underclocking. Your previous profile stays available; increased factory requirements are marked for review.' +
+      'Creates a recalculated profile revision that prefers extra production over underclocking. Your previous profile stays available; increased production line requirements are marked for review.' +
       // A transcribed handbook says so first (#480).
       (isTranscribed(calculated) ? ' ' + RESOLVE_WARNING : ''),
     confirmLabel: 'Round up production',
@@ -183,7 +183,7 @@ async function roundUp(event: Event) {
       toast(
         'Created rounded profile. ' +
           reply.reviewCount +
-          ' completed factory checks need review; previous progress is preserved.',
+          ' completed production line checks need review; previous progress is preserved.',
       );
       void refocus();
     } catch (error) {
@@ -196,13 +196,13 @@ async function roundUp(event: Event) {
 
 <template>
   <template v-if="page && milestones">
-    <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factory targets" />
+    <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factories" />
     <MilestoneOnlyNotice />
   </template>
   <template v-else-if="page">
     <PageHeader
       eyebrow="CALCULATED PRODUCTION"
-      title="Factory targets"
+      title="Factories"
       subtitle="Each recipe line includes its inputs, whole buildings and later expansion. Multiple recipes for a part can share one site."
     />
     <GroupEditBar />
@@ -220,7 +220,7 @@ async function roundUp(event: Event) {
       <input
         id="factory-search"
         class="search"
-        aria-label="Find a factory"
+        aria-label="Find a production line"
         placeholder="Find a part or recipe…"
         :value="page.query"
         @input="search"
@@ -255,10 +255,10 @@ async function roundUp(event: Event) {
     </div>
     <CompletionModules v-if="page.post" :modules="page.completion" />
     <p v-if="page.grouped" class="small muted" data-logistics-link>
-      What each group sends the others, and by which belt, pipe or vehicle, is on
+      What each factory sends the others, and by which belt, pipe or vehicle, is on
       <a href="#logistics">Logistics</a>.
     </p>
   </template>
   <!-- No calculated plan open: only the heading, and nothing reads a plan that is not there. -->
-  <PageHeader v-else eyebrow="CALCULATED PRODUCTION" title="Factory targets" />
+  <PageHeader v-else eyebrow="CALCULATED PRODUCTION" title="Factories" />
 </template>

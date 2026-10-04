@@ -164,8 +164,8 @@ const page = computed(() =>
         <p v-else class="small muted">
           Start with construction stock and currently available power. Mark HUB, MAM and recipe
           unlocks as you complete them; these carry across phases. Milestone cost guidance updates
-          from factories marked running. Full-phase factory targets follow the startup and unlock
-          steps.
+          from production lines marked running. Full-phase production lines follow the startup and
+          unlock steps.
         </p>
         <Checklist />
         <AddTaskForm placeholder="Add a task…" />

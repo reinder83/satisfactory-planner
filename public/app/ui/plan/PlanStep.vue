@@ -1,27 +1,42 @@
 <!--
   One step of the build-plan checklist. Its checkbox writes the step's saved checklist key
-  (toggleCheck in ui/actions.ts, which the storage page's checklists use too); its
-  "Open factory" link is a factoryLink(). In edit mode it adds move, edit and remove tools. `step` is a row from
+  (toggleCheck in ui/actions.ts, which the storage page's checklists use too). A step linked to a
+  production line has "Production line ↗", a factoryLink() to the line's dialog, and, when the
+  line is in a factory, "Open factory: <name> →" before it, a link to that factory's flow page
+  (#1047): the factory the build plan builds the line with (StepFactory in tasks.ts), aimed at
+  the line's card there; a line split over several places says so under the links. In edit
+  mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark. The lead step
   (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done.
 -->
 <script setup lang="ts">
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { holdUnsavedChoices, save } from '../../api.ts';
-import { phase, setEditingTask } from '../../session.ts';
+import { flowRoute, phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { removeStepBody } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
+import { listNames } from '../../../wording.ts';
 import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
-import { refocusAfterRemoval, refocusOn } from '../refocus.ts';
+import { aimFlowLine, refocusAfterRemoval, refocusOn } from '../refocus.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(
   defineProps<{ step: PlanStepView; editing?: boolean; lead?: boolean }>(),
   { editing: false, lead: false },
 );
+
+// "Open factory: <name> →" is a real link, so it opens in a new tab too; followed here, the flow
+// page it opens focuses this step's line (aimFlowLine in ui/refocus.ts).
+const splitId = computed(() => 'step-split-' + props.step.id);
+function aimLine(event: MouseEvent) {
+  const link = props.step.link;
+  if (!link?.factory || event.button !== 0) return;
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  aimFlowLine(link.factory.id, link.id);
+}
 
 // Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42),
 // so its row is drawn anew and focus would fall to <body>. Ticked, focus goes to the same
@@ -196,12 +211,29 @@ async function deletePersonal(event: Event) {
         @click="markDone"
       >
         Mark done</button
+      ><a
+        v-if="step.link?.factory"
+        :class="['btn', lead ? '' : 'quiet', 'task-link']"
+        :href="'#' + flowRoute(step.link.factory.id)"
+        :data-step-factory="step.link.factory.id"
+        :aria-describedby="step.link.factory.others.length ? splitId : undefined"
+        @click="aimLine"
+      >
+        Open factory: {{ step.link.factory.name }} →</a
       ><button
         v-if="step.link"
         :class="['btn', lead ? '' : 'quiet', 'task-link']"
         v-bind="factoryLink({ calcFactory: step.link.id })"
+        :aria-label="'Production line: ' + step.link.name"
       >
-        Open factory: {{ step.link.name }} ↗</button
+        Production line ↗</button
+      ><span
+        v-if="step.link?.factory?.others.length"
+        :id="splitId"
+        class="small muted task-split"
+        data-step-split
+        >Split over {{ listNames([step.link.factory.name, ...step.link.factory.others]) }}; this
+        step builds it with {{ step.link.factory.name }}.</span
       ><button
         v-if="step.custom && !editing"
         class="delete-task"

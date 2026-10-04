@@ -56,7 +56,7 @@ test('the navigation lists Notes between Power & resources and Backup (#243)', (
       ['#plan', '◫Build plan'],
       ['#factories', '▥Factories'],
       // The profile has no factory groups yet, so Logistics says what it needs (SP-09).
-      ['#logistics', '⇄Logisticsneeds factory groups'],
+      ['#logistics', '⇄Logisticsneeds factories'],
       ['#storage', '▦Storage room'],
       ['#resources', '↗Power & resources'],
       ['#notes', '✎Notes'],
@@ -398,7 +398,7 @@ test('Logistics is dimmed with its reason until there is something to show (SP-0
   render();
   await nextTick();
   assert.ok(link().classList.contains('dim'));
-  assert.equal(reason(), 'needs factory groups');
+  assert.equal(reason(), 'needs factories');
   assert.equal(link().querySelector('.nav-needs')!.getAttribute('aria-hidden'), 'true');
   // With groups: a normal link, no reason.
   openProfile({

@@ -313,8 +313,9 @@ test('the lead step offers its factory; search, Hide completed and editing still
   await nextTick();
   assert.equal(leadId(), ids[linked]);
   const link = $('#main .task.lead .task-link')!;
-  assert.match(link.textContent, /^\s*Open factory: /);
-  assert.ok(!link.classList.contains('quiet'), 'a full button on the lead step');
+  assert.match(link.textContent, /^\s*(Open factory: .* →|Production line ↗)\s*$/);
+  for (const each of $$('#main .task.lead .task-link'))
+    assert.ok(!each.classList.contains('quiet'), 'full buttons on the lead step');
   assert.ok($('#main .task.lead [data-mark-done]'));
   // The search looks in both groups; a completed match shows under Done.
   $<HTMLInputElement>('#plan-search')!.value = tasks[0]!.title;
@@ -410,9 +411,13 @@ test('edits show on the plan, and edit mode offers tools, removed steps and the 
   assert.ok(!steps().includes('phase-3-survey'), 'removed steps disappear from the plan');
   assert.equal($('[data-task="phase-3-iron"] summary')!.textContent, evil);
   assert.equal(
+    $(`.task-link[data-calc-factory="${wire}"]`)!.getAttribute('aria-label'),
+    'Production line: Wire',
+    'linked steps offer the production line',
+  );
+  assert.equal(
     $(`.task-link[data-calc-factory="${wire}"]`)!.textContent.trim(),
-    'Open factory: Wire ↗',
-    'linked steps offer the factory',
+    'Production line ↗',
   );
   assert.ok($('[data-remove="custom-1"]'), 'a personal task can be deleted');
   assert.equal($('[data-move-task]'), null);
@@ -574,7 +579,7 @@ test('a cleared step title restores the original, and an automatic link can be r
     body: '',
     link: '',
   });
-  // A calculated step links to its own row; "No linked factory" is saved as '-'.
+  // A calculated step links to its own row; "No linked production line" is saved as '-'.
   const row = generated.stages['3'].rows![0]!,
     id = 'calc-3-' + row.id;
   open({ calculated: generated });

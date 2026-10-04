@@ -8,7 +8,7 @@ import NoteBox from '../NoteBox.vue';
 
 withDefaults(defineProps<{ noteKey: string; label?: string; ariaLabel?: string }>(), {
   label: '',
-  ariaLabel: 'Factory notes',
+  ariaLabel: 'Production line notes',
 });
 </script>
 

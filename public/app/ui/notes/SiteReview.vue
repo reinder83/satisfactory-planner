@@ -28,9 +28,9 @@ const entries = computed(() =>
     <h2 id="site-review-title">Ticks kept for review</h2>
     <p class="small muted">
       When this plan was calculated, these lines were ticked in the profile it came from. Their
-      machines are now split differently between the factory groups' own lines and the central
-      lines, so the ticks were not moved to any one line. Tick the lines that stand in your world;
-      nothing on this list is deleted.
+      machines are now split differently between the factories' own lines and the central lines, so
+      the ticks were not moved to any one line. Tick the lines that stand in your world; nothing on
+      this list is deleted.
     </p>
     <ul class="unplaced-list">
       <li v-for="entry in entries" :key="entry.key" :data-site-review-check="entry.key">

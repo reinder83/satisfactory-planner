@@ -51,7 +51,7 @@ beforeEach(async () => {
 for (const [where, control] of [
   ['the Step title field', '[name=title]'],
   ['the Details field', '[name=body]'],
-  ['the Linked factory list', '[name=link]'],
+  ['the Linked production line list', '[name=link]'],
   ['the Save step button', '[type=submit]'],
   ['the Cancel button', '[data-cancel-task-edit]'],
 ] as const) {

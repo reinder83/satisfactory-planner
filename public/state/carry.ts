@@ -64,12 +64,12 @@ export const carryOptions: [key: string, label: string, description: string][] =
   ],
   [
     'planEdits',
-    'Build-plan edits and factory groups',
-    'Renamed, reordered and removed steps, plus your factory group names.',
+    'Build-plan edits and factories',
+    'Renamed, reordered and removed steps, plus your factories and their names.',
   ],
   [
     'factories',
-    'Factory progress for unchanged lines',
+    'Progress on unchanged production lines',
     'Production lines stay ticked where the new plan needs no more machines and no more input.',
   ],
   [

@@ -4843,12 +4843,19 @@ button.rail-tile:hover {
     min-height: 44px;
   }
 }
+/* "Open factory: … →" and "Production line ↗" under a step (#1047): side by side, wrapping onto
+   a second row on a narrow screen. */
 .task-link {
   display: inline-block;
-  margin-top: 8px;
+  margin: 8px 14px 0 0;
 }
-/* On a phone "Open factory: … ↗" under a step is a 44px touch target (#749). Height only: the
-   link is already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
+/* The note under them for a line split over several factories. */
+.task-split {
+  display: block;
+  margin-top: 6px;
+}
+/* On a phone each link under a step is a 44px touch target (#749). Height only: the link is
+   already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
 @media (max-width: 720px) {
   .task-link {
     display: inline-flex;

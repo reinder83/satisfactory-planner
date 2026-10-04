@@ -77,7 +77,7 @@ const frame = computed(() =>
       logistics: !calculated
         ? 'needs a calculated plan'
         : !factoryGroupsState().groups.length
-          ? 'needs factory groups'
+          ? 'needs factories'
           : '',
     } as Record<string, string>,
     // The empty workspace's placeholder save has no id; the breadcrumb says so as the status does.

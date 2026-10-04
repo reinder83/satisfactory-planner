@@ -30,7 +30,7 @@ const typeRate = async (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event('input'));
   await nextTick();
 };
-const NOTE = 'Under 0.001/min: so small this group may not count it.';
+const NOTE = 'Under 0.001/min: so small this factory may not count it.';
 
 async function editGroups(rate: number) {
   const wire = migratedRow('wire');
@@ -126,6 +126,6 @@ test('a generator’s field keeps its unit and adds the note in MW', async () =>
   await nextTick();
   assert.deepEqual(described(field(coal.id, 'fg-power')), [
     'MW',
-    'Under 0.001 MW: so small this group may not count it.',
+    'Under 0.001 MW: so small this factory may not count it.',
   ]);
 });

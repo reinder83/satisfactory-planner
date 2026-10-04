@@ -93,8 +93,8 @@ const printPage = () => window.print();
 <template>
   <template v-if="page">
     <PageHeader
-      eyebrow="FACTORY GROUP · BUILD ORDER"
-      :title="page.name ?? 'Factory group'"
+      eyebrow="FACTORY · BUILD ORDER"
+      :title="page.name ?? 'Factory'"
       :subtitle="
         page.flow?.lines.length
           ? `${page.phase} · ${page.flow.lines.length} ${page.flow.lines.length === 1 ? 'line' : 'lines'} in the order to build them, with what each one feeds.`
@@ -109,15 +109,15 @@ const printPage = () => window.print();
     </div>
     <MilestoneOnlyNotice />
     <p v-if="!page.milestones && page.name === null" class="notice warn" data-gf-missing>
-      This profile has no factory group at this address. It may have been removed or renamed on the
+      This profile has no factory at this address. It may have been removed or renamed on the
       Factories page.
     </p>
     <p v-else-if="page.flow && !page.flow.lines.length" class="small muted" data-gf-empty>
-      No factories from this group produce anything in {{ page.phase }}.
+      No production lines of this factory produce anything in {{ page.phase }}.
     </p>
     <template v-else-if="page.flow && names">
       <p v-if="styles.size" class="small muted gf-key" data-gf-key>
-        <span>Lanes inside the group:</span>
+        <span>Lanes inside the factory:</span>
         <span v-for="[item, style] in styles" :key="item" class="gf-key-item"
           ><svg class="gf-swatch" width="22" height="8" aria-hidden="true">
             <line
@@ -178,7 +178,7 @@ const printPage = () => window.print();
       <FlowPorts id="gf-out-h" title="Leaves" :ports="page.flow.outs" :fold="page.flow.fold" />
       <FlowTable :flow="page.flow" :names="names" />
       <p v-if="page.flow.split" class="small muted">
-        Split lines show this group's share of their machines and rates.
+        Split lines show this factory's share of their machines and rates.
       </p>
     </template>
   </template>

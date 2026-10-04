@@ -50,7 +50,7 @@ const view = computed(() =>
       waiting: waiting.slice(0, MAX_WAITING),
       more: Math.max(0, waiting.length - MAX_WAITING),
       power: status.power.short
-        ? `The built factories draw ${power(status.power.drawMW)}, more than the ${power(status.power.supplyMW)} from built generators and the spare power you listed.`
+        ? `The built production lines draw ${power(status.power.drawMW)}, more than the ${power(status.power.supplyMW)} from built generators and the spare power you listed.`
         : '',
     };
   }),
@@ -61,8 +61,8 @@ const view = computed(() =>
   <section v-if="view" class="panel build-status" data-build-status>
     <h2>Built so far</h2>
     <p class="small muted">
-      {{ view.built }} of {{ view.total }} factories marked running. Raw resources count as mined;
-      the rest follows from what is built.
+      {{ view.built }} of {{ view.total }} production lines marked running. Raw resources count as
+      mined; the rest follows from what is built.
     </p>
     <div v-for="delivery in view.delivery" :key="delivery.item" class="delivery">
       <label>{{ delivery.item }}</label>
@@ -81,7 +81,9 @@ const view = computed(() =>
         {{ view.next.name }}</button
       >, which {{ view.next.why }}.
     </p>
-    <p v-else class="small" data-build-next>Every factory of this phase is marked running.</p>
+    <p v-else class="small" data-build-next>
+      Every production line of this phase is marked running.
+    </p>
     <div v-if="view.waiting.length" class="notice warn" data-build-waiting>
       <b>Built but waiting on a supplier</b>
       <ul>

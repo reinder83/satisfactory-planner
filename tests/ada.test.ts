@@ -134,7 +134,7 @@ test('ADA counts the same progress the pages show', () => {
   assert.match(
     adaRemarks(facts({ factories: { done: 0, total: 6 } })).find(r => r.id === 'factories-none')!
       .text,
-    /6 factory targets for Phase 3, none marked running/,
+    /6 production lines for Phase 3, none marked running/,
   );
 });
 
@@ -212,7 +212,7 @@ test('ADA notices the states that are not just a number', () => {
   assert.match(
     adaRemarks(facts({ view: 'plan', groupedSteps: true })).find(r => r.id === 'grouped-steps')!
       .text,
-    /follow your factory groups/,
+    /follow your factories/,
   );
   assert.ok(
     !ids(facts({ view: 'plan' })).includes('grouped-steps'),
@@ -220,7 +220,7 @@ test('ADA notices the states that are not just a number', () => {
   );
   assert.match(
     adaRemarks(facts({ groups: 3 })).find(r => r.id === 'groups-some')!.text,
-    /3 factory groups on record/,
+    /3 factories on record/,
   );
   assert.match(
     adaRemarks(facts({ assumptions: 4 })).find(r => r.id === 'assumptions')!.text,
@@ -366,7 +366,7 @@ test('ADA reads the build-so-far status: held-back rows, nothing flowing, the ne
   assert.ok(dry.includes('build-dry'));
   assert.match(
     adaRemarks(facts({ build: build() })).find(r => r.id === 'build-dry')!.text,
-    /3 factories marked running, and not one Space Elevator part moves yet[^]*Steel Beam/,
+    /3 production lines marked running, and not one Space Elevator part moves yet[^]*Steel Beam/,
   );
   // Some flowing: the best next step and what it adds.
   const flowing = adaRemarks(facts({ build: build({ share: 40, nextGain: 20 }) }));
@@ -453,14 +453,11 @@ test("ADA words a pending recalculation for a group's lines, not its marks, as t
       r => r.id === 'on-site-pending',
     )!.text;
   const lines = remark({ onSiteLinesOnly: true });
-  assert.match(lines, /^What your factory groups' lines use changed/);
+  assert.match(lines, /^What your factories' lines use changed/);
   assert.doesNotMatch(lines, /differs from this plan/);
   assert.match(lines, /Nothing recalculates by itself/);
-  assert.match(
-    remark({ onSiteLinesOnly: false }),
-    /^What your factory groups make on site differs/,
-  );
-  assert.match(remark({}), /^What your factory groups make on site differs/);
+  assert.match(remark({ onSiteLinesOnly: false }), /^What your factories make on site differs/);
+  assert.match(remark({}), /^What your factories make on site differs/);
 });
 
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {

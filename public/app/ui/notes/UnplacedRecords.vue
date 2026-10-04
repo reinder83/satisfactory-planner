@@ -60,7 +60,7 @@ const records = computed(() =>
     const assignments: Entry[] = Object.entries(unmapped?.assignments || {}).map(([key, list]) => ({
       key,
       what: key,
-      value: groupsText(list) || 'No group',
+      value: groupsText(list) || 'No factory',
     }));
     const count = checks.length + notes.length + assignments.length;
     return count ? { checks, notes, assignments } : null;
@@ -94,7 +94,7 @@ const records = computed(() =>
       </ul>
     </template>
     <template v-if="records.assignments.length">
-      <h3>Factory groups</h3>
+      <h3>Factories</h3>
       <ul class="unplaced-list">
         <li
           v-for="entry in records.assignments"

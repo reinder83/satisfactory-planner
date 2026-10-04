@@ -55,7 +55,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
       :value="settings.recipes"
     />
     <SelectField
-      label="Ingot factories"
+      label="Ingot lines"
       name="pureIngots"
       :options="INGOTS"
       :value="String(settings.pureIngots)"
