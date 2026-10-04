@@ -14,7 +14,8 @@ import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
 import { factoryLink } from '../actions.ts';
-import type { FlowModel, FlowOutput } from '../../flow.ts';
+import { listNames } from '../../../wording.ts';
+import type { BankNote, FlowModel, FlowOutput, SupplyNote } from '../../flow.ts';
 
 const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model: null });
 
@@ -37,6 +38,38 @@ const caption = (output: FlowOutput) =>
 // fluid unit's leading space becomes a no-break space, as itemRate() in flow.ts writes it, so a
 // long fluid rate keeps its unit beside the number (#364); .rail-rate is nowrap as well.
 const unitText = (unit: string | undefined) => (unit || '/min').replace(/^ /, '\u00a0');
+
+// The bank note's ", supplied together with ..." (flow.ts SupplyNote): "the other recipes
+// producing it", or "the other lines making it" when one of them follows this line's recipe (a
+// group's copy of it), and what is left over from the lines made on site for groups that offer
+// their excess since a group edit (#1002). `many`: the note speaks of several items.
+function suppliedWith(note: SupplyNote, many = false): string {
+  const it = many ? 'them' : 'it';
+  const leftover = note.leftover;
+  const parts = [
+    ...(note.shared
+      ? [note.sameRecipe ? `the other lines making ${it}` : `the other recipes producing ${it}`]
+      : []),
+    ...(leftover
+      ? [
+          `what is left over from the line${leftover.lines > 1 ? 's' : ''} made on site for ${listNames(leftover.groups)}`,
+        ]
+      : []),
+  ];
+  return parts.length ? ', supplied together with ' + parts.join(' and ') : '';
+}
+
+// An own line's sentence for its outputs its group does not mark, such as a byproduct (#1001):
+// they go to the demand for them across the whole plan, as any other line's do. It goes before
+// the note's last full stop, with the full stop of the sentence before it, so the template's text
+// after it still ends the paragraph as before (Vue drops a last text node of whitespace alone).
+// Empty without such outputs.
+function planWideText(note: BankNote): string {
+  const planWide = note.planWide;
+  if (!planWide) return '';
+  const many = planWide.items.length > 1;
+  return `. ${listNames(planWide.items)} ${many ? 'go' : 'goes'} to the demand for ${many ? 'them' : 'it'} across this phase's whole plan${planWide.lessOnSite ? ', less what factory groups make on site' : ''}${suppliedWith(planWide, many)}`;
+}
 
 const flow = computed(() => {
   const model = props.model;
@@ -163,22 +196,27 @@ const flow = computed(() => {
         Made on site for {{ flow.model.bankNote.ownLine }}'s lines{{
           flow.model.bankNote.shared ? ', together with the group’s other lines making it' : ''
         }}, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and
-        the rest goes to the other places that ask for it.
+        the rest goes to the other places that ask for it{{ planWideText(flow.model.bankNote) }}.
+      </p>
+      <p
+        v-else-if="flow.model.bankNote?.ownLine && flow.model.bankNote.asksNone"
+        class="small muted"
+      >
+        Made on site for {{ flow.model.bankNote.ownLine }}'s lines, which now ask for none of it:
+        all of it goes to the AWESOME Sink{{ planWideText(flow.model.bankNote) }}.
       </p>
       <p v-else-if="flow.model.bankNote?.ownLine" class="small muted">
         Demand of {{ flow.model.bankNote.ownLine }}'s lines, which this line makes the item for on
         site{{
           flow.model.bankNote.shared ? ' together with the group’s other lines making it' : ''
-        }}; what it makes beyond that goes to the AWESOME Sink.
+        }}; what it makes beyond that goes to the AWESOME Sink{{
+          planWideText(flow.model.bankNote)
+        }}.
       </p>
       <p v-else-if="flow.model.bankNote" class="small muted">
         Demand for the item across this phase's whole plan{{
           flow.model.bankNote.lessOnSite ? ', less what factory groups make on site' : ''
-        }}{{
-          flow.model.bankNote.shared
-            ? ', supplied together with the other recipes producing it'
-            : ''
-        }}.
+        }}{{ suppliedWith(flow.model.bankNote) }}.
       </p></template
     >
   </template>
