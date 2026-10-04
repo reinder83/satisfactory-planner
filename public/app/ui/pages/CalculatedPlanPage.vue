@@ -44,6 +44,23 @@ import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
 
+// What Phase 5's Alien Power Augmenters add to a stage's power: their 500 MW each and their boost
+// on new and installed generation, which the planner counts into availableMW. The Resources
+// page's bar shows the same figure as "Augmenter boost" (#1050 review).
+function augmenterBoost(
+  stagePlan: { augmenters?: number; availableMW?: number; generationMW?: number },
+  settings: { availablePowerGW: number },
+): number {
+  return (stagePlan.augmenters ?? 0) > 0
+    ? Math.max(
+        0,
+        (stagePlan.availableMW ?? 0) -
+          (stagePlan.generationMW || 0) -
+          settings.availablePowerGW * 1000,
+      )
+    : 0;
+}
+
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
 const page = computed(() =>
@@ -83,10 +100,14 @@ const page = computed(() =>
             {
               key: 'power',
               href: '#resources',
-              // The new generation, and the spare existing power it adds to (#1048), as the
-              // Resources page's bar names them; the power step says what the phase needs.
+              // The new generation, what Phase 5's augmenters add and the spare existing power
+              // (#1048), as the Resources page's bar names and sums them; the power step says
+              // what the phase needs.
               text:
                 `${power(stagePlan.generationMW)} new power` +
+                (augmenterBoost(stagePlan, calculated.settings) > 0.01
+                  ? ` + ${power(augmenterBoost(stagePlan, calculated.settings))} augmenter boost`
+                  : '') +
                 (calculated.settings.availablePowerGW > 0
                   ? ` + ${power(calculated.settings.availablePowerGW * 1000)} existing spare power`
                   : ''),

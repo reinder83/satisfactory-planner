@@ -52,3 +52,20 @@ test('without spare power the summary is the new power alone, as before', () => 
   render();
   assert.equal(summaryPower(), `${power(plan.stages['3'].generationMW)} new power`);
 });
+
+test('with augmenters the summary adds their boost, as the Resources bar does (#1050 review)', () => {
+  const plan = generated();
+  const stage = plan.stages['3'];
+  plan.settings.availablePowerGW = 20;
+  plan.settings.installedPowerGW = 40;
+  // What the augmenters add on top of the new generation and the spare power, as availableMW
+  // holds it: 3 GW here.
+  stage.augmenters = 2;
+  stage.availableMW = (stage.generationMW || 0) + 20000 + 3000;
+  open({ calculated: plan });
+  render();
+  assert.equal(
+    summaryPower(),
+    `${power(stage.generationMW)} new power + 3 GW augmenter boost + 20 GW existing spare power`,
+  );
+});

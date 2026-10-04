@@ -549,7 +549,7 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
     id: 'startup-' + context.stage + '-power-review',
     title: 'Power available now',
     body:
-      figures.existingMW > 0 && context.stage >= 2
+      figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
         ? existingPowerText(context, figures, unlocked)
         : unlockText(context, figures, unlocked),
   };
@@ -557,13 +557,17 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
 
 // A phase's power as the planner solved it (planner/stage.ts), in MW: what it needs (its
 // whole-machine peak with the utility allowance, requiredMW), the spare existing power the
-// settings enter (availablePowerGW, as the Resources page's bar shows it), the new generation its
-// generator lines build (generationMW, the build plan's "new power") and what is left once the
-// need is met (availableMW less requiredMW; negative when short). The generator lines come
-// highest source first (SOURCE_ORDER).
+// settings enter (availablePowerGW, as the Resources page's bar shows it), what Phase 5's Alien
+// Power Augmenters add to it (their 500 MW each and their boost on installed generation), the
+// new generation its generator lines build with the augmenters' boost, and what is left once the
+// need is met (availableMW less requiredMW; negative when short). These split availableMW the way
+// stageSupply in app/build-status.ts does, so the text matches the plan as solved (#1050 review).
+// The generator lines come highest source first (SOURCE_ORDER).
 interface PhasePowerFigures {
   requiredMW: number;
   existingMW: number;
+  augmenters: number;
+  augmenterMW: number;
   newMW: number;
   leftMW: number;
   generators: CalcRow[];
@@ -576,12 +580,15 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
   const planned = stageOf(stage),
     existingMW = (plan.settings.availablePowerGW || 0) * 1000,
     requiredMW = planned?.requiredMW || 0,
-    newMW = planned?.generationMW || 0;
+    newMW = (planned?.generationMW || 0) * (1 + (planned?.boost || 0)),
+    augmenters = planned?.augmenters || 0;
   const availableMW = planned?.availableMW ?? newMW + existingMW;
   const rank = (row: CalcRow) => SOURCE_ORDER.indexOf(generatorSource(row));
   return {
     requiredMW,
     existingMW,
+    augmenters,
+    augmenterMW: augmenters > 0 ? Math.max(0, availableMW - newMW - existingMW) : 0,
     newMW,
     leftMW: availableMW - requiredMW,
     period: planned?.nuclearPeriod ?? 0,
@@ -633,22 +640,30 @@ function existingPowerText(
   figures: PhasePowerFigures,
   unlocked: UnlockedPower,
 ): string {
-  const { requiredMW, existingMW, generators } = figures;
-  const have = `You have ${powerAmount(existingMW)} of spare power available`;
+  const { requiredMW, existingMW, augmenters, augmenterMW, generators } = figures;
+  // What the phase has before any new generation: the spare power, and what the augmenters add.
+  const haveMW = existingMW + augmenterMW;
+  const yours = `your ${augmenters === 1 ? 'augmenter adds' : formatNumber(augmenters) + ' augmenters add'} ${powerAmount(augmenterMW)}`;
+  const have =
+    augmenterMW <= 0.01
+      ? `You have ${powerAmount(existingMW)} of spare power available`
+      : existingMW <= 0.01
+        ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
+        : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
   const allowance = `with the ${plan.settings.utilityPercent ?? 20}% utility allowance`;
   const unlock = missingUnlocks(generators, unlocked);
   const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
   const check =
     ' Before connecting the next factory, check the actual load against what your grid supplies.';
-  if (requiredMW - existingMW <= 0.01)
+  if (requiredMW - haveMW <= 0.01)
     return (
-      `${have}, which covers this phase's ${powerAmount(requiredMW)} (${allowance}): ` +
+      `${have}, which ${augmenterMW > 0.01 ? 'cover' : 'covers'} this phase's ${powerAmount(requiredMW)} (${allowance}): ` +
       (generators.length
         ? `nothing needs building for that. The plan still builds ${newGeneration(plan, figures, true)}.${unlockFirst}`
         : 'nothing needs building for power in this phase.') +
       check
     );
-  const more = `${have}. This phase needs ${powerAmount(requiredMW - existingMW)} more (${powerAmount(requiredMW)} in all, ${allowance})`;
+  const more = `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more (${powerAmount(requiredMW)} in all, ${allowance})`;
   if (!generators.length)
     return `${more}, and its plan builds no generators for it: see the power headroom on the Resources page.${check}`;
   return `${more}: build ${newGeneration(plan, figures, false)}.${unlockFirst}${check}`;

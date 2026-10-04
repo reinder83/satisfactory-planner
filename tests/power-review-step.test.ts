@@ -412,3 +412,71 @@ test('the build plan keeps every other step key in its place', () => {
         assert.equal(now.includes(PETROLEUM), phase === '3', where);
       }
 });
+
+// Phase 5's Alien Power Augmenters add their 500 MW each and a boost on installed and new
+// generation, which the plan counts into availableMW. The step splits availableMW as stageSupply
+// in app/build-status.ts does: spare power, what the augmenters add, and the new generation with
+// their boost, so the parts add up to what the plan was solved with (#1050 review).
+const augmenterFigures = (plan: StoredCalculatedPlan) => {
+  const stage = plan.stages['5'];
+  const newMW = (stage.generationMW || 0) * (1 + (stage.boost || 0));
+  const spareMW = plan.settings.availablePowerGW * 1000;
+  return { stage, newMW, spareMW, augmenterMW: stage.availableMW! - newMW - spareMW };
+};
+
+test('Phase 5 with augmenters that, with the spare power, cover the phase: nothing to build', () => {
+  // The review's case: 20 GW spare of 40 GW installed, 10 augmenters.
+  const plan = calculate({
+    phase: '3',
+    availablePowerGW: 20,
+    installedPowerGW: 40,
+    augmenters: 10,
+  });
+  const { stage, newMW, augmenterMW } = augmenterFigures(plan);
+  assert.equal(stage.augmenters, 10);
+  assert.equal(newMW, 0, 'no generator lines');
+  assert.equal(augmenterMW, 50000, '10 × 500 MW plus the boost on the 40 GW installed');
+  assert.equal(
+    review(plan, {}, '5').body,
+    `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(stage.requiredMW!)} (with the 20% utility allowance): nothing needs building for power in this phase.` +
+      CHECK,
+  );
+});
+
+test('Phase 5 with augmenters and new generation: the parts add up to the plan', () => {
+  const plan = calculate({
+    phase: '3',
+    availablePowerGW: 10,
+    installedPowerGW: 10,
+    augmenters: 4,
+  });
+  const { stage, newMW, spareMW, augmenterMW } = augmenterFigures(plan);
+  assert.ok(newMW > 0 && augmenterMW > 0);
+  assert.ok(Math.abs(spareMW + augmenterMW + newMW - stage.availableMW!) < 1e-6);
+  const requiredMW = stage.requiredMW!,
+    leftMW = stage.availableMW! - requiredMW;
+  const body = review(plan, {}, '5').body;
+  assert.ok(
+    body.startsWith(
+      `You have 10 GW of spare power available, and your 4 augmenters add ${gw(augmenterMW)}. This phase needs ${gw(requiredMW - spareMW - augmenterMW)} more (${gw(requiredMW)} in all, with the 20% utility allowance): build its `,
+    ),
+    body,
+  );
+  // The new generation with the augmenters' boost, and what that leaves over or short.
+  assert.ok(body.includes(`, which provides ${gw(newMW)}`), body);
+  assert.ok(
+    body.includes(
+      leftMW >= 0 ? `, ${gw(leftMW)} spare` : `, ${gw(-leftMW)} short of the need: see the power`,
+    ),
+    body,
+  );
+});
+
+test('Phase 5 with augmenters and no spare power: the augmenters are named on their own', () => {
+  const plan = calculate({ phase: '3', availablePowerGW: 0, installedPowerGW: 10, augmenters: 4 });
+  const { augmenterMW } = augmenterFigures(plan);
+  assert.ok(augmenterMW > 0);
+  assert.ok(
+    review(plan, {}, '5').body.startsWith(`Your Alien Power Augmenters add ${gw(augmenterMW)}`),
+  );
+});
