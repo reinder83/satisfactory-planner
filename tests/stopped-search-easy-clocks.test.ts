@@ -60,8 +60,13 @@ function assertBalanced(stage: CurrentStage, label: string) {
     assert.ok(rate > -0.01, `${label}: ${item} is not used faster than it is made (${rate})`);
 }
 
+// #935 lowered Phase 5's power (the Space Elevator parts' Manufacturer and Blender lines), and at
+// the settings of #593 the easy clocks now fit at the exact plan's own time. With 30% more power
+// per machine they slow it again, the case these tests describe.
+const slower = { ...settings, powerFactor: 1.3 };
+
 test('a phase no rounded plan fits gets easy clocks on its last machines (#694)', () => {
-  const plan = withStoppedPhase(settings, 5);
+  const plan = withStoppedPhase(slower, 5);
   const stage = plan.stages['5'];
   assert.equal(stage.feasible, true, 'the phase is planned, not a draft');
   assert.equal(stage.roundedAfterStop, undefined, 'no whole-machine rounding fit');
@@ -98,7 +103,7 @@ test('a phase no rounded plan fits gets easy clocks on its last machines (#694)'
   for (const phase of ['1', '2', '3', '4'] as const)
     assert.equal(plan.stages[phase].fractionalAfterStop, undefined, `Phase ${phase} searched`);
   // Linear solves only: the same plan on every run.
-  assert.deepEqual(withStoppedPhase(settings, 5).stages['5'].rows, stage.rows, 'deterministic');
+  assert.deepEqual(withStoppedPhase(slower, 5).stages['5'].rows, stage.rows, 'deterministic');
 });
 
 test('easy clocks may take longer than the target where they do not fit at it (#701)', () => {

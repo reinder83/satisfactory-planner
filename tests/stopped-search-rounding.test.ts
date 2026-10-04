@@ -157,8 +157,10 @@ test('a line that shares a fluid with another whole line keeps a fractional cloc
 });
 
 test('only lines tied by a fluid are said to share one; the others were raised by their chain (#714)', () => {
-  // Iron Plate and Compacted Coal use no fluid: they reach the raise limit because each line they
-  // feed that is rounded up raises them again. The warning used to say they share a fluid.
+  // Compacted Coal and Rocket Fuel share no fluid with another whole-machine line of this plan:
+  // they reach the raise limit because each line they feed that is rounded up raises them again. The
+  // warning used to say they share a fluid. (Iron Plate was raised too before #935 corrected the
+  // Space Elevator parts' power, which changed this plan's network.)
   const issue = { ...settings, nuclear: 'recycle', multiplier: 1, amplifySloops: 0 };
   const warning = withStoppedPhase(issue, 5).warnings.find(line =>
     line.startsWith('Phase 5: the whole-machine search'),
@@ -167,7 +169,7 @@ test('only lines tied by a fluid are said to share one; the others were raised b
   assert.doesNotMatch(warning, /shares? a fluid/, 'no line is said to share a fluid');
   assert.match(
     warning,
-    /Iron Plate and Compacted Coal kept being rounded up as the lines they feed were rounded, so they keep a fractional clock on the last machine\./,
+    /Compacted Coal and Rocket Fuel kept being rounded up as the lines they feed were rounded, so they keep a fractional clock on the last machine\./,
   );
   // Rubber and Plastic both make Heavy Oil Residue, which balances exactly: Rubber is still said
   // to share a fluid, and Copper Ingot, at the top of the wire chain, is worded apart.
