@@ -59,9 +59,12 @@ export function flowPhaseOf(hash: string): string | null {
 }
 // The hash (without its #) of group `groupId`'s flow page in phase `shown`, the phase on screen
 // unless given, so the page opened in a new tab, bookmarked or reloaded shows that phase's build
-// order (#926).
-export const flowRoute = (groupId: string, shown: Phase = phase()) =>
-  `factories/${encodeURIComponent(groupId)}/flow?phase=${encodeURIComponent(shown)}`;
+// order (#926). Before a profile's state is loaded no phase is on screen, so the address names
+// none: that is still a flow page's address, which leaves the phase shown as it is.
+export function flowRoute(groupId: string, shown: Phase | null = stateLoaded ? phase() : null) {
+  const route = `factories/${encodeURIComponent(groupId)}/flow`;
+  return shown === null ? route : `${route}?phase=${encodeURIComponent(shown)}`;
+}
 // The route a hash names: an unknown one shows the plan. A group's flow page belongs to the
 // factories page, so the sidebar marks Factories.
 export const viewOf = (hash: string): View =>

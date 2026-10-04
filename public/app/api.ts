@@ -228,6 +228,16 @@ export async function post<T = unknown>(
 let shownHash = location.hash;
 let navigating = false;
 
+// Rewrites the address of the page on screen to `route` (the hash without its #), as render()
+// in shell.ts does to keep a group's flow page's address naming the phase shown (#926), and
+// records it as the page on screen, so keeping unsaved notes on a later Back puts this address
+// back rather than the one it replaced (acceptRoute). replaceState adds no history entry and,
+// in a browser, fires no hashchange, so the hashchange listener never records it.
+export function replaceShownRoute(route: string) {
+  history.replaceState(history.state, '', '#' + route);
+  shownHash = location.hash;
+}
+
 // Goes to a route. Changing the hash triggers the hashchange listener in
 // listeners.ts, which renders; an unchanged hash would not, so render directly.
 // A route change from here is not checked for unsaved notes: the callers that leave a page

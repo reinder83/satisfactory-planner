@@ -1,4 +1,5 @@
 // The router that renders the current view into the page frame (ui/Shell.vue).
+import { replaceShownRoute } from './api.ts';
 import { required } from './format.ts';
 import {
   currentSave,
@@ -62,14 +63,15 @@ function drawPage() {
 // address names, when it is a group's flow page (showRoutePhase in session.ts, #926). A flow
 // page's address then names the phase shown, so a new tab, a bookmark or a reload shows it again:
 // after the phase picker or "Go to Phase N" changed it, for an address from before #926, and in
-// place of a phase the address names that the profile does not offer. replaceState adds no
-// history entry and fires no hashchange.
+// place of a phase the address names that the profile does not offer. The rewrite adds no
+// history entry and fires no hashchange, and it becomes the address of the page on screen, which
+// keeping unsaved notes on a later Back puts back (replaceShownRoute in api.ts).
 function routeToDraw(): string {
   const route = location.hash.slice(1);
   if (route !== drawnRoute) showRoutePhase(route);
   const group = flowGroupOf(route);
   if (group === null || !currentSave.id || flowPhaseOf(route) === phase()) return route;
-  const shown = flowRoute(group);
-  history.replaceState(history.state, '', '#' + shown);
+  const shown = flowRoute(group, phase());
+  replaceShownRoute(shown);
   return shown;
 }
