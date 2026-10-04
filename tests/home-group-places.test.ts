@@ -1,6 +1,7 @@
 // A row's home group (homeGroup, the build plan's site) and its places (rowPlaces, the Logistics
 // page and a group's flow) in public/app/group-order.ts agree, also when the row keeps a
-// membership of a removed group (#900). Rows without one keep the home group they had before.
+// membership of a removed group (#900). Rows without one keep the home group they had before,
+// unless no group has a share of them: those are Ungrouped since #942 (home-group-dust.test.ts).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -172,8 +173,7 @@ function generatedRows(withRemoved: boolean, count: number, seed: number) {
 }
 
 // What homeGroup must name for the places rowPlaces gives: the group with the largest share (the
-// first in rowShares' order on a tie); when no group has one, Ungrouped if a removed group's
-// membership takes up a row with a total, else the first membership's place.
+// first in rowShares' order on a tie); when no existing group has a share, Ungrouped (#942).
 function expectedHome(r: CalcRow, groups: GroupsInput): string {
   const shares = [...rowPlaces(r, groups)].filter(
     ([place, share]) => place !== UNGROUPED && share > LINK_DUST,
@@ -182,10 +182,7 @@ function expectedHome(r: CalcRow, groups: GroupsInput): string {
     const top = Math.max(...shares.map(([, share]) => share));
     return shares.find(([, share]) => share >= top - LINK_DUST)![0];
   }
-  const memberships = rowMemberships(r, groups);
-  if (rowTotal(r) > LINK_DUST && memberships.some(m => REMOVED.includes(m.group))) return UNGROUPED;
-  const first = memberships[0]?.group;
-  return first && KNOWN.includes(first) ? first : UNGROUPED;
+  return UNGROUPED;
 }
 
 test('homeGroup names the group rowPlaces gives the largest share, for generated rows', () => {
@@ -201,22 +198,24 @@ test('homeGroup names the group rowPlaces gives the largest share, for generated
         assert.ok((places.get(home) || 0) > LINK_DUST, `${what}: ${home} has a share`);
         for (const [place, share] of groupShares)
           assert.ok(share <= places.get(home)! + LINK_DUST, `${what}: ${place} over ${home}`);
-      } else if (
-        rowTotal(r) > LINK_DUST &&
-        rowMemberships(r, groups).some(m => REMOVED.includes(m.group))
-      )
-        // A removed group's membership never makes the row a group's when no group has a share,
-        // whatever the order of the memberships: rowPlaces puts it in Ungrouped.
+      } else
+        // No group has a share, whatever the order of the memberships: rowPlaces puts the row in
+        // Ungrouped, and so does homeGroup (#942).
         assert.equal(home, UNGROUPED, what);
     }
 });
 
-test('rows without a removed group’s membership keep their home group', () => {
+test('rows without a removed group’s membership keep their home group when a group has a share', () => {
   let changedWithRemoved = 0;
   for (const withRemoved of [false, true])
     for (const { row: r, groups } of generatedRows(withRemoved, 3000, withRemoved ? 7 : 3)) {
       const what = `${r.id} ${JSON.stringify(rowMemberships(r, groups))} of ${rowTotal(r)}`;
-      if (!withRemoved) assert.equal(homeGroup(r, groups), releasedHomeGroup(r, groups), what);
+      // A row no group has a share of (a total of zero here) is Ungrouped since #942.
+      const shared = [...rowPlaces(r, groups)].some(
+        ([place, share]) => place !== UNGROUPED && share > LINK_DUST,
+      );
+      if (!withRemoved && !shared) assert.equal(homeGroup(r, groups), UNGROUPED, what);
+      else if (!withRemoved) assert.equal(homeGroup(r, groups), releasedHomeGroup(r, groups), what);
       else if (homeGroup(r, groups) !== releasedHomeGroup(r, groups)) changedWithRemoved++;
     }
   // The generator does reach the rows #900 is about.
