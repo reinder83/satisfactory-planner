@@ -31,6 +31,7 @@ import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import MachineCells from './MachineCells.vue';
+import RecycleAdvice from './RecycleAdvice.vue';
 import { toggleCheck } from '../actions.ts';
 
 const props = defineProps<{ id: string }>();
@@ -129,6 +130,7 @@ const view = computed(() =>
       generic storage surplus.
     </div>
     <FlowDiagram :model="view.flow" />
+    <RecycleAdvice :id="view.row.id" />
     <h3>Machine setup</h3>
     <MachineCells
       :counts="view.machines.counts"

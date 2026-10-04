@@ -23,6 +23,10 @@ import {
 import { machineLine } from '../../views/factories.ts';
 import { power } from '../../wizard/fields.ts';
 import { factoryLink } from '../actions.ts';
+import { calcStage } from '../../session.ts';
+import { byproductAdvice, inputAdvice, type AdviceLine } from '../../recycle.ts';
+import { recycleContext } from '../../views/calculated.ts';
+import { legacy } from '../bridge.ts';
 
 const props = defineProps<{ line: FlowLine; names: FlowNames; running: boolean; hot: boolean }>();
 
@@ -37,6 +41,21 @@ const machines = computed(() => {
 const fromOutside = (row: FlowRow) =>
   row.links.some(link => link.from.kind === 'place') && !row.links.some(isLaneLink);
 const loops = (row: FlowRow) => row.links.some(link => link.loop);
+// MOCK-UP (#1022, #1024): the dialog's byproduct and Water advice for this line, per item.
+const advice = computed(() =>
+  legacy(() => {
+    const row = calcStage()?.rows?.find(r => r.id === props.line.id);
+    const context = recycleContext();
+    const byItem = { in: new Map<string, string>(), out: new Map<string, string>() };
+    if (!row || !context) return byItem;
+    const text = (line: AdviceLine) =>
+      line.parts.map(part => (typeof part === 'string' ? part : part.text)).join('') +
+      (line.extract ? ' ' + line.extract : '');
+    for (const line of byproductAdvice(row, context)) byItem.out.set(line.item, text(line));
+    for (const line of inputAdvice(row, context)) byItem.in.set(line.item, text(line));
+    return byItem;
+  }),
+);
 </script>
 
 <template>
@@ -60,7 +79,10 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
         <span class="gf-item"
           ><span class="gf-name">← {{ row.item }}</span>
           <small v-if="loops(row)" class="chain-loop">loop · seed a starter batch</small>
-          <small class="muted">{{ sourcesText(row.links, names) }}</small></span
+          <small class="muted">{{ sourcesText(row.links, names) }}</small>
+          <small v-if="advice.in.get(row.item)" class="gf-advice">{{
+            advice.in.get(row.item)
+          }}</small></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b
           ><small>{{ row.belts }}</small></span
@@ -69,7 +91,10 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
       <div v-for="row in line.outputs" :key="row.id" class="gf-row gf-out" :data-row="row.id">
         <span class="gf-item"
           ><span class="gf-name">→ {{ row.item }}</span>
-          <small class="muted">{{ destinationsText(row.links, names) }}</small></span
+          <small class="muted">{{ destinationsText(row.links, names) }}</small>
+          <small v-if="advice.out.get(row.item)" class="gf-advice">{{
+            advice.out.get(row.item)
+          }}</small></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b
           ><small>{{ row.belts }}</small></span

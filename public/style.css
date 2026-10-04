@@ -5844,3 +5844,22 @@ th.resource-cell {
     text-align: left;
   }
 }
+
+/* MOCK-UP (#1022, #1024): the byproduct and Water advice in a factory dialog and on a group's
+   flow page. */
+.recycle-advice p:first-child {
+  margin-top: 0;
+}
+.recycle-advice .rail-link {
+  font-size: 12.5px;
+}
+.gf-advice {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.gf-advice::before {
+  content: '♻ ';
+}

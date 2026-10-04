@@ -6,7 +6,8 @@
 import { groupedRows, groupedSteps } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
-import { itemRate, rateOfItem } from '../flow.ts';
+import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
+import { adviceText, byproductAdvice, inputAdvice, type RecycleContext } from '../recycle.ts';
 import { num } from '../format.ts';
 import {
   calcStage,
@@ -19,7 +20,7 @@ import {
   state,
 } from '../session.ts';
 import { power } from '../wizard/fields.ts';
-import { siteGroupName } from './factories.ts';
+import { factoryGroupsState, siteGroupName } from './factories.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -75,7 +76,29 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
 // to an easier rounded option only where the dialog shows one (#379).
 const rowStepBody = (row: CalcRow): string =>
   siteLineText(row) +
-  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
+  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
+  recycleStepText(row);
+
+// MOCK-UP (#1022, #1024): the byproduct and Water advice of the factory dialog, as text.
+function recycleStepText(row: CalcRow): string {
+  const context = recycleContext();
+  if (!context) return '';
+  const text = adviceText([...byproductAdvice(row, context), ...inputAdvice(row, context)]);
+  return text ? ' ' + text : '';
+}
+
+// MOCK-UP (#1022, #1024): what recycle.ts reads, for the phase shown.
+export function recycleContext(): RecycleContext | null {
+  const snapshot = calcStage();
+  if (!snapshot?.rows) return null;
+  return {
+    stage: snapshot,
+    groups: factoryGroupsState(),
+    name: buildRowName,
+    fluid: item => FLUIDS.has(item),
+    itemRate,
+  };
+}
 
 // The first sentence of a step for a factory group's own line made on site (#876), naming the
 // group; '' for any other row.
