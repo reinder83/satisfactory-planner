@@ -6,12 +6,12 @@
 // row's total changes: nothing is offered and the sink takes no more than the plan's surplus.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculate, DATA } from '../planner.ts';
+import { calculate } from '../planner.ts';
 import { onSiteSettings } from '../public/app/on-site.ts';
 import { itemBooks } from '../public/app/group-links.ts';
+import { lineProblems, random, rowsOf } from './helpers/on-site-books.ts';
 import { STANDARD_BEFORE_1040 } from './helpers/standard-before-1040.ts';
 import type {
-  CalcRow,
   CurrentCalculatedPlan,
   FactoryGroups,
   StageKey,
@@ -25,7 +25,6 @@ const PLATE = 'Recipe_IronPlate_C',
 const OWN_INGOT = `${INGOT}:${PLC3}`;
 // A Smelter makes 30 Iron Ingot/min; an Iron Plate line uses 3 Iron Ingot for 2 Iron Plate.
 const SMELTER = 30;
-const rowsOf = (stage: StoredStage): CalcRow[] => stage.rows || [];
 const row = (stage: StoredStage, id: string) => rowsOf(stage).find(entry => entry.id === id);
 const near = (a: number, b: number) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b));
 
@@ -108,20 +107,6 @@ test('a shrinking Iron Plate line no longer leaves PLC3 a Smelter short (#984)',
   assert.equal(fall.books.offered['Iron Ingot'], undefined);
 });
 
-// A small seeded generator, so a failure can be replayed.
-function random(seed: number) {
-  let state = seed >>> 0;
-  const next = () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const pick = <T>(list: readonly T[]): T => list[Math.floor(next() * list.length)]!;
-  return { next, pick };
-}
-
 // The profiles the random configurations start from: the start phase, whole machines or not,
 // and the storage rate, so the rows' totals differ from configuration to configuration. All on
 // the standard recipes as they were before #1040 (with Pure Aluminum Ingot), so the seeds draw
@@ -203,63 +188,6 @@ function configuration(seed: number) {
       .flat()
       .filter(membership => membership.rate !== null),
   };
-}
-
-// Whether an item balances exactly in the plan, rather than overflowing to the sink: a fluid, a
-// radioactive item, waste, or anything the sink does not take (exactBalance in the planner).
-const exact = (item: string) =>
-  !!DATA.items[item]?.fluid ||
-  !!DATA.items[item]?.radioactive ||
-  item.endsWith('Waste') ||
-  !((DATA.items[item]?.sink ?? 0) > 0);
-
-// What is wrong with the groups' own lines in a phase right after the recalculation, as
-// messages. For each item a group marks and makes on its own lines (ItemBooks.local):
-// - the lines make at least what the books give the group (`asked`), less 1e-6 × max(1, asked);
-// - they make less than that plus, for each of the group's own lines of the item, its rounding:
-//   one machine's output on a whole-machine line (equivalent within 1e-6 of its machines), none on
-//   a fractional one, and all of its output on a line that makes another item too, which may be
-//   what sizes it (a Rubber line making the group's Heavy Oil Residue, a Plastic line making the
-//   plan's Heavy Oil Residue); plus the same 1e-6;
-// - nothing is offered (ItemBooks.offered, above 1e-6 × max(1, rate)): the sink takes every
-//   group's excess, within the plan's surplus.
-// Left out, and counted in `left`: an item that balances exactly (a fluid such as Heavy Oil
-// Residue), whose lines the planner still sizes by the shares worked out from the plan being
-// recalculated, as before #984 (followedParts in planner/on-site.ts).
-function lineProblems(
-  stage: StoredStage,
-  groups: FactoryGroups,
-  label: string,
-  left: { count: number },
-): string[] {
-  const problems: string[] = [];
-  const tolerance = (rate: number) => 1e-6 * Math.max(1, rate);
-  const books = itemBooks(stage, groups);
-  const ownLines = (group: string, item: string) =>
-    rowsOf(stage).filter(line => line.onSite?.group === group && line.outputs[item]);
-  for (const [item, lines] of Object.entries(books.local))
-    for (const [group, { made, asked }] of lines) {
-      if (exact(item)) {
-        left.count++;
-        continue;
-      }
-      const rounding = (line: CalcRow) =>
-        Object.keys(line.outputs).length > 1
-          ? line.outputs[item]!
-          : Math.abs(line.equivalent - line.machines) < 1e-6
-            ? line.outputs[item]! / line.machines
-            : 0;
-      const slack = ownLines(group, item).reduce((total, line) => total + rounding(line), 0);
-      if (made < asked - tolerance(asked))
-        problems.push(`${label}: ${group}'s lines make ${made} ${item} of the ${asked} it asks`);
-      if (made >= asked + slack + tolerance(asked))
-        problems.push(`${label}: ${group}'s lines make ${made} ${item} for ${asked} (${slack})`);
-    }
-  for (const [item, places] of Object.entries(books.offered))
-    for (const [group, rate] of places)
-      if (rate > tolerance(rate) && !exact(item))
-        problems.push(`${label}: ${group} offers ${rate} ${item}`);
-  return problems;
 }
 
 test('right after a recalculation with fixed and open memberships, each own line matches the books (#984)', () => {
