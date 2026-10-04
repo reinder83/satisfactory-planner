@@ -7,6 +7,8 @@
   the lanes: a row's name (.gf-name) is what its dot or arrowhead points at, and each row
   carries its id in the flow as data-row. An input row fed from outside the group and by no
   other line of it has a blue side bar instead of an arrow; one fed only by itself has neither.
+  Under a byproduct's output row, and under an input row a byproduct covers, a ♻ line repeats
+  the factory dialog's advice for the whole line (rowAdvice, #1022) as text.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -21,6 +23,10 @@ import {
   type FlowNames,
 } from '../../views/group-flow-page.ts';
 import { machineLine } from '../../views/factories.ts';
+import { rowAdvice } from '../../views/calculated.ts';
+import { adviceSentence } from '../../recycle.ts';
+import { calcStage } from '../../session.ts';
+import { legacy } from '../bridge.ts';
 import { power } from '../../wizard/fields.ts';
 import { factoryLink } from '../actions.ts';
 
@@ -37,6 +43,17 @@ const machines = computed(() => {
 const fromOutside = (row: FlowRow) =>
   row.links.some(link => link.from.kind === 'place') && !row.links.some(isLaneLink);
 const loops = (row: FlowRow) => row.links.some(link => link.loop);
+// The dialog's byproduct advice for this line as text, by item: for its byproducts (`out`) and
+// for its inputs a byproduct covers (`in`).
+const advice = computed(() =>
+  legacy(() => {
+    const byItem = { in: new Map<string, string>(), out: new Map<string, string>() };
+    const row = calcStage()?.rows?.find(candidate => candidate.id === props.line.id);
+    for (const line of row ? rowAdvice(row) : [])
+      byItem[line.kind === 'byproduct' ? 'out' : 'in'].set(line.item, adviceSentence(line));
+    return byItem;
+  }),
+);
 </script>
 
 <template>
@@ -60,7 +77,10 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
         <span class="gf-item"
           ><span class="gf-name">← {{ row.item }}</span>
           <small v-if="loops(row)" class="chain-loop">loop · seed a starter batch</small>
-          <small class="muted">{{ sourcesText(row.links, names) }}</small></span
+          <small class="muted">{{ sourcesText(row.links, names) }}</small
+          ><small v-if="advice.in.has(row.item)" class="gf-advice" data-advice="input"
+            >♻ {{ advice.in.get(row.item) }}</small
+          ></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b
           ><small>{{ row.belts }}</small></span
@@ -69,7 +89,10 @@ const loops = (row: FlowRow) => row.links.some(link => link.loop);
       <div v-for="row in line.outputs" :key="row.id" class="gf-row gf-out" :data-row="row.id">
         <span class="gf-item"
           ><span class="gf-name">→ {{ row.item }}</span>
-          <small class="muted">{{ destinationsText(row.links, names) }}</small></span
+          <small class="muted">{{ destinationsText(row.links, names) }}</small
+          ><small v-if="advice.out.has(row.item)" class="gf-advice" data-advice="byproduct"
+            >♻ {{ advice.out.get(row.item) }}</small
+          ></span
         ><span class="gf-num"
           ><b>{{ itemRate(row.item, row.rate) }}</b
           ><small>{{ row.belts }}</small></span

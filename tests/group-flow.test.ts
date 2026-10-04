@@ -199,9 +199,10 @@ test('a split row counts only the group’s share, in each group it is in', () =
     assert.equal(flow.split, true);
   }
   for (const id of ['fg-iron', 'fg-motor']) assertAddsUp(stage, split, id);
-  // The motor works now makes rods of its own, so less comes in from the iron works.
+  // The motor works now makes rods of its own, so less comes in from the iron works: each group
+  // uses its own rods first (#1022), so the iron works sends only the 5 its screws leave of its 15.
   const rodsFromIron = motor.ins.find(port => port.place === 'fg-iron' && port.item === 'Rod');
-  close(rodsFromIron!.rate, 10, 'rods the motor works still takes from the iron works');
+  close(rodsFromIron!.rate, 5, 'rods the motor works still takes from the iron works');
 });
 
 test('the sink and protected storage fold into one summary that keeps the details', () => {
@@ -319,13 +320,14 @@ test('a line that uses what it makes links to itself, so its rows add up (#898)'
   const waterIn = distill.inputs.find(input => input.item === 'Water')!;
   const waterOut = distill.outputs.find(output => output.item === 'Water')!;
   const self = (link: FlowLink) => link.self;
-  // The self link: 24 × 30 / 34 of the line's own water goes back into it.
+  // The self link: the line takes all 24 of its own water back first (#1022); the well gives it
+  // the other 6 and the cooling line its 4.
   const back = waterOut.links.find(self)!;
   assert.deepEqual(
     [back.from, back.to, back.loop],
     [{ kind: 'line', id: 'distill' }, { kind: 'line', id: 'distill' }, false],
   );
-  close(back.rate, (24 * 30) / 34, 'water the line feeds itself');
+  close(back.rate, 24, 'water the line feeds itself');
   assert.equal(back.belts, `belts for ${back.rate} Water`);
   // The same link is on both of the line's water rows, and each row adds up exactly.
   assert.deepEqual(waterIn.links.filter(self), [back]);
@@ -340,20 +342,55 @@ test('a line that uses what it makes links to itself, so its rows add up (#898)'
   );
   assert.deepEqual(
     waterOut.links.map(link => [link.to.id, link.self]),
-    [
-      ['distill', true],
-      ['cool', false],
-    ],
+    [['distill', true]],
+  );
+  const cool = flow.lines[1]!.inputs.find(input => input.item === 'Water')!;
+  assert.deepEqual(
+    cool.links.map(link => [link.from.id, link.rate]),
+    [[sourceOf('Water'), 4]],
   );
   // No other link is a self link.
   const all = flow.lines.flatMap(line => [...line.inputs, ...line.outputs]).flatMap(r => r.links);
   assert.ok(all.every(link => link.self === (link.from.id === link.to.id)));
+  // A self link rides no lane, so the line's water has none.
+  assert.deepEqual(flow.lanes, []);
+  assertAddsUp(distilled, factoryGroups, 'fg-iron');
+
+  // A line that gives back more than it takes: it takes its 20 back first, and the 4 it has left
+  // go to the cooling line on a lane, which gets its other 10 from the well.
+  const surplus: StoredStage = {
+    ...distilled,
+    rows: [
+      row('distill', { Ore: 10, Water: 20 }, { Silica: 10, Water: 24 }),
+      row('cool', { Water: 14 }, { Steam: 4 }),
+    ],
+    raw: { Ore: 10, Water: 10 },
+  };
+  const more = flowOf(surplus, factoryGroups, 'fg-iron');
+  assert.deepEqual(
+    more.lines[0]!.outputs.find(output => output.item === 'Water')!.links.map(link => [
+      link.to.id,
+      link.self,
+      link.rate,
+    ]),
+    [
+      ['distill', true, 20],
+      ['cool', false, 4],
+    ],
+  );
+  assert.deepEqual(
+    more.lines[1]!.inputs[0]!.links.map(link => [link.from.id, link.rate]),
+    [
+      ['distill', 4],
+      [sourceOf('Water'), 10],
+    ],
+  );
   // The water lane carries only the link to the cooling line: a self link rides no lane.
   assert.deepEqual(
-    flow.lanes.map(lane => [lane.from, lane.to, lane.links.length]),
+    more.lanes.map(lane => [lane.from, lane.to, lane.links.length]),
     [['out|distill|Water', ['in|cool|Water'], 1]],
   );
-  assertAddsUp(distilled, factoryGroups, 'fg-iron');
+  assertAddsUp(surplus, factoryGroups, 'fg-iron');
 
   // A distiller on its own: its self link is its water's only link between lines, so no lane.
   const alone: StoredStage = {
