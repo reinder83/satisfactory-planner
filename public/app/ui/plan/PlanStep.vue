@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { nextTick, ref } from 'vue';
-import { save } from '../../api.ts';
+import { holdUnsavedChoices, save } from '../../api.ts';
 import { phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { removeStepBody } from '../../shared-steps.ts';
@@ -104,8 +104,10 @@ async function move(event: Event, direction: number) {
 }
 
 // "Edit": swap the step for its edit form (StepEditForm.vue). The button goes with the step, so
-// focus goes to the form's Step title field (ui/refocus.ts, #562).
+// focus goes to the form's Step title field (ui/refocus.ts, #562). Another step's open form with
+// typed text not saved yet stays open instead and says so, as Done editing does (#969, #1029).
 async function edit(event: Event) {
+  if (holdUnsavedChoices()) return;
   const refocus = refocusOn(
     event.currentTarget,
     `#main [data-task-edit="${CSS.escape(props.step.id)}"] [name=title]`,

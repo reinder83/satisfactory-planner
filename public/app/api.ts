@@ -365,14 +365,18 @@ export function hasUnsavedNotes(root: ParentNode = document) {
 
 // A choice only an explicit Save stores, unlike a note: the Factories page's "Made on site"
 // picker (ui/factories/OnSitePicker.vue, #930), whose ticks save nothing until Save (#854,
-// #856). Each one on screen registers here, so nothing that takes it away drops a choice without
-// a word, and nothing saves one by itself. `el` is its element while mounted; `label` names it
-// in a question ("Made on site in Alpha"); `unsaved` is true while it shows a choice that is not
-// saved; `hold` says so beside it and offers Save and Discard, bringing it into view with focus
-// on its Save when `focus` is set; `discard` puts the saved choice back.
+// #856), and a build-plan step's edit form (ui/plan/StepEditForm.vue, #969), whose text only
+// Save step stores. Each one on screen registers here, so nothing that takes it away drops a
+// choice without a word, and nothing saves one by itself. `el` is its element while mounted;
+// `label` names it in a question ("Made on site in Alpha", or the step's title); `edits` is set
+// for a step's form, so the question speaks of edits to that step; `unsaved` is true while it
+// shows a choice that is not saved; `hold` says so beside it and offers Save and Discard (a
+// step's form: Save step and Cancel), bringing it into view with focus on its Save when `focus`
+// is set; `discard` puts the saved choice back.
 export type ChoiceDraft = {
   el: () => Element | null | undefined;
   label: () => string;
+  edits?: boolean;
   unsaved: () => boolean;
   hold: (focus: boolean) => void;
   discard: () => void;
@@ -399,19 +403,33 @@ export function holdUnsavedChoices(root: ParentNode = document): boolean {
   return held.length > 0;
 }
 
+// What is not saved, for the question below: 'your choice in "Made on site in Alpha" is not
+// saved yet', 'your edits to the step "Smelt iron" are not saved yet' (#969), or both joined.
+function unsavedText(choices: ChoiceDraft[]) {
+  const quoted = (drafts: ChoiceDraft[]) =>
+    listNames(drafts.map(choice => '"' + choice.label() + '"'));
+  const picks = choices.filter(choice => !choice.edits),
+    steps = choices.filter(choice => choice.edits);
+  const parts = [
+    picks.length > 1 ? 'your choices in ' + quoted(picks) : '',
+    picks.length === 1 ? 'your choice in ' + quoted(picks) : '',
+    steps.length
+      ? 'your edits to the ' + (steps.length > 1 ? 'steps ' : 'step ') + quoted(steps)
+      : '',
+  ].filter(Boolean);
+  const plural = picks.length > 1 || steps.length > 0 || parts.length > 1;
+  return { text: parts.join(' and ') + (plural ? ' are' : ' is') + ' not saved yet', plural };
+}
+
 // The question allowSwitch() asks: about notes a write could not carry, choices not saved, or
-// both. The names come from the user (group names); the dialog draws them as text.
-function leaveQuestion(notes: boolean, choices: string[]) {
+// both. The names come from the user (group names, step titles); the dialog draws them as text.
+function leaveQuestion(notes: boolean, choices: ChoiceDraft[]) {
   if (!choices.length)
     return {
       title: 'Leave without saving notes?',
       body: 'You have notes that could not be saved. Leave without saving those edits?',
     };
-  const named = listNames(choices.map(label => '"' + label + '"'));
-  const choiceText =
-    choices.length > 1
-      ? 'your choices in ' + named + ' are not saved yet'
-      : 'your choice in ' + named + ' is not saved yet';
+  const { text: choiceText, plural } = unsavedText(choices);
   return notes
     ? {
         title: 'Leave without saving?',
@@ -426,14 +444,15 @@ function leaveQuestion(notes: boolean, choices: string[]) {
           choiceText[0]!.toUpperCase() +
           choiceText.slice(1) +
           '. Leave without saving ' +
-          (choices.length > 1 ? 'them?' : 'it?'),
+          (plural ? 'them?' : 'it?'),
       };
 }
 
 // Whether it is fine to leave the current page (or, with `root`, that part of it). Notes
 // waiting for their pause are sent first, and a write already on its way finishes by itself,
 // so this asks only when a note would be lost: its write failed (the box says "Not saved"),
-// or no write carries its text; or when a choice is not saved (choiceDrafts above, #930). It is
+// or no write carries its text; or when a choice is not saved (choiceDrafts above: a "Made on
+// site" pick, #930, or a step's edit form, #969). It is
 // true at once when there is nothing to ask, otherwise the answer of the in-app confirmation
 // (ui/confirm.ts), true when the user agrees to drop those notes and choices; the choices then
 // show their saved state again, since a phase change keeps the page they are on. So a caller
@@ -447,10 +466,7 @@ export function allowSwitch(root: ParentNode = document): true | Promise<boolean
     choices = unsavedChoicesIn(root);
   if (!notes && !choices.length) return true;
   return confirmAction({
-    ...leaveQuestion(
-      notes,
-      choices.map(choice => choice.label()),
-    ),
+    ...leaveQuestion(notes, choices),
     confirmLabel: 'Leave without saving',
     danger: true,
   }).then(ok => {
