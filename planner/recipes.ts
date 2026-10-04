@@ -18,6 +18,12 @@ const slug = (name: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+// A recipe's primary product: the first of its outputs, as recipes.json lists them (Rocket Fuel
+// for Rocket Fuel; its Compacted Coal is a byproduct). Preferred recipes (recipePool) and the
+// groups' own lines (siteCopies in on-site.ts, #1012) go by it; the interface reads a plan row the
+// same way (rowTotal in public/app/group-order.ts, onSiteCopyable in public/app/on-site.ts).
+export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefined =>
+  Object.keys(recipe.outputs)[0];
 // The recipes a phase may choose from, before power generators are added (generators() below).
 // `config` is normalised settings, `phase` a number 1 to 5, and `conversion` whether the Phase 5
 // Converter recipes that make raw resources (SAM-based ore conversion) are allowed. Returns
@@ -92,11 +98,7 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
       if (!preferred.length || preferred.includes(recipe.id)) return true;
       return !preferred.some(id => {
         const other = DATA.recipes.find(r => r.id === id);
-        return (
-          other &&
-          other.phase <= phase &&
-          Object.keys(other.outputs)[0] === Object.keys(recipe.outputs)[0]
-        );
+        return other && other.phase <= phase && primaryOutput(other) === primaryOutput(recipe);
       });
     });
 }

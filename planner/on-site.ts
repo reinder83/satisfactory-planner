@@ -7,7 +7,7 @@
 import type { CurrentSettings, CurrentStage, OnSiteGroup } from '../public/types/index.ts';
 import type { PoolRecipe } from './types.ts';
 import { DATA, RAW } from './data.ts';
-import { recipePool, generators } from './recipes.ts';
+import { recipePool, generators, primaryOutput } from './recipes.ts';
 
 // A per-group line's row id: the recipe id, a colon and the group id. A check key
 // `calc-<phase>-<rowId>` must pass safeKey (public/state/validate.ts), which allows ':' but not
@@ -40,10 +40,14 @@ const shareOf = (shares: Shares, rowId: string) =>
 
 // The copies of `pool`'s recipes a phase plans per on-site group (`pool` is the phase's whole
 // pool, before the network of the two-step fit narrows it, so every solve of the phase sees the
-// same copies). A group gets a copy of each recipe that makes an item it marks and has a consumer
-// of in this phase: a row it has a share of that uses the item, or one of its own copies that
-// does (Copper Ingot for its Wire line). No consumer, no line. A copy is the recipe as it is,
-// whole machines like it and never amplified, with the id `<recipe>:<group>` and `onSite`.
+// same copies). A group gets a copy of each recipe whose primary product (primaryOutput) is an
+// item it marks and has a consumer of in this phase: a row it has a share of that uses the item,
+// or one of its own copies that does (Copper Ingot for its Wire line). No consumer, no line. A
+// recipe that makes the item only as a byproduct stays central (#1012): a copy of it would run
+// the whole recipe for the group, take over the group's own consumer row (Rocket Fuel, copied
+// for its Compacted Coal) and so drop and re-add the group's lines at every recalculation. A
+// copy is the recipe as it is, whole machines like it and never amplified, with the id
+// `<recipe>:<group>` and `onSite`.
 export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRecipe[]) {
   const copies: PoolRecipe[] = [];
   for (const [group, entry] of Object.entries(config.onSite || {})) {
@@ -61,7 +65,7 @@ export function siteCopies(config: CurrentSettings, phase: number, pool: PoolRec
         if (
           !copied.has(recipe.id) &&
           copyable(recipe) &&
-          Object.keys(recipe.outputs).some(item => consumed.has(item))
+          consumed.has(primaryOutput(recipe) ?? '')
         ) {
           copied.add(recipe.id);
           copies.push({
