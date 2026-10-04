@@ -42,7 +42,7 @@ const view = computed(() =>
 
 <template>
   <DialogFrame v-if="view" :title="view.name" :subtitle="view.subtitle" :icon="view.name">
-    <p>
+    <p class="slot-place">
       <b>{{ view.bay }}</b
       ><br />{{ view.where }}
     </p>
