@@ -19,7 +19,7 @@ import type {
 // The profile's factory groups with defaults filled in. `assignments` maps a factory key
 // (a calculated row id; a handbook factory id on an original profile) to a list of { group,
 // rate } memberships;
-// a null rate means the whole output, or the remainder once other groups take theirs.
+// a null rate means the whole output, or the rest once other groups take theirs.
 export function factoryGroupsState(): FactoryGroups {
   const saved: Partial<FactoryGroups> = state?.factoryGroups || {};
   return {
