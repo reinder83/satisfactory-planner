@@ -41,10 +41,13 @@ export interface AdaFacts {
   unplaced: number;
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876).
   siteReview?: number;
-  // The items the factory groups mark as made on site are not the ones the plan was calculated
-  // with (onSiteChange in app/on-site-picker.ts, #877): the plan waits for a recalculation the
-  // user starts.
+  // The group lines made on site that the factory groups' marks would give are not the ones the
+  // plan has (onSiteChange in app/on-site-picker.ts, #877, #938): the plan waits for a
+  // recalculation the user starts.
   onSitePending?: boolean;
+  // The plan waits only because a group's lines no longer use, or now use, an item it marks, not
+  // because the marks changed (#985): the notice says so, and so does ADA.
+  onSiteLinesOnly?: boolean;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -388,8 +391,11 @@ const RULES: AdaRule[] = [
     on: ['factories', 'plan', 'logistics'],
     tone: 'warn',
     when: facts => facts.onSitePending,
-    text: () =>
-      'You changed what your factory groups make on site, and this plan has not been told yet. Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
+    text: facts =>
+      (facts.onSiteLinesOnly
+        ? "What your factory groups' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
+        : 'You changed what your factory groups make on site, and this plan has not been told yet. ') +
+      'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
   },
   {
     id: 'notes',

@@ -420,6 +420,19 @@ test('ADA says a change to the items made on site waits for a recalculation (#87
   }
 });
 
+test("ADA words a pending recalculation for a group's lines, not its marks, as the notice does (#985)", () => {
+  const remark = (over: Partial<AdaFacts>) =>
+    adaRemarks(facts({ view: 'factories', onSitePending: true, ...over })).find(
+      r => r.id === 'on-site-pending',
+    )!.text;
+  const lines = remark({ onSiteLinesOnly: true });
+  assert.match(lines, /^What your factory groups' lines use changed/);
+  assert.doesNotMatch(lines, /You changed/);
+  assert.match(lines, /Nothing recalculates by itself/);
+  assert.match(remark({ onSiteLinesOnly: false }), /^You changed what your factory groups make/);
+  assert.match(remark({}), /^You changed what your factory groups make/);
+});
+
 test('ADA notices a phase without notes on the plan and on the Notes page (#243)', () => {
   for (const view of ['plan', 'notes']) {
     const bare = adaRemarks(facts({ view, hasPhaseNote: false }));
