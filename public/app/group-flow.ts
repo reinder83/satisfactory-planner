@@ -250,7 +250,8 @@ function crossingPorts(
 // ItemBooks.local) an outgoing port is shared by what each line making it has left after the
 // links inside the group, as groupLinks counts it: the group's own lines' excess goes to the
 // sink (its `sunk`), and the other lines making the item share the rest, so every output row
-// still adds up (#912).
+// still adds up (#912). After a group edit the own lines may have more left than the sink takes
+// (#918, its `offered`): that part leaves with the other lines' supply, for the other places.
 function portLinks(
   parts: GroupPart[],
   ports: { ins: FlowPort[]; outs: FlowPort[] },
@@ -304,12 +305,17 @@ function portLinks(
     const leftHere = (line: GroupPart) => left.get(line) || 0;
     const othersLeft = others.reduce((sum, line) => sum + leftHere(line), 0);
     // The own lines' excess goes to the sink port(s), up to what they have left.
-    let ownLeft = own.reduce((sum, line) => sum + leftHere(line), 0);
+    const ownExcess = own.reduce((sum, line) => sum + leftHere(line), 0);
+    let ownLeft = ownExcess;
     const fromOwn = itemPorts.map(port => {
       const rate = port.place === OUTSIDE.surplus ? Math.min(port.rate, ownLeft) : 0;
       ownLeft -= rate;
       return rate;
     });
+    // What the sink has no room for (#918, ItemBooks.offered: the group asks for less since a
+    // group edit) leaves with the other lines' supply, shared in proportion to what each has left.
+    const offered = (line: GroupPart) =>
+      own.includes(line) ? (leftHere(line) * ownLeft) / ownExcess : leftHere(line);
     return itemPorts.flatMap((port, i) => {
       const rest = port.rate - fromOwn[i]!;
       // Should the other lines have nothing left (memberships changed since the plan was
@@ -317,9 +323,11 @@ function portLinks(
       const restLinks =
         rest <= LINK_DUST
           ? []
-          : othersLeft > LINK_DUST
-            ? share(port, others, leftHere, false, rest)
-            : share(port, makers, madeHere, false, rest);
+          : ownLeft > LINK_DUST
+            ? share(port, makers, offered, false, rest)
+            : othersLeft > LINK_DUST
+              ? share(port, others, leftHere, false, rest)
+              : share(port, makers, madeHere, false, rest);
       return [...share(port, own, leftHere, false, fromOwn[i]), ...restLinks];
     });
   };

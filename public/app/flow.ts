@@ -9,6 +9,8 @@
 // say (itemBooks in group-links.ts, #956): a group's own line delivers only to that group's
 // share of each consumer, and what it makes beyond that to the sink; the other lines making the
 // item deliver what is left; and a consumer's input links to the line that feeds most of it.
+// After a group edit a group's own lines may make more than the sink has room for (#918,
+// ItemBooks.offered): that part is shared with the other lines' supply (ordinaryShares).
 // Every other item, and every item of a plan without such lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
 import { itemBooks, placeTotal, sharedRate } from './group-links.ts';
@@ -107,6 +109,8 @@ export interface RecipeView {
 export interface BankNote {
   shared: boolean;
   ownLine?: string;
+  // An own line's group offers what the sink has no room for to the other places (#918).
+  offers?: true;
   lessOnSite?: true;
 }
 
@@ -384,18 +388,57 @@ function outputItem(row: CalcRow, item: string, context: CalcFlowContext): Outpu
   };
 }
 
+// How the ordinary supply of an item groups make on site meets `wanted`, a demand the groups' own
+// lines do not meet (itemBooks): what each group's offer gives (ItemBooks.offered, #918: its own
+// lines' excess the sink has no room for since a group edit), and what the other lines making the
+// item give (`lines`). Without offers the other lines give all of it.
+function ordinaryShares(
+  item: string,
+  site: SiteBooks,
+  wanted: number,
+): { lines: number; offers: Map<string, number> } {
+  const offers = site.books.offered[item];
+  if (!offers) return { lines: wanted, offers: new Map() };
+  const made = placeTotal(site.books.supply[item]),
+    asked = placeTotal(site.books.demand[item]);
+  const give = (supplied: number) =>
+    supplied > LINK_DUST && asked > LINK_DUST ? sharedRate(made, asked, supplied, wanted) : 0;
+  return {
+    lines: give(made - placeTotal(offers)),
+    offers: new Map([...offers].map(([group, rate]) => [group, give(rate)])),
+  };
+}
+
+// The part of `wanted`, a demand the groups' own lines do not meet, that `row` gives
+// (ordinaryShares): a group's own line its part of its group's offer (none without one), any other
+// line what the other lines give.
+function ordinaryPart(row: CalcRow, output: OutputItem, wanted: number): number {
+  const { item, site } = output;
+  if (!site) return wanted;
+  const shares = ordinaryShares(item, site, wanted);
+  if (!site.group) return shares.lines;
+  // ownLineGroup found the group's lines in the books.
+  const lines = site.books.local[item]!.get(site.group)!;
+  return ((shares.offers.get(site.group) || 0) * (row.outputs[item] || 0)) / lines.made;
+}
+
 // What `row` delivers of the item to `consumer`: all its demand, unless groups make the item on
 // site (#956). Then a group's own line gives its part of what the group's own lines give the
-// consumer (sharedRate, as the group's flow shares them), and any other line the part they leave.
+// consumer (sharedRate, as the group's flow shares them), and any other line the part they leave;
+// after a group edit, an own line whose group offers its excess shares that part too (#918).
 function deliveredTo(row: CalcRow, consumer: CalcRow, output: OutputItem): number {
   const { item, site } = output;
   const rate = consumer.inputs[item] || 0;
   if (!site) return rate;
-  if (!site.group) return siteParts(consumer, item, site).central;
+  const central = ordinaryPart(row, output, siteParts(consumer, item, site).central);
+  if (!site.group) return central;
   // ownLineGroup found the group's lines in the books.
   const lines = site.books.local[item]!.get(site.group)!;
   const wanted = rate * (rowPlaces(consumer, site.groups).get(site.group) || 0);
-  return sharedRate(lines.made, lines.asked, row.outputs[item] || 0, wanted);
+  // A group that asks for none of the item since a group edit gets none from its lines.
+  const own =
+    lines.asked > 0 ? sharedRate(lines.made, lines.asked, row.outputs[item] || 0, wanted) : 0;
+  return own + central;
 }
 
 // The other rows of the phase consuming the item, with what `row` delivers to each. For an item
@@ -432,12 +475,15 @@ function consumerOutputs(row: CalcRow, output: OutputItem, context: CalcFlowCont
 }
 
 // The item's protected storage, Space Elevator delivery and drone fuel from the phase's books.
-function bookOutputs(output: OutputItem, storedStage: StoredStage) {
+// For an item groups make on site, the part `row` gives of each (ordinaryPart): none from a group's
+// own line, unless its group offers its excess since a group edit (#918).
+function bookOutputs(row: CalcRow, output: OutputItem, storedStage: StoredStage) {
   const { item, unit, pre, mach } = output;
   const outputs: FlowOutput[] = [];
-  const stored = storedStage.storage?.[item],
-    delivered = storedStage.delivery?.[item]?.rate,
-    drone = storedStage.drone?.[item];
+  const part = (rate: number | undefined) => rate && ordinaryPart(row, output, rate);
+  const stored = part(storedStage.storage?.[item]),
+    delivered = part(storedStage.delivery?.[item]?.rate),
+    drone = part(storedStage.drone?.[item]);
   if (stored)
     outputs.push({
       kind: 'store',
@@ -508,15 +554,17 @@ function reserveOutputs(output: OutputItem, context: CalcFlowContext) {
 
 // What goes to the sink of an item groups make on site (#956), as the books send it: from a
 // group's own line its part of what the group's own lines make beyond the group's demand
-// (`sunk`), from any other line the plan's surplus less all of that.
+// (`sunk`), from any other line the plan's surplus less all of that (ordinaryPart: shared with
+// any group's offer, #918).
 function siteSinkRate(row: CalcRow, output: OutputItem, surplus: number): number {
   const { item, site } = output;
   if (!site) return surplus;
   const sunk = site.books.sunk[item];
-  if (!site.group) return surplus - placeTotal(sunk);
+  const rest = ordinaryPart(row, output, surplus - placeTotal(sunk));
+  if (!site.group) return rest;
   // ownLineGroup found the group's lines in the books.
   const made = site.books.local[item]!.get(site.group)!.made;
-  return ((sunk?.get(site.group) || 0) * (row.outputs[item] || 0)) / made;
+  return ((sunk?.get(site.group) || 0) * (row.outputs[item] || 0)) / made + rest;
 }
 
 // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
@@ -545,18 +593,21 @@ function sinkOutputs(row: CalcRow, output: OutputItem, storedStage: StoredStage)
 // with its consuming rows, then its books, reserves and sinks. With byproducts, every
 // destination is prefixed with its item name and carries no machine count. A group's own line
 // made on site delivers an item its group marks to the group's consumers and the sink alone
-// (#876, #956): storage, deliveries and reserves draw on the other lines making the item.
+// (#876, #956): storage, deliveries and reserves draw on the other lines making the item. After a
+// group edit its group may offer the excess the sink has no room for (#918): then the line also
+// shares the other consumers, storage, deliveries and drone fuel (bookOutputs).
 export function flowOutputs(row: CalcRow, context: CalcFlowContext): FlowOutput[] {
   const outputs = Object.keys(row.outputs || {}).flatMap(item => {
     const output = outputItem(row, item, context);
     if (output.site?.group)
       return [
         ...consumerOutputs(row, output, context),
+        ...bookOutputs(row, output, context.storedStage),
         ...sinkOutputs(row, output, context.storedStage),
       ];
     return [
       ...consumerOutputs(row, output, context),
-      ...bookOutputs(output, context.storedStage),
+      ...bookOutputs(row, output, context.storedStage),
       ...reserveOutputs(output, context),
       ...sinkOutputs(row, output, context.storedStage),
     ];
@@ -583,7 +634,8 @@ export const generatorOutputs = (row: CalcRow): FlowOutput[] =>
 // The row an input of `row` links to: the first other row producing the item; there may be more
 // than one. For an item groups make on site (#956), the line that gives the row most of it, as
 // the books share it (siteParts): a group's own line for that group's share, else the first other
-// line making the item; on a tie, the group rowPlaces lists first.
+// line making the item; on a tie, the group rowPlaces lists first. A group that offers its own
+// lines' excess since a group edit (#918) gives its part of the rest through its own line.
 function inputSource(row: CalcRow, item: string, context: CalcFlowContext): CalcRow | undefined {
   const makers = (context.storedStage.rows || []).filter(
     maker => maker.id !== row.id && maker.outputs?.[item],
@@ -591,6 +643,8 @@ function inputSource(row: CalcRow, item: string, context: CalcFlowContext): Calc
   const site = siteItemBooks(item, context);
   if (!site) return makers[0];
   const { own, central } = siteParts(row, item, site);
+  const shares = ordinaryShares(item, site, central);
+  for (const [group, rate] of shares.offers) own.set(group, (own.get(group) || 0) + rate);
   let source: CalcRow | undefined,
     largest = 0;
   for (const [group, rate] of own) {
@@ -598,7 +652,7 @@ function inputSource(row: CalcRow, item: string, context: CalcFlowContext): Calc
     if (line && rate > largest + LINK_DUST) [source, largest] = [line, rate];
   }
   const centralLine = makers.find(maker => !ownLineGroup(maker, item, site));
-  if (centralLine && central > largest + LINK_DUST) source = centralLine;
+  if (centralLine && shares.lines > largest + LINK_DUST) source = centralLine;
   return source ?? makers[0];
 }
 
@@ -625,27 +679,47 @@ export interface FlowNotes {
 
 // Whether another row makes `item` for the same consumers as `row`: any other row making it, or
 // for an item groups make on site (#956) another of the same group's own lines for an own line,
-// and another line that is no group's own line for any other row.
-function sharesItem(row: CalcRow, item: string, context: CalcFlowContext): boolean {
+// and another line that is no group's own line for any other row. After a group edit (#918) an
+// own line whose group offers its excess also shares the other consumers with those lines;
+// `ownOnly` asks only about the same group's own lines, which is what an own line's note says.
+function sharesItem(
+  row: CalcRow,
+  item: string,
+  context: CalcFlowContext,
+  ownOnly = false,
+): boolean {
   const site = siteItemBooks(item, context);
   const group = site && ownLineGroup(row, item, site);
+  // Whether a line serves the demand the groups' own lines leave (ordinaryShares).
+  const ordinary = (line: CalcRow) => {
+    const lineGroup = site && ownLineGroup(line, item, site);
+    return !lineGroup || !!site?.books.offered[item]?.has(lineGroup);
+  };
   return (context.storedStage.rows || []).some(
     other =>
       other.id !== row.id &&
       other.outputs?.[item] &&
-      (!site || ownLineGroup(other, item, site) === group),
+      (!site ||
+        ownLineGroup(other, item, site) === group ||
+        (!ownOnly && ordinary(row) && ordinary(other))),
   );
 }
 
 // The bank note's words for lines made on site (#956): the group's name when `row` is its own
-// line for one of its items, else whether groups make one of its items on site.
+// line for one of its items (and whether its group offers its excess since a group edit, #918),
+// else whether groups make one of its items on site.
 function siteNote(row: CalcRow, context: CalcFlowContext): Omit<BankNote, 'shared'> {
   const site = context.site;
   if (!site) return {};
   const items = Object.keys(row.outputs || {}).filter(item => siteItemBooks(item, context));
   const group = items.map(item => ownLineGroup(row, item, site)).find(Boolean);
   if (group)
-    return { ownLine: site.groups.groups.find(known => known.id === group)?.name ?? group };
+    return {
+      ownLine: site.groups.groups.find(known => known.id === group)?.name ?? group,
+      ...(items.some(item => site.books.offered[item]?.has(group))
+        ? { offers: true as const }
+        : {}),
+    };
   return items.length ? { lessOnSite: true } : {};
 }
 
@@ -664,14 +738,19 @@ export function flowNotes(
   context: CalcFlowContext,
 ): FlowNotes {
   const splits = outputs.filter(o => o.mach !== undefined && o.kind !== 'sink');
-  const shared = Object.keys(row.outputs || {}).some(item => sharesItem(row, item, context));
+  const site = siteNote(row, context);
+  // An own line's note speaks of its group's other own lines only: the lines it shares an
+  // offered excess with (#918) are the other places, which the offer wording names.
+  const shared = Object.keys(row.outputs || {}).some(item =>
+    sharesItem(row, item, context, !!site.ownLine),
+  );
   return {
     split:
       splits.length > 1
         ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
         : '',
     clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
-    bankNote: outputs.some(o => !o.noItem) ? { shared, ...siteNote(row, context) } : null,
+    bankNote: outputs.some(o => !o.noItem) ? { shared, ...site } : null,
   };
 }
 
