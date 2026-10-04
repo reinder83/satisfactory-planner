@@ -1,8 +1,9 @@
 <!--
   The dialog for one row of a calculated plan at the current phase: its Running box in the
   sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
-  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram,
-  machine setup (machineSetup in views/calculated.ts, drawn as the three MachineCells, SP-20),
+  step, and under the title the card's headline rate (SP-21, #256); then the flow diagram, the
+  byproduct advice (RecycleAdvice.vue, #1022), machine setup (machineSetup in
+  views/calculated.ts, drawn as the three MachineCells, SP-20),
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
@@ -31,6 +32,7 @@ import DialogFrame from './DialogFrame.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import MachineCells from './MachineCells.vue';
+import RecycleAdvice from './RecycleAdvice.vue';
 import { toggleCheck } from '../actions.ts';
 
 const props = defineProps<{ id: string }>();
@@ -129,6 +131,7 @@ const view = computed(() =>
       generic storage surplus.
     </div>
     <FlowDiagram :model="view.flow" />
+    <RecycleAdvice :id="view.row.id" />
     <h3>Machine setup</h3>
     <MachineCells
       :counts="view.machines.counts"

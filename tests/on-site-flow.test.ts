@@ -425,6 +425,10 @@ test("the issue's case: a group's own Iron Rod line sends the sink only the plan
 // tests/ui/on-site-flow-dialog.test.ts, the configurations of seeds 1 to 4 above (Phase 3) and the
 // frozen plan without lines made on site, with marking groups. Each case keeps its stage, so the
 // check reads no planner. The factory dialog's flows of the same cases are checked in that test.
+// The links and group flows were recorded again when #1022 changed how an item is shared out
+// (shareOut: each group uses its own supply first): every place still sends and receives the same
+// net amount of each item, only by fewer links and never both ways. The books themselves, which
+// #918 must leave alone, offer nothing in any of these cases.
 interface RecordedCase {
   label: string;
   stage: StoredStage;
@@ -463,6 +467,7 @@ test('plans whose groups were not edited after the recalculation keep exactly th
   assert.equal(recorded.cases.length, 6);
   for (const entry of recorded.cases) {
     const { stage, groups } = entry;
+    assert.deepEqual(itemBooks(stage, groups).offered, {}, `${entry.label}: nothing offered`);
     assert.deepEqual(groupLinks(stage, groups), entry.links, entry.label);
     for (const group of groups.groups)
       assert.deepEqual(

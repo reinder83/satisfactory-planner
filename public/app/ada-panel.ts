@@ -38,6 +38,7 @@ import { render } from './shell.ts';
 import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { buildRowName, currentBuildStatus } from './views/calculated.ts';
+import { byproductCount } from './recycle.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
@@ -228,6 +229,7 @@ function adaFacts(): AdaFacts {
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),
+    byproducts: byproductCount(calcStage() ?? { feasible: false }),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,

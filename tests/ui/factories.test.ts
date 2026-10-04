@@ -1920,7 +1920,8 @@ test('a calculated factory dialog measures fluid inputs and outputs in m³/min (
   open({ calculated: plan });
   render();
   openCalculatedFactory(fuel.id);
-  const easy = plain($('#detail .notice.info')!.textContent!);
+  // The easier setting's notice, which follows the byproduct advice's (#1022).
+  const easy = plain($('#detail .notice.info:not([data-recycle-advice])')!.textContent!);
   assert.match(easy, /Its output: Fuel [\d.,]+ m³\/min\./);
   assert.match(easy, /Extra inputs needed: Heavy Oil Residue [\d.,]+ m³\/min\./);
   // The outputs list (the row is not named after its output), the machine cells and the flow's

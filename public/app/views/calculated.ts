@@ -6,8 +6,10 @@
 import { groupedRows, groupedSteps } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
-import { itemRate, rateOfItem } from '../flow.ts';
+import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
+import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
+import type { AdviceLine, AdviceWords, RecycleModel } from '../recycle.ts';
 import {
   calcStage,
   calculated,
@@ -19,7 +21,7 @@ import {
   state,
 } from '../session.ts';
 import { power } from '../wizard/fields.ts';
-import { siteGroupName } from './factories.ts';
+import { factoryGroupsState, siteGroupName } from './factories.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -66,16 +68,58 @@ export function orderedPhaseSteps(shownPhase: Phase = phase()): PhaseStep[] {
 export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
+  // The stage of the phase shown, which need not be the current phase (#1022).
+  const snapshot = calculated.stages[shownPhase === 'post' ? '5' : shownPhase];
   return orderedPhaseSteps(shownPhase).map(({ row, ...step }) =>
-    row ? { ...step, body: rowStepBody(row) } : step,
+    row ? { ...step, body: rowStepBody(row, snapshot) } : step,
   );
 }
 
 // A production row's build-plan step text: its machines, inputs and outputs, with the pointer
-// to an easier rounded option only where the dialog shows one (#379).
-const rowStepBody = (row: CalcRow): string =>
+// to an easier rounded option only where the dialog shows one (#379), then the factory dialog's
+// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022).
+const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
   siteLineText(row) +
-  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.`;
+  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open factory details for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
+  recycleStepText(row, snapshot);
+
+// A step's byproduct advice (adviceText in recycle.ts) after a space, or '' for none.
+function recycleStepText(row: CalcRow, snapshot: StoredStage | undefined): string {
+  const text = adviceText(rowAdvice(row, snapshot));
+  return text ? ' ' + text : '';
+}
+
+// The recycling model (recycleModel in recycle.ts) of `snapshot`, a stage of the open plan, for
+// the profile's factory groups. The build plan, a group's flow page and the factory dialog ask
+// for it once per line, so it is worked out once per stage, groups and plan.
+let recycleCache:
+  | { snapshot: StoredStage; groups: string; plan: unknown; model: RecycleModel }
+  | undefined;
+function recycleModelOf(snapshot: StoredStage): RecycleModel {
+  const groups = factoryGroupsState(),
+    key = JSON.stringify(groups);
+  const cache = recycleCache;
+  if (cache?.snapshot === snapshot && cache.groups === key && cache.plan === calculated)
+    return cache.model;
+  const model = recycleModel(snapshot, groups, calculated?.settings.onSite);
+  recycleCache = { snapshot, groups: key, plan: calculated, model };
+  return model;
+}
+
+// How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.
+const recycleWords: AdviceWords = {
+  name: row => (calculated ? rowStepTitle(calculated, state, row) : row.name),
+  fluid: item => FLUIDS.has(item),
+  // Called through, not referenced: flow.ts and this module import each other.
+  itemRate: (item, rate) => itemRate(item, rate),
+};
+
+// A line's byproduct advice (recycle.ts, #1022) in stage `snapshot`, the phase shown unless
+// given: where its byproducts go, then where the inputs a byproduct covers come from.
+export const rowAdvice = (
+  row: CalcRow,
+  snapshot: StoredStage | undefined = calcStage(),
+): AdviceLine[] => (snapshot ? lineAdvice(row, recycleModelOf(snapshot), recycleWords) : []);
 
 // The first sentence of a step for a factory group's own line made on site (#876), naming the
 // group; '' for any other row.

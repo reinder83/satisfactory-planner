@@ -48,6 +48,9 @@ export interface AdaFacts {
   // The plan waits only because a group's lines no longer use, or now use, an item it marks, not
   // because the marks changed (#985): the notice says so, and so does ADA.
   onSiteLinesOnly?: boolean;
+  // How many byproducts the open phase's lines make, one per line and byproduct (byproductCount
+  // in app/recycle.ts, #1022); each factory dialog says where to send its own.
+  byproducts?: number;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -385,6 +388,14 @@ const RULES: AdaRule[] = [
     when: facts => (facts.siteReview ?? 0) > 0,
     text: facts =>
       `${plural(facts.siteReview!, 'tick')} from the profile this one came from had no single line to land on, because the lines factory groups make on site changed. They are listed at the foot of Notes, exactly as they were. Tick the lines that actually stand. I would check, but I do not have legs.`,
+  },
+  {
+    id: 'recycle-byproducts',
+    on: ['factories'],
+    tone: 'calm',
+    when: facts => (facts.byproducts ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.byproducts!, 'byproduct')} to recycle in ${facts.phaseLabel}. Each line's dialog says where to send its own, and the build plan's step says the same. I did the sums. The plumbing is yours.`,
   },
   {
     id: 'on-site-pending',

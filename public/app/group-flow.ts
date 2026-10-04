@@ -5,13 +5,15 @@
 // It is counted from the same books as the Logistics page (itemBooks and groupLinks in
 // group-links.ts), so it agrees with "Between groups":
 // - a split row counts only the group's share of it (rowPlaces in group-order.ts);
+// - inside the group, an item moves by the rule groupLinks shares an item between places by
+//   (shareOut, #1022), with the lines as the places: a line whose recipe both uses and makes an
+//   item (Distilled Silica's water, #898) takes its own back first, a self link from and to the
+//   same line, marked `self`; then each line making the item gives each line using it its part
+//   of what is left, in proportion to what each makes and still uses (sharedRate);
 // - what comes in from outside the group and what leaves it are groupLinks' own links, each
-//   shared among the group's lines that use (or make) the item in proportion to their parts;
-// - inside the group, an item moves from each line making it to each line using it by the rule
-//   groupLinks shares an item between places by (sharedRate), with the lines as the places.
-// A line whose recipe both uses and makes an item (Distilled Silica's water, #898) feeds its own
-// share of it back into itself: a self link, from and to the same line, marked `self`. With it,
-// the links into an input row add up to its rate, and the links out of an output row to its
+//   shared among the group's lines in proportion to what each still uses, or has left, after the
+//   links inside the group.
+// So the links into an input row add up to its rate, and the links out of an output row to its
 // rate, whenever the plan makes what it asks for.
 //
 // Lines are keyed by their plan row's id and placed by rowPlaces alone, so a per-group line
@@ -27,12 +29,11 @@ import {
   itemBooks,
   OUTSIDE,
   placeName,
-  placeTotal,
   sharedRate,
   sourceItem,
   UNGROUPED,
 } from './group-links.ts';
-import type { ItemBooks } from './group-links.ts';
+import type { GroupLink, ItemBooks } from './group-links.ts';
 import type { CalcRow, FactoryGroups, OnSiteSettings, StoredStage } from '../types/index.ts';
 
 // The belts or pipes that carry `rate` of `item`, in the factory dialog's words: the page
@@ -164,11 +165,13 @@ const lineEnd = (part: GroupPart): FlowEnd => ({ kind: 'line', id: part.row.id }
 const madeBy = (part: GroupPart, item: string) => (part.row.outputs?.[item] || 0) * part.share;
 const usedBy = (part: GroupPart, item: string) => (part.row.inputs?.[item] || 0) * part.share;
 
-// The links between the group's own lines, by maker, its outputs in order, then user. A line
-// that uses what it makes gets a self link to itself, so its rows still add up (#898).
+// The links between the group's own lines, by maker, its outputs in order, then user, by the
+// rule groupLinks shares an item between places by (shareOut, #1022): a line that uses what it
+// makes takes it back first, as a self link to itself (#898), and the group's lines then share
+// what their makers have left in proportion to what each makes and still uses (sharedRate).
 // For an item the group makes on site (#876, ItemBooks.local) its own lines meet its own demand
-// first, by the same rule among themselves; any other line making it shares out only the part of
-// each user's demand they leave.
+// first, by sharedRate among themselves; the other lines making it share out only the part of
+// each user's demand they leave, by the same rule.
 function insideLinks(
   parts: GroupPart[],
   books: ItemBooks,
@@ -176,21 +179,22 @@ function insideLinks(
   groupId: string,
 ): FlowLink[] {
   const links: FlowLink[] = [];
+  const shares = new Map<string, InsideShares>();
   parts.forEach((maker, makerIndex) => {
     for (const item of Object.keys(maker.row.outputs || {})) {
       const supplied = madeBy(maker, item);
       if (supplied <= LINK_DUST) continue;
       const own = books.local[item]?.get(groupId);
       const onSite = !!own && maker.row.onSite?.group === groupId;
-      const made = onSite ? own.made : placeTotal(books.supply[item]),
-        asked = onSite ? own.asked : placeTotal(books.demand[item]);
-      // The part of each user's demand left after the group's own lines (all of it without them).
-      const left =
-        own && !onSite && own.asked > 0 ? 1 - Math.min(own.made, own.asked) / own.asked : 1;
+      const share = onSite
+        ? undefined
+        : (shares.get(item) ?? itemShares(parts, item, own, groupId));
+      if (share) shares.set(item, share);
       parts.forEach((user, userIndex) => {
-        const wanted = usedBy(user, item) * left;
-        if (wanted <= LINK_DUST) return;
-        const rate = sharedRate(made, asked, supplied, wanted);
+        const rate = share
+          ? insideRate(share, maker, user)
+          : // The own lines among themselves: sharedRate of what they make and the group asks.
+            sharedRate(own!.made, own!.asked, supplied, usedBy(user, item));
         if (rate > LINK_DUST)
           links.push({
             item,
@@ -207,6 +211,59 @@ function insideLinks(
   return links;
 }
 
+// How a group's lines other than its own lines made on site share one item (insideLinks): what
+// each line takes back of its own (`self`), what each maker has left after that (`made`) and what
+// each user still wants (`wanted`), with their totals.
+interface InsideShares {
+  self: Map<GroupPart, number>;
+  made: Map<GroupPart, number>;
+  wanted: Map<GroupPart, number>;
+  madeTotal: number;
+  wantedTotal: number;
+}
+
+// The InsideShares of `item` in the group. `own` is the group's own lines made on site for it
+// (ItemBooks.local), whose part of each user's demand is left out.
+function itemShares(
+  parts: GroupPart[],
+  item: string,
+  own: { made: number; asked: number } | undefined,
+  groupId: string,
+): InsideShares {
+  // The part of each user's demand left after the group's own lines (all of it without them).
+  const left = own && own.asked > 0 ? 1 - Math.min(own.made, own.asked) / own.asked : 1;
+  const share: InsideShares = {
+    self: new Map(),
+    made: new Map(),
+    wanted: new Map(),
+    madeTotal: 0,
+    wantedTotal: 0,
+  };
+  for (const part of parts) {
+    const made = own && part.row.onSite?.group === groupId ? 0 : madeBy(part, item),
+      wanted = usedBy(part, item) * left,
+      self = Math.min(made, wanted);
+    share.self.set(part, self);
+    share.made.set(part, made - self);
+    share.wanted.set(part, wanted - self);
+    share.madeTotal += made - self;
+    share.wantedTotal += wanted - self;
+  }
+  return share;
+}
+
+// What `maker` gives `user` of the item (InsideShares): its own use when it is the user, plus its
+// part of what the group's makers have left, shared by sharedRate.
+function insideRate(share: InsideShares, maker: GroupPart, user: GroupPart): number {
+  const made = share.made.get(maker) || 0,
+    wanted = share.wanted.get(user) || 0;
+  const shared =
+    made > LINK_DUST && wanted > LINK_DUST
+      ? sharedRate(share.madeTotal, share.wantedTotal, made, wanted)
+      : 0;
+  return shared + (maker === user ? share.self.get(maker) || 0 : 0);
+}
+
 function portKind(place: string, stage: StoredStage, groups: FactoryGroups): PortKind {
   if (isSource(place)) return stage.raw?.[sourceItem(place)] ? 'raw' : 'supply';
   if (place === UNGROUPED) return 'ungrouped';
@@ -219,13 +276,13 @@ const byKindThenRate = (a: FlowPort, b: FlowPort) =>
   a.item.localeCompare(b.item) ||
   a.place.localeCompare(b.place);
 
-// What crosses the group's edge: groupLinks' links into and out of it, one port per item.
+// What crosses the group's edge: groupLinks' links (`links`) into and out of it, one port per item.
 function crossingPorts(
   stage: StoredStage,
   groups: FactoryGroups,
   groupId: string,
   belts: BeltsFor,
-  planned: OnSiteSettings | undefined,
+  links: GroupLink[],
 ): { ins: FlowPort[]; outs: FlowPort[] } {
   const ins: FlowPort[] = [],
     outs: FlowPort[] = [];
@@ -237,7 +294,7 @@ function crossingPorts(
     rate,
     belts: belts(item, rate),
   });
-  for (const link of groupLinks(stage, groups, planned)) {
+  for (const link of links) {
     if (link.to === groupId)
       for (const entry of link.items) ins.push(port(link.from, entry.item, entry.rate));
     if (link.from === groupId)
@@ -247,7 +304,9 @@ function crossingPorts(
 }
 
 // Each port's rate shared among the group's lines that use its item (`ins`) or make it
-// (`outs`), in proportion to their parts. For an item the group makes on site (#876,
+// (`outs`), in proportion to what each still needs, or has left, after the links inside the
+// group (#1022: so a line that takes its own byproduct back, or gets it from the group's own
+// lines, draws only the rest from outside). For an item the group makes on site (#876,
 // ItemBooks.local) an outgoing port is shared by what each line making it has left after the
 // links inside the group, as groupLinks counts it: the group's own lines' excess goes to the
 // sink (its `sunk`), and the other lines making the item share the rest, so every output row
@@ -286,7 +345,7 @@ function portLinks(
       ];
     });
   };
-  // What a line has left of `item` after its links inside the group.
+  // What a line has left of `item` after its links inside the group, and what it still needs.
   const leftOf = (line: GroupPart, item: string) =>
     Math.max(
       0,
@@ -294,11 +353,27 @@ function portLinks(
         .filter(link => link.item === item && isLine(link.from, line.row.id))
         .reduce((left, link) => left - link.rate, madeBy(line, item)),
     );
+  const needOf = (line: GroupPart, item: string) =>
+    Math.max(
+      0,
+      inside
+        .filter(link => link.item === item && isLine(link.to, line.row.id))
+        .reduce((need, link) => need - link.rate, usedBy(line, item)),
+    );
+  // `part`, or `whole` when no line has any of `part` left (rounding, or the memberships changed
+  // since the plan was calculated), so the port still reaches the lines.
+  const partOr = (
+    lines: GroupPart[],
+    part: (line: GroupPart) => number,
+    whole: (line: GroupPart) => number,
+  ) => (lines.reduce((sum, line) => sum + part(line), 0) > LINK_DUST ? part : whole);
   const outLinks = (item: string): FlowLink[] => {
     const itemPorts = ports.outs.filter(port => port.item === item);
     const madeHere = (line: GroupPart) => madeBy(line, item);
-    if (!local[item]?.has(groupId))
-      return itemPorts.flatMap(port => share(port, parts, madeHere, false));
+    if (!local[item]?.has(groupId)) {
+      const left = partOr(parts, line => leftOf(line, item), madeHere);
+      return itemPorts.flatMap(port => share(port, parts, left, false));
+    }
     const makers = parts.filter(line => madeHere(line) > LINK_DUST);
     const own = makers.filter(line => line.row.onSite?.group === groupId);
     const others = makers.filter(line => line.row.onSite?.group !== groupId);
@@ -333,7 +408,15 @@ function portLinks(
     });
   };
   return [
-    ...ports.ins.flatMap(port => share(port, parts, line => usedBy(line, port.item), true)),
+    ...ports.ins.flatMap(port => {
+      const used = (line: GroupPart) => usedBy(line, port.item);
+      return share(
+        port,
+        parts,
+        partOr(parts, line => needOf(line, port.item), used),
+        true,
+      );
+    }),
     ...[...new Set(ports.outs.map(port => port.item))].flatMap(outLinks),
   ];
 }
@@ -379,6 +462,40 @@ function flowLine(
   };
 }
 
+// What a place's flow reads of the phase's books: itemBooks and groupLinks of them, worked out
+// once for every place (recycle.ts reads each place's links).
+export interface PhaseBooks {
+  books: ItemBooks;
+  links: GroupLink[];
+}
+
+// The lines of place `placeId` (a group, or UNGROUPED), what crosses its edge and every link into
+// or out of its lines: those between its own lines (insideLinks), then those with the places
+// outside it (portLinks).
+function placeFlow(
+  stage: StoredStage,
+  groups: FactoryGroups,
+  placeId: string,
+  phase: PhaseBooks,
+  belts: BeltsFor,
+): { parts: GroupPart[]; ports: { ins: FlowPort[]; outs: FlowPort[] }; links: FlowLink[] } {
+  const parts = groupParts(stage, groups, placeId);
+  const inside = insideLinks(parts, phase.books, belts, placeId);
+  const ports = crossingPorts(stage, groups, placeId, belts, phase.links);
+  const links = [...inside, ...portLinks(parts, ports, belts, inside, phase.books.local, placeId)];
+  return { parts, ports, links };
+}
+
+// Every link into or out of the lines of place `placeId` (a group, or UNGROUPED for the rows in
+// no group), as its flow page shares them (placeFlow), without belts. recycle.ts follows each
+// line's byproducts through them.
+export const placeLinks = (
+  stage: StoredStage,
+  groups: FactoryGroups,
+  placeId: string,
+  phase: PhaseBooks,
+): FlowLink[] => placeFlow(stage, groups, placeId, phase, () => '').links;
+
 // The flow of group `groupId` in a calculated phase, null for a group the profile does not have.
 // `belts` words the belts or pipes of a rate (BeltsFor), `name` names a line (LineName) and
 // `planned` is the plan's settings.onSite, the items made on site for each group (itemBooks).
@@ -392,11 +509,14 @@ export function groupFlow(
   planned?: OnSiteSettings,
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
-  const parts = groupParts(stage, groups, groupId);
   const books = itemBooks(stage, groups, planned);
-  const inside = insideLinks(parts, books, belts, groupId);
-  const ports = crossingPorts(stage, groups, groupId, belts, planned);
-  const links = [...inside, ...portLinks(parts, ports, belts, inside, books.local, groupId)];
+  const { parts, ports, links } = placeFlow(
+    stage,
+    groups,
+    groupId,
+    { books, links: groupLinks(stage, groups, planned) },
+    belts,
+  );
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts, name));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));
   const lanes = assignLanes(lines);

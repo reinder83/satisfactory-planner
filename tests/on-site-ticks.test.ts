@@ -196,13 +196,20 @@ test('two groups that make Wire on site have no Wire link between them', () => {
   const books = itemBooks(stage, groups);
   assert.equal(books.supply.Wire?.get(ALPHA), undefined);
   assert.equal(books.demand.Wire?.get(ALPHA), undefined);
-  // Without the marks the same lines are ordinary supply again, shared with everyone.
-  const unmarked = groupLinks(stage, { ...groups, local: {} });
+  // Without the marks the same lines are ordinary supply again. Each group then uses its own
+  // supply first (#1022), and these lines were sized to their groups' demand, so there is still
+  // no Wire link between the groups.
+  const unmarkedGroups = { ...groups, local: {} };
+  assert.ok((itemBooks(stage, unmarkedGroups).supply.Wire?.get(ALPHA) || 0) > 0, 'ordinary supply');
+  const unmarked = groupLinks(stage, unmarkedGroups);
   assert.ok(
-    unmarked.some(
-      link => link.from === ALPHA && link.to === BETA && link.items.some(e => e.item === 'Wire'),
+    !unmarked.some(
+      link =>
+        [ALPHA, BETA].includes(link.from) &&
+        [ALPHA, BETA].includes(link.to) &&
+        link.items.some(e => e.item === 'Wire'),
     ),
-    'a Wire link between the groups without the marks',
+    'no Wire link between the groups without the marks either',
   );
 });
 

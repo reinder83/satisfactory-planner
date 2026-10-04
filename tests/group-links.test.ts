@@ -190,9 +190,13 @@ test('memberships without a rate split what is left evenly (#197)', () => {
 });
 
 test('each raw resource and existing-supply item is a source of its own (#231)', () => {
+  // The plan builds only what the existing supply leaves (#231): 25 of the 30 ingots. (Before
+  // #1022 this stage made 35 ingots for 30 asked; the rule now uses every group's own supply before
+  // existing supply, so an unbalanced stage would leave the existing ingots unused.)
   const stage = {
     ...chain,
-    raw: { ...chain.raw, Coal: 12 },
+    rows: [row('ingot', { Ore: 25 }, { Ingot: 25 }), chain.rows![1]!],
+    raw: { Ore: 25, Coal: 12 },
     supplied: { Ingot: 5 },
   } as typeof chain;
   const links = groupLinks(
