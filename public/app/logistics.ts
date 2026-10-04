@@ -11,6 +11,7 @@ import type {
   ItemRates,
   LinkMode,
   LinkTransport,
+  OnSiteSettings,
   StageKey,
   StoredCalculatedPlan,
   UpdateOp,
@@ -179,7 +180,7 @@ export function transportFuel(
   ][]) {
     if (Number(phase) < Number(plan.settings.phase || 1) || !stage.rows?.length) continue;
     const fuels: ItemRates = {};
-    for (const link of groupLinks(stage, groups)) {
+    for (const link of groupLinks(stage, groups, plan.settings.onSite)) {
       const transport = linkTransportFor(groups.links, link.from, link.to);
       if (!transport?.fuel) continue;
       const burn = linkLoad(link.items, transport, catalog, fluids).fuelPerMin;
@@ -287,17 +288,19 @@ export function linkTotal(items: { rate: number; fluid: boolean }[]): string {
 // the other sources going the same way keep that choice (state.ts factoryLinkTransport). The
 // old entry applied in every phase, so its siblings are the sources going there in any phase of
 // the plan, not only the one on screen (#235). Undefined when the link has no such old entry.
+// `planned` is the plan's settings.onSite (itemBooks).
 export function linkSiblings(
   stages: StoredCalculatedPlan['stages'] | undefined,
   groups: FactoryGroups,
   link: { from: string; to: string },
+  planned?: OnSiteSettings,
 ): string[] | undefined {
   return isSource(link.from) && groups.links?.[MINES + ':' + link.to]
     ? [
         ...new Set(
           Object.values(stages ?? {})
             .filter(stage => stage.rows?.length)
-            .flatMap(stage => groupLinks(stage, groups))
+            .flatMap(stage => groupLinks(stage, groups, planned))
             .filter(other => isSource(other.from) && other.to === link.to)
             .map(other => other.from),
         ),

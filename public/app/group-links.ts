@@ -14,15 +14,21 @@
 // left out: they are that group's own belts.
 //
 // A factory group's own line made on site (#875, #876: `onSite`) sits wholly in its group. For
-// the items that group marks (factoryGroups.local) it supplies only the group's own demand, its
-// share of each consumer, which is what the planner sized it to; what it makes beyond that goes
-// to the sink rather than to other groups (onSiteBooks). So two groups that both make Wire on site
-// have no Wire link between them, and a central Wire line serves the remaining consumers. Should
-// a group edit after the recalculation leave the group asking for less than that (#918), the sink
-// still takes only the plan's surplus, and the rest is offered to the other places as ordinary
-// supply, so the books keep balancing without a recalculation.
+// the items the plan was calculated to make on site for that group (siteItems) it supplies only
+// the group's own demand, its share of each consumer, which is what the planner sized it to; what
+// it makes beyond that goes to the sink rather than to other groups (onSiteBooks). So two groups
+// that both make Wire on site have no Wire link between them, and a central Wire line serves the
+// remaining consumers. Should a group edit after the recalculation leave the group asking for less
+// than that (#918), the sink still takes only the plan's surplus, and the rest is offered to the
+// other places as ordinary supply, so the books keep balancing without a recalculation.
 import { LINK_DUST, rowPlaces, rowShares, UNGROUPED } from './group-order.ts';
-import type { FactoryGroups, ItemRates, LinkTransport, StoredStage } from '../types/index.ts';
+import type {
+  FactoryGroups,
+  ItemRates,
+  LinkTransport,
+  OnSiteSettings,
+  StoredStage,
+} from '../types/index.ts';
 
 // Place ids that are not factory groups. UNGROUPED and rowShares live in group-order.ts, which
 // the build plan's order shares (#869); they are exported here too for the pages that use them.
@@ -82,17 +88,30 @@ export interface GroupLink {
   items: { item: string; rate: number }[];
 }
 
+// The items a group's own lines made on site keep inside the group (#1003): those the plan was
+// calculated to make on site for it (`planned`, the plan's settings.onSite), as the planner routes
+// them (siteRoutes in planner/on-site.ts). Any other output of such a line is ordinary supply, as
+// from a central line of its recipe: Water from its Aluminum Scrap line though the group marks
+// Water (a raw resource, never made on site), or an item the group marked after the
+// recalculation. Without the setting (a plan stored without it has no such lines) the group's
+// marks (factoryGroups.local) stand in, as before.
+const siteItems = (
+  groups: FactoryGroups,
+  group: string,
+  planned: OnSiteSettings | undefined,
+): readonly string[] => (planned ? planned[group]?.items : groups.local?.[group]) || [];
+
 // Per item, what each place makes (`supply`) and what each place asks for (`demand`), per minute.
 // `sunk`: per item, what a group's own lines made on site make beyond the group's own demand,
 // which goes straight to the sink (#876), up to the plan's surplus for the item. A group's own
-// lines' supply of an item it marks, and the demand it meets, are left out of `supply` and
-// `demand`: they stay inside the group.
+// lines' supply of an item made on site for the group (siteItems), and the demand it meets, are
+// left out of `supply` and `demand`: they stay inside the group.
 // `offered`: per item, the part of a group's own lines' excess the sink has no room for (#918:
 // the group asks for less since a group edit). It is in `supply` too, at the group, as ordinary
 // supply the other places share; empty while the groups are as the plan was calculated for.
-// `local`: per item and group, what that group's own lines make of an item it marks (`made`) and
-// what the group asked for it before they met it (`asked`), so a group's flow (group-flow.ts)
-// shares those lines out inside the group by the same rule.
+// `local`: per item and group, what that group's own lines make of an item made on site for it
+// (`made`) and what the group asked for it before they met it (`asked`), so a group's flow
+// (group-flow.ts) and the factory dialog (flow.ts) share those lines out by the same rule.
 export interface ItemBooks {
   supply: Record<string, Map<string, number>>;
   demand: Record<string, Map<string, number>>;
@@ -103,11 +122,16 @@ export interface ItemBooks {
 
 // The books groupLinks shares out: every row's inputs and outputs split by its places
 // (rowPlaces), the raw resources and existing supply as sources, and protected storage, drone
-// fuel, vehicle fuel, the Space Elevator and the sink as destinations.
-export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks {
+// fuel, vehicle fuel, the Space Elevator and the sink as destinations. `planned` is the plan's
+// settings.onSite (siteItems).
+export function itemBooks(
+  stage: StoredStage,
+  groups: FactoryGroups,
+  planned?: OnSiteSettings,
+): ItemBooks {
   const supply: Record<string, Map<string, number>> = {};
   const demand: Record<string, Map<string, number>> = {};
-  // What groups' own lines make of the items those groups mark, per item and group.
+  // What groups' own lines make of the items made on site for those groups, per item and group.
   const onSite: Record<string, Map<string, number>> = {};
   const put = (
     books: Record<string, Map<string, number>>,
@@ -122,9 +146,9 @@ export function itemBooks(stage: StoredStage, groups: FactoryGroups): ItemBooks 
   for (const row of stage.rows || []) {
     // A membership in a group that no longer exists counts as ungrouped.
     for (const [place, share] of rowPlaces(row, groups)) {
-      const marked = row.onSite?.group === place ? groups.local?.[place] || [] : [];
+      const own = row.onSite?.group === place ? siteItems(groups, place, planned) : [];
       for (const [item, rate] of Object.entries(row.outputs || {}))
-        put(marked.includes(item) ? onSite : supply, item, place, rate * share);
+        put(own.includes(item) ? onSite : supply, item, place, rate * share);
       for (const [item, rate] of Object.entries(row.inputs || {}))
         put(demand, item, place, rate * share);
     }
@@ -207,8 +231,14 @@ export const sharedRate = (made: number, asked: number, supplied: number, wanted
 export const placeTotal = (places: Map<string, number> | undefined): number =>
   [...(places?.values() || [])].reduce((sum, rate) => sum + rate, 0);
 
-export function groupLinks(stage: StoredStage, groups: FactoryGroups): GroupLink[] {
-  const { supply, demand, sunk } = itemBooks(stage, groups);
+// What moves between the places of a phase, from its books (itemBooks; `planned` is the plan's
+// settings.onSite).
+export function groupLinks(
+  stage: StoredStage,
+  groups: FactoryGroups,
+  planned?: OnSiteSettings,
+): GroupLink[] {
+  const { supply, demand, sunk } = itemBooks(stage, groups, planned);
   const links = new Map<string, GroupLink>();
   const add = (from: string, to: string, item: string, rate: number) => {
     const key = from + '\u0000' + to;
