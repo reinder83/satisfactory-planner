@@ -27,9 +27,12 @@ export const siteBalance = (item: string, group: string) => `item:${item}@${grou
 
 // Items no group line is made for: raw resources (and so existing supply of them), radioactive
 // items and nuclear recipes, whose balances the whole-machine rounding never touches (#370).
+// Power generators (negative power) are no production line either. Every production recipe draws
+// power, but a plan calculated before #935 froze Singularity Cell at 0 MW, so the rule is "not a
+// generator" rather than "draws power", as onSiteCopyable in public/app/on-site.ts reads it.
 const NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
 const copyable = (recipe: PoolRecipe) =>
-  recipe.power > 0 &&
+  recipe.power >= 0 &&
   !recipe.slots &&
   !recipe.onSite &&
   !NUCLEAR.test(

@@ -34,15 +34,17 @@ const SITE_NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
 // group marks, as the planner decides it (siteCopies, copyable and markable in
 // planner/on-site.ts): `item` is the row's primary product, its first output (#1012, the
 // planner's primaryOutput, read from a plan row here), so a recipe that makes it only as a
-// byproduct stays central; and the recipe is a machine that takes power, not a nuclear one (so
-// never one making a radioactive item). The Made on site picker follows only these from a marked
-// part to its ingredients (#967). A test checks the two rules agree on every recipe and output.
+// byproduct stays central; and the recipe is a production machine, not a power generator
+// (negative power) or a nuclear one (so never one making a radioactive item). A plan calculated
+// before #935 has Singularity Cell's row at 0 MW (the recipe data's error then); it counts, since
+// a recalculation now copies it. The Made on site picker follows only these from a marked part to
+// its ingredients (#967). A test checks the two rules agree on every recipe and output.
 export const onSiteCopyable = (
   row: Pick<CalcRow, 'name' | 'power' | 'inputs' | 'outputs'>,
   item: string,
 ) =>
   Object.keys(row.outputs || {})[0] === item &&
-  row.power > 0 &&
+  row.power >= 0 &&
   !SITE_NUCLEAR.test(
     [row.name, ...Object.keys(row.inputs || {}), ...Object.keys(row.outputs || {})].join(' '),
   );

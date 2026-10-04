@@ -69,7 +69,7 @@ const shortOfPower = {
   ...settings,
   sam: 'needed',
   multiplier: 20,
-  powerFactor: 2,
+  powerFactor: 2.2,
   installedPowerGW: 200,
 };
 
