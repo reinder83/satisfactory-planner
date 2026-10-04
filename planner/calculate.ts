@@ -15,7 +15,7 @@ import { draftStage } from './draft.ts';
 import { pullFinalPhaseForward, judgeAugmenterFuel } from './adjustments.ts';
 import { planWarnings } from './warnings.ts';
 import { stoppedSearch } from './rounding.ts';
-import { plannedSites, centralSettings } from './on-site.ts';
+import { plannedSites, centralSettings, withinRates } from './on-site.ts';
 
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
 // interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
@@ -103,7 +103,14 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
 // on #875), last and for the whole phase, and the stage records `onSiteDropped`: as with
 // amplification and existing supply, an optional input never costs a plan that fits. A search
 // that only stopped at a limit keeps the lines, through the fallbacks of the two-step fit.
+// A group's part of a row with a fixed-rate membership follows the row's total (#984), which
+// holds while the row makes at least its fixed rates: when a row makes less, the phase is
+// planned again as withinRates says.
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
+  return withinRates(config, phase, settings => solveSites(settings, phase));
+}
+// solvePhase's solve with the groups' own lines, or with every item made centrally.
+function solveSites(config: CurrentSettings, phase: number): RunResult {
   const result = solveGoal(config, phase);
   if (result.feasible || stoppedSearch(result) || !config.wholeMachines) return result;
   const sites = plannedSites(config, phase);

@@ -2,7 +2,7 @@
 // put in order group by group (#869). Shared by the build plan and its build status
 // (orderedPhaseSteps and currentBuildStatus in views/calculated.ts) and the flows between groups
 // (group-links.ts).
-import type { CalcRow, FactoryGroups, GroupAssignment } from '../types/index.ts';
+import type { CalcRow, FactoryGroups, GroupAssignment, OnSiteRate } from '../types/index.ts';
 
 // The place of a row, or the part of one, that is in no factory group.
 export const UNGROUPED = 'ungrouped';
@@ -43,6 +43,29 @@ export function rowShares(
   if (open.length) for (const membership of open) add(membership.group, rest / open.length);
   else add(UNGROUPED, rest);
   return shares;
+}
+
+// rowShares' rule as each membership's part of a row of any total T, for a row with a fixed-rate
+// membership (#984): a fixed rate is `rate` per minute after the earlier fixed rates (`after`),
+// a membership without a rate `open` of what all the fixed rates leave (T - `after`). That is
+// rowShares(T) × T for every T at least the fixed rates' sum; below it rowShares caps the fixed
+// rates. Empty for a row without a fixed rate, whose shares do not depend on its total.
+export function rowParts(
+  memberships: { group: string; rate: number | null }[] | undefined,
+): Map<string, OnSiteRate> {
+  const parts = new Map<string, OnSiteRate>();
+  const fixed = (memberships || []).filter(m => m.rate != null);
+  if (!fixed.length) return parts;
+  let after = 0;
+  for (const membership of fixed) {
+    // Only the memberships with a rate (the filter above).
+    parts.set(membership.group, { rate: membership.rate!, open: 0, after });
+    after += membership.rate!;
+  }
+  const open = (memberships || []).filter(m => m.rate == null);
+  for (const membership of open)
+    parts.set(membership.group, { rate: 0, open: 1 / open.length, after });
+  return parts;
 }
 
 // The factory groups as the build order reads them: a profile's saved `factoryGroups`, whose
