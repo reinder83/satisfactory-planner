@@ -90,6 +90,8 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
     stages: stages as Record<StageKey, CurrentStage>,
     warnings,
     createdAt: new Date().toISOString(),
+    // Fluid lines keep exact clocks even with a solid byproduct (#1086, roundsToWholeMachines).
+    exactFluidLines: true,
   };
 }
 // Solves each phase on its own, 1 to 5, each with a fresh search deadline. A phase that does not

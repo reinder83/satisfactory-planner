@@ -201,18 +201,14 @@ test('from Phase 2 on, a plan that fits has the power it needs (the issue’s E7
         0,
         `${label}, Phase ${phase}: ${view.needMW} of ${view.availableMW}`,
       );
-      // The extraction is in the planner's own power balance: its lines at their linear power,
-      // with the allowance, and the extraction, less its generators' output, within the spare
-      // power (with what the augmenters add).
+      // The extraction is in the planner's own power balance, and the generators' fuel covers
+      // the need: the lines at their clocked power, with the allowance, and the extraction, less
+      // the generators' output, within the spare power (with what the augmenters add). Since
+      // #1086 the fuel follows that clocked need rather than the lines' full linear power
+      // (planner/load.ts), so it is the need the fuel must cover, not the linear balance.
       const grid = stage.grid as StageGrid;
-      const linear = (stage.rows as CalcRow[])
-        .filter(row => row.power > 0)
-        .reduce((sum, row) => sum + row.power * row.equivalent * plan.settings.powerFactor, 0);
       const generation = (stage.rows as CalcRow[]).reduce((sum, row) => sum + row.generationMW, 0);
-      const balance =
-        linear * (1 + plan.settings.utilityPercent / 100) +
-        grid.extractionMW -
-        generation * (1 + (stage.boost || 0));
+      const balance = grid.needMW - generation * (1 + (stage.boost || 0));
       assert.ok(
         balance <= grid.spareMW + grid.augmenterMW + 0.01 + 1e-6 * Math.abs(balance),
         `${label}, Phase ${phase}: ${balance} within ${grid.spareMW + grid.augmenterMW}`,
