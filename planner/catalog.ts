@@ -110,7 +110,8 @@ export const catalog = (): Catalog => ({
     {
       id: 'minimal',
       name: 'Minimal construction',
-      description: '24-hour deliveries; minimize production-building equivalents.',
+      description:
+        'The fewest buildings that deliver each phase within 24 hours, run as fast as they allow.',
     },
     {
       id: 'balanced',

@@ -15,6 +15,7 @@ import type {
   CurrentSettings,
   Distribution,
   DroneFuel,
+  ExactClocks,
   ExtractionRecord,
   ItemRates,
   MainPower,
@@ -197,6 +198,26 @@ const sitePart = (value: unknown, max: number): number =>
     : typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max
       ? value
       : fail('Invalid items made on site.');
+// The production lines a whole-machine plan runs at exact clocks (#1066): { phase: [row id] }, from
+// the progress state's exactClocks when the user starts a recalculation (exactClocksSettings in
+// public/app/exact-clocks.ts) and frozen with the plan. Row ids are check key parts; an amplified
+// twin ('amp:') is always whole machines and is refused. Duplicates go, ids are sorted, and empty
+// phases are dropped; with nothing left the field is absent, so settings without it stay as they
+// were. An id the phase does not plan is kept and changes nothing.
+const exactClockLines = (raw: unknown): { exactClocks?: ExactClocks } => {
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) fail('Invalid exact clocks.');
+  const out: ExactClocks = {};
+  for (const [phase, ids] of Object.entries(raw)) {
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !Array.isArray(ids) || ids.length > 1000)
+      fail('Invalid exact clocks.');
+    if (ids.some(id => typeof id !== 'string' || !ROW_ID.test(id) || id.startsWith('amp:')))
+      fail('Invalid exact clocks.');
+    const clean = [...new Set(ids as string[])].sort();
+    if (clean.length) out[phase as StageKey] = clean;
+  }
+  return Object.keys(out).length ? { exactClocks: out } : {};
+};
 // A known item that is not a raw resource: what existing supply and settings.onSite may name. The
 // interface applies the same rule to the marks it sends (onSitePlannable in
 // public/app/on-site.ts, #921); a test checks the two agree.
@@ -345,6 +366,7 @@ export function settings(input: unknown = {}): CurrentSettings {
     existingSupply: supplyRates(input.existingSupply),
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
+    ...exactClockLines(input.exactClocks),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

@@ -59,6 +59,9 @@ export interface PlanStepView extends Step {
   // The note of a line a delivered Space Elevator part leaves without work (idleStepNotes): the
   // step is dimmed and says why under its title.
   idle?: string;
+  // A production line at exact clocks in a whole-machine plan, or the change a recalculation would
+  // make to its clocks (lineClockNote in exact-clocks.ts, #1066), under the title.
+  clocks?: string;
   icon: StepIconData;
   link: StepLink | null;
   custom?: boolean;

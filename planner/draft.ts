@@ -55,8 +55,11 @@ export function draftStage(config: CurrentSettings, phase: number, result: Unsol
 const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
   run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion }).feasible;
 // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
-// doubled budgets to measure which resources need headroom and how much; keep bounds modest for
-// MIP stability. Sets `wholeMachinesOnly` and the `shortfalls` it measured on the draft.
+// each budget allowed to run over at a high cost (`overBudget`), so the fit raises a budget only as
+// far as whole machines need it: the least extra budget, not what a fit with room to spare would
+// draw. Measured with doubled budgets, as before #1066, raw resources were almost free, so the
+// fit spent the extra budget on saving machines and overstated the need (+44% Crude Oil where
+// whole machines need +32%). Sets `wholeMachinesOnly` and the `shortfalls` it measured.
 function wholeMachinesReason(
   stage: CurrentStage,
   { config, phase, plain, conversion }: DraftContext,
@@ -65,12 +68,7 @@ function wholeMachinesReason(
   const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
   const rounded: RunResult = network.feasible
     ? run(
-        {
-          ...plain,
-          limits: Object.fromEntries(
-            RAW.map(resource => [resource, config.limits[resource]! * 2 + 600]),
-          ),
-        },
+        plain,
         phase,
         // Fractional nuclear plants, as the plan itself falls back to: the shortfall
         // is about the solid-part lines.
@@ -78,6 +76,7 @@ function wholeMachinesReason(
           conversion,
           recipeIds: new Set(network.rows.map(row => row.id)),
           fractionalNuclear: true,
+          overBudget: true,
         },
       )
     : { feasible: false };
@@ -91,7 +90,7 @@ function wholeMachinesReason(
     }));
   const names = (stage.shortfalls || []).map(shortfall => shortfall.name);
   return names.length
-    ? `Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length > 1 ? 'those budgets' : 'that budget'} a little, or turn off whole-machine production for this profile.`
+    ? `Precise balancing fits these budgets, but whole solid-part machines at 100% need more ${listNames(names)}. Raise ${names.length > 1 ? 'those budgets' : 'that budget'}, or turn off whole-machine production for this profile.`
     : 'Mixed-recipe balancing fits these budgets, but running solid-part machines whole at 100% does not. Add some budget headroom or turn off whole-machine production for this profile.';
 }
 // A real budget shortfall: what the diagnostic draws beyond the budgets, and the time at which

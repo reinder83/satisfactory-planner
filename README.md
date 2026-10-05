@@ -16,7 +16,7 @@ Most calculators stop at the numbers. This one keeps going: which milestone to u
 - **Starts in five questions.** A short guided start (your phase, your goal, which recipes, what to keep stocked, how exact) — or the full settings wizard if you want every control.
 - **Fits your world.** Count your nodes or just pick your World Randomization settings and it works out the budgets. Already producing something? Enter the rate and the plan builds only the rest.
 - **Turns the plan into a checklist.** A chronological build order with HUB milestones, MAM research, hard drives and power upgrades in the order you need them.
-- **Whole machines.** Solid-part lines run at 100% by default, with the surplus listed; fluids and power stay precisely balanced.
+- **Whole machines.** Solid-part lines run at 100% by default, with the surplus listed and what that costs against exact clocks; any single line can be set to exact clocks, and fluids and power stay precisely balanced.
 - **Storage map.** Every item gets a container address in a storage room you can rearrange.
 - **Yours to edit.** Reorder and rewrite steps, sort production lines into factories at your own sites, add notes and personal tasks.
 - **Progress you keep.** Several saves, several profiles per save, each with its own progress. Updates never change an existing plan behind your back.
