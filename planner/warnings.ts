@@ -141,7 +141,21 @@ function onSiteWarnings({ config, stages }: FinishedPlan): string[] {
       `Phase ${phase} makes ${listNames(items)} centrally: the whole-machine lines of ${listNames(dropped.map(([group]) => groupName(group)))} for ${items.length > 1 ? 'those items' : 'that item'} need more than your budgets allow, while central lines fit. Raise a budget a little, or make fewer items on site.`,
     );
   }
+  warnings.push(...overflowWarnings(stages, groupName));
   return warnings;
+}
+// The phases whose groups' excess of an item made on site meets the central demand (#1063,
+// stage.onSiteOverflow): a sentence each.
+function overflowWarnings(stages: PhaseStages, groupName: (group: string) => string): string[] {
+  return Object.entries(stages).flatMap(([phase, stage]) => {
+    const routed = Object.entries(stage.onSiteOverflow || {});
+    if (!routed.length) return [];
+    const items = [...new Set(routed.flatMap(([, list]) => list))].sort();
+    const many = routed.length > 1;
+    return [
+      `Phase ${phase}: a central line would have sent almost all the ${listNames(items)} it made to the AWESOME Sink, so the own lines of ${listNames(routed.map(([group]) => groupName(group)))} also give the rest of the plan what they make beyond ${many ? "their factories'" : "the factory's"} needs, and fewer central machines are built.`,
+    ];
+  });
 }
 // A sentence per item byproductFeeds finds, each starting with a space; '' for none.
 function feedSentences(

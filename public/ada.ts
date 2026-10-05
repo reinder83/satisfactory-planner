@@ -105,6 +105,10 @@ export interface AdaFacts {
   // The factory groups' own whole-machine lines did not fit the stage, so it makes those items
   // centrally (stage.onSiteDropped, #875): the items and the groups, as name lists. null otherwise.
   onSiteDropped?: { items: string; groups: string } | null;
+  // A central line of these items would have sunk almost all it made, so the groups' own lines
+  // also give the rest of the plan what they have left (stage.onSiteOverflow, #1063): the items
+  // and the groups, as name lists. null or absent otherwise.
+  onSiteOverflow?: { items: string; groups: string } | null;
   profiles: number;
   // Days since the browser edition's last full export, or null.
   backupDays: number | null;
@@ -613,6 +617,15 @@ const RULES: AdaRule[] = [
     when: facts => facts.onSiteDropped,
     text: facts =>
       `${facts.phaseLabel} makes ${facts.onSiteDropped!.items} centrally: the whole-machine lines of ${facts.onSiteDropped!.groups} need more than your budgets allow, while central lines fit. Shared lines. Shared conveyor belts. Shared disappointment. Raise a budget a little, or make fewer items on site.`,
+  },
+  {
+    // The groups' excess of an item made on site meets the central demand (#1063).
+    id: 'on-site-overflow',
+    on: ['factories', 'logistics'],
+    tone: 'calm',
+    when: facts => facts.onSiteOverflow,
+    text: facts =>
+      `In ${facts.phaseLabel} the own lines of ${facts.onSiteOverflow!.groups} also send the rest of the plan the ${facts.onSiteOverflow!.items} they make beyond their own needs: a central line would have sunk almost all it made. Fewer machines, same parts. Logistics shows where it goes.`,
   },
   {
     id: 'hours',

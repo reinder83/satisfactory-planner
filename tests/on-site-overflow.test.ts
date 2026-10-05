@@ -91,6 +91,15 @@ test("a recalculation lets Alpha's excess meet the central demand: no central li
     );
     assert.equal(routed.count, 1);
   }
+  // The profile assumptions say so, per phase.
+  for (const phase of PHASES)
+    assert.ok(
+      plan.warnings.includes(
+        `Phase ${phase}: a central line would have sent almost all the Quickwire it made to the AWESOME Sink, so the own lines of Alpha also give the rest of the plan what they make beyond the factory's needs, and fewer central machines are built.`,
+      ),
+      `Phase ${phase}'s warning`,
+    );
+  assert.equal(recorded.plan.warnings.filter(w => w.includes('almost all')).length, 0);
   // The other phases have no line made on site and are planned exactly as before.
   for (const phase of ['1', '2'] as StageKey[])
     assert.deepEqual(
