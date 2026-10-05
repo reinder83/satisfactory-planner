@@ -17,6 +17,8 @@
 //                  (mapping, #606), version 13; no update op edits it
 //   onSiteReview   ticks a recalculation kept for review because of lines made on site
 //                  (validateOnSiteReview, #876), version 15; no update op edits it
+//   exactClocks    { phase: [rowId] } production lines asked to run at exact clocks
+//                  (validateExactClocks, #1066), version 16; absent means the plan's own
 // Checklist keys link progress to content and must never be renamed, because saved states
 // only hold the key: 'calc-<phase>-<rowId>' (calculated rows), 'factory-<phase>-<factoryId>'
 // (handbook factories), 'slot-<address>-<built|labelled|connected|verified>' (containers),

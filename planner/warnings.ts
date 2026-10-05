@@ -10,7 +10,7 @@ import type {
   StageKey,
 } from '../public/types/index.ts';
 import { DATA, RAW, exactBalance } from './data.ts';
-import { roundsToWholeMachines } from './model.ts';
+import { exactClockLine, roundsToWholeMachines } from './model.ts';
 import { productRate } from './rounding.ts';
 import { primaryOutput } from './recipes.ts';
 import type { PhaseStages } from './calculate.ts';
@@ -241,6 +241,12 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
   warnings.push(
     'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
   );
+  // The lines set to exact clocks (#1066), counted per phase as the build plan lists them.
+  const exact = Object.values(config.exactClocks || {}).flat().length;
+  if (exact)
+    warnings.push(
+      `${exact === 1 ? 'One production line runs' : `${exact} production lines run`} at exact clocks, as asked: the last machine is underclocked to the exact remainder instead of sending the overflow to the sink.`,
+    );
   if (config.nuclear !== 'none')
     warnings.push(
       'Uranium-fuelled Nuclear Power Plants are whole buildings wherever the budgets allow' +
@@ -257,21 +263,24 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
     );
   return warnings;
 }
+// The lines of a phase that round to whole machines: those roundsToWholeMachines picks, less the
+// lines set to exact clocks (#1066), whose last machine is meant to be fractional.
+const roundingLines = (config: CurrentSettings, phase: string) => (row: CalcRow) =>
+  roundsToWholeMachines(row) && !exactClockLine(config, Number(phase), row.id);
 // Phases whose whole-machine search stopped and whose exact plan was rounded instead (#593), one
 // sentence each, since each can take its own time. Not "to the nearest": where only the plan with
 // every line rounded up fits, that one is used (roundedTry, #698). The time is compared with the
 // exact plan's, which the stage records (#708).
-function roundedWarnings({ stages }: FinishedPlan): string[] {
+function roundedWarnings({ config, stages }: FinishedPlan): string[] {
   return Object.entries(stages)
     .filter(([, stage]) => stage.feasible && stage.roundedAfterStop !== undefined)
     .map(([phase, stage]) => {
       const target = stage.roundedAfterStop!,
         longer = stage.hours! > target * 1.01;
       // Lines roundedRun left fractional because it rounded them up more than ROUNDING_RAISES times.
-      const left = (stage.rows || []).filter(
-        row => roundsToWholeMachines(row) && row.lastClock < 100 - 1e-6,
-      );
-      const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock');
+      const rounds = roundingLines(config, phase);
+      const left = (stage.rows || []).filter(row => rounds(row) && row.lastClock < 100 - 1e-6);
+      const kept = raisedLines(stage, left, 'whole-machine', 'a fractional clock', rounds);
       return `Phase ${phase}: the whole-machine search stopped before it could prove the best plan, so its exact plan is rounded to whole machines instead. That can take more machines and resources than the best whole-machine plan${longer ? `, and this phase takes ${warningDuration(stage.hours!)} instead of ${warningDuration(target)}` : ''}.${kept} Fewer alternates or precise balancing usually let the search finish.`;
     });
 }
@@ -281,7 +290,7 @@ function roundedWarnings({ stages }: FinishedPlan): string[] {
 export const warningDuration = durationOfHours;
 // Phases whose search stopped and that no rounded whole-machine plan fit, so they are the exact
 // plan with easy clocks (#694), one sentence each.
-function fractionalWarnings({ stages }: FinishedPlan): string[] {
+function fractionalWarnings({ config, stages }: FinishedPlan): string[] {
   return Object.entries(stages)
     .filter(([, stage]) => stage.feasible && stage.fractionalAfterStop !== undefined)
     .map(([phase, stage]) => {
@@ -290,7 +299,7 @@ function fractionalWarnings({ stages }: FinishedPlan): string[] {
         stage.hours! > target * 1.01
           ? ` It takes ${warningDuration(stage.hours!)} instead of ${warningDuration(target)}.`
           : '';
-      return `Phase ${phase} is not whole machines: its whole-machine search stopped before it could prove the best plan, and rounding its exact plan to whole machines found no plan that fits the budgets within 50% more time. ${fractionalClocks(clocks)}${longer}${offGridLines(stage, clocks)} Fewer alternates or precise balancing usually let the search finish.`;
+      return `Phase ${phase} is not whole machines: its whole-machine search stopped before it could prove the best plan, and rounding its exact plan to whole machines found no plan that fits the budgets within 50% more time. ${fractionalClocks(clocks)}${longer}${offGridLines(stage, clocks, roundingLines(config, phase))} Fewer alternates or precise balancing usually let the search finish.`;
     });
 }
 // How the last machines of a phase in fractionalWarnings are clocked.
@@ -300,7 +309,11 @@ const fractionalClocks = (clocks: FractionalAfterStop['clocks']) =>
     : `So this phase is its exact plan with easy clocks: every solid-part line runs whole machines at 100% except the last, which runs at 25%, 50% or 75%${clocks === 'rate' ? ', or at the clock that makes a whole number of items per minute' : ''}.`;
 // The solid-part lines of a phase in fractionalWarnings whose last machine is not on an easy
 // clock (roundedRun raised them more than EASY_RAISES times), as sentences (raisedLines).
-function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']): string {
+function offGridLines(
+  stage: CurrentStage,
+  clocks: FractionalAfterStop['clocks'],
+  rounds: (row: CalcRow) => boolean,
+): string {
   if (clocks === 'precise') return '';
   const easy = (row: CalcRow) => {
     const last = row.lastClock / 100;
@@ -308,10 +321,8 @@ function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']
     const perMachine = row.equivalent > 0 ? productRate(row) / row.equivalent : 0;
     return clocks === 'rate' && Math.abs(perMachine * last - Math.round(perMachine * last)) < 1e-4;
   };
-  const left = (stage.rows || []).filter(
-    row => roundsToWholeMachines(row) && !row.amplified && !easy(row),
-  );
-  return raisedLines(stage, left, 'solid-part', 'a precise clock');
+  const left = (stage.rows || []).filter(row => rounds(row) && !row.amplified && !easy(row));
+  return raisedLines(stage, left, 'solid-part', 'a precise clock', rounds);
 }
 // Why roundedRun left the `left` lines of a stage off their grid, as sentences: it rounded each
 // up more than its raise limit (ROUNDING_RAISES, EASY_RAISES). Two whole lines tied by a fluid
@@ -320,8 +331,14 @@ function offGridLines(stage: CurrentStage, clocks: FractionalAfterStop['clocks']
 // of the stage also makes or uses is said to share a fluid (#714). A line at the top of a long
 // chain (Iron Plate, Copper Ingot) reaches the limit too, raised again each time the lines it
 // feeds were rounded.
-function raisedLines(stage: CurrentStage, left: CalcRow[], kind: string, clock: string): string {
-  const lines = (stage.rows || []).filter(row => roundsToWholeMachines(row));
+function raisedLines(
+  stage: CurrentStage,
+  left: CalcRow[],
+  kind: string,
+  clock: string,
+  rounds: (row: CalcRow) => boolean,
+): string {
+  const lines = (stage.rows || []).filter(rounds);
   const fluids = (row: CalcRow) =>
     [...Object.keys(row.inputs), ...Object.keys(row.outputs)].filter(
       item => DATA.items[item]?.fluid && !RAW.includes(item),

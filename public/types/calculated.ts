@@ -108,6 +108,11 @@ export interface CurrentSettings {
   // The items factory groups make on site (#875): absent unless a recalculation the user started
   // planned per-group lines.
   onSite?: OnSiteSettings;
+  // The production lines a whole-machine plan runs at exact clocks (#1066): per phase, the row ids
+  // whose last machine is underclocked to the exact remainder instead of running whole at 100%.
+  // Absent unless a recalculation the user started asked for it (the progress state's
+  // `exactClocks`, saved from a line's dialog), so a plan without it calculates exactly as before.
+  exactClocks?: ExactClocks;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;
@@ -128,6 +133,10 @@ export interface CurrentSettings {
   alternateRecipes: string[];
   preferredRecipes: string[];
 }
+
+// Per phase, the row ids of the production lines to run at exact clocks (#1066): in settings the
+// lines a plan was calculated with, in the progress state the lines the user asked for since.
+export type ExactClocks = Partial<Record<StageKey, string[]>>;
 
 // One factory group's part of settings.onSite (#875), keyed by group id: the items it makes on
 // site, its name when the plan was calculated (for the warnings), and per phase the share of each
@@ -244,6 +253,17 @@ export interface FuelVerdict {
   worthIt: boolean;
 }
 
+// A phase planned with exact clocks, beside its whole-machine plan (#1066): its buildings, the
+// power it needs (requiredMW), its raw resources per minute, its solid output beyond every demand
+// per minute (the stage's `surplus` added up: what storage or the sink takes) and its hours.
+export interface ExactPlan {
+  buildings: number;
+  requiredMW: number;
+  raw: ItemRates;
+  surplus: number;
+  hours: number;
+}
+
 // A resource a failed phase needs more of.
 export interface Shortfall {
   name: string;
@@ -290,9 +310,13 @@ export interface StageResult {
   hours: number;
   // Names of the resource converter rows.
   conversions: string[];
-  // Added by calculate(): the hours of the plan this one replaced when it was pulled ahead,
-  // Phase 5's fuel comparison, and whether supply or amplification had to be dropped.
+  // Added by calculate(): the hours of the plan this one replaced when it was pulled ahead (the
+  // target time on the final phase, or minimal construction run as fast as its buildings allow,
+  // #1066), Phase 5's fuel comparison, and whether supply or amplification had to be dropped.
   aheadOf?: number;
+  // What rounding to whole machines costs (#1066): the same phase planned with exact clocks. Only
+  // on a phase of a whole-machine plan where both fit; absent from older plans.
+  exactPlan?: ExactPlan;
   fuelVerdict?: FuelVerdict;
   supplyDropped?: boolean;
   amplificationDropped?: boolean;

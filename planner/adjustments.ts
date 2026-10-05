@@ -131,3 +131,37 @@ function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResul
         : count(fueled) < count(unfueled)),
   };
 }
+// Minimal construction (#1066): the fewest buildings for the goal's 24-hour deliveries, run as
+// fast as those buildings allow, rather than every line clocked down to stretch the phase to the
+// 24 hours. The phase is solved again for maximum output with each line, generators included,
+// capped at the machines the 24-hour plan builds (`caps`, as the target time on the final phase
+// caps an earlier phase), so not one building is added; the pace rises until a line runs out of
+// machines. The faster plan is kept only when it finishes strictly sooner, recording the hours it
+// replaces as `aheadOf`, as resolveEarlierPhases does. A re-solve that does not fit or stopped at
+// a limit keeps the 24-hour plan, and so does Phase 1, whose hand-fed biomass the planner cannot
+// run harder (a maximising solve of Phase 1 has only the entered spare power, see addPower).
+// A phase that makes its on-site items centrally (#875) is re-solved that way too, and keeps
+// saying so; a row that makes less than its fixed rates is planned as solvePhase plans it (#984).
+export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved): Solved {
+  const caps = Object.fromEntries(stage.rows.map(row => [row.id, row.machines]));
+  const fast = withinRates(stageSettings(config, stage), phase, settings =>
+    run(settings, phase, { maximum: true, caps, conversion: phase === 5 && config.sam !== 'avoid' }),
+  );
+  if (!fast.feasible || !(fast.hours < stage.hours - 1e-6)) return stage;
+  return {
+    ...fast,
+    aheadOf: stage.hours,
+    ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
+  };
+}
+// Minimal construction's warning (#1066): what the goal plans, and which phases finish before the
+// 24 hours because their buildings run as fast as they allow. `sooner` lists those phases.
+export function fullSpeedWarning(config: CurrentSettings, sooner: number[]): string[] {
+  if (config.goal !== 'minimal') return [];
+  const phases = sooner.length
+    ? ` ${sooner.length > 1 ? 'Phases' : 'Phase'} ${listNames(sooner.map(String))} ${sooner.length > 1 ? 'finish' : 'finishes'} sooner that way; ${sooner.length > 1 ? 'their' : 'its'} delivery rates are not rounded.`
+    : ' No phase could finish sooner with those buildings.';
+  return [
+    `Minimal construction builds the fewest machines that deliver each phase within 24 hours, then runs them as fast as those buildings allow, without adding one.${phases}`,
+  ];
+}

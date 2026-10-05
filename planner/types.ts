@@ -22,4 +22,5 @@ export interface RunOptions {
   baseline?: Record<string, number> | null;
   fractionalNuclear?: boolean;
   roundStopped?: boolean;
+  overBudget?: boolean;
 }

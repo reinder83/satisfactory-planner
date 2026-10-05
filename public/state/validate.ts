@@ -9,6 +9,7 @@ import { vehicleFuels } from '../preferences.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
   CustomTask,
+  ExactClocks,
   FactoryGroups,
   GroupAssignment,
   HandbookMapping,
@@ -18,6 +19,7 @@ import type {
   LinkTransport,
   Phase,
   ProgressState,
+  StageKey,
   StorageEdits,
   StoredCalculatedPlan,
   TaskEdits,
@@ -422,6 +424,26 @@ export function validateOnSiteReview(raw: unknown): OnSiteReview | undefined {
   // Only kept with an entry, so a state without one keeps its old shape and version.
   return Object.keys(checks).length ? { checks } : undefined;
 }
+// Returns a clean copy of exactClocks (#1066), or undefined when absent: the production lines the
+// user asked to run at exact clocks, { phase: [row id] }. Row ids are record-key safe and never an
+// amplified twin ('amp:'), which is always whole machines; duplicates go, ids are sorted and an
+// empty phase is dropped. An empty map stays: it asks for no line at exact clocks, which differs
+// from a plan calculated with some.
+export function validateExactClocks(raw: unknown): ExactClocks | undefined {
+  if (raw === undefined) return undefined;
+  const bad = () => fail('Invalid exact clocks.');
+  if (!plain(raw) || Object.keys(raw).length > 5) bad();
+  const out: ExactClocks = {};
+  for (const [phase, ids] of Object.entries(raw as Raw)) {
+    if (!['1', '2', '3', '4', '5'].includes(phase) || !Array.isArray(ids) || ids.length > 1000)
+      bad();
+    const list = ids as unknown[];
+    if (list.some(id => !safeKey(id) || (id as string).startsWith('amp:'))) bad();
+    const clean = [...new Set(list as string[])].sort();
+    if (clean.length) out[phase as StageKey] = clean;
+  }
+  return out;
+}
 // Returns a clean copy of handbookOrigin (#485), or undefined when absent. Its unmapped records
 // follow the same rules as the state's own checks, notes and group assignments; the groups an
 // unmapped assignment names need not exist any more.
@@ -641,7 +663,7 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // The single gate for progress: every load, import, update and new profile passes through
 // it, on the server (workspace.ts), in the browser (browser-api.ts) and inside full-save
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
-// Versions 1–15 are accepted as they are; there is no field-by-field upgrade, because each
+// Versions 1–16 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. The one rewrite is of keys, not of
 // a version: an amplified twin's unlock records merge into its recipe's (mergeAmplifiedUnlocks).
 // A higher version is refused with an update message, so a newer save is never downgraded or
@@ -651,11 +673,11 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 export function validateState(state: unknown): ProgressState {
   if (
     !plain(state) ||
-    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].includes(state.version as number)
+    ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(state.version as number)
   )
     fail(
-      // Compared as the old code did, so a version given as "16" also gets the update message.
-      ((state as Raw | null | undefined)?.version as number) > 15
+      // Compared as the old code did, so a version given as "17" also gets the update message.
+      ((state as Raw | null | undefined)?.version as number) > 16
         ? 'This backup was made by a newer planner version. Update the app to import it.'
         : 'Choose a valid version 1 planner backup.',
     );
@@ -710,6 +732,8 @@ export function validateState(state: unknown): ProgressState {
   if (origin) clean.handbookOrigin = origin;
   const review = validateOnSiteReview(state.onSiteReview);
   if (review) clean.onSiteReview = review;
+  const exact = validateExactClocks(state.exactClocks);
+  if (exact) clean.exactClocks = exact;
   // Version 1 states never carry layout edits, so older planners keep importing
   // untouched saves; a state with layout edits is marked 2, one with build plan
   // edits or factory groups 3, and one using a container position past 08 is
@@ -731,9 +755,12 @@ export function validateState(state: unknown): ProgressState {
   // restored onto the profile later could then no longer be re-keyed. A group that makes items on
   // site (factoryGroups.local, #874) is 14: an older release's validateGroups would drop the choice.
   // Ticks a recalculation kept for review because of lines made on site (onSiteReview, #876) are
-  // 15: an older release would drop them, and they are progress.
-  clean.version = clean.onSiteReview
-    ? 15
+  // 15: an older release would drop them, and they are progress. The production lines asked to run
+  // at exact clocks (exactClocks, #1066) are 16: an older release would drop the choice.
+  clean.version = clean.exactClocks
+    ? 16
+    : clean.onSiteReview
+      ? 15
     : clean.factoryGroups.local
       ? 14
       : clean.handbookOrigin?.mapping
