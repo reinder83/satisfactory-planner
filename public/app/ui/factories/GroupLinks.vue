@@ -14,6 +14,10 @@
   vehicles and fuel. The controls sit on the sender's Out row only, so each link is edited in one
   place; the receiver's In row shows the belt or vehicle badge. The choice saves as a
   factoryLinkTransport update (factoryGroups.links).
+  How a link travels is one choice the factory's flow page shares (linkCarrier in logistics.ts,
+  #1067): Water from the Water source is pumped by Water Extractors at the site that uses it, so
+  its link has no transport controls; a belted link puts its trickle items (trickleItems) on
+  mixed belts and says so under its badge.
   A Space Elevator part delivered in full (its saved count at the target, #1062) is dimmed on its
   link to the elevator and marked "delivered"; the link stays, as the plan has it.
 -->
@@ -26,20 +30,24 @@ import { deliveredParts } from '../../delivered.ts';
 import {
   groupLinks,
   isSource,
-  linkTransportFor,
   OUTSIDE,
   placeName,
   sourceItem,
   UNGROUPED,
 } from '../../group-links.ts';
 import {
+  carrierTransport,
   DEFAULT_TRIP_MIN,
+  EXTRACT_BADGE,
   LINK_MODES,
   linkBeltBadge,
+  linkCarrier,
   linkSiblings,
   linkTotal,
   linkTransportUpdate,
   linkVehicleText,
+  TRICKLE_SHARE,
+  trickleItems,
   transportFuel,
 } from '../../logistics.ts';
 import {
@@ -74,8 +82,12 @@ const view = computed(() =>
     // The parts delivered in full (#1062): their links to the Space Elevator say so.
     const delivered = deliveredParts(stage, stageKey(), state.deliveries);
     const links = groupLinks(stage, groupsState, calculated.settings.onSite).map(link => {
+      // The one transport choice the flow page shares (linkCarrier, #1067): extracted Water
+      // needs none, a saved vehicle, or belts and pipes.
       const key = link.from + ':' + link.to,
-        transport = linkTransportFor(groupsState.links, link.from, link.to);
+        carrier = linkCarrier(groupsState.links, link.from, link.to),
+        transport = carrierTransport(carrier),
+        extract = carrier.kind === 'extract';
       const mode: 'belt' | LinkMode = transport?.mode ?? 'belt';
       const vehicle = transport
         ? linkVehicleText(
@@ -117,7 +129,11 @@ const view = computed(() =>
         items,
         packed: items.filter(item => item.pack),
         load: vehicle?.lines ?? [],
-        badge: vehicle?.badge ?? linkBeltBadge(link.items, FLUIDS, lanePlan),
+        extract,
+        mixed: transport || extract ? '' : mixedText(link.items, link.to),
+        badge: extract
+          ? EXTRACT_BADGE
+          : (vehicle?.badge ?? linkBeltBadge(link.items, FLUIDS, lanePlan)),
       };
     });
     type Row = (typeof links)[number];
@@ -163,6 +179,23 @@ const view = computed(() =>
   }),
 );
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
+
+// The line under a belted link whose trickle items share a mixed belt (trickleItems, #1067):
+// "The 14 items under 120/min share a mixed belt; Smart Splitters sort them where it arrives." The
+// sink takes them mixed, so a link to it needs no sorting. '' without trickle items.
+function mixedText(items: { item: string; rate: number }[], to: string): string {
+  const trickle = trickleItems(items, FLUIDS, lanePlan);
+  if (!trickle.size) return '';
+  const rate = items.filter(entry => trickle.has(entry.item)).reduce((sum, e) => sum + e.rate, 0),
+    lanes = lanePlan(rate, false),
+    under = num(lanes.lane.cap * TRICKLE_SHARE);
+  const share = `The ${trickle.size} items under ${under}/min share ${lanes.count > 1 ? lanes.count + ' mixed belts' : 'a mixed belt'}`;
+  return to === OUTSIDE.surplus
+    ? share + '.'
+    : share +
+        '; Smart Splitters sort them where ' +
+        (lanes.count > 1 ? 'they arrive.' : 'it arrives.');
+}
 // A transcribed handbook says so before it is solved afresh (#480).
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 
@@ -369,7 +402,14 @@ async function recalculate(event: Event) {
                   }}<span v-if="item.delivered" data-delivered-link> · delivered</span>
                 </li>
               </ul>
-              <template v-if="part.dir === 'out'">
+              <template v-if="part.dir === 'out' && link.extract">
+                <p class="small" data-link-extract>
+                  Build the Water Extractors at {{ link.toName }}: no pipe or vehicle between
+                  places. Each production line's dialog says how many.
+                </p>
+                <p class="flow-badge" data-link-badge>{{ link.badge }}</p>
+              </template>
+              <template v-else-if="part.dir === 'out'">
                 <div class="link-transport">
                   <label
                     >By
@@ -432,7 +472,10 @@ async function recalculate(event: Event) {
                     {{ link.packed.map(item => `${item.item} as ${item.pack}`).join(', ') }}.
                   </p>
                 </template>
-                <p v-else class="flow-badge" data-link-badge>{{ link.badge }}</p>
+                <template v-else>
+                  <p v-if="link.mixed" class="small muted" data-link-mixed>{{ link.mixed }}</p>
+                  <p class="flow-badge" data-link-badge>{{ link.badge }}</p>
+                </template>
               </template>
               <p v-else :class="['flow-badge', { vehicle: link.transport }]" data-link-badge>
                 {{ link.badge }}

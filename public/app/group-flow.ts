@@ -40,6 +40,13 @@ import type { CalcRow, FactoryGroups, OnSiteSettings, StoredStage } from '../typ
 // passes itemBelts (flow.ts) at the phase it shows, "2 × Mk.3 belts".
 export type BeltsFor = (item: string, rate: number) => string;
 
+// How the items of one link into or out of the group travel (#1067), as the Logistics page has
+// that link: the page passes linkItemWords (logistics.ts), so a link by train there says "by
+// freight train" here, extracted Water "Water Extractors here", and a trickle item its mixed belt.
+// It gives the words for the link's items (BeltsFor), for the port and for each line's part of
+// it. Without one, every port takes the group's belts (`belts`).
+export type LinkWords = (link: GroupLink) => BeltsFor;
+
 // A line's name. The page passes buildRowName (views/calculated.ts), the build plan's step title
 // (rowStepTitle), so a group's own line made on site is "Wire for Alpha" there as here (#896).
 // Without one a line is named after its row: the recipe's name.
@@ -283,26 +290,41 @@ function crossingPorts(
   stage: StoredStage,
   groups: FactoryGroups,
   groupId: string,
-  belts: BeltsFor,
+  carry: LinkWords,
   links: GroupLink[],
-): { ins: FlowPort[]; outs: FlowPort[] } {
+): CrossingPorts {
   const ins: FlowPort[] = [],
     outs: FlowPort[] = [];
-  const port = (place: string, item: string, rate: number): FlowPort => ({
-    place,
-    label: placeName(place, groups.groups, stage.raw),
-    kind: portKind(place, stage, groups),
-    item,
-    rate,
-    belts: belts(item, rate),
-  });
+  const words = new Map<FlowPort, BeltsFor>();
+  const port = (place: string, item: string, rate: number, belts: BeltsFor): FlowPort => {
+    const made: FlowPort = {
+      place,
+      label: placeName(place, groups.groups, stage.raw),
+      kind: portKind(place, stage, groups),
+      item,
+      rate,
+      belts: belts(item, rate),
+    };
+    words.set(made, belts);
+    return made;
+  };
   for (const link of links) {
+    if (link.to !== groupId && link.from !== groupId) continue;
+    const belts = carry(link);
     if (link.to === groupId)
-      for (const entry of link.items) ins.push(port(link.from, entry.item, entry.rate));
+      for (const entry of link.items) ins.push(port(link.from, entry.item, entry.rate, belts));
     if (link.from === groupId)
-      for (const entry of link.items) outs.push(port(link.to, entry.item, entry.rate));
+      for (const entry of link.items) outs.push(port(link.to, entry.item, entry.rate, belts));
   }
-  return { ins: ins.sort(byKindThenRate), outs: outs.sort(byKindThenRate) };
+  return { ins: ins.sort(byKindThenRate), outs: outs.sort(byKindThenRate), words };
+}
+
+// What crosses a group's edge (crossingPorts): the ports in and out, and each port's link words
+// (LinkWords), which the lines' parts of it take too (portLinks).
+interface CrossingPorts {
+  ins: FlowPort[];
+  outs: FlowPort[];
+  words: Map<FlowPort, BeltsFor>;
 }
 
 // Each port's rate shared among the group's lines that use its item (`ins`) or make it
@@ -316,7 +338,7 @@ function crossingPorts(
 // (#918, its `offered`): that part leaves with the other lines' supply, for the other places.
 function portLinks(
   parts: GroupPart[],
-  ports: { ins: FlowPort[]; outs: FlowPort[] },
+  ports: CrossingPorts,
   belts: BeltsFor,
   inside: FlowLink[],
   local: ItemBooks['local'],
@@ -338,7 +360,7 @@ function portLinks(
         {
           item: port.item,
           rate,
-          belts: belts(port.item, rate),
+          belts: (ports.words.get(port) ?? belts)(port.item, rate),
           from: inward ? place : lineEnd(line),
           to: inward ? lineEnd(line) : place,
           loop: false,
@@ -480,10 +502,11 @@ function placeFlow(
   placeId: string,
   phase: PhaseBooks,
   belts: BeltsFor,
-): { parts: GroupPart[]; ports: { ins: FlowPort[]; outs: FlowPort[] }; links: FlowLink[] } {
+  carry: LinkWords = () => belts,
+): { parts: GroupPart[]; ports: CrossingPorts; links: FlowLink[] } {
   const parts = groupParts(stage, groups, placeId);
   const inside = insideLinks(parts, phase.books, belts, placeId);
-  const ports = crossingPorts(stage, groups, placeId, belts, phase.links);
+  const ports = crossingPorts(stage, groups, placeId, carry, phase.links);
   const links = [...inside, ...portLinks(parts, ports, belts, inside, phase.books.local, placeId)];
   return { parts, ports, links };
 }
@@ -499,9 +522,10 @@ export const placeLinks = (
 ): FlowLink[] => placeFlow(stage, groups, placeId, phase, () => '').links;
 
 // The flow of group `groupId` in a calculated phase, null for a group the profile does not have.
-// `belts` words the belts or pipes of a rate (BeltsFor), `name` names a line (LineName) and
-// `planned` is the plan's settings.onSite, the items made on site for each group (itemBooks).
-// Deterministic: it reads only its arguments.
+// `belts` words the belts or pipes of a rate (BeltsFor), `name` names a line (LineName),
+// `planned` is the plan's settings.onSite, the items made on site for each group (itemBooks), and
+// `carry` words how each link into or out of the group travels (LinkWords, #1067), on `belts`
+// without one. Deterministic: it reads only its arguments.
 export function groupFlow(
   stage: StoredStage,
   groups: FactoryGroups,
@@ -509,6 +533,7 @@ export function groupFlow(
   belts: BeltsFor,
   name: LineName = rowName,
   planned?: OnSiteSettings,
+  carry?: LinkWords,
 ): GroupFlow | null {
   if (!groups.groups.some(group => group.id === groupId)) return null;
   const books = itemBooks(stage, groups, planned);
@@ -518,6 +543,7 @@ export function groupFlow(
     groupId,
     { books, links: groupLinks(stage, groups, planned) },
     belts,
+    carry,
   );
   const lines = parts.map((part, i) => flowLine(part, i + 1, links, belts, name));
   const folded = ports.outs.filter(port => FOLDED.has(port.place));

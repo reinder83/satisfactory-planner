@@ -14,6 +14,7 @@
 // is shared with the other lines' supply (ordinaryShares).
 // Every other item, and every item of a plan without such lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
+import { wholeShares } from './apportion.ts';
 import { itemBooks, placeTotal, sharedRate } from './group-links.ts';
 import { LINK_DUST, rowPlaces } from './group-order.ts';
 import { calcStage, calculated, checked, progressionData, stage } from './session.ts';
@@ -72,8 +73,15 @@ export interface FlowOutput {
   link?: FactoryLink;
   rate?: number;
   unit?: string;
-  // Machines of this factory the destination takes; undefined when not meaningful.
+  // Machines of this factory the destination takes at 100%; undefined when not meaningful.
   mach?: number;
+  // This line's whole machines for the destination (splitMachines, #1067): the destinations'
+  // counts together are the line's machine count, by largest remainder, so the split adds up; and
+  // `lineMach`, the exact part of the line's machines at 100% they stand for (`mach`, scaled to
+  // the line's own output where the destinations are the plan-wide demand of an item other lines
+  // make too). Set together.
+  machines?: number;
+  lineMach?: number;
   beltTxt?: string;
   // The output item's name, prefixed when a row has byproducts.
   pre?: string;
@@ -314,15 +322,51 @@ export const itemBelts = (item: string, rate: number, stageKey?: string): string
 
 // Keeps a destination list to at most ten rows: past that, the first nine stay and the rest become
 // one "+ N more destinations" row carrying their summed rate. Order is the caller's, so whatever
-// sorts last is what gets folded.
+// sorts last is what gets folded. The folded row keeps the machines of the rows it folds
+// (splitMachines), so the split still adds up to the line's machines.
 function capFlowOutputs(list: FlowOutput[], unit = '/min'): FlowOutput[] {
   if (list.length <= 10) return list;
   const rest = list.slice(9),
     sum = rest.reduce((total, output) => total + (output.rate || 0), 0);
+  const split = rest.filter(output => output.machines !== undefined);
+  const machines = split.length
+    ? {
+        machines: split.reduce((total, output) => total + (output.machines || 0), 0),
+        lineMach: split.reduce((total, output) => total + (output.lineMach || 0), 0),
+      }
+    : {};
   return [
     ...list.slice(0, 9),
-    { kind: 'more', label: `+ ${rest.length} more destinations`, rate: sum, unit },
+    { kind: 'more', label: `+ ${rest.length} more destinations`, rate: sum, unit, ...machines },
   ];
+}
+
+// The line's machines split over its destinations (#1067): the line's whole machines shared out
+// over them by largest remainder (wholeShares) in proportion to each one's machines at 100%
+// (`mach`, and the sink's, which flowOutputs gives none), so the counts (`machines`) add up to the
+// line's machines rather than to more, as rounding each one up did (46 for 43). `lineMach` is each
+// one's exact part, scaled to the line's own output when the destinations ask for more (an item
+// other lines make too: they are its plan-wide demand). `mach` stays as it was. A row with
+// byproducts, whose machines make every output at once, is left as it is.
+export function splitMachines(row: CalcRow, outputs: FlowOutput[]): FlowOutput[] {
+  const items = Object.keys(row.outputs || {});
+  if (items.length !== 1) return outputs;
+  const equivalent = rowEquivalent(row),
+    perMachine = (row.outputs[items[0]!] || 0) / equivalent;
+  if (!(perMachine > 0)) return outputs;
+  const splits = (output: FlowOutput) =>
+    output.mach !== undefined || (output.kind === 'sink' && !!output.rate);
+  const exact = outputs.map(output =>
+    splits(output) ? (output.mach ?? (output.rate || 0) / perMachine) : 0,
+  );
+  const total = exact.reduce((sum, mach) => sum + mach, 0);
+  if (!(total > 0)) return outputs;
+  // Within rounding noise of the line's output, the parts stay as flowOutputs gave them.
+  const scale = total > equivalent * (1 + 1e-9) ? equivalent / total : 1;
+  const whole = wholeShares(row.machines, exact);
+  return outputs.map((output, i) =>
+    splits(output) ? { ...output, machines: whole[i]!, lineMach: exact[i]! * scale } : output,
+  );
 }
 
 // What the calculated-row helpers below read besides the row: the phase's stored stage (its
@@ -722,9 +766,14 @@ export function flowInputs(row: CalcRow, context: CalcFlowContext): FlowInput[] 
   });
 }
 
+// A destination's whole machines (splitMachines) as the split writes them: "<1" for one that
+// shares a machine with the others.
+export const machinesText = (machines: number): string => (machines < 1 ? '<1' : num(machines));
+
 // The notes of a calculated row's flow model (flowNotes).
 export interface FlowNotes {
-  // " · split ≈ 3 / 2 across the deliveries below", or empty with one delivery or none.
+  // " · split ≈ 3 / 2 across the deliveries below", or empty with one delivery or none. The
+  // counts add up to the line's machines (splitMachines).
   split: string;
   clock: string;
   bankNote: BankNote | null;
@@ -819,7 +868,8 @@ function bankNoteOf(row: CalcRow, context: CalcFlowContext): BankNote {
 }
 
 // The notes for a calculated row whose (capped) destinations are `outputs`. With more than one
-// delivery, the split suggests how the machines divide between them. A calculated row is whole
+// delivery, the split suggests how the machines divide between them, the sink included, adding up
+// to the line's machines (splitMachines, #1067). A calculated row is whole
 // machines at 100% plus, when the equivalent is fractional, one adjustable machine; its clock
 // is in the dialog's Machine setup table. Consumer, storage and delivery rates are the item's
 // plan-wide demand, not this row's share: the bank note under the destinations says so, and
@@ -832,11 +882,11 @@ export function flowNotes(
   outputs: FlowOutput[],
   context: CalcFlowContext,
 ): FlowNotes {
-  const splits = outputs.filter(o => o.mach !== undefined && o.kind !== 'sink');
+  const splits = outputs.filter(o => o.machines !== undefined);
   return {
     split:
       splits.length > 1
-        ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
+        ? ` · split ≈ ${splits.map(o => machinesText(o.machines!)).join(' / ')} across the deliveries below`
         : '',
     clock: row.machines - rowEquivalent(row) > 1e-7 ? '@ 100% + 1 adjustable' : '@ 100%',
     bankNote: outputs.some(o => !o.noItem) ? bankNoteOf(row, context) : null,
@@ -907,7 +957,9 @@ export function calcFlowModel(row: CalcRow): FlowModel {
     ...(site ? { site } : {}),
   };
   const inputs = flowInputs(row, context);
-  const outputs = capFlowOutputs([...generatorOutputs(row), ...flowOutputs(row, context)]);
+  const outputs = capFlowOutputs(
+    splitMachines(row, [...generatorOutputs(row), ...flowOutputs(row, context)]),
+  );
   const notes = flowNotes(row, outputs, context);
   return {
     stage: context.stageKey,

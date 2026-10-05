@@ -139,3 +139,27 @@ test('a revision with transport fuel carries it and the progress, and the old pr
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test('a vehicle saved on a Water link burns nothing: Water Extractors pump it at the site (#1067)', () => {
+  const plan = calculate({ phase: '3' });
+  let state = newProfileState(plan, null, null, undefined, undefined).state;
+  const water = groupLinks(plan.stages['3'], state.factoryGroups).find(
+    link => link.from === 'supply/Water',
+  );
+  assert.ok(water, 'the plan pumps Water into a factory');
+  state = mutate(state, {
+    type: 'factoryLinkTransport',
+    from: water.from,
+    to: water.to,
+    mode: 'truck',
+    roundTripMin: 6,
+    fuel: 'Packaged Fuel',
+  });
+  // Saved as it was (an earlier release still reads it), and planned for nowhere.
+  assert.deepEqual(state.factoryGroups.links?.[`${water.from}:${water.to}`], {
+    mode: 'truck',
+    roundTripMin: 6,
+    fuel: 'Packaged Fuel',
+  });
+  assert.deepEqual(transportFuel(plan, state.factoryGroups, catalog(), FLUIDS), {});
+});

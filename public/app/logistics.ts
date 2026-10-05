@@ -4,7 +4,8 @@
 // per link in factoryGroups.links (state.ts); the flows come from group-links.ts.
 import { fuelledModes } from '../state.ts';
 import { num, plural } from './format.ts';
-import { groupLinks, isSource, linkTransportFor, MINES } from './group-links.ts';
+import { groupLinks, isSource, linkTransportFor, MINES, sourceItem } from './group-links.ts';
+import type { GroupLink } from './group-links.ts';
 import type {
   Catalog,
   FactoryGroups,
@@ -16,6 +17,30 @@ import type {
   StoredCalculatedPlan,
   UpdateOp,
 } from '../types/index.ts';
+
+// How a link's items travel (#1067): the one choice the Logistics page, a factory's flow page and
+// the transport fuel all read, so a link is never belts on one page and a train on the other.
+// `extract`: Water from the Water source, which Water Extractors pump at the site that uses it,
+// so it needs no pipe or vehicle between places (a vehicle saved on such a link stays saved and
+// is not used); `vehicle`: the transport saved on the link (linkTransportFor); `belt`: belts or
+// pipes, the default.
+export type LinkCarrier =
+  | { kind: 'extract' }
+  | { kind: 'vehicle'; transport: LinkTransport }
+  | { kind: 'belt' };
+// The raw resources extractors pump wherever the line using them is: Water Extractors work on
+// any body of water, unlike a node or a resource well.
+export const EXTRACTED_ON_SITE: ReadonlySet<string> = new Set(['Water']);
+export function linkCarrier(links: FactoryGroups['links'], from: string, to: string): LinkCarrier {
+  if (isSource(from) && EXTRACTED_ON_SITE.has(sourceItem(from))) return { kind: 'extract' };
+  const transport = linkTransportFor(links, from, to);
+  return transport ? { kind: 'vehicle', transport } : { kind: 'belt' };
+}
+// A link's transport as the pages use it: the saved vehicle, or none for belts and extraction.
+export const carrierTransport = (carrier: LinkCarrier): LinkTransport | undefined =>
+  carrier.kind === 'vehicle' ? carrier.transport : undefined;
+// What the badge of a link extracted at the site says, on both its ends.
+export const EXTRACT_BADGE = 'Water Extractors on site';
 
 // Vehicle figures from the SatisfactoryTools dataset at the revision recorded in recipes.json:
 // inventory slots from each vehicle's description (the Freight Car's 32 slots or 1,600 m³), and
@@ -35,6 +60,9 @@ export const FLUID_CAR_M3 = 1600;
 // four cars. The wiki's Freight Car weight table has one locomotive pulling 5 fully loaded cars
 // up the steepest buildable incline (2 m ramps) and 13 up 1 m ramps, so four leaves a margin.
 export const CARS_PER_LOCOMOTIVE = 4;
+// The belt or pipe ports of one Freight Platform or Fluid Freight Platform (#1067): a car is
+// loaded and unloaded through both, so it moves at most two belts (or pipes) of a flow.
+export const PLATFORM_PORTS = 2;
 // The choices a link offers, in menu order; 'belt' is the default belt or pipe.
 export const LINK_MODES: ['belt' | LinkMode, string][] = [
   ['belt', 'Belt or pipe'],
@@ -52,8 +80,9 @@ export interface LinkLoad {
   slotsUsed: number;
   slots: number;
   // A train's cars: for solid items (32 slots each) and one per fluid per 1,600 m³, or more when
-  // the flow needs them (#232): a car is loaded and unloaded at no more than one belt (or pipe)
-  // of the best mark unlocked, so a flow of several belts needs a car per belt.
+  // the flow needs them (#232): a car is loaded and unloaded through its platform's two ports
+  // (PLATFORM_PORTS, #1067), so at no more than two belts (or pipes) of the best mark unlocked,
+  // and a flow of more needs a car per two belts.
   freightCars: number;
   fluidCars: number;
   // Whether the belt limit set the freight cars, or the pipe limit a fluid's cars, rather than
@@ -73,7 +102,8 @@ export interface LinkLoad {
 // Road vehicles and drones carry fluids packaged (catalog.packaged: the item and the m³ one
 // holds); a slot holds one item type, so every item takes whole slots, and the vehicle count is
 // the smallest that fits each vehicle's share of a round trip's load into its slots. `lanes` is
-// the best belt (items/min) and pipe (m³/min) unlocked, which cap what one freight car moves.
+// the best belt (items/min) and pipe (m³/min) unlocked, which cap what one freight car moves
+// through its platform's two ports (PLATFORM_PORTS).
 export function linkLoad(
   items: { item: string; rate: number }[],
   transport: LinkTransport,
@@ -103,7 +133,7 @@ export function linkLoad(
     const fluid = fluids.has(item);
     if (transport.mode === 'train' && fluid) {
       const held = Math.ceil((rate * trip) / FLUID_CAR_M3),
-        piped = lanes ? Math.ceil(rate / lanes.pipe - 1e-9) : 0;
+        piped = lanes ? Math.ceil(rate / (PLATFORM_PORTS * lanes.pipe) - 1e-9) : 0;
       load.fluidCars += Math.max(held, piped);
       if (piped > held) load.pipeLimited = true;
       continue;
@@ -125,7 +155,8 @@ export function linkLoad(
   if (transport.mode === 'train') {
     const slots = slotsFor(1),
       held = Math.ceil(slots / vehicle.slots),
-      belted = lanes && perTrip.length ? Math.ceil(solidRate / lanes.belt - 1e-9) : 0;
+      belted =
+        lanes && perTrip.length ? Math.ceil(solidRate / (PLATFORM_PORTS * lanes.belt) - 1e-9) : 0;
     load.freightCars = Math.max(held, belted);
     if (belted > held) load.beltLimited = true;
     const cars = load.freightCars + load.fluidCars;
@@ -181,7 +212,8 @@ export function transportFuel(
     if (Number(phase) < Number(plan.settings.phase || 1) || !stage.rows?.length) continue;
     const fuels: ItemRates = {};
     for (const link of groupLinks(stage, groups, plan.settings.onSite)) {
-      const transport = linkTransportFor(groups.links, link.from, link.to);
+      // The pages' own choice (linkCarrier): Water pumped at the site burns no vehicle fuel.
+      const transport = carrierTransport(linkCarrier(groups.links, link.from, link.to));
       if (!transport?.fuel) continue;
       const burn = linkLoad(link.items, transport, catalog, fluids).fuelPerMin;
       if (burn > 0) fuels[transport.fuel] = (fuels[transport.fuel] || 0) + burn;
@@ -200,7 +232,8 @@ export const DEFAULT_FUEL = 'Packaged Fuel';
 
 // For a link that goes by vehicle: the lines under its Out row, and the short badge on its In
 // row. `belt` and `pipe` are the best belt and pipe unlocked (flow.ts bestLane): a freight car
-// loads at no more than one of each (#232).
+// loads at no more than two of each, one per port of its platform (#232, #1067), and the line
+// that says so names the cars the flow needs.
 export function linkVehicleText(
   items: { item: string; rate: number }[],
   transport: LinkTransport,
@@ -226,12 +259,20 @@ export function linkVehicleText(
         `1 train: ${locos}, ${cars.join(' and ')}. Electric: each locomotive draws 25–110 MW from the grid while moving.`,
       );
       const limits = [
-        load.beltLimited ? `one ${belt.mark} belt (${num(belt.cap)}/min)` : '',
-        load.pipeLimited ? `one ${pipe.mark} pipe (${num(pipe.cap)} m³/min)` : '',
+        load.beltLimited
+          ? `${PLATFORM_PORTS} × ${belt.mark} belts (${num(PLATFORM_PORTS * belt.cap)}/min) per freight car`
+          : '',
+        load.pipeLimited
+          ? `${PLATFORM_PORTS} × ${pipe.mark} pipes (${num(PLATFORM_PORTS * pipe.cap)} m³/min) per fluid car`
+          : '',
+      ].filter(Boolean);
+      const needs = [
+        load.beltLimited ? plural(load.freightCars, 'freight car') : '',
+        load.pipeLimited ? plural(load.fluidCars, 'fluid car') : '',
       ].filter(Boolean);
       if (limits.length)
         lines.push(
-          `A car loads and unloads at no more than ${limits.join(' or ')}, so this flow needs that many cars.`,
+          `A platform loads and unloads a car through its two ports, at most ${limits.join(' and ')}, so this flow needs ${needs.join(' and ')}.`,
         );
       badge = `1 train: ${locos}, ${cars.join(' and ')}`;
     }
@@ -251,27 +292,86 @@ export function linkVehicleText(
   return { lines, badge };
 }
 
-// "3 × Mk.4 belts · 1 × Mk.2 pipe": the belts and pipes a link needs, totalled per mark.
-// `lanes` plans one item's belts or pipes (flow.ts lanePlan).
+// How one rate travels on belts or pipes of the best mark (flow.ts lanePlan): the lane's mark and
+// capacity, how many lanes and the word for them.
+export type LanesFor = (
+  rate: number,
+  fluid: boolean,
+) => { lane: { mark: string; cap: number }; count: number; word: 'belt' | 'pipe' };
+
+// The share of one belt below which an item is a trickle (#1067): two or more trickle items of a
+// link share mixed belts rather than taking a belt each, as a sink or storage link of many small
+// items does (14 belts for 183/min before). A quarter of a Mk.4 belt is 120/min.
+export const TRICKLE_SHARE = 0.25;
+
+// The trickle items of a link (TRICKLE_SHARE): its solid items under a quarter of a belt, when
+// there are at least two of them; none otherwise, since one item on a belt of its own is the same
+// belt.
+export function trickleItems(
+  items: { item: string; rate: number }[],
+  fluids: Set<string>,
+  lanes: LanesFor,
+): Set<string> {
+  const small = items.filter(
+    ({ item, rate }) =>
+      !fluids.has(item) && rate > 0 && rate < lanes(rate, false).lane.cap * TRICKLE_SHARE,
+  );
+  return new Set(small.length > 1 ? small.map(entry => entry.item) : []);
+}
+
+// "3 × Mk.4 belts · 1 × Mk.4 mixed belt · 1 × Mk.2 pipe": the belts and pipes a link needs,
+// totalled per mark, with its trickle items (trickleItems) on as few mixed belts as carry their
+// total (#1067). `lanes` plans one rate's belts or pipes (flow.ts lanePlan).
 export function linkBeltBadge(
   items: { item: string; rate: number }[],
   fluids: Set<string>,
-  lanes: (
-    rate: number,
-    fluid: boolean,
-  ) => { lane: { mark: string }; count: number; word: 'belt' | 'pipe' },
+  lanes: LanesFor,
 ): string {
+  const trickle = trickleItems(items, fluids, lanes);
   const marks = new Map<string, { count: number; mark: string; word: string }>();
-  for (const { item, rate } of items) {
-    const plan = lanes(rate, fluids.has(item)),
-      key = plan.lane.mark + plan.word,
-      entry = marks.get(key) ?? { count: 0, mark: plan.lane.mark, word: plan.word };
+  const add = (key: string, plan: ReturnType<LanesFor>, word: string) => {
+    const entry = marks.get(key) ?? { count: 0, mark: plan.lane.mark, word };
     entry.count += plan.count;
     marks.set(key, entry);
+  };
+  const mixedRate = items
+    .filter(entry => trickle.has(entry.item))
+    .reduce((sum, entry) => sum + entry.rate, 0);
+  for (const { item, rate } of items) {
+    if (trickle.has(item)) {
+      if (!marks.has('mixed')) add('mixed', lanes(mixedRate, false), 'mixed belt');
+      continue;
+    }
+    const plan = lanes(rate, fluids.has(item));
+    add(plan.lane.mark + plan.word, plan, plan.word);
   }
   return [...marks.values()]
     .map(m => `${m.count} × ${m.mark} ${m.word}${m.count > 1 ? 's' : ''}`)
     .join(' · ');
+}
+
+// How each item of `link` travels, as a factory's flow page words it beside a port or a link of
+// a line (#1067), from the same choice as the Logistics page (linkCarrier): "Water Extractors
+// here" for extracted Water, "by truck" for a vehicle, else its belts or pipes, a trickle item
+// (trickleItems) on the link's "mixed Mk.4 belt". `belts` words a rate's own belts or pipes
+// (flow.ts itemBelts). The function takes an item and a rate: the link's whole rate of the item
+// for its port, a line's part of it for that line's link.
+export function linkItemWords(
+  link: GroupLink,
+  links: FactoryGroups['links'],
+  fluids: Set<string>,
+  lanes: LanesFor,
+  belts: (item: string, rate: number) => string,
+): (item: string, rate: number) => string {
+  const carrier = linkCarrier(links, link.from, link.to);
+  if (carrier.kind === 'extract') return () => 'Water Extractors here';
+  if (carrier.kind === 'vehicle') {
+    const words = 'by ' + VEHICLES[carrier.transport.mode].name.toLowerCase();
+    return () => words;
+  }
+  const trickle = trickleItems(link.items, fluids, lanes);
+  return (item, rate) =>
+    trickle.has(item) ? `mixed ${lanes(rate, false).lane.mark} belt` : belts(item, rate);
 }
 
 // "215/min · 96 m³/min": items and fluids add up separately.
