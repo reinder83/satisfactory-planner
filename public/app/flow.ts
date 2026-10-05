@@ -9,8 +9,9 @@
 // say (itemBooks in group-links.ts, #956): a group's own line delivers only to that group's
 // share of each consumer, and what it makes beyond that to the sink; the other lines making the
 // item deliver what is left; and a consumer's input links to the line that feeds most of it.
-// After a group edit a group's own lines may make more than the sink has room for (#918,
-// ItemBooks.offered): that part is shared with the other lines' supply (ordinaryShares).
+// After a group edit, or where the plan routed their excess to the central demand (#1063), a
+// group's own lines may make more than the sink has room for (#918, ItemBooks.offered): that part
+// is shared with the other lines' supply (ordinaryShares).
 // Every other item, and every item of a plan without such lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
 import { wholeShares } from './apportion.ts';
@@ -19,6 +20,7 @@ import { LINK_DUST, rowPlaces } from './group-order.ts';
 import { calcStage, calculated, checked, progressionData, stage } from './session.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
+import { sinkCaption, sinkCause } from './sink-cause.ts';
 import type { ItemBooks } from './group-links.ts';
 import type { FactoryLink } from './ui/actions.ts';
 import type {
@@ -196,6 +198,9 @@ export const FLUIDS = new Set([
   'Crude Oil',
   'Liquid Biofuel',
 ]);
+
+// Whether an item travels by pipe, as sinkCause asks.
+const isFluid = (item: string) => FLUIDS.has(item);
 
 // The unit an item's rate is written in (#351, #361): m³/min for a fluid, /min for anything
 // else. A card's headline shows it in its own span beside the number.
@@ -648,8 +653,11 @@ function siteSinkRate(row: CalcRow, output: OutputItem, surplus: number): number
 
 // Plutonium rods the waste strategy sinks, then the plan's surplus for the item. The planner
 // leaves fluids, radioactive and unsinkable items out of `surplus`, so they never show here.
-// For an item groups make on site, the part of it this row sends (siteSinkRate).
-function sinkOutputs(row: CalcRow, output: OutputItem, storedStage: StoredStage) {
+// For an item groups make on site, the part of it this row sends (siteSinkRate). The surplus is
+// captioned by its cause (sinkCause, #1063): whole-machine rounding only where rounding explains
+// it.
+function sinkOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext) {
+  const { storedStage, settings } = context;
   const { item, unit, pre } = output;
   const outputs: FlowOutput[] = [];
   if (item === 'Plutonium Fuel Rod' && storedStage.plutoniumSink)
@@ -663,8 +671,18 @@ function sinkOutputs(row: CalcRow, output: OutputItem, storedStage: StoredStage)
       pre,
     });
   const surplus = siteSinkRate(row, output, storedStage.surplus?.[item] ?? 0);
-  if (surplus > 0.002)
-    outputs.push({ kind: 'sink', label: 'AWESOME Sink', icon: item, rate: surplus, unit, pre });
+  if (surplus > 0.002) {
+    const cause = sinkCause(row, item, surplus, storedStage, !!settings?.wholeMachines, isFluid);
+    outputs.push({
+      kind: 'sink',
+      label: 'AWESOME Sink',
+      subTxt: sinkCaption(cause),
+      icon: item,
+      rate: surplus,
+      unit,
+      pre,
+    });
+  }
   return outputs;
 }
 
@@ -682,13 +700,13 @@ export function flowOutputs(row: CalcRow, context: CalcFlowContext): FlowOutput[
       return [
         ...consumerOutputs(row, output, context),
         ...bookOutputs(row, output, context.storedStage),
-        ...sinkOutputs(row, output, context.storedStage),
+        ...sinkOutputs(row, output, context),
       ];
     return [
       ...consumerOutputs(row, output, context),
       ...bookOutputs(row, output, context.storedStage),
       ...reserveOutputs(output, context),
-      ...sinkOutputs(row, output, context.storedStage),
+      ...sinkOutputs(row, output, context),
     ];
   });
   return outputs.sort((a, b) => (b.rate || 0) - (a.rate || 0));

@@ -39,6 +39,13 @@ export const exact = (item: string) =>
 //   plan's Heavy Oil Residue); plus the same 1e-6;
 // - nothing is offered (ItemBooks.offered, above 1e-6 × max(1, rate)): the sink takes every
 //   group's excess, within the plan's surplus.
+// Except where the phase was planned again with the group's excess of the item feeding the
+// central demand (#1063, `onSiteOverflow`): there the lines may make more than the books give the
+// group, which saves central machines, and the group offers that part; they still make at least
+// what the books give the group, what they make beyond that and the offer is within the rounding
+// above, and the groups offer together at most what the central demand takes (what the phase's
+// lines, storage, deliveries and fuel take of the item, less what the books give the groups).
+// Such items are counted in `routed`.
 // Left out, and counted in `left`: an item that balances exactly (a fluid such as Heavy Oil
 // Residue), whose lines the planner still sizes by the shares worked out from the plan being
 // recalculated, as before #984 (followedParts in planner/on-site.ts), and a group's item that
@@ -49,8 +56,11 @@ export function lineProblems(
   label: string,
   left: { count: number },
   skip: (group: string, item: string) => boolean = () => false,
+  routed: { count: number } = { count: 0 },
 ): string[] {
   const problems: string[] = [];
+  const overflows = (group: string, item: string) =>
+    !!stage.onSiteOverflow?.[group]?.includes(item);
   const tolerance = (rate: number) => 1e-6 * Math.max(1, rate);
   const books = itemBooks(stage, groups);
   const ownLines = (group: string, item: string) =>
@@ -70,12 +80,37 @@ export function lineProblems(
       const slack = ownLines(group, item).reduce((total, line) => total + rounding(line), 0);
       if (made < asked - tolerance(asked))
         problems.push(`${label}: ${group}'s lines make ${made} ${item} of the ${asked} it asks`);
-      if (made >= asked + slack + tolerance(asked))
-        problems.push(`${label}: ${group}'s lines make ${made} ${item} for ${asked} (${slack})`);
+      const offered = overflows(group, item) ? books.offered[item]?.get(group) || 0 : 0;
+      if (overflows(group, item)) routed.count++;
+      if (made - offered >= asked + slack + tolerance(asked))
+        problems.push(
+          `${label}: ${group}'s lines make ${made} ${item} for ${asked} and an offer of ${offered} (${slack})`,
+        );
     }
-  for (const [item, places] of Object.entries(books.offered))
+  for (const [item, places] of Object.entries(books.offered)) {
+    let routedOffer = 0;
     for (const [group, rate] of places)
-      if (rate > tolerance(rate) && !exact(item) && !skip(group, item))
+      if (overflows(group, item)) routedOffer += rate;
+      else if (rate > tolerance(rate) && !exact(item) && !skip(group, item))
         problems.push(`${label}: ${group} offers ${rate} ${item}`);
+    const central = centralDemand(stage, books, item);
+    if (routedOffer > central + tolerance(central))
+      problems.push(`${label}: the groups offer ${routedOffer} ${item} for ${central} asked`);
+  }
   return problems;
+}
+
+// What the phase takes of `item` outside the groups' own balances: its lines' inputs, protected
+// storage, deliveries, drone and vehicle fuel, less what the books give the groups (`asked`).
+function centralDemand(stage: StoredStage, books: ReturnType<typeof itemBooks>, item: string) {
+  const lines = rowsOf(stage).reduce((total, line) => total + (line.inputs[item] || 0), 0);
+  const used =
+    lines +
+    (stage.storage?.[item] || 0) +
+    (stage.delivery?.[item]?.rate || 0) +
+    (stage.drone?.[item] || 0) +
+    (stage.transport?.[item] || 0);
+  let asked = 0;
+  for (const entry of books.local[item]?.values() || []) asked += entry.asked;
+  return used - asked;
 }

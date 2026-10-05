@@ -643,6 +643,26 @@ test('ADA says when a phase makes its on-site items centrally (#875)', () => {
   );
 });
 
+test("ADA says when a factory's own lines also feed the rest of the plan (#1063)", () => {
+  const find = (given: Partial<AdaFacts>) =>
+    adaRemarks(facts({ view: 'factories', ...given })).find(r => r.id === 'on-site-overflow');
+  assert.equal(find({}), undefined, 'a phase without it says nothing');
+  assert.equal(find({ onSiteOverflow: null }), undefined);
+  const line = find({ onSiteOverflow: { items: 'Quickwire', groups: 'Alpha' } });
+  assert.ok(line);
+  assert.equal(line.tone, 'calm');
+  assert.match(
+    line.text,
+    /^In Phase 3 the own lines of Alpha also send the rest of the plan the Quickwire they make beyond their own needs: a central line would have sunk almost all it made./,
+  );
+  assert.ok(
+    adaRemarks(
+      facts({ view: 'logistics', onSiteOverflow: { items: 'Quickwire', groups: 'Alpha' } }),
+    ).some(r => r.id === 'on-site-overflow'),
+    'also on the Logistics page',
+  );
+});
+
 test('ADA points at a note changed elsewhere that waits for a choice (#1052)', () => {
   for (const view of ['notes', 'plan', 'factories', 'storage']) {
     const line = adaRemarks(facts({ view, noteConflicts: 1 })).find(r => r.id === 'note-conflict')!;

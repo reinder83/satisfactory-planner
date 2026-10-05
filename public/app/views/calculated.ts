@@ -125,7 +125,7 @@ export const rowAdvice = (
 // group; '' for any other row.
 const siteLineText = (row: CalcRow): string =>
   row.onSite
-    ? `Made on site for ${siteGroupName(row)}: it feeds that factory's own lines, and what they do not use goes to the AWESOME Sink. `
+    ? `Made on site for ${siteGroupName(row)}: it feeds that factory's own lines first, and what they do not use goes to any other line that still needs it, then to the AWESOME Sink. `
     : '';
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)

@@ -30,7 +30,7 @@ const caption = (output: FlowOutput) =>
       store: 'protected module',
       ship: output.shipSub || 'delivery',
       drone: 'protected supply contract',
-      sink: output.subTxt || 'whole-machine rounding surplus',
+      sink: output.subTxt || '',
       more: 'combined smaller destinations',
     }) as Record<FlowOutput['kind'], string>
   )[output.kind] || '';
@@ -202,8 +202,8 @@ const flow = computed(() => {
       <p v-if="flow.model.bankNote?.ownLine && flow.model.bankNote.offers" class="small muted">
         Made on site for {{ flow.model.bankNote.ownLine }}'s lines{{
           flow.model.bankNote.shared ? ', together with the factory’s other lines making it' : ''
-        }}, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and
-        the rest goes to the other places that ask for it{{ planWideText(flow.model.bankNote) }}.
+        }}, which use less than it makes: the AWESOME Sink takes what the plan sinks, and the rest
+        goes to the other places that ask for it{{ planWideText(flow.model.bankNote) }}.
       </p>
       <p
         v-else-if="flow.model.bankNote?.ownLine && flow.model.bankNote.asksNone"

@@ -134,6 +134,40 @@ test('flowOutputs prefixes every destination of a row with byproducts, without m
   );
 });
 
+test('flowOutputs captions the sink by its cause, rounding only where rounding explains it (#1063)', () => {
+  const whole = { wholeMachines: true };
+  const sinkOf = (line: CalcRow, books: Partial<StoredStage>, settings?: Partial<StoredSettings>) =>
+    flowOutputs(line, context(books, '3', settings)).find(output => output.kind === 'sink')?.subTxt;
+  // A Petroleum Coke line runs to use up the Plastic line's Heavy Oil Residue.
+  const plastic = row('plastic', { 'Crude Oil': 120 }, { Plastic: 80, 'Heavy Oil Residue': 40 });
+  const coke = row('coke', { 'Heavy Oil Residue': 40 }, { 'Petroleum Coke': 120 });
+  assert.equal(
+    sinkOf(coke, { rows: [plastic, coke], surplus: { 'Petroleum Coke': 120 } }, whole),
+    'left over from using up Heavy Oil Residue',
+  );
+  // Four Iron Plate machines make 20/min each: less than that sunk is rounding, more is not, and
+  // nothing is rounding without whole machines.
+  assert.equal(
+    sinkOf(plates, { rows: [plates], surplus: { 'Iron Plate': 15 } }, whole),
+    'whole-machine rounding surplus',
+  );
+  assert.equal(
+    sinkOf(plates, { rows: [plates], surplus: { 'Iron Plate': 40 } }, whole),
+    'more than this phase uses',
+  );
+  assert.equal(
+    sinkOf(plates, { rows: [plates], surplus: { 'Iron Plate': 15 } }),
+    'more than this phase uses',
+  );
+  // A byproduct names the main product the phase uses.
+  const fuel = row('fuel', { 'Crude Oil': 240 }, { Fuel: 160, 'Polymer Resin': 120 });
+  const generator = { ...row('power', { Fuel: 160 }, {}), power: -250 };
+  assert.equal(
+    sinkOf(fuel, { rows: [fuel, generator], surplus: { 'Polymer Resin': 120 } }, whole),
+    'made alongside Fuel, which this phase uses',
+  );
+});
+
 test('flowOutputs reserves augmenter matrix and extra cells in Phase 5 only', () => {
   const matrix = row('matrix', {}, { 'Alien Power Matrix': 10 });
   const cells = row('cells', {}, { 'Singularity Cell': 10 });

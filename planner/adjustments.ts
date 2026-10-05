@@ -1,7 +1,7 @@
 // The adjustments calculate() makes to the finished stages: the target time on the final phase
 // (phaseTime 'final') and the verdict on fueling the augmenters.
 import { listNames } from '../public/wording.ts';
-import type { CalcRow, CurrentSettings, StageResult } from '../public/types/index.ts';
+import type { CalcRow, CurrentSettings, CurrentStage, StageResult } from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { RAW } from './data.ts';
 import { run, wholeLine } from './model.ts';
@@ -12,15 +12,20 @@ import type { PhaseStages } from './calculate.ts';
 // hard as the machines a later phase already builds allow, so it finishes sooner
 // without adding a building the plan later drops. A phase is never made slower,
 // and nothing is pulled forward past what its own phase can unlock and power.
+// `unrouted` holds the first plan of each phase whose routed plan stands (withOverflow, #1063).
 // Returns the warning that says what happened, or none when this does not apply.
-export function pullFinalPhaseForward(config: CurrentSettings, stages: PhaseStages): string[] {
+export function pullFinalPhaseForward(
+  config: CurrentSettings,
+  stages: PhaseStages,
+  unrouted: Record<number, Solved> = {},
+): string[] {
   if (
     config.phaseTime !== 'final' ||
     config.goal === 'maximum' ||
     !Object.values(stages).every(stage => stage.feasible)
   )
     return [];
-  const { pulled, stopped } = resolveEarlierPhases(config, stages);
+  const { pulled, stopped } = resolveEarlierPhases(config, stages, unrouted);
   return [finalPhaseWarning(pulled, stopped)];
 }
 // built[phase] = { recipeId: whole machines } as each phase's plan builds it. Phase n's caps
@@ -32,36 +37,63 @@ export function pullFinalPhaseForward(config: CurrentSettings, stages: PhaseStag
 // records, rather than the full-speed time in between (#1066). A re-solve that stopped at its
 // limit ('Unknown' at the node limit, 'Time limit reached' at the backstop or Phase 5's deadline)
 // proves nothing either way: that phase keeps its own plan, and the warning says the search
-// stopped instead of claiming it could not finish sooner (#650). Returns the phases it pulled
-// ahead and those whose search stopped.
+// stopped instead of claiming it could not finish sooner (#650).
+// A phase planned with a group's excess routed to the central demand (#1063) that is not pulled
+// ahead tries its first plan (`unrouted`) as well: when that one is pulled ahead to finish sooner
+// than the routed plan, the phase keeps the first plan, pulled ahead, so routing never leaves a
+// phase later than it would have been (the routed plan's capped re-solve may not fit where the
+// first plan's does, #1094). The phases are re-solved from Phase 4 down, so the caps of an earlier
+// phase hold the machines of the plan a later phase keeps; each phase's own re-solve reads only its
+// own and later phases' plans. Returns the phases it pulled ahead and those whose search stopped.
 function resolveEarlierPhases(
   config: CurrentSettings,
   stages: PhaseStages,
+  unrouted: Record<number, Solved>,
 ): { pulled: number[]; stopped: number[] } {
   const built: Record<number, Record<string, number>> = {};
   const pulled: number[] = [],
     stopped: number[] = [];
-  for (let phase = 1; phase <= 5; phase++)
-    for (const row of stages[phase]!.rows || [])
-      built[phase] = { ...built[phase], [row.id]: row.machines };
-  for (let phase = 1; phase <= 4; phase++) {
+  const machines = (stage: CurrentStage) =>
+    Object.fromEntries((stage.rows || []).map(row => [row.id, row.machines]));
+  for (let phase = 1; phase <= 5; phase++) built[phase] = machines(stages[phase]!);
+  // The phase's plan re-solved for maximum output under the caps of its own and later phases.
+  // A phase that makes its on-site items centrally (#875), or routes a group's excess to the
+  // central balance (#1063), is re-solved that way too, and a row that makes less than its fixed
+  // rates as solvePhase plans it (#984).
+  const pullAhead = (phase: number, stage: CurrentStage) => {
     const caps: Record<string, number> = {};
     for (let later = phase; later <= 5; later++)
-      for (const [id, machines] of Object.entries(built[later] || {}))
-        caps[id] = Math.max(caps[id] || 0, machines);
-    // A phase that makes its on-site items centrally (#875) is re-solved that way too, and a row
-    // that makes less than its fixed rates as solvePhase plans it (#984).
-    const ahead = withinRates(stageSettings(config, stages[phase]), phase, settings =>
+      for (const [id, count] of Object.entries(built[later] || {}))
+        caps[id] = Math.max(caps[id] || 0, count);
+    return withinRates(stageSettings(config, stage), phase, settings =>
       run(settings, phase, { maximum: true, caps }),
     );
+  };
+  for (let phase = 4; phase >= 1; phase--) {
     const stage = stages[phase]!;
-    if (ahead.feasible && ahead.hours < stage.hours! - 1e-6) {
+    const sooner = (ahead: RunResult): ahead is Solved =>
+      ahead.feasible && ahead.hours < stage.hours! - 1e-6;
+    const ahead = pullAhead(phase, stage);
+    const first = unrouted[phase];
+    if (sooner(ahead)) {
       stages[phase] = { ...ahead, aheadOf: stage.aheadOf ?? stage.hours! };
       pulled.push(phase);
-    } else if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
+      continue;
+    }
+    if (first) {
+      built[phase] = machines(first);
+      const firstAhead = pullAhead(phase, first);
+      if (sooner(firstAhead)) {
+        stages[phase] = { ...firstAhead, aheadOf: first.aheadOf ?? first.hours };
+        pulled.push(phase);
+        continue;
+      }
+      built[phase] = machines(stage);
+    }
+    if (!ahead.feasible && ahead.solverStatus && !/infeasible/i.test(ahead.solverStatus))
       stopped.push(phase);
   }
-  return { pulled, stopped };
+  return { pulled: pulled.reverse(), stopped: stopped.reverse() };
 }
 // The phaseTime 'final' warning: which earlier phases finish sooner, and which searches stopped.
 // Only the phases resolveEarlierPhases pulled ahead count: a phase that minimal construction
@@ -152,8 +184,9 @@ function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResul
 // replaces as `aheadOf`, as resolveEarlierPhases does. A re-solve that does not fit or stopped at
 // a limit keeps the 24-hour plan, and so does Phase 1, whose hand-fed biomass the planner cannot
 // run harder (a maximising solve of Phase 1 has only the entered spare power, see addPower).
-// A phase that makes its on-site items centrally (#875) is re-solved that way too, and keeps
-// saying so; a row that makes less than its fixed rates is planned as solvePhase plans it (#984).
+// A phase that makes its on-site items centrally (#875), or routes a group's excess to the central
+// balance (#1063), is re-solved that way too, and keeps saying so; a row that makes less than its
+// fixed rates is planned as solvePhase plans it (#984).
 // A phase that provably cannot finish sooner (cannotFinishSooner) is not re-solved at all.
 export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved): Solved {
   if (cannotFinishSooner(config, phase, stage)) return stage;
@@ -170,6 +203,7 @@ export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved)
     ...fast,
     aheadOf: stage.hours,
     ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
+    ...(stage.onSiteOverflow ? { onSiteOverflow: stage.onSiteOverflow } : {}),
   };
 }
 // Whether no plan within the stage's own machines can finish sooner, so fullSpeed's re-solve could

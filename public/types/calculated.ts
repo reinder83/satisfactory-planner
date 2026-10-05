@@ -156,6 +156,9 @@ export interface OnSiteGroup {
   // planner/on-site.ts); until then the row's share sizes the line, as before #1038. Absent in
   // plans made before #1038, whose planner never read it.
   ifBuilt?: Partial<Record<StageKey, Record<string, OnSiteRate>>>;
+  // Only inside the planner, never stored (settings() leaves it out): the items whose excess the
+  // group's own lines may send to the central balance (withOverflow in planner/on-site.ts, #1063).
+  overflow?: string[];
 }
 // A group's part of a row of total T (its primary output per minute, MW for a generator), as
 // rowShares gives it while the row makes at least what its fixed rates take: `rate` per minute
@@ -382,6 +385,11 @@ export interface StageResult {
   // The factory groups' own whole-machine lines (#875) did not fit this phase's budgets, so it
   // makes those items centrally: { group id: items }. Absent otherwise and from older plans.
   onSiteDropped?: Record<string, string[]>;
+  // A central line of an item made on site would have sunk almost all it made, so the phase was
+  // planned again with these groups' excess of these items feeding the central demand (#1063,
+  // withOverflow in planner/on-site.ts): { group id: items }. Absent otherwise and from older
+  // plans.
+  onSiteOverflow?: Record<string, string[]>;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;
