@@ -12,7 +12,12 @@ import { ENGINE } from './data.ts';
 import { fail, settings } from './settings.ts';
 import { run } from './model.ts';
 import { draftStage } from './draft.ts';
-import { pullFinalPhaseForward, judgeAugmenterFuel } from './adjustments.ts';
+import {
+  pullFinalPhaseForward,
+  judgeAugmenterFuel,
+  fullSpeed,
+  fullSpeedWarning,
+} from './adjustments.ts';
 import { planWarnings } from './warnings.ts';
 import { stoppedSearch } from './rounding.ts';
 import { plannedSites, centralSettings, withinRates } from './on-site.ts';
@@ -62,11 +67,17 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
   const stages = solvePhases(config, onPhase);
+  // Minimal construction's phases that run their buildings faster than the 24 hours (fullSpeed),
+  // read before the target time on the final phase may pull an earlier phase ahead too.
+  const sooner = Object.entries(stages)
+    .filter(([, stage]) => stage.aheadOf !== undefined)
+    .map(([phase]) => Number(phase));
   // Everything below adjusts the finished stages or adds warnings. Warnings are plain sentences,
   // shown in this order as the profile's assumptions (plan page, Backup page, wizard review).
   // The adjustments run in this order, after Phase 5 and on its search deadline, and each returns
   // the warnings it adds; planWarnings reads the stages as they left them.
   const warnings = [
+    ...fullSpeedWarning(config, sooner),
     ...pullFinalPhaseForward(config, stages),
     ...judgeAugmenterFuel(config, stages),
   ];
@@ -88,10 +99,40 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
     setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
-    const result = solvePhase(config, phase);
-    stages[phase] = result.feasible ? result : draftStage(config, phase, result);
+    const result = planPhase(config, phase);
+    stages[phase] = result.feasible
+      ? withExactPlan(config, phase, result)
+      : draftStage(config, phase, result);
   }
   return stages;
+}
+// One phase as the profile's goal plans it: solvePhase, and under minimal construction the same
+// buildings run as fast as they allow (fullSpeed, #1066).
+function planPhase(config: CurrentSettings, phase: number): RunResult {
+  const result = solvePhase(config, phase);
+  return result.feasible && config.goal === 'minimal' ? fullSpeed(config, phase, result) : result;
+}
+// What rounding to whole machines costs (#1066): a whole-machine phase records the same phase
+// planned with exact clocks (planPhase without wholeMachines, so without the lines set to exact
+// clocks either) as `exactPlan`: its buildings, power, raw resources, overflow and hours, which
+// the plan's pages set beside the whole-machine figures. Only where both fit: a phase whose exact
+// plan does not fit records nothing, and neither does a plan without whole machines. It shares
+// the phase's search deadline; the exact plan is a linear solve unless production amplification
+// asks for an integer search, and one that stops records nothing either.
+function withExactPlan(config: CurrentSettings, phase: number, stage: Solved): Solved {
+  if (!config.wholeMachines) return stage;
+  const exact = planPhase({ ...config, wholeMachines: false }, phase);
+  if (!exact.feasible) return stage;
+  return {
+    ...stage,
+    exactPlan: {
+      buildings: exact.rows.reduce((total, row) => total + row.machines, 0),
+      needMW: exact.grid?.needMW ?? exact.requiredMW,
+      raw: Object.fromEntries(Object.entries(exact.raw).filter(([, rate]) => rate > 0.001)),
+      surplus: Object.values(exact.surplus).reduce((total, rate) => total + rate, 0),
+      hours: exact.hours,
+    },
+  };
 }
 // One phase's solve under the profile's goal and SAM conversion. SAM conversion: 'allow' offers it
 // to the Phase 5 solve from the start, 'needed' only when Phase 5 does not fit without it, 'avoid'

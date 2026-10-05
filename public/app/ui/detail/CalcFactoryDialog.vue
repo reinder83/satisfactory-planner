@@ -3,7 +3,8 @@
   sticky header (#239), writing `calc-<stage>-<row id>` like the row's card and build-plan
   step, and under the title the card's headline rate (SP-21, #256); then the flow diagram, the
   byproduct advice (RecycleAdvice.vue, #1022), machine setup (machineSetup in
-  views/calculated.ts, drawn as the three MachineCells, SP-20),
+  views/calculated.ts, drawn as the three MachineCells, SP-20) with the line's clocks in a
+  whole-machine plan (ExactClockChoice.vue, #1066),
   lane advice, the outputs (only where the headline does not already say them), expansion by
   phase and the note saved under `factory-<row id>`. The easier rounded setting is left out
   when the profile already runs whole machines. Opened by openCalculatedFactory in
@@ -31,6 +32,7 @@ import type { CalcRow } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
+import ExactClockChoice from './ExactClockChoice.vue';
 import FlowDiagram from './FlowDiagram.vue';
 import LaneAdvice from './LaneAdvice.vue';
 import MachineCells from './MachineCells.vue';
@@ -156,6 +158,7 @@ const view = computed(() =>
       :full-caption="view.machines.full"
       :adjustable-caption="view.machines.adjustable"
     />
+    <ExactClockChoice :row="view.row" />
     <div v-if="view.easy" class="notice info">
       <b>Easier optional setting: set only the adjustable machine to {{ view.easy.clock }}%.</b>
       <p>Its output: {{ view.easy.output }}.</p>

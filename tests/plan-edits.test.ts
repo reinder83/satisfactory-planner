@@ -65,7 +65,7 @@ test('build plan edits round-trip, mark the state version 3 and preserve checkma
   );
   assert.equal(state.checks['phase-3-survey'], true);
   assert.throws(
-    () => validateState({ ...JSON.parse(JSON.stringify(state)), version: 16 }),
+    () => validateState({ ...JSON.parse(JSON.stringify(state)), version: 17 }),
     /newer planner version/,
   );
 });

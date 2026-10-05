@@ -9,13 +9,16 @@
   Mark done and its Open factory. The other unfinished steps follow in order, and completed
   ones fold into "Done (n)" under the list, so ticking the lead step promotes the next one.
   A line that only made a Space Elevator part already delivered in full (#1062) is dimmed with
-  a note under its title, and its unfinished step comes after the other unfinished ones.
+  a note under its title, and its unfinished step comes after the other unfinished ones. A line
+  at exact clocks, or one whose clocks a recalculation would change (#1066), says so there too.
   With every step done, a line says the phase checklist is complete. While editing, the list
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
+import { lineClockNote } from '../../exact-clocks.ts';
 import {
+  calculated,
   checked,
   editingTask,
   hideDone,
@@ -23,6 +26,8 @@ import {
   query,
   setHideDone,
   setQuery,
+  stage,
+  state,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
 import {
@@ -41,25 +46,34 @@ import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
 import type { PlanStepView, RemovedStepView, Step } from '../../tasks.ts';
 
+// A production line's own step at exact clocks, or one whose clocks a recalculation would change
+// (lineClockNote, #1066); '' for any other step, a personal task linked to the line included.
+const clockNote = (stepId: string, rowId: string | undefined): string =>
+  calculated && rowId && stepId === 'calc-' + stage() + '-' + rowId
+    ? lineClockNote(calculated, state, stage(), rowId)
+    : '';
+
 const list = computed(() =>
   legacy(() => {
     const tasks = planTasks(),
       shown = filteredPlanTasks(tasks),
       removed = removedPlanTasks(),
       idle = idleStepNotes(shown);
-    const steps = shown.map(
-      (task): PlanStepView => ({
+    const steps = shown.map((task): PlanStepView => {
+      const link = taskLink(task);
+      return {
         id: task.id,
         title: task.title,
         body: task.body,
         done: checked(task.id),
         idle: idle.get(task.id),
+        clocks: clockNote(task.id, link?.id),
         icon: taskIcon(task),
-        link: taskLink(task),
+        link,
         custom: task.id.startsWith('custom-'),
         form: planEditing && editingTask === task.id ? taskLinkChoices(task) : null,
-      }),
-    );
+      };
+    });
     return {
       total: tasks.length,
       query,

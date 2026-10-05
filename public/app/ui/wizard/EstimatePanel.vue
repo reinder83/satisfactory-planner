@@ -1,6 +1,7 @@
 <!--
   The live estimate beside All settings steps 3 and 4 (SP-33, #268), from wizard/estimate.ts:
-  the buildings and power at the plan's last phase, and the tightest raw resource over every
+  the buildings and power at the plan's last phase, what whole machines add there over exact
+  clocks (#1066, once the whole-machine pass is in), and the tightest raw resource over every
   phase it plans, as a share of its budget. A resource over its budget, a phase that does not
   fit or too little power shows a warning. The status line is a polite live region, so a screen
   reader hears when an estimate is ready without every figure being read out. Leaving the step
@@ -23,6 +24,7 @@ import {
 } from '../../wizard/estimate.ts';
 import { power } from '../../wizard/fields.ts';
 import { powerView } from '../../../power.ts';
+import { measuredRounding } from '../../exact-clocks.ts';
 import { resourceUse } from '../../views/resources.ts';
 import { legacy } from '../bridge.ts';
 
@@ -62,6 +64,8 @@ const view = computed(() =>
     // The last phase's power as every page gives it (powerView in public/power.ts, #1064).
     const lastPower = powerView(last, plan.settings),
       short = lastPower.shortMW > 0;
+    // What whole machines add over exact clocks (#1066), measured by the whole-machine pass.
+    const rounding = measuredRounding(plan);
     const unfit = stages.filter(([, stageResult]) => !stageResult.feasible).map(([phase]) => phase);
     const warnings = [
       ...(tightest?.use.over
@@ -89,6 +93,12 @@ const view = computed(() =>
         power: `${power(lastPower.needMW)} of ${power(lastPower.availableMW)}`,
         short,
         tightest,
+        rounding: rounding
+          ? {
+              phase: rounding.phase,
+              text: `+${num(rounding.cost.buildings[0] - rounding.cost.buildings[1])} buildings, +${power(rounding.cost.needMW[0] - rounding.cost.needMW[1])}`,
+            }
+          : null,
       },
       warnings,
     };
@@ -158,6 +168,12 @@ onBeforeUnmount(() => {
         <dt class="eyebrow">Power needed at Phase {{ view.figures.phase }}</dt>
         <dd data-estimate-power :class="view.figures.short ? 'warn' : undefined">
           {{ view.figures.power }}
+        </dd>
+      </div>
+      <div v-if="view.figures.rounding">
+        <dt class="eyebrow">Whole machines add at Phase {{ view.figures.rounding.phase }}</dt>
+        <dd data-estimate-rounding>
+          {{ view.figures.rounding.text }} <small>against exact clocks</small>
         </dd>
       </div>
       <div v-if="view.figures.tightest">

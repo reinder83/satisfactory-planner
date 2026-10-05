@@ -687,3 +687,32 @@ test('ADA warns on every page when the others moved to another profile (#1052)',
     assert.ok(!ids(facts({ view })).includes('group-moved'), 'absent means none');
   }
 });
+
+test('ADA says the clocks asked for wait for a recalculation, and what whole machines cost (#1066)', () => {
+  for (const view of ['factories', 'plan']) {
+    const line = adaRemarks(facts({ view, exactClocksPending: 2 })).find(
+      r => r.id === 'exact-clocks-pending',
+    )!;
+    assert.equal(line.tone, 'warn');
+    assert.match(line.text, /^You changed the clocks of 2 production lines/);
+    assert.match(line.text, /Nothing recalculates by itself: Recalculate with exact clocks/);
+    assert.match(line.text, /plans them\./);
+    assert.ok(!ids(facts({ view })).includes('exact-clocks-pending'), 'absent means none');
+  }
+  assert.match(
+    adaRemarks(facts({ view: 'plan', exactClocksPending: 1 })).find(
+      r => r.id === 'exact-clocks-pending',
+    )!.text,
+    /^You changed the clocks of 1 production line,.* plans it\./,
+  );
+  const cost = adaRemarks(
+    facts({ view: 'plan', roundingCost: { buildings: '1,226 buildings', power: '33.4 GW' } }),
+  ).find(r => r.id === 'rounding-cost')!;
+  assert.equal(cost.tone, 'calm');
+  assert.match(
+    cost.text,
+    /^Whole machines at 100% cost this phase 1,226 buildings and 33.4 GW more/,
+  );
+  assert.match(cost.text, /dialog can set that one line to exact clocks/);
+  assert.ok(!ids(facts({ view: 'plan' })).includes('rounding-cost'), 'absent without the record');
+});

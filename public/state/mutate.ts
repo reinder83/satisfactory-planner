@@ -48,7 +48,16 @@ import { ITEM_NAMES } from './items.ts';
 // on top of a newer state (another tab or device wrote in between), they would silently undo
 // that write, so both editions refuse them unless the tab saw the current revision (#165).
 // Small operations (a tick, a count, one assignment) merge safely and are never refused.
-const baseSensitive = ['taskOrder', 'note', 'taskEdit', 'storageBayOrder', 'storageSlotMove'];
+// exactClocks (#1066) sends its whole map, so a tab that has not seen another's change would undo
+// it.
+const baseSensitive = [
+  'taskOrder',
+  'note',
+  'taskEdit',
+  'storageBayOrder',
+  'storageSlotMove',
+  'exactClocks',
+];
 export const staleWrite =
   'This profile was changed in another tab or on another device, so your last change was not ' +
   'saved. The page now shows the latest version; text you typed is kept, and saving it again ' +
@@ -153,7 +162,14 @@ function removeTask(state: SavedState, update: Raw) {
   for (const phase of Object.keys(edits.order) as Phase[])
     edits.order[phase] = edits.order[phase]!.filter(stepId => stepId !== id);
 }
+// The production lines asked to run at exact clocks (#1066), sent whole; null forgets the choice,
+// so the plan's own applies again. validateState checks the map.
+function setExactClocks(state: SavedState, update: Raw) {
+  if (update.value === null) delete state.exactClocks;
+  else state.exactClocks = update.value as SavedState['exactClocks'];
+}
 const recordEdits: Record<string, StateEdit> = {
+  exactClocks: setExactClocks,
   check: setRecord,
   note: setRecord,
   delivery: setRecord,

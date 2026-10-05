@@ -210,6 +210,14 @@ export const version15 = {
   },
 } satisfies SavedState;
 
+// Version 16: production lines asked to run at exact clocks (#1066): the Screw line in Phase 3
+// and the Iron Plate line in Phase 4.
+export const version16 = {
+  ...version15,
+  version: 16,
+  exactClocks: { '3': ['Recipe_Screw_C'], '4': ['Recipe_IronPlate_C'] },
+} satisfies SavedState;
+
 // Each state and the version validateState must mark it with.
 export const states: [SavedState, number][] = [
   [version1, 1],
@@ -228,6 +236,7 @@ export const states: [SavedState, number][] = [
   [version13, 13],
   [version14, 14],
   [version15, 15],
+  [version16, 16],
 ];
 
 export const backup = {
