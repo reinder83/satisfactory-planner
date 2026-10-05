@@ -17,7 +17,9 @@ import {
   flowNotes,
   flowOutputs,
   siteBooks,
+  splitMachines,
 } from '../../public/app/flow.ts';
+import { num } from '../../public/app/format.ts';
 import type { CalcFlowContext, FlowModel, FlowOutput } from '../../public/app/flow.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { calcStage } from '../../public/app/session.ts';
@@ -148,13 +150,20 @@ test("each Wire line's deliveries add up to what it makes, and so does the split
     const model = modelOf(id);
     const made = rowOf(id).outputs.Wire!;
     assert.ok(near(total(model.outputs), made), `${id}: ${total(model.outputs)} of ${made}`);
-    // The split counts the machines of each delivery but the sink, and those cover the line's.
+    // The machines of each delivery but the sink cover the line's, less what it sinks; with the
+    // sink's, the whole machines add up to the line's (#1067).
     const split = model.outputs.filter(o => o.mach !== undefined && o.kind !== 'sink');
     const sunk = total(model.outputs.filter(o => o.kind === 'sink'));
     const machines = split.reduce((sum, output) => sum + output.mach!, 0);
     assert.ok(near(machines, ((made - sunk) / made) * model.equivalent), id);
+    splitAddsUp(model, id);
   }
-  assert.match(modelOf(WIRE).bar!.sub, / · split ≈ 5 \/ 1 across the deliveries below$/);
+  const wire = modelOf(WIRE);
+  const words = wire.outputs.filter(o => o.machines !== undefined).map(o => o.machines);
+  assert.equal(
+    wire.bar!.sub.match(/ · split ≈ (.*) across the deliveries below$/)![1],
+    words.map(count => (count! < 1 ? '<1' : String(count))).join(' / '),
+  );
 });
 
 test("LaneAdvice's other consumers on the same belt are those the feeding line delivers to", () => {
@@ -245,10 +254,43 @@ const frozen: StoredCalculatedPlan = JSON.parse(
 const recorded: Record<string, unknown> = JSON.parse(
   fs.readFileSync('tests/fixtures/flow-model-2026-10-04.json', 'utf8'),
 );
+// The recordings predate #1067, which gives each destination its whole machines and its exact
+// part of the line's (`machines` and `lineMach`, splitMachines) and words the split by them.
+// Each model is compared as it was before: those fields left out and the split as it was then
+// worded, rounding each delivery but the sink up (preSplit), so the rest still compares exactly.
+const preSplit = (outputs: FlowOutput[]) => {
+  const splits = outputs.filter(
+    o => o.mach !== undefined && o.kind !== 'sink' && o.kind !== 'more',
+  );
+  return splits.length > 1
+    ? ` · split ≈ ${splits.map(o => num(Math.ceil(o.mach! - 1e-9))).join(' / ')} across the deliveries below`
+    : '';
+};
+const before1067 = (model: FlowModel): FlowModel => {
+  const outputs = model.outputs.map(
+    ({ machines: _machines, lineMach: _lineMach, ...output }): FlowOutput => output,
+  );
+  const bar = model.bar && {
+    ...model.bar,
+    sub:
+      model.bar.sub.replace(/ · split ≈ .* across the deliveries below$/, '') + preSplit(outputs),
+  };
+  return { ...model, outputs, bar };
+};
+// Every split adds up to the line's machines (#1067).
+const splitAddsUp = (model: FlowModel, label: string) => {
+  const split = model.outputs.filter(o => o.machines !== undefined);
+  if (split.length)
+    assert.equal(
+      split.reduce((sum, o) => sum + o.machines!, 0),
+      model.machineCount,
+      label,
+    );
+};
 const snapshot = (model: FlowModel) =>
   JSON.parse(
     JSON.stringify({
-      ...model,
+      ...before1067(model),
       sameItemConsumers: Object.fromEntries(
         model.inputs.map(input => [input.name, model.sameItemConsumers(input.name)]),
       ),
@@ -286,8 +328,11 @@ test('a plan without lines made on site keeps exactly the flow it had', () => {
   };
   try {
     for (const factoryGroups of [noGroups, marked])
-      for (const [id, model] of Object.entries(recorded))
-        assert.deepEqual(snapshot(modelOf(id, frozen, factoryGroups)), model, id);
+      for (const [id, model] of Object.entries(recorded)) {
+        const now = modelOf(id, frozen, factoryGroups);
+        assert.deepEqual(snapshot(now), model, id);
+        splitAddsUp(now, id);
+      }
   } finally {
     Number.prototype.toLocaleString = toLocale;
   }
@@ -420,12 +465,19 @@ test('rows of plans whose groups were not edited after the recalculation keep ex
                 i.rate,
                 i.link?.calcFactory ?? null,
               ]),
-              notes: flowNotes(row, outputs, context),
+              notes: { ...flowNotes(row, outputs, context), split: preSplit(outputs) },
             }),
           ),
           entry.dialog[row.id],
           `${entry.label}: ${row.id}`,
         );
+        const split = splitMachines(row, outputs).filter(o => o.machines !== undefined);
+        if (split.length)
+          assert.equal(
+            split.reduce((sum, o) => sum + o.machines!, 0),
+            row.machines,
+            `${entry.label}: ${row.id} split`,
+          );
       }
     }
   } finally {

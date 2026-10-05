@@ -2335,7 +2335,21 @@ test('between groups: a card per group with what comes in and goes out, names es
   assert.ok(text(into).startsWith(`← from ${evil} `), text(into));
   assert.ok(out.querySelector('[data-link-mode]'));
   assert.equal($$('[data-link-in] select, [data-link-in] input').length, 0);
-  assert.equal($$('[data-link-mode]').length, $$('[data-link-out]').length);
+  // Every link but extracted Water has its transport controls on its Out row: Water Extractors
+  // pump Water at the site that uses it, so its link needs no pipe or vehicle (#1067).
+  const pumped = $$('[data-link-out]').filter(row =>
+    row.dataset.linkOut!.startsWith('supply/Water:'),
+  );
+  assert.ok(pumped.length, 'the plan pumps Water');
+  assert.equal($$('[data-link-mode]').length, $$('[data-link-out]').length - pumped.length);
+  for (const row of pumped) {
+    assert.equal(row.querySelector('[data-link-mode]'), null);
+    assert.match(
+      text(row.querySelector('[data-link-extract]')!),
+      /^Build the Water Extractors at /,
+    );
+    assert.equal(text(row.querySelector('[data-link-badge]')!), 'Water Extractors on site');
+  }
   // Every link has exactly one Out row, so each can be edited, and the mines' go to the groups.
   const outs = $$('[data-link-out]').map(row => row.dataset.linkOut);
   assert.equal(new Set(outs).size, outs.length);
@@ -2374,8 +2388,12 @@ test('between groups: a card per group with what comes in and goes out, names es
     'a fluid reads m³/min',
   );
   assert.match(item.getAttribute('title')!, /^[A-Z][\w ]+: [\d.,]+( m³)?\/min$/);
+  // Belts and pipes per mark, trickle items on mixed belts (#1067), or extracted Water.
   for (const linkBadge of $$('[data-link-badge]'))
-    assert.match(text(linkBadge), /^\d+ × Mk\.\d (belt|pipe)s?( · \d+ × Mk\.\d (belt|pipe)s?)*$/);
+    assert.match(
+      text(linkBadge),
+      /^(\d+ × Mk\.\d (mixed belt|belt|pipe)s?( · \d+ × Mk\.\d (mixed belt|belt|pipe)s?)*|Water Extractors on site)$/,
+    );
   const badge = (row: Element) => text(row.querySelector('[data-link-badge]')!);
   assert.equal(badge(out), badge(into));
   // Each part counts its links and adds up what they carry.
@@ -2604,9 +2622,12 @@ test('between groups: a vehicle saved on a whole mines link applies to each sour
   go('logistics');
   render();
   await nextTick();
-  const sources = $$('[data-link-out]')
+  const allSources = $$('[data-link-out]')
     .map(row => row.dataset.linkOut!)
     .filter(key => key.startsWith('supply/') && key.endsWith(':fg-smelt1'));
+  // Water is pumped at the site (#1067): its link has no vehicle to pick, though it keeps its part
+  // of the old choice when the others split it.
+  const sources = allSources.filter(key => !key.startsWith('supply/Water:'));
   assert.ok(sources.length > 1, JSON.stringify(sources));
   for (const source of sources)
     assert.equal($<HTMLSelectElement>(`[data-link-mode="${source}"]`)!.value, 'truck', source);
@@ -2617,7 +2638,10 @@ test('between groups: a vehicle saved on a whole mines link applies to each sour
   mode.dispatchEvent(new Event('change'));
   await settle();
   const sent = calls.at(-1)![1] as Extract<UpdateOp, { type: 'factoryLinkTransport' }>;
-  assert.deepEqual([...sent.siblings!].sort(), sources.map(source => source.split(':')[0]).sort());
+  assert.deepEqual(
+    [...sent.siblings!].sort(),
+    allSources.map(source => source.split(':')[0]).sort(),
+  );
   const links = state.factoryGroups.links!;
   assert.equal(links['mines:fg-smelt1'], undefined);
   assert.deepEqual(links[first!], { mode: 'train', roundTripMin: 7 });
