@@ -145,7 +145,11 @@ function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResul
 export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved): Solved {
   const caps = Object.fromEntries(stage.rows.map(row => [row.id, row.machines]));
   const fast = withinRates(stageSettings(config, stage), phase, settings =>
-    run(settings, phase, { maximum: true, caps, conversion: phase === 5 && config.sam !== 'avoid' }),
+    run(settings, phase, {
+      maximum: true,
+      caps,
+      conversion: phase === 5 && config.sam !== 'avoid',
+    }),
   );
   if (!fast.feasible || !(fast.hours < stage.hours - 1e-6)) return stage;
   return {

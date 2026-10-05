@@ -184,7 +184,7 @@ export function draftFixes(
     );
   if (snapshot.wholeMachinesOnly)
     fixes.push(
-      'Keep these budgets instead: untick “Run solid-part machines at 100%” (Goals). Precise balancing fits, with one adjustable machine per production line.',
+      'Keep these budgets instead: untick “Whole machines” (Goals). Exact clocks fit, with one adjustable machine per production line.',
     );
   if (snapshot.minHours)
     fixes.push(

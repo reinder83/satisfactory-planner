@@ -457,7 +457,9 @@ export const exactClockLine = (config: CurrentSettings, phase: number, id: strin
 // Whether a phase plans a line as whole machines at 100%: under `wholeMachines`, a line that
 // rounds (roundsToWholeMachines) and that the user did not ask to run at exact clocks.
 export const wholeLine = (config: CurrentSettings, phase: number, recipe: PoolRecipe) =>
-  config.wholeMachines && roundsToWholeMachines(recipe) && !exactClockLine(config, phase, recipe.id);
+  config.wholeMachines &&
+  roundsToWholeMachines(recipe) &&
+  !exactClockLine(config, phase, recipe.id);
 // What each item per minute a raw resource draws beyond its budget costs under `overBudget`: more
 // than the machines it could save, so the solve raises a budget only as far as it must.
 const OVER_BUDGET_COST = 1000;

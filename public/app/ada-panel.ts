@@ -12,7 +12,7 @@ import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
 import { stageSupply } from './build-status.ts';
 import { deliveryKey } from './delivered.ts';
-import { durationOfHours, num } from './format.ts';
+import { durationOfHours, num, plural } from './format.ts';
 import {
   calcStage,
   calculated,
@@ -36,6 +36,7 @@ import {
   workspace,
 } from './session.ts';
 import { groupsReorder } from './group-order.ts';
+import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
@@ -160,6 +161,26 @@ function onSitePendingFacts(): Pick<AdaFacts, 'onSitePending' | 'onSiteLinesOnly
   return { onSitePending: !!change, onSiteLinesOnly: !!change && !change.marksChanged };
 }
 
+// The lines a recalculation with the clocks asked for would change (exactClocksChange, #1066), and
+// what whole machines cost in the open phase (roundingCost), in the side column's words: more
+// buildings and power than exact clocks, only where the whole-machine plan takes more.
+function exactClockFacts(): Pick<AdaFacts, 'exactClocksPending' | 'roundingCost'> {
+  const change = calculated ? exactClocksChange(calculated, state) : null;
+  const cost = roundingCost(calcStage());
+  const more = cost && cost.buildings[0] - cost.buildings[1];
+  return {
+    ...(change ? { exactClocksPending: change.exact.length + change.whole.length } : {}),
+    ...(cost && more && more > 0
+      ? {
+          roundingCost: {
+            buildings: plural(more, 'building'),
+            power: power(Math.max(0, cost.requiredMW[0] - cost.requiredMW[1])),
+          },
+        }
+      : {}),
+  };
+}
+
 // Where the user's other tabs or devices moved (#1052), as the notice names it.
 function groupMovedFact(): string {
   const moved = groupMoved();
@@ -257,6 +278,7 @@ function adaFacts(): AdaFacts {
     unplaced: unplacedCount(),
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),
+    ...exactClockFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,

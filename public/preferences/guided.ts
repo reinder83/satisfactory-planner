@@ -15,7 +15,9 @@
 //   elevator multiplier    +1102%  (50x)
 //   recipe access           -57%   (all alternates), and on a heavy plan it
 //                                  decides whether Phase 5 fits at all
-//   whole machines          -64%   (precise balancing instead)
+//   whole machines          -64%   (precise balancing instead; measured again for #1066:
+//                                  Phase 5 1,895 buildings and 65.6 GW whole, 669 and 32.2 GW
+//                                  exact, which the 'exact' question's lead words)
 //   storage supply          +56%   (everything, rather than construction)
 //
 // while eleven of the wizard's controls — world seed, mod notes, SAM
@@ -94,7 +96,8 @@ export const guidedQuestions: GuidedQuestion[] = [
       {
         value: 'minimal',
         label: 'Build as little as possible',
-        detail: 'Deliveries take about 24 hours a phase. The fewest machines that still finish.',
+        detail:
+          'The fewest machines that deliver a phase within 24 hours, run as fast as they allow.',
         glyph: 'minimal',
         set: { goal: 'minimal' },
       },
@@ -193,19 +196,21 @@ export const guidedQuestions: GuidedQuestion[] = [
     step: 3,
     short: 'Exactness',
     title: 'How exact should the build be?',
-    lead: 'Both fit your resource budgets. This is about what you would rather do in game.',
+    lead: 'Whole machines are easier to set up but build more. Measured on a default plan, Phase 5 takes nearly three times the buildings and twice the power with whole machines.',
     options: [
       {
         value: 'whole',
         label: 'Whole machines at 100%',
-        detail: 'Nothing to underclock. Extra output fills storage and then goes to the sink.',
+        detail:
+          'Nothing to underclock, but every machine runs at full speed, so the lines feeding it do too. Extra output fills storage and then goes to the sink.',
         glyph: 'whole',
         set: { wholeMachines: true },
       },
       {
         value: 'precise',
         label: 'Exact ratios',
-        detail: 'Fewer machines, but some run at an odd clock speed you set by hand.',
+        detail:
+          'Far fewer machines and less power, but the last machine of each line runs at an odd clock speed you set by hand.',
         glyph: 'precise',
         set: { wholeMachines: false },
       },

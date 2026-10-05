@@ -18,23 +18,7 @@ import type { ExactClocks } from './calculated.ts';
 // migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
 // (factoryGroups.local), 15 ticks a recalculation kept for review because of lines made on site
 // (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks).
-export type StateVersion =
-  | 1
-  | 2
-  | 3
-  | 4
-  | 5
-  | 6
-  | 7
-  | 8
-  | 9
-  | 10
-  | 11
-  | 12
-  | 13
-  | 14
-  | 15
-  | 16;
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
 // Ticks a recalculation into a new profile could not carry onto one line of the new plan, because
 // of factory groups' own lines made on site (#876, newProfileState in state/carry.ts): a tick on a

@@ -19,9 +19,9 @@ test('handbookOrigin makes a state version 12 and is kept exactly', () => {
   assert.equal('handbookOrigin' in validateState(structuredClone(version11)), false);
 });
 
-test('a version newer than 15 is refused with the update message', () => {
+test('a version newer than 16 is refused with the update message', () => {
   assert.throws(
-    () => validateState({ ...structuredClone(version12), version: 16 }),
+    () => validateState({ ...structuredClone(version12), version: 17 }),
     /newer planner version/,
   );
 });

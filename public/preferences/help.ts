@@ -50,7 +50,7 @@ export const helpText: Record<string, string> = {
   phaseTime:
     'Every phase gives each phase the same target time. The final phase applies it to Phase 5 only: earlier phases then run their lines as hard as the machines a later phase already builds allow, so they finish sooner without adding a building the plan later drops. Their delivery rates are not rounded. Ignored for maximum output.',
   wholeMachines:
-    'Use whole production machines at 100%, sending extra solids to storage or the sink. Liquid and nuclear loops can still need balancing.',
+    'Use whole production machines at 100%, sending extra solids to storage or the sink. Every machine then runs at full speed, so the lines that feed it do too: more buildings, power and raw resources than exact clocks. Fluid, generator and nuclear lines always run at exact clocks, and a single production line can be set to exact clocks in its dialog.',
   roundRates: 'Rounds elevator target rates; completion time may be slightly longer or shorter.',
   // The power allowance and drone fuel (fuels.ts).
   utilityPercent:

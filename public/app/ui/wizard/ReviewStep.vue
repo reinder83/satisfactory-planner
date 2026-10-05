@@ -1,7 +1,8 @@
 <!--
   All settings step 5, Review, drawn from the calculated preview (never missing here: moving
   to step 5 always calculates). Phases before the profile's start phase are left out. Then
-  what was credited from production you already run, whether fueled augmenters pay off, the
+  what was credited from production you already run, whether fueled augmenters pay off, what
+  whole machines cost against exact clocks (RoundingCost.vue, #1066), the
   options for each phase that does not fit, the calculation's assumptions and, when adding a
   profile to a save, the carry-over panel.
 -->
@@ -14,6 +15,7 @@ import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
 import FuelVerdict from './FuelVerdict.vue';
+import RoundingCost from '../plan/RoundingCost.vue';
 import SupplyNotice from './SupplyNotice.vue';
 import StepHeading from '../form/StepHeading.vue';
 
@@ -56,6 +58,8 @@ const view = computed(() =>
           fixes: draftFixes(stageResult, preview.settings),
         })),
       warnings: preview.warnings,
+      // What whole machines cost in each phase listed (#1066).
+      rounding: stages.map(([phase, stageResult]) => ({ phase, stage: stageResult })),
     };
   }),
 );
@@ -93,6 +97,7 @@ const view = computed(() =>
       </table>
     </div>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
+    <RoundingCost :entries="view.rounding" layout="table" />
     <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">
       <b>{{ phaseDraft.heading }}</b> {{ phaseDraft.reason
       }}<template v-if="phaseDraft.fixes.length"

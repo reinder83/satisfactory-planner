@@ -761,33 +761,33 @@ export function validateState(state: unknown): ProgressState {
     ? 16
     : clean.onSiteReview
       ? 15
-    : clean.factoryGroups.local
-      ? 14
-      : clean.handbookOrigin?.mapping
-        ? 13
-        : clean.handbookOrigin
-          ? 12
-          : linksNeedV11(clean.factoryGroups)
-            ? 11
-            : clean.storageEdits.bayOrder
-              ? 10
-              : linksNeedV9(clean.factoryGroups)
-                ? 9
-                : clean.storageEdits.bayFloors
-                  ? 8
-                  : clean.factoryGroups.links
-                    ? 7
-                    : clean.storageEdits.hiddenFloors.length
-                      ? 6
-                      : clean.storageEdits.hiddenBays.length
-                        ? 5
-                        : hasAddedSlots(clean.storageEdits)
-                          ? 4
-                          : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
-                            ? 3
-                            : hasEdits(clean.storageEdits)
-                              ? 2
-                              : 1;
+      : clean.factoryGroups.local
+        ? 14
+        : clean.handbookOrigin?.mapping
+          ? 13
+          : clean.handbookOrigin
+            ? 12
+            : linksNeedV11(clean.factoryGroups)
+              ? 11
+              : clean.storageEdits.bayOrder
+                ? 10
+                : linksNeedV9(clean.factoryGroups)
+                  ? 9
+                  : clean.storageEdits.bayFloors
+                    ? 8
+                    : clean.factoryGroups.links
+                      ? 7
+                      : clean.storageEdits.hiddenFloors.length
+                        ? 6
+                        : clean.storageEdits.hiddenBays.length
+                          ? 5
+                          : hasAddedSlots(clean.storageEdits)
+                            ? 4
+                            : hasTaskEdits(clean.taskEdits) || hasGroups(clean.factoryGroups)
+                              ? 3
+                              : hasEdits(clean.storageEdits)
+                                ? 2
+                                : 1;
   const revision = state.revision as number;
   clean.revision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
   return clean;
