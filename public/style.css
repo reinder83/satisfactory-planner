@@ -4931,6 +4931,15 @@ button.rail-tile:hover {
    says why, in the body font (the title's own is the heading font). */
 .task.is-idle summary {
   color: var(--muted);
+  position: relative;
+  padding-right: 22px;
+}
+/* The note is a block of its own in the summary, so the fold marker would float below it: keep
+   the marker beside the title, as on every other step. */
+.task.is-idle summary::after {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 .task.is-idle .task-icon {
   color: #55615b;
