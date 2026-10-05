@@ -4,9 +4,20 @@
 // A step's id is its checklist key in state.checks; edits (rename, reorder, remove,
 // link) are stored separately in state.taskEdits keyed by that id, so they never
 // change the id or lose its checkmark.
+import { idleLineNote, idleLines } from './delivered.ts';
 import { placeName } from './group-links.ts';
 import { homeGroup, LINK_DUST, rowPlaces } from './group-order.ts';
-import { calcStage, calculated, checked, hideDone, phase, query, state } from './session.ts';
+import {
+  calcStage,
+  calculated,
+  checked,
+  hideDone,
+  milestoneOnly,
+  phase,
+  query,
+  stage,
+  state,
+} from './session.ts';
 import { buildRowName, calcTasks, orderedPhaseSteps, rowIcon } from './views/calculated.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
@@ -45,6 +56,9 @@ export type StepIconData = { item: string; kind?: undefined } | { kind: string; 
 // page's fixed checklists (ui/storage/StorageChecklist.vue) have no personal tasks or edits.
 export interface PlanStepView extends Step {
   done: boolean;
+  // The note of a line a delivered Space Elevator part leaves without work (idleStepNotes): the
+  // step is dimmed and says why under its title.
+  idle?: string;
   icon: StepIconData;
   link: StepLink | null;
   custom?: boolean;
@@ -209,6 +223,23 @@ export function removedPlanTasks(): Step[] {
 // A calculated production step (calc-<phase>-<rowId>) links to its own production line (row).
 // Returns that row id, or '' for any other step.
 export const autoTaskLink = (id: string) => id.match(/^calc-(?:[1-5]|post)-(.+)$/)?.[1] || '';
+
+// The steps of this phase's lines that a delivered Space Elevator part leaves without work
+// (#1062, idleLines in delivered.ts), by step id, with the note each shows under its title. Only
+// a line's own step (calc-<stage>-<row id>) is dimmed. Post Phase 5 keeps every Phase 5 line
+// running, and a milestone-only phase has no lines, so neither dims any.
+export function idleStepNotes(steps: Step[]): Map<string, string> {
+  const notes = new Map<string, string>();
+  if (phase() === 'post' || milestoneOnly()) return notes;
+  const idle = idleLines(calculated, stage(), state.deliveries);
+  if (!idle.size) return notes;
+  const prefix = 'calc-' + stage() + '-';
+  for (const step of steps) {
+    const line = step.id.startsWith(prefix) ? idle.get(step.id.slice(prefix.length)) : undefined;
+    if (line) notes.set(step.id, idleLineNote(line));
+  }
+  return notes;
+}
 
 // The production line (row) a step links to: its saved link, or else the automatic one. A saved
 // link of '-' (StepEditForm.vue's "No linked production line" on an automatically linked step)

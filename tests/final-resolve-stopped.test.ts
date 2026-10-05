@@ -7,11 +7,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../planner.ts';
 
-// Whole machines: every re-solve is an integer search, and Phases 2 to 4 finish sooner.
+// Whole machines: every re-solve is an integer search, and under the minimal goal Phase 3 finishes
+// sooner. (Under the balanced goal it used to be Phases 2 to 4, but only because their own plans'
+// times came from the goal's rates; since all a part's whole-machine output goes to the elevator,
+// #1062, those plans are as fast as the re-solves.)
 const settings = {
   phase: '5',
   recipes: 'all',
-  goal: 'balanced',
+  goal: 'minimal',
   wholeMachines: true,
   sam: 'avoid',
   phaseTime: 'final',
@@ -42,7 +45,7 @@ const targetWarning = (warnings: string[]) =>
 
 test('stopped phaseTime final re-solves are not reported as "could not finish sooner" (#650)', () => {
   const full = calculateCounted(settings);
-  const pulled = ['2', '3', '4'] as const;
+  const pulled = ['3'] as const;
   for (const phase of pulled)
     assert.ok(full.plan.stages[phase].aheadOf, `on an ordinary machine Phase ${phase} is pulled`);
   // The Phase 5 solve on its own makes as many calls as with a target time on every phase, so the

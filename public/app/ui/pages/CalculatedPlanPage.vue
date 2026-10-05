@@ -1,6 +1,7 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, a summary line (factories,
-  storage and power, each linking to its page, and the delivery time; SP-43), why it opened on an
+  storage and power, each linking to its page, and the delivery time, what is left of it once a
+  delivery count is saved, #1062; SP-43), why it opened on an
   earlier phase than the saved one when it did (ui/plan/OpenedEarlierNotice.vue, #666), the checklist
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
@@ -15,7 +16,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { durationOfHours, num, slug } from '../../format.ts';
+import { deliveryHoursLeft, deliveryKey } from '../../delivered.ts';
+import { durationOfHours, num } from '../../format.ts';
 import {
   calcStage,
   calculated,
@@ -26,7 +28,9 @@ import {
   phaseLabel,
   stage,
   startPhase,
+  state,
 } from '../../session.ts';
+import type { StoredStage } from '../../../types/index.ts';
 import { storageBays } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -59,6 +63,17 @@ function augmenterBoost(
           settings.availablePowerGW * 1000,
       )
     : 0;
+}
+
+// The summary's delivery time (#1062): the plan's own at steady state until a count is saved,
+// then what the rest of the delivery takes at the plan's rates, and complete once every part is.
+// A part without a rate (a plan migrated from the handbook) leaves the plan's own time standing.
+function deliveryTime(stagePlan: StoredStage): string {
+  const left = deliveryHoursLeft(stagePlan, stage(), state.deliveries);
+  if (left === 0) return 'Elevator delivery complete';
+  if (left === null || !Number.isFinite(left))
+    return `Delivery in ${durationOfHours(stagePlan.hours || 0)} at steady state`;
+  return `Rest of the delivery in ${durationOfHours(left)} at steady state`;
 }
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
@@ -114,11 +129,11 @@ const page = computed(() =>
             },
             {
               key: 'hours',
-              text: `Delivery in ${durationOfHours(stagePlan.hours || 0)} at steady state`,
+              text: deliveryTime(stagePlan),
             },
           ],
       deliveries: Object.entries(stagePlan?.delivery || {}).map(([item, delivery]) => ({
-        id: stage() + '-' + slug(item),
+        id: deliveryKey(stage(), item),
         name: item,
         ...delivery,
       })),
