@@ -202,28 +202,40 @@ export const overflowRoute = (item: string, group: string) => `overflow:${item}@
 const ALMOST_ALL_SUNK = 0.75;
 // A phase planned by `solve` with `config`, and planned again with the groups' excess routed to
 // the central balance (overflowRoute) when the first plan sinks almost all that the central lines
-// of an item made on site make (sunkCentrally). The second plan stands only when it fits as the
-// first did (no fallback the first did not need) and builds fewer machines, in no more time; it
-// records the routes it was offered as `onSiteOverflow` ({ group: items }). Any other phase is
-// the first plan, exactly as before #1063. A plan without whole machines makes exactly what each
-// group uses, so it is never planned again.
+// of an item made on site make (sunkCentrally). `finish` is what the goal does to a solved plan
+// that fits, given the settings it was solved with (minimal construction runs the plan's buildings
+// as fast as they allow: fullSpeed in planner/adjustments.ts); the two plans are compared as they
+// leave it, so the routed plan never finishes later than the first one would have. The second
+// plan stands only when it fits as the first did (no fallback the first did not need) and builds
+// fewer machines, before and after `finish`, in no more time after it; it records the routes it
+// was offered as `onSiteOverflow` ({ group: items }). Any other phase is the first plan, exactly
+// as before #1063. A plan without whole machines makes exactly what each group uses, so it is
+// never planned again.
 export function withOverflow(
   config: CurrentSettings,
   phase: number,
   solve: (settings: CurrentSettings) => RunResult,
+  finish: (settings: CurrentSettings, plan: Solved) => Solved = (_settings, plan) => plan,
 ): RunResult {
   const first = solve(config);
-  if (!first.feasible || first.onSiteDropped || !config.wholeMachines) return first;
+  if (!first.feasible) return first;
+  const firstDone = finish(config, first);
+  if (first.onSiteDropped || !config.wholeMachines) return firstDone;
   const routes = sunkCentrally(config, phase, first);
-  if (!Object.keys(routes).length) return first;
-  const routed = solve(withOverflowItems(config, routes));
-  return routed.feasible &&
-    !routed.onSiteDropped &&
-    !fallsBack(routed, first) &&
-    buildings(routed) < buildings(first) &&
-    routed.hours <= first.hours + 1e-9
-    ? { ...routed, onSiteOverflow: routes }
-    : first;
+  if (!Object.keys(routes).length) return firstDone;
+  const routedSettings = withOverflowItems(config, routes);
+  const routed = solve(routedSettings);
+  if (
+    !routed.feasible ||
+    routed.onSiteDropped ||
+    fallsBack(routed, first) ||
+    buildings(routed) >= buildings(first)
+  )
+    return firstDone;
+  const routedDone = finish(routedSettings, routed);
+  return buildings(routedDone) < buildings(firstDone) && routedDone.hours <= firstDone.hours + 1e-9
+    ? { ...routedDone, onSiteOverflow: routes }
+    : firstDone;
 }
 const buildings = (plan: Solved) => plan.rows.reduce((total, row) => total + row.machines, 0);
 // Per group, the solid items it makes on site on its own lines in `plan` of which the central
@@ -624,7 +636,13 @@ export function sharedSettings(config: CurrentSettings): CurrentSettings {
   );
   return { ...config, onSite };
 }
-// The settings a re-solve of a finished stage uses (phaseTime 'final', the augmenter fuel
-// verdict): central when the stage had to make its items centrally.
+// The settings a re-solve of a finished stage uses (minimal construction's fullSpeed, phaseTime
+// 'final', the augmenter fuel verdict): central when the stage had to make its items centrally,
+// and with the groups' excess routed to the central balance when the stage was planned that way
+// (onSiteOverflow, #1063), so the re-solve can still build the plan it re-solves.
 export const stageSettings = (config: CurrentSettings, stage: CurrentStage | undefined) =>
-  stage?.onSiteDropped ? centralSettings(config) : config;
+  stage?.onSiteDropped
+    ? centralSettings(config)
+    : stage?.onSiteOverflow
+      ? withOverflowItems(config, stage.onSiteOverflow)
+      : config;

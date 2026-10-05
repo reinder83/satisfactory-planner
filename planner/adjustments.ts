@@ -49,8 +49,9 @@ function resolveEarlierPhases(
     for (let later = phase; later <= 5; later++)
       for (const [id, machines] of Object.entries(built[later] || {}))
         caps[id] = Math.max(caps[id] || 0, machines);
-    // A phase that makes its on-site items centrally (#875) is re-solved that way too, and a row
-    // that makes less than its fixed rates as solvePhase plans it (#984).
+    // A phase that makes its on-site items centrally (#875), or routes a group's excess to the
+    // central balance (#1063), is re-solved that way too, and a row that makes less than its fixed
+    // rates as solvePhase plans it (#984).
     const ahead = withinRates(stageSettings(config, stages[phase]), phase, settings =>
       run(settings, phase, { maximum: true, caps }),
     );
@@ -152,8 +153,9 @@ function fuelVerdict(config: CurrentSettings, fueled: Solved, unfueled: RunResul
 // replaces as `aheadOf`, as resolveEarlierPhases does. A re-solve that does not fit or stopped at
 // a limit keeps the 24-hour plan, and so does Phase 1, whose hand-fed biomass the planner cannot
 // run harder (a maximising solve of Phase 1 has only the entered spare power, see addPower).
-// A phase that makes its on-site items centrally (#875) is re-solved that way too, and keeps
-// saying so; a row that makes less than its fixed rates is planned as solvePhase plans it (#984).
+// A phase that makes its on-site items centrally (#875), or routes a group's excess to the central
+// balance (#1063), is re-solved that way too, and keeps saying so; a row that makes less than its
+// fixed rates is planned as solvePhase plans it (#984).
 // A phase that provably cannot finish sooner (cannotFinishSooner) is not re-solved at all.
 export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved): Solved {
   if (cannotFinishSooner(config, phase, stage)) return stage;
@@ -170,6 +172,7 @@ export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved)
     ...fast,
     aheadOf: stage.hours,
     ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
+    ...(stage.onSiteOverflow ? { onSiteOverflow: stage.onSiteOverflow } : {}),
   };
 }
 // Whether no plan within the stage's own machines can finish sooner, so fullSpeed's re-solve could

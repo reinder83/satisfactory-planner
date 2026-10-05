@@ -107,10 +107,17 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
   return stages;
 }
 // One phase as the profile's goal plans it: solvePhase, and under minimal construction the same
-// buildings run as fast as they allow (fullSpeed, #1066).
+// buildings run as fast as they allow (fullSpeed, #1066). A phase that sinks almost all a central
+// line of an item made on site makes is planned again with the groups' excess of it feeding the
+// central demand, as withOverflow says (#1063). It compares the two plans after fullSpeed, so
+// under minimal construction the routed plan stands only when it finishes no later at full speed.
 function planPhase(config: CurrentSettings, phase: number): RunResult {
-  const result = solvePhase(config, phase);
-  return result.feasible && config.goal === 'minimal' ? fullSpeed(config, phase, result) : result;
+  return withOverflow(
+    config,
+    phase,
+    settings => solvePhase(settings, phase),
+    (settings, plan) => (config.goal === 'minimal' ? fullSpeed(settings, phase, plan) : plan),
+  );
 }
 // What rounding to whole machines costs (#1066): a whole-machine phase records the same phase
 // planned with exact clocks (planPhase without wholeMachines, so without the lines set to exact
@@ -149,13 +156,9 @@ function withExactPlan(config: CurrentSettings, phase: number, stage: Solved): S
 // that only stopped at a limit keeps the lines, through the fallbacks of the two-step fit.
 // A group's part of a row with a fixed-rate membership follows the row's total (#984), which
 // holds while the row makes at least its fixed rates: when a row makes less, the phase is
-// planned again as withinRates says. A phase that sinks almost all a central line of an item made
-// on site makes is planned again with the groups' excess of it feeding the central demand, as
-// withOverflow says (#1063).
+// planned again as withinRates says.
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
-  return withOverflow(config, phase, routed =>
-    withinRates(routed, phase, settings => solveSites(settings, phase)),
-  );
+  return withinRates(config, phase, settings => solveSites(settings, phase));
 }
 // solvePhase's solve with the groups' own lines, or with every item made centrally.
 function solveSites(config: CurrentSettings, phase: number): RunResult {

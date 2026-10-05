@@ -13,7 +13,8 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { calculate, settings } from '../planner.ts';
-import { withOverflow } from '../planner/on-site.ts';
+import { stageSettings, withOverflow } from '../planner/on-site.ts';
+import { fullSpeed } from '../planner/adjustments.ts';
 import { itemBooks, groupLinks, OUTSIDE } from '../public/app/group-links.ts';
 import { initialState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
@@ -106,6 +107,83 @@ test("a recalculation lets Alpha's excess meet the central demand: no central li
       rowsOf(plan.stages[phase]).map(line => [line.id, line.machines]),
       rowsOf(recorded.plan.stages[phase]).map(line => [line.id, line.machines]),
     );
+});
+
+// Minimal construction with exact clocks (#1092 review): the stored plan's settings with
+// `goal: 'minimal'` and every central line of Phases 3-5 that makes no Quickwire at exact clocks,
+// so fullSpeed (#1066) re-solves those phases rather than proving they cannot finish sooner.
+// Before the fix, withOverflow compared the two plans before fullSpeed, and fullSpeed re-solved the
+// routed phase without its route, so its central Quickwire line was capped at 0 machines: Phase 3
+// took 23.1 hours instead of main's 13.8.
+const exactClockSettings = () => {
+  const input = json(recorded.plan.settings);
+  input.exactClocks = Object.fromEntries(
+    PHASES.map(phase => [
+      phase,
+      rowsOf(recorded.plan.stages[phase])
+        .filter(line => !line.onSite && !line.id.startsWith('amp:') && !line.outputs.Quickwire)
+        .map(line => line.id),
+    ]),
+  );
+  return input;
+};
+// What main 990cec8 (before #1063) calculates from those settings under minimal construction.
+const MAIN_MINIMAL: Record<string, { buildings: number; hours: number }> = {
+  '3': { buildings: 78, hours: 13.810672933513546 },
+  '4': { buildings: 173, hours: 19.898683076393123 },
+  '5': { buildings: 314, hours: 21.34639538636434 },
+};
+
+test('under minimal construction with exact clocks, no phase finishes later than before #1063', () => {
+  const plan = calculate({ ...exactClockSettings(), goal: 'minimal' });
+  for (const phase of PHASES) {
+    const stage = plan.stages[phase],
+      main = MAIN_MINIMAL[phase]!;
+    assert.ok(
+      stage.hours! <= main.hours + 1e-6,
+      `Phase ${phase}: ${stage.hours} h, main ${main.hours} h`,
+    );
+    assert.ok(buildings(stage) <= main.buildings, `Phase ${phase}: ${buildings(stage)} buildings`);
+    assert.ok(stage.aheadOf !== undefined, `Phase ${phase} runs at full speed`);
+    // A phase that keeps the route builds no central line and fewer machines; one that does not
+    // is main's plan.
+    if (stage.onSiteOverflow) {
+      assert.equal(row(stage, FUSED), undefined, `Phase ${phase}: no central line`);
+      assert.ok(buildings(stage) < main.buildings);
+    } else assert.equal(buildings(stage), main.buildings);
+  }
+  // Phase 3 keeps the route and runs its buildings faster than main did.
+  assert.deepEqual(plan.stages['3'].onSiteOverflow, { [ALPHA]: ['Quickwire'] });
+  assert.ok(plan.stages['3'].hours! < MAIN_MINIMAL['3']!.hours - 1);
+  // The warning names the phases that finish sooner, as on main.
+  assert.ok(
+    plan.warnings.includes(
+      'Minimal construction builds the fewest machines that deliver each phase within 24 hours, then runs them as fast as those buildings allow, without adding one. Phases 3, 4 and 5 finish sooner that way; their delivery rates are not rounded.',
+    ),
+    plan.warnings.find(warning => warning.startsWith('Minimal')),
+  );
+});
+
+test('fullSpeed re-solves a routed stage with its route, and keeps saying it was routed', () => {
+  // The balanced plan routes Alpha's excess in Phases 3-5; re-solving such a stage for full speed
+  // (stageSettings, as phaseTime 'final' and the augmenter fuel verdict also re-solve) needs the
+  // route, or its central Quickwire line, capped at 0 machines, leaves no faster plan.
+  const input = exactClockSettings();
+  const plan = calculate(input);
+  const minimal = settings({ ...input, goal: 'minimal' });
+  for (const phase of PHASES) {
+    const stage = plan.stages[phase] as Solved;
+    assert.deepEqual(stage.onSiteOverflow, { [ALPHA]: ['Quickwire'] }, `Phase ${phase}`);
+    assert.deepEqual(stageSettings(minimal, stage).onSite![ALPHA]!.overflow, ['Quickwire']);
+    const fast = fullSpeed(minimal, Number(phase), stage);
+    assert.ok(fast.hours < stage.hours, `Phase ${phase}: ${fast.hours} < ${stage.hours}`);
+    assert.equal(fast.aheadOf, stage.hours);
+    assert.deepEqual(fast.onSiteOverflow, { [ALPHA]: ['Quickwire'] });
+    assert.equal(row(fast, FUSED), undefined, 'still no central line');
+  }
+  // A stage without the route re-solves with the settings as they are.
+  assert.equal(plan.stages['1'].onSiteOverflow, undefined);
+  assert.equal(stageSettings(minimal, plan.stages['1']), minimal);
 });
 
 // A full export holding the stored plan.
@@ -265,4 +343,32 @@ test('withOverflow plans again only when a central line sinks almost all it make
   const alone = stagePlan(600, 0);
   assert.equal(withOverflow(config(), 4, answer(alone)), alone);
   assert.equal(calls.length, 2);
+});
+
+test("withOverflow compares the two plans after the goal's finish (fullSpeed under minimal)", () => {
+  const sinking = stagePlan(540 + 60, 1),
+    better = stagePlan(540 + 60, 0);
+  const solve = (settings: CurrentSettings) =>
+    settings.onSite![ALPHA]!.overflow ? better : sinking;
+  // A finish that runs the first plan to 5 hours and the routed one to 6: the first stands, as
+  // the finish left it, though the routed plan was as fast before it.
+  const finished: [string[] | undefined, Solved][] = [];
+  const slower = (settings: CurrentSettings, plan: Solved) => {
+    finished.push([settings.onSite![ALPHA]!.overflow, plan]);
+    return { ...plan, hours: plan === better ? 6 : 5, aheadOf: plan.hours };
+  };
+  const result = withOverflow(config(), 4, solve, slower);
+  assert.deepEqual(result, { ...sinking, hours: 5, aheadOf: 8 });
+  // Each plan was finished with the settings it was solved with.
+  assert.deepEqual(finished, [
+    [undefined, sinking],
+    [['Quickwire'], better],
+  ]);
+  // A finish that runs both to 5 hours: the routed plan stands, with its route.
+  const even = (_settings: CurrentSettings, plan: Solved) => ({ ...plan, hours: 5 });
+  assert.deepEqual(withOverflow(config(), 4, solve, even), {
+    ...better,
+    hours: 5,
+    onSiteOverflow: { [ALPHA]: ['Quickwire'] },
+  });
 });
