@@ -15,6 +15,7 @@ import path from 'node:path';
 import { calculate, settings } from '../planner.ts';
 import { stageSettings, withOverflow } from '../planner/on-site.ts';
 import { fullSpeed } from '../planner/adjustments.ts';
+import { exactBalance } from '../planner/data.ts';
 import { itemBooks, groupLinks, OUTSIDE } from '../public/app/group-links.ts';
 import { initialState, validateState } from '../public/state.ts';
 import { importableTransfer, validateTransfer } from '../public/transfer.ts';
@@ -162,6 +163,53 @@ test('under minimal construction with exact clocks, no phase finishes later than
     ),
     plan.warnings.find(warning => warning.startsWith('Minimal')),
   );
+});
+
+// What main ac52c49 (before #1063) calculates from those settings, balanced, with the target time
+// on the final phase: Phases 3 and 4 are pulled ahead.
+const MAIN_FINAL: Record<string, { buildings: number; hours: number }> = {
+  '3': { buildings: 90, hours: 5.555555611111113 },
+  '4': { buildings: 230, hours: 7.478632553418805 },
+  '5': { buildings: 460, hours: 7.936507936507936 },
+};
+
+test("under phaseTime 'final', a routed phase that cannot be pulled ahead keeps the first plan when that one can (#1092 review)", () => {
+  // Both Phase 3 plans take 7.86 hours, so the routed one stands on buildings. The capped re-solve
+  // of the routed plan does not fit (#1094), while the first plan's is pulled ahead to 5.56 hours,
+  // as on main: Phase 3 keeps the first plan, pulled ahead.
+  const plan = calculate({ ...exactClockSettings(), phaseTime: 'final' });
+  for (const phase of PHASES) {
+    const stage = plan.stages[phase],
+      main = MAIN_FINAL[phase]!;
+    assert.ok(
+      stage.hours! <= main.hours + 1e-6,
+      `Phase ${phase}: ${stage.hours} h, main ${main.hours} h`,
+    );
+    assert.ok(buildings(stage) <= main.buildings, `Phase ${phase}: ${buildings(stage)} buildings`);
+  }
+  const third = plan.stages['3'];
+  assert.ok(Math.abs(third.hours! - MAIN_FINAL['3']!.hours) < 1e-6, `Phase 3: ${third.hours} h`);
+  assert.equal(third.aheadOf, 7.861635220125787);
+  assert.equal(third.onSiteOverflow, undefined, 'the first plan, without the route');
+  assert.equal(row(third, FUSED)?.machines, 1, 'with its central line');
+  // Phase 4's routed plan is pulled ahead itself, so it stays routed: no central line, fewer
+  // buildings than main. Phase 5 is not re-solved and keeps its route.
+  assert.ok(plan.stages['4'].aheadOf !== undefined);
+  assert.equal(row(plan.stages['4'], FUSED), undefined, 'Phase 4: no central line');
+  assert.ok(buildings(plan.stages['4']) < MAIN_FINAL['4']!.buildings);
+  assert.deepEqual(plan.stages['5'].onSiteOverflow, { [ALPHA]: ['Quickwire'] });
+  assert.equal(row(plan.stages['5'], FUSED), undefined, 'Phase 5: no central line');
+  // The warning names Phases 3 and 4, as on main.
+  assert.ok(
+    plan.warnings.includes(
+      'Your target time applies to Phase 5. Earlier phases run their lines as hard as the machines a later phase already builds allow, so Phases 3 and 4 finish sooner; no building is added that a later phase does not keep. Delivery rates for those phases are not rounded.',
+    ),
+    plan.warnings.find(warning => warning.startsWith('Your target time')),
+  );
+  // No fluid is made beyond what the plan uses.
+  for (const phase of PHASES)
+    for (const [item, rate] of Object.entries(plan.stages[phase].surplus || {}))
+      if (exactBalance(item)) assert.ok(rate < 1e-6, `Phase ${phase}: ${rate}/min ${item}`);
 });
 
 test('fullSpeed re-solves a routed stage with its route, and keeps saying it was routed', () => {
@@ -357,8 +405,11 @@ test("withOverflow compares the two plans after the goal's finish (fullSpeed und
     finished.push([settings.onSite![ALPHA]!.overflow, plan]);
     return { ...plan, hours: plan === better ? 6 : 5, aheadOf: plan.hours };
   };
-  const result = withOverflow(config(), 4, solve, slower);
+  const firsts: Solved[] = [];
+  const keep = (first: Solved) => firsts.push(first);
+  const result = withOverflow(config(), 4, solve, slower, keep);
   assert.deepEqual(result, { ...sinking, hours: 5, aheadOf: 8 });
+  assert.deepEqual(firsts, [], 'no first plan to keep when it stands itself');
   // Each plan was finished with the settings it was solved with.
   assert.deepEqual(finished, [
     [undefined, sinking],
@@ -366,9 +417,11 @@ test("withOverflow compares the two plans after the goal's finish (fullSpeed und
   ]);
   // A finish that runs both to 5 hours: the routed plan stands, with its route.
   const even = (_settings: CurrentSettings, plan: Solved) => ({ ...plan, hours: 5 });
-  assert.deepEqual(withOverflow(config(), 4, solve, even), {
+  assert.deepEqual(withOverflow(config(), 4, solve, even, keep), {
     ...better,
     hours: 5,
     onSiteOverflow: { [ALPHA]: ['Quickwire'] },
   });
+  // The first plan, as the finish left it, is kept for phaseTime 'final' (resolveEarlierPhases).
+  assert.deepEqual(firsts, [{ ...sinking, hours: 5 }]);
 });

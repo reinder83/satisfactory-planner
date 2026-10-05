@@ -66,7 +66,9 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   const config = settings(input);
   if (config.goal === 'maximum' && !config.limitsConfirmed)
     fail('Confirm your available resource budgets before maximizing output.');
-  const stages = solvePhases(config, onPhase);
+  // The first plan of each phase whose routed plan stands (withOverflow), for phaseTime 'final'.
+  const unrouted: Record<number, Solved> = {};
+  const stages = solvePhases(config, unrouted, onPhase);
   // Minimal construction's phases that run their buildings faster than the 24 hours (fullSpeed),
   // read before the target time on the final phase may pull an earlier phase ahead too.
   const sooner = Object.entries(stages)
@@ -78,7 +80,7 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // the warnings it adds; planWarnings reads the stages as they left them.
   const warnings = [
     ...fullSpeedWarning(config, sooner),
-    ...pullFinalPhaseForward(config, stages),
+    ...pullFinalPhaseForward(config, stages, unrouted),
     ...judgeAugmenterFuel(config, stages),
   ];
   // Each phase keeps the generators the phase before built, where it still fuels them (#1064).
@@ -93,13 +95,18 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   };
 }
 // Solves each phase on its own, 1 to 5, each with a fresh search deadline. A phase that does not
-// fit becomes a draft that explains why (draftStage).
-function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void): PhaseStages {
+// fit becomes a draft that explains why (draftStage). A phase planned with the groups' excess
+// routed to the central demand records its first plan in `unrouted` (withOverflow).
+function solvePhases(
+  config: CurrentSettings,
+  unrouted: Record<number, Solved>,
+  onPhase?: (phase: number) => void,
+): PhaseStages {
   const stages: PhaseStages = {};
   for (let phase = 1; phase <= 5; phase++) {
     onPhase?.(phase);
     setSearchDeadline(Date.now() + PHASE_SEARCH_MS);
-    const result = planPhase(config, phase);
+    const result = planPhase(config, phase, first => (unrouted[phase] = first));
     stages[phase] = result.feasible
       ? withExactPlan(config, phase, result)
       : draftStage(config, phase, result);
@@ -111,12 +118,18 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
 // line of an item made on site makes is planned again with the groups' excess of it feeding the
 // central demand, as withOverflow says (#1063). It compares the two plans after fullSpeed, so
 // under minimal construction the routed plan stands only when it finishes no later at full speed.
-function planPhase(config: CurrentSettings, phase: number): RunResult {
+// `unrouted` is given the first plan when the routed one stands.
+function planPhase(
+  config: CurrentSettings,
+  phase: number,
+  unrouted?: (first: Solved) => void,
+): RunResult {
   return withOverflow(
     config,
     phase,
     settings => solvePhase(settings, phase),
     (settings, plan) => (config.goal === 'minimal' ? fullSpeed(settings, phase, plan) : plan),
+    unrouted,
   );
 }
 // What rounding to whole machines costs (#1066): a whole-machine phase records the same phase

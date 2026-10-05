@@ -208,14 +208,16 @@ const ALMOST_ALL_SUNK = 0.75;
 // leave it, so the routed plan never finishes later than the first one would have. The second
 // plan stands only when it fits as the first did (no fallback the first did not need) and builds
 // fewer machines, before and after `finish`, in no more time after it; it records the routes it
-// was offered as `onSiteOverflow` ({ group: items }). Any other phase is the first plan, exactly
-// as before #1063. A plan without whole machines makes exactly what each group uses, so it is
-// never planned again.
+// was offered as `onSiteOverflow` ({ group: items }), and `unrouted` is given the first plan as it
+// left `finish` (phaseTime 'final' may still prefer it, see resolveEarlierPhases in
+// planner/adjustments.ts). Any other phase is the first plan, exactly as before #1063. A plan
+// without whole machines makes exactly what each group uses, so it is never planned again.
 export function withOverflow(
   config: CurrentSettings,
   phase: number,
   solve: (settings: CurrentSettings) => RunResult,
   finish: (settings: CurrentSettings, plan: Solved) => Solved = (_settings, plan) => plan,
+  unrouted?: (first: Solved) => void,
 ): RunResult {
   const first = solve(config);
   if (!first.feasible) return first;
@@ -233,9 +235,10 @@ export function withOverflow(
   )
     return firstDone;
   const routedDone = finish(routedSettings, routed);
-  return buildings(routedDone) < buildings(firstDone) && routedDone.hours <= firstDone.hours + 1e-9
-    ? { ...routedDone, onSiteOverflow: routes }
-    : firstDone;
+  if (!(buildings(routedDone) < buildings(firstDone) && routedDone.hours <= firstDone.hours + 1e-9))
+    return firstDone;
+  unrouted?.(firstDone);
+  return { ...routedDone, onSiteOverflow: routes };
 }
 const buildings = (plan: Solved) => plan.rows.reduce((total, row) => total + row.machines, 0);
 // Per group, the solid items it makes on site on its own lines in `plan` of which the central
