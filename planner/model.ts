@@ -1,7 +1,13 @@
 // One phase's linear program: run(), its context, the recipe pool and demands, the model's
 // constraints and variables, the solve and the check of its result.
 // Re-exported by ../planner.ts.
-import { droneSupply, wantsStorage, storageRateFor } from '../public/preferences.ts';
+import {
+  droneSupply,
+  extractionMWPerUnit,
+  wantsStorage,
+  storageRateFor,
+} from '../public/preferences.ts';
+import { extractionEquipment } from '../public/power.ts';
 import { solve, type LpModel } from '../optimizer.ts';
 import type { CurrentSettings, ItemRates, StageDelivery, StageKey } from '../public/types/index.ts';
 import type { PoolRecipe, RunResult, RunOptions } from './types.ts';
@@ -51,7 +57,9 @@ import {
 //   drone       dedicated drone fuel per minute; `delivery` { item: { target, rate } }
 //   surplus     solid, sinkable output per minute beyond every demand (overflow for the sink)
 //   power       peakMW, generationMW, requiredMW (peak with utility allowance), availableMW (new
-//               generation with augmenter boost plus spare), additionalHeadroomMW (shortfall)
+//               generation with augmenter boost plus spare), additionalHeadroomMW (shortfall),
+//               as releases before #1064 read them; and `grid`, the phase's power as the plan
+//               sizes it (#1064, stageGrid in public/power.ts), which the pages read
 //   hours       time to finish the phase's deliveries at these rates
 //   plus plutoniumSink, sloopsUsed, augmenter fields, matrixRate and `conversions` (row names),
 //   and `nuclearPeriod` when the uranium plants came in multiples of the recycle chain's period
@@ -252,7 +260,8 @@ function deliveryDemand({ config, phase }: PhaseContext): Record<string, StageDe
   }
   return delivery;
 }
-// A 20% planning allowance covers unmodelled mining, pumps and logistics; existing power is spare capacity.
+// A 20% planning allowance on the production lines covers pumps and logistics (extraction has its
+// own power, addSources); existing power is spare capacity.
 // Alien Power Augmenters generate 500 MW each and multiply the grid's base production:
 // (generators + 500 x augmenters) x (1 + 0.1 x unfueled + 0.3 x fueled). The multiplier applies to
 // installed capacity, of which the entered spare power is only a part, so both are needed here.
@@ -361,8 +370,10 @@ function addSiteFeeds(model: LpModel, feeds: SiteFeed[]) {
       };
   }
 }
-// The power constraint, in MW: consumption (x powerFactor x utility allowance) minus new
-// generation (x augmenter boost) may not exceed the spare figure. Phase 1 normally has no power
+// The power constraint, in MW: consumption (x powerFactor x utility allowance) plus extraction
+// (x powerFactor) minus new generation (x augmenter boost) may not exceed the spare figure. Each
+// line counts at its full linear power, never less than its clocked power, so the stage's grid
+// (stageGrid in public/power.ts) never needs more than its whole generators give (#1064). Phase 1 normally has no power
 // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
 // no generators, so only the entered spare power can run that phase harder. calculate() never
 // maximises Phase 1 for maximum output; only the `phaseTime: 'final'` re-solve does.
@@ -453,11 +464,19 @@ function addSources(
 ) {
   // Raw resources: a 'raw:' source variable per extracted item the pool uses, capped by its
   // budget ('limit:') and almost free, so extraction is spent only where it saves machines.
+  // Each draws its miners' or extractors' power (#1064, extractionMWPerUnit), so the plan's
+  // generators cover extraction too.
   // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
+  const equipment = extractionEquipment(config);
   for (const item of RAW) {
     if (!allItems.has(item)) continue;
     model.constraints['limit:' + item] = { max: ignoreLimits ? 1e7 : config.limits[item] };
-    model.variables['raw:' + item] = { cost: 0.0001, ['item:' + item]: 1, ['limit:' + item]: 1 };
+    model.variables['raw:' + item] = {
+      cost: 0.0001,
+      ['item:' + item]: 1,
+      ['limit:' + item]: 1,
+      power: extractionMWPerUnit(item, equipment) * config.powerFactor,
+    };
   }
   // A line you already run is a capped, almost-free source of its product, so the
   // plan builds only the remainder and drops the whole chain behind what you

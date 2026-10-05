@@ -13,8 +13,13 @@ export interface Recipe {
   machine: string;
   inputs: ItemRates;
   outputs: ItemRates;
-  // MW per machine; negative for a generator.
+  // MW per machine; negative for a generator. In a variable-power machine (Particle Accelerator,
+  // Converter, Quantum Encoder) the top of the recipe's range, its peak.
   power: number;
+  // Variable-power machines only (#1064): the bottom of the recipe's range in MW (SatisfactoryTools
+  // `minPower`, same revision). The draw ramps between the two over each cycle, so a machine draws
+  // (minPower + power) / 2 on average.
+  minPower?: number;
 }
 
 export interface ItemInfo {

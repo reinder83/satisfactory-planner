@@ -67,7 +67,8 @@ export function rankAlternates(
       ? {
           buildings: stage.rows.reduce((total, row) => total + row.machines, 0),
           rawTotal: Object.values(stage.raw || {}).reduce((total, rate) => total + rate, 0),
-          requiredMW: stage.requiredMW || 0,
+          // The phase's power need as the plan sizes it (#1064).
+          requiredMW: stage.grid?.needMW ?? (stage.requiredMW || 0),
           hours: Number.isFinite(stage.hours) ? stage.hours! : null,
         }
       : null;

@@ -43,22 +43,25 @@ import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
+import { powerView } from '../../../power.ts';
+import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
-// What Phase 5's Alien Power Augmenters add to a stage's power: their 500 MW each and their boost
-// on new and installed generation, which the planner counts into availableMW. The Resources
-// page's bar shows the same figure as "Augmenter boost" (#1050 review).
-function augmenterBoost(
-  stagePlan: { augmenters?: number; availableMW?: number; generationMW?: number },
-  settings: { availablePowerGW: number },
-): number {
-  return (stagePlan.augmenters ?? 0) > 0
-    ? Math.max(
-        0,
-        (stagePlan.availableMW ?? 0) -
-          (stagePlan.generationMW || 0) -
-          settings.availablePowerGW * 1000,
-      )
-    : 0;
+// The summary's power line, from the one power model every page reads (powerView in
+// public/power.ts, #1064): what the phase has against what it needs, as the Resources page's bar
+// and the power step give them. A plan made before #1064 keeps its old line: the new generation,
+// what Phase 5's augmenters add (their 500 MW each and their boost on new and installed
+// generation, the bar's "Augmenter boost", #1050 review) and the spare existing power.
+function powerSummary(stagePlan: StoredStage, settings: StoredCalculatedPlan['settings']): string {
+  const view = powerView(stagePlan, settings);
+  if (view.modelled) return `${power(view.availableMW)} of power for ${power(view.needMW)} needed`;
+  const boost = view.supply.find(part => part.key === 'boost')?.mw ?? 0;
+  return (
+    `${power(stagePlan.generationMW)} new power` +
+    (boost > 0.01 ? ` + ${power(boost)} augmenter boost` : '') +
+    (settings.availablePowerGW > 0
+      ? ` + ${power(settings.availablePowerGW * 1000)} existing spare power`
+      : '')
+  );
 }
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
@@ -100,17 +103,7 @@ const page = computed(() =>
             {
               key: 'power',
               href: '#resources',
-              // The new generation, what Phase 5's augmenters add and the spare existing power
-              // (#1048), as the Resources page's bar names and sums them; the power step says
-              // what the phase needs.
-              text:
-                `${power(stagePlan.generationMW)} new power` +
-                (augmenterBoost(stagePlan, calculated.settings) > 0.01
-                  ? ` + ${power(augmenterBoost(stagePlan, calculated.settings))} augmenter boost`
-                  : '') +
-                (calculated.settings.availablePowerGW > 0
-                  ? ` + ${power(calculated.settings.availablePowerGW * 1000)} existing spare power`
-                  : ''),
+              text: powerSummary(stagePlan, calculated.settings),
             },
             {
               key: 'hours',

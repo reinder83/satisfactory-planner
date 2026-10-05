@@ -137,6 +137,7 @@ export const amplified = (recipe: PoolRecipe): PoolRecipe => ({
   id: 'amp:' + recipe.id,
   name: recipe.name + ' (somersloop amplified)',
   power: recipe.power * 4,
+  ...(recipe.minPower !== undefined ? { minPower: recipe.minPower * 4 } : {}),
   slots: AMPLIFY_SLOTS[recipe.machine],
   outputs: Object.fromEntries(
     Object.entries(recipe.outputs).map(([item, rate]) => [item, rate * 2]),

@@ -1,5 +1,6 @@
 import type {
   CalcRow,
+  GridGenerator,
   Progression,
   ProgressionEntry,
   StageKey,
@@ -7,6 +8,7 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import { listNames, powerAmount } from './wording.ts';
+import { powerView } from './power.ts';
 
 // A generated guidance step: its checklist key, title and text.
 export interface GuideTask {
@@ -555,15 +557,21 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
   };
 }
 
-// A phase's power as the planner solved it (planner/stage.ts), in MW: what it needs (its
-// whole-machine peak with the utility allowance, requiredMW), the spare existing power the
-// settings enter (availablePowerGW, as the Resources page's bar shows it), what Phase 5's Alien
-// Power Augmenters add to it (their 500 MW each and their boost on installed generation), the
-// new generation its generator lines build with the augmenters' boost, and what is left once the
-// need is met (availableMW less requiredMW; negative when short). These split availableMW the way
-// stageSupply in app/build-status.ts does, so the text matches the plan as solved (#1050 review).
-// The generator lines come highest source first (SOURCE_ORDER).
+// A phase's power as every page gives it (powerView in public/power.ts, #1064), in MW: what it
+// needs (its lines at their clocked power with the utility allowance and the miners and
+// extractors; for a plan made before #1064 its whole-machine peak with the allowance), the spare
+// existing power the settings enter (availablePowerGW, as the Resources page's bar shows it),
+// what Phase 5's Alien Power Augmenters add to it (their 500 MW each and their boost on installed
+// generation), the new generation its whole generators give with the augmenters' boost, and what
+// is left once the need is met (negative when short). The generator lines come highest source
+// first (SOURCE_ORDER). `modelled` is true for a plan with a grid, whose `kept` lists the
+// generators the phase before built and this phase keeps, per building.
 interface PhasePowerFigures {
+  modelled: boolean;
+  kept: GridGenerator[];
+  // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
+  previous: number;
+  boost: number;
   requiredMW: number;
   existingMW: number;
   augmenters: number;
@@ -577,20 +585,20 @@ interface PhasePowerFigures {
 }
 
 function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFigures {
-  const planned = stageOf(stage),
-    existingMW = (plan.settings.availablePowerGW || 0) * 1000,
-    requiredMW = planned?.requiredMW || 0,
-    newMW = (planned?.generationMW || 0) * (1 + (planned?.boost || 0)),
-    augmenters = planned?.augmenters || 0;
-  const availableMW = planned?.availableMW ?? newMW + existingMW;
+  const planned = stageOf(stage) ?? { feasible: false },
+    view = powerView(planned, plan.settings);
   const rank = (row: CalcRow) => SOURCE_ORDER.indexOf(generatorSource(row));
   return {
-    requiredMW,
-    existingMW,
-    augmenters,
-    augmenterMW: augmenters > 0 ? Math.max(0, availableMW - newMW - existingMW) : 0,
-    newMW,
-    leftMW: availableMW - requiredMW,
+    modelled: view.modelled,
+    kept: view.generators.filter(entry => entry.kept > 0),
+    previous: stage - 1,
+    boost: planned.boost || 0,
+    requiredMW: view.needMW,
+    existingMW: view.spareMW,
+    augmenters: planned.augmenters || 0,
+    augmenterMW: view.augmenterMW,
+    newMW: view.generationMW,
+    leftMW: view.leftMW,
     period: planned?.nuclearPeriod ?? 0,
     generators: rows.filter(isGenerator).sort((first, second) => rank(first) - rank(second)),
   };
@@ -650,7 +658,7 @@ function existingPowerText(
       : existingMW <= 0.01
         ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
         : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
-  const allowance = `with the ${plan.settings.utilityPercent ?? 20}% utility allowance`;
+  const allowance = `${figures.modelled ? 'with extraction and' : 'with'} the ${plan.settings.utilityPercent ?? 20}% utility allowance`;
   const unlock = missingUnlocks(generators, unlocked);
   const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
   const check =
@@ -682,7 +690,7 @@ function newGeneration(
   const lines = generators.map(
     row => `${formatNumber(row.machines)} × ${row.name} (${row.machine})`,
   );
-  const named = `its ${listNames(plannedSources(generators))} power, ${listNames(lines)}`;
+  const named = `its ${listNames(plannedSources(generators))} power, ${listNames(lines)}${keptText(figures)}`;
   if (covered)
     return `${named}, which adds ${powerAmount(newMW)}${spareCause(plan, figures, newMW)}`;
   const left =
@@ -694,6 +702,19 @@ function newGeneration(
   return `${named}, which provides ${powerAmount(newMW)}${left}`;
 }
 
+// The generators the phase before built that this phase keeps (#1064), after its generator lines:
+// " (7 of these Fuel Generators were built in Phase 3)", or where it keeps more than its lines
+// need, " (keep all 8 Fuel Generators built in Phase 3)". Empty without any.
+function keptText({ kept, previous }: PhasePowerFigures): string {
+  const parts = kept.map(entry => {
+    const plural = entry.machine + (entry.kept === 1 ? '' : 's');
+    return entry.machines > entry.own
+      ? `keep all ${formatNumber(entry.kept)} ${plural} built in Phase ${previous}`
+      : `${formatNumber(entry.kept)} of these ${entry.machine}s ${entry.kept === 1 ? 'was' : 'were'} built in Phase ${previous}`;
+  });
+  return parts.length ? ` (${listNames(parts)})` : '';
+}
+
 // Why the generator lines give more than the phase needs, where the plan shows it: the profile's
 // minimum of uranium reactors (settings.uraniumReactors, which the planner builds whatever the
 // need), else the waste chain's period in Phase 5 (the spare less than one block of plants), else
@@ -701,12 +722,16 @@ function newGeneration(
 // the largest). Otherwise no reason is given.
 function spareCause(
   plan: GuideContext['plan'],
-  { generators, period }: PhasePowerFigures,
+  figures: PhasePowerFigures,
   leftMW: number,
 ): string {
+  const { generators, period } = figures;
   const minimum = plan.settings.uraniumReactors ?? 1;
   const uranium = generators.find(row => row.id === 'power-uranium');
-  const perMachine = (row: CalcRow) => row.generationMW / Math.max(1, row.machines);
+  // One generator's output: a whole one at 100% in a plan with a grid (#1064), else the line's
+  // output over its machines.
+  const perMachine = (row: CalcRow) =>
+    figures.modelled ? -row.power : row.generationMW / Math.max(1, row.machines);
   if (uranium && uranium.machines <= minimum && leftMW >= perMachine(uranium) - 0.01)
     return ` because this profile's minimum is ${formatNumber(minimum)} uranium reactor${minimum === 1 ? '' : 's'}`;
   // One block: the period's uranium plants with the plutonium and ficsonium plants they feed.
@@ -715,8 +740,31 @@ function spareCause(
     .reduce((total, row) => total + row.generationMW, 0);
   if (uranium && period > 1 && leftMW < (nuclearMW * period) / Math.max(1, uranium.machines))
     return ` from building the uranium plants in multiples of ${formatNumber(period)}, so every line of the waste chain runs whole`;
+  if (figures.modelled) return gridCause(figures, leftMW);
   const whole = generators.every(row => Math.abs(row.machines - (row.equivalent ?? 0)) < 1e-6);
   if (whole && leftMW < Math.max(...generators.map(perMachine)))
+    return generators.every(row => row.machine === 'Nuclear Power Plant')
+      ? ' from building whole plants'
+      : ' from building whole generators';
+  return '';
+}
+
+// Why a plan with a grid (#1064) has power left over, after the nuclear causes above: generators
+// the phase before built that it keeps beyond what its own lines need; fuel its lines make beyond
+// what the phase needs, which whole production lines and their byproducts set (the generators can
+// burn it, the phase draws less); else every generator line rounded up to whole generators, the
+// spare less than one of each. Otherwise no reason is given.
+function gridCause(figures: PhasePowerFigures, leftMW: number): string {
+  const { generators, kept, previous } = figures;
+  const extra = kept.filter(entry => entry.machines > entry.own);
+  if (extra.length)
+    return ` from keeping the ${listNames(extra.map(entry => `${formatNumber(entry.kept)} ${entry.machine}${entry.kept === 1 ? '' : 's'}`))} built in Phase ${previous}`;
+  const unit = (row: CalcRow) => -row.power * (1 + figures.boost);
+  const fuelMW = generators.reduce((sum, row) => sum + row.generationMW * (1 + figures.boost), 0);
+  const usedMW = figures.requiredMW - figures.existingMW - figures.augmenterMW;
+  if (fuelMW - usedMW > Math.max(0, ...generators.map(unit)) + 0.01)
+    return ' because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much';
+  if (leftMW < generators.reduce((sum, row) => sum + unit(row), 0) + 0.01)
     return generators.every(row => row.machine === 'Nuclear Power Plant')
       ? ' from building whole plants'
       : ' from building whole generators';
@@ -794,10 +842,9 @@ function biomassStartupTasks(
   const { plan, stage, stageOf } = context;
   if (!(stage === 1 || (!coal && !petroleum && !nuclear && !hasSparePower(context)))) return [];
   const first = stage === startPhase(context);
-  const need = Math.max(
-      0,
-      (stageOf(stage)?.requiredMW || 0) - plan.settings.availablePowerGW * 1000,
-    ),
+  // What the phase needs beyond the spare power, as every page gives it (#1064).
+  const view = powerView(stageOf(stage) ?? { feasible: false }, plan.settings),
+    need = Math.max(0, view.needMW - view.spareMW),
     factor = plan.settings.powerFactor ?? 1;
   // Three starter constructors have their own draw; this is a manually supplied startup estimate.
   const burners = Math.ceil((need + 12 * factor) / 30);
@@ -1150,14 +1197,22 @@ export function baseTasks({ stage }: GuideContext): GuideTask[] {
 // Lines an earlier phase built that this phase's plan drops. Its resource and power budgets do
 // not include them, and a replacement is usually a different machine rather than an upgrade in
 // place, so say what becomes of them. Only what the previous phase ran: each line is retired
-// once, in the phase straight after the last one that needed it.
+// once, in the phase straight after the last one that needed it. A generator line is not
+// retired where this phase keeps its building's generators (#1064, the stage's grid): they burn
+// this phase's fuel instead, as "Power available now" says.
 export function retireTasks({ plan, stage, stageOf }: GuideContext): GuideTask[] {
   const start = Number(plan.settings.phase || 1),
     previous = stage - 1,
     retired = new Map<string, { name: string; machine: string; machines: number }>();
+  const kept = new Set(
+    (stageOf(stage)?.grid?.generators || [])
+      .filter(entry => entry.kept > 0)
+      .map(entry => entry.machine),
+  );
   if (previous >= start)
     for (const row of stageOf(previous)?.rows || [])
-      retired.set(row.id, { name: row.name, machine: row.machine, machines: row.machines });
+      if (!(row.power < 0 && kept.has(row.machine)))
+        retired.set(row.id, { name: row.name, machine: row.machine, machines: row.machines });
   for (let later = stage; later <= 5; later++)
     for (const row of stageOf(later)?.rows || []) retired.delete(row.id);
   const all = [...retired.values()].sort((a, b) => b.machines - a.machines),

@@ -23,6 +23,7 @@ import ItemIcon from '../ItemIcon.vue';
 import PageHeader from '../PageHeader.vue';
 import { toggleCheck } from '../actions.ts';
 import CalcWarnings from '../plan/CalcWarnings.vue';
+import { powerView, type PowerPart } from '../../../power.ts';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
@@ -30,77 +31,18 @@ import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts'
 // its own: the page says so (MilestoneOnlyNotice.vue) rather than drawing nothing.
 const milestones = computed(() => legacy(() => !!calculated && milestoneOnly()));
 
-interface Part {
-  key: string;
-  label: string;
-  mw: number;
-  caption: string;
-}
-
-// One power headroom bar (SP-29): what the phase needs, its whole-machine peak plus the utility
-// allowance, against what it has, new generation (with any augmenter boost) plus the existing
-// spare figure, as planner.ts sums them into requiredMW and availableMW. The headline is the
-// share of that available power left over, or the shortfall. The somersloop and augmenter
-// counts are legend captions.
+// One power headroom bar (SP-29): what the phase needs against what it has, from the one power
+// model every page reads (powerView in public/power.ts, #1064): the production lines at their
+// clocked power, their utility allowance and the miners and extractors, against whole generators
+// (with any augmenter boost) and the existing spare figure. A plan made before #1064 shows its
+// own figures as it always did (whole-machine peak and new generation). The headline is the share
+// of that available power left over, or the shortfall. The somersloop and augmenter counts and
+// the variable-power machines' average are legend captions.
 function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settings']) {
-  const peak = stagePlan.peakMW || 0,
-    utility = Math.max(0, (stagePlan.requiredMW ?? peak) - peak),
-    generation = stagePlan.generationMW || 0,
-    spare = settings.availablePowerGW * 1000,
-    // What the augmenters add: their 500 MW each and the boost on new and installed
-    // generation, which planner.ts counts into availableMW.
-    boost =
-      (stagePlan.augmenters ?? 0) > 0
-        ? Math.max(0, (stagePlan.availableMW ?? 0) - generation - spare)
-        : 0,
-    required = peak + utility,
-    available = generation + boost + spare,
-    short = required - available > 0.01 ? required - available : 0;
-  const sloops = stagePlan.sloopsUsed ?? 0,
-    augmenters = stagePlan.augmenters ?? 0;
-  const demand: Part[] = [
-    {
-      key: 'peak',
-      label: 'Whole-machine peak',
-      mw: peak,
-      caption:
-        'At selected consumption multiplier' +
-        (sloops > 0
-          ? ` · ${num(sloops)} somersloop${sloops > 1 ? 's' : ''} in production: amplified machines give double output at four times the power`
-          : ''),
-    },
-    {
-      key: 'utility',
-      label: 'Utility allowance',
-      mw: utility,
-      caption:
-        (settings.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
-    },
-  ];
-  const supply: Part[] = [
-    {
-      key: 'generation',
-      label: 'New generation',
-      mw: generation,
-      caption: 'Fuel and recycling included',
-    },
-    ...(augmenters > 0
-      ? [
-          {
-            key: 'boost',
-            label: 'Augmenter boost',
-            mw: boost,
-            caption: `${num(augmenters)} augmenter${augmenters > 1 ? 's' : ''} · ${num(stagePlan.augmenterMW)} MW plus ${Math.round((stagePlan.boost || 0) * 100)}% of base production`,
-          },
-        ]
-      : []),
-    {
-      key: 'spare',
-      label: 'Existing spare power',
-      mw: spare,
-      caption: 'Not total installed generation',
-    },
-  ];
+  const view = powerView(stagePlan, settings);
+  const required = view.needMW,
+    available = view.availableMW,
+    short = view.shortMW;
   const scale = Math.max(required, available) || 1,
     width = (mw: number) => (mw / scale) * 100 + '%';
   const headline = short
@@ -108,7 +50,7 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
     : available > 0
       ? Math.floor(((available - required) / available) * 100) + '% headroom'
       : 'No power needed';
-  const list = (parts: Part[]) =>
+  const list = (parts: PowerPart[]) =>
     parts
       .filter(p => p.mw > 0)
       .map(p => `${power(p.mw)} ${p.label.toLowerCase()}`)
@@ -118,11 +60,11 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
     short: short > 0,
     required: power(required),
     available: power(available),
-    demand: demand.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
-    supply: supply.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
+    demand: view.demand.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
+    supply: view.supply.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
     shortWidth: width(short),
     // The bars' text alternative: every figure they draw, in one sentence.
-    label: `${headline}. Needed: ${power(required)} (${list(demand)}). Available: ${power(available)} (${list(supply)}).`,
+    label: `${headline}. Needed: ${power(required)} (${list(view.demand)}). Available: ${power(available)} (${list(view.supply)}).`,
   };
 }
 

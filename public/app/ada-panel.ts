@@ -10,7 +10,7 @@ import {
 } from '../ada.ts';
 import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
-import { stageSupply } from './build-status.ts';
+import { powerView } from '../power.ts';
 import { durationOfHours, num, slug } from './format.ts';
 import {
   calcStage,
@@ -208,10 +208,10 @@ function adaFacts(): AdaFacts {
   );
   // Same default as ui/plan/DeliveryCounter.vue: a delivery with no saved count has none yet.
   const delivered = (delivery: { id: string }) => state.deliveries[delivery.id] ?? 0;
-  const spareMW = calculated ? (calculated.settings.availablePowerGW || 0) * 1000 : 0;
-  const headroom = calculated ? storedStage.additionalHeadroomMW || 0 : 0;
-  // What the stage's power is balanced against, as build-status.ts measures it (#334).
-  const supply = stageSupply(storedStage, spareMW);
+  // The stage's power as every page gives it (powerView in public/power.ts, #1064): what it
+  // needs, its new generation and the spare power, with what the augmenters add (#334).
+  const grid = calculated ? powerView(storedStage, calculated.settings) : null;
+  const headroom = grid?.shortMW ?? 0;
   const savedPhase = openedFrom();
   // Plain data only; ada.ts decides which remarks apply.
   return {
@@ -273,13 +273,14 @@ function adaFacts(): AdaFacts {
             (calculated?.settings.limits?.[resource] ?? Infinity),
         )
       : [],
+    // A shortfall is only measured with a calculated profile, so `grid` is there below.
     power:
       headroom > 0.01
         ? {
-            required: power(storedStage.requiredMW || 0),
-            generation: supply.generationMW > 0.01 ? power(supply.generationMW) : '',
-            spare: power(spareMW),
-            augmented: supply.spareMW - spareMW > 0.01 ? power(supply.spareMW) : '',
+            required: power(grid!.needMW),
+            generation: grid!.generationMW > 0.01 ? power(grid!.generationMW) : '',
+            spare: power(grid!.spareMW),
+            augmented: grid!.augmenterMW > 0.01 ? power(grid!.spareMW + grid!.augmenterMW) : '',
             headroom: power(headroom),
             biomass: stage() === '1',
             tight: true,

@@ -15,12 +15,11 @@
 //   by a later one) settle, and a fully built plan comes out at exactly its planned rates.
 // - Power is reported, not applied: a plan whose built factories draw more than its built
 //   generators and the spare power give is flagged, but nothing is slowed down for it. It is
-//   measured as the planner's power constraint does (planner.ts), from the stage's own figures:
-//   a consumer draws its peak share times the utility allowance (requiredMW / peakMW), a
-//   generator gives its output times the augmenter boost, and the spare part is what the stage's
-//   availableMW holds beyond its own generation. Phase 1 runs on hand-fed biomass and has no
+//   measured by the stage's grid (gridPower, #1064), or for a plan made before it as the
+//   planner's power constraint did (storedPower). Phase 1 runs on hand-fed biomass and has no
 //   power constraint, so it is never flagged.
-import type { CalcRow, ItemRates, StoredStage } from '../types/index.ts';
+import { lineLoad } from '../power.ts';
+import type { CalcRow, ItemRates, StageGrid, StoredStage } from '../types/index.ts';
 
 export interface RowStatus {
   id: string;
@@ -138,6 +137,53 @@ export function stageSupply(
   return { generationMW, spareMW };
 }
 
+// What the built rows draw and what powers them, in MW, by the stage's grid (#1064, stageGrid in
+// public/power.ts): each consumer at its clocked power with the utility allowance, the miners and
+// extractors for the raw resources the built rows take, against each built generator line's whole
+// generators with the augmenter boost, the augmenters' own part and the spare power. A fully
+// built plan draws its grid's need, which its own generators cover (the ones kept from the phase
+// before are left out, so this never counts on more than the rows build).
+function gridPower(stage: StoredStage, grid: StageGrid, share: Map<string, number>) {
+  const rows = stage.rows || [];
+  const peak = rows.reduce((sum, row) => sum + lineLoad(row).peak, 0);
+  const scale = peak > 0 ? (grid.loadMW + grid.allowanceMW) / peak : 0;
+  const taken: Record<string, number> = {};
+  let drawMW = 0,
+    supplyMW = grid.spareMW + grid.augmenterMW;
+  for (const row of rows) {
+    const rowShare = share.get(row.id)!;
+    if (row.power > 0) drawMW += lineLoad(row).peak * scale * rowShare;
+    else supplyMW += row.machines * -row.power * (1 + (stage.boost || 0)) * rowShare;
+    for (const [item, rate] of Object.entries(row.inputs || {}))
+      if (grid.extraction[item]) taken[item] = (taken[item] || 0) + rate * rowShare;
+  }
+  for (const [item, mw] of Object.entries(grid.extraction)) {
+    const drawn = stage.raw?.[item] || 0;
+    if (drawn > 0) drawMW += (mw / drawn) * Math.min(drawn, taken[item] || 0);
+  }
+  return { drawMW, supplyMW };
+}
+
+// The same for a plan made before #1064, as the planner balanced it then. peakMW is whole
+// machines at full power x powerFactor, so a row's share of it per machine-equivalent is
+// peakMW / machines; the utility allowance is the stage's requiredMW / peakMW. The spare part
+// comes from stageSupply.
+function storedPower(stage: StoredStage, share: Map<string, number>, sparePowerMW: number) {
+  const boost = stage.boost || 0;
+  const utility = stage.peakMW && stage.requiredMW ? stage.requiredMW / stage.peakMW : 1;
+  const { spareMW } = stageSupply(stage, sparePowerMW);
+  let drawMW = 0,
+    supplyMW = spareMW;
+  for (const row of stage.rows || []) {
+    const rowShare = share.get(row.id)!;
+    if (row.power > 0) {
+      const perEquivalent = row.machines && row.peakMW ? row.peakMW / row.machines : row.power;
+      drawMW += perEquivalent * (row.equivalent || 0) * utility * rowShare;
+    } else supplyMW += (row.generationMW || 0) * (1 + boost) * rowShare;
+  }
+  return { drawMW, supplyMW };
+}
+
 // `checks` is the profile's progress checks and `stageKey` the stage's key in the plan ('1'-'5'),
 // as in the build plan's step ids. `buildOrder` is the stage's rows in the order the build plan
 // lists them (groupedRows in group-order.ts, #869), which decides ties for the next step.
@@ -166,21 +212,9 @@ export function buildStatus(
     }
     return status;
   });
-  // Power, as the planner balances it. peakMW is whole machines at full power x powerFactor, so
-  // a row's share of it per machine-equivalent is peakMW / machines; the utility allowance is
-  // the stage's requiredMW / peakMW. The spare part comes from stageSupply.
-  const boost = stage.boost || 0;
-  const utility = stage.peakMW && stage.requiredMW ? stage.requiredMW / stage.peakMW : 1;
-  const { spareMW } = stageSupply(stage, sparePowerMW);
-  let drawMW = 0,
-    supplyMW = spareMW;
-  for (const row of rows) {
-    const rowShare = share.get(row.id)!;
-    if (row.power > 0) {
-      const perEquivalent = row.machines && row.peakMW ? row.peakMW / row.machines : row.power;
-      drawMW += perEquivalent * (row.equivalent || 0) * utility * rowShare;
-    } else supplyMW += (row.generationMW || 0) * (1 + boost) * rowShare;
-  }
+  const { drawMW, supplyMW } = stage.grid
+    ? gridPower(stage, stage.grid, share)
+    : storedPower(stage, share, sparePowerMW);
   // The planner's own balance leaves float dust, so a fully built plan never trips the flag.
   const short = stageKey !== '1' && drawMW > supplyMW + 1e-6 * Math.max(1, supplyMW);
   // Machine-equivalents running among the rows built now, under a set of shares.

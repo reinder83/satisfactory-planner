@@ -145,6 +145,39 @@ export const WATER_EXTRACTOR = {
   minClock: 1,
   maxClock: 250,
 } as const;
+// --- Extraction power (#1064) ---
+//
+// What the miners and extractors draw, from the same dataset (metadata powerConsumption): Miner
+// Mk.1/Mk.2/Mk.3 5/15/45 MW, Oil Extractor 40 MW, Resource Well Pressurizer 150 MW (its
+// satellite extractors draw nothing), Water Extractor 20 MW (WATER_EXTRACTOR). Every one follows
+// the clock by the same exponent: MW x clock^1.321929.
+export const MINER_MW: Record<number, number> = { 1: 5, 2: 15, 3: 45 };
+export const OIL_EXTRACTOR_MW = 40;
+export const PRESSURIZER_MW = 150;
+// Satellites per resource well on the map: one well of ten, two of eight, eight of seven and six
+// of six (see presetSurvey), so a pressurizer feeds 118 / 17 of them on average.
+export const WELL_SATELLITES = 118 / 17;
+// The equipment the plan's extraction power assumes when the profile has no node survey: Miner
+// Mk.3 at 250%, as the shipped budgets do (`blankExtraction`).
+export const DEFAULT_EXTRACTION = { mark: 3, clock: 2.5 } as const;
+
+// MW per item (or m³) per minute of a raw resource, at `mark` and `clock` (1 = 100%) on normal
+// nodes: one machine's draw at that clock over what it extracts there. Crude Oil from Oil
+// Extractors, Nitrogen Gas from resource wells, Water from Water Extractors, the rest from miners
+// of `mark`. The planner charges it on every raw resource it draws (#1064).
+export function extractionMWPerUnit(
+  resource: string,
+  { mark = 3, clock = 2.5 }: Equipment = {},
+): number {
+  const scale = clock ** (WATER_EXTRACTOR.exponent - 1);
+  if (resource === 'Water') return (WATER_EXTRACTOR.mw / WATER_EXTRACTOR.rate) * scale;
+  if (oilNodeResources.includes(resource)) return (OIL_EXTRACTOR_MW / OIL_BASE) * scale;
+  if (wellResources.includes(resource))
+    return (PRESSURIZER_MW / (WELL_BASE * WELL_SATELLITES)) * scale;
+  const miner = MINER_BASE[mark] ? mark : 3;
+  return (MINER_MW[miner]! / MINER_BASE[miner]!) * scale;
+}
+
 // The advice writes a clock to two decimals (0.01%), which the game's clock input takes.
 export const EXTRACTOR_CLOCK_DECIMALS = 2;
 // Less Water than one extractor gives at its lowest clock (1.2 m³/min).

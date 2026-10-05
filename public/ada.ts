@@ -73,8 +73,8 @@ export interface AdaFacts {
   reason: string;
   // Raw resources over their budget.
   short: string[];
-  // A stage's whole-building power shortfall, as power strings: the draw (requiredMW), the
-  // generation its own rows build with the augmenter boost ('' when none), the spare power
+  // A stage's power shortfall (powerView in public/power.ts, #1064), as power strings: the draw
+  // (its need), the generation its own rows build with the augmenter boost ('' when none), the spare power
   // entered, that spare part with what Phase 5's augmenters add ('' when it adds nothing) and
   // the headroom still missing, which is the draw minus the other two (#334). `biomass` is set
   // on Phase 1, whose power the plan leaves to biomass or existing generation.
@@ -201,7 +201,7 @@ const RULES: AdaRule[] = [
         : power.generation
           ? 'Build generation beyond what the plan lists.'
           : 'Build the generation first.';
-      return `${power.headroom} of whole-building power headroom is still unaccounted for: a ${power.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
+      return `${power.headroom} of power headroom is still unaccounted for: a ${power.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
     },
   },
   // `lead` rules describe a state that makes everything else irrelevant and rank first.
