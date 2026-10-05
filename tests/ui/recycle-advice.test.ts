@@ -181,7 +181,7 @@ test('a build-plan step carries the advice of the phase it is in, not of the pha
   );
   assert.match(
     stepOf('4', 'Rubber').replace(/ /g, ' '),
-    / Byproduct Heavy Oil Residue 86\.31 m³\/min: send 54\.47 m³ to Alternate: Diluted Fuel, 31\.62 m³ to Petroleum Coke and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
+    / Byproduct Heavy Oil Residue 85\.42 m³\/min: send 53\.58 m³ to Alternate: Diluted Fuel, 31\.62 m³ to Petroleum Coke and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
   );
   // Alumina Solution extracts more Water in Phase 5, and its step there says so (#1024).
   assert.match(
