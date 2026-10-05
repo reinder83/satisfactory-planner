@@ -152,6 +152,19 @@ function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
   return water > 0 ? { waterExtracted: num(water) } : {};
 }
 
+// The generators the phase before built that the open phase keeps (#1064, the stage's grid), as
+// "7 Fuel Generators", with that phase; none for a plan without a grid or a phase keeping none.
+function keptFacts(storedStage: StoredStage): Pick<AdaFacts, 'keptGenerators' | 'keptFrom'> {
+  const kept = (storedStage.grid?.generators || []).filter(entry => entry.kept > 0);
+  if (!kept.length) return {};
+  return {
+    keptGenerators: listNames(
+      kept.map(entry => `${num(entry.kept)} ${entry.machine}${entry.kept === 1 ? '' : 's'}`),
+    ),
+    keptFrom: 'Phase ' + (Number(stage()) - 1),
+  };
+}
+
 // Whether the plan waits for a recalculation of the lines its groups make on site (onSiteChange,
 // #877), and whether that is only because a group's lines no longer use, or now use, an item it
 // marks, with no change to the marks (#985), so ADA words it as the notice does.
@@ -237,6 +250,7 @@ function adaFacts(): AdaFacts {
     next: next?.title || '',
     retireOpen: steps.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
     idleLines: idleOpen,
+    ...keptFacts(storedStage),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

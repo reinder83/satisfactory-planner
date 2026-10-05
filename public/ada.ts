@@ -25,6 +25,10 @@ export interface AdaFacts {
   retireOpen: number;
   // Unticked steps of lines a delivered Space Elevator part leaves without work (#1062).
   idleLines?: number;
+  // The generators the phase before built that this phase keeps (#1064), as a name list ("7 Fuel
+  // Generators"), and that phase ("Phase 3"); absent when it keeps none.
+  keptGenerators?: string;
+  keptFrom?: string;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -291,6 +295,16 @@ const RULES: AdaRule[] = [
     when: facts => (facts.idleLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.idleLines!, 'production line')} only made elevator parts you have already delivered, so the build plan dims ${facts.idleLines === 1 ? 'it' : 'them'} and says which later phase needs ${facts.idleLines === 1 ? 'it' : 'them'}, if any. Idle machines. FICSIT calls that “strategic reserve”.`,
+  },
+  {
+    // The generators the phase before built stay and count first (#1064), as "Power available
+    // now" and the Resources page's bar say.
+    id: 'kept-generators',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.keptGenerators,
+    text: facts =>
+      `This phase keeps the ${facts.keptGenerators} ${facts.keptFrom} built and counts them before it adds any. A generator that still has fuel to burn is not scrap.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {
