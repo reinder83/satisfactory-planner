@@ -8,6 +8,8 @@
   output (#371), and its group share is that waste with the power it stands for (#374). The
   same structure as FactoryCard.vue (SP-14): the main output with its unit as the headline,
   machines and the adjustable machine's clock on the line below it, then any other outputs.
+  A line at exact clocks in a whole-machine plan says so, and so does one whose clocks a
+  recalculation would change (lineClockNote in app/exact-clocks.ts, #1066).
   The chip at the top says whether it runs, or is held back by a missing supplier with the
   reason above the footer (RunningChip.vue, SP-15); it follows the Running box.
 -->
@@ -15,7 +17,8 @@
 import { computed } from 'vue';
 import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
-import { calculated, checked, factoryEditing, stage } from '../../session.ts';
+import { lineClockNote } from '../../exact-clocks.ts';
+import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
 import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import {
   allocationText,
@@ -81,6 +84,8 @@ const card = computed(() =>
       // A factory group's own line made on site (#876) names its group. It belongs wholly to that
       // group while the group exists, so the group editor is not offered for it then.
       site: row.onSite ? 'Made on site for ' + siteGroupName(row) : '',
+      // A line at exact clocks in a whole-machine plan, or one a recalculation would change (#1066).
+      clocks: calculated ? lineClockNote(calculated, state, stage(), row.id) : '',
       editing:
         factoryEditing &&
         !factoryGroupsState().groups.some(group => group.id === row.onSite?.group),
@@ -125,6 +130,7 @@ const card = computed(() =>
       <template v-for="(output, i) in card.outputs" :key="i"><br v-if="i" />{{ output }}</template>
     </div>
     <div v-if="card.site" class="small allocation" data-on-site>{{ card.site }}</div>
+    <div v-if="card.clocks" class="small allocation" data-exact-clocks>{{ card.clocks }}</div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
     <footer>

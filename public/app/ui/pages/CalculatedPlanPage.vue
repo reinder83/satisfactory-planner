@@ -1,11 +1,13 @@
 <!--
-  #plan on a calculated profile: the calculation's warnings, a summary line (factories,
+  #plan on a calculated profile: the calculation's warnings, the notice that the lines asked to run
+  at exact clocks need a recalculation (ui/plan/ExactClocksRecalc.vue, #1066), a summary line (factories,
   storage and power, each linking to its page, and the delivery time, what is left of it once a
   delivery count is saved, #1062; SP-43), why it opened on an
   earlier phase than the saved one when it did (ui/plan/OpenedEarlierNotice.vue, #666), the checklist
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
-  "Built so far" (ui/plan/BuildStatusPanel.vue) and the profile's assumptions, then the
+  "Built so far" (ui/plan/BuildStatusPanel.vue), what whole machines cost (ui/plan/RoundingCost.vue,
+  #1066) and the profile's assumptions, then the
   hard-drive payoff table (ui/plan/PayoffPanel.vue) across the page's width. Everything
   reads the frozen calculation snapshot through calcStage(). A delivery's id is
   `<stage>-<item slug>`, a saved key. A milestone-only phase before the profile's start phase
@@ -41,6 +43,7 @@ import CalcWarnings from '../plan/CalcWarnings.vue';
 import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
+import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
@@ -48,6 +51,7 @@ import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
 import PayoffPanel from '../plan/PayoffPanel.vue';
 import { powerView } from '../../../power.ts';
+import RoundingCost from '../plan/RoundingCost.vue';
 
 // The summary's power line, from the one power model every page reads (powerView in
 // public/power.ts, #1064): what the phase has against what it needs, as the Resources page's bar
@@ -130,6 +134,8 @@ const page = computed(() =>
         ...delivery,
       })),
       warnings: calculated.warnings,
+      // What whole machines cost in the phase on screen (#1066).
+      rounding: [{ phase: stage(), stage: stagePlan }],
     };
   }),
 );
@@ -144,6 +150,7 @@ const page = computed(() =>
     />
     <PlanEditBar />
     <CalcWarnings />
+    <ExactClocksRecalc />
     <PlanSummary v-if="!page.milestones" :items="page.summary" />
     <div v-if="page.post" class="notice info">
       Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
@@ -188,6 +195,7 @@ const page = computed(() =>
           />
         </section>
         <BuildStatusPanel />
+        <RoundingCost :entries="page.rounding" />
         <section class="panel">
           <h2>Profile assumptions</h2>
           <p v-for="(warning, i) in page.warnings" :key="i" class="small">{{ warning }}</p>

@@ -1,12 +1,13 @@
 // A profile's saved progress (public/state.ts). Two shapes:
 //   SavedState     what may arrive: a stored profile, a backup or an import, of any released
-//                  version (1–15). Later versions only add optional sections, so an older
+//                  version (1–16). Later versions only add optional sections, so an older
 //                  state simply lacks them.
 //   ProgressState  what validateState returns and every other module works with: every
 //                  section present and normalised.
 // Keys and value limits are enforced by validateState at run time; these types only
 // describe the shape. Checklist and note keys must never be renamed (see state.ts).
 import type { Phase } from './common.ts';
+import type { ExactClocks } from './calculated.ts';
 
 // validateState marks the content version from what the state uses: 2 storage layout
 // edits, 3 build-plan edits or factory groups, 4 a container position past 08, 5 a hidden
@@ -16,8 +17,8 @@ import type { Phase } from './common.ts';
 // profile migrated from the handbook (handbookOrigin), 13 one that also records what its
 // migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
 // (factoryGroups.local), 15 ticks a recalculation kept for review because of lines made on site
-// (onSiteReview).
-export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+// (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks).
+export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
 // Ticks a recalculation into a new profile could not carry onto one line of the new plan, because
 // of factory groups' own lines made on site (#876, newProfileState in state/carry.ts): a tick on a
@@ -156,6 +157,10 @@ export interface ProgressState {
   handbookOrigin?: HandbookOrigin;
   // Only on a profile recalculated with lines made on site that kept ticks for review (version 15).
   onSiteReview?: OnSiteReview;
+  // The production lines the user asked to run at exact clocks (#1066), per phase by row id, once
+  // they changed a line's choice; absent means the plan's own (settings.exactClocks). Applied only
+  // by a recalculation the user starts (version 16).
+  exactClocks?: ExactClocks;
 }
 
 // Progress of any released version, as stored or imported. Version 1 states have no
@@ -174,6 +179,7 @@ export interface SavedState {
   factoryGroups?: Partial<FactoryGroups>;
   handbookOrigin?: HandbookOrigin;
   onSiteReview?: OnSiteReview;
+  exactClocks?: ExactClocks;
 }
 
 // The operations /api/update accepts (mutate in state.ts). Each is validated there.
@@ -198,6 +204,9 @@ export type UpdateOp =
   | { type: 'factoryAssign'; key: string; groups: { group: string; rate?: number | null }[] }
   // The whole list of items group `id` makes on site (#877); an empty list drops its entry.
   | { type: 'factoryLocal'; id: string; items: string[] }
+  // The whole map of lines asked to run at exact clocks (#1066); null forgets it, so the plan's
+  // own choice applies again.
+  | { type: 'exactClocks'; value: ExactClocks | null }
   // mode 'belt' goes back to belt or pipe and forgets the link's entry.
   | {
       type: 'factoryLinkTransport';

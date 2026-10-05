@@ -47,6 +47,8 @@ import {
 //                 when whole nuclear plants do not fit, #370)
 //   roundStopped  when the whole-machine search stops at its limit, round the exact plan to
 //                 whole machines instead (roundedFallback, #593); only solvePhase sets it
+//   overBudget    let each raw resource exceed its budget at a high cost (OVER_BUDGET_COST), so
+//                 the solve finds the least extra budget it needs (a draft's measurement, #1066)
 //
 // Returns { feasible: false, solverStatus? } or a stage:
 //   rows        one per recipe in use, in build order (suppliers before consumers): the recipe
@@ -113,6 +115,7 @@ export const phaseContext = (
     baseline = null,
     fractionalNuclear = false,
     roundStopped = false,
+    overBudget = false,
   }: RunOptions,
 ): PhaseContext => ({
   config,
@@ -125,6 +128,7 @@ export const phaseContext = (
   baseline,
   fractionalNuclear,
   roundStopped,
+  overBudget,
   power: phasePower(config, phase),
 });
 // The phase's power figures (see phasePower).
@@ -429,7 +433,7 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], r
         ),
       );
     }
-    if (config.wholeMachines && roundsToWholeMachines(recipe)) (model.ints ??= {})[recipe.id] = 1;
+    if (wholeLine(config, context.phase, recipe)) (model.ints ??= {})[recipe.id] = 1;
   }
   // The somersloop budget: amplified machines may together fill no more slots than
   // `amplifySloops`, per phase.
@@ -476,10 +480,23 @@ export const roundsToWholeMachines = (recipe: PoolRecipe) =>
   !/uranium|plutonium|ficsonium|waste|non-fissile/i.test(
     [recipe.name, ...Object.keys(recipe.inputs), ...Object.keys(recipe.outputs)].join(' '),
   );
+// A line the user asked to run at exact clocks in this phase (settings.exactClocks, #1066): its
+// last machine is underclocked to the exact remainder, as a line of a plan without whole machines.
+export const exactClockLine = (config: CurrentSettings, phase: number, id: string) =>
+  !!config.exactClocks?.[String(phase) as StageKey]?.includes(id);
+// Whether a phase plans a line as whole machines at 100%: under `wholeMachines`, a line that
+// rounds (roundsToWholeMachines) and that the user did not ask to run at exact clocks.
+export const wholeLine = (config: CurrentSettings, phase: number, recipe: PoolRecipe) =>
+  config.wholeMachines &&
+  roundsToWholeMachines(recipe) &&
+  !exactClockLine(config, phase, recipe.id);
+// What each item per minute a raw resource draws beyond its budget costs under `overBudget`: more
+// than the machines it could save, so the solve raises a budget only as far as it must.
+const OVER_BUDGET_COST = 1000;
 // The sources that feed the item balances besides the recipes, and the goal that draws on them.
 function addSources(
   model: LpModel,
-  { config, phase, maximum, ignoreLimits }: PhaseContext,
+  { config, phase, maximum, ignoreLimits, overBudget }: PhaseContext,
   allItems: Set<string>,
   delivery: Record<string, StageDelivery>,
 ) {
@@ -498,6 +515,17 @@ function addSources(
       ['limit:' + item]: 1,
       power: extractionMWPerUnit(item, equipment) * config.powerFactor,
     };
+    // A draft's measurement (#1066): how far the budget must be raised, at a cost that outweighs
+    // the machines it could save, up to the budget again plus 600/min (the modest bound that
+    // keeps the integer search stable, as the doubled budgets it replaces did).
+    if (overBudget && !ignoreLimits) {
+      model.constraints['overBudget:' + item] = { max: config.limits[item]! + 600 };
+      model.variables['overBudget:' + item] = {
+        cost: OVER_BUDGET_COST,
+        ['limit:' + item]: -1,
+        ['overBudget:' + item]: 1,
+      };
+    }
   }
   // A line you already run is a capped, almost-free source of its product, so the
   // plan builds only the remainder and drops the whole chain behind what you

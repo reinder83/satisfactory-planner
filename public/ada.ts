@@ -63,6 +63,13 @@ export interface AdaFacts {
   // The plan waits only because a group's lines no longer use, or now use, an item it marks, not
   // because the marks changed (#985): the notice says so, and so does ADA.
   onSiteLinesOnly?: boolean;
+  // The production lines asked to run at exact clocks are not the ones the plan was calculated
+  // with (exactClocksChange in app/exact-clocks.ts, #1066): how many lines a recalculation would
+  // change.
+  exactClocksPending?: number;
+  // What whole machines cost in the open phase against exact clocks (roundingCost in
+  // app/exact-clocks.ts, #1066), as the plan's side column words it; absent without the record.
+  roundingCost?: { buildings: string; power: string };
   // How many byproducts the open phase's lines make, one per line and byproduct (byproductCount
   // in app/recycle.ts, #1022); each factory dialog says where to send its own.
   byproducts?: number;
@@ -456,6 +463,24 @@ const RULES: AdaRule[] = [
         ? "What your factories' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
         : 'What your factories make on site differs from this plan, and this plan has not been told yet. ') +
       'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
+  },
+  {
+    // The lines asked to run at exact clocks differ from the plan's (#1066).
+    id: 'exact-clocks-pending',
+    on: ['factories', 'plan'],
+    tone: 'warn',
+    when: facts => (facts.exactClocksPending ?? 0) > 0,
+    text: facts =>
+      `You changed the clocks of ${plural(facts.exactClocksPending!, 'production line')}, and this plan has not been told yet. Nothing recalculates by itself: Recalculate with exact clocks makes a new profile that plans ${facts.exactClocksPending === 1 ? 'it' : 'them'}. This one stays as it is. Precision, deferred.`,
+  },
+  {
+    // What whole machines cost in the open phase (#1066), from the calculation's own record.
+    id: 'rounding-cost',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => !!facts.roundingCost,
+    text: facts =>
+      `Whole machines at 100% cost this phase ${facts.roundingCost!.buildings} and ${facts.roundingCost!.power} more than exact clocks would. Nothing to underclock, plenty to sink. A production line's dialog can set that one line to exact clocks.`,
   },
   {
     id: 'group-moved',

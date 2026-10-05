@@ -9,7 +9,8 @@
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark. The lead step
   (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
-  dimmed, with its note under the title.
+  dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
+  recalculation would change (`step.clocks`, #1066), says so there too.
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
@@ -210,9 +211,8 @@ async function deletePersonal(event: Event) {
     <details :data-task="step.id" :open="lead">
       <summary>
         {{ step.title
-        }}<span v-if="step.idle" :id="idleId" class="task-idle" data-idle-note>{{
-          step.idle
-        }}</span>
+        }}<span v-if="step.idle" :id="idleId" class="task-idle" data-idle-note>{{ step.idle }}</span
+        ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span>
       </summary>
       <p>{{ step.body || 'Your own task for this phase.' }}</p>
       <button
