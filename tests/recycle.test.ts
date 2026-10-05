@@ -84,7 +84,7 @@ test('a byproduct all of which goes back to the line that feeds this one', () =>
   assert.deepEqual(adviceOf('4', 'Aluminum Scrap'), [
     [
       'byproduct',
-      'Water 116.27 m³/min',
+      'Water 116.18 m³/min',
       'Send all of it back to Alumina Solution, which feeds this line.',
     ],
   ]);
@@ -94,20 +94,20 @@ test('a byproduct shared by several lines, some in another group, and an input i
   assert.deepEqual(adviceOf('4', 'Alumina Solution'), [
     [
       'byproduct',
-      'Silica 106.06/min',
-      'Send 88.85 to Aluminum Ingot, 10.21 to Alternate: Silicon Circuit Board in Electronics and 7 to Alternate: Silicon High-Speed Connector in Electronics.',
+      'Silica 105.99/min',
+      'Send 88.78 to Aluminum Ingot, 10.21 to Alternate: Silicon Circuit Board in Electronics and 7 to Alternate: Silicon High-Speed Connector in Electronics.',
     ],
     [
       'input',
-      'Water 381.81 m³/min',
-      '116.27 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in Industrial parts; extract the other 258.04 m³.',
+      'Water 381.55 m³/min',
+      '116.18 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in Industrial parts; extract the other 257.87 m³.',
     ],
   ]);
   assert.deepEqual(adviceOf('4', 'Rubber'), [
     [
       'byproduct',
-      'Heavy Oil Residue 83.44 m³/min',
-      'Send 51.66 m³ to Alternate: Diluted Fuel, 31.56 m³ to Petroleum Coke and 0.22 m³ to Alternate: Coated Cable in Copper & caterium.',
+      'Heavy Oil Residue 86.31 m³/min',
+      'Send 54.47 m³ to Alternate: Diluted Fuel, 31.62 m³ to Petroleum Coke and 0.22 m³ to Alternate: Coated Cable in Copper & caterium.',
     ],
   ]);
 });
@@ -133,14 +133,14 @@ test('a solid partly used is stored or sunk; one no line uses is stored or sent 
   assert.deepEqual(adviceOf('3', 'Fuel'), [
     [
       'byproduct',
-      'Polymer Resin 41.57/min',
-      'Send 39.52 to Residual Plastic and store or sink the other 2.05.',
+      'Polymer Resin 43/min',
+      'Send 39.52 to Residual Plastic and store or sink the other 3.48.',
     ],
   ]);
   assert.deepEqual(adviceOf('4', 'Alternate: Nitro Rocket Fuel'), [
     [
       'byproduct',
-      'Compacted Coal 10.4/min',
+      'Compacted Coal 12.52/min',
       'No line uses it: store it or send it to the AWESOME Sink.',
     ],
   ]);
@@ -183,8 +183,8 @@ test('Dark Matter Residue in Phase 5 crosses groups to the trap, which names eve
 test('a receiving line covered fully, in part, and a line with neither', () => {
   // Its Water, which no byproduct covers, has a paragraph of its own (#1024).
   assert.deepEqual(adviceOf('4', 'Alternate: Diluted Fuel'), [
-    ['input', 'Heavy Oil Residue 51.66 m³/min', 'All of it from the byproduct of Rubber.'],
-    ['input', 'Water 103.33 m³/min', 'No byproduct covers it: extract all of it.'],
+    ['input', 'Heavy Oil Residue 54.47 m³/min', 'All of it from the byproduct of Rubber.'],
+    ['input', 'Water 108.94 m³/min', 'No byproduct covers it: extract all of it.'],
   ]);
   assert.deepEqual(adviceOf('4', 'Alternate: Coated Cable'), [
     [
@@ -315,16 +315,16 @@ test('the build plan writes the advice after the outputs, as text', () => {
     diluted = rowNamed('4', 'Alternate: Diluted Fuel');
   assert.equal(
     plain(adviceText(lineAdvice(scrap, modelOf('4'), words))),
-    'Byproduct Water 116.27 m³/min: send all of it back to Alumina Solution, which feeds this line.',
+    'Byproduct Water 116.18 m³/min: send all of it back to Alumina Solution, which feeds this line.',
   );
   assert.equal(
     plain(adviceText(lineAdvice(nitro, modelOf('4'), words))),
-    'Byproduct Compacted Coal 10.4/min. No line uses it: store it or send it to the AWESOME Sink.',
+    'Byproduct Compacted Coal 12.52/min. No line uses it: store it or send it to the AWESOME Sink.',
   );
   // Its extracted Water follows, with the Water Extractors for it (#1024).
   assert.equal(
     plain(adviceText(inputAdvice(diluted, modelOf('4'), words))),
-    'Heavy Oil Residue 51.66 m³/min: all of it from the byproduct of Rubber. Water 103.33 m³/min. No byproduct covers it: extract all of it. Water Extractors: 1 at 86.1% (16.41 MW); no Power Shards needed.',
+    'Heavy Oil Residue 54.47 m³/min: all of it from the byproduct of Rubber. Water 108.94 m³/min. No byproduct covers it: extract all of it. Water Extractors: 1 at 90.78% (17.6 MW); no Power Shards needed.',
   );
   assert.equal(adviceText([]), '');
 });

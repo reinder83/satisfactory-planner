@@ -55,7 +55,8 @@ test('formatNumber matches toLocaleString with at most 2 decimals for every kind
 
 test('phaseSteps text is byte-identical to the per-call toLocaleString version', async () => {
   // The module as it was before #772, loaded from a temporary copy. Besides types, progression.ts
-  // imports only wording.ts (#871), which is copied beside it.
+  // imports wording.ts (#871), which is copied beside it, and power.ts (#1064), which the copy
+  // imports from where it is.
   const source = fs.readFileSync(new URL('../public/progression.ts', import.meta.url), 'utf8');
   const shared = /const numberFormat = [^\n]*\n(export const formatNumber = [^\n]*)\n/;
   assert.match(source, shared);
@@ -65,11 +66,16 @@ test('phaseSteps text is byte-identical to the per-call toLocaleString version',
     fs.copyFileSync(new URL('../public/wording.ts', import.meta.url), path.join(dir, 'wording.ts'));
     fs.writeFileSync(
       file,
-      source.replace(
-        shared,
-        'export const formatNumber = (value: unknown): string =>\n' +
-          '  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });\n',
-      ),
+      source
+        .replace(
+          shared,
+          'export const formatNumber = (value: unknown): string =>\n' +
+            '  Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });\n',
+        )
+        .replace(
+          "from './power.ts'",
+          `from '${new URL('../public/power.ts', import.meta.url).href}'`,
+        ),
     );
     const before = (await import(pathToFileURL(file).href)) as { phaseSteps: typeof phaseSteps };
     const data: Progression = JSON.parse(

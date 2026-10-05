@@ -1,6 +1,7 @@
 // The plan's warnings: plain sentences, one group after another (WARNING_GROUPS).
 // Re-exported by ../planner.ts.
 import { durationOfHours, listNames } from '../public/wording.ts';
+import { extractionEquipment } from '../public/power.ts';
 import type {
   CurrentSettings,
   CalcRow,
@@ -230,9 +231,14 @@ function budgetWarnings({ config }: FinishedPlan): string[] {
 function assumptionWarnings({ config }: FinishedPlan): string[] {
   return [
     'Phase targets assume that phase’s milestones and required MAM research are unlocked. Gathered items, buildings and equipment are not continuously automated.',
-    `Power includes new generators and their fuel chains, with a ${config.utilityPercent}% allowance for trains, drone ports, mining and pumps. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
+    `Power includes new generators and their fuel chains, the miners and extractors (${extractionText(config)}), and a ${config.utilityPercent}% allowance on the production lines for trains, drone ports and pumps. Machines count at their clocked power; Particle Accelerators, Converters and Quantum Encoders at their peak. Generators are whole and run at 100%, burning fuel only for the power drawn, and a phase keeps the generators the phase before built. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
   ];
 }
+// The extraction equipment the plan's power assumes (#1064): "Miner Mk.3 at 250% on normal nodes".
+const extractionText = (config: CurrentSettings) => {
+  const { mark, clock } = extractionEquipment(config);
+  return `Miner Mk.${mark} at ${Math.round(clock * 100)}% on normal nodes`;
+};
 // Whole machines, and how the nuclear plants were rounded (#370).
 function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
   if (!config.wholeMachines) return [];

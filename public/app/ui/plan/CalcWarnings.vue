@@ -1,30 +1,32 @@
 <!--
   The notices above a calculated profile's plan, factories and resources pages for the current
   phase: the infeasible-draft warning with its options (draftFixes in views/calculated.ts), and
-  extra power headroom for whole buildings with what that phase can build for it (headroomAdvice,
-  #331). It draws nothing without a calculated profile.
+  the power the phase still needs with what that phase can build for it (headroomAdvice, #331),
+  from the one power model every page reads (powerView in public/power.ts, #1064). A plan made
+  before #1064 keeps its own wording: extra headroom for whole buildings. It draws nothing
+  without a calculated profile.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { calcStage, calculated, phase } from '../../session.ts';
 import { draftFixes, draftHeading, headroomAdvice } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
+import { powerView } from '../../../power.ts';
 import { legacy } from '../bridge.ts';
 
 const notices = computed(() =>
   legacy(() => {
     const stageResult = calcStage();
-    if (!stageResult) return { draft: null, headroom: '', advice: '' };
+    if (!stageResult) return { draft: null, headroom: '', modelled: false, advice: '' };
+    const view = powerView(stageResult, calculated?.settings ?? { availablePowerGW: 0 });
     return {
       draft: !stageResult.feasible && {
         heading: draftHeading(stageResult),
         reason: stageResult.reason,
         fixes: draftFixes(stageResult, calculated?.settings),
       },
-      headroom:
-        (stageResult.additionalHeadroomMW ?? 0) > 0.01
-          ? power(stageResult.additionalHeadroomMW!)
-          : '',
+      headroom: view.shortMW > 0 ? power(view.shortMW) : '',
+      modelled: view.modelled,
       advice: headroomAdvice(stageResult, phase()),
     };
   }),
@@ -46,8 +48,12 @@ const notices = computed(() =>
       </p></template
     >
   </div>
-  <div v-if="notices.headroom" class="notice warn">
-    Allow another {{ notices.headroom }} for whole-building power headroom.
+  <div v-if="notices.headroom" class="notice warn" data-power-short>
+    <template v-if="notices.modelled"
+      >This phase needs another {{ notices.headroom }} of power.</template
+    ><template v-else
+      >Allow another {{ notices.headroom }} for whole-building power headroom.</template
+    >
     {{ notices.advice }}
   </div>
 </template>

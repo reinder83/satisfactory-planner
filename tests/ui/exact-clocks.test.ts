@@ -245,11 +245,11 @@ test('the wizard measures what whole machines cost, on Goals and in Review', asy
   await settle();
   assert.equal(
     text('[data-whole-machines-cost]'),
-    `Measured on these settings: Phase 5 takes ${num(cost.buildings[0])} buildings and ${power(cost.requiredMW[0])} of power with whole machines, against ${num(cost.buildings[1])} buildings and ${power(cost.requiredMW[1])} with exact clocks.`,
+    `Measured on these settings: Phase 5 takes ${num(cost.buildings[0])} buildings and ${power(cost.needMW[0])} of power with whole machines, against ${num(cost.buildings[1])} buildings and ${power(cost.needMW[1])} with exact clocks.`,
   );
   assert.equal(
     text('[data-estimate-rounding]'),
-    `+${num(cost.buildings[0] - cost.buildings[1])} buildings, +${power(cost.requiredMW[0] - cost.requiredMW[1])} against exact clocks`,
+    `+${num(cost.buildings[0] - cost.buildings[1])} buildings, +${power(cost.needMW[0] - cost.needMW[1])} against exact clocks`,
   );
   cancelEstimate(true);
   wizardAt(5, plan);

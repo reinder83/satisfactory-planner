@@ -65,11 +65,13 @@ test('an unfueled Phase 5 search that stopped is not reported as "does not fit" 
 
 // A large installed grid makes the fuel's multiplier worth 40 GW: whole machines fit Phase 5 with
 // the fuel but not without it, with or without SAM conversion, and that is proven, not a stop.
+// (Power consumption at 2.2 times until #1064: with the miners' and extractors' power the fueled
+// plan no longer fit there, so 2 times now.)
 const shortOfPower = {
   ...settings,
   sam: 'needed',
   multiplier: 20,
-  powerFactor: 2.2,
+  powerFactor: 2,
   installedPowerGW: 200,
 };
 

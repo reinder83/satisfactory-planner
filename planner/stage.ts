@@ -3,6 +3,7 @@ import type { CurrentSettings, CalcRow, ItemRates, StageDelivery } from '../publ
 import type { LpModel } from '../optimizer.ts';
 import type { PoolRecipe, Solved } from './types.ts';
 import { DATA, RAW } from './data.ts';
+import { extractionEquipment, stageGrid } from '../public/power.ts';
 import type { PhaseContext, PhaseDemands, Solution } from './model.ts';
 
 // Reads the solution back into a stage (see run for its fields). `model` is the model `solved`
@@ -30,10 +31,21 @@ export function readStage(
       .filter(([, rate]) => rate > 0.002),
   );
   const raw = Object.fromEntries(RAW.map(item => [item, solved.values['raw:' + item] || 0]));
-  // Power totals. The LP balanced power at fractional machine counts; building whole machines at
-  // full power can need more, and the difference is reported as additionalHeadroomMW below.
+  // Power totals as releases before #1064 read them: whole machines at full power against the
+  // generators' fractional output, with the shortfall as additionalHeadroomMW below. The pages
+  // read `grid` instead (stageGrid in public/power.ts).
   const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
     generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
+  const grid = stageGrid({
+    rows,
+    raw,
+    powerFactor: config.powerFactor,
+    utilityPercent: config.utilityPercent,
+    extractionAt: extractionEquipment(config),
+    boost,
+    spareMW: config.availablePowerGW * 1000,
+    augmenterMW: spareMW - config.availablePowerGW * 1000,
+  });
   return {
     feasible: true,
     rows: buildOrder(rows),
@@ -62,6 +74,7 @@ export function readStage(
       0,
       peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
     ),
+    grid,
     // The phase takes as long as its slowest delivery (Infinity if a rate is 0).
     hours: Math.max(
       ...Object.values(delivery).map(part => (part.rate ? part.target / part.rate / 60 : Infinity)),
@@ -94,7 +107,9 @@ function deliverAll(model: LpModel, solved: Solution, delivery: Record<string, S
   }
 }
 // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
-// one runs underclocked at `lastClock` % (100 for a whole-machine row). Row inputs and outputs
+// one runs underclocked at `lastClock` % (100 for a whole-machine row). A generator line is
+// whole generators at 100% (#1064): generators burn fuel only for the power drawn, so its last
+// one is never underclocked, and its `equivalent` is the fuel it burns. Row inputs and outputs
 // are the line's totals per minute. peakMW counts whole machines at full power without the
 // utility allowance; generationMW is a generator's output at its fractional level.
 function stageRows(config: CurrentSettings, pool: PoolRecipe[], solved: Solution): CalcRow[] {
@@ -108,7 +123,7 @@ function stageRows(config: CurrentSettings, pool: PoolRecipe[], solved: Solution
         equivalent,
         machines,
         ...(recipe.slots ? { amplified: true, sloops: recipe.slots * machines } : {}),
-        lastClock: Math.max(0, (equivalent - machines + 1) * 100),
+        lastClock: recipe.power < 0 ? 100 : Math.max(0, (equivalent - machines + 1) * 100),
         inputs: Object.fromEntries(
           Object.entries(recipe.inputs).map(([item, rate]) => [item, rate * equivalent]),
         ),

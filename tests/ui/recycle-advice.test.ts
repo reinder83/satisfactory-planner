@@ -102,8 +102,8 @@ test("a receiving line's dialog says where the inputs a byproduct covers come fr
   openCalculatedFactory(rowId('4', 'Alumina Solution'));
   const paragraphs = $$('#detail [data-recycle-advice] p').map(paragraph);
   assert.deepEqual(paragraphs, [
-    'Byproduct · Silica 106.06/min|Send 88.85 to Aluminum Ingot ↗, 10.21 to Alternate: Silicon Circuit Board ↗ in Electronics and 7 to Alternate: Silicon High-Speed Connector ↗ in Electronics.',
-    `Input · Water 381.81 m³/min|116.27 m³ recycled from Aluminum Scrap ↗, 7.5 m³ recycled from Battery ↗ in ${evil}; extract the other 258.04 m³.`,
+    'Byproduct · Silica 105.99/min|Send 88.78 to Aluminum Ingot ↗, 10.21 to Alternate: Silicon Circuit Board ↗ in Electronics and 7 to Alternate: Silicon High-Speed Connector ↗ in Electronics.',
+    `Input · Water 381.55 m³/min|116.18 m³ recycled from Aluminum Scrap ↗, 7.5 m³ recycled from Battery ↗ in ${evil}; extract the other 257.87 m³.`,
   ]);
   assert.equal(document.querySelector('x-evil'), null, 'the group name is text');
 });
@@ -115,10 +115,10 @@ test("a receiving line's dialog counts the Water Extractors for the Water no byp
   assert.equal(text(notice.previousElementSibling), 'Byproducts and water');
   const [silica, water] = [...notice.querySelectorAll('p')];
   assert.equal(extractors(silica), '', 'a byproduct has none');
-  // For the 258.04 m³ extracted, not the 381.81 the line takes, on a line of its own.
+  // For the 257.87 m³ extracted, not the 381.55 the line takes, on a line of its own.
   assert.equal(
     extractors(water),
-    'Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
+    'Water Extractors at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW). Or up to 250% with Power Shards: 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW).',
   );
   assert.equal(water!.querySelector('[data-extractors]')!.previousElementSibling?.tagName, 'BR');
   assert.equal(document.querySelector('x-evil'), null);
@@ -162,11 +162,11 @@ test("a coal generator's dialog counts the Water Extractors for its Water (#1024
   const water = $('#detail [data-recycle-advice] p')!;
   assert.equal(
     paragraph(water),
-    'Input · Water 139.36 m³/min|No byproduct covers it: extract all of it.',
+    'Input · Water 232.31 m³/min|No byproduct covers it: extract all of it.',
   );
   assert.equal(
     extractors(water),
-    'Water Extractors at 100%: 1 at 100% + 1 at 16.13% (2 extractors, 21.79 MW). Or up to 250% with Power Shards: 1 at 116.13% (1 extractor, 1 Power Shard, 24.37 MW).',
+    'Water Extractors at 100%: 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW). Or up to 250% with Power Shards: 1 at 193.59% (1 extractor, 2 Power Shards, 47.89 MW).',
   );
 });
 
@@ -177,16 +177,16 @@ test('a build-plan step carries the advice of the phase it is in, not of the pha
   // Rubber is built in both phases, with other numbers in each.
   assert.match(
     stepOf('3', 'Rubber').replace(/ /g, ' '),
-    / Byproduct Heavy Oil Residue 48\.03 m³\/min: send 36\.68 m³ to Petroleum Coke, 11\.13 m³ to Residual Fuel and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
+    / Byproduct Heavy Oil Residue 48\.03 m³\/min: send 36\.34 m³ to Petroleum Coke, 11\.47 m³ to Alternate: Turbo Heavy Fuel and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
   );
   assert.match(
     stepOf('4', 'Rubber').replace(/ /g, ' '),
-    / Byproduct Heavy Oil Residue 83\.44 m³\/min: send 51\.66 m³ to Alternate: Diluted Fuel, 31\.56 m³ to Petroleum Coke and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
+    / Byproduct Heavy Oil Residue 86\.31 m³\/min: send 54\.47 m³ to Alternate: Diluted Fuel, 31\.62 m³ to Petroleum Coke and 0\.22 m³ to Alternate: Coated Cable in Copper & caterium\.$/,
   );
   // Alumina Solution extracts more Water in Phase 5, and its step there says so (#1024).
   assert.match(
     stepOf('4', 'Alumina Solution').replace(/ /g, ' '),
-    /; extract the other 258\.04 m³\. Water Extractors at 100%: 2 at 100% \+ 1 at 15\.03% \(3 extractors, 41\.63 MW\)\. Or up to 250% with Power Shards: 1 at 215\.03% \(1 extractor, 3 Power Shards, 55\.03 MW\)\.$/,
+    /; extract the other 257\.87 m³\. Water Extractors at 100%: 2 at 100% \+ 1 at 14\.89% \(3 extractors, 41\.61 MW\)\. Or up to 250% with Power Shards: 1 at 214\.89% \(1 extractor, 3 Power Shards, 54\.98 MW\)\.$/,
   );
   assert.match(
     stepOf('5', 'Alumina Solution').replace(/ /g, ' '),
@@ -194,7 +194,7 @@ test('a build-plan step carries the advice of the phase it is in, not of the pha
   );
   assert.match(
     stepOf('3', 'Fuel').replace(/ /g, ' '),
-    /Outputs: Fuel [\d.]+ m³\/min, Polymer Resin 41\.57\/min\. Byproduct Polymer Resin 41\.57\/min: send 39\.52 to Residual Plastic and store or sink the other 2\.05\.$/,
+    /Outputs: Fuel [\d.]+ m³\/min, Polymer Resin 43\/min\. Byproduct Polymer Resin 43\/min: send 39\.52 to Residual Plastic and store or sink the other 3\.48\.$/,
   );
 });
 
@@ -205,7 +205,7 @@ test('the build plan shows the advice in the step, and a step the user rewrote k
   const step = $(`[data-check="calc-4-${scrap}"]`)!.closest('.task')!;
   assert.match(
     text(step.querySelector('p')),
-    /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.27 m³\/min\. Byproduct Water 116\.27 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
+    /Outputs: Aluminum Scrap [\d.,]+\/min, Water 116\.18 m³\/min\. Byproduct Water 116\.18 m³\/min: send all of it back to Alumina Solution, which feeds this line\.$/,
   );
   // A line taking Water no byproduct covers (#1024).
   const concrete = $(`[data-check="calc-4-${rowId('4', 'Alternate: Wet Concrete')}"]`)!.closest(
@@ -246,7 +246,7 @@ test("a group's flow page has the advice under the rows it concerns, and its lan
   // The line's Water Extractors end its ♻ line (#1024).
   assert.equal(
     plainText(solutionWater.querySelector('.gf-advice')),
-    `♻ 116.27 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 258.04 m³. Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).`,
+    `♻ 116.18 m³ recycled from Aluminum Scrap, 7.5 m³ recycled from Battery in ${evil}; extract the other 257.87 m³. Water Extractors at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW). Or up to 250% with Power Shards: 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW).`,
   );
   // A row the advice does not concern has no ♻ line: the line's main product.
   assert.equal(

@@ -22,8 +22,9 @@ const settings = {
 };
 // Runs `body` on a clock that moves `step` milliseconds every time it is read, whatever the real
 // time. The solver's clock backstop (30 seconds) then stops every search that reads the clock more
-// than 30000 / `step` times: with 100, the amplified searches over the widened network, never the
-// unamplified ones. It counts reads, not time, so it stops the same searches on every machine.
+// than 30000 / `step` times: with 40, the amplified searches over the widened network, never the
+// unamplified ones (with 100 until #1064, whose power model made the unamplified searches longer:
+// 10 to 50 stop only the amplified ones now). It counts reads, not time, so it stops the same searches on every machine.
 // Only performance.now ticks, the clock HiGHS reads: Date.now, which the phase's deadline for its
 // searches reads (#592), keeps the real time, so that deadline is never reached here.
 function onTickingClock<T>(step: number, body: () => T): T {
@@ -38,7 +39,7 @@ function onTickingClock<T>(step: number, body: () => T): T {
   }
 }
 const phase3 = (amplifySloops: number) =>
-  onTickingClock(100, () => calculate({ ...settings, amplifySloops })).stages[3];
+  onTickingClock(40, () => calculate({ ...settings, amplifySloops })).stages[3];
 
 test('amplification with existing supply never costs a phase that fits without it (#597)', () => {
   const plain = phase3(0);

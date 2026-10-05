@@ -212,8 +212,10 @@ export interface CalcRow {
   // The phase the recipe unlocks in.
   phase: number;
   machine: string;
-  // MW per machine at 100%; negative for a generator.
+  // MW per machine at 100%; negative for a generator. A variable-power machine's peak, and its
+  // `minPower` (#1064; absent from plans made before it).
   power: number;
+  minPower?: number;
   // The line's totals per minute.
   inputs: ItemRates;
   outputs: ItemRates;
@@ -254,14 +256,53 @@ export interface FuelVerdict {
 }
 
 // A phase planned with exact clocks, beside its whole-machine plan (#1066): its buildings, the
-// power it needs (requiredMW), its raw resources per minute, its solid output beyond every demand
+// power it needs as the pages give it (needMW: its grid's, #1064, else requiredMW), its raw resources per minute, its solid output beyond every demand
 // per minute (the stage's `surplus` added up: what storage or the sink takes) and its hours.
 export interface ExactPlan {
   buildings: number;
-  requiredMW: number;
+  needMW: number;
   raw: ItemRates;
   surplus: number;
   hours: number;
+}
+
+// A stage's power as the plan sizes it (#1064, stageGrid in public/power.ts): what the phase
+// needs, and the whole generators, augmenters and spare power that give it. Every page reads it
+// through powerView. Plans made before #1064 have none and keep their own figures (requiredMW,
+// availableMW, additionalHeadroomMW), which powerView reads instead.
+export interface GridGenerator {
+  // The building (Coal Generator, Fuel Generator, Nuclear Power Plant).
+  machine: string;
+  // Whole generators of it the phase runs, all at 100%: they burn fuel only for the power drawn.
+  machines: number;
+  // What the phase's own generator lines need of them (their machines, summed).
+  own: number;
+  // Of `machines`, the ones the phase before already built and the phase keeps (0 for none).
+  kept: number;
+  // One generator's capacity in MW, before the augmenter boost.
+  unitMW: number;
+}
+export interface StageGrid {
+  // The production lines at their clocked power (the clock power exponent) x the consumption
+  // multiplier, variable-power machines at their peak.
+  loadMW: number;
+  // The variable-power machines' part of loadMW at their peak, and the same at their average.
+  variablePeakMW: number;
+  variableAverageMW: number;
+  // Miners and extractors: MW per raw resource, and the equipment assumed.
+  extraction: ItemRates;
+  extractionMW: number;
+  extractionAt: { mark: number; clock: number };
+  // The utility allowance on loadMW, and loadMW + allowanceMW + extractionMW.
+  allowanceMW: number;
+  needMW: number;
+  generators: GridGenerator[];
+  // The whole generators' capacity with the augmenter boost, what Phase 5's augmenters add (their
+  // 500 MW each and their boost on installed generation), the entered spare power, and the sum.
+  generationMW: number;
+  augmenterMW: number;
+  spareMW: number;
+  availableMW: number;
 }
 
 // A resource a failed phase needs more of.
@@ -306,6 +347,9 @@ export interface StageResult {
   availableMW: number;
   requiredMW: number;
   additionalHeadroomMW: number;
+  // The phase's power as the plan sizes it (#1064); see StageGrid. The three figures above keep
+  // their earlier meaning for releases before it.
+  grid: StageGrid;
   // Time to finish the phase's deliveries; Infinity when a rate is 0.
   hours: number;
   // Names of the resource converter rows.

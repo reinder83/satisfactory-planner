@@ -217,7 +217,7 @@ test('no text sits on a dark background in print (#330)', () => {
   // Fills that carry no text: bars, dots and the progress squares, and the power headroom bar's
   // segments and legend swatches (SP-29).
   const fills =
-    /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight|\.over)? span$|^\.guided-progress \.\w+ i$|^\.seg-(peak|utility|generation|boost|spare|short)$|^\.phase-seg\.(done|current) > span$/;
+    /scrollbar|^\.dot$|^\.stat::before$|^\.progress-track span$|^\.resource-bar(\.tight|\.over)? span$|^\.guided-progress \.\w+ i$|^\.seg-(peak|load|extraction|utility|generation|boost|spare|short)$|^\.phase-seg\.(done|current) > span$/;
   const dark: string[] = [];
   for (const rule of rules(screen))
     for (const selector of rule.selector.split(/\s*,\s*/)) {

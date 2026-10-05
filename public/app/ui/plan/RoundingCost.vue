@@ -35,8 +35,8 @@ const view = computed(() => {
           { label: 'Buildings', whole: num(cost.buildings[0]), exact: num(cost.buildings[1]) },
           {
             label: 'Power needed',
-            whole: power(cost.requiredMW[0]),
-            exact: power(cost.requiredMW[1]),
+            whole: power(cost.needMW[0]),
+            exact: power(cost.needMW[1]),
           },
           {
             label: 'To storage or the sink',

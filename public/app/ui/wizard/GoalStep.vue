@@ -49,7 +49,7 @@ const view = computed(() =>
           measuredRounding(estimate.plan);
         if (!measured) return '';
         const { phase, cost } = measured;
-        return `Measured on these settings: Phase ${phase} takes ${num(cost.buildings[0])} buildings and ${power(cost.requiredMW[0])} of power with whole machines, against ${num(cost.buildings[1])} buildings and ${power(cost.requiredMW[1])} with exact clocks.`;
+        return `Measured on these settings: Phase ${phase} takes ${num(cost.buildings[0])} buildings and ${power(cost.needMW[0])} of power with whole machines, against ${num(cost.buildings[1])} buildings and ${power(cost.needMW[1])} with exact clocks.`;
       })(),
     };
   }),

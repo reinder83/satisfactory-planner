@@ -25,6 +25,10 @@ export interface AdaFacts {
   retireOpen: number;
   // Unticked steps of lines a delivered Space Elevator part leaves without work (#1062).
   idleLines?: number;
+  // The generators the phase before built that this phase keeps (#1064), as a name list ("7 Fuel
+  // Generators"), and that phase ("Phase 3"); absent when it keeps none.
+  keptGenerators?: string;
+  keptFrom?: string;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -82,8 +86,8 @@ export interface AdaFacts {
   reason: string;
   // Raw resources over their budget.
   short: string[];
-  // A stage's whole-building power shortfall, as power strings: the draw (requiredMW), the
-  // generation its own rows build with the augmenter boost ('' when none), the spare power
+  // A stage's power shortfall (powerView in public/power.ts, #1064), as power strings: the draw
+  // (its need), the generation its own rows build with the augmenter boost ('' when none), the spare power
   // entered, that spare part with what Phase 5's augmenters add ('' when it adds nothing) and
   // the headroom still missing, which is the draw minus the other two (#334). `biomass` is set
   // on Phase 1, whose power the plan leaves to biomass or existing generation.
@@ -210,7 +214,7 @@ const RULES: AdaRule[] = [
         : power.generation
           ? 'Build generation beyond what the plan lists.'
           : 'Build the generation first.';
-      return `${power.headroom} of whole-building power headroom is still unaccounted for: a ${power.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
+      return `${power.headroom} of power headroom is still unaccounted for: a ${power.required} draw against ${against}. Unpowered machines are simply very expensive furniture. ${advice}`;
     },
   },
   // `lead` rules describe a state that makes everything else irrelevant and rank first.
@@ -298,6 +302,16 @@ const RULES: AdaRule[] = [
     when: facts => (facts.idleLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.idleLines!, 'production line')} only made elevator parts you have already delivered, so the build plan dims ${facts.idleLines === 1 ? 'it' : 'them'} and says which later phase needs ${facts.idleLines === 1 ? 'it' : 'them'}, if any. Idle machines. FICSIT calls that “strategic reserve”.`,
+  },
+  {
+    // The generators the phase before built stay and count first (#1064), as "Power available
+    // now" and the Resources page's bar say.
+    id: 'kept-generators',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.keptGenerators,
+    text: facts =>
+      `This phase keeps the ${facts.keptGenerators} ${facts.keptFrom} built and counts them before it adds any. A generator that still has fuel to burn is not scrap.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

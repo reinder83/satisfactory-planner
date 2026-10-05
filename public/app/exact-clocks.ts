@@ -152,7 +152,7 @@ export function lineClockNote(
 // largest first. null for a stage without one (an exact plan, an older plan, a draft).
 export interface RoundingCost {
   buildings: [whole: number, exact: number];
-  requiredMW: [whole: number, exact: number];
+  needMW: [whole: number, exact: number];
   hours: [whole: number, exact: number];
   // Solid output beyond every demand per minute: what storage or the sink takes.
   surplus: [whole: number, exact: number];
@@ -168,7 +168,8 @@ export function roundingCost(stage: StoredStage | undefined): RoundingCost | nul
       (stage.rows ?? []).reduce((total, row) => total + row.machines, 0),
       exact.buildings,
     ],
-    requiredMW: [stage.requiredMW ?? 0, exact.requiredMW],
+    // The power the phase needs as every page gives it (its grid's, #1064, else requiredMW).
+    needMW: [stage.grid?.needMW ?? stage.requiredMW ?? 0, exact.needMW],
     hours: [stage.hours ?? Infinity, exact.hours],
     surplus: [
       Object.values(stage.surplus ?? {}).reduce((total, rate) => total + rate, 0),

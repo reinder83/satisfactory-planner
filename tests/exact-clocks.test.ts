@@ -166,14 +166,14 @@ test('a whole-machine phase records the same phase with exact clocks; an exact p
     assert.ok(recorded, 'Phase ' + phase + ' records its exact plan');
     assert.equal(recorded.buildings, buildings(reference));
     assert.equal(recorded.hours, reference.hours);
-    assert.equal(recorded.requiredMW, reference.requiredMW);
+    assert.equal(recorded.needMW, reference.grid?.needMW ?? reference.requiredMW);
     assert.equal('exactPlan' in reference, false);
     assert.ok(recorded.buildings < buildings(plan.stages[phase]));
   }
   // The cost as the pages word it: more buildings and power, and the raw resources it adds.
   const cost = roundingCost(json(plan.stages['5']))!;
   assert.ok(cost.buildings[0] > 2 * cost.buildings[1], 'Phase 5 builds over twice as many');
-  assert.ok(cost.requiredMW[0] > cost.requiredMW[1]);
+  assert.ok(cost.needMW[0] > cost.needMW[1]);
   assert.ok(cost.extraRaw.length && cost.extraRaw.every(([, extra]) => extra > 0));
   assert.equal(roundingCost(json(exact.stages['5'])), null);
   assert.deepEqual(measuredRounding(json(plan))?.phase, '5');

@@ -23,6 +23,7 @@ import {
   setEstimatePaused,
 } from '../../wizard/estimate.ts';
 import { power } from '../../wizard/fields.ts';
+import { powerView } from '../../../power.ts';
 import { measuredRounding } from '../../exact-clocks.ts';
 import { resourceUse } from '../../views/resources.ts';
 import { legacy } from '../bridge.ts';
@@ -60,7 +61,9 @@ const view = computed(() =>
         if (!use.idle && (!tightest || use.fraction > tightest.use.fraction))
           tightest = { name, phase, use };
       }
-    const short = (last.requiredMW ?? 0) - (last.availableMW ?? 0) > 0.01;
+    // The last phase's power as every page gives it (powerView in public/power.ts, #1064).
+    const lastPower = powerView(last, plan.settings),
+      short = lastPower.shortMW > 0;
     // What whole machines add over exact clocks (#1066), measured by the whole-machine pass.
     const rounding = measuredRounding(plan);
     const unfit = stages.filter(([, stageResult]) => !stageResult.feasible).map(([phase]) => phase);
@@ -75,7 +78,7 @@ const view = computed(() =>
         : []),
       ...(short
         ? [
-            `Phase ${lastPhase} needs ${power(last.requiredMW)} of power; ${power(last.availableMW)} is available.`,
+            `Phase ${lastPhase} needs ${power(lastPower.needMW)} of power; ${power(lastPower.availableMW)} is available.`,
           ]
         : []),
     ];
@@ -87,13 +90,13 @@ const view = computed(() =>
       figures: {
         phase: lastPhase,
         buildings: last.rows ? num(last.rows.reduce((sum, row) => sum + row.machines, 0)) : '—',
-        power: `${power(last.requiredMW)} of ${power(last.availableMW)}`,
+        power: `${power(lastPower.needMW)} of ${power(lastPower.availableMW)}`,
         short,
         tightest,
         rounding: rounding
           ? {
               phase: rounding.phase,
-              text: `+${num(rounding.cost.buildings[0] - rounding.cost.buildings[1])} buildings, +${power(rounding.cost.requiredMW[0] - rounding.cost.requiredMW[1])}`,
+              text: `+${num(rounding.cost.buildings[0] - rounding.cost.buildings[1])} buildings, +${power(rounding.cost.needMW[0] - rounding.cost.needMW[1])}`,
             }
           : null,
       },

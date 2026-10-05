@@ -1,6 +1,7 @@
 <!--
   All settings step 5, Review, drawn from the calculated preview (never missing here: moving
-  to step 5 always calculates). Phases before the profile's start phase are left out. Then
+  to step 5 always calculates), with each phase's power as every page gives it (powerView in
+  public/power.ts, #1064). Phases before the profile's start phase are left out. Then
   what was credited from production you already run, whether fueled augmenters pay off, what
   whole machines cost against exact clocks (RoundingCost.vue, #1066), the
   options for each phase that does not fit, the calculation's assumptions and, when adding a
@@ -12,8 +13,10 @@ import { durationOfHours, num } from '../../format.ts';
 import { draft } from '../../session.ts';
 import { budgetMeasured, draftFixes, draftHeading } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
+import { powerView } from '../../../power.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
+import type { StoredSettings, StoredStage } from '../../../types/index.ts';
 import FuelVerdict from './FuelVerdict.vue';
 import RoundingCost from '../plan/RoundingCost.vue';
 import SupplyNotice from './SupplyNotice.vue';
@@ -22,6 +25,25 @@ import StepHeading from '../form/StepHeading.vue';
 // A number keeps its unit on its line in the narrow Delivery time column (#741): "about 7 h
 // 52 min" may wrap after "about" or between "h" and "52", never between "7" and "h".
 const unbroken = (text: string): string => text.replace(/(\d) /g, '$1\u00a0');
+
+// The New generation and Power needed columns (#1064): the generators the phase builds, and what
+// it needs of what it has, or what it is short, as the Resources page's bar, the headroom notice
+// and the power step give them. Phase 1 runs on biomass, which the plan leaves to the player. A
+// plan made before #1064 shows its generators' output as it always did.
+function powerCells(phase: string, stageResult: StoredStage, settings: StoredSettings) {
+  const generation = stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—';
+  if (!stageResult.rows) return { generation, power: { text: '—', short: false } };
+  const view = powerView(stageResult, settings);
+  return {
+    generation: view.modelled ? power(view.generationMW) : generation,
+    power:
+      view.shortMW > 0 && phase === '1'
+        ? { text: `${power(view.needMW)} from biomass`, short: false }
+        : view.shortMW > 0
+          ? { text: `Short by ${power(view.shortMW)} of ${power(view.needMW)}`, short: true }
+          : { text: `${power(view.needMW)} of ${power(view.availableMW)}`, short: false },
+  };
+}
 
 const view = computed(() =>
   legacy(() => {
@@ -41,7 +63,7 @@ const view = computed(() =>
         buildings: stageResult.rows
           ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
           : '—',
-        generation: stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—',
+        ...powerCells(phase, stageResult, preview.settings),
         // A stopped search or an older saved plan measured no budget: a neutral draft (#632).
         budget: stageResult.feasible
           ? 'Within entered limits'
@@ -78,6 +100,7 @@ const view = computed(() =>
             <th>Delivery time</th>
             <th>Buildings</th>
             <th>New generation</th>
+            <th>Power needed</th>
           </tr>
         </thead>
         <tbody>
@@ -92,6 +115,9 @@ const view = computed(() =>
             </td>
             <td>{{ row.buildings }}</td>
             <td>{{ row.generation }}</td>
+            <td :class="row.power.short ? 'warn' : undefined" data-review-power>
+              {{ row.power.text }}
+            </td>
           </tr>
         </tbody>
       </table>

@@ -136,15 +136,24 @@ test('a calculated profile draws its draft and headroom as warnings, guidance as
   go('plan');
   render();
   all.push(...tones());
+  // Phase 1 runs on biomass, so the power notice asks for more there (#1064: from Phase 2 on the
+  // plan's generators cover its need).
+  page();
+  const early = generated();
+  early.settings.phase = '1';
+  open({ calculated: early, phase: '1' });
+  go('plan');
+  render();
+  all.push(...tones());
   assert.equal(toneOf(all, /Planning draft/), 'warn', 'infeasible draft');
   assert.equal(toneOf(all, /Whole-machine production:/), 'info');
   assert.equal(toneOf(all, /Retain these Phase 5 capacities/), 'info', 'phase guidance');
-  assert.equal(toneOf(all, /whole-building power headroom/), 'warn');
+  assert.equal(toneOf(all, /This phase needs another [\d.,]+ \w+ of power\./), 'warn');
   assert.equal(toneOf(all, /Prefer extra production over underclocking/), 'info', 'round-up hint');
   assert.equal(toneOf(all, /Optional storage template/), 'info');
   const orange = all.filter(([tone]) => tone === 'warn').map(([, text]) => text);
   assert.ok(
-    orange.every(t => /Planning draft|power headroom/.test(t)),
+    orange.every(t => /Planning draft|of power\./.test(t)),
     'only the warnings are orange: ' + orange.join(' | '),
   );
 });

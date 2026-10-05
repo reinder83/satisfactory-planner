@@ -7,14 +7,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../planner.ts';
 
-// Whole machines: every re-solve is an integer search, and under the minimal goal Phase 3 finishes
-// sooner. (Under the balanced goal it used to be Phases 2 to 4, but only because their own plans'
-// times came from the goal's rates; since all a part's whole-machine output goes to the elevator,
-// #1062, those plans are as fast as the re-solves.)
+// Whole machines: every re-solve is an integer search, and with a target time of 12 hours Phase 3
+// finishes sooner. (Under the balanced goal it used to be Phases 2 to 4, but only because their own
+// plans' times came from the goal's rates; since all a part's whole-machine output goes to the
+// elevator, #1062, those plans are as fast as the re-solves. The minimal goal pulled Phase 3 until
+// #1064, whose power model changed those plans.)
 const settings = {
   phase: '5',
   recipes: 'all',
-  goal: 'minimal',
+  goal: 'timed',
+  hours: 12,
   wholeMachines: true,
   sam: 'avoid',
   phaseTime: 'final',
