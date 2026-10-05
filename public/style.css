@@ -2084,8 +2084,13 @@ tr.muted td:first-child {
   height: 100%;
   flex: none;
 }
-.seg-peak {
+.seg-peak,
+.seg-load {
   background: var(--accent);
+}
+/* Miners and extractors (#1064), after the production lines and their allowance. */
+.seg-extraction {
+  background: var(--gold);
 }
 .seg-utility {
   background: var(--accent-sh);

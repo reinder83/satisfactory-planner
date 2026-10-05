@@ -220,6 +220,7 @@ export interface EasySetup {
   extraOutputs: ItemRates;
 }
 export function machineSetup(row: CalcRow) {
+  if (wholeGenerators(row)) return generatorSetup(row);
   const equivalent = row.equivalent || row.machines - 1 + row.lastClock / 100,
     whole = Math.floor(equivalent + 1e-7),
     fraction = Math.max(0, equivalent - whole),
@@ -270,6 +271,28 @@ export function machineSetup(row: CalcRow) {
       };
   }
   return { summary, whole, partial, fullOutput, lastOutput, clock: fraction * 100, easy };
+}
+
+// A generator line of a plan made since #1064: whole generators at 100% (its last one is not
+// underclocked, lastClock 100), which burn fuel only for the power drawn; its `equivalent` is the
+// fuel it burns. Older plans keep their underclocked last generator.
+const wholeGenerators = (row: CalcRow) => row.power < 0 && !(row.lastClock < 100 - 1e-7);
+function generatorSetup(row: CalcRow) {
+  const fullOutput = [
+    `${num(-row.power)} MW`,
+    ...Object.entries(row.outputs || {}).map(([item, rate]) =>
+      rateOfItem(item, rate / (row.equivalent || row.machines)),
+    ),
+  ].join(' · ');
+  return {
+    summary: `${row.machines} ${row.machine} total: all at 100%; they burn fuel only for the power drawn.`,
+    whole: row.machines,
+    partial: false,
+    fullOutput,
+    lastOutput: fullOutput,
+    clock: 0,
+    easy: null as EasySetup | null,
+  };
 }
 
 // The easier rounded setting the factory dialog offers (ui/detail/CalcFactoryDialog.vue), and

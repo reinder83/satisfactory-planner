@@ -2,7 +2,9 @@
 // factory to the user, and one recipe row a production line ("line" in counts). Only the words
 // changed: a progress state saved by the previous release loads as it was, with no migration,
 // its own rewritten step text stays as the user wrote it, the build plan lists the same step
-// ids (recorded on main before the change, tests/fixtures/step-ids-2026-10-04.json), and a flow
+// ids (recorded on main before the change, tests/fixtures/step-ids-2026-10-04.json; recorded
+// again on #1064, whose power model added a Residual Plastic line to Phases 3 and 5 and keeps the
+// Phase 4 generators, so Phase 5 retires none), and a flow
 // page's address from before #926 still routes. Then a guard: no page, panel or dialog a user
 // reads still says "group" for a factory or counts factories where it means lines.
 import assert from 'node:assert/strict';

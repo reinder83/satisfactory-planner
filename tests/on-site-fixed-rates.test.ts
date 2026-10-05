@@ -48,12 +48,13 @@ const plc3: FactoryGroups = {
   local: { [PLC3]: ['Iron Ingot'] },
 };
 
-// Phase 4 plans whose Iron Plate line makes 440, 520, 560 and 640 Iron Plate/min.
+// Phase 4 plans whose Iron Plate line makes 440, 520, 560 and 660 Iron Plate/min (640 until #1064, whose power model
+// changed the plan at 3 times the storage rate).
 const PLANS = {
   440: { phase: '4', wholeMachines: true, limitsConfirmed: true, goal: 'timed', hours: 12 },
   520: { phase: '4', wholeMachines: true, limitsConfirmed: true },
   560: { phase: '4', wholeMachines: true, limitsConfirmed: true, storageRate: 2 },
-  640: { phase: '4', wholeMachines: true, limitsConfirmed: true, storageRate: 3 },
+  660: { phase: '4', wholeMachines: true, limitsConfirmed: true, storageRate: 3 },
 } as const;
 type PlateTotal = keyof typeof PLANS;
 const plans = new Map<PlateTotal, CurrentCalculatedPlan>();
@@ -89,8 +90,8 @@ test("the issue's example: the Iron Plate line grows from 520 to 560 and PLC3's 
 });
 
 test('a growing Iron Plate line no longer gives PLC3 a Smelter more than its 47 needs (#984)', () => {
-  // 47/440 of 960 would be 102.5 Iron Ingot, 4 Smelters; the books give PLC3 70.5.
-  const { stage, books, own } = recalculated(440, 640);
+  // 47/440 of 990 would be 105.75 Iron Ingot, 4 Smelters; the books give PLC3 70.5.
+  const { stage, books, own } = recalculated(440, 660);
   assert.ok(near(own.asked, 70.5), `PLC3 asks ${own.asked}`);
   assert.equal(row(stage, OWN_INGOT)!.machines, 3);
   assert.equal(books.offered['Iron Ingot'], undefined, 'nothing offered');
@@ -337,7 +338,9 @@ test('a fixed rate on a row the plan being recalculated lacks counts where the r
   assert.deepEqual(onSite[BETA]!.ifBuilt!['3'], { [BEAM]: { rate: 0, open: 1, after: 10 } });
   assert.equal(onSite[ALPHA]!.ifBuilt!['4'], undefined, 'Phase 4 has the row: a part of rates');
   assert.deepEqual(onSite[ALPHA]!.rates!['4'], { [BEAM]: { rate: 10, open: 0, after: 0 } });
-  const plan = calculate({ ...AMPLIFIED, storageRate: 3, onSite });
+  // At 7 times the storage rate the recalculation builds the row in Phase 3 (3 times until #1064,
+  // whose power model changed which twin that plan builds).
+  const plan = calculate({ ...AMPLIFIED, storageRate: 7, onSite });
   const stage = plan.stages['3'];
   assert.equal(row(stage, BEAM)!.outputs['Steel Beam'], 15);
   // The books give Alpha its 10 Steel Beam/min and Beta the other 5, at 4 Steel Ingot each, and

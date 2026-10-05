@@ -63,8 +63,15 @@ test('a phase says which of the previous phase’s lines it stops using', () => 
         .filter(p => Number(p) > Number(phase))
         .flatMap(p => (plan.stages[p].rows || []).map(r => r.id)),
     );
+    // A generator line whose building this phase keeps is not retired (#1064): its generators
+    // burn this phase's fuel.
+    const kept = new Set(
+      (plan.stages[String(phase) as StageKey].grid?.generators || [])
+        .filter(entry => entry.kept > 0)
+        .map(entry => entry.machine),
+    );
     return (plan.stages[String(phase - 1) as StageKey].rows || []).filter(
-      r => !now.has(r.id) && !later.has(r.id),
+      r => !now.has(r.id) && !later.has(r.id) && !(r.power < 0 && kept.has(r.machine)),
     );
   };
   for (const phase of [2, 3, 4, 5]) {

@@ -13,6 +13,7 @@ import { taskIcon } from '../../public/app/tasks.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
 import { power } from '../../public/app/wizard/fields.ts';
+import { lineLoad } from '../../public/power.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
 import CalculatedFactoriesPage from '../../public/app/ui/pages/CalculatedFactoriesPage.vue';
 import type { FlowModel } from '../../public/app/flow.ts';
@@ -1004,8 +1005,9 @@ test('a calculated dialog shows the same three cells as its card, with output pe
     .closest('.factory-card')!
     .querySelector('.machines')!.textContent!;
   const cells = machineCells();
+  // A plan made since #1064 (its stage has a grid) says what the line draws at its clock.
   assert.deepEqual(cells, [
-    ['Total', num(made.machines), made.machine + ' · peak load ' + power(made.peakMW)],
+    ['Total', num(made.machines), made.machine + ' · draws ' + power(lineLoad(made).peak)],
     ['At 100%', num(made.machines - 1), `${num(each)} ${item}/min each`],
     [
       'Adjustable',
@@ -1015,10 +1017,19 @@ test('a calculated dialog shows the same three cells as its card, with output pe
   ]);
   assert.match(cells[2]![1]!, /^1 at [\d.,]+%$/, 'the card and the dialog show one clock');
   assert.doesNotMatch(detail(), /Clock each/, 'the cells replace the setup table');
-  // A generator's Total says what it generates; it draws no peak load.
+  // A generator's Total says what it generates, and what its whole generators can; it draws
+  // nothing. This one is shaped as a plan before #1064 stored it, its last one underclocked.
   openCalculatedFactory(generator.id);
   assert.deepEqual(machineCells(), [
-    ['Total', '5', generator.machine + ' · generates ' + num(406.8) + ' MW'],
+    [
+      'Total',
+      '5',
+      generator.machine +
+        ' · generates ' +
+        num(406.8) +
+        ' MW, up to ' +
+        power(5 * -generator.power),
+    ],
     ['At 100%', '4', num(406.8 / 4.625) + ' MW each'],
     [
       'Adjustable',
@@ -1254,10 +1265,8 @@ test('a calculated card shows its main output, or a generator’s power, as the 
   const power = cardOf(`#main button.name[data-calc-factory="${generator.id}"]`);
   assert.equal(headline(power), num(406.8) + ' MW', 'a word unit keeps a no-break space');
   assert.equal(power.querySelector('.output span')!.textContent, 'MW');
-  assert.equal(
-    machinesLine(power),
-    `5 × ${generator.machine} · last at ${(62.5).toLocaleString()}%`,
-  );
+  // Generators are whole and run at 100% (#1064): they burn fuel only for the power drawn.
+  assert.equal(machinesLine(power), `5 × ${generator.machine}`);
   assert.equal(power.querySelector('.recipe'), null, 'nothing restates the power');
   // Above 1000 MW it is GW, with the unit still shown.
   generator.generationMW = 24882.66;

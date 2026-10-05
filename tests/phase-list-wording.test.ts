@@ -28,8 +28,9 @@ function onTickingClock<T>(step: number, body: () => T): T {
 
 test('the issue’s dropped amplification lists Phases 2, 3, 4 and 5', () => {
   // The issue's settings: whole machines, 106 somersloops for amplification and 13.3 Circuit
-  // Boards/min of production already run, with every amplified fit cut off.
-  const result = onTickingClock(100, () =>
+  // Boards/min of production already run, with every amplified fit cut off (a step of 40 since
+  // #1064, whose power model made the searches longer: at 100 Phase 3's own fit stops too).
+  const result = onTickingClock(40, () =>
     calculate({
       phase: '5',
       goal: 'balanced',

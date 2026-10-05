@@ -5,7 +5,9 @@
 // #984 in tests/fixtures/on-site-shares-2026-10-04.json). Likewise settings.onSite[group].ifBuilt
 // (#1038), a group's parts of rows the plan being recalculated lacked in a phase: a plan stored
 // before #1038 has none and recalculates exactly as it did (recorded on main before #1038 in
-// tests/fixtures/on-site-rates-2026-10-04.json).
+// tests/fixtures/on-site-rates-2026-10-04.json). #1064's power model changed every plan, so both
+// fixtures' rows were recorded again on it from the same settings, by the same steps as these
+// tests (which reproduced the earlier recordings exactly on main before #1064).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

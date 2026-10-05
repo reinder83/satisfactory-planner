@@ -35,6 +35,7 @@ const SHARED = [
   'browser-api.ts',
   'browser-store.ts',
   'handbook-migration.ts',
+  'power.ts',
   'preferences.ts',
   'progression.ts',
   'state.ts',

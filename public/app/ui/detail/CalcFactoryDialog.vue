@@ -26,6 +26,8 @@ import {
 import { machineCounts } from '../../views/factories.ts';
 import { inputText } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
+import { lineLoad } from '../../../power.ts';
+import type { CalcRow } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
 import DetailNote from './DetailNote.vue';
 import DialogFrame from './DialogFrame.vue';
@@ -36,6 +38,27 @@ import RecycleAdvice from './RecycleAdvice.vue';
 import { toggleCheck } from '../actions.ts';
 
 const props = defineProps<{ id: string }>();
+
+// What the line draws or gives, after its machine: in a plan made since #1064 (its stage has a
+// grid) a consumer at its clocked power, a Particle Accelerator, Converter or Quantum Encoder at
+// its peak and its average, and a generator line its output and its whole generators' capacity;
+// in an older plan its whole-machine peak or its output, as before.
+function loadText(row: CalcRow): string {
+  if (!calcStage()?.grid)
+    return row.peakMW > 0
+      ? ' · peak load ' + power(row.peakMW)
+      : row.generationMW > 0
+        ? ' · generates ' + power(row.generationMW)
+        : '';
+  const factor = calculated?.settings.powerFactor ?? 1,
+    { peak, average } = lineLoad(row);
+  if (row.power < 0)
+    return ` · generates ${power(row.generationMW)}, up to ${power(row.machines * -row.power)}`;
+  if (peak <= 0) return '';
+  return average < peak - 1e-6
+    ? ` · draws ${power(peak * factor)} at peak, ${power(average * factor)} on average`
+    : ' · draws ' + power(peak * factor);
+}
 
 const view = computed(() =>
   legacy(() => {
@@ -75,13 +98,7 @@ const view = computed(() =>
       // captions keep the output per machine and the calculated clock this table used to show.
       machines: {
         counts,
-        total:
-          row.machine +
-          (row.peakMW > 0
-            ? ' · peak load ' + power(row.peakMW)
-            : row.generationMW > 0
-              ? ' · generates ' + power(row.generationMW)
-              : ''),
+        total: row.machine + loadText(row),
         full: counts.full ? setup.fullOutput + ' each' : '',
         adjustable: counts.clock
           ? '≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput

@@ -16,6 +16,7 @@ import type {
   Progression,
   StageKey,
   StoredCalculatedPlan,
+  StoredStage,
 } from '../public/types/index.ts';
 
 // The numbers read as in en-US whatever this machine's locale is.
@@ -90,7 +91,9 @@ function generator(
 
 // A Phase 3 profile with `availableGW` of spare power whose `phase` has the given generator lines
 // and power figures in MW (as planner/stage.ts writes them: requiredMW, generationMW and
-// availableMW, new generation plus the spare power).
+// availableMW, new generation plus the spare power). The stage is one a release before #1064
+// stored, without a grid, so the step reads these figures (powerView in public/power.ts); a
+// plan with a grid is tested on real plans below.
 function planWith(
   phase: StageKey,
   availableGW: number,
@@ -98,10 +101,16 @@ function planWith(
   rows: CalcRow[],
   settings: Partial<StoredCalculatedPlan['settings']> = {},
 ): StoredCalculatedPlan {
-  const plan = calculate({ phase: '3', availablePowerGW: availableGW, ...settings });
+  const plan: StoredCalculatedPlan = calculate({
+    phase: '3',
+    availablePowerGW: availableGW,
+    ...settings,
+  });
   const generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
+  const stored: StoredStage = { ...plan.stages[phase] };
+  delete stored.grid;
   plan.stages[phase] = {
-    ...plan.stages[phase],
+    ...stored,
     rows,
     requiredMW,
     generationMW,
@@ -175,7 +184,8 @@ test('spare power plus new generation that falls short, or none at all', () => {
 
 // A real plan: 50 × the elevator costs at half the power consumption, nuclear set to recycle,
 // whole machines. Phase 4 needs more than the spare power; the planner builds whole uranium
-// plants for the rest, less than one plant's 2.5 GW over.
+// plants for the rest, less than one plant's 2.5 GW over. The figures are the stage's grid
+// (#1064), which every page reads: its need counts the miners and extractors too.
 test('a calculated plan: "needs X more", the new generation and the spare from whole plants', () => {
   const plan = calculate({
     phase: '3',
@@ -187,6 +197,7 @@ test('a calculated plan: "needs X more", the new generation and the spare from w
     recipes: 'all',
   });
   const stage = plan.stages['4'],
+    grid = stage.grid!,
     plants = stage.rows!.filter(row => row.generationMW > 0);
   assert.deepEqual(
     plants.map(row => row.id),
@@ -194,25 +205,26 @@ test('a calculated plan: "needs X more", the new generation and the spare from w
     'Phase 4 generates with uranium plants only',
   );
   const uranium = plants[0]!;
-  assert.equal(stage.generationMW, uranium.machines * 2500, 'whole plants at 2,500 MW each');
-  // A feasible stage has its power figures.
-  const requiredMW = stage.requiredMW!,
-    spare = stage.availableMW! - requiredMW;
+  assert.equal(grid.generationMW, uranium.machines * 2500, 'whole plants at 2,500 MW each');
+  assert.ok(grid.extractionMW > 0, 'the need counts the miners and extractors');
+  const requiredMW = grid.needMW,
+    spare = grid.availableMW - requiredMW;
   assert.ok(spare > 0 && spare < 2500, 'less than one plant over the need');
   assert.equal(
     review(plan, { ...OIL, [COAL]: true }, '4').body,
-    `You have 44.43 GW of spare power available. This phase needs ${gw(requiredMW - 44425)} more (${gw(requiredMW)} in all, with the 20% utility allowance): build its nuclear power, ${uranium.machines} × Uranium power (Nuclear Power Plant), which provides ${gw(stage.generationMW!)}, ${gw(spare)} spare from building whole plants. Unlock Nuclear Power first.` +
+    `You have 44.43 GW of spare power available. This phase needs ${gw(requiredMW - 44425)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its nuclear power, ${uranium.machines} × Uranium power (Nuclear Power Plant), which provides ${gw(grid.generationMW)}, ${gw(spare)} spare from building whole plants. Unlock Nuclear Power first.` +
       CHECK,
   );
   // Phase 3 runs on the spare power alone.
   assert.match(
     review(plan, { ...OIL, [COAL]: true }, '3').body,
-    /^You have 44\.43 GW of spare power available, which covers this phase's [\d.]+ GW \(with the 20% utility allowance\): nothing needs building for power in this phase\./,
+    /^You have 44\.43 GW of spare power available, which covers this phase's [\d.]+ GW \(with extraction and the 20% utility allowance\): nothing needs building for power in this phase\./,
   );
 });
 
 // Phase 5 under 'recycle' builds the uranium plants in blocks of the waste chain's period (#370),
-// so a block's whole plants can leave more over than one plant would.
+// so a block's whole plants can leave more over than one plant would. Phase 4's uranium plant is
+// kept (#1064), which the step says after the generator lines.
 test('a calculated Phase 5 that recycles: the spare from the waste chain period', () => {
   const plan = calculate({
     phase: '3',
@@ -220,27 +232,35 @@ test('a calculated Phase 5 that recycles: the spare from the waste chain period'
     wholeMachines: true,
     availablePowerGW: 20,
   });
-  const stage = plan.stages['5'];
+  const stage = plan.stages['5'],
+    grid = stage.grid!;
   assert.equal(stage.nuclearPeriod, 20);
-  const generators = stage.rows!.filter(row => row.generationMW > 0);
-  assert.ok(generators.every(row => row.machine === 'Nuclear Power Plant'));
-  const requiredMW = stage.requiredMW!,
-    spare = stage.availableMW! - requiredMW;
+  const nuclear = grid.generators.find(entry => entry.machine === 'Nuclear Power Plant')!;
+  assert.equal(nuclear.kept, plan.stages['4'].grid!.generators[0]!.machines);
+  const requiredMW = grid.needMW,
+    spare = grid.availableMW - requiredMW;
   assert.ok(spare > 2500, 'more than one plant over the need');
   const body = review(plan, {}, '5').body;
   assert.ok(
     body.startsWith(
-      `You have 20 GW of spare power available. This phase needs ${gw(requiredMW - 20000)} more (${gw(requiredMW)} in all, with the 20% utility allowance): build its nuclear power, `,
+      `You have 20 GW of spare power available. This phase needs ${gw(requiredMW - 20000)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its nuclear `,
     ),
     body,
   );
   assert.ok(
-    body.endsWith(
-      `, which provides ${gw(stage.generationMW!)}, ${gw(spare)} spare from building the uranium plants in multiples of 20, so every line of the waste chain runs whole. Unlock Nuclear Power first.` +
-        CHECK,
+    body.includes(
+      `(${nuclear.kept} of these Nuclear Power Plants ${nuclear.kept === 1 ? 'was' : 'were'} built in Phase 4)`,
     ),
     body,
   );
+  // The waste chain's period explains the spare; the unlocks the sources need follow it.
+  assert.ok(
+    body.includes(
+      `, which provides ${gw(grid.generationMW)}, ${gw(spare)} spare from building the uranium plants in multiples of 20, so every line of the waste chain runs whole. Unlock `,
+    ),
+    body,
+  );
+  assert.ok(body.endsWith(' Nuclear Power first.' + CHECK), body);
 });
 
 test('without spare power: a ticked source below the planned one is not advised', () => {
@@ -414,14 +434,19 @@ test('the build plan keeps every other step key in its place', () => {
 });
 
 // Phase 5's Alien Power Augmenters add their 500 MW each and a boost on installed and new
-// generation, which the plan counts into availableMW. The step splits availableMW as stageSupply
-// in app/build-status.ts does: spare power, what the augmenters add, and the new generation with
-// their boost, so the parts add up to what the plan was solved with (#1050 review).
+// generation. The step splits what the phase has as the stage's grid does (#1064): spare power,
+// what the augmenters add, and the whole generators with their boost, so the parts add up to
+// what the plan was sized with (#1050 review).
 const augmenterFigures = (plan: StoredCalculatedPlan) => {
-  const stage = plan.stages['5'];
-  const newMW = (stage.generationMW || 0) * (1 + (stage.boost || 0));
-  const spareMW = plan.settings.availablePowerGW * 1000;
-  return { stage, newMW, spareMW, augmenterMW: stage.availableMW! - newMW - spareMW };
+  const stage = plan.stages['5'],
+    grid = stage.grid!;
+  return {
+    stage,
+    grid,
+    newMW: grid.generationMW,
+    spareMW: grid.spareMW,
+    augmenterMW: grid.augmenterMW,
+  };
 };
 
 test('Phase 5 with augmenters that, with the spare power, cover the phase: nothing to build', () => {
@@ -432,13 +457,13 @@ test('Phase 5 with augmenters that, with the spare power, cover the phase: nothi
     installedPowerGW: 40,
     augmenters: 10,
   });
-  const { stage, newMW, augmenterMW } = augmenterFigures(plan);
+  const { stage, grid, newMW, augmenterMW } = augmenterFigures(plan);
   assert.equal(stage.augmenters, 10);
   assert.equal(newMW, 0, 'no generator lines');
   assert.equal(augmenterMW, 50000, '10 × 500 MW plus the boost on the 40 GW installed');
   assert.equal(
     review(plan, {}, '5').body,
-    `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(stage.requiredMW!)} (with the 20% utility allowance): nothing needs building for power in this phase.` +
+    `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(grid.needMW)} (with extraction and the 20% utility allowance): nothing needs building for power in this phase.` +
       CHECK,
   );
 });
@@ -450,15 +475,15 @@ test('Phase 5 with augmenters and new generation: the parts add up to the plan',
     installedPowerGW: 10,
     augmenters: 4,
   });
-  const { stage, newMW, spareMW, augmenterMW } = augmenterFigures(plan);
+  const { grid, newMW, spareMW, augmenterMW } = augmenterFigures(plan);
   assert.ok(newMW > 0 && augmenterMW > 0);
-  assert.ok(Math.abs(spareMW + augmenterMW + newMW - stage.availableMW!) < 1e-6);
-  const requiredMW = stage.requiredMW!,
-    leftMW = stage.availableMW! - requiredMW;
+  assert.ok(Math.abs(spareMW + augmenterMW + newMW - grid.availableMW) < 1e-6);
+  const requiredMW = grid.needMW,
+    leftMW = grid.availableMW - requiredMW;
   const body = review(plan, {}, '5').body;
   assert.ok(
     body.startsWith(
-      `You have 10 GW of spare power available, and your 4 augmenters add ${gw(augmenterMW)}. This phase needs ${gw(requiredMW - spareMW - augmenterMW)} more (${gw(requiredMW)} in all, with the 20% utility allowance): build its `,
+      `You have 10 GW of spare power available, and your 4 augmenters add ${gw(augmenterMW)}. This phase needs ${gw(requiredMW - spareMW - augmenterMW)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its `,
     ),
     body,
   );
@@ -478,5 +503,28 @@ test('Phase 5 with augmenters and no spare power: the augmenters are named on th
   assert.ok(augmenterMW > 0);
   assert.ok(
     review(plan, {}, '5').body.startsWith(`Your Alien Power Augmenters add ${gw(augmenterMW)}`),
+  );
+});
+
+// #1064: the step says why a phase has power left over and which generators it keeps. In a
+// whole-machine plan the fuel lines are set by whole production lines and their byproducts, and
+// can make more fuel than the phase needs; a kept building's generators count toward the lines.
+test('a whole-machine plan names the generators it keeps and the fuel its lines make over', () => {
+  const plan = calculate({
+    phase: '3',
+    wholeMachines: true,
+    availablePowerGW: 2,
+    installedPowerGW: 2,
+  });
+  const grid = plan.stages['5'].grid!;
+  const fuel = grid.generators.find(entry => entry.machine === 'Fuel Generator')!;
+  assert.ok(fuel.kept > 0 && fuel.machines >= fuel.kept);
+  const body = review(plan, { [PETROLEUM]: true }, '5').body;
+  assert.ok(body.includes(`(${fuel.kept} of these Fuel Generators were built in Phase 4)`), body);
+  assert.ok(
+    body.includes(
+      `, ${gw(grid.availableMW - grid.needMW)} spare because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much.`,
+    ),
+    body,
   );
 });

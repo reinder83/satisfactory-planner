@@ -592,10 +592,18 @@ test('the goals step and what Review says about each phase', () => {
   // The verdict comes right after the phase, so a phone shows it without scrolling (#661).
   assert.deepEqual(
     $$('table thead th').map(th => (th.textContent || '').trim()),
-    ['Phase', 'Budget', 'Delivery time', 'Buildings', 'New generation'],
+    ['Phase', 'Budget', 'Delivery time', 'Buildings', 'New generation', 'Power needed'],
   );
   assert.equal(firstRow[0], '1');
   assert.match(firstRow[1] ?? '', /^(Within entered limits|Needs adjustment|Planning draft)$/);
+  // The power each phase needs of what it has, as every page gives it (#1064): Phase 1 runs on
+  // biomass; from Phase 2 on the phase's whole generators cover its need.
+  assert.match(firstRow[5] ?? '', /^[\d.,]+ (MW|GW) from biomass$/);
+  const powerCells = $$('[data-review-power]').map(td => (td.textContent || '').trim());
+  assert.equal(powerCells.length, 5);
+  for (const cell of powerCells.slice(1))
+    assert.match(cell, /^[\d.,]+ (MW|GW) of [\d.,]+ (MW|GW)$/);
+  assert.equal($$('[data-review-power].warn').length, 0, 'no phase is short');
   wizardAt(5);
   assert.doesNotMatch(main(), /was /);
   // Review flags only the phases the profile plans.
@@ -1168,13 +1176,12 @@ function freshEstimate() {
   cancelEstimate(true);
   setEstimatePaused(false, null);
 }
-// The generated plan with Iron Ore at `share` of its budget in Phase 5, and enough power there
-// (the fixture's Phase 5 asks for more than it has, which the estimate warns about too).
+// The generated plan with Iron Ore at `share` of its budget in Phase 5. Its power is enough there:
+// the plan sizes its generators to its need (#1064, the stage's grid).
 function estimated(share: number) {
   const plan = structuredClone(generated());
   const last = plan.stages['5'];
   last.raw!['Iron Ore'] = plan.settings.limits['Iron Ore']! * share;
-  last.availableMW = (last.requiredMW ?? 0) + 100;
   return plan;
 }
 const previews = <B>(calls: [string, B][]) =>
@@ -1202,7 +1209,7 @@ test('Goals and Resources show a live estimate beside the form, the other steps 
   );
   assert.equal(
     text('[data-estimate-power]').trim(),
-    `${power(last.requiredMW)} of ${power(last.availableMW)}`,
+    `${power(last.grid!.needMW)} of ${power(last.grid!.availableMW)}`,
   );
   assert.ok(text('[data-estimate-tightest]').length > 0, 'the tightest resource is named');
   assert.equal($('[data-estimate-status]')!.getAttribute('aria-live'), 'polite');
@@ -1217,17 +1224,19 @@ test('a budget over 100% shows a warning in the estimate (SP-33)', async () => {
   assert.match(text('[data-estimate-tightest]'), /^ ?Iron Ore 125% Phase 5/);
   assert.ok($('[data-estimate-tightest]')!.classList.contains('warn'));
   assert.match(text('[data-estimate-warning]'), /Iron Ore is over its budget: 125% in Phase 5\./);
-  // Too little power at the last phase warns as well, as the plan's headroom notice would.
+  // Too little power at the last phase warns as well, as the plan's headroom notice would: here a
+  // grid with 1 GW less than the phase needs.
   freshEstimate();
-  const plan = generated(),
+  const plan = structuredClone(generated()),
     last = plan.stages['5'];
+  last.grid = { ...last.grid!, availableMW: last.grid!.needMW - 1000 };
   stubFetch({ '/api/preview': plan });
   wizardAt(3);
   await pause(30);
   assert.ok($('[data-estimate-power]')!.classList.contains('warn'));
   assert.ok(
     text('[data-estimate-warning]').includes(
-      `Phase 5 needs ${power(last.requiredMW)} of power; ${power(last.availableMW)} is available.`,
+      `Phase 5 needs ${power(last.grid.needMW)} of power; ${power(last.grid.availableMW)} is available.`,
     ),
   );
   // A phase that does not fit says so.

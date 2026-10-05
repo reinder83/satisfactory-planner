@@ -10,7 +10,7 @@
 //   help.ts        the wizard's and the guided start's help text
 //   guided.ts      the guided start's questions
 //   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
-//                  the Water Extractors a line's Water needs
+//                  the Water Extractors a line's Water needs, and the power extraction draws
 //   presets.ts     node counts prefilled from the world settings
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
@@ -45,17 +45,23 @@ export {
   tutorialKeys,
 } from './preferences/guided.ts';
 export {
+  DEFAULT_EXTRACTION,
   EXTRACTOR_CLOCK_DECIMALS,
   EXTRACTOR_MIN_RATE,
   EXTRACTOR_RATE_STEP,
   MINER_BASE,
+  MINER_MW,
   OIL_BASE,
+  OIL_EXTRACTOR_MW,
+  PRESSURIZER_MW,
   WATER_EXTRACTOR,
   WELL_BASE,
+  WELL_SATELLITES,
   blankCounts,
   blankExtraction,
   clockChoices,
   extractionLimits,
+  extractionMWPerUnit,
   extractorClocks,
   extractorMW,
   extractorOption,

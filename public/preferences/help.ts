@@ -54,7 +54,7 @@ export const helpText: Record<string, string> = {
   roundRates: 'Rounds elevator target rates; completion time may be slightly longer or shorter.',
   // The power allowance and drone fuel (fuels.ts).
   utilityPercent:
-    'Extra power above production demand for trains, stations, drone ports, miners and pumps. Default 20%. This is a percentage, not a fixed 20 GW; check actual peak load as transport expands.',
+    'Extra power above the production lines for trains, stations, drone ports and pumps. Miners and extractors are counted on their own. Default 20%. This is a percentage, not a fixed 20 GW; check actual peak load as transport expands.',
   droneFuel:
     'Dedicated fuel supply begins in Phase 4 after Tier 8 Aeronautical Engineering. Ionized fuel uses a battery bridge until Phase 5. Fuel rods stay outside general storage; plutonium needs a nuclear waste-processing chain.',
   droneFuelRate:

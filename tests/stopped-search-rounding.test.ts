@@ -175,19 +175,26 @@ test('only lines tied by a fluid are said to share one; the others were raised b
     warning,
     /Compacted Coal and Rocket Fuel kept being rounded up as the lines they feed were rounded, so they keep a fractional clock on the last machine\./,
   );
-  // Rubber and Plastic both make Heavy Oil Residue, which balances exactly: Rubber is still said
-  // to share a fluid, and Copper Ingot, at the top of the wire chain, is worded apart.
-  const tied = withStoppedPhase({ ...issue, multiplier: 3, amplifySloops: 106 }, 5);
+  // Rubber makes Heavy Oil Residue and Petroleum Coke takes it, which balances exactly: Rubber is
+  // still said to share a fluid, and Aluminum Ingot, raised by the lines it feeds, is worded
+  // apart. (The standard recipes at three times the costs showed this until #1064, whose power
+  // model changed that plan; every alternate at the issue's costs shows it now.)
+  const tied = withStoppedPhase({ ...issue, recipes: 'all', amplifySloops: 0 }, 5);
   const both = tied.warnings.find(line => line.startsWith('Phase 5: the whole-machine search'));
   assert.ok(both);
-  assert.match(both, /\. Rubber shares a fluid with another whole-machine line, so it keeps/);
-  assert.match(both, /\. [^.]*\bCopper Ingot kept being rounded up as the lines they feed/);
-  assert.doesNotMatch(both, /Copper Ingot[^.]*shares? a fluid/);
+  assert.match(
+    both,
+    /\. Rubber and [^.]+ share a fluid with another whole-machine line, so they keep/,
+  );
+  assert.match(both, /\. [^.]*\bAluminum Ingot[^.]* kept being rounded up as the lines they feed/);
+  assert.doesNotMatch(both, /Aluminum Ingot[^.]*shares? a fluid/);
   const rubber = tied.stages['5'].rows!.find(row => row.name === 'Rubber');
   assert.ok(rubber && rubber.outputs['Heavy Oil Residue'], 'Rubber makes Heavy Oil Residue');
   assert.ok(
-    tied.stages['5'].rows!.some(row => row.name === 'Plastic' && row.outputs['Heavy Oil Residue']),
-    'and so does Plastic',
+    tied.stages['5'].rows!.some(
+      row => row.name === 'Petroleum Coke' && row.inputs['Heavy Oil Residue'],
+    ),
+    'and Petroleum Coke takes it',
   );
 });
 

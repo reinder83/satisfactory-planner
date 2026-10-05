@@ -369,26 +369,27 @@ test('after group edits that change what a marking group asks for, the books sti
 });
 
 test("the issue's case: a group's own Iron Rod line sends the sink only the plan's surplus (#918)", () => {
-  // Seed 16: Group 2 marks Iron Rod and holds the central Rotor line; Group 0 marks Rotor. In
-  // Phase 2 Group 2's own Iron Rod line makes 150 for the 147 its group asks, and the plan sinks
-  // 15. After the recalculation half the Rotor line joins Group 0, so Group 2 asks only 117.
-  const { plan, groups: configured } = configuration(16);
+  // Seed 31 (seed 16 until #1064, whose power model changed the plan the seeds are drawn from):
+  // Group 0 marks Iron Rod and holds the central Rotor line. In Phase 2 Group 0's own Iron Rod
+  // line makes 240 for the 230 its group asks, and the plan sinks 15. After the recalculation half
+  // the Rotor line joins Group 1, so Group 0 asks only 190.
+  const { plan, groups: configured } = configuration(31);
   const stage = plan.stages['2'];
-  const ownLine = rowsOf(stage).find(row => row.id === 'Recipe_IronRod_C:fg-rand2')!;
-  assert.equal(ownLine.outputs['Iron Rod'], 150);
+  const ownLine = rowsOf(stage).find(row => row.id === 'Recipe_IronRod_C:fg-rand0')!;
+  assert.equal(ownLine.outputs['Iron Rod'], 240);
   assert.equal(stage.surplus?.['Iron Rod'], 15);
   const groups: FactoryGroups = {
     ...configured,
     assignments: {
       ...configured.assignments,
       Recipe_Rotor_C: [
-        { group: 'fg-rand2', rate: null },
         { group: 'fg-rand0', rate: null },
+        { group: 'fg-rand1', rate: null },
       ],
     },
   };
   const books = itemBooks(stage, groups);
-  assert.equal(books.local['Iron Rod']!.get('fg-rand2')!.asked, 117);
+  assert.equal(books.local['Iron Rod']!.get('fg-rand0')!.asked, 190);
   const links = groupLinks(stage, groups);
   const ironRod = (from: string | null, to: string) =>
     links
@@ -397,22 +398,22 @@ test("the issue's case: a group's own Iron Rod line sends the sink only the plan
       .filter(entry => entry.item === 'Iron Rod')
       .reduce((total, entry) => total + entry.rate, 0);
   assert.ok(ironRod(null, OUTSIDE.surplus) <= 15 + 1e-9, `${ironRod(null, OUTSIDE.surplus)} sunk`);
-  // Group 0 gets all the Iron Rod it asks for, part of it from Group 2's own line.
-  const asked = books.demand['Iron Rod']!.get('fg-rand0')!;
-  assert.ok(near(ironRod(null, 'fg-rand0'), asked), `${ironRod(null, 'fg-rand0')} of ${asked}`);
-  assert.ok(ironRod('fg-rand2', 'fg-rand0') > 0, 'Group 2 sends Group 0 Iron Rod');
+  // Group 1 gets all the Iron Rod it asks for, from Group 0's own line.
+  const asked = books.demand['Iron Rod']!.get('fg-rand1')!;
+  assert.ok(near(ironRod(null, 'fg-rand1'), asked), `${ironRod(null, 'fg-rand1')} of ${asked}`);
+  assert.ok(ironRod('fg-rand0', 'fg-rand1') > 0, 'Group 0 sends Group 1 Iron Rod');
   assert.deepEqual(bookProblems(stage, groups), []);
-  // The sink takes its 15 from the own line's excess of 33, and the other 18 are offered.
-  assert.ok(near(books.sunk['Iron Rod']!.get('fg-rand2')!, 15));
-  assert.ok(near(books.offered['Iron Rod']!.get('fg-rand2')!, 18));
+  // The sink takes its 15 from the own line's excess of 50, and the other 35 are offered.
+  assert.ok(near(books.sunk['Iron Rod']!.get('fg-rand0')!, 15));
+  assert.ok(near(books.offered['Iron Rod']!.get('fg-rand0')!, 35));
   // Every place's input rows add up, and the own line's output row too.
   for (const group of groups.groups)
     assert.deepEqual(flowProblems(stage, groups, group.id), [], group.id);
-  const flow = groupFlow(stage, groups, 'fg-rand2', belts)!;
+  const flow = groupFlow(stage, groups, 'fg-rand0', belts)!;
   const out = flow.lines
     .find(line => line.id === ownLine.id)!
     .outputs.find(row => row.item === 'Iron Rod')!;
-  assert.ok(near(sum(out.links), 150));
+  assert.ok(near(sum(out.links), 240));
   const toSink = out.links.filter(
     link => link.to.kind === 'place' && link.to.id === OUTSIDE.surplus,
   );
