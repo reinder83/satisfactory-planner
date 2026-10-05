@@ -16,8 +16,9 @@
 //   recipe access           -57%   (all alternates), and on a heavy plan it
 //                                  decides whether Phase 5 fits at all
 //   whole machines          -64%   (precise balancing instead; measured again for #1066:
-//                                  Phase 5 1,895 buildings and 65.6 GW whole, 669 and 32.2 GW
-//                                  exact, which the 'exact' question's lead words)
+//                                  Phase 5 1,893 buildings and 73.9 GW of power needed whole,
+//                                  688 and 23.6 GW exact, which the 'exact' question's lead
+//                                  words)
 //   storage supply          +56%   (everything, rather than construction)
 //
 // while eleven of the wizard's controls — world seed, mod notes, SAM
@@ -196,7 +197,7 @@ export const guidedQuestions: GuidedQuestion[] = [
     step: 3,
     short: 'Exactness',
     title: 'How exact should the build be?',
-    lead: 'Whole machines are easier to set up but build more. Measured on a default plan, Phase 5 takes nearly three times the buildings and twice the power with whole machines.',
+    lead: 'Whole machines are easier to set up but build more. Measured on a default plan, Phase 5 takes nearly three times the buildings and the power with whole machines.',
     options: [
       {
         value: 'whole',
