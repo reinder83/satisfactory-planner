@@ -150,7 +150,7 @@ function fluidWords(rate: number, sources: MiningSource[], clock: number): strin
         const option = miningAdvice(rate, sources, at);
         const words = option.short
           ? `the nodes give only ${miningNumber(rate - option.short)} m³/min`
-          : adviceWords(option, true);
+          : 'tap ' + adviceWords(option, true);
         return `at ${miningNumber(at * 100)}%: ${words}`;
       })
       .join('; ')

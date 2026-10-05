@@ -20,6 +20,10 @@
   mixed belts and says so under its badge.
   A Space Elevator part delivered in full (its saved count at the target, #1062) is dimmed on its
   link to the elevator and marked "delivered"; the link stays, as the plan has it.
+  Mining and belts per phase (#1065): a mined resource's card names the nodes the phase's draw
+  taps (stageMiningAdvice in public/mining.ts), and while the best belt or pipe mark's milestone is
+  not ticked a line under the intro says which one and the mark to plan with until then
+  (laneUnlockNote in flow.ts).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
