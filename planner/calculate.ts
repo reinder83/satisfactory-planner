@@ -15,7 +15,7 @@ import { draftStage } from './draft.ts';
 import { pullFinalPhaseForward, judgeAugmenterFuel } from './adjustments.ts';
 import { planWarnings } from './warnings.ts';
 import { stoppedSearch } from './rounding.ts';
-import { plannedSites, centralSettings, withinRates } from './on-site.ts';
+import { plannedSites, centralSettings, withinRates, withOverflow } from './on-site.ts';
 import { carryGenerators } from '../public/power.ts';
 
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
@@ -108,9 +108,13 @@ function solvePhases(config: CurrentSettings, onPhase?: (phase: number) => void)
 // that only stopped at a limit keeps the lines, through the fallbacks of the two-step fit.
 // A group's part of a row with a fixed-rate membership follows the row's total (#984), which
 // holds while the row makes at least its fixed rates: when a row makes less, the phase is
-// planned again as withinRates says.
+// planned again as withinRates says. A phase that sinks almost all a central line of an item made
+// on site makes is planned again with the groups' excess of it feeding the central demand, as
+// withOverflow says (#1063).
 function solvePhase(config: CurrentSettings, phase: number): RunResult {
-  return withinRates(config, phase, settings => solveSites(settings, phase));
+  return withOverflow(config, phase, routed =>
+    withinRates(routed, phase, settings => solveSites(settings, phase)),
+  );
 }
 // solvePhase's solve with the groups' own lines, or with every item made centrally.
 function solveSites(config: CurrentSettings, phase: number): RunResult {

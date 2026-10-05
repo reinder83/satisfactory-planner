@@ -147,6 +147,9 @@ export interface OnSiteGroup {
   // planner/on-site.ts); until then the row's share sizes the line, as before #1038. Absent in
   // plans made before #1038, whose planner never read it.
   ifBuilt?: Partial<Record<StageKey, Record<string, OnSiteRate>>>;
+  // Only inside the planner, never stored (settings() leaves it out): the items whose excess the
+  // group's own lines may send to the central balance (withOverflow in planner/on-site.ts, #1063).
+  overflow?: string[];
 }
 // A group's part of a row of total T (its primary output per minute, MW for a generator), as
 // rowShares gives it while the row makes at least what its fixed rates take: `rate` per minute

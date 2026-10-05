@@ -29,7 +29,7 @@ const caption = (output: FlowOutput) =>
       store: 'protected module',
       ship: output.shipSub || 'delivery',
       drone: 'protected supply contract',
-      sink: output.subTxt || 'whole-machine rounding surplus',
+      sink: output.subTxt || '',
       more: 'combined smaller destinations',
     }) as Record<FlowOutput['kind'], string>
   )[output.kind] || '';

@@ -173,26 +173,87 @@ export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRec
     routes,
     draws: siteDraws(pool, balances, follows),
     feeds: siteFeeds(pool, balances, routes),
-    overflows: balances.filter(balance => !exactBalance(balance.item)),
+    overflows: balances.filter(
+      ({ group, item }) =>
+        !exactBalance(item) && !!config.onSite?.[group]?.overflow?.includes(item),
+    ),
   };
 }
 
 // A group's own lines of a solid item it makes on site can make more than the group uses, because
-// whole machines round up. That excess used to have only the sink, so a central line still made
-// what the other consumers and storage asked for: one machine for 1/min, its other 89/min sunk
-// (#1063). So each such balance gets a route, `overflow:<item>@<group>`, that carries the group's
-// excess into the central balance, where it meets the central demand before a central line does:
-// the central line shrinks or is not built. The route costs a thousandth of a machine per item
-// (OVERFLOW_COST), so the search does not route for nothing, while carrying what one central
-// machine makes (a few hundred items/min) still costs less than that machine: it carries what
-// saves machines, and a plan does not build a bigger group line to feed the central demand. A plan
-// without whole machines, whose group lines make exactly what the group uses, leaves it empty.
-// The books need nothing new: what the group's lines make beyond the group's use and the plan's
+// whole machines round up, and that excess has only the sink. So a central line can still be
+// built for what the other consumers and storage ask, and sink almost all it makes: one Fused
+// Quickwire machine for 1/min of storage, its other 89/min sunk, beside a group line sinking 69/min
+// (#1063). withOverflow plans such a phase again with a route per group and item,
+// `overflow:<item>@<group>` (the group's `overflow`, which only the planner sets), that carries
+// the group's excess into the central balance, where it meets the central demand before a central
+// line does, so the central line shrinks or is not built. The route costs a thousandth of a
+// machine per item (OVERFLOW_COST), so the search does not route for nothing, while carrying what
+// one central machine makes (a few hundred items/min) still costs less than that machine. The
+// books need nothing new: what the group's lines make beyond the group's use and the plan's
 // surplus is `offered` (itemBooks in public/app/group-links.ts, #918), ordinary supply at the
 // group that the other places share. An item that balances exactly (a fluid) has no excess and
 // gets no route.
 export const OVERFLOW_COST = 0.001;
 export const overflowRoute = (item: string, group: string) => `overflow:${item}@${group}`;
+// How much of what the central lines of an item make the plan must sink before withOverflow
+// tries the routes: three quarters, "almost all" (#1063's central lines sank 89 of 90/min and
+// 57.5 of 67.5/min).
+const ALMOST_ALL_SUNK = 0.75;
+// A phase planned by `solve` with `config`, and planned again with the groups' excess routed to
+// the central balance (overflowRoute) when the first plan sinks almost all that the central lines
+// of an item made on site make (sunkCentrally). The second plan stands only when it fits as the
+// first did (no fallback the first did not need) and builds fewer machines, in no more time; any
+// other phase is the first plan, exactly as before #1063. A plan without whole machines makes
+// exactly what each group uses, so it is never planned again.
+export function withOverflow(
+  config: CurrentSettings,
+  phase: number,
+  solve: (settings: CurrentSettings) => RunResult,
+): RunResult {
+  const first = solve(config);
+  if (!first.feasible || first.onSiteDropped || !config.wholeMachines) return first;
+  const items = sunkCentrally(config, first);
+  if (!items.size) return first;
+  const routed = solve(withOverflowItems(config, items));
+  return routed.feasible &&
+    !routed.onSiteDropped &&
+    !fallsBack(routed, first) &&
+    buildings(routed) < buildings(first) &&
+    routed.hours <= first.hours + 1e-9
+    ? routed
+    : first;
+}
+const buildings = (plan: Solved) => plan.rows.reduce((total, row) => total + row.machines, 0);
+// The solid items groups make on site in `plan` of which the plan sinks at least ALMOST_ALL_SUNK
+// of what the central lines making them as their main product make.
+function sunkCentrally(config: CurrentSettings, plan: Solved): Set<string> {
+  const items = new Set<string>();
+  for (const row of plan.rows) {
+    if (!row.onSite) continue;
+    const marked = config.onSite?.[row.onSite.group]?.items || [];
+    for (const item of Object.keys(row.outputs))
+      if (marked.includes(item) && !exactBalance(item)) items.add(item);
+  }
+  for (const item of items) {
+    const central = plan.rows
+      .filter(row => !row.onSite && primaryOutput(row) === item)
+      .reduce((total, row) => total + (row.outputs[item] || 0), 0);
+    if (!(central > 0 && (plan.surplus[item] || 0) >= ALMOST_ALL_SUNK * central))
+      items.delete(item);
+  }
+  return items;
+}
+// `config` with each group that makes one of `items` on site allowed to route its excess of it to
+// the central balance (OnSiteGroup.overflow).
+function withOverflowItems(config: CurrentSettings, items: ReadonlySet<string>): CurrentSettings {
+  const onSite: NonNullable<CurrentSettings['onSite']> = {};
+  for (const [group, entry] of Object.entries(config.onSite || {})) {
+    const overflow = entry.items.filter(item => items.has(item));
+    onSite[group] = overflow.length ? { ...entry, overflow } : entry;
+  }
+  return { ...config, onSite };
+}
 
 // The central byproduct of an item a group makes on site that balances exactly (a fluid), as
 // buildModel offers it to the groups' balances (#1012, the owner's decision there): a recipe that

@@ -380,7 +380,10 @@ function addSiteFeeds(model: LpModel, feeds: SiteFeed[]) {
 // (#1063, overflowRoute in on-site.ts): each 'overflow:<item>@<group>' takes from the group's
 // balance what it gives the central one, at a small cost, so it carries only what saves a central
 // machine.
-function addSiteOverflows(model: LpModel, overflows: { item: string; group: string; name: string }[]) {
+function addSiteOverflows(
+  model: LpModel,
+  overflows: { item: string; group: string; name: string }[],
+) {
   for (const { item, group, name } of overflows)
     model.variables[overflowRoute(item, group)] = {
       cost: OVERFLOW_COST,
