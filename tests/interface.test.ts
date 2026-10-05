@@ -31,6 +31,7 @@ import {
   knownWorld,
   presetPurities,
   uniformPurities,
+  waterExtractors,
 } from '../public/preferences.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -128,6 +129,8 @@ function ui() {
     knownWorld,
     presetPurities,
     uniformPurities,
+    // ADA's Water count (#1024), for a plan whose phase extracts Water.
+    waterExtractors,
   });
   vm.runInContext(source, context);
   context.catalogData = catalog();

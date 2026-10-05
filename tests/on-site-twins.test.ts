@@ -292,8 +292,10 @@ const builtParts = (plan: CurrentCalculatedPlan, phase: StageKey, stage: StoredS
 // books give (seeds 44, 115, 152 and 530, Phase 2 to 5), offered the rest (seeds 346, 421, 504 and
 // 596, Phase 1 to 4) or made less (seed 247, Phase 1), as seed 16 offered 10.5 Steel Ingot/min in
 // Phase 5 and seed 10's lines made 7.8 of the 19.65 Steel Beam/min the books gave fg-twin2 there.
+// #1064's power model changed the plans these seeds draw: seeds 65, 84, 199 and 316 are added for
+// the most #1038 cases among seeds 41 to 600 on its plans (4, 3, 4 and 4 such parts built).
 const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571, 590];
-const IF_BUILT_SEEDS = [44, 115, 152, 247, 346, 421, 504, 530, 596];
+const IF_BUILT_SEEDS = [44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316];
 const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS, ...IF_BUILT_SEEDS];
 
 test('right after a recalculation with amplification on, each own line matches the books (#904)', () => {
@@ -371,10 +373,11 @@ test("#1042's example: the plan kept was settled at its own totals, so R1's line
   assert.ok(own && Math.abs(own.asked - 46.4) < 1e-6, `R1 asks ${own?.asked}`);
   assert.equal(own.made, 50);
   assert.ok(row(stage, 'Recipe_CircuitBoard_C'), 'the Circuit Board line');
-  // Phase 4 builds the Circuit Board line, which the plan being recalculated lacks there, and R1's
-  // fixed rate counts there too (#1038): every own line matches the books.
+  // Phase 4 builds the Circuit Board line, and R1's fixed rate counts there too: every own line
+  // matches the books. (Until #1064 the plan being recalculated lacked the line in Phase 4, a case
+  // of #1038; its power model changed that plan, and tests/on-site-fixed-rates.test.ts and the
+  // property check above keep the case.)
   assert.ok(row(plan.stages['4'], 'Recipe_CircuitBoard_C'), 'the Circuit Board line in Phase 4');
-  assert.equal(row(before.stages['4'], 'Recipe_CircuitBoard_C'), undefined);
   const problems: string[] = [];
   for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][])
     problems.push(...lineProblems(stage, groups, `phase ${phase}`, { count: 0 }));

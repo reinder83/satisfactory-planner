@@ -88,8 +88,9 @@ test('Phase 5 recycling rounds the uranium plants to the chain period and the wa
   assert.ok(!stage.nuclearFractional);
   const count = uranium(stage);
   assert.ok(whole(count / 20), `${count} uranium plants is a multiple of 20`);
-  // The exact solve needs about 112.7 plants; the next multiple of 20 is 120.
-  assert.equal(Math.round(count), 120);
+  // The exact solve needs about 131 plants (with the miners' and extractors' power, #1064); the
+  // next multiple of 20 is 140.
+  assert.equal(Math.round(count), 140);
   for (const name of WASTE_CHAIN) {
     const chainRow = row(stage, name);
     assert.ok(whole(chainRow.equivalent), `${name}: ${chainRow.equivalent} is whole`);
@@ -133,18 +134,19 @@ test('the sink strategy and Phase 4 recycling give a whole uranium plant count',
 });
 
 test('whole nuclear plants fall back to a fractional count when they do not fit the budgets', () => {
-  // About 1,559 uranium/min fits the exact 116.9 plants; 120 plants need 1,600.
+  // About 1,828 uranium/min fits the exact 137.1 plants; 140 plants need 1,867 (#1064 counts the
+  // miners' and extractors' power, so the plan needs more plants than it did).
   const plan = calculate({
     ...recycle,
     mainPower: 'nuclear',
-    limits: { ...PURE_LIMITS, Uranium: 1570 },
+    limits: { ...PURE_LIMITS, Uranium: 1850 },
   });
   const stage = plan.stages[5];
   assert.equal(stage.feasible, true);
   assert.equal(stage.nuclearFractional, true);
   assert.equal(stage.nuclearPeriod, undefined);
   assert.ok(!whole(uranium(stage)), `${uranium(stage)} stays fractional`);
-  assert.ok(stage.raw!.Uranium! <= 1570.01);
+  assert.ok(stage.raw!.Uranium! <= 1850.01);
   assert.ok(
     plan.warnings.some(warning =>
       warning.startsWith(

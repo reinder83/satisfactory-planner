@@ -33,7 +33,9 @@ const settings = {
 };
 
 test('a dropped amplification says the search stopped, not that a time limit ran out', () => {
-  const result = onTickingClock(100, () => calculate({ ...settings, amplifySloops: 106 }));
+  // A step of 40 since #1064, whose power model made the searches longer: at 100 the
+  // unamplified fit stops too.
+  const result = onTickingClock(40, () => calculate({ ...settings, amplifySloops: 106 }));
   assert.equal(result.stages[3].amplificationDropped, true, 'the amplified searches stopped');
   const warning = result.warnings.find(text => /could not fit production amplification/.test(text));
   assert.ok(warning, 'the plan warns that amplification was dropped');

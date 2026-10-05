@@ -71,11 +71,11 @@ test('ADA’s power remark sets the draw against everything the plan counts on',
     ).text;
   assert.equal(
     text({ generation: '232,27 MW' }, 'Phase 2'),
-    '169,73 MW of whole-building power headroom is still unaccounted for: a 402 MW draw against 232,27 MW of planned generation and the 0 MW you listed as spare. Unpowered machines are simply very expensive furniture. Build generation beyond what the plan lists.',
+    '169,73 MW of power headroom is still unaccounted for: a 402 MW draw against 232,27 MW of planned generation and the 0 MW you listed as spare. Unpowered machines are simply very expensive furniture. Build generation beyond what the plan lists.',
   );
   assert.equal(
     text({ required: '129,6 MW', spare: '100 MW', headroom: '29,6 MW', biomass: true }, 'Phase 1'),
-    '29,6 MW of whole-building power headroom is still unaccounted for: a 129,6 MW draw against the 100 MW you listed as spare. Unpowered machines are simply very expensive furniture. Phase 1 plans no generators: burn biomass, or bring existing generation.',
+    '29,6 MW of power headroom is still unaccounted for: a 129,6 MW draw against the 100 MW you listed as spare. Unpowered machines are simply very expensive furniture. Phase 1 plans no generators: burn biomass, or bring existing generation.',
   );
   // A later stage that builds no generators of its own.
   assert.match(

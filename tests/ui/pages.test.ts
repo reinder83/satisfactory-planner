@@ -1036,14 +1036,21 @@ test('the calculated resources page shows every budget with its icon and what is
   for (const row of rows.slice(1))
     assert.ok(!row.querySelectorAll('td')[3]!.classList.contains('warn'), 'the others fit');
   // One power headroom bar instead of the tiles (SP-29); augmenters only when the plan has them.
+  // Its parts are the plan's own power model (#1064).
   assert.equal($$('#main .stat').length, 0);
   assert.deepEqual(
     $$('#main [data-power-part] .eyebrow').map(eyebrow => eyebrow.textContent),
-    ['Whole-machine peak', 'Utility allowance', 'New generation', 'Existing spare power'],
+    [
+      'Production lines',
+      'Utility allowance',
+      'Miners and extractors',
+      'Generators',
+      'Existing spare power',
+    ],
   );
   assert.equal(
     $('#main [data-power-part="utility"] small')!.textContent,
-    '20% for transport and utilities; verify actual load',
+    '20% of the production lines for transport and utilities; verify actual load',
   );
   assert.match($('#main .backup-grid')!.textContent, /No raw-resource conversion required\./);
   assert.match($('#main .backup-grid')!.textContent, /None credited in this phase\./);
@@ -1237,8 +1244,10 @@ test('a resource counts as tight above 90% of its budget and over above 100%', (
 });
 
 test('the calculated resources page lists somersloops, augmenters, conversions and credits', () => {
-  const plan = generated();
+  const plan: StoredCalculatedPlan = generated();
   const stage = plan.stages['3'];
+  // The stage as a release before #1064 stored it: its own figures, no grid.
+  delete stage.grid;
   Object.assign(stage, {
     feasible: false,
     reason: evil,
@@ -1284,8 +1293,11 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
 // MW below 1,000 and GW above; a shortfall says so in red.
 test('the calculated resources page draws one power headroom bar (SP-29)', () => {
   const plain = (text: string) => text.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
-  const plan = generated();
+  const plan: StoredCalculatedPlan = generated();
   const stage = plan.stages['3'];
+  // The stage as a release before #1064 stored it: its own figures, no grid. The plan's grid is
+  // drawn the same way (the next test).
+  delete stage.grid;
   Object.assign(stage, { peakMW: 2000, requiredMW: 2400, generationMW: 3000, augmenters: 0 });
   plan.settings.availablePowerGW = 0.2;
   openCalculatedResources(plan);
@@ -1331,6 +1343,73 @@ test('the calculated resources page draws one power headroom bar (SP-29)', () =>
   );
   assert.ok($('#main [data-power-bar="supply"] .seg-short'), 'the gap is drawn');
   assert.match($('#main [role="img"]')!.getAttribute('aria-label')!, /^Short by /);
+});
+
+// #1064: a plan made since then draws its grid: the production lines at their clocked power, the
+// allowance on them and the miners and extractors, against its whole generators (and which of
+// them the phase before built) and the spare power; a variable-power machine's peak and average.
+test('the calculated resources page draws the plan’s own power model (#1064)', () => {
+  const plain = (text: string) => text.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  const plan = generated();
+  const stage = plan.stages['3'];
+  stage.grid = {
+    ...stage.grid!,
+    loadMW: 2000,
+    variablePeakMW: 1500,
+    variableAverageMW: 1000,
+    allowanceMW: 400,
+    extractionMW: 600,
+    extractionAt: { mark: 3, clock: 2.5 },
+    needMW: 3000,
+    generators: [{ machine: 'Fuel Generator', machines: 14, own: 14, kept: 5, unitMW: 250 }],
+    generationMW: 3500,
+    augmenterMW: 0,
+    spareMW: 500,
+    availableMW: 4000,
+  };
+  stage.rows = [
+    ...stage.rows!,
+    {
+      ...stage.rows![0]!,
+      id: 'Recipe_Diamond_C',
+      machine: 'Particle Accelerator',
+      power: 750,
+      minPower: 250,
+    },
+  ];
+  plan.settings.availablePowerGW = 0.5;
+  openCalculatedResources(plan);
+  const bar = $('#main [data-power-headroom]')!;
+  assert.equal(
+    plain(bar.querySelector('[data-power-headline]')!.textContent!),
+    `25% headroom ${power(3000)} needed of ${power(4000)} available`,
+  );
+  const part = (key: string) => $(`#main [data-power-part="${key}"]`)!;
+  assert.equal(part('load').querySelector('b')!.textContent, power(2000));
+  assert.ok(
+    part('load')
+      .querySelector('small')!
+      .textContent!.endsWith(
+        `· Particle Accelerators at their ${power(1500)} peak (${power(1000)} on average)`,
+      ),
+    'the variable-power machines at their peak, and on average',
+  );
+  assert.equal(part('extraction').querySelector('b')!.textContent, '600 MW');
+  assert.equal(
+    part('extraction').querySelector('small')!.textContent,
+    'Miner Mk.3 at 250% on normal nodes; oil, water and resource-well extractors at the same clock',
+  );
+  assert.equal(part('generation').querySelector('b')!.textContent, power(3500));
+  assert.equal(
+    part('generation').querySelector('small')!.textContent,
+    '14 Fuel Generators, whole, at 100% · 5 Fuel Generators kept from the phase before',
+  );
+  assert.equal(part('spare').querySelector('b')!.textContent, '500 MW');
+  assert.equal(
+    bar.querySelector('[role="img"]')!.getAttribute('aria-label'),
+    `25% headroom. Needed: ${power(3000)} (${power(2000)} production lines + 400 MW utility allowance + 600 MW miners and extractors). Available: ${power(4000)} (${power(3500)} generators + 500 MW existing spare power).`,
+  );
+  assert.equal($('#main [data-power-short]'), null, 'no notice asks for more');
 });
 
 // Exactly what a profile calculated by an earlier release looks like: no existingSupply in

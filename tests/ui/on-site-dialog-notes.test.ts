@@ -54,7 +54,9 @@ beforeEach(() => page());
 
 // #1001: Group 2 builds Computer and marks Plastic, so the recalculation gives it a Plastic line of
 // its own, "Plastic for Group 2", which also makes Heavy Oil Residue. Group 1 builds Rubber, which
-// makes Heavy Oil Residue too. Group 2 has no other Plastic line.
+// makes Heavy Oil Residue too. Group 2 has no other Plastic line. On coal power: since #1064 the
+// default Phase 3 burns more Fuel, whose Polymer Resin a Residual Plastic line then takes, and the
+// recalculation gives Group 2 a copy of that recipe instead, which has no byproduct.
 const G1 = 'fg-rand1',
   G2 = 'fg-rand2';
 const plasticGroups: FactoryGroups = {
@@ -68,7 +70,11 @@ const plasticGroups: FactoryGroups = {
   },
   local: { [G2]: ['Plastic'] },
 };
-const plasticPlan = generatedWith({ ...BASE, onSite: onSiteSettings(plain, plasticGroups) });
+const COAL = { ...BASE, mainPower: 'coal' };
+const plasticPlan = generatedWith({
+  ...COAL,
+  onSite: onSiteSettings(generatedWith(COAL), plasticGroups),
+});
 const OWN_PLASTIC = `Recipe_Plastic_C:${G2}`;
 
 test('an own line whose recipe has a byproduct does not claim the factory’s other lines (#1001)', () => {
@@ -99,8 +105,8 @@ test('an own line whose recipe has a byproduct does not claim the factory’s ot
 });
 
 test('a line sharing a byproduct with a group’s copy of its recipe says "other lines", not "other recipes" (#1002)', () => {
-  // The central Plastic line shares Plastic with Residual Plastic, another recipe, and Heavy Oil
-  // Residue with Rubber and "Plastic for Group 2", a copy of its own recipe.
+  // The central Plastic line shares Plastic and Heavy Oil Residue with "Plastic for Group 2", a
+  // copy of its own recipe, and Heavy Oil Residue with Rubber.
   const { model, note } = dialogOf(plasticPlan, plasticGroups, 'Recipe_Plastic_C');
   assert.deepEqual(model.bankNote, { shared: true, sameRecipe: true, lessOnSite: true });
   assert.equal(

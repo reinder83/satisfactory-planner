@@ -323,7 +323,9 @@ const augmenterCaption = (stage: StoredStage) => {
 // A plan made before #1064: its own figures, read as the pages read them then. The need is the
 // stage's requiredMW (whole machines at full power plus the allowance), what it has its new
 // generation (with the boost), what the augmenters add and the entered spare power; the bar
-// splits it as it did (the augmenter part also holding the boost on new generation).
+// splits it as it did (the augmenter part also holding the boost on new generation). What is
+// missing is the need less what it has, which is the stage's additionalHeadroomMW, as the planner
+// computed it then.
 function storedView(stage: StoredStage, settings: ViewSettings): PowerView {
   const peak = stage.peakMW || 0,
     need = Math.max(peak, stage.requiredMW ?? peak),
@@ -335,7 +337,7 @@ function storedView(stage: StoredStage, settings: ViewSettings): PowerView {
     // spare power, so it also holds the boost on new generation.
     barBoost = augmenters > 0 ? Math.max(0, (stage.availableMW ?? 0) - generation - spare) : 0,
     available = generation + barBoost + spare;
-  const short = stage.additionalHeadroomMW ?? Math.max(0, need - available);
+  const short = Math.max(0, need - available);
   const sloops = stage.sloopsUsed ?? 0;
   return {
     modelled: false,

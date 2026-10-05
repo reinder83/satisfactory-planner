@@ -265,14 +265,14 @@ const waterOf = (plan: Plan, phase: '2' | '4' | '5', name: string) => {
 };
 
 test('only the Water no byproduct covers is extracted, and counted in extractors', () => {
-  // Alumina Solution takes 381.81 m³/min, of which byproducts cover 116.27 + 7.5.
+  // Alumina Solution takes 381.55 m³/min, of which byproducts cover 116.18 + 7.5.
   const solution = waterOf(alternates, '4', 'Alumina Solution')!;
-  assert.match(plainText(adviceSentence(solution)), /; extract the other 258\.04 m³\.$/);
+  assert.match(plainText(adviceSentence(solution)), /; extract the other 257\.87 m³\.$/);
   assert.equal(
     plainText(solution.extractors!),
-    'Water Extractors at 100%: 2 at 100% + 1 at 15.03% (3 extractors, 41.63 MW). Or up to 250% with Power Shards: 1 at 215.03% (1 extractor, 3 Power Shards, 55.03 MW).',
+    'Water Extractors at 100%: 2 at 100% + 1 at 14.89% (3 extractors, 41.61 MW). Or up to 250% with Power Shards: 1 at 214.89% (1 extractor, 3 Power Shards, 54.98 MW).',
   );
-  assert.notEqual(solution.extractors, extractorAdvice(381.81), 'not the whole input');
+  assert.notEqual(solution.extractors, extractorAdvice(381.55), 'not the whole input');
   // Its own byproduct covers most of Distilled Silica's (a milestone recipe, named without
   // "Alternate: " since #1044).
   const distilled = waterOf(alternates, '4', 'Distilled Silica')!;
@@ -302,7 +302,7 @@ test('Water no byproduct covers is extracted in full, coal generators included',
   const coal = waterOf(standard, '2', 'Coal power')!;
   assert.equal(
     plainText(adviceText([coal])),
-    'Water 139.36 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100%: 1 at 100% + 1 at 16.13% (2 extractors, 21.79 MW). Or up to 250% with Power Shards: 1 at 116.13% (1 extractor, 1 Power Shard, 24.37 MW).',
+    'Water 232.31 m³/min. No byproduct covers it: extract all of it. Water Extractors at 100%: 1 at 100% + 1 at 93.59% (2 extractors, 38.32 MW). Or up to 250% with Power Shards: 1 at 193.59% (1 extractor, 2 Power Shards, 47.89 MW).',
   );
   // A line taking no Water gets no Water paragraph.
   assert.equal(waterOf(alternates, '4', 'Aluminum Scrap'), undefined);

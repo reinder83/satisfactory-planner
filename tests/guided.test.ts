@@ -72,6 +72,7 @@ import {
   presetPurities,
   uniformPurities,
   richShape,
+  waterExtractors,
 } from '../public/preferences.ts';
 
 const source = appSource();
@@ -167,6 +168,8 @@ function ui() {
     presetPurities,
     uniformPurities,
     richShape,
+    // ADA's Water count (#1024), for a plan whose phase extracts Water.
+    waterExtractors,
   });
   vm.runInContext(source, context);
   context.catalogData = catalog();

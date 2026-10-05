@@ -10,17 +10,23 @@ const modules = fs
   .filter(name => name.endsWith('.ts'));
 
 // rawResources was added after the split, as the raw-resource list the planner and the interface
-// share (#921), and the Water Extractor figures and counts for the byproduct advice (#1024).
+// share (#921), the Water Extractor figures and counts for the byproduct advice (#1024), and the
+// extraction power the plan's power model charges (#1064).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
+    'DEFAULT_EXTRACTION',
     'EXTRACTOR_CLOCK_DECIMALS',
     'EXTRACTOR_MIN_RATE',
     'EXTRACTOR_RATE_STEP',
     'GUIDED_TOPUP_RATE',
     'MINER_BASE',
+    'MINER_MW',
     'OIL_BASE',
+    'OIL_EXTRACTOR_MW',
+    'PRESSURIZER_MW',
     'WATER_EXTRACTOR',
     'WELL_BASE',
+    'WELL_SATELLITES',
     'blankCounts',
     'blankExtraction',
     'clockChoices',
@@ -30,6 +36,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'droneSupply',
     'elevatorParts',
     'extractionLimits',
+    'extractionMWPerUnit',
     'extractorClocks',
     'extractorMW',
     'extractorOption',

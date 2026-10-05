@@ -58,6 +58,7 @@
    "calc-3-Recipe_ModularFrameHeavy_C",
    "calc-3-Recipe_Plastic_C",
    "calc-3-Recipe_LiquidFuel_C",
+   "calc-3-Recipe_ResidualPlastic_C",
    "calc-3-Recipe_Rubber_C",
    "calc-3-Recipe_ResidualFuel_C",
    "calc-3-Recipe_CircuitBoard_C",
@@ -189,6 +190,7 @@
    "calc-5-Recipe_Alternate_EnrichedCoal_C",
    "calc-5-Recipe_Alternate_Turbofuel_C",
    "calc-5-Recipe_RocketFuel_C",
+   "calc-5-Recipe_ResidualPlastic_C",
    "calc-5-Recipe_CrystalOscillator_C",
    "calc-5-Recipe_CircuitBoard_C",
    "calc-5-Recipe_Computer_C",
@@ -229,8 +231,7 @@
    "calc-5-Recipe_DarkMatter_C",
    "calc-5-Recipe_SingularityCell_C",
    "calc-5-Recipe_SpaceElevatorPart_11_C",
-   "calc-5-storage",
-   "retire-5"
+   "calc-5-storage"
   ],
   "post": [
    "startup-5-power-review",
@@ -271,6 +272,7 @@
    "calc-5-Recipe_Alternate_EnrichedCoal_C",
    "calc-5-Recipe_Alternate_Turbofuel_C",
    "calc-5-Recipe_RocketFuel_C",
+   "calc-5-Recipe_ResidualPlastic_C",
    "calc-5-Recipe_CrystalOscillator_C",
    "calc-5-Recipe_CircuitBoard_C",
    "calc-5-Recipe_Computer_C",
@@ -311,8 +313,7 @@
    "calc-5-Recipe_DarkMatter_C",
    "calc-5-Recipe_SingularityCell_C",
    "calc-5-Recipe_SpaceElevatorPart_11_C",
-   "calc-5-storage",
-   "retire-5"
+   "calc-5-storage"
   ]
  },
  "no groups": {
@@ -362,8 +363,9 @@
    "calc-3-Recipe_IngotCopper_C",
    "calc-3-Recipe_CopperSheet_C",
    "calc-3-Recipe_Plastic_C",
-   "calc-3-Recipe_CircuitBoard_C",
    "calc-3-Recipe_LiquidFuel_C",
+   "calc-3-Recipe_ResidualPlastic_C",
+   "calc-3-Recipe_CircuitBoard_C",
    "calc-3-Recipe_Rubber_C",
    "calc-3-Recipe_ResidualFuel_C",
    "calc-3-Recipe_IngotSteel_C",
@@ -501,6 +503,7 @@
    "calc-5-Recipe_SuperpositionOscillator_C",
    "calc-5-Recipe_TimeCrystal_C",
    "calc-5-Recipe_CopperSheet_C",
+   "calc-5-Recipe_ResidualPlastic_C",
    "calc-5-Recipe_CircuitBoard_C",
    "calc-5-Recipe_Computer_C",
    "calc-5-Recipe_IngotCaterium_C",
@@ -545,8 +548,7 @@
    "calc-5-Recipe_SingularityCell_C",
    "calc-5-Recipe_SpaceElevatorPart_11_C",
    "calc-5-power-rocket-fuel",
-   "calc-5-storage",
-   "retire-5"
+   "calc-5-storage"
   ],
   "post": [
    "startup-5-power-review",
@@ -583,6 +585,7 @@
    "calc-5-Recipe_SuperpositionOscillator_C",
    "calc-5-Recipe_TimeCrystal_C",
    "calc-5-Recipe_CopperSheet_C",
+   "calc-5-Recipe_ResidualPlastic_C",
    "calc-5-Recipe_CircuitBoard_C",
    "calc-5-Recipe_Computer_C",
    "calc-5-Recipe_IngotCaterium_C",
@@ -627,8 +630,7 @@
    "calc-5-Recipe_SingularityCell_C",
    "calc-5-Recipe_SpaceElevatorPart_11_C",
    "calc-5-power-rocket-fuel",
-   "calc-5-storage",
-   "retire-5"
+   "calc-5-storage"
   ]
  }
 }

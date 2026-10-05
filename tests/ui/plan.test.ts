@@ -3,7 +3,9 @@
 // handbook (#387, whose guide keeps the handbook's step ids), mounted through render() the way
 // the app mounts them, in happy-dom.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { RESOLVE_WARNING } from '../../public/handbook-migration.ts';
+import { power } from '../../public/app/wizard/fields.ts';
 import { nextTick } from 'vue';
 import { beforeEach, test, vi } from 'vitest';
 import {
@@ -700,7 +702,11 @@ test('a calculated plan saved before existing production existed still renders',
 // #331: the headroom notice ended on "Phase 1 needs biomass or existing generation." on every
 // phase. It now names the phase shown and, from Phase 2 on, the generators its plan builds.
 test('the power headroom notice speaks of the phase shown, on every phase', () => {
-  const plan = structuredClone(generated);
+  // A plan the first release stored (no grid, #1064), which reads its own figures: every phase
+  // has headroom to allow there.
+  const plan: StoredCalculatedPlan = JSON.parse(
+    fs.readFileSync('tests/fixtures/calculated-plan-2026-09-12.json', 'utf8'),
+  );
   // A profile that starts in Phase 1, so the picker offers every phase.
   plan.settings.phase = '1';
   const headroom = () =>
@@ -736,6 +742,31 @@ test('the power headroom notice speaks of the phase shown, on every phase', () =
   go('plan');
   render();
   assert.equal(headroom(), undefined);
+});
+
+// #1064: a plan made since then sizes its generators to its need (its grid), so from Phase 2 on
+// no notice asks for more; Phase 1 runs on biomass, and its notice says what the phase needs.
+test('a plan with its own power model asks for more power only in Phase 1', () => {
+  const plan = structuredClone(generated);
+  plan.settings.phase = '1';
+  const notice = () => $('#main [data-power-short]')?.textContent!.replace(/\s+/g, ' ').trim();
+  for (const phase of ['1', '2', '3', '4', '5', 'post'] as const) {
+    const grid = plan.stages[phase === 'post' ? '5' : phase]!.grid!;
+    page();
+    open({ calculated: plan, phase });
+    go('plan');
+    render();
+    if (phase !== '1') {
+      assert.ok(grid.availableMW >= grid.needMW, `Phase ${phase}: its generators cover its need`);
+      assert.equal(notice(), undefined, `Phase ${phase} asks for no more`);
+      continue;
+    }
+    assert.ok(grid.needMW > grid.availableMW);
+    assert.equal(
+      notice(),
+      `This phase needs another ${power(grid.needMW - grid.availableMW)} of power. Phase 1 needs biomass or existing generation.`,
+    );
+  }
 });
 
 test('the headroom advice lists every generator a stage builds, or none', () => {
