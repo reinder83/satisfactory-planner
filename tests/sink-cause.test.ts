@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../planner.ts';
-import { sinkCaption, sinkCause } from '../public/app/sink-cause.ts';
+import { exactClocksKeep, sinkCaption, sinkCause } from '../public/app/sink-cause.ts';
 import type { CalcRow, StoredStage } from '../public/types/index.ts';
 
 const FLUIDS = new Set(['Heavy Oil Residue', 'Crude Oil', 'Fuel', 'Water']);
@@ -103,4 +103,22 @@ test("the issue's plan: Phase 3 on coal power sinks all its Petroleum Coke to us
     kind: 'uses-up',
     item: 'Heavy Oil Residue',
   });
+});
+
+test("the exact-clocks note says exact clocks remove only rounding's overflow", () => {
+  // Rounding: exact clocks remove it, and the note keeps its own sentence.
+  assert.equal(exactClocksKeep({ kind: 'rounding' }), undefined);
+  // Anything else: exact clocks would not remove it, and the note says why.
+  assert.equal(
+    exactClocksKeep({ kind: 'uses-up', item: 'Heavy Oil Residue' }),
+    'It is left over from using up Heavy Oil Residue, so exact clocks would not remove it: they only underclock the last machine to the exact remainder.',
+  );
+  assert.equal(
+    exactClocksKeep({ kind: 'alongside', item: 'Fuel' }),
+    'It is made alongside Fuel, which this phase uses, so exact clocks would not remove it: they only underclock the last machine to the exact remainder.',
+  );
+  assert.equal(
+    exactClocksKeep({ kind: 'unused' }),
+    'That is more than rounding to whole machines explains, so exact clocks would remove at most part of it: they only underclock the last machine to the exact remainder.',
+  );
 });

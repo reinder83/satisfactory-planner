@@ -89,6 +89,23 @@ export function sinkCause(
   return used[0] ? { kind: 'alongside', item: used[0] } : { kind: 'unused' };
 }
 
+// What exact clocks would do to a line's overflow, in its "Exact clocks for this line" note
+// (ui/detail/ExactClockChoice.vue): undefined where rounding to whole machines explains the
+// overflow, which exact clocks remove; otherwise the sentence that says why they would not.
+export function exactClocksKeep(cause: SinkCause): string | undefined {
+  const only = 'they only underclock the last machine to the exact remainder.';
+  switch (cause.kind) {
+    case 'rounding':
+      return undefined;
+    case 'uses-up':
+      return `It is left over from using up ${cause.item}, so exact clocks would not remove it: ${only}`;
+    case 'alongside':
+      return `It is made alongside ${cause.item}, which this phase uses, so exact clocks would not remove it: ${only}`;
+    case 'unused':
+      return `That is more than rounding to whole machines explains, so exact clocks would remove at most part of it: ${only}`;
+  }
+}
+
 // The caption under the sink for a cause (FlowDiagram.vue).
 export function sinkCaption(cause: SinkCause): string {
   switch (cause.kind) {
