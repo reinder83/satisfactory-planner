@@ -572,6 +572,9 @@ interface PhasePowerFigures {
   // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
   previous: number;
   boost: number;
+  // What the plan's fuel was balanced for (a plan with a grid): every line at its full linear
+  // power with the allowance, and the extraction; 0 otherwise.
+  plannedMW: number;
   requiredMW: number;
   existingMW: number;
   augmenters: number;
@@ -593,6 +596,7 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
     kept: view.generators.filter(entry => entry.kept > 0),
     previous: stage - 1,
     boost: planned.boost || 0,
+    plannedMW: plannedFor(planned, plan.settings),
     requiredMW: view.needMW,
     existingMW: view.spareMW,
     augmenters: planned.augmenters || 0,
@@ -602,6 +606,19 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
     period: planned?.nuclearPeriod ?? 0,
     generators: rows.filter(isGenerator).sort((first, second) => rank(first) - rank(second)),
   };
+}
+
+// What a stage's fuel was balanced for (#1064): the planner's power constraint charges every line
+// its full linear power with the allowance, and the extraction. 0 without a grid.
+function plannedFor(planned: StoredStage, settings: GuideContext['plan']['settings']): number {
+  if (!planned.grid) return 0;
+  const linear = (planned.rows || [])
+    .filter(row => row.power > 0)
+    .reduce((sum, row) => sum + row.power * (row.equivalent || 0), 0);
+  return (
+    linear * (settings.powerFactor ?? 1) * (1 + (settings.utilityPercent ?? 20) / 100) +
+    planned.grid.extractionMW
+  );
 }
 
 // Power sources from the highest tier down, as generatorSource names them, and the HUB unlock
@@ -750,25 +767,30 @@ function spareCause(
 }
 
 // Why a plan with a grid (#1064) has power left over, after the nuclear causes above: generators
-// the phase before built that it keeps beyond what its own lines need; fuel its lines make beyond
-// what the phase needs, which whole production lines and their byproducts set (the generators can
-// burn it, the phase draws less); else every generator line rounded up to whole generators, the
-// spare less than one of each. Otherwise no reason is given.
+// the phase before built that it keeps beyond what its own lines need; fuel the lines make beyond
+// what the plan's power balance asks for by more than one generator burns (whole production lines
+// and their byproducts set how much); else the larger of the generators rounded up to whole ones
+// (with fuel for less than one generator over the balance, which whole plants in the planner
+// leave) and the fuel planned for every line at its full linear power while its underclocked
+// machines draw less. Otherwise no reason is given.
 function gridCause(figures: PhasePowerFigures, leftMW: number): string {
   const { generators, kept, previous } = figures;
   const extra = kept.filter(entry => entry.machines > entry.own);
   if (extra.length)
     return ` from keeping the ${listNames(extra.map(entry => `${formatNumber(entry.kept)} ${entry.machine}${entry.kept === 1 ? '' : 's'}`))} built in Phase ${previous}`;
-  const unit = (row: CalcRow) => -row.power * (1 + figures.boost);
+  if (!(leftMW > 0.01)) return '';
   const fuelMW = generators.reduce((sum, row) => sum + row.generationMW * (1 + figures.boost), 0);
-  const usedMW = figures.requiredMW - figures.existingMW - figures.augmenterMW;
-  if (fuelMW - usedMW > Math.max(0, ...generators.map(unit)) + 0.01)
+  const unitMW = Math.max(0, ...generators.map(row => -row.power * (1 + figures.boost)));
+  const fuelOver = fuelMW - (figures.plannedMW - figures.existingMW - figures.augmenterMW);
+  if (fuelOver > unitMW + 0.01)
     return ' because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much';
-  if (leftMW < generators.reduce((sum, row) => sum + unit(row), 0) + 0.01)
-    return generators.every(row => row.machine === 'Nuclear Power Plant')
-      ? ' from building whole plants'
-      : ' from building whole generators';
-  return '';
+  const whole = figures.newMW - fuelMW + Math.max(0, fuelOver),
+    clock = figures.plannedMW - figures.requiredMW;
+  if (clock > whole)
+    return ' because the fuel is planned for every machine at full power, and the underclocked machines draw less';
+  return generators.every(row => row.machine === 'Nuclear Power Plant')
+    ? ' from building whole plants'
+    : ' from building whole generators';
 }
 
 // The text without spare existing power: by the power unlocks ticked, as before #1048, except that

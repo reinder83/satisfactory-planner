@@ -505,3 +505,26 @@ test('Phase 5 with augmenters and no spare power: the augmenters are named on th
     review(plan, {}, '5').body.startsWith(`Your Alien Power Augmenters add ${gw(augmenterMW)}`),
   );
 });
+
+// #1064: the step says why a phase has power left over and which generators it keeps. In a
+// whole-machine plan the fuel lines are set by whole production lines and their byproducts, and
+// can make more fuel than the phase needs; a kept building's generators count toward the lines.
+test('a whole-machine plan names the generators it keeps and the fuel its lines make over', () => {
+  const plan = calculate({
+    phase: '3',
+    wholeMachines: true,
+    availablePowerGW: 2,
+    installedPowerGW: 2,
+  });
+  const grid = plan.stages['5'].grid!;
+  const fuel = grid.generators.find(entry => entry.machine === 'Fuel Generator')!;
+  assert.ok(fuel.kept > 0 && fuel.machines >= fuel.kept);
+  const body = review(plan, { [PETROLEUM]: true }, '5').body;
+  assert.ok(body.includes(`(${fuel.kept} of these Fuel Generators were built in Phase 4)`), body);
+  assert.ok(
+    body.includes(
+      `, ${gw(grid.availableMW - grid.needMW)} spare because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much.`,
+    ),
+    body,
+  );
+});
