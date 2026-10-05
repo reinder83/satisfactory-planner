@@ -361,7 +361,7 @@ test('the dialog says where an own line’s Wire goes beyond the sink after a gr
   const text = $('#detail')!.textContent || '';
   assert.match(
     text.replace(/\s+/g, ' '),
-    /Made on site for Alpha's lines, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and the rest goes to the other places that ask for it\./,
+    /Made on site for Alpha's lines, which use less than it makes: the AWESOME Sink takes what the plan sinks, and the rest goes to the other places that ask for it\./,
   );
   assert.doesNotMatch(text, /other lines making it/);
 });

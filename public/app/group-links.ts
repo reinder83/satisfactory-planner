@@ -23,7 +23,10 @@
 // that both make Wire on site have no Wire link between them, and a central Wire line serves the
 // remaining consumers. Should a group edit after the recalculation leave the group asking for less
 // than that (#918), the sink still takes only the plan's surplus, and the rest is offered to the
-// other places as ordinary supply, so the books keep balancing without a recalculation.
+// other places as ordinary supply, so the books keep balancing without a recalculation. A plan
+// whose central line of the item would have sunk almost all it made routes the group's excess to
+// the central demand instead (#1063, withOverflow in planner/on-site.ts): its surplus leaves that
+// part out, so the books offer it the same way.
 import { LINK_DUST, rowPlaces, rowShares, UNGROUPED } from './group-order.ts';
 import type {
   FactoryGroups,
@@ -110,8 +113,9 @@ const siteItems = (
 // lines' supply of an item made on site for the group (siteItems), and the demand it meets, are
 // left out of `supply` and `demand`: they stay inside the group.
 // `offered`: per item, the part of a group's own lines' excess the sink has no room for (#918:
-// the group asks for less since a group edit). It is in `supply` too, at the group, as ordinary
-// supply the other places share; empty while the groups are as the plan was calculated for.
+// the group asks for less since a group edit; #1063: the plan routed it to the central demand).
+// It is in `supply` too, at the group, as ordinary supply the other places share; empty while the
+// groups are as the plan was calculated for, unless the plan routed some.
 // `local`: per item and group, what that group's own lines make of an item made on site for it
 // (`made`) and what the group asked for it before they met it (`asked`), so a group's flow
 // (group-flow.ts) and the factory dialog (flow.ts) share those lines out by the same rule.

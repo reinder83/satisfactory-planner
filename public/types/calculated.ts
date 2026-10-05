@@ -361,6 +361,11 @@ export interface StageResult {
   // The factory groups' own whole-machine lines (#875) did not fit this phase's budgets, so it
   // makes those items centrally: { group id: items }. Absent otherwise and from older plans.
   onSiteDropped?: Record<string, string[]>;
+  // A central line of an item made on site would have sunk almost all it made, so the phase was
+  // planned again with these groups' excess of these items feeding the central demand (#1063,
+  // withOverflow in planner/on-site.ts): { group id: items }. Absent otherwise and from older
+  // plans.
+  onSiteOverflow?: Record<string, string[]>;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;

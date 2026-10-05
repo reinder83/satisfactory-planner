@@ -306,7 +306,8 @@ test('right after a recalculation with amplification on, each own line matches t
     split = 0,
     turned = 0,
     built = 0;
-  const left = { count: 0 };
+  const left = { count: 0 },
+    routed = { count: 0 };
   for (const seed of SEEDS) {
     const { before, plan, groups } = configuration(seed);
     for (const [phase, stage] of Object.entries(plan.stages) as [StageKey, StoredStage][]) {
@@ -316,7 +317,7 @@ test('right after a recalculation with amplification on, each own line matches t
       phases++;
       lines += own;
       const label = `seed ${seed}, phase ${phase}`;
-      problems.push(...lineProblems(stage, groups, label, left));
+      problems.push(...lineProblems(stage, groups, label, left, undefined, routed));
       built += builtParts(plan, phase, stage);
       // The pairs of twins in the phase, those whose lines are held by different groups or at
       // different rates, and the lines the recalculation turned amplified or back.
@@ -340,6 +341,9 @@ test('right after a recalculation with amplification on, each own line matches t
   assert.ok(turned >= 150, `${turned} lines turned amplified or back`);
   assert.ok(built >= 30, `${built} parts of rows the plan being recalculated lacked, built`);
   assert.ok(left.count * 5 <= lines, `${left.count} items left out`);
+  // Lines whose excess feeds the central demand (#1063) stay few, so the check above still
+  // covers almost every line.
+  assert.ok(routed.count * 10 <= lines, `${routed.count} lines routed to the central demand`);
 });
 
 // #1042's groups (tests/fixtures/on-site-settle-groups-2026-10-04.json): three groups holding rows

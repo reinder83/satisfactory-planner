@@ -39,6 +39,10 @@ export const exact = (item: string) =>
 //   plan's Heavy Oil Residue); plus the same 1e-6;
 // - nothing is offered (ItemBooks.offered, above 1e-6 × max(1, rate)): the sink takes every
 //   group's excess, within the plan's surplus.
+// Except where the phase was planned again with the group's excess of the item feeding the
+// central demand (#1063, `onSiteOverflow`): there the lines may make more than the books give the
+// group, which saves central machines, and the group offers that part; they still make at least
+// what the books give the group. Such items are counted in `routed`.
 // Left out, and counted in `left`: an item that balances exactly (a fluid such as Heavy Oil
 // Residue), whose lines the planner still sizes by the shares worked out from the plan being
 // recalculated, as before #984 (followedParts in planner/on-site.ts), and a group's item that
@@ -49,8 +53,11 @@ export function lineProblems(
   label: string,
   left: { count: number },
   skip: (group: string, item: string) => boolean = () => false,
+  routed: { count: number } = { count: 0 },
 ): string[] {
   const problems: string[] = [];
+  const overflows = (group: string, item: string) =>
+    !!stage.onSiteOverflow?.[group]?.includes(item);
   const tolerance = (rate: number) => 1e-6 * Math.max(1, rate);
   const books = itemBooks(stage, groups);
   const ownLines = (group: string, item: string) =>
@@ -70,12 +77,13 @@ export function lineProblems(
       const slack = ownLines(group, item).reduce((total, line) => total + rounding(line), 0);
       if (made < asked - tolerance(asked))
         problems.push(`${label}: ${group}'s lines make ${made} ${item} of the ${asked} it asks`);
-      if (made >= asked + slack + tolerance(asked))
+      if (overflows(group, item)) routed.count++;
+      else if (made >= asked + slack + tolerance(asked))
         problems.push(`${label}: ${group}'s lines make ${made} ${item} for ${asked} (${slack})`);
     }
   for (const [item, places] of Object.entries(books.offered))
     for (const [group, rate] of places)
-      if (rate > tolerance(rate) && !exact(item) && !skip(group, item))
+      if (rate > tolerance(rate) && !exact(item) && !skip(group, item) && !overflows(group, item))
         problems.push(`${label}: ${group} offers ${rate} ${item}`);
   return problems;
 }

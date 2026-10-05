@@ -9,8 +9,9 @@
 // say (itemBooks in group-links.ts, #956): a group's own line delivers only to that group's
 // share of each consumer, and what it makes beyond that to the sink; the other lines making the
 // item deliver what is left; and a consumer's input links to the line that feeds most of it.
-// After a group edit a group's own lines may make more than the sink has room for (#918,
-// ItemBooks.offered): that part is shared with the other lines' supply (ordinaryShares).
+// After a group edit, or where the plan routed their excess to the central demand (#1063), a
+// group's own lines may make more than the sink has room for (#918, ItemBooks.offered): that part
+// is shared with the other lines' supply (ordinaryShares).
 // Every other item, and every item of a plan without such lines, is shared plan-wide.
 import { num, num3 } from './format.ts';
 import { itemBooks, placeTotal, sharedRate } from './group-links.ts';
