@@ -43,7 +43,7 @@ Adding a profile to a save you already play starts from that save's settings ins
 
    **Production amplification** is optional and starts at 0. Give it a budget and the planner puts that many somersloops in the plan's own machines, choosing where they pay best: an amplified machine keeps its inputs, doubles its output and draws four times the power, so it buys ore and buildings with power. Collecting every somersloop is a hunt, and some are hard to reach, so leaving this at 0 plans exactly as before. The budget applies to each phase's plan rather than adding up across phases, because each phase is a self-contained steady state and the somersloops move as you rebuild.
 
-3. Choose minimal construction (24-hour delivery), balanced (8-hour delivery), a target time, or maximum elevator output.
+3. Choose minimal construction (the fewest buildings that deliver within 24 hours, run as fast as they allow), balanced (8-hour delivery), a target time, or maximum elevator output. The whole-machine box shows what whole machines cost on your settings once the live estimate has measured it.
 
    **Target time applies to** decides whether that time is each phase's target or only the final phase's. On _The final phase_, earlier phases run their lines as hard as the machines a later phase already builds allow, so they finish sooner without adding a building the plan later drops — an early phase is never made slower, never runs more of a recipe than a later phase keeps, and never uses a recipe no later phase uses. Their delivery rates are not rounded, and Review shows what each pulled-forward phase would otherwise have taken. Ignored for maximum output, which already maximizes every phase.
 
@@ -126,7 +126,11 @@ Milestone cost notes use production lines explicitly marked running in this or e
 
 ## Whole-machine production
 
-New profiles default to running solid-part production machines at 100%. The solver selects a recipe network first and fits whole-machine production within the resource budgets, recalculating upstream requirements and handling liquid byproducts. Extra solids are listed as surplus: supply downstream lines, refill storage, then sink the rest. This can increase the scale of the entire chain, not only the last machine in one production line.
+New profiles default to running solid-part production machines at 100%. The solver selects a recipe network first and fits whole-machine production within the resource budgets, recalculating upstream requirements and handling liquid byproducts. Extra solids are listed as surplus: supply downstream lines, refill storage, then sink the rest. This can increase the scale of the entire chain, not only the last machine in one production line: every machine runs at full speed, so the lines feeding it do too. On a default plan Phase 5 takes nearly three times the buildings and twice the power of exact clocks.
+
+The build plan's side column shows **What whole machines cost** in the phase on screen: buildings, power needed, what goes to storage or the sink and the delivery time, each beside the same phase planned with exact clocks, and the raw resources whole machines draw on top. The wizard's Review shows the same for every phase, and the Goals step under the whole-machine box. A profile calculated before this was recorded shows none until you recalculate it.
+
+To run one production line at exact clocks, open it (**Production line ↗**) and tick **Exact clocks for this line**: its last machine is then underclocked to the exact remainder instead of sending the overflow to storage or the sink, and the lines feeding it shrink with it. The choice is saved with the profile's progress and changes nothing by itself: the line's build-plan step and card say _Exact clocks after a recalculation_, and the build plan and **Factories** offer **Recalculate with exact clocks**, which makes a new profile with your progress carried over; the open profile stays as it is. Untick the box to take the choice back. Fluid lines always run at exact clocks, because a pipe cannot overflow, and so do generator and nuclear lines.
 
 Space Elevator parts are the exception: everything a part's lines make beyond what other lines use goes to the elevator, never to the sink, and the delivery time follows from it. Two Assemblers making 10 Versatile Framework/min deliver all 10, so Phase 3's 2,500 take about 4 h 10 min, not the 7 h 52 min the balanced goal's 5.3/min would take. A profile calculated before this change keeps its own rates until you recalculate it.
 
@@ -136,13 +140,13 @@ Fluid, generator and nuclear/waste-processing lines remain precisely balanced an
 
 For a previously calculated profile, use **Factories → Round up production**. This creates a new profile revision, copies notes/unlocks/progress, and clears completed production line checks only where increased inputs or machine counts need review. The previous profile and all its progress remain untouched.
 
-If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. When only the whole-machine fit exceeds a budget, the draft names each short resource with the rate that would fit and offers the alternative of precise balancing. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
+If resource limits or solver limits prevent a rounded plan, affected phases are flagged for review. When only the whole-machine fit exceeds a budget, the draft names each short resource with the least rate that would fit and offers the alternative of precise balancing. Whole-machine maximum output is bounded to the selected recipe network; it is not a global mixed-recipe integer optimum.
 
 ## Calculation scope
 
 The generated plans solve material and resource constraints using HiGHS. Standard recipes are always available at their modeled phase; the alternate option enables phase-eligible alternates. Pure ingots override other ingot recipes when available. Actual recipe/milestone unlocking still has to happen in game.
 
-Fixed-time plans minimize production-building equivalents, then report whole buildings and the last machine’s underclock. They do not claim the absolute minimum number of integer buildings. Maximum output maximizes simultaneous elevator delivery within the entered budgets and selected recipe set, then minimizes building equivalents at that output. It does not optimize AWESOME Sink points.
+Fixed-time plans minimize production-building equivalents, then report whole buildings and the last machine’s underclock. They do not claim the absolute minimum number of integer buildings. Minimal construction then runs those buildings as fast as they allow: each phase is solved again for the fastest delivery with no line given more machines than the 24-hour plan builds, and keeps that plan when it finishes sooner (Review shows the 24-hour time beside it, and **Profile assumptions** names the phases). Phase 1, which runs on hand-fed biomass, keeps its 24-hour plan. Maximum output maximizes simultaneous elevator delivery within the entered budgets and selected recipe set, then minimizes building equivalents at that output. It does not optimize AWESOME Sink points.
 
 SAM policies affect raw-resource conversion only. Essential SAM ingredients remain available. Full nuclear recycling burns plutonium and Ficsonium rods in Phase 5, enforcing zero accumulated radioactive waste. Phase 4 sinks plutonium fuel rods until Ficsonium is available.
 
