@@ -183,7 +183,7 @@ export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRec
 // A group's own lines of a solid item it makes on site can make more than the group uses, because
 // whole machines round up, and that excess has only the sink. So a central line can still be
 // built for what the other consumers and storage ask, and sink almost all it makes: one Fused
-// Quickwire machine for 1/min of storage, its other 89/min sunk, beside a group line sinking 69/min
+// Quickwire machine for 1/min of storage, its other 89/min sunk, beside a group line sinking 70/min
 // (#1063). withOverflow plans such a phase again with a route per group and item,
 // `overflow:<item>@<group>` (the group's `overflow`, which only the planner sets), that carries
 // the group's excess into the central balance, where it meets the central demand before a central
