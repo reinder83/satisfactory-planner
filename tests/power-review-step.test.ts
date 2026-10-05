@@ -101,7 +101,11 @@ function planWith(
   rows: CalcRow[],
   settings: Partial<StoredCalculatedPlan['settings']> = {},
 ): StoredCalculatedPlan {
-  const plan: StoredCalculatedPlan = calculate({ phase: '3', availablePowerGW: availableGW, ...settings });
+  const plan: StoredCalculatedPlan = calculate({
+    phase: '3',
+    availablePowerGW: availableGW,
+    ...settings,
+  });
   const generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
   const stored: StoredStage = { ...plan.stages[phase] };
   delete stored.grid;
