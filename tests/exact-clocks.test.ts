@@ -12,8 +12,10 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { calculate, catalog, DATA, RAW, run, settings } from '../planner.ts';
 import { roundsToWholeMachines } from '../planner/model.ts';
+import { fullSpeed } from '../planner/adjustments.ts';
 import { generators } from '../planner/recipes.ts';
 import { resourceDefaults } from '../public/preferences.ts';
+import { listNames } from '../public/wording.ts';
 import {
   exactClocksChange,
   exactClocksSettings,
@@ -204,6 +206,87 @@ test('minimal construction runs the 24-hour buildings as fast as they allow, add
   // Other goals plan as before: no phase is pulled ahead.
   const balanced = calculate({ ...BASE, wholeMachines: false });
   assert.ok(Object.values(balanced.stages).every(stage => stage.aheadOf === undefined));
+});
+
+// Counts the Date.now calls `fn` makes: every integer search reads its time left through it.
+function searches<T>(fn: () => T): { value: T; calls: number } {
+  const dateNow = Date.now;
+  let calls = 0;
+  Date.now = () => (calls++, dateNow());
+  try {
+    return { value: fn(), calls };
+  } finally {
+    Date.now = dateNow;
+  }
+}
+
+test('minimal construction re-solves a phase only when its buildings might finish sooner', () => {
+  const config = settings({ ...BASE, goal: 'minimal' });
+  // Whole machines: every line runs at 100% and all of a part's output goes to the elevator, so
+  // no plan within the same buildings finishes sooner, and the integer search is skipped.
+  for (const phase of [2, 3, 4, 5]) {
+    const day = run(config, phase, { conversion: phase === 5 });
+    assert.ok(day.feasible);
+    const { value, calls } = searches(() => fullSpeed(config, phase, day));
+    assert.equal(value, day, `Phase ${phase} keeps its whole-machine plan`);
+    assert.equal(calls, 0, `Phase ${phase} is not searched again`);
+    // The search it skips finds nothing sooner either.
+    const caps = Object.fromEntries(day.rows.map(row => [row.id, row.machines]));
+    const fast = run(config, phase, { maximum: true, caps, conversion: phase === 5 });
+    assert.ok(!fast.feasible || fast.hours >= day.hours - 1e-6, `Phase ${phase} cannot gain`);
+  }
+  // The part Phase 2 takes longest over, and its line.
+  const day = run(config, 2);
+  assert.ok(day.feasible);
+  const [part] = Object.entries(day.delivery).sort(
+    ([, a], [, b]) => b.target / b.rate - a.target / a.rate,
+  )[0]!;
+  const maker = day.rows.find(row => (row.outputs[part] || 0) > 0)!;
+  // That line at exact clocks has room to spare, so the phase is searched again.
+  const exact = settings({ ...BASE, goal: 'minimal', exactClocks: { '2': [maker.id] } });
+  const exactDay = run(exact, 2);
+  assert.ok(exactDay.feasible);
+  assert.ok(
+    searches(() => fullSpeed(exact, 2, exactDay)).calls > 0,
+    'an exact-clock part is searched',
+  );
+  // So is a part you already make some of, and the same buildings then finish sooner.
+  const supplied = settings({ ...BASE, goal: 'minimal', existingSupply: { [part]: 0.5 } });
+  const suppliedDay = run(supplied, 2);
+  assert.ok(suppliedDay.feasible);
+  const faster = searches(() => fullSpeed(supplied, 2, suppliedDay));
+  assert.ok(faster.calls > 0, 'a supplied part is searched');
+  assert.ok(faster.value.hours < suppliedDay.hours - 1e-6, 'and finishes sooner');
+  assert.equal(faster.value.aheadOf, suppliedDay.hours);
+});
+
+test('minimal construction with the target time on Phase 5 names only the earlier phases it pulls', () => {
+  const input = { ...BASE, wholeMachines: false, goal: 'minimal', phaseTime: 'final' };
+  const plan = calculate(input);
+  const alone = calculate({ ...input, phaseTime: 'every' });
+  // Every phase runs at full speed on its own; Phase 5 is not pulled, it is the final phase.
+  assert.ok(alone.stages['5'].aheadOf !== undefined, 'Phase 5 runs at full speed');
+  assert.equal(plan.stages['5'].hours, alone.stages['5'].hours);
+  const pulled = (['1', '2', '3', '4'] as StageKey[]).filter(
+    phase => plan.stages[phase].hours! < alone.stages[phase].hours! - 1e-6,
+  );
+  assert.ok(pulled.length, 'some earlier phase is pulled ahead');
+  const warning = plan.warnings.find(text =>
+    text.startsWith('Your target time applies to Phase 5.'),
+  );
+  assert.ok(warning);
+  const many = pulled.length > 1;
+  assert.ok(
+    warning.includes(
+      `so ${many ? 'Phases' : 'Phase'} ${listNames(pulled)} ${many ? 'finish' : 'finishes'} sooner;`,
+    ),
+    warning,
+  );
+  // A pulled phase records the 24-hour plan's time, as its full-speed plan did.
+  for (const phase of pulled) {
+    const own = alone.stages[phase];
+    assert.equal(plan.stages[phase].aheadOf, own.aheadOf ?? own.hours, `Phase ${phase}`);
+  }
 });
 
 // The issue's "+62% copper": measured with every budget doubled, raw resources cost almost
