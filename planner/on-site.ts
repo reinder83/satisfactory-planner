@@ -173,8 +173,26 @@ export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRec
     routes,
     draws: siteDraws(pool, balances, follows),
     feeds: siteFeeds(pool, balances, routes),
+    overflows: balances.filter(balance => !exactBalance(balance.item)),
   };
 }
+
+// A group's own lines of a solid item it makes on site can make more than the group uses, because
+// whole machines round up. That excess used to have only the sink, so a central line still made
+// what the other consumers and storage asked for: one machine for 1/min, its other 89/min sunk
+// (#1063). So each such balance gets a route, `overflow:<item>@<group>`, that carries the group's
+// excess into the central balance, where it meets the central demand before a central line does:
+// the central line shrinks or is not built. The route costs a thousandth of a machine per item
+// (OVERFLOW_COST), so the search does not route for nothing, while carrying what one central
+// machine makes (a few hundred items/min) still costs less than that machine: it carries what
+// saves machines, and a plan does not build a bigger group line to feed the central demand. A plan
+// without whole machines, whose group lines make exactly what the group uses, leaves it empty.
+// The books need nothing new: what the group's lines make beyond the group's use and the plan's
+// surplus is `offered` (itemBooks in public/app/group-links.ts, #918), ordinary supply at the
+// group that the other places share. An item that balances exactly (a fluid) has no excess and
+// gets no route.
+export const OVERFLOW_COST = 0.001;
+export const overflowRoute = (item: string, group: string) => `overflow:${item}@${group}`;
 
 // The central byproduct of an item a group makes on site that balances exactly (a fluid), as
 // buildModel offers it to the groups' balances (#1012, the owner's decision there): a recipe that
