@@ -7,7 +7,9 @@
 // before #1038 has none and recalculates exactly as it did (recorded on main before #1038 in
 // tests/fixtures/on-site-rates-2026-10-04.json). #1064's power model changed every plan, so both
 // fixtures' rows were recorded again on it from the same settings, by the same steps as these
-// tests (which reproduced the earlier recordings exactly on main before #1064).
+// tests (which reproduced the earlier recordings exactly on main before #1064). #1086 (fluid
+// lines at exact clocks, fuel that follows the load) changed them again, and they were recorded
+// once more the same way (the steps reproduced the #1064 recordings exactly on main first).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

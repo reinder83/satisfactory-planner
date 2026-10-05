@@ -3,6 +3,7 @@
 // step and card that say what a recalculation would change, the notice that offers it, and the
 // wizard's whole-machine choice with its measured cost.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
@@ -18,6 +19,7 @@ import { $, applyUpdate, catalog, generatedWith, go, open, page, stubFetch } fro
 import type {
   CalcRow,
   CurrentCalculatedPlan,
+  StageKey,
   StoredCalculatedPlan,
   UpdateOp,
 } from '../../public/types/index.ts';
@@ -41,8 +43,8 @@ function overflowing(plan: CurrentCalculatedPlan): CalcRow {
     );
   })!;
 }
-// A Phase 3 line that makes only fluids (a Refinery's Fuel line also makes Polymer Resin, a
-// solid, so it rounds like any solid line).
+// A Phase 3 line that makes only fluids. (A Refinery's Fuel line also makes Polymer Resin, a solid;
+// since #1086 it runs at exact clocks too, as every line whose main product is a fluid.)
 const fluidLine = (plan: CurrentCalculatedPlan) => {
   const solid = new Set(catalog().storageItems.map(item => item.name));
   return plan.stages['3'].rows!.find(
@@ -61,11 +63,11 @@ function adaSays(id: string): string {
   }
   return '';
 }
-function openWhole(plan: StoredCalculatedPlan = wholePlan(), progress = {}) {
+function openWhole(plan: StoredCalculatedPlan = wholePlan(), progress = {}, phase: StageKey = '3') {
   page();
   open({
     calculated: plan,
-    phase: '3',
+    phase,
     workspace: { catalog: catalog() },
     state: progress,
   });
@@ -209,6 +211,31 @@ test('a fluid line always runs at exact clocks; an exact plan offers no choice a
   await settle();
   assert.equal($('[data-exact-clock-choice]'), null);
   assert.equal($('[data-exact-clock-fixed]'), null);
+});
+
+// #1086: a fluid line with a solid byproduct (Rocket Fuel with its Compacted Coal) runs at exact
+// clocks like any fluid line, while a plan stored before #1086, which ran it on whole machines,
+// keeps describing it so and offering the box until the user recalculates.
+test('a fluid line with a solid byproduct runs at exact clocks; a plan stored before keeps its own', async () => {
+  const stored: StoredCalculatedPlan = JSON.parse(
+    fs.readFileSync('tests/fixtures/fuel-plan-2026-10-05.json', 'utf8'),
+  );
+  const rocketFuel = (plan: StoredCalculatedPlan) =>
+    plan.stages['5'].rows!.find(row => row.id === 'Recipe_RocketFuel_C')!;
+  assert.equal(rocketFuel(stored).lastClock, 100);
+  openWhole(stored, {}, '5');
+  openCalculatedFactory(rocketFuel(stored).id);
+  await settle();
+  assert.ok($('[data-exact-clock-choice]'), 'the stored plan offers the box');
+  assert.match(text('[data-exact-clock-note]'), /^This plan runs the line on whole machines/);
+  const plan = generatedWith(stored.settings);
+  assert.equal(plan.exactFluidLines, true);
+  assert.ok(rocketFuel(plan).lastClock < 100, 'a recalculation runs it at exact clocks');
+  openWhole(plan, {}, '5');
+  openCalculatedFactory(rocketFuel(plan).id);
+  await settle();
+  assert.equal($('[data-exact-clock-choice]'), null);
+  assert.match(text('[data-exact-clock-fixed]'), /^A fluid line always runs at exact clocks/);
 });
 
 // The wizard: the whole-machine box says what it costs once the live estimate measured it, the

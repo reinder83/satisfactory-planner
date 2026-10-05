@@ -42,9 +42,10 @@ function withStoppedPhase(input: object, phase: number) {
     Date.now = dateNow;
   }
 }
-// A row the whole-machine fit makes whole: a solid, sinkable, non-raw output, nothing nuclear
-// (roundsToWholeMachines in planner.ts).
+// A row the whole-machine fit makes whole: a solid, sinkable, non-raw output, a main product that
+// is not a fluid (#1086), nothing nuclear (roundsToWholeMachines in planner/model.ts).
 const roundsWhole = (row: NonNullable<CurrentStage['rows']>[number]) =>
+  !DATA.items[Object.keys(row.outputs)[0] ?? '']?.fluid &&
   Object.keys(row.outputs).some(
     item => !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
   ) &&
@@ -76,14 +77,19 @@ function assertWholePlan(
 test('a stopped whole-machine search is rounded from the exact plan at the target time (#593)', () => {
   const plan = withStoppedPhase(settings, 4);
   const stage = plan.stages['4'];
-  assertWholePlan(stage, plan.settings.limits, 'Phase 4');
+  const warning = plan.warnings.find(line => line.startsWith('Phase 4: the whole-machine search'));
+  assert.ok(warning, 'the plan says what happened');
+  // Every line is whole but those the warning names as raised past the limit by the lines they
+  // feed (Copper Ingot since #1086, whose fluid lines at exact clocks changed this plan's network).
+  const raised = / ([^.]+) kept being rounded up as the lines (?:it|they) feed/.exec(warning);
+  // A match always has its one group.
+  const fractional = raised ? raised[1]!.split(/, | and /) : [];
+  assertWholePlan(stage, plan.settings.limits, 'Phase 4', fractional);
   const exact = calculate({ ...settings, wholeMachines: false, amplifySloops: 0 }).stages['4'];
   assert.equal(stage.roundedAfterStop, exact.hours, 'it records the exact plan’s time (#708)');
   assert.ok(stage.hours! <= 8.01, 'and keeps it');
   assert.equal(stage.amplificationDropped, undefined, 'the amplified rounding fits');
   assert.ok((stage.sloopsUsed || 0) > 0, 'with somersloops placed');
-  const warning = plan.warnings.find(line => line.startsWith('Phase 4: the whole-machine search'));
-  assert.ok(warning, 'the plan says what happened');
   assert.match(warning, /stopped before it could prove the best plan/);
   assert.match(warning, /rounded to whole machines/);
   assert.doesNotMatch(warning, /instead of/, 'no longer time is claimed');
@@ -97,10 +103,12 @@ test('a stopped whole-machine search is rounded from the exact plan at the targe
 
 test('a line rounds to its nearest whole count, so the phase may take slightly longer (#693)', () => {
   // The owner's correction in #593: round each line to the nearest whole count, which may be
-  // lower, and let the phase take slightly longer, rather than always rounding up.
-  const plan = withStoppedPhase(settings, 4);
+  // lower, and let the phase take slightly longer, rather than always rounding up. At four times
+  // the costs (at five, the issue's, every line rounds up since #1086 changed its plan's network).
+  const four = { ...settings, multiplier: 4 };
+  const plan = withStoppedPhase(four, 4);
   const stage = plan.stages['4'];
-  const exact = calculate({ ...settings, wholeMachines: false, amplifySloops: 0 }).stages['4'];
+  const exact = calculate({ ...four, wholeMachines: false, amplifySloops: 0 }).stages['4'];
   // Machine-equivalents of a recipe's line, an amplified machine counting twice.
   const line = (of: CurrentStage, id: string) =>
     of
@@ -161,11 +169,13 @@ test('a line that shares a fluid with another whole line keeps a fractional cloc
 });
 
 test('only lines tied by a fluid are said to share one; the others were raised by their chain (#714)', () => {
-  // Compacted Coal and Rocket Fuel share no fluid with another whole-machine line of this plan:
-  // they reach the raise limit because each line they feed that is rounded up raises them again. The
-  // warning used to say they share a fluid. (Iron Plate was raised too before #935 corrected the
-  // Space Elevator parts' power, which changed this plan's network.)
-  const issue = { ...settings, nuclear: 'recycle', multiplier: 1, amplifySloops: 0 };
+  // Iron Ingot and Copper Ingot share no fluid with another whole-machine line of this plan: they
+  // reach the raise limit because each line they feed that is rounded up raises them again. The
+  // warning used to say such lines share a fluid. (The issue's plan showed it with Compacted Coal
+  // and Rocket Fuel until #1086 kept the Rocket Fuel line, a fluid line, at exact clocks; the
+  // issue's costs with amplification on show it with these two. Iron Plate was raised too before
+  // #935 corrected the Space Elevator parts' power, which changed this plan's network.)
+  const issue = { ...settings, nuclear: 'recycle', multiplier: 1 };
   const warning = withStoppedPhase(issue, 5).warnings.find(line =>
     line.startsWith('Phase 5: the whole-machine search'),
   );
@@ -173,21 +183,18 @@ test('only lines tied by a fluid are said to share one; the others were raised b
   assert.doesNotMatch(warning, /shares? a fluid/, 'no line is said to share a fluid');
   assert.match(
     warning,
-    /Compacted Coal and Rocket Fuel kept being rounded up as the lines they feed were rounded, so they keep a fractional clock on the last machine\./,
+    /Iron Ingot and Copper Ingot kept being rounded up as the lines they feed were rounded, so they keep a fractional clock on the last machine\./,
   );
   // Rubber makes Heavy Oil Residue and Petroleum Coke takes it, which balances exactly: Rubber is
-  // still said to share a fluid, and Aluminum Ingot, raised by the lines it feeds, is worded
-  // apart. (The standard recipes at three times the costs showed this until #1064, whose power
-  // model changed that plan; every alternate at the issue's costs shows it now.)
+  // said to share a fluid, in a sentence of its own. (The standard recipes at three times the
+  // costs showed this until #1064, whose power model changed that plan; every alternate at the
+  // issue's costs shows it now. Aluminum Ingot, raised by the lines it feeds, was worded apart in
+  // the same warning until #1086 changed that plan's fuel lines.)
   const tied = withStoppedPhase({ ...issue, recipes: 'all', amplifySloops: 0 }, 5);
   const both = tied.warnings.find(line => line.startsWith('Phase 5: the whole-machine search'));
   assert.ok(both);
-  assert.match(
-    both,
-    /\. Rubber and [^.]+ share a fluid with another whole-machine line, so they keep/,
-  );
-  assert.match(both, /\. [^.]*\bAluminum Ingot[^.]* kept being rounded up as the lines they feed/);
-  assert.doesNotMatch(both, /Aluminum Ingot[^.]*shares? a fluid/);
+  assert.match(both, /\. Rubber shares a fluid with another whole-machine line, so it keeps/);
+  assert.doesNotMatch(both, /kept being rounded up/);
   const rubber = tied.stages['5'].rows!.find(row => row.name === 'Rubber');
   assert.ok(rubber && rubber.outputs['Heavy Oil Residue'], 'Rubber makes Heavy Oil Residue');
   assert.ok(

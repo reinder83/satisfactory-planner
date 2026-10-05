@@ -790,8 +790,7 @@ function gridCause(figures: PhasePowerFigures, leftMW: number): string {
     return ' because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much';
   const have = figures.existingMW + figures.augmenterMW;
   const whole = figures.newMW - fuelMW + Math.max(0, fuelOver),
-    clock =
-      Math.min(fuelMW, figures.plannedMW - have) - (figures.requiredMW - have);
+    clock = Math.min(fuelMW, figures.plannedMW - have) - (figures.requiredMW - have);
   if (clock > whole)
     return ' because the fuel is planned for every machine at full power, and the underclocked machines draw less';
   return generators.every(row => row.machine === 'Nuclear Power Plant')
