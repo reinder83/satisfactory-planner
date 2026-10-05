@@ -23,6 +23,8 @@ export interface AdaFacts {
   steps: { done: number; total: number };
   next: string;
   retireOpen: number;
+  // Unticked steps of lines a delivered Space Elevator part leaves without work (#1062).
+  idleLines?: number;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -280,6 +282,15 @@ const RULES: AdaRule[] = [
     when: facts => facts.retireOpen > 0,
     text: facts =>
       `${plural(facts.retireOpen, 'retirement step')} still open. This phase stopped budgeting for those lines; your power grid did not. Dismantle them and reclaim the material.`,
+  },
+  {
+    // The lines a delivered elevator part leaves without work (#1062), dimmed in the build plan.
+    id: 'delivered-lines',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => (facts.idleLines ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.idleLines!, 'production line')} only made elevator parts you have already delivered, so the build plan dims ${facts.idleLines === 1 ? 'it' : 'them'} and says which later phase needs ${facts.idleLines === 1 ? 'it' : 'them'}, if any. Idle machines. FICSIT calls that “strategic reserve”.`,
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

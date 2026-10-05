@@ -54,7 +54,9 @@ import {
 //               allowance), `generationMW` for generators, and `amplified`/`sloops` for 'amp:' rows
 //   raw         per-minute draw on each raw resource; `supplied` credited existing production
 //   storage     protected storage rate per storable item (0 keeps the container, reserves nothing)
-//   drone       dedicated drone fuel per minute; `delivery` { item: { target, rate } }
+//   drone       dedicated drone fuel per minute; `delivery` { item: { target, rate } }, `rate`
+//               all the lines make of the part beyond its other uses (deliverAll in stage.ts,
+//               #1062), at least the goal's rate
 //   surplus     solid, sinkable output per minute beyond every demand (overflow for the sink)
 //   power       peakMW, generationMW, requiredMW (peak with utility allowance), availableMW (new
 //               generation with augmenter boost plus spare), additionalHeadroomMW (shortfall),
@@ -87,7 +89,7 @@ export function run(config: CurrentSettings, phase: number, options: RunOptions 
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   if (!satisfiesModel(model, solved)) return { feasible: false };
-  return readStage(context, pool, demands, solved, period);
+  return readStage(context, pool, demands, solved, period, model);
 }
 // What every step of one phase's solve shares: the normalised settings, the phase (1 to 5),
 // run()'s options with their defaults filled in, and the phase's power figures.

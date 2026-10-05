@@ -14,16 +14,20 @@
   vehicles and fuel. The controls sit on the sender's Out row only, so each link is edited in one
   place; the receiver's In row shows the belt or vehicle badge. The choice saves as a
   factoryLinkTransport update (factoryGroups.links).
+  A Space Elevator part delivered in full (its saved count at the target, #1062) is dimmed on its
+  link to the elevator and marked "delivered"; the link stays, as the plan has it.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num, plural } from '../../format.ts';
 import { bestLane, FLUIDS, lanePlan, rateOfItem } from '../../flow.ts';
+import { deliveredParts } from '../../delivered.ts';
 import {
   groupLinks,
   isSource,
   linkTransportFor,
+  OUTSIDE,
   placeName,
   sourceItem,
   UNGROUPED,
@@ -45,6 +49,8 @@ import {
   currentSave,
   loadContext,
   setWorkspace,
+  stage as stageKey,
+  state,
   workspace,
 } from '../../session.ts';
 import { render } from '../../shell.ts';
@@ -65,6 +71,8 @@ const view = computed(() =>
       groupsState = factoryGroupsState();
     if (!calculated || !stage?.rows?.length || !groupsState.groups.length) return null;
     const name = (id: string) => placeName(id, groupsState.groups, stage.raw);
+    // The parts delivered in full (#1062): their links to the Space Elevator say so.
+    const delivered = deliveredParts(stage, stageKey(), state.deliveries);
     const links = groupLinks(stage, groupsState, calculated.settings.onSite).map(link => {
       const key = link.from + ':' + link.to,
         transport = linkTransportFor(groupsState.links, link.from, link.to);
@@ -84,15 +92,17 @@ const view = computed(() =>
           pack =
             fluid && transport && transport.mode !== 'train'
               ? workspace.catalog.packaged?.[item]?.item
-              : '';
+              : '',
+          done = link.to === OUTSIDE.delivery && delivered.has(item);
         return {
           item,
           rate,
           fluid,
           pack: pack || '',
+          delivered: done,
           // With its unit, as the part header above has it: 213,27/min, 139,36 m³/min (#462).
           text: `${num(rate)}${fluid ? ' m³' : ''}/min`,
-          title: `${item}: ${num(rate)}${fluid ? ' m³' : ''}/min${pack ? `, as ${pack}` : ''}`,
+          title: `${item}: ${num(rate)}${fluid ? ' m³' : ''}/min${pack ? `, as ${pack}` : ''}${done ? ', delivered' : ''}`,
         };
       });
       return {
@@ -348,9 +358,15 @@ async function recalculate(event: Event) {
                 >
               </div>
               <ul class="flow-items">
-                <li v-for="item in link.items" :key="item.item" :title="item.title">
+                <li
+                  v-for="item in link.items"
+                  :key="item.item"
+                  :title="item.title"
+                  :class="{ delivered: item.delivered }"
+                >
                   <ItemIcon :name="item.item" /><span class="flow-item-name">{{ item.item }}: </span
-                  >{{ item.text }}
+                  >{{ item.text
+                  }}<span v-if="item.delivered" data-delivered-link> · delivered</span>
                 </li>
               </ul>
               <template v-if="part.dir === 'out'">

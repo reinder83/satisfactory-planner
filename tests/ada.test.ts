@@ -119,6 +119,19 @@ test('ADA counts the same progress the pages show', () => {
     'flawless',
   );
   assert.ok(ids(facts({ retireOpen: 2 })).includes('retire'));
+  // Lines a delivered elevator part leaves without work (#1062), dimmed in the build plan.
+  assert.ok(!ids(facts()).includes('delivered-lines'));
+  const idle = (count: number) =>
+    adaRemarks(facts({ idleLines: count })).find(r => r.id === 'delivered-lines')!;
+  assert.equal(idle(1).tone, 'calm');
+  assert.match(
+    idle(1).text,
+    /^1 production line only made elevator parts .* dims it and says which later phase needs it/,
+  );
+  assert.match(
+    idle(2).text,
+    /^2 production lines only made elevator parts .* dims them and says which later phase needs them/,
+  );
   assert.match(
     adaRemarks(facts({ retireOpen: 1 })).find(r => r.id === 'retire')!.text,
     /1 retirement step still open/,

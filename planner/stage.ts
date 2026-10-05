@@ -1,17 +1,20 @@
 // A solved phase's model read back into a stage: its rows, surplus and build order.
-import type { CurrentSettings, CalcRow, ItemRates } from '../public/types/index.ts';
+import type { CurrentSettings, CalcRow, ItemRates, StageDelivery } from '../public/types/index.ts';
+import type { LpModel } from '../optimizer.ts';
 import type { PoolRecipe, Solved } from './types.ts';
 import { DATA, RAW } from './data.ts';
 import { extractionEquipment, stageGrid } from '../public/power.ts';
 import type { PhaseContext, PhaseDemands, Solution } from './model.ts';
 
-// Reads the solution back into a stage (see run for its fields).
+// Reads the solution back into a stage (see run for its fields). `model` is the model `solved`
+// solves; deliverAll reads the Space Elevator parts' balances from it.
 export function readStage(
   context: PhaseContext,
   pool: PoolRecipe[],
   demands: PhaseDemands,
   solved: Solution,
   period: number,
+  model: LpModel,
 ): Solved {
   const { config, maximum, power } = context;
   const { storage, delivery, drone, transport, matrix } = demands;
@@ -20,6 +23,7 @@ export function readStage(
   if (maximum)
     for (const part of Object.values(delivery))
       part.rate = ((solved.values.goal || 0) * part.target) / 1000;
+  deliverAll(model, solved, delivery);
   const rows = stageRows(config, pool, solved);
   const supplied = Object.fromEntries(
     Object.entries(config.existingSupply)
@@ -80,6 +84,27 @@ export function readStage(
       .filter(row => Object.keys(row.outputs).some(item => RAW.includes(item) && item !== 'Water'))
       .map(row => row.name),
   };
+}
+// Every Space Elevator part the lines make beyond their other uses goes to the elevator (#1062):
+// a part's delivery rate is all its central balance has left once the lines, protected storage,
+// fuel and the other demands have taken theirs, so the phase's time follows what the lines really
+// make. Whole machines round a part's line up past the rate the goal asks for (Phase 3 asks 5.3
+// Versatile Framework/min and builds two Assemblers, which make 10/min); that excess used to go
+// to the sink while the delivery time was worked out from the smaller rate. The model still plans
+// for the goal's rate (the balance's lower bound); only the reading changes. An excess no larger
+// than the surplus leaves out (0.002/min) is solver noise and changes nothing, so a plan without
+// whole machines, which makes exactly the goal's rate, reads as it did before.
+function deliverAll(model: LpModel, solved: Solution, delivery: Record<string, StageDelivery>) {
+  for (const [item, part] of Object.entries(delivery)) {
+    const balance = 'item:' + item,
+      bound = model.constraints[balance];
+    if (bound?.min === undefined) continue;
+    let total = 0;
+    for (const [variable, coefficients] of Object.entries(model.variables))
+      total += (solved.values[variable] || 0) * (coefficients[balance] || 0);
+    const over = total - bound.min;
+    if (over > 0.002) part.rate += over;
+  }
 }
 // Rows: every recipe in use. `machines` rounds the equivalent up to buildings, and the last
 // one runs underclocked at `lastClock` % (100 for a whole-machine row). A generator line is

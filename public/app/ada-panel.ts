@@ -11,7 +11,8 @@ import {
 import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
 import { powerView } from '../power.ts';
-import { durationOfHours, num, slug } from './format.ts';
+import { deliveryKey } from './delivered.ts';
+import { durationOfHours, num } from './format.ts';
 import {
   calcStage,
   calculated,
@@ -38,7 +39,7 @@ import { groupsReorder } from './group-order.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
-import { planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
+import { idleStepNotes, planTasks, removedPlanTasks, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { buildRowName, currentBuildStatus } from './views/calculated.ts';
 import { byproductCount } from './recycle.ts';
@@ -191,7 +192,12 @@ function unplacedCount(): number {
 
 function adaFacts(): AdaFacts {
   const steps = currentSave.id ? planTasks() : [];
-  const next = steps.find(t => !checked(t.id));
+  // The next step leaves out the lines a delivered elevator part leaves without work (#1062), as
+  // the build plan's lead step does, unless nothing else is left.
+  const idle = idleStepNotes(steps),
+    idleOpen = steps.filter(t => idle.has(t.id) && !checked(t.id)).length;
+  const next =
+    steps.find(t => !checked(t.id) && !idle.has(t.id)) ?? steps.find(t => !checked(t.id));
   // Read only with a calculated profile open; an empty stage stands in if its data is missing. A
   // milestone-only phase (#759) has no stage of its own, which is not a failed plan: it stands in
   // as feasible, with nothing in it.
@@ -202,9 +208,9 @@ function adaFacts(): AdaFacts {
   const slots = storageBays()
     .flatMap(b => b.items)
     .filter(i => i.name);
-  // Calculated delivery ids are <stage>-<slug(item)>, as in views/calculated.ts.
+  // Calculated delivery ids are <stage>-<slug(item)> (deliveryKey).
   const deliveries = Object.entries<StageDelivery>(storedStage.delivery || {}).map(
-    ([item, delivery]) => ({ id: stage() + '-' + slug(item), target: delivery.target }),
+    ([item, delivery]) => ({ id: deliveryKey(stage(), item), target: delivery.target }),
   );
   // Same default as ui/plan/DeliveryCounter.vue: a delivery with no saved count has none yet.
   const delivered = (delivery: { id: string }) => state.deliveries[delivery.id] ?? 0;
@@ -230,6 +236,7 @@ function adaFacts(): AdaFacts {
     steps: { done: steps.filter(t => checked(t.id)).length, total: steps.length },
     next: next?.title || '',
     retireOpen: steps.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
+    idleLines: idleOpen,
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

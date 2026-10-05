@@ -8,6 +8,8 @@
   Outside edit mode (SP-42, #277) the first unfinished step leads the list, unfolded, with
   Mark done and its Open factory. The other unfinished steps follow in order, and completed
   ones fold into "Done (n)" under the list, so ticking the lead step promotes the next one.
+  A line that only made a Space Elevator part already delivered in full (#1062) is dimmed with
+  a note under its title, and its unfinished step comes after the other unfinished ones.
   With every step done, a line says the phase checklist is complete. While editing, the list
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
 -->
@@ -25,6 +27,7 @@ import {
 import { render } from '../../shell.ts';
 import {
   filteredPlanTasks,
+  idleStepNotes,
   planTasks,
   removedPlanTasks,
   taskIcon,
@@ -42,13 +45,15 @@ const list = computed(() =>
   legacy(() => {
     const tasks = planTasks(),
       shown = filteredPlanTasks(tasks),
-      removed = removedPlanTasks();
+      removed = removedPlanTasks(),
+      idle = idleStepNotes(shown);
     const steps = shown.map(
       (task): PlanStepView => ({
         id: task.id,
         title: task.title,
         body: task.body,
         done: checked(task.id),
+        idle: idle.get(task.id),
         icon: taskIcon(task),
         link: taskLink(task),
         custom: task.id.startsWith('custom-'),
@@ -67,8 +72,10 @@ const list = computed(() =>
           ? 'No steps match this search.'
           : 'Every step of this phase is completed. Untick “Hide completed” to review them.',
       steps,
-      // Outside edit mode: the unfinished steps (the first leads) and the completed ones.
-      open: steps.filter(s => !s.done),
+      // Outside edit mode: the unfinished steps (the first leads) and the completed ones. The
+      // steps of lines a delivered part leaves without work (#1062) come last among the
+      // unfinished ones, dimmed, and never lead.
+      open: [...steps.filter(s => !s.done && !s.idle), ...steps.filter(s => !s.done && s.idle)],
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
@@ -147,7 +154,12 @@ function toggleHideDone(event: Event) {
   </div>
   <template v-else>
     <div v-if="list.open.length" class="checklist" data-open-steps>
-      <PlanStep v-for="(step, i) in list.open" :key="step.id" :step="step" :lead="i === 0" />
+      <PlanStep
+        v-for="(step, i) in list.open"
+        :key="step.id"
+        :step="step"
+        :lead="i === 0 && !step.idle"
+      />
     </div>
     <div v-else-if="list.complete && !list.query.trim()" class="checklist">
       <div class="task lead is-complete" data-phase-complete>
