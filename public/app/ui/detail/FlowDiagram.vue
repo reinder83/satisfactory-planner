@@ -15,6 +15,7 @@ import ItemIcon from '../ItemIcon.vue';
 import RecipePanel from './RecipePanel.vue';
 import { factoryLink } from '../actions.ts';
 import { listNames } from '../../../wording.ts';
+import { machinesText } from '../../flow.ts';
 import type { BankNote, FlowModel, FlowOutput, SupplyNote } from '../../flow.ts';
 
 const props = withDefaults(defineProps<{ model?: FlowModel | null }>(), { model: null });
@@ -97,22 +98,23 @@ const flow = computed(() => {
         unit: unitText(plan.lane.unit),
       };
     }),
-    // A destination row. `mach` is how many machines' worth of output it takes, rounded up
-    // per destination (under half a machine reads "<1"); absent where it cannot be split.
+    // A destination row. `machines` is its part of the line's whole machines, which add up to the
+    // line's count over the destinations (splitMachines in flow.ts, #1067; "<1" for one sharing a
+    // machine), with `lineMach`, its exact part at 100%, under it; absent where it cannot be split.
     outputs: model.outputs.map(output => ({
       ...output,
       caption: (output.pre ? output.pre + ' · ' : '') + caption(output),
       machines:
-        output.mach === undefined
+        output.machines === undefined || output.lineMach === undefined
           ? null
           : {
-              round: output.mach < 0.5 ? '<1' : num(Math.ceil(output.mach - 1e-9)),
-              exact: num(output.mach) + ' at 100% · round up',
+              round: machinesText(output.machines),
+              exact: num(output.lineMach) + ' at 100%',
             },
       rateText: output.rateTxt ?? null,
       rateValue: output.rateTxt == null && output.rate !== undefined ? num(output.rate) : null,
     })),
-    perDelivery: model.outputs.some(o => o.mach !== undefined),
+    perDelivery: model.outputs.some(o => o.machines !== undefined),
   };
 });
 </script>

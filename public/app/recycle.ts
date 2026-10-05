@@ -16,8 +16,14 @@
 // Water no byproduct covers, in the owner's two options (waterExtractors in
 // preferences/extraction.ts), with the clocks adding up to exactly that Water.
 //
+// A fluid that several lines of a place make and several take is one pool (#1067): its pipes join
+// in one manifold, so the advice gives the pool once, its total in and each line's part out,
+// rounded so the parts add up (roundedParts), rather than every maker's share of every user, which
+// split it to 0.01 m³ a pair.
+//
 // It reads only its arguments (no session), so the pages pass the stage of the phase they show.
 import { num, plural } from './format.ts';
+import { nearestFraction, roundedParts, sensibleDecimals } from './apportion.ts';
 import { EXTRACTOR_MIN_RATE, waterExtractors } from '../preferences.ts';
 import { power } from './wizard/fields.ts';
 import { homeGroup, LINK_DUST, rowPlaces, UNGROUPED } from './group-order.ts';
@@ -249,7 +255,10 @@ export function byproductAdvice(
   const rows = new Map((model.stage.rows || []).map(other => [other.id, other]));
   return byproductsOf(row).flatMap(item => {
     const wording: Wording = { model, words, row, item, rowOf: id => rows.get(id) };
-    const parts = byproductParts(wording, peersOf(model, row.id, item, 'from'));
+    const pool = poolFor(wording, 'from');
+    const parts = pool
+      ? poolParts(wording, pool, 'Pool it with the others: ')
+      : byproductParts(wording, peersOf(model, row.id, item, 'from'));
     return parts.length
       ? [
           {
@@ -337,6 +346,7 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
     const raw = (model.stage.raw?.[item] || 0) > LINK_DUST;
     const water = item === WATER && raw && extracted > LINK_DUST;
     if (!lines.some(byproduct) && !water) return [];
+    const pool = lines.some(byproduct) ? poolFor(wording, 'to') : undefined;
     const all = lines.length === 1 && extracted <= LINK_DUST;
     const parts = lines.flatMap((peer, i): AdvicePart[] => [
       ...(i ? [', '] : []),
@@ -353,7 +363,11 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
         kind: 'input' as const,
         item,
         lead: item + ' ' + words.itemRate(item, row.inputs[item]!),
-        parts: lines.length ? [...parts, rest] : [NO_COVER],
+        parts: pool
+          ? poolParts(wording, pool, 'From one pool: ')
+          : lines.length
+            ? [...parts, rest]
+            : [NO_COVER],
         ...(water ? { extractors: extractorAdvice(extracted) } : {}),
       },
     ];
@@ -404,6 +418,123 @@ function sourcePhrase(wording: Wording, peer: Peer, amount: string): AdvicePart[
       ? 'recycled from '
       : 'from the byproduct of ';
   return [`${amount} ${words}`, lineLink(wording, end.id), whereOf(wording, end)];
+}
+
+// --- Pools (#1067) ---
+
+// One place's pool of a fluid: what goes in, each line of the place making it and each line
+// elsewhere or source (extraction) sending it into the place's lines, and what comes out, each
+// line of the place taking it and each line elsewhere or destination its lines send it to, the
+// largest first, with the total.
+interface Pool {
+  ins: Peer[];
+  outs: Peer[];
+  total: number;
+}
+
+// The pool `wording.row`'s fluid is in, when that is one: the place the row sends it from (`side`
+// 'from', its byproduct) or takes it in (`side` 'to', its input), when it is a single place whose
+// pool has at least two lines sending it in and two ends taking it out. Undefined otherwise, where
+// the advice words it line by line as before: a solid, a row split over places, or a fluid that
+// one line sends or one end takes (extracted Water counts for no line: each line has its own
+// extractors, #1024).
+function poolFor(wording: Wording, side: 'from' | 'to'): Pool | undefined {
+  if (!wording.words.fluid(wording.item)) return undefined;
+  const places = new Set<string>();
+  for (const transfer of wording.model.transfers) {
+    const end = transfer[side];
+    if (transfer.item === wording.item && end.kind === 'line' && end.id === wording.row.id)
+      places.add(end.place);
+  }
+  if (places.size !== 1) return undefined;
+  const pool = poolOf(wording.model, [...places][0]!, wording.item);
+  const makers = pool.ins.filter(peer => peer.end.kind === 'line').length;
+  return makers > 1 && pool.outs.length > 1 ? pool : undefined;
+}
+
+// The pool of `item` in `place` (Pool), from the model's transfers: a transfer from a line of the
+// place puts its line in, one into a line of the place puts its line out, and a transfer crossing
+// the place's edge puts its other end in or out: a line elsewhere (named with its place), or a
+// source or destination.
+function poolOf(model: RecycleModel, place: string, item: string): Pool {
+  const ins = new Map<string, Peer>(),
+    outs = new Map<string, Peer>();
+  const add = (peers: Map<string, Peer>, end: RecycleEnd, rate: number) => {
+    const key = end.kind === 'line' ? `line|${end.id}|${end.place}` : `place|${end.id}`;
+    const entry = peers.get(key) ?? { end, rate: 0 };
+    entry.rate += rate;
+    peers.set(key, entry);
+  };
+  const here = (end: RecycleEnd) => end.kind === 'line' && end.place === place;
+  for (const { item: moved, from, to, rate } of model.transfers) {
+    if (moved !== item || !(here(from) || here(to))) continue;
+    add(ins, from, rate);
+    add(outs, to, rate);
+  }
+  const listed = (peers: Map<string, Peer>) =>
+    [...peers.values()].filter(peer => peer.rate > LINK_DUST).sort((a, b) => b.rate - a.rate);
+  const inList = listed(ins);
+  return {
+    ins: inList,
+    outs: listed(outs),
+    total: inList.reduce((sum, peer) => sum + peer.rate, 0),
+  };
+}
+
+// The pool's sentence after `lead`: "1,650 m³ in from this line, Plastic ↗ and Oil refining;
+// out 1,080 m³ to Petroleum Coke ↗ (≈ 2/3), 450 m³ to this line (≈ 3/11) and 120 m³ to Coated
+// Cable ↗ in Electronics (≈ 1/14)." Amounts are rounded to the pool's size (sensibleDecimals),
+// the parts out adding up to the total in (roundedParts), and each part out has its share of the
+// pool as a simple fraction (shareText).
+function poolParts(wording: Wording, pool: Pool, lead: string): AdvicePart[] {
+  const decimals = sensibleDecimals(pool.total);
+  const [total = 0] = roundedParts([pool.total], decimals);
+  const outs = roundedParts(
+    pool.outs.map(peer => peer.rate),
+    decimals,
+  );
+  const amount = (value: number) =>
+    (value > 0 ? num(value) : '< ' + num(10 ** -decimals)) +
+    (wording.words.fluid(wording.item) ? ' m³' : '');
+  const ins = pool.ins.map(peer => poolEnd(wording, peer.end));
+  const out = pool.outs.map((peer, i) => [
+    `${amount(outs[i]!)} to `,
+    ...poolEnd(wording, peer.end),
+    ` (${shareText(peer.rate / pool.total)})`,
+  ]);
+  return [
+    lead,
+    `${amount(total)} in from `,
+    ...joinPhrases(ins),
+    '; out ',
+    ...joinPhrases(out),
+    '.',
+  ];
+}
+
+// One end of a pool as its sentence names it: "this line", another line linked (" in
+// Electronics" after it when that is another place than the row's own), another place by name,
+// "extractors" for a raw resource, "existing supply", or a destination ("the Space Elevator").
+function poolEnd(wording: Wording, end: RecycleEnd): AdvicePart[] {
+  if (end.kind === 'line')
+    return end.id === wording.row.id
+      ? ['this line']
+      : [lineLink(wording, end.id), whereOf(wording, end)];
+  const { stage, groups } = wording.model;
+  if (isSource(end.id))
+    return [(stage.raw?.[wording.item] || 0) > LINK_DUST ? 'extractors' : 'existing supply'];
+  const destination = DESTINATION_WORDS[end.id];
+  if (destination) return [destination.replace(/^(to|for) /, '')];
+  return [placeName(end.id, groups.groups, stage.raw)];
+}
+
+// A part's share of a pool as a simple fraction (nearestFraction): "2/3", "≈ 7/15" when it is
+// only near one, or "< 1/16" for a share too small for one.
+function shareText(share: number): string {
+  const [numerator, denominator] = nearestFraction(share);
+  if (numerator === 0) return '< 1/16';
+  const text = `${numerator}/${denominator}`;
+  return Math.abs(share - numerator / denominator) < 5e-4 ? text : '≈ ' + text;
 }
 
 // The advice of a line as one paragraph's text: its sentence without links.

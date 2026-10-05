@@ -13,6 +13,7 @@ import {
   itemBelts,
   lanePlan,
   rowEquivalent,
+  splitMachines,
 } from '../../public/app/flow.ts';
 import type { CalcFlowContext, FlowOutput, LanePlan } from '../../public/app/flow.ts';
 import type { CalcRow, StoredSettings, StoredStage } from '../../public/types/index.ts';
@@ -200,9 +201,11 @@ test('flowInputs links each input to the first other row making it', () => {
 
 test('flowNotes splits the machines across deliveries, and says when the item is shared', () => {
   const stage = context({ rows: [plates, screws, frames] });
-  const outputs = flowOutputs(plates, stage);
+  // Frames take 2.5 of the 4 machines and Screws 1.5: by largest remainder 3 and 1, which add up
+  // to the 4 (rounding each up said 3 / 2, five machines, before #1067).
+  const outputs = splitMachines(plates, flowOutputs(plates, stage));
   assert.deepEqual(flowNotes(plates, outputs, stage), {
-    split: ' · split ≈ 3 / 2 across the deliveries below',
+    split: ' · split ≈ 3 / 1 across the deliveries below',
     clock: '@ 100%',
     bankNote: { shared: false },
   });
@@ -211,8 +214,10 @@ test('flowNotes splits the machines across deliveries, and says when the item is
     flowNotes(plates, outputs, context({ rows: [plates, morePlates] })).bankNote!.shared,
     true,
   );
-  // One delivery, or only sinks besides it, gives no split; no destinations, no bank note.
+  // One delivery gives no split, nor does a sink without its whole machines; no destinations, no
+  // bank note.
   const sink: FlowOutput = { kind: 'sink', label: 'AWESOME Sink', rate: 1, mach: 1 };
+  assert.equal(flowNotes(plates, [outputs[0]!], stage).split, '');
   assert.equal(flowNotes(plates, [outputs[0]!, sink], stage).split, '');
   assert.equal(flowNotes(plates, [], stage).bankNote, null);
   // A fractional equivalent is whole machines plus one adjustable machine.

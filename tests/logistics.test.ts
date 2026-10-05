@@ -286,7 +286,7 @@ test('a train counts freight cars for solids and one fluid car per 1,600 m³ of 
   );
 });
 
-test('a freight car moves at most one belt or pipe, and a train gets a locomotive per four cars (#232)', () => {
+test('a freight car moves at most two belts or pipes, one per platform port, and a train gets a locomotive per four cars (#232, #1067)', () => {
   const lanes = { belt: 780, pipe: 600 };
   const train = (items: [string, number][], roundTripMin: number) =>
     linkLoad(
@@ -296,15 +296,20 @@ test('a freight car moves at most one belt or pipe, and a train gets a locomotiv
       fluids,
       lanes,
     );
-  // A short trip: 2,000 plates fit one car, but one car loads at most 780/min, so three cars.
+  // A short trip: 2,000 plates fit one car, but a car's platform loads at most two belts, 1,560/min,
+  // so two cars (one belt per car said three before #1067).
   const short = train([['Iron Plate', 2000]], 1);
-  assert.deepEqual([short.freightCars, short.beltLimited, short.pipeLimited], [3, true, false]);
+  assert.deepEqual([short.freightCars, short.beltLimited, short.pipeLimited], [2, true, false]);
   assert.equal(short.locomotives, 1);
-  // Exactly one belt's worth needs one car, not two.
-  assert.equal(train([['Iron Plate', 780]], 1).freightCars, 1);
-  // Water at 900 m³/min fits one fluid car per trip, but that is one and a half pipes: two cars.
+  // Exactly two belts' worth needs one car, not two; one more item needs a second.
+  assert.equal(train([['Iron Plate', 1560]], 1).freightCars, 1);
+  assert.equal(train([['Iron Plate', 1561]], 1).freightCars, 2);
+  // Water at 900 m³/min fits one fluid car per trip and its two pipe ports: one car. At 1,500 m³/min
+  // (two and a half pipes) the ports set two cars.
   const water = train([['Water', 900]], 1);
-  assert.deepEqual([water.fluidCars, water.pipeLimited, water.beltLimited], [2, true, false]);
+  assert.deepEqual([water.fluidCars, water.pipeLimited, water.beltLimited], [1, false, false]);
+  const more = train([['Water', 1500]], 1);
+  assert.deepEqual([more.fluidCars, more.pipeLimited, more.beltLimited], [2, true, false]);
   // A long trip is limited by capacity instead, and a long train gets more locomotives.
   const long = train([['Iron Plate', 2000]], 60);
   assert.equal(long.beltLimited, false);

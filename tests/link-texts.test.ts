@@ -85,12 +85,14 @@ test('a fluid with no package cannot go by road vehicle or drone', () => {
 });
 
 test('a train link has its locomotives and cars, and says when the belt sets the cars', () => {
-  // 1,000 plates/min fit one car by capacity but need four Mk.3 belts; 100 m³/min is one car; five cars take two locomotives.
+  // 2,000 plates/min fit two cars by capacity, but a car's platform loads them through its two
+  // ports, two Mk.3 belts (540/min): four cars (#1067). 100 m³/min is one car; five cars take two
+  // locomotives. The line names the cars rather than "that many".
   const cars = `4 freight cars and 1 fluid car (${num(1600)} m³ each)`;
   assert.deepEqual(
     vehicleText(
       [
-        ['Iron Plate', 1000],
+        ['Iron Plate', 2000],
         ['Water', 100],
       ],
       { mode: 'train', roundTripMin: 5 },
@@ -98,10 +100,15 @@ test('a train link has its locomotives and cars, and says when the belt sets the
     {
       lines: [
         `1 train: 2 locomotives, ${cars}. Electric: each locomotive draws 25–110 MW from the grid while moving.`,
-        'A car loads and unloads at no more than one Mk.3 belt (270/min), so this flow needs that many cars.',
+        'A platform loads and unloads a car through its two ports, at most 2 × Mk.3 belts (540/min) per freight car, so this flow needs 4 freight cars.',
       ],
       badge: `1 train: 2 locomotives, ${cars}`,
     },
+  );
+  // The pipes set a fluid car's count the same way: 700 m³/min is more than two Mk.1 pipes.
+  assert.deepEqual(
+    vehicleText([['Water', 700]], { mode: 'train', roundTripMin: 1 }).lines.at(-1),
+    'A platform loads and unloads a car through its two ports, at most 2 × Mk.1 pipes (600 m³/min) per fluid car, so this flow needs 2 fluid cars.',
   );
   assert.deepEqual(vehicleText([], { mode: 'train', roundTripMin: 5 }), {
     lines: [],
@@ -111,7 +118,7 @@ test('a train link has its locomotives and cars, and says when the belt sets the
 
 test('the belt badge totals the belts and pipes per mark', () => {
   const lanes = (rate: number, fluid: boolean) => ({
-    lane: { mark: fluid ? 'Mk.2' : 'Mk.4' },
+    lane: { mark: fluid ? 'Mk.2' : 'Mk.4', cap: 100 },
     count: Math.ceil(rate / 100),
     word: fluid ? ('pipe' as const) : ('belt' as const),
   });
