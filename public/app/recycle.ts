@@ -493,9 +493,10 @@ function poolParts(wording: Wording, pool: Pool, lead: string): AdvicePart[] {
     pool.outs.map(peer => peer.rate),
     decimals,
   );
+  // With the no-break space amountOf writes before m³.
   const amount = (value: number) =>
     (value > 0 ? num(value) : '< ' + num(10 ** -decimals)) +
-    (wording.words.fluid(wording.item) ? ' m³' : '');
+    (wording.words.fluid(wording.item) ? ' m³' : '');
   const ins = pool.ins.map(peer => poolEnd(wording, peer.end));
   const out = pool.outs.map((peer, i) => [
     `${amount(outs[i]!)} to `,

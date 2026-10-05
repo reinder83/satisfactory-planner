@@ -9,6 +9,9 @@ import {
   DEFAULT_FUEL,
   DEFAULT_TRIP_MIN,
   linkBeltBadge,
+  linkCarrier,
+  linkItemWords,
+  trickleItems,
   linkSiblings,
   linkTotal,
   linkTransportUpdate,
@@ -251,4 +254,95 @@ test('a source link with a mines choice saved before #231 has the sources going 
   assert.equal(linkSiblings(stages, { ...groups, links: {} }, iron), undefined);
   assert.equal(linkSiblings(stages, { ...groups, links: undefined }, iron), undefined);
   assert.deepEqual(linkSiblings(undefined, groups, iron), []);
+});
+
+// Mk.4 belts (480/min) and Mk.2 pipes (600 m³/min), as lanePlan plans them.
+const mk4 = (rate: number, fluid: boolean) => {
+  const cap = fluid ? 600 : 480;
+  return {
+    lane: { mark: fluid ? 'Mk.2' : 'Mk.4', cap },
+    count: Math.max(1, Math.ceil(rate / cap - 1e-9)),
+    word: fluid ? ('pipe' as const) : ('belt' as const),
+  };
+};
+
+test('trickle items share mixed belts: a sink link of 14 items is one belt, not 14 (#1067)', () => {
+  // 14 items, 183/min in all, each under a quarter of a Mk.4 belt (120/min).
+  const sunk = Array.from({ length: 14 }, (_, i) => ({
+    item: `Part ${i}`,
+    rate: i < 7 ? 20 : 6.1,
+  }));
+  assert.equal(Math.round(sunk.reduce((sum, entry) => sum + entry.rate, 0) * 10) / 10, 182.7);
+  assert.equal(trickleItems(sunk, fluids, mk4).size, 14);
+  assert.equal(linkBeltBadge(sunk, fluids, mk4), '1 × Mk.4 mixed belt');
+  // A large item keeps belts of its own; the trickles share as many mixed belts as carry them; a
+  // fluid keeps its pipe.
+  const mixed = [
+    { item: 'Iron Plate', rate: 900 },
+    { item: 'Water', rate: 30 },
+    ...Array.from({ length: 6 }, (_, i) => ({ item: `Screw ${i}`, rate: 100 })),
+  ];
+  assert.equal(
+    linkBeltBadge(mixed, fluids, mk4),
+    '2 × Mk.4 belts · 1 × Mk.2 pipe · 2 × Mk.4 mixed belts',
+  );
+  // One small item alone is no trickle: its belt is the same belt.
+  assert.equal(trickleItems([{ item: 'Screw', rate: 5 }], fluids, mk4).size, 0);
+  assert.equal(
+    linkBeltBadge(
+      [
+        { item: 'Screw', rate: 5 },
+        { item: 'Rotor', rate: 200 },
+      ],
+      fluids,
+      mk4,
+    ),
+    '2 × Mk.4 belts',
+  );
+});
+
+test('a link travels one way on every page: extracted Water, a saved vehicle, else belts (#1067)', () => {
+  const truck = { mode: 'truck' as const, roundTripMin: 4, fuel: 'Packaged Fuel' };
+  const train = { mode: 'train' as const, roundTripMin: 8 };
+  const links: FactoryGroups['links'] = {
+    'fg-a:fg-b': train,
+    [sourceOf('Water') + ':fg-a']: truck,
+    [MINES + ':fg-b']: truck,
+  };
+  assert.deepEqual(linkCarrier(links, 'fg-a', 'fg-b'), { kind: 'vehicle', transport: train });
+  // Water is pumped at the site that uses it, whatever is saved on its link.
+  assert.deepEqual(linkCarrier(links, sourceOf('Water'), 'fg-a'), { kind: 'extract' });
+  assert.deepEqual(linkCarrier(undefined, sourceOf('Water'), 'fg-b'), { kind: 'extract' });
+  // An old whole-mines choice still applies to each source (#231), Water aside.
+  assert.deepEqual(linkCarrier(links, sourceOf('Iron Ore'), 'fg-b'), {
+    kind: 'vehicle',
+    transport: truck,
+  });
+  assert.deepEqual(linkCarrier(links, sourceOf('Water'), 'fg-b'), { kind: 'extract' });
+  assert.deepEqual(linkCarrier(links, 'fg-b', 'fg-a'), { kind: 'belt' });
+  // The flow page's words for each port follow the same choice.
+  const belts = (item: string, rate: number) => `${mk4(rate, fluids.has(item)).count} × belts`;
+  const words = (link: { from: string; to: string; items: { item: string; rate: number }[] }) =>
+    linkItemWords(link, links, fluids, mk4, belts);
+  const items = [
+    { item: 'Iron Plate', rate: 600 },
+    { item: 'Screw', rate: 10 },
+    { item: 'Rotor', rate: 5 },
+  ];
+  assert.equal(words({ from: 'fg-a', to: 'fg-b', items })('Iron Plate', 600), 'by freight train');
+  assert.equal(
+    words({ from: sourceOf('Iron Ore'), to: 'fg-b', items })('Iron Ore', 60),
+    'by truck',
+  );
+  assert.equal(
+    words({ from: sourceOf('Water'), to: 'fg-a', items: [{ item: 'Water', rate: 90 }] })(
+      'Water',
+      90,
+    ),
+    'Water Extractors here',
+  );
+  const belted = words({ from: 'fg-b', to: 'fg-a', items });
+  assert.equal(belted('Iron Plate', 600), '2 × belts');
+  assert.equal(belted('Screw', 10), 'mixed Mk.4 belt');
+  assert.equal(belted('Rotor', 2), 'mixed Mk.4 belt', 'a line’s part of a trickle rides it too');
 });
