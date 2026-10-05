@@ -171,7 +171,7 @@ test('after a group edit the central line names the line whose leftover meets pa
   // Alpha's own line keeps the #918 sentence.
   assert.match(
     dialogOf(wirePlan, movedStator, `Recipe_Wire_C:${ALPHA}`).note,
-    /^Made on site for Alpha's lines, which now ask for less than it makes: the AWESOME Sink takes what the plan sinks, and the rest goes to the other places that ask for it\.$/,
+    /^Made on site for Alpha's lines, which use less than it makes: the AWESOME Sink takes what the plan sinks, and the rest goes to the other places that ask for it\.$/,
   );
 });
 

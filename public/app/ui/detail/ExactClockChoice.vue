@@ -23,6 +23,7 @@ import {
   withExactClock,
 } from '../../exact-clocks.ts';
 import { FLUIDS, itemRate } from '../../flow.ts';
+import { exactClocksKeep, sinkCause } from '../../sink-cause.ts';
 import { calcStage, calculated, stage, state, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { legacy } from '../bridge.ts';
@@ -48,16 +49,22 @@ const view = computed(() =>
     const phase = stage(),
       planned = exactClockIn(plannedExactClocks(calculated), phase, row.id),
       wanted = exactClockIn(wantedExactClocks(calculated, state), phase, row.id);
-    // The main product's overflow in this phase: what the phase makes of it beyond every use.
+    // The main product's overflow in this phase: what the phase makes of it beyond every use, and
+    // why (sinkCause, #1063): exact clocks remove only what rounding to whole machines explains.
     const [main] = Object.keys(row.outputs || {}).filter(item => sinkable.has(item));
-    const spare = (main && calcStage()?.surplus?.[main]) || 0;
+    const current = calcStage();
+    const spare = (main && current?.surplus?.[main]) || 0;
+    const keep =
+      main && current && spare > 0.005
+        ? exactClocksKeep(sinkCause(row, main, spare, current, true, item => FLUIDS.has(item)))
+        : undefined;
     const note =
       planned !== wanted
         ? 'Saved. The plan keeps running this line as it was calculated until you recalculate: the build plan offers “Recalculate with exact clocks”, which makes a new profile and leaves this one as it is.'
         : planned
           ? 'This plan runs the line at exact clocks: whole machines at 100% and the last one underclocked to the exact remainder.'
           : spare > 0.005 && main
-            ? `This plan runs the line on whole machines at 100%. This phase makes ${itemRate(main, spare)} more ${main} than it uses, which goes to storage or the sink. Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.`
+            ? `This plan runs the line on whole machines at 100%. This phase makes ${itemRate(main, spare)} more ${main} than it uses, which goes to storage or the sink. ${keep ?? 'Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.'}`
             : 'This plan runs the line on whole machines at 100%. Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it.';
     return { id: row.id, wanted, note, noteId: 'exact-clock-note-' + row.id };
   }),

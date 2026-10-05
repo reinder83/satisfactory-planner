@@ -173,7 +173,128 @@ export function siteRoutes(config: CurrentSettings, phase: number, pool: PoolRec
     routes,
     draws: siteDraws(pool, balances, follows),
     feeds: siteFeeds(pool, balances, routes),
+    overflows: balances.filter(
+      ({ group, item }) =>
+        !exactBalance(item) && !!config.onSite?.[group]?.overflow?.includes(item),
+    ),
   };
+}
+
+// A group's own lines of a solid item it makes on site can make more than the group uses, because
+// whole machines round up, and that excess has only the sink. So a central line can still be
+// built for what the other consumers and storage ask, and sink almost all it makes: one Fused
+// Quickwire machine for 1/min of storage, its other 89/min sunk, beside a group line sinking 70/min
+// (#1063). withOverflow plans such a phase again with a route per group and item,
+// `overflow:<item>@<group>` (the group's `overflow`, which only the planner sets), that carries
+// the group's excess into the central balance, where it meets the central demand before a central
+// line does, so the central line shrinks or is not built. The route costs a thousandth of a
+// machine per item (OVERFLOW_COST), so the search does not route for nothing, while carrying what
+// one central machine makes (a few hundred items/min) still costs less than that machine. The
+// books need nothing new: what the group's lines make beyond the group's use and the plan's
+// surplus is `offered` (itemBooks in public/app/group-links.ts, #918), ordinary supply at the
+// group that the other places share. An item that balances exactly (a fluid) has no excess and
+// gets no route.
+export const OVERFLOW_COST = 0.001;
+export const overflowRoute = (item: string, group: string) => `overflow:${item}@${group}`;
+// How much of what the central lines of an item make the plan must sink before withOverflow
+// tries the routes: three quarters, "almost all" (#1063's central lines sank 89 of 90/min and
+// 57.5 of 67.5/min).
+const ALMOST_ALL_SUNK = 0.75;
+// A phase planned by `solve` with `config`, and planned again with the groups' excess routed to
+// the central balance (overflowRoute) when the first plan sinks almost all that the central lines
+// of an item made on site make (sunkCentrally). `finish` is what the goal does to a solved plan
+// that fits, given the settings it was solved with (minimal construction runs the plan's buildings
+// as fast as they allow: fullSpeed in planner/adjustments.ts); the two plans are compared as they
+// leave it, so the routed plan never finishes later than the first one would have. The second
+// plan stands only when it fits as the first did (no fallback the first did not need) and builds
+// fewer machines, before and after `finish`, in no more time after it; it records the routes it
+// was offered as `onSiteOverflow` ({ group: items }), and `unrouted` is given the first plan as it
+// left `finish` (phaseTime 'final' may still prefer it, see resolveEarlierPhases in
+// planner/adjustments.ts). Any other phase is the first plan, exactly as before #1063. A plan
+// without whole machines makes exactly what each group uses, so it is never planned again.
+export function withOverflow(
+  config: CurrentSettings,
+  phase: number,
+  solve: (settings: CurrentSettings) => RunResult,
+  finish: (settings: CurrentSettings, plan: Solved) => Solved = (_settings, plan) => plan,
+  unrouted?: (first: Solved) => void,
+): RunResult {
+  const first = solve(config);
+  if (!first.feasible) return first;
+  const firstDone = finish(config, first);
+  if (first.onSiteDropped || !config.wholeMachines) return firstDone;
+  const routes = sunkCentrally(config, phase, first);
+  if (!Object.keys(routes).length) return firstDone;
+  const routedSettings = withOverflowItems(config, routes);
+  const routed = solve(routedSettings);
+  if (
+    !routed.feasible ||
+    routed.onSiteDropped ||
+    fallsBack(routed, first) ||
+    buildings(routed) >= buildings(first)
+  )
+    return firstDone;
+  const routedDone = finish(routedSettings, routed);
+  if (!(buildings(routedDone) < buildings(firstDone) && routedDone.hours <= firstDone.hours + 1e-9))
+    return firstDone;
+  unrouted?.(firstDone);
+  return { ...routedDone, onSiteOverflow: routes };
+}
+const buildings = (plan: Solved) => plan.rows.reduce((total, row) => total + row.machines, 0);
+// Per group, the solid items it makes on site on its own lines in `plan` of which the central
+// lines making them as their main product sink at least ALMOST_ALL_SUNK of what they make. What
+// the central lines sink is the plan's surplus less what the groups' own lines make beyond the
+// groups' use, measured as the model counts it (siteRoutes over the plan's rows: each row's part
+// of the item in a group's balance, and the fixed amounts the groups' balances give, #984), as the
+// factory dialog shows the central line's sink.
+function sunkCentrally(
+  config: CurrentSettings,
+  phase: number,
+  plan: Solved,
+): Record<string, string[]> {
+  const { balances, routes, draws } = siteRoutes(config, phase, plan.rows);
+  const inBalance = (row: CalcRow, item: string, side: 'in' | 'out', name: string) =>
+    routes(row, item, side).reduce(
+      (total, [balance, part]) =>
+        balance === name
+          ? total + (side === 'in' ? row.inputs[item] || 0 : row.outputs[item] || 0) * part
+          : total,
+      0,
+    );
+  const excessOf = (name: string, item: string) => {
+    let made = 0,
+      used = 0;
+    for (const row of plan.rows) {
+      made += inBalance(row, item, 'out', name);
+      used += inBalance(row, item, 'in', name);
+    }
+    for (const draw of draws) if (draw.balance === name) used += draw.rate;
+    return Math.max(0, made - used);
+  };
+  const result: Record<string, string[]> = {};
+  for (const item of new Set(balances.map(balance => balance.item))) {
+    if (exactBalance(item)) continue;
+    const sites = balances.filter(balance => balance.item === item);
+    const central = plan.rows
+      .filter(row => !row.onSite && primaryOutput(row) === item)
+      .reduce((total, row) => total + (row.outputs[item] || 0), 0);
+    const excess = sites.reduce((total, site) => total + excessOf(site.name, item), 0);
+    if (central > 0 && (plan.surplus[item] || 0) - excess >= ALMOST_ALL_SUNK * central - 1e-6)
+      for (const { group } of sites) (result[group] ??= []).push(item);
+  }
+  for (const items of Object.values(result)) items.sort();
+  return result;
+}
+// `config` with each group in `routes` allowed to route its excess of those items to the central
+// balance (OnSiteGroup.overflow).
+function withOverflowItems(
+  config: CurrentSettings,
+  routes: Record<string, string[]>,
+): CurrentSettings {
+  const onSite: NonNullable<CurrentSettings['onSite']> = {};
+  for (const [group, entry] of Object.entries(config.onSite || {}))
+    onSite[group] = routes[group] ? { ...entry, overflow: routes[group] } : entry;
+  return { ...config, onSite };
 }
 
 // The central byproduct of an item a group makes on site that balances exactly (a fluid), as
@@ -518,7 +639,13 @@ export function sharedSettings(config: CurrentSettings): CurrentSettings {
   );
   return { ...config, onSite };
 }
-// The settings a re-solve of a finished stage uses (phaseTime 'final', the augmenter fuel
-// verdict): central when the stage had to make its items centrally.
+// The settings a re-solve of a finished stage uses (minimal construction's fullSpeed, phaseTime
+// 'final', the augmenter fuel verdict): central when the stage had to make its items centrally,
+// and with the groups' excess routed to the central balance when the stage was planned that way
+// (onSiteOverflow, #1063), so the re-solve can still build the plan it re-solves.
 export const stageSettings = (config: CurrentSettings, stage: CurrentStage | undefined) =>
-  stage?.onSiteDropped ? centralSettings(config) : config;
+  stage?.onSiteDropped
+    ? centralSettings(config)
+    : stage?.onSiteOverflow
+      ? withOverflowItems(config, stage.onSiteOverflow)
+      : config;

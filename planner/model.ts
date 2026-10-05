@@ -27,6 +27,8 @@ import {
   BYPRODUCT_FIRST,
   feedCap,
   feedRoute,
+  OVERFLOW_COST,
+  overflowRoute,
   siteBalance,
   siteCopies,
   siteFloors,
@@ -295,7 +297,8 @@ function phasePower(config: CurrentSettings, phase: number): PhasePower {
 // power, recipe variables with the somersloop budget and caps, the rows held to their fixed rates
 // (#984, only in a re-solve that needs them), the routes of central byproducts into the groups'
 // balances (#1012, only for an item a group makes on site that some line makes as a byproduct and
-// that balances exactly), raw resources, existing supply,
+// that balances exactly), the routes of the groups' excess of a solid item into the central
+// balance (#1063, only for an item a group makes on site), raw resources, existing supply,
 // the plutonium sink, the goal, then whole nuclear plants. The solver's result can depend on
 // that order, so keep it. `period` is the nuclear rounding (see roundNuclear).
 export function buildModel(
@@ -326,6 +329,7 @@ export function buildModel(
   addRecipes(model, context, pool, sites.routes);
   addSiteFloors(model, context, pool);
   addSiteFeeds(model, sites.feeds);
+  addSiteOverflows(model, sites.overflows);
   addSources(model, context, allItems, demands.delivery);
   const period = roundNuclear(model, context, pool, demands.demand);
   return { model, period };
@@ -385,6 +389,21 @@ function addSiteFeeds(model: LpModel, feeds: SiteFeed[]) {
         [cap]: 1,
       };
   }
+}
+// The routes of the groups' excess of a solid item they make on site into the central balance
+// (#1063, overflowRoute in on-site.ts): each 'overflow:<item>@<group>' takes from the group's
+// balance what it gives the central one, at a small cost, so it carries only what saves a central
+// machine.
+function addSiteOverflows(
+  model: LpModel,
+  overflows: { item: string; group: string; name: string }[],
+) {
+  for (const { item, group, name } of overflows)
+    model.variables[overflowRoute(item, group)] = {
+      cost: OVERFLOW_COST,
+      [name]: -1,
+      ['item:' + item]: 1,
+    };
 }
 // The power constraint, in MW: consumption (x powerFactor x utility allowance) plus extraction
 // (x powerFactor) minus new generation (x augmenter boost) may not exceed the spare figure. Each

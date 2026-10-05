@@ -7,9 +7,12 @@
 // before #1038 has none and recalculates exactly as it did (recorded on main before #1038 in
 // tests/fixtures/on-site-rates-2026-10-04.json). #1064's power model changed every plan, so both
 // fixtures' rows were recorded again on it from the same settings, by the same steps as these
-// tests (which reproduced the earlier recordings exactly on main before #1064). #1086 (fluid
-// lines at exact clocks, fuel that follows the load) changed them again, and they were recorded
-// once more the same way (the steps reproduced the #1064 recordings exactly on main first).
+// tests (which reproduced the earlier recordings exactly on main before #1064). #1063 dropped the
+// central Wire line that sank almost all it made in Phases 4 and 5 of the second shares case, so
+// that case's rows were recorded again on it the same way; the other cases did not change.
+// #1086 (fluid lines at exact clocks, fuel that follows the load) changed the rows of all four
+// cases, and they were recorded once more the same way (the steps reproduced the #1063
+// recordings exactly on main first).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

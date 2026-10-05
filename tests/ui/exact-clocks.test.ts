@@ -160,6 +160,31 @@ test('a line’s dialog saves exact clocks without recalculating; the plan asks 
   assert.equal($('[data-exact-clocks-recalc]'), null);
 });
 
+test('a line that uses up a fluid says exact clocks would not remove its sink (#1063)', async () => {
+  // Phase 3 on coal power: the Petroleum Coke line uses up the Heavy Oil Residue of the Plastic
+  // and Rubber lines, and all its coke goes to the sink.
+  const plan = generatedWith({ ...WHOLE, phase: '3', mainPower: 'coal', limitsConfirmed: true });
+  const coke = plan.stages['3'].rows!.find(row => row.id === 'Recipe_PetroleumCoke_C')!;
+  assert.ok(coke, 'a Petroleum Coke line');
+  openWhole(plan);
+  openCalculatedFactory(coke.id);
+  await settle();
+  assert.ok($(`[data-exact-clock="${coke.id}"]`), 'the dialog still offers the choice');
+  assert.match(
+    text('[data-exact-clock-note]'),
+    /more Petroleum Coke than it uses, which goes to storage or the sink\. It is left over from using up Heavy Oil Residue, so exact clocks would not remove it: they only underclock the last machine to the exact remainder\.$/,
+  );
+  // A line whose overflow is rounding keeps the sentence that exact clocks remove it.
+  const rounding = overflowing(wholePlan());
+  openWhole();
+  openCalculatedFactory(rounding.id);
+  await settle();
+  assert.match(
+    text('[data-exact-clock-note]'),
+    /Exact clocks underclock the last machine to the exact remainder instead, and the lines feeding it shrink with it\.$/,
+  );
+});
+
 test('“Recalculate with exact clocks” makes a new profile that plans the lines asked for', async () => {
   const plan = wholePlan(),
     line = overflowing(plan);

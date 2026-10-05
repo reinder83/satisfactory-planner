@@ -248,7 +248,8 @@ test('right after a recalculation with fixed and open memberships, each own line
     fixed = 0,
     changed = 0,
     short = 0;
-  const left = { count: 0 };
+  const left = { count: 0 },
+    routed = { count: 0 };
   for (let seed = 1; seed <= 40; seed++) {
     const { before, plan, groups, fixed: rates } = configuration(seed);
     fixed += rates.length;
@@ -259,7 +260,7 @@ test('right after a recalculation with fixed and open memberships, each own line
       phases++;
       lines += own;
       const label = `seed ${seed}, phase ${phase}`;
-      problems.push(...lineProblems(stage, groups, label, left));
+      problems.push(...lineProblems(stage, groups, label, left, undefined, routed));
       // The parts that follow a row's total: rows whose total the recalculation changed, and
       // rows that make less than the fixed rates (sized by rowShares' shares at their total).
       const total = (from: StoredStage, id: string) => {
@@ -280,6 +281,9 @@ test('right after a recalculation with fixed and open memberships, each own line
   assert.ok(changed >= 30, `${changed} rows with a fixed rate changed their total`);
   assert.ok(short >= 40, `${short} rows make less than their fixed rates`);
   assert.ok(left.count * 10 <= lines, `${left.count} fluids left out`);
+  // Lines whose excess feeds the central demand (#1063) stay few, so the check above still
+  // covers almost every line.
+  assert.ok(routed.count * 10 <= lines, `${routed.count} lines routed to the central demand`);
 });
 
 // #1038: Alpha holds the Steel Beam line at a fixed 10/min and Beta the rest, and both make Steel

@@ -137,7 +137,8 @@ function payoffFacts(): AdaFacts['payoff'] {
 }
 
 // The items a stage makes centrally because its groups' own lines did not fit (#875), and those
-// groups by the names the plan was calculated with.
+// groups by the names the plan was calculated with. Also the items whose groups' excess meets the
+// central demand (#1063, stage.onSiteOverflow), which have the same shape.
 function onSiteDroppedFacts(
   dropped: Record<string, string[]>,
   onSite: OnSiteSettings | undefined,
@@ -348,6 +349,10 @@ function adaFacts(): AdaFacts {
     onSiteDropped:
       calculated && storedStage.feasible && storedStage.onSiteDropped
         ? onSiteDroppedFacts(storedStage.onSiteDropped, calculated.settings.onSite)
+        : null,
+    onSiteOverflow:
+      calculated && storedStage.feasible && storedStage.onSiteOverflow
+        ? onSiteDroppedFacts(storedStage.onSiteOverflow, calculated.settings.onSite)
         : null,
     profiles: workspace.saves.find(s => s.id === currentSave.id)?.profiles.length || 0,
     backupDays: backupDays(workspace.lastBackup),
