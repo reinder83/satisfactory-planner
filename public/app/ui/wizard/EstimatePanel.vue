@@ -2,7 +2,7 @@
   The live estimate beside All settings steps 3 and 4 (SP-33, #268), from wizard/estimate.ts:
   the buildings and power at the plan's last phase, what whole machines add there over exact
   clocks (#1066, once the whole-machine pass is in), and the tightest raw resource over every
-  phase it plans, as a share of its budget. A resource over its budget, a phase that does not
+  phase it plans, as a share of its budget (the phase's own with mining per phase, #1065). A resource over its budget, a phase that does not
   fit or too little power shows a warning. The status line is a polite live region, so a screen
   reader hears when an estimate is ready without every figure being read out. Leaving the step
   cancels the estimate and forgets it; arriving estimates the draft's settings straight away.
@@ -26,6 +26,7 @@ import { power } from '../../wizard/fields.ts';
 import { powerView } from '../../../power.ts';
 import { measuredRounding } from '../../exact-clocks.ts';
 import { resourceUse } from '../../views/resources.ts';
+import { stageBudget } from '../../../mining.ts';
 import { legacy } from '../bridge.ts';
 
 const form = () => document.querySelector<HTMLFormElement>('#wizard-form');
@@ -57,7 +58,8 @@ const view = computed(() =>
       null;
     for (const [phase, stageResult] of stages)
       for (const [name, rate] of Object.entries(stageResult.raw || {})) {
-        const use = resourceUse(rate, plan.settings.limits[name] ?? 0);
+        // The phase's own budget with mining per phase (#1065), else the entered one.
+        const use = resourceUse(rate, stageBudget(stageResult, plan.settings, name));
         if (!use.idle && (!tightest || use.fraction > tightest.use.fraction))
           tightest = { name, phase, use };
       }

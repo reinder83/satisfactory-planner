@@ -1,6 +1,7 @@
 // The draft of a phase that does not fit, and the reason it gives.
 import { listNames } from '../public/wording.ts';
-import type { CurrentSettings, CurrentStage } from '../public/types/index.ts';
+import { phaseMining } from '../public/preferences.ts';
+import type { CurrentSettings, CurrentStage, ItemRates } from '../public/types/index.ts';
 import type { Solved, RunResult } from './types.ts';
 import { RAW } from './data.ts';
 import { run, goalHours } from './model.ts';
@@ -8,12 +9,14 @@ import type { Unsolved } from './calculate.ts';
 import { warningDuration } from './warnings.ts';
 
 // What the draft of a phase that does not fit is diagnosed with: the settings without production
-// amplification (`plain`) and the phase's SAM conversion.
+// amplification (`plain`), the phase's SAM conversion and its budgets: the settings', or with
+// mining per phase the phase's own (#1065).
 interface DraftContext {
   config: CurrentSettings;
   phase: number;
   plain: CurrentSettings;
   conversion: boolean;
+  budgets: ItemRates;
 }
 // Infeasible phase: build a draft that explains why. The diagnostic is the exact LP with every
 // budget lifted, so its `raw` shows what the goal would need. Three outcomes, in order: the
@@ -39,7 +42,8 @@ export function draftStage(config: CurrentSettings, phase: number, result: Unsol
     stage.reason =
       'The selected recipe/power options cannot support this combination. Allow alternates or change the goals.';
   else {
-    const draft: DraftContext = { config, phase, plain, conversion };
+    const budgets = config.phaseMining ? phaseMining(config, phase).budgets : config.limits;
+    const draft: DraftContext = { config, phase, plain, conversion, budgets };
     const currentHours = goalHours(config);
     stage.reason =
       config.goal !== 'maximum' && fitsInHours(draft, currentHours)
@@ -62,7 +66,7 @@ const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) 
 // whole machines need +32%). Sets `wholeMachinesOnly` and the `shortfalls` it measured.
 function wholeMachinesReason(
   stage: CurrentStage,
-  { config, phase, plain, conversion }: DraftContext,
+  { phase, plain, conversion, budgets }: DraftContext,
 ) {
   stage.wholeMachinesOnly = true;
   const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
@@ -82,11 +86,11 @@ function wholeMachinesReason(
     : { feasible: false };
   if (rounded.feasible)
     stage.shortfalls = RAW.filter(
-      resource => (rounded.raw[resource] || 0) > config.limits[resource]! + 0.001,
+      resource => (rounded.raw[resource] || 0) > budgets[resource]! + 0.001,
     ).map(resource => ({
       name: resource,
       needed: Math.ceil(rounded.raw[resource]!),
-      budget: config.limits[resource]!,
+      budget: budgets[resource]!,
     }));
   const names = (stage.shortfalls || []).map(shortfall => shortfall.name);
   return names.length
@@ -101,13 +105,13 @@ function shortfallReason(
   diagnostic: Solved,
   currentHours: number,
 ) {
-  const { config } = draft;
+  const { config, budgets } = draft;
   const shortfalls = RAW.filter(
-    resource => (diagnostic.raw[resource] || 0) > config.limits[resource]! + 0.05,
+    resource => (diagnostic.raw[resource] || 0) > budgets[resource]! + 0.05,
   ).map(resource => ({
     name: resource,
     needed: Math.ceil(diagnostic.raw[resource]!),
-    budget: config.limits[resource]!,
+    budget: budgets[resource]!,
   }));
   stage.shortfalls = shortfalls;
   // The minimal per-phase time is found on the exact LP; whole machines may need slightly more.

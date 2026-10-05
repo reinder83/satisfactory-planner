@@ -4,12 +4,23 @@
 import {
   droneSupply,
   extractionMWPerUnit,
+  phaseMining,
+  sourceMWPerUnit,
+  sourceYield,
+  waterMWPerUnit,
   wantsStorage,
   storageRateFor,
 } from '../public/preferences.ts';
 import { extractionEquipment } from '../public/power.ts';
 import { solve, type LpModel } from '../optimizer.ts';
-import type { CurrentSettings, ItemRates, StageDelivery, StageKey } from '../public/types/index.ts';
+import type {
+  CurrentSettings,
+  ItemRates,
+  MiningSource,
+  StageDelivery,
+  StageKey,
+  StageMining,
+} from '../public/types/index.ts';
 import type { PoolRecipe, RunResult, RunOptions } from './types.ts';
 import { DATA, RAW, DELIVERIES, exactBalance } from './data.ts';
 import { recipePool, amplifiable, amplified, nuclearPeriod, generators } from './recipes.ts';
@@ -96,11 +107,14 @@ export function run(config: CurrentSettings, phase: number, options: RunOptions 
   return readStage(context, pool, demands, solved, period, model);
 }
 // What every step of one phase's solve shares: the normalised settings, the phase (1 to 5),
-// run()'s options with their defaults filled in, and the phase's power figures.
+// run()'s options with their defaults filled in, the phase's power figures and, for a plan with
+// mining and belts per phase (#1065), the phase's mining: its budgets and node kinds (null
+// otherwise, where every phase has the settings' budgets).
 export interface PhaseContext extends Required<RunOptions> {
   config: CurrentSettings;
   phase: number;
   power: PhasePower;
+  mining: StageMining | null;
 }
 // run()'s options with their defaults filled in, and the phase's power figures.
 export const phaseContext = (
@@ -130,7 +144,11 @@ export const phaseContext = (
   roundStopped,
   overBudget,
   power: phasePower(config, phase),
+  mining: config.phaseMining ? phaseMining(config, phase) : null,
 });
+// The phase's budget for a raw resource: its mining's (#1065), else the settings'.
+export const phaseBudget = (context: Pick<PhaseContext, 'config' | 'mining'>, item: string) =>
+  context.mining ? context.mining.budgets[item]! : context.config.limits[item]!;
 // The phase's power figures (see phasePower).
 interface PhasePower {
   utilityFactor: number;
@@ -496,30 +514,38 @@ const OVER_BUDGET_COST = 1000;
 // The sources that feed the item balances besides the recipes, and the goal that draws on them.
 function addSources(
   model: LpModel,
-  { config, phase, maximum, ignoreLimits, overBudget }: PhaseContext,
+  context: PhaseContext,
   allItems: Set<string>,
   delivery: Record<string, StageDelivery>,
 ) {
+  const { config, phase, maximum, ignoreLimits, overBudget, mining } = context;
   // Raw resources: a 'raw:' source variable per extracted item the pool uses, capped by its
   // budget ('limit:') and almost free, so extraction is spent only where it saves machines.
   // Each draws its miners' or extractors' power (#1064, extractionMWPerUnit), so the plan's
-  // generators cover extraction too.
+  // generators cover extraction too. With mining per phase (#1065), the phase's budget, and a
+  // source per node kind instead (addNodeKinds).
   // Diagnostics use the highest budget the settings accept; larger bounds destabilize the WASM MIP solver.
   const equipment = extractionEquipment(config);
   for (const item of RAW) {
     if (!allItems.has(item)) continue;
-    model.constraints['limit:' + item] = { max: ignoreLimits ? 1e7 : config.limits[item] };
-    model.variables['raw:' + item] = {
-      cost: 0.0001,
-      ['item:' + item]: 1,
-      ['limit:' + item]: 1,
-      power: extractionMWPerUnit(item, equipment) * config.powerFactor,
-    };
+    const budget = phaseBudget(context, item);
+    model.constraints['limit:' + item] = { max: ignoreLimits ? 1e7 : budget };
+    const kinds = mining?.sources[item];
+    if (mining && kinds) addNodeKinds(model, context, item, kinds);
+    else
+      model.variables['raw:' + item] = {
+        cost: 0.0001,
+        ['item:' + item]: 1,
+        ['limit:' + item]: 1,
+        power:
+          (mining ? waterMWPerUnit(mining.miner.clock) : extractionMWPerUnit(item, equipment)) *
+          config.powerFactor,
+      };
     // A draft's measurement (#1066): how far the budget must be raised, at a cost that outweighs
     // the machines it could save, up to the budget again plus 600/min (the modest bound that
     // keeps the integer search stable, as the doubled budgets it replaces did).
     if (overBudget && !ignoreLimits) {
-      model.constraints['overBudget:' + item] = { max: config.limits[item]! + 600 };
+      model.constraints['overBudget:' + item] = { max: budget + 600 };
       model.variables['overBudget:' + item] = {
         cost: OVER_BUDGET_COST,
         ['limit:' + item]: -1,
@@ -554,6 +580,39 @@ function addSources(
     for (const [item, part] of Object.entries(delivery)) goal['item:' + item] = -part.target / 1000;
     model.variables.goal = goal;
   }
+}
+// A raw resource's sources under mining per phase (#1065): one 'raw:<item>@<kind>' variable per
+// node kind the phase draws it from (pure, normal or impure nodes, resource-well satellites),
+// each capped at what the phase's nodes of that kind give ('nodes:<item>@<kind>') and charged
+// its machines' power per item at the phase's clock (sourceMWPerUnit), so the plan's generators
+// cover the nodes the draw really taps. Each also counts against the resource's budget
+// ('limit:'). The cheapest kind per item costs least, by a margin far below anything else in
+// the model, so the solve taps the best nodes first, as the pages advise (miningAdvice). A
+// diagnostic (ignoreLimits) or a draft's measurement (overBudget) drops the per-kind caps with
+// the budget.
+function addNodeKinds(
+  model: LpModel,
+  { config, ignoreLimits, overBudget, mining }: PhaseContext,
+  item: string,
+  kinds: MiningSource[],
+) {
+  // The caller only passes kinds for a phase with mining.
+  const clock = mining!.miner.clock;
+  const ordered = [...kinds].sort(
+    (first, second) => sourceMWPerUnit(first, clock) - sourceMWPerUnit(second, clock),
+  );
+  ordered.forEach((kind, rank) => {
+    const name = item + '@' + kind.kind;
+    model.variables['raw:' + name] = {
+      cost: 0.0001 * (1 + rank / 100),
+      ['item:' + item]: 1,
+      ['limit:' + item]: 1,
+      power: sourceMWPerUnit(kind, clock) * config.powerFactor,
+      ...(ignoreLimits || overBudget ? {} : { ['nodes:' + name]: 1 }),
+    };
+    if (!ignoreLimits && !overBudget)
+      model.constraints['nodes:' + name] = { max: kind.nodes * sourceYield(kind, clock) };
+  });
 }
 // Whole nuclear plants (#370). Every line downstream of the uranium plants is linear in their
 // count, so rounding that count is enough. In Phase 5 under 'recycle' the count is a whole

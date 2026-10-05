@@ -9,6 +9,8 @@ import type {
 } from './types/index.ts';
 import { listNames, powerAmount } from './wording.ts';
 import { powerView } from './power.ts';
+import { miningLinearMW, phaseForTier } from './preferences.ts';
+import { miningBuildings, miningStepBody } from './mining.ts';
 
 // A generated guidance step: its checklist key, title and text.
 export interface GuideTask {
@@ -77,10 +79,6 @@ const COLLECTIBLES = [
   'Somersloop',
 ];
 
-// The Space Elevator phase in which a HUB tier becomes available: tiers 1-2 in Phase 1, 3-4 in
-// Phase 2 and so on, with 9 in Phase 5.
-const phaseForTier = (tier: number) =>
-  tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
 // Locale-formatted with at most 2 decimals, exactly as Number(value).toLocaleString(undefined,
 // { maximumFractionDigits: 2 }) would, but with one shared formatter: toLocaleString with options
 // builds a new Intl.NumberFormat on every call, which was most of phaseSteps' time (#772).
@@ -177,6 +175,7 @@ export function phaseSteps(
       : [...steps.powerTasks, ...steps.milestoneTasks];
   return [
     ...startup,
+    ...miningTask(plan, stage),
     ...steps.hardDrives,
     ...(plan.stages[stage]?.rows || []).map(row => ({
       id: 'calc-' + stage + '-' + row.id,
@@ -191,6 +190,14 @@ export function phaseSteps(
     },
     ...steps.retire,
   ];
+}
+
+// The phase's mining step (#1065), on a plan with mining per phase: the miners and extractors
+// its draw needs, best nodes first (miningStepBody in mining.ts). Its key is `mining-<stage>`;
+// a plan without mining per phase has no such step, so its build plan is as it was.
+function miningTask(plan: Pick<StoredCalculatedPlan, 'stages'>, stage: StageKey): GuideTask[] {
+  const body = miningStepBody(plan.stages[stage], stage);
+  return body ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', body }] : [];
 }
 
 // What phaseSteps reads of a profile's progress: its ticks, and its factory groups' names, which
@@ -315,6 +322,12 @@ export function requiredMilestones(context: GuideContext): ProgressionEntry[] {
   const wanted = new Set(rows.map(recipeIdOf));
   for (const row of rows) {
     const building = data.buildings[row.machine];
+    if (building) wanted.add(building);
+  }
+  // With mining per phase (#1065), the belts, pipes, miners and extractors the phase's mining
+  // uses, so the milestone of each (Tier 7 Logistics Mk.5 in Phase 4) is a step of the phase.
+  for (const name of miningBuildings(context.stageOf(stage))) {
+    const building = data.buildings[name];
     if (building) wanted.add(building);
   }
   for (const entry of data.entries) if (entry.recipes.some(r => wanted.has(r))) add(entry);
@@ -615,9 +628,13 @@ function plannedFor(planned: StoredStage, settings: GuideContext['plan']['settin
   const linear = (planned.rows || [])
     .filter(row => row.power > 0)
     .reduce((sum, row) => sum + row.power * (row.equivalent || 0), 0);
+  // With mining per phase (#1065) the grid counts the nodes' clocked power, and the planner charged
+  // each node kind's linear power.
+  const extraction = planned.mining
+    ? miningLinearMW(planned.raw || {}, planned.mining) * (settings.powerFactor ?? 1)
+    : planned.grid.extractionMW;
   return (
-    linear * (settings.powerFactor ?? 1) * (1 + (settings.utilityPercent ?? 20) / 100) +
-    planned.grid.extractionMW
+    linear * (settings.powerFactor ?? 1) * (1 + (settings.utilityPercent ?? 20) / 100) + extraction
   );
 }
 

@@ -5846,6 +5846,27 @@ th.resource-cell {
 .supply-notice .small {
   margin-top: 12px;
 }
+/* The budgets step's budgets per phase (#1065): its caption reads as the paragraph above it. */
+.phase-budgets {
+  margin: 8px 0 16px;
+}
+.phase-budgets caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0 8px;
+}
+/* The Resources page's miners and extractors (#1065): one advice per resource, which wraps over
+   several lines, so its icon sits at the top. */
+.mining-advice {
+  margin: 16px 0 0;
+}
+.mining-advice .supply-summary li {
+  align-items: flex-start;
+}
+.mining-advice .supply-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 720px) {
   .guided-grid {
     grid-template-columns: 1fr;

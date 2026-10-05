@@ -73,6 +73,14 @@ import {
   uniformPurities,
   richShape,
   waterExtractors,
+  BELT_MARKS,
+  PIPE_MARKS,
+  EXTRACTOR_OPTIONS,
+  isWellKind,
+  miningAdvice,
+  phaseForTier,
+  phaseMiner,
+  phaseMining,
 } from '../public/preferences.ts';
 
 const source = appSource();
@@ -170,6 +178,15 @@ function ui() {
     richShape,
     // ADA's Water count (#1024), for a plan whose phase extracts Water.
     waterExtractors,
+    // The belt and pipe marks (flow.ts) and the mining per phase (mining.ts, #1065).
+    BELT_MARKS,
+    PIPE_MARKS,
+    EXTRACTOR_OPTIONS,
+    isWellKind,
+    miningAdvice,
+    phaseForTier,
+    phaseMiner,
+    phaseMining,
   });
   vm.runInContext(source, context);
   context.catalogData = catalog();

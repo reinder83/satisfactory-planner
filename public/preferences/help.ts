@@ -69,9 +69,9 @@ export const helpText: Record<string, string> = {
   guidedHours: 'Hours per phase. The planner sizes the factory to deliver each phase in this long.',
   // The node survey (extraction.ts).
   extractionMark:
-    'The miner you will have running on these nodes. A Mk.1 gives 60 a minute on a normal node, a Mk.2 gives 120 and a Mk.3 gives 240, before overclocking. Plan for the miner the phase can build, not the one you have today.',
+    'The miner you will have running on these nodes. A Mk.1 gives 60 a minute on a normal node, a Mk.2 gives 120 and a Mk.3 gives 240, before overclocking. Plan for the miner the phase can build, not the one you have today. With budgets per phase, each phase uses the best miner it can build, up to this one.',
   extractionClock:
-    'Overclocking multiplies extraction. 250% needs three Power Shards per miner and is what the planner’s default budgets assume.',
+    'Overclocking multiplies extraction. 250% needs three Power Shards per miner and is what the planner’s default budgets assume. With budgets per phase, miners run at 100% until Phase 5 and never faster than this.',
   extractionNodes:
     'How many nodes of each purity your world has for this resource. A count, not a budget: zero means your world has none of that purity, so an all-pure world leaves the first two boxes at zero. The interactive map linked above will count them for you if you upload your save.',
   extractionWells:

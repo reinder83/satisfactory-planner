@@ -12,6 +12,8 @@
 //   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
 //                  the Water Extractors a line's Water needs, and the power extraction draws
 //   presets.ts     node counts prefilled from the world settings
+//   mining.ts      mining and belts per phase (#1065): each phase's miner, clock, belts and
+//                  pipes, the budgets they give and the nodes a phase's draw taps
 // build.ts ships each module to both editions as preferences/<name>.js; the Dockerfile copies
 // their sources for the server, which reaches this file through the planner.
 export {
@@ -91,3 +93,24 @@ export {
   startingSurvey,
   uniformPurities,
 } from './preferences/presets.ts';
+export {
+  BELT_MARKS,
+  EXTRACTOR_OPTIONS,
+  EXTRACTOR_TIERS,
+  MINER_MARKS,
+  PHASE_CLOCK,
+  PIPE_MARKS,
+  bestMark,
+  extractorBuilt,
+  isWellKind,
+  miningAdvice,
+  miningLinearMW,
+  miningMW,
+  phaseForTier,
+  phaseMiner,
+  phaseMining,
+  sourceClock,
+  sourceMWPerUnit,
+  sourceYield,
+  waterMWPerUnit,
+} from './preferences/mining.ts';

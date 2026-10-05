@@ -25,7 +25,8 @@
 import { computed } from 'vue';
 import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
 import { num, plural } from '../../format.ts';
-import { bestLane, FLUIDS, lanePlan, rateOfItem } from '../../flow.ts';
+import { bestLane, FLUIDS, laneUnlockNote, lanePlan, rateOfItem } from '../../flow.ts';
+import { stageMiningAdvice } from '../../../mining.ts';
 import { deliveredParts } from '../../delivered.ts';
 import {
   groupLinks,
@@ -169,13 +170,24 @@ const view = computed(() =>
     const mined = links.filter(l => isSource(l.from));
     const flow = (rows: Row[]) => rows.reduce((sum, row) => sum + row.items[0]!.rate, 0);
     const minedFirst = (id: string) => (stage.raw?.[sourceItem(id)] ? 0 : 1);
+    // A mined resource's nodes (#1065), on a plan with mining per phase.
+    const nodes = new Map(stageMiningAdvice(stage).map(entry => [entry.resource, entry.words]));
     const sources = [...new Set(mined.map(l => l.from))]
       .map(id => ({ id, rows: mined.filter(l => l.from === id) }))
       .sort((a, b) => minedFirst(a.id) - minedFirst(b.id) || flow(b.rows) - flow(a.rows))
-      .map(({ id, rows }) => ({ id, name: name(id), parts: [part('out', rows)] }));
+      .map(({ id, rows }) => ({
+        id,
+        name: name(id),
+        parts: [part('out', rows)],
+        mining: nodes.get(sourceItem(id)) ?? '',
+      }));
     cards.unshift(...sources);
     const idle = places.filter(id => !used(id)).map(name);
-    return { links, cards, idle };
+    // What the belts and pipes the links use still need (#1065): their milestones, until ticked.
+    const unlock = [laneUnlockNote(bestLane(false)), laneUnlockNote(bestLane(true))]
+      .filter(Boolean)
+      .join(' ');
+    return { links, cards, idle, unlock };
   }),
 );
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
@@ -348,6 +360,7 @@ async function recalculate(event: Event) {
       unlocked. Flows inside a factory are left out. Pick a vehicle on a factory's outgoing link and
       give its round trip to see how many it takes.
     </p>
+    <p v-if="view.unlock" class="small" data-lane-unlock>{{ view.unlock }}</p>
     <p v-if="!view.links.length" class="small">Nothing moves between factories yet.</p>
     <div v-else class="group-cards">
       <article
@@ -358,6 +371,9 @@ async function recalculate(event: Event) {
         :data-group="card.id"
       >
         <h3>{{ card.name }}</h3>
+        <p v-if="'mining' in card && card.mining" class="small muted" data-mining-source>
+          {{ card.mining }}
+        </p>
         <div class="group-flow">
           <section
             v-for="part in card.parts"
