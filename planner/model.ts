@@ -12,8 +12,16 @@ import { solve, type LpModel } from '../optimizer.ts';
 import type { CurrentSettings, ItemRates, StageDelivery, StageKey } from '../public/types/index.ts';
 import type { PoolRecipe, RunResult, RunOptions } from './types.ts';
 import { DATA, RAW, DELIVERIES, exactBalance } from './data.ts';
-import { recipePool, amplifiable, amplified, nuclearPeriod, generators } from './recipes.ts';
+import {
+  recipePool,
+  amplifiable,
+  amplified,
+  nuclearPeriod,
+  generators,
+  primaryOutput,
+} from './recipes.ts';
 import { twoStepFit } from './fit.ts';
+import { withinLoad } from './load.ts';
 import { readStage } from './stage.ts';
 import {
   BYPRODUCT_FIRST,
@@ -93,7 +101,7 @@ export function run(config: CurrentSettings, phase: number, options: RunOptions 
   if (!solved.feasible || !solved.bounded)
     return { feasible: false, solverStatus: solved.solverStatus };
   if (!satisfiesModel(model, solved)) return { feasible: false };
-  return readStage(context, pool, demands, solved, period, model);
+  return withinLoad(context, readStage(context, pool, demands, solved, period, model));
 }
 // What every step of one phase's solve shares: the normalised settings, the phase (1 to 5),
 // run()'s options with their defaults filled in, and the phase's power figures.
@@ -116,6 +124,7 @@ export const phaseContext = (
     fractionalNuclear = false,
     roundStopped = false,
     overBudget = false,
+    loadBound = null,
   }: RunOptions,
 ): PhaseContext => ({
   config,
@@ -129,6 +138,7 @@ export const phaseContext = (
   fractionalNuclear,
   roundStopped,
   overBudget,
+  loadBound,
   power: phasePower(config, phase),
 });
 // The phase's power figures (see phasePower).
@@ -402,8 +412,13 @@ function addSiteOverflows(
 // constraint (its power is hand-fed biomass). A maximising solve of Phase 1 has it too: there are
 // no generators, so only the entered spare power can run that phase harder. calculate() never
 // maximises Phase 1 for maximum output; only the `phaseTime: 'final'` re-solve does.
-function addPower(model: LpModel, { phase, maximum, power }: PhaseContext) {
-  if (phase >= 2 || maximum) model.constraints.power = { max: power.spareMW };
+// A solve bounded by its load (`loadBound`, #1086, load.ts) credits the power constraint with what
+// the underclocked machines of the plan before it draw less than their linear power, and caps the
+// non-nuclear generators' output ('generation') at a fixed figure.
+function addPower(model: LpModel, { phase, maximum, power, loadBound }: PhaseContext) {
+  if (phase >= 2 || maximum)
+    model.constraints.power = { max: power.spareMW + (loadBound?.creditMW ?? 0) };
+  if (loadBound) model.constraints.generation = { max: loadBound.capMW };
 }
 // One variable per recipe: its level is machine-equivalents at 100% clock (see
 // recipeCoefficients). Then the somersloop budget and, for phaseTime 'final', the caps.
@@ -452,7 +467,11 @@ function addRecipes(model: LpModel, context: PhaseContext, pool: PoolRecipe[], r
 // A recipe variable's coefficients: its cost, its power, and its per-machine outputs (+) and
 // inputs (-) in each item balance: the central one, or split with the groups' own balances of the
 // items they make on site (`routes`, siteRoutes in on-site.ts).
-function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext, routes: Routes) {
+function recipeCoefficients(
+  recipe: PoolRecipe,
+  { config, power, loadBound }: PhaseContext,
+  routes: Routes,
+) {
   const coefficients: Record<string, number> = {
     cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
     power:
@@ -460,6 +479,9 @@ function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext,
         ? recipe.power * (1 + power.boost)
         : recipe.power * config.powerFactor * power.utilityFactor,
   };
+  // A capped solve (#1086, load.ts) bounds the non-nuclear generators' output.
+  if (loadBound && recipe.power < 0 && recipe.machine !== 'Nuclear Power Plant')
+    coefficients.generation = -recipe.power * (1 + power.boost);
   for (const [item, rate] of Object.entries(recipe.outputs))
     for (const [balance, part] of routes(recipe, item, 'out'))
       coefficients[balance] = (coefficients[balance] || 0) + rate * part;
@@ -472,8 +494,13 @@ function recipeCoefficients(recipe: PoolRecipe, { config, power }: PhaseContext,
 // a solid, sinkable, non-raw item, so its overshoot can go to the sink. Fluid-only recipes,
 // generators and anything nuclear keep fractional clocks, because their balances are exact.
 // (Generators have no outputs, and power-uranium outputs waste.) The uranium plants are
-// rounded separately, in roundNuclear.
+// rounded separately, in roundNuclear. A fluid line keeps exact clocks even when it also makes a
+// solid (#1086, the owner's rule in #1066 that fluid lines follow the exact rate): a recipe whose
+// main product (its first output, primaryOutput in recipes.ts) is a fluid, such as Rocket Fuel
+// with its Compacted Coal or Fuel with its Polymer Resin, would otherwise round its fluid up,
+// which a pipe cannot overflow. Its solid byproduct follows the fractional line into the sink.
 export const roundsToWholeMachines = (recipe: PoolRecipe) =>
+  !DATA.items[primaryOutput(recipe) ?? '']?.fluid &&
   Object.keys(recipe.outputs).some(
     item => !DATA.items[item]?.fluid && !RAW.includes(item) && (DATA.items[item]?.sink ?? 0) > 0,
   ) &&

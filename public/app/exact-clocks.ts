@@ -30,15 +30,22 @@ const EXACT_NUCLEAR = /uranium|plutonium|ficsonium|waste|non-fissile/i;
 
 // Whether a whole-machine plan rounds `row` to whole machines, as roundsToWholeMachines in
 // planner/model.ts decides it: a line that makes a solid, sinkable item that is not a raw
-// resource, and nothing nuclear. `solidSinkable` names the items a container takes (the catalog's
-// storageItems: solid, sinkable, not raw, not radioactive), which is the planner's rule for every
-// recipe the data has; tests/exact-clocks.test.ts checks the two agree. Fluid, generator and
-// nuclear lines always run at exact clocks, so the choice is not offered for them, and neither is
-// an amplified twin, which is always whole machines.
+// resource, whose main product (its first output) is not a fluid, and nothing nuclear.
+// `solidSinkable` names the items a container takes (the catalog's storageItems: solid, sinkable,
+// not raw, not radioactive), which is the planner's rule for every recipe the data has;
+// tests/exact-clocks.test.ts checks the two agree. Fluid, generator and nuclear lines always run
+// at exact clocks, so the choice is not offered for them, and neither is an amplified twin, which
+// is always whole machines. `fluids` names the fluids whose lines the plan keeps at exact clocks
+// whatever else they make (fluidLines below): a plan calculated before #1086 rounded a fluid line
+// with a solid byproduct (Rocket Fuel with its Compacted Coal) to whole machines, and its dialog
+// keeps describing the line that way until a recalculation.
 export function roundsWholeLine(
   row: Pick<CalcRow, 'name' | 'inputs' | 'outputs'>,
   solidSinkable: ReadonlySet<string>,
+  fluids: ReadonlySet<string>,
 ): boolean {
+  const [main] = Object.keys(row.outputs || {});
+  if (main !== undefined && fluids.has(main)) return false;
   return (
     Object.keys(row.outputs || {}).some(
       item => solidSinkable.has(item) && !rawResources.includes(item),
@@ -49,6 +56,13 @@ export function roundsWholeLine(
   );
 }
 
+// The fluids whose lines a plan keeps at exact clocks even with a solid byproduct, for
+// roundsWholeLine: all of `fluids` for a plan calculated since #1086 (`exactFluidLines`), none for
+// one calculated before it.
+export const fluidLines = (
+  plan: Pick<StoredCalculatedPlan, 'exactFluidLines'>,
+  fluids: ReadonlySet<string>,
+): ReadonlySet<string> => (plan.exactFluidLines ? fluids : new Set());
 // The lines a plan was calculated with at exact clocks.
 export const plannedExactClocks = (plan: Pick<StoredCalculatedPlan, 'settings'>): ExactClocks =>
   plan.settings.exactClocks ?? {};

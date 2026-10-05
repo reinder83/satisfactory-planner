@@ -23,4 +23,11 @@ export interface RunOptions {
   fractionalNuclear?: boolean;
   roundStopped?: boolean;
   overBudget?: boolean;
+  loadBound?: LoadBound | null;
+}
+// The fixed figures a solve bounded by its load is planned with (#1086, planner/load.ts), in MW:
+// what the power constraint is credited with, and the most the non-nuclear generators may give.
+export interface LoadBound {
+  creditMW: number;
+  capMW: number;
 }

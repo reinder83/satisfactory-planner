@@ -506,10 +506,10 @@ test('Phase 5 with augmenters and no spare power: the augmenters are named on th
   );
 });
 
-// #1064: the step says why a phase has power left over and which generators it keeps. In a
-// whole-machine plan the fuel lines are set by whole production lines and their byproducts, and
-// can make more fuel than the phase needs; a kept building's generators count toward the lines.
-test('a whole-machine plan names the generators it keeps and the fuel its lines make over', () => {
+// #1064: the step says why a phase has power left over and which generators it keeps; a kept
+// building's generators count toward the lines. #1086: the fuel lines follow the phase's load, so
+// what is left is whole generators rounded up, no longer fuel the lines make over the need.
+test('a whole-machine plan names the generators it keeps, and its fuel follows the load', () => {
   const plan = calculate({
     phase: '3',
     wholeMachines: true,
@@ -519,12 +519,36 @@ test('a whole-machine plan names the generators it keeps and the fuel its lines 
   const grid = plan.stages['5'].grid!;
   const fuel = grid.generators.find(entry => entry.machine === 'Fuel Generator')!;
   assert.ok(fuel.kept > 0 && fuel.machines >= fuel.kept);
+  // The fuel gives at most one Fuel Generator beyond the need, and whole generators round up by
+  // less than one more.
+  assert.ok(grid.availableMW - grid.needMW < 500, 'less than two Fuel Generators over the need');
   const body = review(plan, { [PETROLEUM]: true }, '5').body;
   assert.ok(body.includes(`(${fuel.kept} of these Fuel Generators were built in Phase 4)`), body);
   assert.ok(
+    body.includes(`, ${gw(grid.availableMW - grid.needMW)} spare from building whole generators.`),
+    body,
+  );
+  assert.doesNotMatch(body, /make more fuel than the phase needs/);
+});
+
+// A plan stored before #1086 keeps its numbers and its reason until the user recalculates: its
+// Phase 5 (recorded on main before #1086, with 2 GW of spare power) runs 360 Fuel Generators on
+// 1,500 m³/min of Rocket Fuel from whole Rocket Fuel blenders, 90 GW for a 73.87 GW need.
+test('a plan stored before #1086 still names the fuel its lines make over the need', () => {
+  const stored: StoredCalculatedPlan = JSON.parse(
+    fs.readFileSync('tests/fixtures/fuel-plan-2026-10-05.json', 'utf8'),
+  );
+  assert.equal(stored.exactFluidLines, undefined);
+  const grid = stored.stages['5'].grid!;
+  assert.equal(grid.generationMW, 90000);
+  const body = review(stored, { [PETROLEUM]: true }, '5').body;
+  assert.ok(
     body.includes(
-      `, ${gw(grid.availableMW - grid.needMW)} spare because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much.`,
+      `, which provides 90 GW, ${gw(grid.availableMW - grid.needMW)} spare because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much.`,
     ),
     body,
   );
+  // A recalculation of the same settings plans the fuel for the load.
+  const again = calculate(stored.settings).stages['5'].grid!;
+  assert.ok(again.availableMW - again.needMW < 500, `${again.availableMW} for ${again.needMW}`);
 });

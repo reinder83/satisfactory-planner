@@ -22,7 +22,9 @@
 //   the phase runs at least as many of it.
 // The planner's power constraint charges every line at its full linear power (never less than
 // its clocked power) and the extraction at the same rate, so a plan that fits needs no more than
-// its whole generators give.
+// its whole generators give. Since #1086 a plan's fuel then follows the clocked need, within one
+// generator, while still covering it (planner/load.ts): generators burn fuel only for the power
+// drawn, and fuel made beyond that backs its chain up in the game.
 import { DEFAULT_EXTRACTION, extractionMWPerUnit } from './preferences.ts';
 import { listNames, powerAmount } from './wording.ts';
 import type {

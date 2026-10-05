@@ -294,8 +294,13 @@ const builtParts = (plan: CurrentCalculatedPlan, phase: StageKey, stage: StoredS
 // Phase 5 and seed 10's lines made 7.8 of the 19.65 Steel Beam/min the books gave fg-twin2 there.
 // #1064's power model changed the plans these seeds draw: seeds 65, 84, 199 and 316 are added for
 // the most #1038 cases among seeds 41 to 600 on its plans (4, 3, 4 and 4 such parts built).
+// #1086's fuel lines changed them again: seeds 325, 513 and 553 are added (4, 4 and 3 such parts
+// built), among the most on its plans. (Seed 171, with 4, ends Phase 3 on a plan whose fixed-rate
+// part was not measured at its own totals, the case listed on #1038.)
 const SETTLE_SEEDS = [118, 135, 223, 311, 345, 397, 420, 455, 476, 489, 531, 571, 590];
-const IF_BUILT_SEEDS = [44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316];
+const IF_BUILT_SEEDS = [
+  44, 115, 152, 247, 346, 421, 504, 530, 596, 65, 84, 199, 316, 325, 513, 553,
+];
 const SEEDS = [...Array.from({ length: 40 }, (_, i) => i + 1), ...SETTLE_SEEDS, ...IF_BUILT_SEEDS];
 
 test('right after a recalculation with amplification on, each own line matches the books (#904)', () => {
