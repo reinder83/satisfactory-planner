@@ -138,9 +138,9 @@ test('ADA counts the same progress the pages show', () => {
   );
   // The generators the phase before built stay and count first (#1064).
   assert.ok(!ids(facts()).includes('kept-generators'));
-  const kept = adaRemarks(
-    facts({ keptGenerators: '7 Fuel Generators', keptFrom: 'Phase 3' }),
-  ).find(r => r.id === 'kept-generators')!;
+  const kept = adaRemarks(facts({ keptGenerators: '7 Fuel Generators', keptFrom: 'Phase 3' })).find(
+    r => r.id === 'kept-generators',
+  )!;
   assert.equal(kept.tone, 'calm');
   assert.match(kept.text, /^This phase keeps the 7 Fuel Generators Phase 3 built and counts them/);
   assert.match(
