@@ -585,8 +585,9 @@ interface PhasePowerFigures {
   // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
   previous: number;
   boost: number;
-  // What the plan's fuel was balanced for (a plan with a grid): every line at its full linear
-  // power with the allowance, and the extraction; 0 otherwise.
+  // What the planner's power constraint charges (a plan with a grid): every line at its full
+  // linear power with the allowance, and the extraction; 0 otherwise. A plan before #1086 has
+  // its fuel for this; a later one for the clocked need, within a generator (planner/load.ts).
   plannedMW: number;
   requiredMW: number;
   existingMW: number;
@@ -621,8 +622,8 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
   };
 }
 
-// What a stage's fuel was balanced for (#1064): the planner's power constraint charges every line
-// its full linear power with the allowance, and the extraction. 0 without a grid.
+// What the planner's power constraint charges a stage (#1064): every line at its full linear power
+// with the allowance, and the extraction. 0 without a grid.
 function plannedFor(planned: StoredStage, settings: GuideContext['plan']['settings']): number {
   if (!planned.grid) return 0;
   const linear = (planned.rows || [])
@@ -788,8 +789,11 @@ function spareCause(
 // what the plan's power balance asks for by more than one generator burns (whole production lines
 // and their byproducts set how much); else the larger of the generators rounded up to whole ones
 // (with fuel for less than one generator over the balance, which whole plants in the planner
-// leave) and the fuel planned for every line at its full linear power while its underclocked
-// machines draw less. Otherwise no reason is given.
+// leave) and the fuel planned beyond the phase's need within that balance: for every line at its
+// full linear power while its underclocked machines draw less. A plan since #1086 plans its fuel
+// for the clocked need (planner/load.ts), so that part is at most a generator's worth there; a
+// plan before it, whose fuel follows the linear balance, keeps the reason it was given. Otherwise
+// no reason is given.
 function gridCause(figures: PhasePowerFigures, leftMW: number): string {
   const { generators, kept, previous } = figures;
   const extra = kept.filter(entry => entry.machines > entry.own);
@@ -801,8 +805,9 @@ function gridCause(figures: PhasePowerFigures, leftMW: number): string {
   const fuelOver = fuelMW - (figures.plannedMW - figures.existingMW - figures.augmenterMW);
   if (fuelOver > unitMW + 0.01)
     return ' because its lines make more fuel than the phase needs: whole production lines and their byproducts set how much';
+  const have = figures.existingMW + figures.augmenterMW;
   const whole = figures.newMW - fuelMW + Math.max(0, fuelOver),
-    clock = figures.plannedMW - figures.requiredMW;
+    clock = Math.min(fuelMW, figures.plannedMW - have) - (figures.requiredMW - have);
   if (clock > whole)
     return ' because the fuel is planned for every machine at full power, and the underclocked machines draw less';
   return generators.every(row => row.machine === 'Nuclear Power Plant')

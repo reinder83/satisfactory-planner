@@ -19,6 +19,7 @@ import { listNames } from '../public/wording.ts';
 import {
   exactClocksChange,
   exactClocksSettings,
+  fluidLines,
   lineClockNote,
   measuredRounding,
   roundingCost,
@@ -316,10 +317,14 @@ test('a whole-machine draft asks for the least extra budget, never a resource it
 // The interface decides which lines offer the choice by the planner's own rule.
 test('the interface rounds a line exactly when the planner does, for every recipe', () => {
   const sinkable = new Set(catalog().storageItems.map(item => item.name));
+  const fluids = fluidLines(
+    { exactFluidLines: calculate({ phase: '2' }).exactFluidLines },
+    new Set(Object.keys(DATA.items).filter(item => DATA.items[item]!.fluid)),
+  );
   const config = settings({ nuclear: 'recycle', mainPower: 'nuclear' });
   for (const recipe of [...DATA.recipes, ...generators(config, 5)])
     assert.equal(
-      roundsWholeLine(recipe, sinkable),
+      roundsWholeLine(recipe, sinkable, fluids),
       roundsToWholeMachines(recipe),
       recipe.id + ' ' + recipe.name,
     );

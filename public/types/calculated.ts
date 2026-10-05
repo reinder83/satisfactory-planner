@@ -453,6 +453,12 @@ export interface CurrentCalculatedPlan {
   warnings: string[];
   // ISO time of the calculation.
   createdAt: string;
+  // Set by every plan calculated since #1086: a production line whose main product is a fluid runs
+  // at exact clocks even when it also makes a solid (roundsToWholeMachines in planner/model.ts). A
+  // plan without it rounded such a line (Rocket Fuel, Fuel) to whole machines under wholeMachines,
+  // and the line's dialog keeps saying so until a recalculation (fluidLines in
+  // public/app/exact-clocks.ts).
+  exactFluidLines: true;
 }
 
 // An end-game production line built once everything else is done.
@@ -501,6 +507,8 @@ export interface StoredCalculatedPlan {
   warnings: string[];
   createdAt: string;
   guide?: PlanGuide;
+  // Absent from a plan calculated before #1086 (see CurrentCalculatedPlan).
+  exactFluidLines?: boolean;
 }
 
 // Hard-drive payoff (#67): what allowing one more alternate recipe does to one phase of a

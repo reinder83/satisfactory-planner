@@ -15,6 +15,7 @@ import { save } from '../../api.ts';
 import { whileBusy } from '../../busy.ts';
 import {
   exactClockIn,
+  fluidLines,
   plannedExactClocks,
   roundsWholeLine,
   sameExactClocks,
@@ -39,7 +40,7 @@ const view = computed(() =>
     if (!calculated?.settings.wholeMachines || row.amplified || row.generationMW > 0 || !items)
       return null;
     const sinkable = new Set(items.map(item => item.name));
-    if (!roundsWholeLine(row, sinkable))
+    if (!roundsWholeLine(row, sinkable, fluidLines(calculated, FLUIDS)))
       return {
         fixed: Object.keys(row.outputs || {}).some(item => FLUIDS.has(item))
           ? 'A fluid line always runs at exact clocks: a pipe cannot overflow, so the last machine is underclocked to the exact remainder.'
