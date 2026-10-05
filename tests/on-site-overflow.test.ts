@@ -67,21 +67,30 @@ test('the stored plan: a central Fused Quickwire line sinks 89 of its 90/min', (
   }
 });
 
+// Alpha's line as the planner before #1063 sizes it from these settings: the stored plan's, but in
+// Phase 5 two machines fewer, since #1086 plans the fuel for the load and the AI Limiter line
+// takes 720 Quickwire/min rather than 840 (computed on main ac52c49 with #1086, the branch of
+// #1086 before it merged #1063).
+const BEFORE_1063_OWN: Record<string, number> = { '3': 6, '4': 13, '5': 19 };
+// What Alpha's line makes beyond Alpha's lines and the 1/min of storage: 69/min, and in Phase 5,
+// whose 19 machines make 1,710 for the 1,700 Alpha's lines take, 9.
+const LEFT: Record<string, number> = { '3': 69, '4': 69, '5': 9 };
+
 test("a recalculation lets Alpha's excess meet the central demand: no central line, fewer machines", () => {
   const plan = recalculation();
   for (const phase of PHASES) {
     const before = recorded.plan.stages[phase],
       stage = plan.stages[phase];
     assert.equal(row(stage, FUSED), undefined, `Phase ${phase}: no central Fused Quickwire line`);
-    assert.equal(row(stage, OWN)?.machines, row(before, OWN)?.machines, "Alpha's line as before");
+    assert.equal(row(stage, OWN)?.machines, BEFORE_1063_OWN[phase], "Alpha's line as before");
     assert.deepEqual(stage.onSiteOverflow, { [ALPHA]: ['Quickwire'] });
-    assert.equal(stage.surplus?.Quickwire, 69, 'only what Alpha has left after storage');
+    assert.equal(stage.surplus?.Quickwire, LEFT[phase], 'only what Alpha has left after storage');
     assert.ok(buildings(stage) < buildings(before), `${buildings(stage)} < ${buildings(before)}`);
     // The books: Alpha's excess beyond the plan's surplus is offered to storage; the sink takes
     // the rest, and every place still balances.
     const books = itemBooks(stage, recorded.groups, plan.settings.onSite);
     assert.equal(books.offered.Quickwire?.get(ALPHA), 1);
-    assert.equal(books.sunk.Quickwire?.get(ALPHA), 69);
+    assert.equal(books.sunk.Quickwire?.get(ALPHA), LEFT[phase]);
     const links = groupLinks(stage, recorded.groups, plan.settings.onSite);
     const toStorage = links.find(link => link.from === ALPHA && link.to === OUTSIDE.storage);
     assert.equal(toStorage?.items.find(entry => entry.item === 'Quickwire')?.rate, 1);
@@ -128,11 +137,15 @@ const exactClockSettings = () => {
   );
   return input;
 };
-// What main 990cec8 (before #1063) calculates from those settings under minimal construction.
-const MAIN_MINIMAL: Record<string, { buildings: number; hours: number }> = {
-  '3': { buildings: 78, hours: 13.810672933513546 },
-  '4': { buildings: 173, hours: 19.898683076393123 },
-  '5': { buildings: 314, hours: 21.34639538636434 },
+// What main before #1063 calculates from those settings under minimal construction, with #1086's
+// fuel (main ac52c49 with #1086, the branch of #1086 before it merged #1063). Main 990cec8 gave
+// 78, 173 and 314 buildings in 13.81, 19.90 and 21.35 hours: its generators were sized for every
+// line at full linear power, more than the 24-hour plan's load draws, and running the buildings
+// faster used that power. Sized for the load, Phase 5's buildings allow no faster plan (`ahead`).
+const MAIN_MINIMAL: Record<string, { buildings: number; hours: number; ahead: boolean }> = {
+  '3': { buildings: 78, hours: 13.810672933513546, ahead: true },
+  '4': { buildings: 171, hours: 19.942678244927716, ahead: true },
+  '5': { buildings: 309, hours: 23.80952380952381, ahead: false },
 };
 
 test('under minimal construction with exact clocks, no phase finishes later than before #1063', () => {
@@ -145,7 +158,7 @@ test('under minimal construction with exact clocks, no phase finishes later than
       `Phase ${phase}: ${stage.hours} h, main ${main.hours} h`,
     );
     assert.ok(buildings(stage) <= main.buildings, `Phase ${phase}: ${buildings(stage)} buildings`);
-    assert.ok(stage.aheadOf !== undefined, `Phase ${phase} runs at full speed`);
+    assert.equal(stage.aheadOf !== undefined, main.ahead, `Phase ${phase} runs at full speed`);
     // A phase that keeps the route builds no central line and fewer machines; one that does not
     // is main's plan.
     if (stage.onSiteOverflow) {
@@ -159,25 +172,28 @@ test('under minimal construction with exact clocks, no phase finishes later than
   // The warning names the phases that finish sooner, as on main.
   assert.ok(
     plan.warnings.includes(
-      'Minimal construction builds the fewest machines that deliver each phase within 24 hours, then runs them as fast as those buildings allow, without adding one. Phases 3, 4 and 5 finish sooner that way; their delivery rates are not rounded.',
+      'Minimal construction builds the fewest machines that deliver each phase within 24 hours, then runs them as fast as those buildings allow, without adding one. Phases 3 and 4 finish sooner that way; their delivery rates are not rounded.',
     ),
     plan.warnings.find(warning => warning.startsWith('Minimal')),
   );
 });
 
-// What main ac52c49 (before #1063) calculates from those settings, balanced, with the target time
-// on the final phase: Phases 3 and 4 are pulled ahead.
+// What main ac52c49 (before #1063) calculates from those settings at twice the costs, balanced,
+// with the target time on the final phase and #1086's fuel (the branch of #1086 before it merged
+// #1063): Phases 3 and 4 are pulled ahead. (At the stored costs main gave 90, 230 and 460
+// buildings; since #1086 the routed Phase 3 plan is pulled ahead too, so the costs are doubled for
+// a phase whose routed plan cannot be.)
 const MAIN_FINAL: Record<string, { buildings: number; hours: number }> = {
-  '3': { buildings: 90, hours: 5.555555611111113 },
-  '4': { buildings: 230, hours: 7.478632553418805 },
-  '5': { buildings: 460, hours: 7.936507936507936 },
+  '3': { buildings: 99, hours: 6.951270261543323 },
+  '4': { buildings: 309, hours: 7.624113551418442 },
+  '5': { buildings: 661, hours: 7.936507936507936 },
 };
 
 test("under phaseTime 'final', a routed phase that cannot be pulled ahead keeps the first plan when that one can (#1092 review)", () => {
-  // Both Phase 3 plans take 7.86 hours, so the routed one stands on buildings. The capped re-solve
-  // of the routed plan does not fit (#1094), while the first plan's is pulled ahead to 5.56 hours,
-  // as on main: Phase 3 keeps the first plan, pulled ahead.
-  const plan = calculate({ ...exactClockSettings(), phaseTime: 'final' });
+  // Both Phase 3 plans take 8.33 hours, so the routed one stands on buildings. The capped re-solve
+  // of the routed plan is not pulled ahead (#1094), while the first plan's is, to 6.95 hours, as
+  // on main: Phase 3 keeps the first plan, pulled ahead.
+  const plan = calculate({ ...exactClockSettings(), multiplier: 2, phaseTime: 'final' });
   for (const phase of PHASES) {
     const stage = plan.stages[phase],
       main = MAIN_FINAL[phase]!;
@@ -189,7 +205,7 @@ test("under phaseTime 'final', a routed phase that cannot be pulled ahead keeps 
   }
   const third = plan.stages['3'];
   assert.ok(Math.abs(third.hours! - MAIN_FINAL['3']!.hours) < 1e-6, `Phase 3: ${third.hours} h`);
-  assert.equal(third.aheadOf, 7.861635220125787);
+  assert.equal(third.aheadOf, 25 / 3);
   assert.equal(third.onSiteOverflow, undefined, 'the first plan, without the route');
   assert.equal(row(third, FUSED)?.machines, 1, 'with its central line');
   // Phase 4's routed plan is pulled ahead itself, so it stays routed: no central line, fewer
@@ -224,10 +240,16 @@ test('fullSpeed re-solves a routed stage with its route, and keeps saying it was
     assert.deepEqual(stage.onSiteOverflow, { [ALPHA]: ['Quickwire'] }, `Phase ${phase}`);
     assert.deepEqual(stageSettings(minimal, stage).onSite![ALPHA]!.overflow, ['Quickwire']);
     const fast = fullSpeed(minimal, Number(phase), stage);
-    assert.ok(fast.hours < stage.hours, `Phase ${phase}: ${fast.hours} < ${stage.hours}`);
-    assert.equal(fast.aheadOf, stage.hours);
     assert.deepEqual(fast.onSiteOverflow, { [ALPHA]: ['Quickwire'] });
     assert.equal(row(fast, FUSED), undefined, 'still no central line');
+    // Phase 5's generators are sized for its load since #1086, and its whole lines leave no
+    // faster plan within its buildings: it keeps the stage.
+    if (phase === '5') {
+      assert.equal(fast, stage, 'Phase 5 keeps its plan');
+      continue;
+    }
+    assert.ok(fast.hours < stage.hours, `Phase ${phase}: ${fast.hours} < ${stage.hours}`);
+    assert.equal(fast.aheadOf, stage.hours);
   }
   // A stage without the route re-solves with the settings as they are.
   assert.equal(plan.stages['1'].onSiteOverflow, undefined);
