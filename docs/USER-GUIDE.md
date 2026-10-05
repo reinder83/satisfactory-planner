@@ -128,6 +128,10 @@ Milestone cost notes use production lines explicitly marked running in this or e
 
 New profiles default to running solid-part production machines at 100%. The solver selects a recipe network first and fits whole-machine production within the resource budgets, recalculating upstream requirements and handling liquid byproducts. Extra solids are listed as surplus: supply downstream lines, refill storage, then sink the rest. This can increase the scale of the entire chain, not only the last machine in one production line.
 
+Space Elevator parts are the exception: everything a part's lines make beyond what other lines use goes to the elevator, never to the sink, and the delivery time follows from it. Two Assemblers making 10 Versatile Framework/min deliver all 10, so Phase 3's 2,500 take about 4 h 10 min, not the 7 h 52 min the balanced goal's 5.3/min would take. A profile calculated before this change keeps its own rates until you recalculate it.
+
+Once a delivery counter on the build plan reaches its target, the steps of the lines that only made that part are dimmed and moved below your other open steps, with a note under the title: _Smart Plating is delivered: this line is now only needed for Phase 2._, or _no longer needed_ when no later phase builds the line. Nothing is ticked for you. A line whose part another line still uses, such as Nuclear Pasta for the Singularity Cells, stays as it is. The build plan's summary then gives the time the rest of the delivery takes, and **Logistics** marks the part _delivered_ on its link to the Space Elevator.
+
 Fluid, generator and nuclear/waste-processing lines remain precisely balanced and may retain underclocks. Detailed instructions separate total machines, full-speed machines and the adjustable machine, and show output per machine next to its clock setting.
 
 For a previously calculated profile, use **Factories → Round up production**. This creates a new profile revision, copies notes/unlocks/progress, and clears completed production line checks only where increased inputs or machine counts need review. The previous profile and all its progress remain untouched.

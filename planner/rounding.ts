@@ -254,7 +254,7 @@ function roundedRun(context: PhaseContext, slowest: number | null, clocks: Clock
       for (const id of rounding) solved.values[id] = gridPoints(grid(id), solved.values[id]!).near;
       if (!satisfiesModel(model, solved)) return { feasible: false };
       for (const part of Object.values(demands.delivery)) part.rate *= solved.values.pace!;
-      return readStage(context, pool, demands, solved, period);
+      return readStage(context, pool, demands, solved, period, model);
     }
     // The amplified twins are fixed once, on the first pass; left free, each pass would trade
     // more of them for the unamplified lines already rounded up.

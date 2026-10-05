@@ -7,7 +7,9 @@
   the line's card there; a line split over several places says so under the links. In edit
   mode it adds move, edit and remove tools. `step` is a row from
   Checklist.vue: the step as the user sees it, with its icon, link and checkmark. The lead step
-  (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done.
+  (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
+  line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
+  dimmed, with its note under the title.
 -->
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
@@ -31,6 +33,9 @@ const props = withDefaults(
 // "Open factory: <name> →" is a real link, so it opens in a new tab too; followed here, the flow
 // page it opens focuses this step's line (aimFlowLine in ui/refocus.ts).
 const splitId = computed(() => 'step-split-' + props.step.id);
+// The note of a line a delivered part leaves without work (#1062), which also describes the
+// step's checkbox.
+const idleId = computed(() => 'step-idle-' + props.step.id);
 function aimLine(event: MouseEvent) {
   const link = props.step.link;
   if (!link?.factory || event.button !== 0) return;
@@ -190,17 +195,25 @@ async function deletePersonal(event: Event) {
 </script>
 
 <template>
-  <article :class="['task', editing ? 'is-editing' : '', lead ? 'lead' : '']">
+  <article
+    :class="['task', editing ? 'is-editing' : '', lead ? 'lead' : '', step.idle ? 'is-idle' : '']"
+  >
     <div v-if="lead" class="step-no">Next step</div>
     <input
       type="checkbox"
       :data-check="step.id"
       @change="check"
       :aria-label="'Complete: ' + step.title"
+      :aria-describedby="step.idle ? idleId : undefined"
       :checked="step.done"
     /><StepIcon :icon="step.icon" />
     <details :data-task="step.id" :open="lead">
-      <summary>{{ step.title }}</summary>
+      <summary>
+        {{ step.title
+        }}<span v-if="step.idle" :id="idleId" class="task-idle" data-idle-note>{{
+          step.idle
+        }}</span>
+      </summary>
       <p>{{ step.body || 'Your own task for this phase.' }}</p>
       <button
         v-if="lead"

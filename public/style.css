@@ -1713,6 +1713,14 @@ p.eyebrow {
   width: 24px;
   height: 24px;
 }
+/* A Space Elevator part delivered in full (#1062): its link to the elevator is dimmed and says so. */
+.flow-items li.delivered {
+  color: var(--muted);
+}
+.flow-items li.delivered .item-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
 /* The item names are for screen readers and copy-paste; the icon (and its tooltip) show them. */
 .flow-item-name {
   position: absolute;
@@ -4917,6 +4925,29 @@ button.rail-tile:hover {
 .task-split {
   display: block;
   margin-top: 6px;
+}
+/* A line that only made a Space Elevator part already delivered in full (#1062): dimmed like a
+   finished step but not struck through, since nobody ticked it, with a note under its title that
+   says why, in the body font (the title's own is the heading font). */
+.task.is-idle summary {
+  color: var(--muted);
+}
+.task.is-idle .task-icon {
+  color: #55615b;
+}
+.task.is-idle .task-icon .item-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.task-idle {
+  display: block;
+  margin-top: 3px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--muted);
 }
 /* On a phone each link under a step is a 44px touch target (#749). Height only: the link is
    already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
