@@ -18,7 +18,7 @@
 import { extractionMWPerUnit } from '../public/preferences.ts';
 import { extractionEquipment, lineLoad } from '../public/power.ts';
 import type { CalcRow, CurrentSettings, ItemRates } from '../public/types/index.ts';
-import { solve, type LpModel } from '../optimizer.ts';
+import { solve, type LpModel, type LpSolution } from '../optimizer.ts';
 import type { PoolRecipe, Solved } from './types.ts';
 import { RAW, exactBalance } from './data.ts';
 import { generators, recipePool } from './recipes.ts';
@@ -103,8 +103,8 @@ export function withStock(config: CurrentSettings, phase: number, stage: Solved)
 // fewest machines. Its sources are the stage's surplus beyond what storage takes of it, the raw
 // budgets and existing supply the stage leaves, and from Phase 2 the power its generators leave,
 // with generator lines of their own where that is not enough (Phase 1 runs on hand-fed biomass,
-// as in the solve). Returns the rows, what each container gets
-// and what the lines draw.
+// as in the solve). Returns the rows, the plan's generator lines that burn more fuel for them, what
+// each container gets and what the lines draw.
 function stockLines(
   config: CurrentSettings,
   phase: number,
@@ -131,30 +131,15 @@ function stockLines(
     const result = solve(model);
     return result.feasible && satisfiesModel(model, result) ? result : null;
   };
-  const first = solveWith(0);
-  if (!first) return none;
-  // The model charges each line its linear power, but an underclocked machine draws less, and
-  // generators burn fuel only for what is drawn: solved again with the power constraint credited
-  // with that difference, so the fuel follows the need (as withinLoad does, #1086). It stands
-  // when it fills the containers as far as the first did.
-  // A credited plan counts only while its own lines draw at least that much less (its fuel covers
-  // its need); at most three rounds, as withinLoad.
-  const filled = (result: typeof first) =>
-    Object.keys(missing).reduce((total, item) => total + (result.values['store:' + item] || 0), 0);
-  const creditOf = (result: typeof first) =>
-    underclockCredit(config, phase, stageRows(config, recipes, result));
-  let solved = first,
-    credit = creditOf(first);
-  for (let round = 0; round < 3 && credit > 0.01; round++) {
-    const next = solveWith(credit);
-    if (!next || filled(next) < filled(first) - 1e-6) break;
-    const own = creditOf(next);
-    if (own >= credit - 1e-6) {
-      solved = next;
-      break;
-    }
-    credit = own;
-  }
+  const solved = creditedSolve(solveWith, {
+    filled: result =>
+      Object.keys(missing).reduce(
+        (total, item) => total + (result.values['store:' + item] || 0),
+        0,
+      ),
+    credit: result => underclockCredit(config, phase, stageRows(config, recipes, result)),
+  });
+  if (!solved) return none;
   const value = (name: string) => solved.values[name] || 0;
   const pick = (prefix: string, items: string[]) =>
     Object.fromEntries(
@@ -174,6 +159,29 @@ function stockLines(
     raw: pick('raw:', RAW),
     supplied: pick('supply:', Object.keys(config.existingSupply)),
   };
+}
+
+// The model charges each line its linear power, but an underclocked machine draws less, and
+// generators burn fuel only for what is drawn: so the lines are solved again with the power
+// constraint credited with that difference (`credit`), and the fuel follows the need (as
+// withinLoad does, #1086). A credited plan stands when it fills the containers as far as the first
+// (`filled`) and its own lines draw at least that much less, so its fuel covers its need; at most
+// three rounds, as withinLoad. Returns the first plan otherwise, and null when that fails.
+function creditedSolve(
+  solveWith: (creditMW: number) => LpSolution | null,
+  measure: { filled: (result: LpSolution) => number; credit: (result: LpSolution) => number },
+): LpSolution | null {
+  const first = solveWith(0);
+  if (!first) return null;
+  let credit = measure.credit(first);
+  for (let round = 0; round < 3 && credit > 0.01; round++) {
+    const next = solveWith(credit);
+    if (!next || measure.filled(next) < measure.filled(first) - 1e-6) break;
+    const own = measure.credit(next);
+    if (own >= credit - 1e-6) return next;
+    credit = own;
+  }
+  return first;
 }
 
 // What `rows` draw less than their linear power in the power constraint's terms, in MW: each
@@ -212,7 +220,6 @@ function stockModel(
   missing: ItemRates,
   creditMW: number,
 ): LpModel {
-  const { power } = phaseContext(config, phase, {});
   const model: LpModel = {
     optimize: 'cost',
     opType: 'min',
@@ -220,41 +227,17 @@ function stockModel(
     variables: {},
     bounds: {},
   };
+  const { boost, utilityFactor } = phaseContext(config, phase, {}).power;
   const balance = (item: string) =>
     (model.constraints['item:' + item] ??= exactBalance(item) ? { equal: 0 } : { min: 0 });
-  // From Phase 2 every MW the lines draw needs fuel: the power the plan's burnt fuel, spare power
-  // and augmenters give beyond its need is free; past that, its generators burn more fuel up to
-  // their whole count ('more:<row id>'), then generator lines of their own (#1086: a plan's fuel
-  // covers its need). Phase 1 runs on hand-fed biomass, as in the solve.
-  if (phase >= 2) {
-    const burntMW =
-      stage.rows.reduce((total, row) => total + row.generationMW, 0) * (1 + power.boost);
-    const { spareMW, augmenterMW, needMW } = stage.grid;
-    model.constraints.power = {
-      max: Math.max(0, spareMW + augmenterMW + burntMW - needMW) + creditMW,
-    };
-    for (const row of stage.rows) {
-      const room = row.machines - row.equivalent;
-      if (!(row.power < 0) || row.machine === 'Nuclear Power Plant' || room <= 1e-6) continue;
-      const coefficients: Record<string, number> = {
-        cost: 0,
-        power: row.power * (1 + power.boost),
-      };
-      for (const [item, rate] of Object.entries(row.inputs)) {
-        balance(item);
-        coefficients['item:' + item] = -rate / row.equivalent;
-      }
-      model.variables[MORE + row.id] = coefficients;
-      model.bounds![MORE + row.id] = room;
-    }
-  }
+  if (phase >= 2) addStockPower(model, stage, boost, creditMW, balance);
   for (const recipe of recipes) {
     const coefficients: Record<string, number> = {
       cost: 1 + (recipe.power > 0 ? recipe.power / 100000 : 0),
       power:
         recipe.power < 0
-          ? recipe.power * (1 + power.boost)
-          : recipe.power * config.powerFactor * power.utilityFactor,
+          ? recipe.power * (1 + boost)
+          : recipe.power * config.powerFactor * utilityFactor,
     };
     for (const [item, rate] of Object.entries(recipe.outputs)) {
       balance(item);
@@ -266,31 +249,7 @@ function stockModel(
     }
     model.variables[recipe.id] = coefficients;
   }
-  // What the plan has spare: its surplus beyond what storage takes of it, almost free.
-  for (const [item, rate] of Object.entries(stage.surplus)) {
-    const left = rate - (fromSurplus[item] || 0);
-    if (left <= STOCK_DUST || !model.constraints['item:' + item]) continue;
-    model.variables['spare:' + item] = { cost: 0.0001, ['item:' + item]: 1 };
-    model.bounds!['spare:' + item] = left;
-  }
-  // The raw budgets the plan leaves, with their extraction power, and existing supply it leaves.
-  const equipment = extractionEquipment(config);
-  for (const item of RAW) {
-    const left = (config.limits[item] ?? 0) - (stage.raw[item] || 0);
-    if (left <= STOCK_DUST || !model.constraints['item:' + item]) continue;
-    model.variables['raw:' + item] = {
-      cost: 0.0001,
-      ['item:' + item]: 1,
-      power: extractionMWPerUnit(item, equipment) * config.powerFactor,
-    };
-    model.bounds!['raw:' + item] = left;
-  }
-  for (const [item, rate] of Object.entries(config.existingSupply)) {
-    const left = rate - (stage.supplied[item] || 0);
-    if (left <= STOCK_DUST || !model.constraints['item:' + item]) continue;
-    model.variables['supply:' + item] = { cost: 0.0001, ['item:' + item]: 1 };
-    model.bounds!['supply:' + item] = left;
-  }
+  addStockSources(model, config, stage, fromSurplus);
   // Each container with no surplus: up to its rate, worth FILL_WORTH when full.
   for (const [item, rate] of Object.entries(missing)) {
     balance(item);
@@ -298,4 +257,59 @@ function stockModel(
     model.bounds!['store:' + item] = rate;
   }
   return model;
+}
+
+// From Phase 2 every MW the storage-only lines draw needs fuel: the power the plan's burnt fuel,
+// spare power and augmenters give beyond its need is free (plus `creditMW`, see stockLines); past
+// that, the plan's generators burn more fuel up to their whole count ('more:<row id>'), then
+// generator lines of their own (#1086: a plan's fuel covers its need). Phase 1 runs on hand-fed
+// biomass, as in the solve, so stockModel adds no power constraint there.
+function addStockPower(
+  model: LpModel,
+  stage: Solved,
+  boost: number,
+  creditMW: number,
+  balance: (item: string) => unknown,
+) {
+  const burntMW = stage.rows.reduce((total, row) => total + row.generationMW, 0) * (1 + boost);
+  const { spareMW, augmenterMW, needMW } = stage.grid;
+  model.constraints.power = {
+    max: Math.max(0, spareMW + augmenterMW + burntMW - needMW) + creditMW,
+  };
+  for (const row of stage.rows) {
+    const room = row.machines - row.equivalent;
+    if (!(row.power < 0) || row.machine === 'Nuclear Power Plant' || room <= 1e-6) continue;
+    const coefficients: Record<string, number> = { cost: 0, power: row.power * (1 + boost) };
+    for (const [item, rate] of Object.entries(row.inputs)) {
+      balance(item);
+      coefficients['item:' + item] = -rate / row.equivalent;
+    }
+    model.variables[MORE + row.id] = coefficients;
+    model.bounds![MORE + row.id] = room;
+  }
+}
+
+// What the storage-only lines may draw on, almost free, for the items their balances have: the
+// plan's surplus beyond what storage takes of it, the raw budgets it leaves (with their extraction
+// power) and the existing supply it leaves.
+function addStockSources(
+  model: LpModel,
+  config: CurrentSettings,
+  stage: Solved,
+  fromSurplus: ItemRates,
+) {
+  const source = (name: string, item: string, left: number, extra: Record<string, number> = {}) => {
+    if (left <= STOCK_DUST || !model.constraints['item:' + item]) return;
+    model.variables[name] = { cost: 0.0001, ['item:' + item]: 1, ...extra };
+    model.bounds![name] = left;
+  };
+  for (const [item, rate] of Object.entries(stage.surplus))
+    source('spare:' + item, item, rate - (fromSurplus[item] || 0));
+  const equipment = extractionEquipment(config);
+  for (const item of RAW)
+    source('raw:' + item, item, (config.limits[item] ?? 0) - (stage.raw[item] || 0), {
+      power: extractionMWPerUnit(item, equipment) * config.powerFactor,
+    });
+  for (const [item, rate] of Object.entries(config.existingSupply))
+    source('supply:' + item, item, rate - (stage.supplied[item] || 0));
 }
