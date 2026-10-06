@@ -25,6 +25,8 @@ export interface AdaFacts {
   retireOpen: number;
   // Unticked steps of lines a delivered Space Elevator part leaves without work (#1062).
   idleLines?: number;
+  // Unticked storage-only lines of the open phase (#1061): optional, listed last.
+  stockLines?: number;
   // The generators the phase before built that this phase keeps (#1064), as a name list ("7 Fuel
   // Generators"), and that phase ("Phase 3"); absent when it keeps none.
   keptGenerators?: string;
@@ -306,6 +308,15 @@ const RULES: AdaRule[] = [
     when: facts => (facts.idleLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.idleLines!, 'production line')} only made elevator parts you have already delivered, so the build plan dims ${facts.idleLines === 1 ? 'it' : 'them'} and says which later phase needs ${facts.idleLines === 1 ? 'it' : 'them'}, if any. Idle machines. FICSIT calls that “strategic reserve”.`,
+  },
+  {
+    // Storage-only lines (#1061): protected storage takes surplus first; these are optional.
+    id: 'storage-lines',
+    on: ['plan', 'storage'],
+    tone: 'calm',
+    when: facts => (facts.stockLines ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.stockLines!, 'storage-only line')} at the end of this phase ${facts.stockLines === 1 ? 'is' : 'are'} optional: storage takes the plan's surplus first, and ${facts.stockLines === 1 ? 'that line fills' : 'those lines fill'} only containers nothing spills into. Build ${facts.stockLines === 1 ? 'it' : 'them'} last, or never. Shelves can wait.`,
   },
   {
     // The generators the phase before built stay and count first (#1064), as "Power available

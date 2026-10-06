@@ -80,6 +80,7 @@ export function storageRows(
 export const SOURCE_NOTES: Record<StorageSource['source'], string> = {
   surplus: 'from surplus',
   line: 'storage-only line (optional)',
+  both: 'from surplus, topped up by a storage-only line (optional)',
   none: 'nothing spare, and no storage-only line fits the budgets',
 };
 

@@ -9,9 +9,10 @@ export interface StorageSource {
   item: string;
   filled: number;
   asked: number;
-  // 'surplus': the plan makes more than it uses; 'line': storage-only lines make it; 'none':
-  // nothing spare and no storage-only line fits the budgets.
-  source: 'surplus' | 'line' | 'none';
+  // 'surplus': the plan makes more than it uses; 'line': storage-only lines make it; 'both': the
+  // surplus, topped up to a rate set for the item itself; 'none': nothing spare and no
+  // storage-only line fits the budgets.
+  source: 'surplus' | 'line' | 'both' | 'none';
 }
 
 // The containers of `stage` with a rate asked, or null for a plan that reserved its storage rates
@@ -23,9 +24,12 @@ export function storageSources(stage: {
 }): StorageSource[] | null {
   const asked = stage.storageAsked;
   if (!asked) return null;
-  const lined = new Set(
-    (stage.rows || []).filter(row => row.stock).flatMap(row => Object.keys(row.outputs)),
-  );
+  // What the storage-only lines make of each item beyond what they use themselves.
+  const lined: ItemRates = {};
+  for (const row of (stage.rows || []).filter(row => row.stock)) {
+    for (const [item, rate] of Object.entries(row.outputs)) lined[item] = (lined[item] || 0) + rate;
+    for (const [item, rate] of Object.entries(row.inputs)) lined[item] = (lined[item] || 0) - rate;
+  }
   return Object.entries(asked)
     .filter(([, rate]) => rate > 0)
     .map(([item, rate]) => {
@@ -34,7 +38,13 @@ export function storageSources(stage: {
         item,
         filled,
         asked: rate,
-        source: !filled ? 'none' : lined.has(item) ? 'line' : 'surplus',
+        source: !filled
+          ? 'none'
+          : (lined[item] || 0) <= 0.002
+            ? 'surplus'
+            : filled - (lined[item] || 0) > 0.002
+              ? 'both'
+              : 'line',
       };
     });
 }

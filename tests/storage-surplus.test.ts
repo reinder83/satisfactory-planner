@@ -268,3 +268,23 @@ test('storage-only lines burn fuel for their power: the fuel covers the need (#1
   }
   assert.equal(checked, 8);
 });
+
+test('a rate set for the item itself is topped up beyond its surplus (#1061)', () => {
+  // The guided start's default: 20 Concrete/min guaranteed on top of the construction rate.
+  const plan = calculate({
+    wholeMachines: true,
+    storage: 'construction',
+    storageOverrides: { Concrete: 20 },
+    storageFromSurplus: true,
+  });
+  for (const phase of STAGES) {
+    const stage = plan.stages[phase];
+    assert.equal(stage.storageAsked!.Concrete, 20);
+    assert.ok(
+      Math.abs(stage.storage!.Concrete! - 20) < 1e-6,
+      `Phase ${phase}: storage gets its 20 Concrete/min, not ${stage.storage!.Concrete}`,
+    );
+    const source = storageSources(stage)!.find(entry => entry.item === 'Concrete')!.source;
+    assert.ok(['surplus', 'line', 'both'].includes(source), `Phase ${phase}: ${source}`);
+  }
+});

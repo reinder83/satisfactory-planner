@@ -6,7 +6,8 @@
 //   1. an item the plan already makes more of than it uses takes its rate from that surplus, with
 //      no extra machine (at most the rate; the rest still goes to the AWESOME Sink, which in game
 //      is a Priority Merger or an overflow splitter after the container);
-//   2. only an item with no surplus at all gets storage-only lines, `<recipe>:stock` rows with
+//   2. only an item with no surplus at all gets storage-only lines (and an item with a rate of its
+//      own, storageOverrides, what its surplus leaves of that rate), `<recipe>:stock` rows with
 //      `stock`, solved as a small linear program at exact clocks (one underclocked machine for a
 //      trickle), fed by the plan's remaining surplus, the raw budgets it leaves and its spare power.
 // Those lines are optional and come last in the build order: nothing else in the plan uses them.
@@ -60,11 +61,15 @@ export function withStock(config: CurrentSettings, phase: number, stage: Solved)
     if (!(rate > 0)) continue;
     const spare = stage.surplus[item] || 0;
     if (spare > STOCK_DUST) fromSurplus[item] = Math.min(rate, spare);
-    else missing[item] = rate;
+    // A rate set for the item itself (storageOverrides, such as the guided start's 20 Concrete/min)
+    // is a guarantee: what the surplus leaves of it is topped up by storage-only lines.
+    const topUp = config.storageOverrides?.[item] !== undefined;
+    if (spare <= STOCK_DUST) missing[item] = rate;
+    else if (topUp && rate - spare > STOCK_DUST) missing[item] = rate - spare;
   }
   const lines = stockLines(config, phase, stage, powered, fromSurplus, missing);
   const storage: ItemRates = Object.fromEntries(
-    Object.keys(asked).map(item => [item, fromSurplus[item] ?? lines.stored[item] ?? 0]),
+    Object.keys(asked).map(item => [item, (fromSurplus[item] ?? 0) + (lines.stored[item] ?? 0)]),
   );
   const rows = [
     ...stage.rows.map(row => lines.generators[row.id] ?? row),

@@ -272,6 +272,8 @@ function adaFacts(): AdaFacts {
     next: next?.title || '',
     retireOpen: steps.filter(t => t.id.startsWith('retire-') && !checked(t.id)).length,
     idleLines: idleOpen,
+    stockLines: (storedStage.rows || []).filter(row => row.stock && !checked(runningKey(row)))
+      .length,
     ...keptFacts(storedStage),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {

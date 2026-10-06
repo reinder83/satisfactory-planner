@@ -21,6 +21,13 @@
 //                                  words)
 //   storage supply          +56%   (everything, rather than construction)
 //
+// Since #1061 a plan the wizard calculates fills protected storage from surplus first, and only
+// items with no surplus get storage-only lines, which are optional. Measured on the guided
+// start's defaults (Phase 1 start, whole machines, 20 Concrete/min), buildings per Phase 1-5:
+// no storage 17/61/208/787/1798; "My building materials" 26/77/217/823/1802 (before: 40/127/
+// 238/859/1804); "Everything" 28/93/265/870/1932 (before: 41/158/359/1363/2530). The stock
+// question's details quote the first three phases.
+//
 // while eleven of the wizard's controls — world seed, mod notes, SAM
 // conversion, collectables, somersloops held, unfueled augmenters, sloops
 // parked in hand-fed lines, the budget confirmation, resource purity, and both
@@ -178,7 +185,7 @@ export const guidedQuestions: GuidedQuestion[] = [
         value: 'construction',
         label: 'My building materials',
         detail:
-          'Plates, rods, concrete, wire, cable, beams, pipes, frames, plastic and rubber each get a container and a guaranteed refill.',
+          'Plates, rods, concrete, wire, cable, beams, pipes, frames, plastic and rubber each get a container. The plan’s surplus fills them first; an item with no surplus gets a small storage-only line, optional and built last. On a default plan: 9 more buildings in Phase 1, 16 in Phase 2, 9 in Phase 3.',
         glyph: 'stock-build',
         set: { storage: 'construction', collectables: false },
       },
@@ -186,7 +193,7 @@ export const guidedQuestions: GuidedQuestion[] = [
         value: 'all',
         label: 'Everything it can automate',
         detail:
-          'A container and a reserved trickle for every automatable solid. The biggest storage room, and the biggest factory.',
+          'A container for every automatable solid, filled from surplus first. The biggest storage room, and the most storage-only lines: on a default plan 11 more buildings in Phase 1, 32 in Phase 2, 57 in Phase 3, all optional.',
         glyph: 'stock-all',
         set: { storage: 'all', collectables: true },
       },
