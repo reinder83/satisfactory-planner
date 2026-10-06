@@ -278,6 +278,30 @@ export const milestoneOnlyPhases = (
     phase => Number(phase) >= Number(firstPlanPhase(plan)) && milestoneOnlyPhase(plan, phase),
   );
 
+// The check keys of every step the milestone-only phases before a calculated plan's start phase
+// list (#1068): what "Everything before Phase N is done" ticks, in the wizard's Review
+// (ui/wizard/EarlierDone.vue, sent as the new profile's `built` keys) and later on the build plan
+// (ui/plan/MilestoneOnlyNotice.vue, a `checks` update). They are all `unlock-<id>` milestone and
+// MAM research steps, facts about the world, and ticking them only adds ticks. None for a plan
+// made for Phase 1 or one with a guide.
+export function stepsBeforeStart(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
+  state: GuideState,
+  data: Progression,
+): string[] {
+  const memo: StepsMemo = {};
+  const ids = milestoneOnlyPhases(plan).flatMap(phase =>
+    phaseSteps(plan, state, data, phase, memo).map(step => step.id),
+  );
+  return [...new Set(ids)];
+}
+
+// "Phase 1", "Phases 1 and 2", "Phases 1, 2 and 3": the milestone-only phases in words (#1068).
+export function earlierPhasesWords(phases: readonly string[]): string {
+  if (phases.length === 1) return 'Phase ' + phases[0];
+  return 'Phases ' + phases.slice(0, -1).join(', ') + ' and ' + phases[phases.length - 1];
+}
+
 // The context the task lists share, for `phase` '1'-'5' or 'post' (planned as Phase 5).
 export function guideContext(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,

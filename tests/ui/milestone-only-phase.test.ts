@@ -212,7 +212,8 @@ test('a profile opened on Phase 1 shows one notice that says both why and what',
     `You are working on Phase 3. Phase 1 still has ${open1} open steps, so the plan starts here. ` +
       'This profile plans production from Phase 3 on. Phase 1 lists only the HUB milestones and ' +
       'MAM research that belong to it: no production lines, storage or power to build here. ' +
-      'Go to Phase 3',
+      // "Mark everything before Phase 3 done" (#1068) while earlier steps are open.
+      'Go to Phase 3 Mark everything before Phase 3 done',
   );
   const button = $<HTMLButtonElement>('[data-go-to-start-phase]')!;
   assert.equal(button.type, 'button');

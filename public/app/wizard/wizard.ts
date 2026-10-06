@@ -13,11 +13,20 @@ import {
   presetSurvey,
   resourceDefaults,
 } from '../../preferences.ts';
+import { stepsBeforeStart } from '../../progression.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
-import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
+import {
+  draft,
+  loadContext,
+  progressionData,
+  setWizard,
+  setWorkspace,
+  wizard,
+  workspace,
+} from '../session.ts';
 import { render } from '../shell.ts';
 import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
@@ -67,6 +76,9 @@ export interface WizardDraft {
   guidedAsk: string[] | null;
   guidedTopics?: string[];
   tutorial: string;
+  // Review's "Everything before Phase N is done" (#1068, ui/wizard/EarlierDone.vue): draft only,
+  // sent as the steps it ticks (earlierDoneKeys), never stored as a setting.
+  earlierDone?: boolean;
   supplyRows?: { name: string; rate: string }[];
   extraction?: Survey;
   extractionStep?: number;
@@ -440,7 +452,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       settings: wizardDraft.settings,
       carryFrom: wizardDraft.saveId ? wizardDraft.carryFrom : null,
       carry: wizardDraft.carry,
-      built: guidedBuiltKeys(wizardDraft),
+      built: [...guidedBuiltKeys(wizardDraft), ...earlierDoneKeys(wizardDraft)],
     },
     true,
     calcProgress(button, 'Saving profile…'),
@@ -462,6 +474,15 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       (carried ? ': ' + carried + '. ' : '. ') +
       'Your other progress is unchanged.',
   );
+}
+
+// The steps "Everything before Phase N is done" ticks in the new profile (#1068): every step the
+// milestone-only phases before its start phase list in the preview (stepsBeforeStart), all of them
+// unlock-<id> keys, which newProfileState accepts as finished work. Records carried from another
+// profile still win over them there, an untick included. None while the box is clear.
+export function earlierDoneKeys(wizardDraft: WizardDraft): string[] {
+  if (!wizardDraft.earlierDone || !wizardDraft.preview) return [];
+  return stepsBeforeStart(wizardDraft.preview, { checks: {} }, progressionData);
 }
 
 // The primary button's label on the current screen: the guided questions, the five steps.
