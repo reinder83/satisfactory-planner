@@ -89,13 +89,13 @@ function integerFit(variant: CurrentSettings, phase: number, options: RunOptions
 }
 // A capped re-solve (fullSpeed, and resolveEarlierPhases under phaseTime 'final') caps each recipe
 // at the machines the stage or a later phase already builds. A looser cap can make the exact LP
-// swap a recipe the stage builds for another (Caterium Wire for Fused Wire), and the integer fit over only
-// that network can then be proven infeasible, which the caller reads as "this phase cannot finish
-// sooner" (#1094). So when the fit over the exact LP's network is proven infeasible under caps, fit
-// again over that network widened with every recipe the caps allow, which holds the rows the stage
-// already builds, amplified twins included, so the stage's own plan lies in it. A fit that worked,
-// or whose search stopped, is left as it was, and so is every solve without caps. Returns the
-// retry's result, or null when there is nothing to retry.
+// swap a recipe the stage builds for another (Caterium Wire for Fused Wire), and the integer fit
+// over only that network can then be proven infeasible, which the caller reads as "this phase
+// cannot finish sooner" (#1094). So when the fit over the exact LP's network is proven infeasible
+// under caps, fit again over that network widened with every recipe the caps allow, which holds
+// the rows the stage already builds, amplified twins included, so the stage's own plan lies in it.
+// A fit that worked, or whose search stopped, is left as it was, and so is every solve without
+// caps. Returns the retry's result, or null when there is nothing to retry.
 function cappedRetry(
   variant: CurrentSettings,
   phase: number,

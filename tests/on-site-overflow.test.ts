@@ -210,12 +210,21 @@ test("under phaseTime 'final', a routed phase finishes no later than main's (#10
   assert.equal(row(third, FUSED), undefined, 'the routed plan: no central line');
   assert.ok(buildings(third) < MAIN_FINAL['3']!.buildings);
   // Phase 4's routed plan is pulled ahead too, so it stays routed: no central line, fewer
-  // buildings than main. Phase 5 is not re-solved and keeps its route.
+  // buildings than main. Phase 5 is not re-solved and keeps its route. A pulled-ahead phase keeps
+  // saying it is routed (#1099), so the assumptions name all three.
   assert.ok(plan.stages['4'].aheadOf !== undefined);
   assert.equal(row(plan.stages['4'], FUSED), undefined, 'Phase 4: no central line');
   assert.ok(buildings(plan.stages['4']) < MAIN_FINAL['4']!.buildings);
-  assert.deepEqual(plan.stages['5'].onSiteOverflow, { [ALPHA]: ['Quickwire'] });
   assert.equal(row(plan.stages['5'], FUSED), undefined, 'Phase 5: no central line');
+  for (const phase of PHASES) {
+    assert.deepEqual(plan.stages[phase].onSiteOverflow, { [ALPHA]: ['Quickwire'] }, phase);
+    assert.ok(
+      plan.warnings.includes(
+        `Phase ${phase}: a central line would have sent almost all the Quickwire it made to the AWESOME Sink, so the own lines of Alpha also give the rest of the plan what they make beyond the factory's needs, and fewer central machines are built.`,
+      ),
+      `Phase ${phase}'s warning`,
+    );
+  }
   // The warning names Phases 3 and 4, as on main.
   assert.ok(
     plan.warnings.includes(
