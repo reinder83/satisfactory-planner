@@ -216,7 +216,10 @@ export function phaseDemands(context: PhaseContext, reachable: Set<string>): Pha
   const { config, phase, maximum } = context;
   const demand: ItemRates = {};
   const add = (item: string, rate: number) => (demand[item] = (demand[item] || 0) + rate);
-  const storage = storageDemand(config, reachable);
+  // Under whole machines protected storage is not a demand of the solve (#1061): it takes the
+  // plan's surplus first, and the lines for what no surplus covers are added after the phase is
+  // planned, at exact clocks (withStock in stock.ts). Elsewhere the lines are exact anyway.
+  const storage = config.wholeMachines ? {} : storageDemand(config, reachable);
   for (const [item, rate] of Object.entries(storage)) if (rate > 0) demand[item] = rate;
   // Under `maximum` deliveries are not a fixed demand; the goal variable (addSources) draws them.
   const delivery = deliveryDemand(context);
@@ -242,7 +245,7 @@ export function phaseDemands(context: PhaseContext, reachable: Set<string>): Pha
 // Protected storage: solid, sinkable, non-radioactive reachable items the storage mode covers,
 // each at its rate from storageRateFor (per-item override, elevator parts 0, build rate, general
 // rate). A rate of 0 keeps the item's container but reserves nothing.
-function storageDemand(config: CurrentSettings, reachable: Set<string>): ItemRates {
+export function storageDemand(config: CurrentSettings, reachable: Set<string>): ItemRates {
   const storage: ItemRates = {};
   for (const item of reachable)
     if (

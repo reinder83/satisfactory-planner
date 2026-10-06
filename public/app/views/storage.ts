@@ -8,7 +8,7 @@ import { STORAGE_ROOM } from '../../storage-room.ts';
 import { itemRate } from '../flow.ts';
 import { calculated, checked, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
-import type { ItemRates, StorageEdits, UpdateOp } from '../../types/index.ts';
+import type { ItemRates, StorageEdits, StoredStage, UpdateOp } from '../../types/index.ts';
 
 // A container position: its address and the item it holds, or null when reserved (empty).
 export interface StoragePosition {
@@ -49,6 +49,8 @@ export function inputText(inputs: ItemRates): string {
 export interface ItemRateRow {
   name: string;
   rate: string;
+  // Where a protected container's rate comes from (#1061, storageRows); absent elsewhere.
+  note?: string;
 }
 
 // itemRateRows: the same non-zero entries inputText lists, in the same order, as rows.
@@ -56,6 +58,32 @@ export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
   return Object.entries(inputs)
     .filter(([, rate]) => rate)
     .map(([item, rate]) => ({ name: item, rate: itemRate(item, rate) }));
+}
+
+// The Resources page's protected storage rows for `stage`. A whole-machine plan since #1061
+// (`storageAsked`) fills storage from surplus first and runs storage-only lines (`stock` rows) only
+// for items with no surplus, so each row says where its rate comes from, and what was asked when
+// the surplus gives less. An older plan reserved its rates in its lines: the rates as they are.
+export function storageRows(
+  stage: Pick<StoredStage, 'storage' | 'storageAsked' | 'rows'>,
+): ItemRateRow[] {
+  const asked = stage.storageAsked;
+  if (!asked) return itemRateRows(stage.storage || {});
+  const lined = new Set(
+    (stage.rows || []).filter(row => row.stock).flatMap(row => Object.keys(row.outputs)),
+  );
+  return Object.entries(asked)
+    .filter(([, rate]) => rate > 0)
+    .map(([item, rate]) => {
+      const filled = stage.storage?.[item] || 0;
+      const source = !filled
+        ? 'nothing spare, and no storage-only line fits the budgets'
+        : lined.has(item)
+          ? 'storage-only line (optional)'
+          : 'from surplus';
+      const short = filled < rate - 0.002 ? `, ${itemRate(item, rate)} asked` : '';
+      return { name: item, rate: itemRate(item, filled), note: source + short };
+    });
 }
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,

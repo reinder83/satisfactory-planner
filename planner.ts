@@ -24,6 +24,7 @@
 //   rounding.ts     the fallbacks after a stopped whole-machine search (#593, #694)
 //   on-site.ts      the factory groups' own lines for items they make on site (#875)
 //   stage.ts        a solved model read back into a stage
+//   stock.ts        protected storage fed from surplus first, and storage-only lines (#1061)
 //   calculate.ts    calculate(): every phase, then the adjustments and the warnings
 //   draft.ts        the draft of a phase that does not fit
 //   adjustments.ts  phaseTime 'final' and the augmenter fuel verdict

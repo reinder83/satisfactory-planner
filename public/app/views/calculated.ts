@@ -80,6 +80,7 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
 // byproduct advice in `snapshot`, the stage of the phase the step is in (#1022).
 const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
   siteLineText(row) +
+  stockLineText(row) +
   `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
   recycleStepText(row, snapshot);
 
@@ -126,6 +127,13 @@ export const rowAdvice = (
 const siteLineText = (row: CalcRow): string =>
   row.onSite
     ? `Made on site for ${siteGroupName(row)}: it feeds that factory's own lines first, and what they do not use goes to any other line that still needs it, then to the AWESOME Sink. `
+    : '';
+
+// The first sentence of a step for a storage-only line (#1061), saying it is optional; '' for any
+// other row.
+const stockLineText = (row: CalcRow): string =>
+  row.stock
+    ? 'Optional, built last: this line only serves protected storage, for the containers the plan has no surplus to fill, and no other line needs it. A full container overflows to the AWESOME Sink. '
     : '';
 
 // The second sentence of the whole-building power headroom notice (ui/plan/CalcWarnings.vue)

@@ -18,7 +18,7 @@ export function readStage(
 ): Solved {
   const { config, maximum, power } = context;
   const { storage, delivery, drone, transport, matrix } = demands;
-  const { utilityFactor, augmenters, fueled, boost, spareMW } = power;
+  const { augmenters, fueled, boost } = power;
   // Under `maximum` the delivery rates are whatever the goal achieved.
   if (maximum)
     for (const part of Object.values(delivery))
@@ -31,21 +31,11 @@ export function readStage(
       .filter(([, rate]) => rate > 0.002),
   );
   const raw = Object.fromEntries(RAW.map(item => [item, solved.values['raw:' + item] || 0]));
-  // Power totals as releases before #1064 read them: whole machines at full power against the
-  // generators' fractional output, with the shortfall as additionalHeadroomMW below. The pages
-  // read `grid` instead (stageGrid in public/power.ts).
-  const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
-    generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
-  const grid = stageGrid({
+  const { peakMW, generationMW, availableMW, requiredMW, additionalHeadroomMW, grid } = stagePower(
+    context,
     rows,
     raw,
-    powerFactor: config.powerFactor,
-    utilityPercent: config.utilityPercent,
-    extractionAt: extractionEquipment(config),
-    boost,
-    spareMW: config.availablePowerGW * 1000,
-    augmenterMW: spareMW - config.availablePowerGW * 1000,
-  });
+  );
   return {
     feasible: true,
     rows: buildOrder(rows),
@@ -66,14 +56,9 @@ export function readStage(
     boost,
     augmenterMW: 500 * augmenters,
     matrixRate: matrix,
-    // New generation with the augmenter boost, plus the spare figure (which already includes the
-    // augmenters' 500 MW each and their boost on installed capacity).
-    availableMW: generationMW * (1 + boost) + spareMW,
-    requiredMW: peakMW * utilityFactor,
-    additionalHeadroomMW: Math.max(
-      0,
-      peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
-    ),
+    availableMW,
+    requiredMW,
+    additionalHeadroomMW,
     grid,
     // The phase takes as long as its slowest delivery (Infinity if a rate is 0).
     hours: Math.max(
@@ -83,6 +68,42 @@ export function readStage(
     conversions: rows
       .filter(row => Object.keys(row.outputs).some(item => RAW.includes(item) && item !== 'Water'))
       .map(row => row.name),
+  };
+}
+// A stage's power from its rows and raw draw: the totals as releases before #1064 read them (whole
+// machines at full power against the generators' fractional output, with the shortfall as
+// additionalHeadroomMW), and `grid`, which the pages read (stageGrid in public/power.ts). Shared
+// by readStage and the storage-only lines added after the solve (planner/stock.ts, #1061).
+export function stagePower(
+  { config, power }: Pick<PhaseContext, 'config' | 'power'>,
+  rows: CalcRow[],
+  raw: ItemRates,
+) {
+  const { utilityFactor, boost, spareMW } = power;
+  const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
+    generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
+  const grid = stageGrid({
+    rows,
+    raw,
+    powerFactor: config.powerFactor,
+    utilityPercent: config.utilityPercent,
+    extractionAt: extractionEquipment(config),
+    boost,
+    spareMW: config.availablePowerGW * 1000,
+    augmenterMW: spareMW - config.availablePowerGW * 1000,
+  });
+  return {
+    peakMW,
+    generationMW,
+    // New generation with the augmenter boost, plus the spare figure (which already includes the
+    // augmenters' 500 MW each and their boost on installed capacity).
+    availableMW: generationMW * (1 + boost) + spareMW,
+    requiredMW: peakMW * utilityFactor,
+    additionalHeadroomMW: Math.max(
+      0,
+      peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
+    ),
+    grid,
   };
 }
 // Every Space Elevator part the lines make beyond their other uses goes to the elevator (#1062):
@@ -112,7 +133,11 @@ function deliverAll(model: LpModel, solved: Solution, delivery: Record<string, S
 // one is never underclocked, and its `equivalent` is the fuel it burns. Row inputs and outputs
 // are the line's totals per minute. peakMW counts whole machines at full power without the
 // utility allowance; generationMW is a generator's output at its fractional level.
-function stageRows(config: CurrentSettings, pool: PoolRecipe[], solved: Solution): CalcRow[] {
+export function stageRows(
+  config: CurrentSettings,
+  pool: PoolRecipe[],
+  solved: Solution,
+): CalcRow[] {
   return pool
     .filter(recipe => (solved.values[recipe.id] || 0) > 1e-6)
     .map((recipe): CalcRow => {
@@ -139,10 +164,15 @@ function stageRows(config: CurrentSettings, pool: PoolRecipe[], solved: Solution
 // sinkable items are listed; fluids, waste and unsinkable items are balanced exactly. `made`
 // counts rows only, so an item also drawn from existing supply or a raw budget shows the rows'
 // excess over total use, clamped at 0.
-function stageSurplus(
-  { config, phase }: PhaseContext,
+export function stageSurplus(
+  { config, phase }: Pick<PhaseContext, 'config' | 'phase'>,
   rows: CalcRow[],
-  { storage, delivery, drone, matrix }: PhaseDemands,
+  {
+    storage,
+    delivery,
+    drone,
+    matrix,
+  }: Pick<PhaseDemands, 'storage' | 'delivery' | 'drone' | 'matrix'>,
 ): ItemRates {
   const used: ItemRates = {},
     made: ItemRates = {};
@@ -176,7 +206,7 @@ function stageSurplus(
 }
 // Build order: by dependency depth, suppliers before consumers; recycling loops are
 // commissioned as a connected group.
-function buildOrder(rows: CalcRow[]): CalcRow[] {
+export function buildOrder(rows: CalcRow[]): CalcRow[] {
   const producers: Record<string, CalcRow[]> = {};
   for (const row of rows)
     for (const item of Object.keys(row.outputs)) (producers[item] ??= []).push(row);
