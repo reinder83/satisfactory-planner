@@ -47,6 +47,14 @@ function powerCells(phase: string, stageResult: StoredStage, settings: StoredSet
   };
 }
 
+// The buildings of a stage's storage-only lines (#1061), or '' for none.
+function stockBuildings(stageResult: StoredStage): string {
+  const count = (stageResult.rows || [])
+    .filter(row => row.stock)
+    .reduce((sum, row) => sum + row.machines, 0);
+  return count ? num(count) : '';
+}
+
 const view = computed(() =>
   legacy(() => {
     const wizardDraft = draft(),
@@ -65,6 +73,8 @@ const view = computed(() =>
         buildings: stageResult.rows
           ? num(stageResult.rows.reduce((sum, row) => sum + row.machines, 0))
           : '—',
+        // Of those, the storage-only lines' (#1061): optional, the stocked choice's own cost.
+        stock: stockBuildings(stageResult),
         ...powerCells(phase, stageResult, preview.settings),
         // A stopped search or an older saved plan measured no budget: a neutral draft (#632).
         // With mining per phase (#1065) the budgets are the phase's, from its miner and belts.
@@ -118,7 +128,15 @@ const view = computed(() =>
                 >{{ ' ' }}<span class="badge">was {{ row.was }}</span></template
               >
             </td>
-            <td>{{ row.buildings }}</td>
+            <td>
+              {{ row.buildings
+              }}<template v-if="row.stock"
+                >{{ ' '
+                }}<span class="badge" data-review-stock
+                  >{{ row.stock }} for storage, optional</span
+                ></template
+              >
+            </td>
             <td>{{ row.generation }}</td>
             <td :class="row.power.short ? 'warn' : undefined" data-review-power>
               {{ row.power.text }}
@@ -127,6 +145,10 @@ const view = computed(() =>
         </tbody>
       </table>
     </div>
+    <p v-if="view.rows.some(row => row.stock)" class="small muted" data-review-stock-note>
+      Protected storage takes each phase’s surplus first. The buildings marked for storage are the
+      storage-only lines for items with no surplus: optional, built last, at exact clocks.
+    </p>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
     <RoundingCost :entries="view.rounding" layout="table" />
     <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">

@@ -136,6 +136,8 @@ const view = computed(() =>
         load: vehicle?.lines ?? [],
         extract,
         mixed: transport || extract ? '' : mixedText(link.items, link.to),
+        // Protected storage fed from surplus first (#1061): how the link ends in game.
+        overflow: link.to === OUTSIDE.storage && !!stage?.storageAsked,
         badge: extract
           ? EXTRACT_BADGE
           : (vehicle?.badge ?? linkBeltBadge(link.items, FLUIDS, lanePlan)),
@@ -422,6 +424,10 @@ async function recalculate(event: Event) {
                   }}<span v-if="item.delivered" data-delivered-link> · delivered</span>
                 </li>
               </ul>
+              <p v-if="part.dir === 'out' && link.overflow" class="small muted" data-link-storage>
+                Surplus first: end each item's belt in its container through a Priority Merger or an
+                overflow splitter, so a full container overflows to the AWESOME Sink.
+              </p>
               <template v-if="part.dir === 'out' && link.extract">
                 <p class="small" data-link-extract>
                   Build the Water Extractors at {{ link.toName }}: no pipe or vehicle between

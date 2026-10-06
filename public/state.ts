@@ -67,6 +67,7 @@ export {
   pickedRecipeUnlocks,
   retiredProfileType,
   roundUpNeedsCalculated,
+  roundUpSettings,
   roundUpState,
   shareState,
   siteTicksForReview,

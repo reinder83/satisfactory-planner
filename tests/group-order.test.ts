@@ -189,6 +189,26 @@ test('groupedSteps reorders only the production steps, with the same ids', () =>
   }
 });
 
+test('storage-only lines keep their places after the storage step in any grouping (#1061)', () => {
+  const plan = calculate({ wholeMachines: true, storageFromSurplus: true });
+  const plain = phaseSteps(plan, { checks: {} }, data, '3');
+  const rows = plain.filter(step => step.row);
+  assert.ok(
+    rows.some(step => step.row!.stock),
+    'Phase 3 has storage-only lines',
+  );
+  const names = ['fg-iron', 'fg-parts'];
+  const grouped = groupedSteps(
+    plain,
+    groups(Object.fromEntries(rows.map((step, i) => [step.row!.id, whole(names[i % 2]!)])), names),
+  );
+  const storage = grouped.findIndex(step => step.id === 'calc-3-storage');
+  grouped.forEach((step, i) => {
+    if (step.row?.stock) assert.equal(step.id, plain[i]!.id, `${step.id} keeps its place`);
+    else if (step.row) assert.ok(i < storage, `${step.id} comes before the storage step`);
+  });
+});
+
 test('the remembered order follows every change of the groups, their assignments or the rows', () => {
   // groupedRows remembers its last orders (the build status asks once per factory card on each
   // redraw), so the same call again gives the very same answer, and any change a fresh one. Each

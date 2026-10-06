@@ -57,6 +57,15 @@ const CALCULATED_TASKS = [
     body: 'Use one container per selected item. Reserve its refill supply and route sinkable overflow to the AWESOME Sink; gathered items need manual replenishment.',
   },
 ];
+// The same step for a whole-machine plan since #1061 (`storageAsked` on a stage), which fills
+// storage from surplus first. Same id, so its tick stays.
+const SURPLUS_TASKS = [
+  {
+    id: 'calc-storage-layout',
+    title: 'Build and label the selected storage positions',
+    body: 'Use one container per selected item. Feed it the plan’s surplus of that item first, through a Priority Merger or an overflow splitter, and route a full container’s overflow to the AWESOME Sink; gathered items need manual replenishment.',
+  },
+];
 
 // Hall order for bays listed from the entrance: rows of two from the back of the hall (the top
 // of the grid) to the front, each row left then right. An odd bay out sits alone on the left
@@ -149,7 +158,11 @@ const page = computed(() =>
       // Every bay on the floor in its current order, search or not, for Move left / right.
       order: order ?? floorBays.map(b => b.id).sort((a, b) => a.localeCompare(b)),
       aisles: Math.floor(placed.length / 2),
-      tasks: calculated?.guide?.storageTasks ?? CALCULATED_TASKS,
+      tasks:
+        calculated?.guide?.storageTasks ??
+        (Object.values(calculated?.stages ?? {}).some(stage => stage.storageAsked)
+          ? SURPLUS_TASKS
+          : CALCULATED_TASKS),
     };
   }),
 );
