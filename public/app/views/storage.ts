@@ -6,6 +6,7 @@
 import { bayOfSlot, slotPosition } from '../../state.ts';
 import { STORAGE_ROOM } from '../../storage-room.ts';
 import { itemRate } from '../flow.ts';
+import { storageSources, type StorageSource } from '../storage-source.ts';
 import { calculated, checked, state } from '../session.ts';
 import { showDetail } from '../ui/detail.ts';
 import type { ItemRates, StorageEdits, StoredStage, UpdateOp } from '../../types/index.ts';
@@ -67,24 +68,20 @@ export function itemRateRows(inputs: ItemRates): ItemRateRow[] {
 export function storageRows(
   stage: Pick<StoredStage, 'storage' | 'storageAsked' | 'rows'>,
 ): ItemRateRow[] {
-  const asked = stage.storageAsked;
-  if (!asked) return itemRateRows(stage.storage || {});
-  const lined = new Set(
-    (stage.rows || []).filter(row => row.stock).flatMap(row => Object.keys(row.outputs)),
-  );
-  return Object.entries(asked)
-    .filter(([, rate]) => rate > 0)
-    .map(([item, rate]) => {
-      const filled = stage.storage?.[item] || 0;
-      const source = !filled
-        ? 'nothing spare, and no storage-only line fits the budgets'
-        : lined.has(item)
-          ? 'storage-only line (optional)'
-          : 'from surplus';
-      const short = filled < rate - 0.002 ? `, ${itemRate(item, rate)} asked` : '';
-      return { name: item, rate: itemRate(item, filled), note: source + short };
-    });
+  const sources = storageSources(stage);
+  if (!sources) return itemRateRows(stage.storage || {});
+  return sources.map(({ item, filled, asked, source }) => ({
+    name: item,
+    rate: itemRate(item, filled),
+    note: SOURCE_NOTES[source] + (filled < asked - 0.002 ? `, ${itemRate(item, asked)} asked` : ''),
+  }));
 }
+// How the Resources page words a container's source (storageSources).
+export const SOURCE_NOTES: Record<StorageSource['source'], string> = {
+  surplus: 'from surplus',
+  line: 'storage-only line (optional)',
+  none: 'nothing spare, and no storage-only line fits the budgets',
+};
 
 // The profile's storage layout edits with defaults filled in: added floors and bays,
 // renamed floors and bays, `slots` (address → item name filled in by the user) and

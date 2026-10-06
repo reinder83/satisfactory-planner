@@ -367,6 +367,7 @@ export function settings(input: unknown = {}): CurrentSettings {
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
     ...exactClockLines(input.exactClocks),
+    ...(input.storageFromSurplus === true ? { storageFromSurplus: true as const } : {}),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

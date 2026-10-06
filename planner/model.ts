@@ -216,10 +216,11 @@ export function phaseDemands(context: PhaseContext, reachable: Set<string>): Pha
   const { config, phase, maximum } = context;
   const demand: ItemRates = {};
   const add = (item: string, rate: number) => (demand[item] = (demand[item] || 0) + rate);
-  // Under whole machines protected storage is not a demand of the solve (#1061): it takes the
-  // plan's surplus first, and the lines for what no surplus covers are added after the phase is
-  // planned, at exact clocks (withStock in stock.ts). Elsewhere the lines are exact anyway.
-  const storage = config.wholeMachines ? {} : storageDemand(config, reachable);
+  // Under whole machines with storageFromSurplus, protected storage is not a demand of the solve
+  // (#1061): it takes the plan's surplus first, and the lines for what no surplus covers are added
+  // after the phase is planned, at exact clocks (withStock in stock.ts). Without whole machines
+  // the lines are exact anyway, and a plan without the setting plans storage as before.
+  const storage = stockedFromSurplus(config) ? {} : storageDemand(config, reachable);
   for (const [item, rate] of Object.entries(storage)) if (rate > 0) demand[item] = rate;
   // Under `maximum` deliveries are not a fixed demand; the goal variable (addSources) draws them.
   const delivery = deliveryDemand(context);
@@ -242,6 +243,10 @@ export function phaseDemands(context: PhaseContext, reachable: Set<string>): Pha
   if (matrix) add('Alien Power Matrix', matrix);
   return { demand, storage, delivery, drone, transport, matrix };
 }
+// Whether protected storage is left out of the solve and fed from surplus first (#1061): under
+// whole machines, when the settings ask for it (storageFromSurplus, absent from older plans).
+export const stockedFromSurplus = (config: CurrentSettings) =>
+  config.wholeMachines && config.storageFromSurplus === true;
 // Protected storage: solid, sinkable, non-radioactive reachable items the storage mode covers,
 // each at its rate from storageRateFor (per-item override, elevator parts 0, build rate, general
 // rate). A rate of 0 keeps the item's container but reserves nothing.

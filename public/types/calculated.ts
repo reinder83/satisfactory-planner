@@ -126,6 +126,11 @@ export interface CurrentSettings {
   hours: number;
   roundRates: boolean;
   wholeMachines: boolean;
+  // Under whole machines, protected storage takes the plan's surplus first and only items with no
+  // surplus get storage-only lines at exact clocks (#1061, planner/stock.ts). Set by the wizard
+  // and Round up production for the plans they calculate; absent (as in every plan stored before
+  // it), storage is a demand of the solve, exactly as before.
+  storageFromSurplus?: true;
   limitsConfirmed: boolean;
   modNotes: string;
   // Resource budgets per minute, one for every raw resource.
