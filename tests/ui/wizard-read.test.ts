@@ -214,7 +214,8 @@ test("a save's next profile starts from a copy of its active profile's settings"
   assert.equal(draft.saveId, 's');
   assert.equal(draft.saveName, 'World');
   assert.equal(draft.carryFrom, 'p');
-  assert.deepEqual(draft.settings, active);
+  // The copy also asks for storage fed from surplus first (#1061), as every wizard draft does.
+  assert.deepEqual(draft.settings, { ...active, storageFromSurplus: true });
   assert.notEqual(draft.settings, active, 'a copy');
   assert.deepEqual(draft.settings.storageOverrides, active.storageOverrides, 'no top-up added');
 });
@@ -248,7 +249,7 @@ test('a profile migrated from the handbook starts from the handbook assumptions'
   });
   startWizard('s');
   const settings = wizard!.settings;
-  assert.deepEqual(settings, migrated);
+  assert.deepEqual(settings, { ...migrated, storageFromSurplus: true });
   assert.deepEqual(
     [
       settings.purity,

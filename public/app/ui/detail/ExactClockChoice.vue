@@ -7,7 +7,8 @@
   line as it was calculated until the user starts "Recalculate with exact clocks" on the build plan
   (ExactClocksRecalc.vue). Choosing what the plan already has forgets the saved choice (null), so a
   state goes back to the version it had. A fluid line, and a nuclear one, always runs at exact
-  clocks and says so instead; generators and amplified lines show nothing.
+  clocks and says so instead, as does a storage-only line (#1061); generators and amplified lines
+  show nothing.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -40,6 +41,12 @@ const view = computed(() =>
     if (!calculated?.settings.wholeMachines || row.amplified || row.generationMW > 0 || !items)
       return null;
     const sinkable = new Set(items.map(item => item.name));
+    // A storage-only line (#1061) is planned at exact clocks by definition.
+    if (row.stock)
+      return {
+        fixed:
+          'A storage-only line always runs at exact clocks: it makes only what its containers take, so the last machine is underclocked to the exact remainder.',
+      };
     if (!roundsWholeLine(row, sinkable, fluidLines(calculated, FLUIDS)))
       return {
         fixed: Object.keys(row.outputs || {}).some(item => FLUIDS.has(item))

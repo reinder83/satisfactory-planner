@@ -22,6 +22,7 @@ import { planWarnings } from './warnings.ts';
 import { stoppedSearch } from './rounding.ts';
 import { plannedSites, centralSettings, withinRates, withOverflow } from './on-site.ts';
 import { carryGenerators } from '../public/power.ts';
+import { withStock } from './stock.ts';
 
 // Calculates a whole profile: every phase 1 to 5, whatever phase the profile starts in (the
 // interface hides earlier phases; post-game reuses Phase 5). `input` is raw settings, validated by
@@ -83,6 +84,10 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
     ...pullFinalPhaseForward(config, stages, unrouted),
     ...judgeAugmenterFuel(config, stages),
   ];
+  // Under whole machines, protected storage takes each phase's surplus first, and only an item
+  // with no surplus gets storage-only lines at exact clocks, built last (#1061, withStock).
+  for (const [phase, stage] of Object.entries(stages))
+    if (stage.feasible) stages[Number(phase)] = withStock(config, Number(phase), stage as Solved);
   // Each phase keeps the generators the phase before built, where it still fuels them (#1064).
   carryGenerators(stages, Number(config.phase));
   warnings.push(...planWarnings(config, stages));

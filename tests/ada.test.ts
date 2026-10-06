@@ -136,6 +136,19 @@ test('ADA counts the same progress the pages show', () => {
     adaRemarks(facts({ retireOpen: 1 })).find(r => r.id === 'retire')!.text,
     /1 retirement step still open/,
   );
+  // Storage-only lines are optional and listed last (#1061).
+  assert.ok(!ids(facts()).includes('storage-lines'));
+  const stock = (count: number) =>
+    adaRemarks(facts({ stockLines: count })).find(r => r.id === 'storage-lines')!;
+  assert.equal(stock(1).tone, 'calm');
+  assert.match(
+    stock(1).text,
+    /^1 storage-only line at the end of this phase is optional: .* Build it last/,
+  );
+  assert.match(
+    stock(3).text,
+    /^3 storage-only lines .* are optional: .* those lines fill .* Build them last/,
+  );
   // The generators the phase before built stay and count first (#1064).
   assert.ok(!ids(facts()).includes('kept-generators'));
   const kept = adaRemarks(facts({ keptGenerators: '7 Fuel Generators', keptFrom: 'Phase 3' })).find(

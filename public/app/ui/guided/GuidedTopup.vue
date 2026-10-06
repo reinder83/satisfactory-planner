@@ -1,7 +1,8 @@
 <!--
   On the guided stock question: the materials you carry out by hand, as chips. A floor for one
-  of them costs about 1% more buildings, where the general construction rate that would reach
-  the same number costs 81-425%, because it applies to all eighteen at once. Ticked chips
+  of them costs 1 to 4 more buildings on a default plan since #1061 (storage takes the surplus
+  first, and a storage-only line tops up the rest), where the general construction rate that would
+  reach the same number costs 81-425%, because it applies to all eighteen at once. Ticked chips
   (name="topup") become storageOverrides of GUIDED_TOPUP_RATE each in readGuidedForm. Nothing
   when no storage is stocked.
 -->
@@ -30,9 +31,10 @@ const view = computed(() =>
     <legend>Which of these do you keep running out of? <HelpTip name="guidedTopup" /></legend>
     <p class="small muted">
       Containers fill from surplus on their own — a default Phase 3 plan already spills 29 Wire and
-      19 Iron Plate a minute into storage. These get a guaranteed {{ rate }}/min on top, which costs
-      about 1% more buildings each. Concrete is picked for you because it is the one the plan leaves
-      least spare.
+      19 Iron Plate a minute into storage. These get a guaranteed {{ rate }}/min: what the surplus
+      leaves of it comes from a storage-only line, optional and built last, 1 to 4 more buildings
+      each on a default plan. Concrete is picked for you because it is the one the plan leaves least
+      spare.
     </p>
     <div class="guided-chips">
       <label
