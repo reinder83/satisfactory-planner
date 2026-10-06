@@ -23,11 +23,13 @@ export const purities3: [purity: NodePurity, label: string][] = [
   ['normal', 'Normal'],
   ['pure', 'Pure'],
 ];
-// [mark, label] for the miner select; the tier is where the game unlocks that miner.
+// [mark, label] for the miner select; the tier is where the game unlocks that miner (Miner Mk.3:
+// Tier 8, Leading-Edge Production; MINER_MARKS in mining.ts, which a test checks against
+// progression.json).
 export const minerMarks: [mark: number, label: string][] = [
   [1, 'Mk.1 — Tier 0'],
   [2, 'Mk.2 — Tier 4'],
-  [3, 'Mk.3 — Tier 7'],
+  [3, 'Mk.3 — Tier 8'],
 ];
 // 250% is the usual endgame assumption and what the shipped default budgets use.
 export const clockChoices: [clock: number, label: string][] = [

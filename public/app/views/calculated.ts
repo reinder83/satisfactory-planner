@@ -22,6 +22,7 @@ import {
 } from '../session.ts';
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
+import { minerWords } from '../../mining.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -169,6 +170,23 @@ export function draftHeading(snapshot: StoredStage, phase?: string): string {
   return overBudget ? 'Planning draft — budget exceeded.' : 'Planning draft.';
 }
 
+// One short budget in draftFixes' words: "Iron Ore to about 1,200/min (entered: 1,000/min)". With
+// mining per phase (#1065) the phase gets a share of the entered budget, so the entered budget it
+// would take, and what the phase gets now: "Iron Ore to about 12,000/min (entered: 9,210/min;
+// this phase gets 921/min of it with Miner Mk.1 at 100%)".
+function shortfallWords(
+  shortfall: NonNullable<StoredStage['shortfalls']>[number],
+  snapshot: StoredStage,
+  settings: Partial<CurrentSettings> | undefined,
+): string {
+  const entered = settings?.limits?.[shortfall.name];
+  const mining = snapshot.mining;
+  if (!mining || entered === undefined || !(shortfall.budget > 0))
+    return `${shortfall.name} to about ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`;
+  const share = shortfall.budget / entered;
+  return `${shortfall.name} to about ${itemRate(shortfall.name, Math.ceil(shortfall.needed / share))} (entered: ${itemRate(shortfall.name, entered)}; this phase gets ${itemRate(shortfall.name, shortfall.budget)} of it with ${minerWords(mining.miner)})`;
+}
+
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.
 // The options for an infeasible phase `snapshot` under `settings`, as sentences (none for an
 // older snapshot). ui/plan/CalcWarnings.vue and the wizard's Review
@@ -180,7 +198,7 @@ export function draftFixes(
   const fixes: string[] = [];
   if (snapshot.shortfalls?.length)
     fixes.push(
-      `Raise the short budget${snapshot.shortfalls.length > 1 ? 's' : ''} (Resources): ${snapshot.shortfalls.map(shortfall => `${shortfall.name} to about ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`).join('; ')}.`,
+      `Raise the short budget${snapshot.shortfalls.length > 1 ? 's' : ''} (Resources): ${snapshot.shortfalls.map(shortfall => shortfallWords(shortfall, snapshot, settings)).join('; ')}.`,
     );
   if (snapshot.wholeMachinesOnly)
     fixes.push(

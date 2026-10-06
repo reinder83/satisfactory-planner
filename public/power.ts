@@ -77,6 +77,10 @@ export interface GridInput {
   powerFactor: number;
   utilityPercent: number;
   extractionAt: { mark: number; clock: number };
+  // The MW of each raw resource's miners and extractors, when the plan works them out itself
+  // (mining per phase, #1065: the nodes the draw taps); else the draw at extractionAt's
+  // equipment on normal nodes.
+  extractionMW?: ItemRates;
   boost: number;
   spareMW: number;
   augmenterMW: number;
@@ -99,7 +103,10 @@ export function stageGrid(input: GridInput): StageGrid {
   const extraction: ItemRates = {};
   for (const [resource, rate] of Object.entries(raw))
     if (rate > 1e-6)
-      extraction[resource] = rate * extractionMWPerUnit(resource, extractionAt) * powerFactor;
+      extraction[resource] =
+        (input.extractionMW
+          ? (input.extractionMW[resource] ?? 0)
+          : rate * extractionMWPerUnit(resource, extractionAt)) * powerFactor;
   const extractionMW = Object.values(extraction).reduce((sum, mw) => sum + mw, 0);
   const allowanceMW = (loadMW * utilityPercent) / 100;
   return withSupply(
@@ -268,7 +275,10 @@ function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSetting
         key: 'extraction',
         label: 'Miners and extractors',
         mw: grid.extractionMW,
-        caption: `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on normal nodes; oil, water and resource-well extractors at the same clock`,
+        // With mining per phase (#1065), the phase's miner on the nodes its draw taps.
+        caption: stage.mining
+          ? `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on the nodes this phase taps, best first, the last one slower; oil, water and resource-well extractors at the same clock`
+          : `Miner Mk.${grid.extractionAt.mark} at ${Math.round(grid.extractionAt.clock * 100)}% on normal nodes; oil, water and resource-well extractors at the same clock`,
       },
     ],
     supply: [

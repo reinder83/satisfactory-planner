@@ -367,6 +367,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
     ...exactClockLines(input.exactClocks),
+    // Mining and belts per phase (#1065): only `true` turns it on, and the field is absent
+    // otherwise, so settings without it, and every plan stored before it, stay as they were.
+    ...(input.phaseMining === true ? { phaseMining: true } : {}),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

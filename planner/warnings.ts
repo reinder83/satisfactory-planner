@@ -2,6 +2,7 @@
 // Re-exported by ../planner.ts.
 import { durationOfHours, listNames } from '../public/wording.ts';
 import { extractionEquipment } from '../public/power.ts';
+import { phaseMinersWords } from '../public/mining.ts';
 import type {
   CurrentSettings,
   CalcRow,
@@ -241,6 +242,13 @@ function budgetWarnings({ config }: FinishedPlan): string[] {
     );
   return warnings;
 }
+// Mining and belts per phase (#1065): what each phase's budgets follow.
+function miningWarnings({ config }: FinishedPlan): string[] {
+  if (!config.phaseMining) return [];
+  return [
+    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase))}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
+  ];
+}
 // What every plan assumes about unlocks and power.
 function assumptionWarnings({ config }: FinishedPlan): string[] {
   return [
@@ -248,8 +256,11 @@ function assumptionWarnings({ config }: FinishedPlan): string[] {
     `Power includes new generators and their fuel chains, the miners and extractors (${extractionText(config)}), and a ${config.utilityPercent}% allowance on the production lines for trains, drone ports and pumps. Machines count at their clocked power; Particle Accelerators, Converters and Quantum Encoders at their peak. Generators are whole and run at 100%, burning fuel only for the power drawn, and a phase keeps the generators the phase before built. Existing plants are represented only by spare capacity; subtract their fuel from available resources. Drone fuel is a separate protected supply contract, not a route-consumption estimate.`,
   ];
 }
-// The extraction equipment the plan's power assumes (#1064): "Miner Mk.3 at 250% on normal nodes".
+// The extraction equipment the plan's power assumes (#1064): "Miner Mk.3 at 250% on normal nodes";
+// with mining per phase (#1065), each phase's miners on the nodes its draw taps.
 const extractionText = (config: CurrentSettings) => {
+  if (config.phaseMining)
+    return `${phaseMinersWords(config.extraction, Number(config.phase))}, on the nodes each phase taps`;
   const { mark, clock } = extractionEquipment(config);
   return `Miner Mk.${mark} at ${Math.round(clock * 100)}% on normal nodes`;
 };
@@ -404,6 +415,7 @@ const WARNING_GROUPS: WarningGroup[] = [
   augmenterFuelWarnings,
   unsinkableWarnings,
   budgetWarnings,
+  miningWarnings,
   assumptionWarnings,
   wholeMachineWarnings,
   roundedWarnings,
