@@ -64,21 +64,38 @@ test('the Resources page gives the phase’s own budgets and the nodes its draw 
   open({ calculated: structuredClone(mined), phase: '4', workspace: { catalog: items } });
   go('resources');
   render();
-  assert.equal(budgets()['Iron Ore'], '36,840/min', 'Miner Mk.3 at 100% on every Iron Ore node');
-  assert.equal(budgets()['Crude Oil'], '3,960 m³/min');
+  // Phase 4 overclocks to 250% with Power Shards (owner's choice on #1096), a pure node capped at
+  // the 780/min of its Mk.5 belt: about 79% of the entered 92,100/min.
+  assert.equal(budgets()['Iron Ore'], '72,780/min', 'Miner Mk.3 at 250% on Mk.5 belts');
+  assert.equal(budgets()['Crude Oil'], '9,900 m³/min');
   const panel = $('[data-mining]')!;
   assert.match(
     plain(panel.querySelector('[data-mining-equipment]')?.textContent),
-    /^Miner Mk\.3 at 100% · Mk\.5 belts \(780\/min\) · Mk\.2 pipes \(600 m³\/min\)$/,
+    /^Miner Mk\.3 at 250% · Mk\.5 belts \(780\/min\) · Mk\.2 pipes \(600 m³\/min\)$/,
   );
   const iron = plain(panel.querySelector('[data-mining-resource="Iron Ore"]')?.textContent);
   assert.match(iron, /^Iron Ore [\d,.]+\/min\. Tap \d+ pure nodes? with Miner Mk\.3: /);
-  assert.match(iron, /\(\d[\d,.]* MW\)\.$/);
+  // A pure node at 250% fills its Mk.5 belt at 162.5%, with two Power Shards.
+  assert.match(iron, / at 162\.5% \(\d[\d,.]* [MG]W, \d+ Power Shards\)\.$/);
   // The power bar says the extraction is the nodes this phase taps.
   assert.match(
     plain($('[data-power-part="extraction"] small')?.textContent),
-    /^Miner Mk\.3 at 100% on the nodes this phase taps, best first/,
+    /^Miner Mk\.3 at 250% on the nodes this phase taps, best first/,
   );
+  // Crude oil's extractors at 100% and at 250% in Phase 4, and only at 100% in Phase 3, whose
+  // budgets count on no Power Shards.
+  const oil = () => plain($('[data-mining-resource="Crude Oil"]')?.textContent);
+  assert.match(oil(), /At 100%: tap .*; at 250%: tap .*Power Shards/);
+  page();
+  open({ calculated: structuredClone(mined), phase: '3', workspace: { catalog: items } });
+  go('resources');
+  render();
+  assert.equal(
+    plain($('[data-mining-equipment]')?.textContent).split(' · ')[0],
+    'Miner Mk.2 at 100%',
+  );
+  assert.match(oil(), /At 100%: tap /);
+  assert.doesNotMatch(oil(), /250%|Power Shard/);
 });
 
 test('a plan stored before #1065 keeps its entered budgets and shows no mining panel', () => {
@@ -191,6 +208,7 @@ test('the budgets step offers the per-phase budgets with each phase’s share, a
   const rows = $$('[data-phase-budgets] tbody tr').map(row => plain(row.textContent));
   assert.equal(rows.length, 5);
   assert.match(rows[0]!, /^1 Miner Mk\.1 at 100% · Mk\.2 belts \(120\/min\).* 10%$/);
+  assert.match(rows[3]!, /^4 Miner Mk\.3 at 250% · Mk\.5 belts \(780\/min\).* 77\.6–100%$/);
   assert.match(rows[4]!, /^5 Miner Mk\.3 at 250% · Mk\.6 belts \(1,200\/min\).* 100%$/);
   // Read with the form: unticked turns it off.
   box.checked = false;

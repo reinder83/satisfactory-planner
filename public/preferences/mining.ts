@@ -7,10 +7,10 @@
 // Phase 1, Mk.2 (Tier 4) from Phase 2 and Mk.3 (Tier 8) from Phase 4; the best belt and pipe of
 // the phase (Mk.2 belts in Phase 1 up to Mk.6 belts, Tier 9, in Phase 5); Oil Extractors from
 // Phase 3 (Tier 5) and resource wells from Phase 4 (Tier 8). Miners and extractors run at 100%
-// until Phase 5 (PHASE_CLOCK): overclocking takes Power Shards, which before Synthetic Power
-// Shards are a collectible hunt the plan does not assume, as it does not assume somersloops. A
-// node survey's miner and clock cap each phase's (never raise it). One node gives its yield at
-// that miner and clock, never more than the belt or pipe it feeds carries.
+// in Phases 1–3 and up to 250% from Phase 4 (PHASE_CLOCK), with Power Shards from Power Slugs
+// (owner's choice on #1096). A node survey's miner and clock cap each phase's (never raise it).
+// One node gives its yield at that miner and clock, never more than the belt or pipe it feeds
+// carries: a pure node's Mk.3 at 250% gives 780/min on Phase 4's Mk.5 belts, not 1,200.
 //
 // A phase's budget for a resource is the entered budget scaled by what the phase's equipment
 // gets from the resource's nodes against what the budget was worked out with (the survey's miner
@@ -86,13 +86,15 @@ export const EXTRACTOR_TIERS = {
   'Oil Extractor': { tier: 5, entry: 'Schematic_5-1_C' },
   'Resource Well Pressurizer': { tier: 8, entry: 'Schematic_8-2_C' },
 } as const;
-// The clock miners and extractors run at in each phase without a survey that says less: 100%
-// until Phase 5, then 250% (three Power Shards each), the endgame assumption the shipped
-// budgets use. Synthetic Power Shards (MAM, Time Crystals) are a Phase 5 research; before that
-// every shard is a collected slug.
-export const PHASE_CLOCK: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 2.5 };
+// The clock miners and extractors run at in each phase without a survey that says less: 100% in
+// Phases 1–3, then up to 250% (three Power Shards each), the endgame assumption the shipped
+// budgets use, from Phase 4 (owner's choice on #1096). Phase 4's shards come from Power Slugs:
+// the MAM's Blue Power Slugs and Overclock Production, which the build plan asks for in every
+// phase (requiredMilestones in progression.ts); Synthetic Power Shards are a Phase 5 research.
+export const PHASE_CLOCK: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 1, 4: 2.5, 5: 2.5 };
 // The clocks a fluid extractor's advice offers, as the Water Extractors' do (#1024): 100% and
-// 250% with three Power Shards each.
+// 250% with three Power Shards each, each only up to the phase's clock (fluidClocks in
+// public/mining.ts).
 export const EXTRACTOR_OPTIONS = [1, 2.5] as const;
 // What the budgets of a profile without a survey were worked out with: Miner Mk.3 at 250%.
 const REFERENCE = { mark: 3, clock: 2.5 };

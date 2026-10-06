@@ -89,9 +89,9 @@ const perPhase = ref(!!draft().settings.phaseMining);
     <table>
       <caption class="small muted">
         These budgets are the most any phase draws. Each phase gets what its miner, clock and belts
-        take from the same nodes: crude oil from Phase 3, resource wells from Phase 4, and no
-        overclocking before Phase 5, where Power Shards can be made. A node survey's miner and clock
-        cap every phase's.
+        take from the same nodes: crude oil from Phase 3, resource wells from Phase 4, and
+        overclocking from Phase 4, with Power Shards from Power Slugs. A node survey's miner and
+        clock cap every phase's.
       </caption>
       <thead>
         <tr>

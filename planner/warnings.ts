@@ -246,7 +246,7 @@ function budgetWarnings({ config }: FinishedPlan): string[] {
 function miningWarnings({ config }: FinishedPlan): string[] {
   if (!config.phaseMining) return [];
   return [
-    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase))}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking before Phase 5 takes Power Shards the plan does not count on. The entered budgets are the most any phase draws.`,
+    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase))}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
   ];
 }
 // What every plan assumes about unlocks and power.

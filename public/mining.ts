@@ -50,8 +50,8 @@ export const equipmentWords = (mining: StageMining): string =>
   `${minerWords(mining.miner)} · ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) · ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min)`;
 
 // The miners of each phase from `from` to 5, consecutive phases with the same miner together:
-// "Miner Mk.1 at 100% in Phase 1, Mk.2 at 100% in Phases 2 and 3, Mk.3 at 100% in Phase 4 and
-// Mk.3 at 250% in Phase 5". `survey` is the settings' node survey, which caps each phase's.
+// "Miner Mk.1 at 100% in Phase 1, Mk.2 at 100% in Phases 2 and 3 and Mk.3 at 250% in Phases 4
+// and 5". `survey` is the settings' node survey, which caps each phase's.
 export function phaseMinersWords(survey: MiningSettings['extraction'], from = 1): string {
   const runs: { words: string; phases: number[] }[] = [];
   for (let phase = from; phase <= 5; phase++) {
@@ -135,17 +135,24 @@ export interface ResourceMining {
   // The advice at the phase's clock, which the power model counts.
   advice: MiningAdvice;
   // "Tap 6 pure and 7 normal nodes with Miner Mk.2: 12 at 100% and 1 at 41.67% (195 MW)." A
-  // fluid lists its extractors at 100% and at 250% with Power Shards, as the Water Extractors do
-  // (#1024).
+  // fluid lists its extractors at 100% and, from Phase 4, at 250% with Power Shards, as the
+  // Water Extractors do (#1024).
   words: string;
 }
 
-// The advice for a fluid at each clock its extractors offer (EXTRACTOR_OPTIONS, with the phase's
-// own clock when it is neither): "at 100%: …; at 250%: …".
+// The clocks a phase at `clock` offers a fluid's extractors: the options (EXTRACTOR_OPTIONS) up
+// to it, and the clock itself when it is neither (a survey's 150%). So Phases 1–3, at 100%,
+// offer no 250% their budgets do not count on.
+export const fluidClocks = (clock: number): number[] =>
+  [...new Set([...EXTRACTOR_OPTIONS.filter(option => option <= clock + 1e-9), clock])].sort(
+    (a, b) => a - b,
+  );
+
+// The advice for a fluid at each clock its phase offers (fluidClocks): "at 100%: …; at 250%: …",
+// or only "at 100%: …" before Phase 4.
 function fluidWords(rate: number, sources: MiningSource[], clock: number): string {
-  const clocks = [...new Set([...EXTRACTOR_OPTIONS, clock])].sort((a, b) => a - b);
   return (
-    clocks
+    fluidClocks(clock)
       .map(at => {
         const option = miningAdvice(rate, sources, at);
         const words = option.short

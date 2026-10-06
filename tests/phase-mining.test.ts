@@ -1,10 +1,10 @@
 // Mining and belts per phase (#1065). A plan with settings.phaseMining gives each phase the miner,
 // clock, belts and pipes its HUB tiers unlock (Miner Mk.1 in Phase 1, Mk.2 from Phase 2, Mk.3
-// from Phase 4; 100% until Phase 5; Mk.2 belts up to Mk.6 belts), budgets that follow from them,
-// and per raw resource the nodes its draw taps, whose power the plan's power model counts. The
-// build plan asks for each belt, pipe, miner and extractor milestone the phase uses. A plan stored
-// before #1065 has no phaseMining: it keeps its budgets, numbers and steps until the user
-// recalculates, in both editions.
+// from Phase 4; 100% in Phases 1–3 and 250% from Phase 4; Mk.2 belts up to Mk.6 belts), budgets
+// that follow from them, and per raw resource the nodes its draw taps, whose power the plan's
+// power model counts. The build plan asks for each belt, pipe, miner and extractor milestone the
+// phase uses. A plan stored before #1065 has no phaseMining: it keeps its budgets, numbers and
+// steps until the user recalculates, in both editions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -31,6 +31,7 @@ import {
   sourceYield,
 } from '../public/preferences.ts';
 import {
+  fluidClocks,
   miningBuildings,
   miningStepBody,
   phaseBudgetRows,
@@ -111,7 +112,7 @@ test('each phase plans with the miner, clock, belts and pipes its tiers unlock (
     { miner: { mark: 1, clock: 1 }, belt: ['Mk.2', 120], pipe: ['Mk.1', 300] },
     { miner: { mark: 2, clock: 1 }, belt: ['Mk.3', 270], pipe: ['Mk.1', 300] },
     { miner: { mark: 2, clock: 1 }, belt: ['Mk.4', 480], pipe: ['Mk.2', 600] },
-    { miner: { mark: 3, clock: 1 }, belt: ['Mk.5', 780], pipe: ['Mk.2', 600] },
+    { miner: { mark: 3, clock: 2.5 }, belt: ['Mk.5', 780], pipe: ['Mk.2', 600] },
     { miner: { mark: 3, clock: 2.5 }, belt: ['Mk.6', 1200], pipe: ['Mk.2', 600] },
   ];
   const config = settings({ phaseMining: true });
@@ -127,20 +128,26 @@ test('the budgets of each phase follow from its equipment: the issue’s 1,200/m
   const config = settings({ phaseMining: true });
   const budget = (phase: number, resource: string) => phaseMining(config, phase).budgets[resource];
   // Iron Ore's 39 impure, 42 normal and 46 pure nodes: Mk.1 at 100% gives 30/60/120 a node, Mk.2
-  // 60/120/240, Mk.3 at 100% 120/240/480, and Mk.3 at 250% 300/600/1,200 on Mk.6 belts.
+  // 60/120/240, Mk.3 at 250% 300/600/1,200 on Mk.6 belts, and in Phase 4 a pure node only the
+  // 780/min its Mk.5 belt carries (owner's choice on #1096): 46 × 780 + 42 × 600 + 39 × 300.
   assert.deepEqual(
     [1, 2, 3, 4, 5].map(phase => budget(phase, 'Iron Ore')),
-    [9210, 18420, 18420, 36840, 92100],
+    [9210, 18420, 18420, 72780, 92100],
+  );
+  assert.equal(
+    Math.round((budget(4, 'Iron Ore')! / config.limits['Iron Ore']!) * 100),
+    79,
+    'Phase 4 gets about 79% of the Iron Ore budget, as #1065 estimated',
   );
   assert.equal(budget(5, 'Iron Ore'), config.limits['Iron Ore'], 'Phase 5 as the shipped budget');
   // Oil Extractors from Phase 3 (Tier 5), resource wells from Phase 4 (Tier 8).
   assert.deepEqual(
     [1, 2, 3, 4, 5].map(phase => budget(phase, 'Crude Oil')),
-    [0, 0, 3960, 3960, 9900],
+    [0, 0, 3960, 9900, 9900],
   );
   assert.deepEqual(
     [1, 2, 3, 4, 5].map(phase => budget(phase, 'Nitrogen Gas')),
-    [0, 0, 0, 4800, 12000],
+    [0, 0, 0, 12000, 12000],
   );
   // Water has no nodes: its allowance is the same in every phase.
   for (const phase of [1, 2, 3, 4, 5]) assert.equal(budget(phase, 'Water'), config.limits.Water);
@@ -153,7 +160,7 @@ test('the budgets of each phase follow from its equipment: the issue’s 1,200/m
 test('a lower entered budget gives each phase the same share of it', () => {
   const half = settings({ phaseMining: true, limits: { 'Iron Ore': 46050 } });
   assert.equal(phaseMining(half, 1).budgets['Iron Ore'], 4605);
-  assert.equal(phaseMining(half, 4).budgets['Iron Ore'], 18420);
+  assert.equal(phaseMining(half, 4).budgets['Iron Ore'], 36390);
   assert.equal(phaseMining(half, 5).budgets['Iron Ore'], 46050);
 });
 
@@ -171,10 +178,12 @@ test('a node survey’s miner and clock cap every phase’s, and are kept as sto
   assert.deepEqual(phaseMining(config, 1).miner, { mark: 1, clock: 1 });
   assert.deepEqual(phaseMining(config, 3).miner, { mark: 2, clock: 1 });
   assert.deepEqual(phaseMining(config, 5).miner, { mark: 2, clock: 1.5 });
-  // 10 normal nodes: 60, 120, 120, 120 and 180 a node; the survey's budget is Phase 5's.
+  // Phase 4 overclocks to the survey's 150%, never to the phase's own 250%.
+  assert.deepEqual(phaseMining(config, 4).miner, { mark: 2, clock: 1.5 });
+  // 10 normal nodes: 60, 120, 120, 180 and 180 a node; the survey's budget is Phase 4's and 5's.
   assert.deepEqual(
     [1, 2, 3, 4, 5].map(phase => phaseMining(config, phase).budgets['Iron Ore']),
-    [600, 1200, 1200, 1200, 1800],
+    [600, 1200, 1200, 1800, 1800],
   );
 });
 
@@ -352,11 +361,37 @@ test('the build plan has a mining step per phase, after the milestones and befor
     assert.match(body, /^Phase \d mines with Miner Mk\.\d at \d+% and carries on Mk\.\d belts/);
     assert.match(body, /Iron Ore [\d,.]+\/min: tap \d+ pure/);
   }
-  // Crude Oil gets its extractors at 100% and at 250%, as Water does (#1024).
-  const oil = stageMiningAdvice(plan.stages['3'] as StoredStage).find(
-    entry => entry.resource === 'Crude Oil',
-  )!;
-  assert.match(oil.words, /^At 100%: tap .* with Oil Extractors: .*; at 250%: tap .*Power Shards/);
+  // From Phase 4, Crude Oil gets its extractors at 100% and at 250%, as Water does (#1024);
+  // Phase 3, whose budgets count on no Power Shards, only at 100% (owner's choice on #1096).
+  const oil = (key: StageKey) =>
+    stageMiningAdvice(plan.stages[key] as StoredStage).find(
+      entry => entry.resource === 'Crude Oil',
+    )!.words;
+  assert.match(oil('4'), /^At 100%: tap .* with Oil Extractors: .*; at 250%: tap .*Power Shards/);
+  assert.match(oil('3'), /^At 100%: tap .* with Oil Extractors: [^;]*\.$/);
+  assert.doesNotMatch(oil('3'), /250%|Power Shard/);
+});
+
+test('no 250% extractor option before Phase 4: a fluid’s advice offers only the clocks its phase plans', () => {
+  assert.deepEqual(fluidClocks(1), [1], 'Phases 1–3: 100% only');
+  assert.deepEqual(fluidClocks(2.5), [1, 2.5], 'Phases 4 and 5: 100% and 250%');
+  assert.deepEqual(fluidClocks(1.5), [1, 1.5], 'a survey at 150%: never above it');
+  let fluids = 0;
+  for (const name of PLAN_NAMES)
+    for (const { phase, stage } of stagesOf(planOf(name)))
+      for (const entry of stageMiningAdvice(stage).filter(entry => entry.fluid)) {
+        fluids++;
+        const offered = [...entry.words.matchAll(/at ([\d.,]+)%: /gi)].map(match =>
+          Number(match[1]!.replace(',', '.')),
+        );
+        assert.deepEqual(
+          offered,
+          fluidClocks(stage.mining!.miner.clock).map(clock => clock * 100),
+          `${name}: ${entry.resource} in Phase ${phase}`,
+        );
+        if (phase < 4) assert.doesNotMatch(entry.words, /250%|Power Shard/, `${name}: ${phase}`);
+      }
+  assert.ok(fluids > 5, `checked ${fluids} fluid draws`);
 });
 
 test('the wizard’s table gives each phase its share of the entered budgets', () => {
@@ -367,7 +402,7 @@ test('the wizard’s table gives each phase its share of the entered budgets', (
       [1, 10, 10],
       [2, 20, 20],
       [3, 20, 40],
-      [4, 40, 40],
+      [4, 77.6, 100],
       [5, 100, 100],
     ],
   );
