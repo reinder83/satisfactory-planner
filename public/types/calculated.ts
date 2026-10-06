@@ -131,6 +131,11 @@ export interface CurrentSettings {
   hours: number;
   roundRates: boolean;
   wholeMachines: boolean;
+  // Under whole machines, protected storage takes the plan's surplus first and only items with no
+  // surplus get storage-only lines at exact clocks (#1061, planner/stock.ts). Set by the wizard
+  // and Round up production for the plans they calculate; absent (as in every plan stored before
+  // it), storage is a demand of the solve, exactly as before.
+  storageFromSurplus?: true;
   limitsConfirmed: boolean;
   modNotes: string;
   // Resource budgets per minute, one for every raw resource.
@@ -185,6 +190,11 @@ export interface OnSiteLine {
   recipe: string;
 }
 
+// A storage-only line (#1061, planner/stock.ts; id '<recipe>:stock'): the recipe it runs. It
+// fills a protected container no surplus covers, at exact clocks, and nothing else uses it.
+export interface StockLine {
+  recipe: string;
+}
 // The settings fields a plan frozen by the first release (2026-09-12) already had.
 export type FirstReleaseSettings =
   | 'phase'
@@ -240,6 +250,8 @@ export interface CalcRow {
   sloops?: number;
   // A factory group's own line for an item it makes on site (#875; id '<recipe>:<group>').
   onSite?: OnSiteLine;
+  // A storage-only line (#1061; id '<recipe>:stock'), optional and built last.
+  stock?: StockLine;
 }
 
 // A delivery the stage must hand in, and the rate it is made at.
@@ -357,8 +369,11 @@ export interface StageResult {
   // Per-minute draw on each raw resource, and existing production credited.
   raw: ItemRates;
   supplied: ItemRates;
-  // Protected storage rate per storable item.
+  // Protected storage rate per storable item: what storage receives. Since #1061 a whole-machine
+  // plan fills it from surplus first and storage-only lines (`stock` rows), and records the rates
+  // the settings ask in `storageAsked`; absent from older plans, whose `storage` is what was asked.
   storage: ItemRates;
+  storageAsked?: ItemRates;
   // Dedicated drone fuel per minute.
   drone: ItemRates;
   // Fuel for the vehicles on factory-group links per minute (#206); absent from older plans.

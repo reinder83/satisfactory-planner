@@ -18,7 +18,7 @@ import { itemRate } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { calcStage, calculated, checked, milestoneOnly, workspace } from '../../session.ts';
 import { resourceUse, tightestFirst } from '../../views/resources.ts';
-import { itemRateRows } from '../../views/storage.ts';
+import { itemRateRows, storageRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
@@ -129,7 +129,7 @@ const page = computed(() =>
         {
           id: 'storage',
           title: 'Protected storage',
-          rows: itemRateRows(stagePlan.storage || {}),
+          rows: storageRows(stagePlan),
           empty: 'No storage production requested.',
         },
         {
@@ -158,6 +158,7 @@ const page = computed(() =>
           }
         : null,
       credited: Object.keys(stagePlan.supplied || {}).length > 0,
+      fromSurplus: !!stagePlan.storageAsked,
       conversions: stagePlan.conversions || [],
       plutonium: num(stagePlan.plutoniumSink),
     };
@@ -294,11 +295,19 @@ const page = computed(() =>
         >
           <li v-for="row in list.rows" :key="row.name">
             <ItemIcon :name="row.name" aria-hidden="true" /><span
-              ><b>{{ row.name }}</b> {{ row.rate }}</span
+              ><b>{{ row.name }}</b> {{ row.rate
+              }}<span v-if="row.note" class="muted" data-storage-source>
+                · {{ row.note }}</span
+              ></span
             >
           </li>
         </ul>
         <p v-else>{{ list.empty }}</p>
+        <p v-if="list.id === 'storage' && page.fromSurplus" class="small muted">
+          Each container takes the plan’s surplus of its item first, and a full one overflows to the
+          AWESOME Sink. Storage-only lines run only for items with no surplus; they are optional and
+          built last.
+        </p>
         <p v-if="list.id === 'supplied' && page.credited" class="small muted">
           The plan does not build these lines or the chain behind them. Their extraction is assumed
           to be outside the budgets above.

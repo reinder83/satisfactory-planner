@@ -265,6 +265,20 @@ const extractionText = (config: CurrentSettings) => {
   return `Miner Mk.${mark} at ${Math.round(clock * 100)}% on normal nodes`;
 };
 // Whole machines, and how the nuclear plants were rounded (#370).
+// Protected storage fed from surplus first (#1061, withStock in stock.ts): where storage comes
+// from, and how many storage-only lines the planned phases (from the start phase) list last.
+function stockWarnings(config: CurrentSettings, stages: PhaseStages): string[] {
+  if (!config.storageFromSurplus || config.storage === 'none') return [];
+  const lines = Object.entries(stages)
+    .filter(([phase]) => Number(phase) >= Number(config.phase))
+    .reduce((total, [, stage]) => total + (stage.rows || []).filter(row => row.stock).length, 0);
+  return [
+    'Protected storage takes the surplus of each item first, and a full container overflows to the AWESOME Sink (a Priority Merger or an overflow splitter after it). ' +
+      (lines
+        ? `Only items with no surplus get storage-only lines, ${lines === 1 ? 'one' : lines} in all, at exact clocks: they are optional and come last in each phase’s build plan.`
+        : 'No item needs a storage-only line.'),
+  ];
+}
 function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
   if (!config.wholeMachines) return [];
   const warnings: string[] = [];
@@ -272,6 +286,7 @@ function wholeMachineWarnings({ config, stages }: FinishedPlan): string[] {
   warnings.push(
     'Solid-part production uses whole machines at 100%. Surplus goes to storage then the sink. Recipe choices are selected first; the result is not a global mixed-recipe integer optimum. Fluid and power balancing can retain fractional clocks.',
   );
+  warnings.push(...stockWarnings(config, stages));
   // The lines set to exact clocks (#1066), counted per phase as the build plan lists them.
   const exact = Object.values(config.exactClocks || {}).flat().length;
   if (exact)

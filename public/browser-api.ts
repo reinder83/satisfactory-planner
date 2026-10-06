@@ -28,6 +28,7 @@ import {
   checkRoundUp,
   currentPayoff,
   phaseProgress,
+  roundUpSettings,
   wholeMachineProfile,
 } from './state.ts';
 import {
@@ -278,7 +279,7 @@ export function createBrowserApi(
     const before = scope(await store.transaction(), url, headers);
     checkRoundUp(before.profile);
     const rounded = await calculator(
-        { ...before.profile.plan!.settings, wholeMachines: true },
+        roundUpSettings(before.profile.plan!.settings),
         options.onProgress,
       ),
       profileId = randomId();

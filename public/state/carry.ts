@@ -434,6 +434,14 @@ export function roundUpState<S extends SavedState>(
     }
   return { state, reviewCount };
 }
+// The settings /api/round-up calculates its whole-machine copy with, in both editions: the plan's
+// own with whole machines, and protected storage fed from surplus first (#1061), so the copy gets
+// no whole line that only exists to be sunk.
+export const roundUpSettings = <T extends object>(settings: T) => ({
+  ...settings,
+  wholeMachines: true,
+  storageFromSurplus: true as const,
+});
 // The whole-machine copy /api/round-up adds in both editions: `<name> · whole machines` (at
 // most 80 characters), the rounded plan with the previous plan's guide, and roundUpState's
 // progress. Returns the profile to push and reviewCount; limits, ids and selection stay with

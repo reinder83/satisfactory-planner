@@ -282,17 +282,19 @@ export const groupsReorder = (rows: readonly CalcRow[], groups: GroupsInput): bo
 // A phase's generated build-plan steps (phaseSteps in progression.ts) with the production steps,
 // the ones that carry a row, in groupedRows order, each in the place of one of them: the other
 // steps keep their places and every step its id (#869). The build plan's steps
-// (calcTasks and generatedTaskIds in app/) all come through here.
+// (calcTasks and generatedTaskIds in app/) all come through here. A storage-only line (#1061,
+// `stock`) keeps its place after the storage step: it is optional and built last.
 export function groupedSteps<S extends { row?: CalcRow }>(
   steps: readonly S[],
   groups: GroupsInput,
 ): S[] {
-  const rowSteps = steps.filter(step => step.row);
+  const grouped = (step: S) => !!step.row && !step.row.stock;
+  const rowSteps = steps.filter(grouped);
   const byRow = new Map(rowSteps.map(step => [step.row!, step]));
   const ordered = groupedRows(
     rowSteps.map(step => step.row!),
     groups,
   ).map(row => byRow.get(row)!);
   let next = 0;
-  return steps.map(step => (step.row ? ordered[next++]! : step));
+  return steps.map(step => (grouped(step) ? ordered[next++]! : step));
 }

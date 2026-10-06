@@ -1,6 +1,12 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
 // or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
-import { checkBase, checkRoundUp, currentPayoff, wholeMachineProfile } from '../public/state.ts';
+import {
+  checkBase,
+  checkRoundUp,
+  currentPayoff,
+  roundUpSettings,
+  wholeMachineProfile,
+} from '../public/state.ts';
 import { needsFrozenMapping, restoreProgress } from '../public/handbook-migration.ts';
 import type { FrozenMapping } from '../public/handbook-migration.ts';
 import { calculate, rankAlternates } from '../planner.ts';
@@ -29,7 +35,7 @@ export function profileRoutes({
     // checkRoundUp passes only a calculated profile, which always carries its plan.
     const plan = profile.plan!;
     limits.throttle(req);
-    const rounded = calculate({ ...plan.settings, wholeMachines: true }),
+    const rounded = calculate(roundUpSettings(plan.settings)),
       profileId = randomId();
     let reviewCount = 0;
     await commit(draft => {

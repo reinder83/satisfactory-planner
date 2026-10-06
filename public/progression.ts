@@ -28,8 +28,9 @@ const AMPLIFIED_NAME = ' (somersloop amplified)';
 // recipe it doubles. So a line's unlock and milestone are always its recipe's. Every place that
 // needs a recipe from a row goes through this (the unlock steps and milestones here, the picked
 // unlocks a new profile carries, the wizard's "Planner's choice").
-export const recipeIdOf = (row: Pick<CalcRow, 'id' | 'onSite'>): string =>
+export const recipeIdOf = (row: Pick<CalcRow, 'id' | 'onSite' | 'stock'>): string =>
   row.onSite?.recipe ??
+  row.stock?.recipe ??
   (row.id.startsWith(AMPLIFIED_ID) ? row.id.slice(AMPLIFIED_ID.length) : row.id);
 // The recipe's own name for a row: an amplified twin's without " (somersloop amplified)".
 const recipeNameOf = (row: Pick<CalcRow, 'id' | 'name'>): string =>
@@ -173,21 +174,21 @@ export function phaseSteps(
           ...steps.baseTasks.slice(5),
         ]
       : [...steps.powerTasks, ...steps.milestoneTasks];
+  const rows = plan.stages[stage]?.rows || [];
+  const rowStep = (row: CalcRow): PhaseStep => ({
+    id: 'calc-' + stage + '-' + row.id,
+    title: rowStepTitle(plan, state, row),
+    body: '',
+    row,
+  });
   return [
     ...startup,
     ...miningTask(plan, stage),
     ...steps.hardDrives,
-    ...(plan.stages[stage]?.rows || []).map(row => ({
-      id: 'calc-' + stage + '-' + row.id,
-      title: rowStepTitle(plan, state, row),
-      body: '',
-      row,
-    })),
-    {
-      id: 'calc-' + stage + '-storage',
-      title: 'Connect protected storage and overflow',
-      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
-    },
+    ...rows.filter(row => !row.stock).map(rowStep),
+    storageStep(plan.stages[stage], stage),
+    // Storage-only lines (#1061) are optional, so they come after everything the plan needs.
+    ...rows.filter(row => row.stock).map(rowStep),
     ...steps.retire,
   ];
 }
@@ -213,8 +214,9 @@ export interface GuideState {
 export function rowStepTitle(
   plan: Pick<StoredCalculatedPlan, 'settings'>,
   state: GuideState,
-  row: Pick<CalcRow, 'name' | 'onSite'>,
+  row: Pick<CalcRow, 'name' | 'onSite' | 'stock'>,
 ): string {
+  if (row.stock) return row.name + ' for storage (optional)';
   const group = row.onSite?.group;
   if (!group) return row.name;
   const name =
@@ -222,6 +224,29 @@ export function rowStepTitle(
     plan.settings.onSite?.[group]?.name ??
     group;
   return row.name + ' for ' + name;
+}
+
+// The storage step of a phase. A whole-machine plan since #1061 (`storageAsked`) fills storage
+// from surplus first and lists its storage-only lines after this step; an older plan reserved
+// the storage rates in its lines, as the old text says. The id is the same either way.
+function storageStep(stagePlan: StoredStage | undefined, stage: StageKey): PhaseStep {
+  const id = 'calc-' + stage + '-storage';
+  if (!stagePlan?.storageAsked)
+    return {
+      id,
+      title: 'Connect protected storage and overflow',
+      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
+    };
+  const lines = (stagePlan.rows || []).filter(row => row.stock).length;
+  return {
+    id,
+    title: 'Fill protected storage from surplus, overflow to the sink',
+    body:
+      'Send each stored item’s surplus into its container first, through a Priority Merger or an overflow splitter, and let a full container overflow to the AWESOME Sink after unlocking it. Handle every liquid byproduct.' +
+      (lines
+        ? ` The ${lines === 1 ? 'storage-only line after this step is' : `${lines} storage-only lines after this step are`} optional: ${lines === 1 ? 'it fills' : 'they fill'} only the containers no surplus covers, so build ${lines === 1 ? 'it' : 'them'} last.`
+        : ''),
+  };
 }
 
 // Whether `phase` of a calculated plan is milestone-only (#759): a phase before the plan's start

@@ -65,7 +65,7 @@ export const helpText: Record<string, string> = {
   existingSupply:
     'Production that already runs in your world, as items per minute. The plan credits it and builds only the remainder, skipping the chain behind it. Enter what your factory actually makes — the recipe and machine count do not have to match anything this plan would have chosen. Its ore and its power are already spent, so enter your resource budgets and spare power net of it, exactly as for any other existing factory.',
   guidedTopup:
-    'A guaranteed refill for the materials you carry out by hand. Twenty a minute of one item costs about one percent more buildings, because the plan already spills far more than that into storage as surplus. Raising the general construction rate to reach the same number costs far more, because it applies to every construction material at once.',
+    'A guaranteed refill for the materials you carry out by hand. Storage takes the plan’s surplus of the item first, and a small storage-only line, optional and built last, tops up the rest: twenty a minute of one item costs 1 to 4 more buildings on a default plan. Raising the general construction rate to reach the same number costs far more, because it applies to every construction material at once.',
   guidedHours: 'Hours per phase. The planner sizes the factory to deliver each phase in this long.',
   // The node survey (extraction.ts).
   extractionMark:

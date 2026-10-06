@@ -182,7 +182,9 @@ function newDraft(
     saveId,
     saveName: existing?.name || '',
     name: '',
-    settings,
+    // A plan the wizard calculates fills protected storage from surplus first (#1061), also when
+    // it starts from a profile calculated before.
+    settings: { ...settings, storageFromSurplus: true },
     preview: null,
     carryFrom: existing?.activeProfile || null,
     carry: Object.fromEntries(carryOptions.map(([key]) => [key, true])),
