@@ -41,8 +41,8 @@ export function pullFinalPhaseForward(
 // A phase planned with a group's excess routed to the central demand (#1063) that is not pulled
 // ahead tries its first plan (`unrouted`) as well: when that one is pulled ahead to finish sooner
 // than the routed plan, the phase keeps the first plan, pulled ahead, so routing never leaves a
-// phase later than it would have been (the routed plan's capped re-solve may not fit where the
-// first plan's does, #1094). The phases are re-solved from Phase 4 down, so the caps of an earlier
+// phase later than it would have been (the routed plan's capped re-solve may finish later than
+// the first plan's). The phases are re-solved from Phase 4 down, so the caps of an earlier
 // phase hold the machines of the plan a later phase keeps; each phase's own re-solve reads only its
 // own and later phases' plans. Returns the phases it pulled ahead and those whose search stopped.
 function resolveEarlierPhases(
