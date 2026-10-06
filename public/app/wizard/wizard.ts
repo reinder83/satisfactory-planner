@@ -364,7 +364,7 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
     // "Miners you already have" (#1068), drawn only with the box ticked: absent means none.
-    const owned = Number(data.get('ownedMiner'));
+    const owned = data.has('ownedMiner') ? Number(data.get('ownedMiner')) : 0;
     if (settings.phaseMining && (owned === 2 || owned === 3)) settings.ownedMiner = owned;
     else delete settings.ownedMiner;
   }
@@ -467,8 +467,13 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
   await loadContext(created.saveId, created.profileId);
   setWizard(null);
   navigate('plan');
+  // Steps ticked in a profile that carries nothing were not carried from anywhere: they are the
+  // finished work it was told about (the HUB tutorial, "What you already have", #1068).
+  const carriedFrom = !!(wizardDraft.saveId && wizardDraft.carryFrom);
   const carried = [
-    created.carriedChecks ? plural(created.carriedChecks, 'step') + ' carried over' : '',
+    created.carriedChecks
+      ? plural(created.carriedChecks, 'step') + (carriedFrom ? ' carried over' : ' start ticked')
+      : '',
     created.reviewCount
       ? plural(created.reviewCount, 'expanded production line') + ' left for review'
       : '',

@@ -200,6 +200,11 @@ test('Review offers the box for a later start phase, off by default, and sends i
   await settle();
   const body = calls.find(([path]) => path === '/api/profiles')![1];
   assert.deepEqual(body.built, keys);
+  // Nothing was carried from another profile: the toast says the steps start ticked.
+  assert.match(
+    $('#toast')!.textContent!,
+    new RegExp(`Profile created: ${keys.length} steps start ticked\.`),
+  );
   assert.ok(keys.every(key => key.startsWith('unlock-')));
 });
 
