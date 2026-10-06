@@ -14,6 +14,8 @@ import { calculate, settings } from '../planner.ts';
 import { DATA } from '../planner/data.ts';
 import { phaseSteps, recipeIdOf, rowStepTitle } from '../public/progression.ts';
 import { roundUpSettings } from '../public/state.ts';
+import { validateTransfer } from '../public/transfer.ts';
+import { saveExport } from './types/fixtures.ts';
 import { storageSources } from '../public/app/storage-source.ts';
 import type {
   CalcRow,
@@ -286,5 +288,21 @@ test('a rate set for the item itself is topped up beyond its surplus (#1061)', (
     );
     const source = storageSources(stage)!.find(entry => entry.item === 'Concrete')!.source;
     assert.ok(['surplus', 'line', 'both'].includes(source), `Phase ${phase}: ${source}`);
+  }
+});
+
+test('a plan with storage-only lines exports and imports unchanged (#1061)', () => {
+  const plan = planOf('construction');
+  const exported = structuredClone(saveExport);
+  exported.saves[0]!.profiles[0]!.plan = JSON.parse(JSON.stringify(plan));
+  const imported = validateTransfer(JSON.parse(JSON.stringify(exported)));
+  const back = imported.saves[0]!.profiles[0]!.plan!;
+  assert.equal(back.settings.storageFromSurplus, true);
+  for (const phase of STAGES) {
+    assert.deepEqual(back.stages[phase].storageAsked, plan.stages[phase].storageAsked);
+    assert.deepEqual(
+      (back.stages[phase].rows || []).filter(row => row.stock).map(row => [row.id, row.stock]),
+      (plan.stages[phase].rows || []).filter(isStock).map(row => [row.id, row.stock]),
+    );
   }
 });
