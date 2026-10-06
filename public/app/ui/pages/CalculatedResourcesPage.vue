@@ -2,7 +2,9 @@
   #resources on a calculated profile, for the current phase: the draft and headroom notices,
   one power headroom bar (SP-29: needed against available, with the somersloop and augmenter
   counts in its legend when the plan uses them), raw resources
-  against the entered budgets (settings.limits), then a panel of icon rows each for drone fuel,
+  against the entered budgets (settings.limits; with mining per phase, #1065, the phase's own,
+  stage.mining.budgets), the miners and extractors the phase's draw taps (on a plan with mining
+  per phase), then a panel of icon rows each for drone fuel,
   vehicle fuel (when the plan has any), protected storage, credited existing production and
   surplus (SP-28), and one for conversions. A plan guide's power section (#393, #469; a migrated
   handbook profile) follows: its commissioning checklist, ticking the guide's own ids, and its
@@ -27,6 +29,7 @@ import PageHeader from '../PageHeader.vue';
 import { toggleCheck } from '../actions.ts';
 import CalcWarnings from '../plan/CalcWarnings.vue';
 import { powerView, type PowerPart } from '../../../power.ts';
+import { equipmentWords, stageBudget, stageMiningAdvice } from '../../../mining.ts';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
 
@@ -109,7 +112,7 @@ const page = computed(() =>
         .map(name => {
           // The plan's limits hold every raw resource.
           const required = stagePlan.raw?.[name] || 0,
-            budget = settings.limits[name]!,
+            budget = stageBudget(stagePlan, settings, name),
             use = resourceUse(required, budget);
           // Each rate carries its own unit (#363): m³/min for a fluid, /min for an ore.
           return {
@@ -156,6 +159,18 @@ const page = computed(() =>
           empty: 'None',
         },
       ].filter(list => list.rows.length || list.empty),
+      // The phase's miners and extractors (#1065): its equipment and, per resource it draws,
+      // the nodes that draw taps. Null on a plan without mining per phase.
+      mining: stagePlan.mining
+        ? {
+            equipment: equipmentWords(stagePlan.mining),
+            rows: stageMiningAdvice(stagePlan).map(entry => ({
+              name: entry.resource,
+              rate: itemRate(entry.resource, entry.rate),
+              words: entry.words,
+            })),
+          }
+        : null,
       credited: Object.keys(stagePlan.supplied || {}).length > 0,
       conversions: stagePlan.conversions || [],
       plutonium: num(stagePlan.plutoniumSink),
@@ -268,8 +283,28 @@ const page = computed(() =>
       </table>
     </div>
     <p class="small muted">
-      Sorted by use, tightest first. Resources this phase does not draw on are listed last.
+      Sorted by use, tightest first. Resources this phase does not draw on are listed last.<template
+        v-if="page.mining"
+      >
+        Budgets are this phase's: what its miners and belts get from the nodes behind your entered
+        budgets.</template
+      >
     </p>
+    <section v-if="page.mining" class="panel mining-advice" data-mining>
+      <h2>Miners and extractors</h2>
+      <p class="small muted" data-mining-equipment>{{ page.mining.equipment }}</p>
+      <ul v-if="page.mining.rows.length" class="supply-summary">
+        <li v-for="row in page.mining.rows" :key="row.name" :data-mining-resource="row.name">
+          <ItemIcon :name="row.name" aria-hidden="true" /><span
+            ><b>{{ row.name }}</b> {{ row.rate }}. {{ row.words }}</span
+          >
+        </li>
+      </ul>
+      <p v-else>This phase mines nothing.</p>
+      <p class="small muted">
+        Tap the best nodes first. Water Extractors are listed with each line that takes Water.
+      </p>
+    </section>
     <div class="backup-grid">
       <section v-for="list in page.lists" :key="list.id" class="panel" :data-rate-list="list.id">
         <h2>{{ list.title }}</h2>

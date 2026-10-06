@@ -1,7 +1,8 @@
 <!--
   All settings step 5, Review, drawn from the calculated preview (never missing here: moving
   to step 5 always calculates), with each phase's power as every page gives it (powerView in
-  public/power.ts, #1064). Phases before the profile's start phase are left out. Then
+  public/power.ts, #1064) and, with mining per phase (#1065), the miner and belts its budgets
+  follow. Phases before the profile's start phase are left out. Then
   what was credited from production you already run, whether fueled augmenters pay off, what
   whole machines cost against exact clocks (RoundingCost.vue, #1066), the
   options for each phase that does not fit, the calculation's assumptions and, when adding a
@@ -14,6 +15,7 @@ import { draft } from '../../session.ts';
 import { budgetMeasured, draftFixes, draftHeading } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { powerView } from '../../../power.ts';
+import { minerWords } from '../../../mining.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
 import type { StoredSettings, StoredStage } from '../../../types/index.ts';
@@ -72,8 +74,11 @@ const view = computed(() =>
           : '—',
         ...powerCells(phase, stageResult, preview.settings),
         // A stopped search or an older saved plan measured no budget: a neutral draft (#632).
+        // With mining per phase (#1065) the budgets are the phase's, from its miner and belts.
         budget: stageResult.feasible
-          ? 'Within entered limits'
+          ? stageResult.mining
+            ? `Within ${minerWords(stageResult.mining.miner)} on ${stageResult.mining.belt.mark} belts`
+            : 'Within entered limits'
           : budgetMeasured(stageResult)
             ? 'Needs adjustment'
             : 'Planning draft',

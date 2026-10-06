@@ -21,7 +21,7 @@
 // that fails, or finishes a maximum-output phase later, leaves the plan as it was. Phases with
 // nuclear plants are left alone: their whole plants and the waste chain's period set their
 // generation by the owner's rules (#370).
-import { extractionMWPerUnit } from '../public/preferences.ts';
+import { extractionMWPerUnit, miningLinearMW } from '../public/preferences.ts';
 import { extractionEquipment } from '../public/power.ts';
 import type { LoadBound, RunResult, Solved } from './types.ts';
 import { DATA } from './data.ts';
@@ -48,7 +48,7 @@ export interface LoadBalance {
   unitMW: number;
 }
 export function loadBalance(
-  { config, power }: PhaseContext,
+  { config, power, mining }: PhaseContext,
   stage: Pick<Solved, 'rows' | 'raw' | 'grid'>,
 ): LoadBalance | null {
   const generators = stage.rows.filter(row => row.power < 0);
@@ -58,10 +58,14 @@ export function loadBalance(
   const linesMW = stage.rows
     .filter(row => row.power > 0)
     .reduce((total, row) => total + row.power * row.equivalent, 0);
-  const extractionMW = Object.entries(stage.raw).reduce(
-    (total, [item, rate]) => total + rate * extractionMWPerUnit(item, equipment),
-    0,
-  );
+  // With mining per phase (#1065), each node kind's draw at its own power, as addNodeKinds in
+  // model.ts charges it.
+  const extractionMW = mining
+    ? miningLinearMW(stage.raw, mining)
+    : Object.entries(stage.raw).reduce(
+        (total, [item, rate]) => total + rate * extractionMWPerUnit(item, equipment),
+        0,
+      );
   const needMW = stage.grid.needMW;
   return {
     linearMW: (linesMW * power.utilityFactor + extractionMW) * config.powerFactor,

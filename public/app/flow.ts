@@ -21,6 +21,7 @@ import { calcStage, calculated, checked, progressionData, stage } from './sessio
 import { factoryGroupsState } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
 import { sinkCaption, sinkCause } from './sink-cause.ts';
+import { BELT_MARKS, PIPE_MARKS, phaseForTier } from '../preferences.ts';
 import type { ItemBooks } from './group-links.ts';
 import type { FactoryLink } from './ui/actions.ts';
 import type {
@@ -223,27 +224,13 @@ export const itemRate = (item: string, rate: number): string =>
 export const rateOfItem = (item: string, rate: number, formatNumber = num): string =>
   `${formatNumber(rate)}${FLUIDS.has(item) ? '\u00a0m³' : ''} ${item}/min`;
 
-// Conveyor belt marks in unlock order. cap is items/min per belt; entry is the progression.json
-// milestone id that unlocks the mark.
-const BELT_LANES: Lane[] = [
-  { mark: 'Mk.1', cap: 60, entry: 'Schematic_1-2_C' },
-  { mark: 'Mk.2', cap: 120, entry: 'Schematic_3-2_C' },
-  { mark: 'Mk.3', cap: 270, entry: 'Schematic_5-3_C' },
-  { mark: 'Mk.4', cap: 480, entry: 'Schematic_6-1_C' },
-  { mark: 'Mk.5', cap: 780, entry: 'Schematic_7-2_C' },
-  { mark: 'Mk.6', cap: 1200, entry: 'Schematic_9-5_C' },
-];
-
-// Pipeline marks, same shape as BELT_LANES; cap is m³/min per pipe.
-const PIPE_LANES: Lane[] = [
-  { mark: 'Mk.1', cap: 300, entry: 'Schematic_3-1_C' },
-  { mark: 'Mk.2', cap: 600, entry: 'Schematic_6-5_C' },
-];
-
-// The planner phase in which a milestone tier becomes available: Tiers 1–2 are Phase 1, 3–4
-// Phase 2, 5–6 Phase 3, 7–8 Phase 4 and 9 Phase 5.
-const phaseForLaneTier = (tier: number) =>
-  tier <= 2 ? 1 : tier <= 4 ? 2 : tier <= 6 ? 3 : tier <= 8 ? 4 : 5;
+// Conveyor belt and pipeline marks in unlock order, from the one table the planner's mining per
+// phase reads too (BELT_MARKS and PIPE_MARKS in preferences/mining.ts, #1065): cap is items/min
+// per belt (m³/min per pipe); entry is the progression.json milestone id that unlocks the mark.
+// Read when a lane is planned rather than when the module loads: the interface tests supply the
+// shared modules' names to the app as it starts.
+const toLane = ({ mark, cap, entry }: Lane): Lane => ({ mark, cap, entry });
+const laneMarks = (fluid: boolean): Lane[] => (fluid ? PIPE_MARKS : BELT_MARKS).map(toLane);
 
 // The milestone that unlocks a belt or pipe mark: its name, tier, the phase it belongs to and
 // whether the user has ticked its `unlock-<id>` step. Null when progression.json lacks the entry.
@@ -253,7 +240,7 @@ function laneMilestone(lane: Lane): LaneMilestone | null {
     ? {
         name: entry.name,
         tier: entry.tier,
-        phase: phaseForLaneTier(entry.tier),
+        phase: phaseForTier(entry.tier),
         marked: checked('unlock-' + entry.id),
       }
     : null;
@@ -264,7 +251,7 @@ function laneMilestone(lane: Lane): LaneMilestone | null {
 // unknown; Mk.1 is the fallback. Returns the lane with its display unit, its milestone and the
 // next mark up (with that mark's milestone), which LaneAdvice.vue mentions as the next upgrade.
 export function bestLane(fluid: boolean, stageKey?: string): BestLane {
-  const lanes = fluid ? PIPE_LANES : BELT_LANES;
+  const lanes = laneMarks(fluid);
   const stageNo = Number(stageKey ?? stage());
   // Both lists start with Mk.1.
   let best = lanes[0]!,
@@ -284,6 +271,18 @@ export function bestLane(fluid: boolean, stageKey?: string): BestLane {
     milestone: bestMilestone,
     next: next ? { ...next, milestone: laneMilestone(next) } : null,
   };
+}
+
+// What a belt or pipe mark the phase plans with still needs (#1065): "Mk.5 belts need Tier 7 ·
+// Logistics Mk.5, which is not ticked yet: until then, plan with Mk.4 belts (480/min).", or ''
+// once its milestone is ticked (or for Mk.1, which needs none).
+export function laneUnlockNote(lane: BestLane): string {
+  const marks = laneMarks(lane.fluid);
+  const milestone = lane.milestone,
+    previous = marks[marks.findIndex(mark => mark.mark === lane.mark) - 1];
+  if (!milestone || milestone.marked || !previous) return '';
+  const word = lane.fluid ? 'pipes' : 'belts';
+  return `${lane.mark} ${word} need Tier ${milestone.tier} · ${milestone.name}, which is not ticked yet: until then, plan with ${previous.mark} ${word} (${num(previous.cap)}${lane.unit}).`;
 }
 
 // How many belts or pipes of the best available mark carry `rate`. Returns the lane, the lane
