@@ -194,29 +194,6 @@ export function phaseSteps(
   ];
 }
 
-// The storage step of a phase. A whole-machine plan since #1061 (`storageAsked`) fills storage
-// from surplus first and lists its storage-only lines after this step; an older plan reserved
-// the storage rates in its lines, as the old text says. The id is the same either way.
-function storageStep(stagePlan: StoredStage | undefined, stage: StageKey): PhaseStep {
-  const id = 'calc-' + stage + '-storage';
-  if (!stagePlan?.storageAsked)
-    return {
-      id,
-      title: 'Connect protected storage and overflow',
-      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
-    };
-  const lines = (stagePlan.rows || []).filter(row => row.stock).length;
-  return {
-    id,
-    title: 'Fill protected storage from surplus, overflow to the sink',
-    body:
-      'Send each stored item’s surplus into its container first, through a Priority Merger or an overflow splitter, and let a full container overflow to the AWESOME Sink after unlocking it. Handle every liquid byproduct.' +
-      (lines
-        ? ` The ${lines === 1 ? 'storage-only line after this step is' : `${lines} storage-only lines after this step are`} optional: ${lines === 1 ? 'it fills' : 'they fill'} only the containers no surplus covers, so build ${lines === 1 ? 'it' : 'them'} last.`
-        : ''),
-  };
-}
-
 // What phaseSteps reads of a profile's progress: its ticks, and its factory groups' names, which
 // name a group's own line made on site.
 export interface GuideState {
@@ -240,6 +217,29 @@ export function rowStepTitle(
     plan.settings.onSite?.[group]?.name ??
     group;
   return row.name + ' for ' + name;
+}
+
+// The storage step of a phase. A whole-machine plan since #1061 (`storageAsked`) fills storage
+// from surplus first and lists its storage-only lines after this step; an older plan reserved
+// the storage rates in its lines, as the old text says. The id is the same either way.
+function storageStep(stagePlan: StoredStage | undefined, stage: StageKey): PhaseStep {
+  const id = 'calc-' + stage + '-storage';
+  if (!stagePlan?.storageAsked)
+    return {
+      id,
+      title: 'Connect protected storage and overflow',
+      body: 'Reserve the listed storage refill rates before elevator exports. Handle every liquid byproduct; send surplus sinkable solids to the AWESOME Sink after unlocking it.',
+    };
+  const lines = (stagePlan.rows || []).filter(row => row.stock).length;
+  return {
+    id,
+    title: 'Fill protected storage from surplus, overflow to the sink',
+    body:
+      'Send each stored item’s surplus into its container first, through a Priority Merger or an overflow splitter, and let a full container overflow to the AWESOME Sink after unlocking it. Handle every liquid byproduct.' +
+      (lines
+        ? ` The ${lines === 1 ? 'storage-only line after this step is' : `${lines} storage-only lines after this step are`} optional: ${lines === 1 ? 'it fills' : 'they fill'} only the containers no surplus covers, so build ${lines === 1 ? 'it' : 'them'} last.`
+        : ''),
+  };
 }
 
 // Whether `phase` of a calculated plan is milestone-only (#759): a phase before the plan's start

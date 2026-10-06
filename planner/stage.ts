@@ -70,42 +70,6 @@ export function readStage(
       .map(row => row.name),
   };
 }
-// A stage's power from its rows and raw draw: the totals as releases before #1064 read them (whole
-// machines at full power against the generators' fractional output, with the shortfall as
-// additionalHeadroomMW), and `grid`, which the pages read (stageGrid in public/power.ts). Shared
-// by readStage and the storage-only lines added after the solve (planner/stock.ts, #1061).
-export function stagePower(
-  { config, power }: Pick<PhaseContext, 'config' | 'power'>,
-  rows: CalcRow[],
-  raw: ItemRates,
-) {
-  const { utilityFactor, boost, spareMW } = power;
-  const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
-    generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
-  const grid = stageGrid({
-    rows,
-    raw,
-    powerFactor: config.powerFactor,
-    utilityPercent: config.utilityPercent,
-    extractionAt: extractionEquipment(config),
-    boost,
-    spareMW: config.availablePowerGW * 1000,
-    augmenterMW: spareMW - config.availablePowerGW * 1000,
-  });
-  return {
-    peakMW,
-    generationMW,
-    // New generation with the augmenter boost, plus the spare figure (which already includes the
-    // augmenters' 500 MW each and their boost on installed capacity).
-    availableMW: generationMW * (1 + boost) + spareMW,
-    requiredMW: peakMW * utilityFactor,
-    additionalHeadroomMW: Math.max(
-      0,
-      peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
-    ),
-    grid,
-  };
-}
 // Every Space Elevator part the lines make beyond their other uses goes to the elevator (#1062):
 // a part's delivery rate is all its central balance has left once the lines, protected storage,
 // fuel and the other demands have taken theirs, so the phase's time follows what the lines really
@@ -224,4 +188,40 @@ export function buildOrder(rows: CalcRow[]): CalcRow[] {
   }
   rows.forEach(visit);
   return ordered;
+}
+// A stage's power from its rows and raw draw: the totals as releases before #1064 read them (whole
+// machines at full power against the generators' fractional output, with the shortfall as
+// additionalHeadroomMW), and `grid`, which the pages read (stageGrid in public/power.ts). Shared
+// by readStage and the storage-only lines added after the solve (planner/stock.ts, #1061).
+export function stagePower(
+  { config, power }: Pick<PhaseContext, 'config' | 'power'>,
+  rows: CalcRow[],
+  raw: ItemRates,
+) {
+  const { utilityFactor, boost, spareMW } = power;
+  const peakMW = rows.reduce((total, row) => total + row.peakMW, 0),
+    generationMW = rows.reduce((total, row) => total + row.generationMW, 0);
+  const grid = stageGrid({
+    rows,
+    raw,
+    powerFactor: config.powerFactor,
+    utilityPercent: config.utilityPercent,
+    extractionAt: extractionEquipment(config),
+    boost,
+    spareMW: config.availablePowerGW * 1000,
+    augmenterMW: spareMW - config.availablePowerGW * 1000,
+  });
+  return {
+    peakMW,
+    generationMW,
+    // New generation with the augmenter boost, plus the spare figure (which already includes the
+    // augmenters' 500 MW each and their boost on installed capacity).
+    availableMW: generationMW * (1 + boost) + spareMW,
+    requiredMW: peakMW * utilityFactor,
+    additionalHeadroomMW: Math.max(
+      0,
+      peakMW * utilityFactor - generationMW * (1 + boost) - spareMW,
+    ),
+    grid,
+  };
 }

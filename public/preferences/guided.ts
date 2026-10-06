@@ -171,7 +171,7 @@ export const guidedQuestions: GuidedQuestion[] = [
     step: 2,
     short: 'Stocked for you',
     title: 'What should the factory keep stocked for you?',
-    lead: 'Beyond the Space Elevator, the plan can reserve production to keep containers filled for your own building.',
+    lead: 'Beyond the Space Elevator, the plan can keep containers filled for your own building: from what it makes beyond its needs first, with small optional lines only where nothing is spare.',
     options: [
       {
         value: 'none',

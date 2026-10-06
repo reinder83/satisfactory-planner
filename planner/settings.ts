@@ -367,7 +367,6 @@ export function settings(input: unknown = {}): CurrentSettings {
     transportFuel: transportFuelRates(input.transportFuel),
     ...onSiteSetting(input.onSite),
     ...exactClockLines(input.exactClocks),
-    ...(input.storageFromSurplus === true ? { storageFromSurplus: true as const } : {}),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(
@@ -386,6 +385,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     hours: number(input.hours, 0.25, 2000, 8),
     roundRates: input.roundRates !== false,
     wholeMachines: input.wholeMachines === true,
+    // Protected storage fed from surplus first (#1061): only `true` turns it on, and the field is
+    // absent otherwise, so settings without it, and every plan stored before it, stay as they were.
+    ...(input.storageFromSurplus === true ? { storageFromSurplus: true as const } : {}),
     limitsConfirmed: !!input.limitsConfirmed,
     modNotes: typeof input.modNotes === 'string' ? input.modNotes.slice(0, 500) : '',
   };
