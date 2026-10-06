@@ -20,7 +20,7 @@ import { itemRateRows } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
-import { ALLOWANCE_SETTING, partsWords, powerNeed } from '../../../power.ts';
+import { ALLOWANCE_SETTING } from '../../../power.ts';
 import { currentProfile, currentSave } from '../../session.ts';
 import { startWizard } from '../../wizard/wizard.ts';
 import PageHeader from '../PageHeader.vue';
@@ -42,10 +42,9 @@ const milestones = computed(() => legacy(() => !!calculated && milestoneOnly()))
 // of that available power left over, or the shortfall. The somersloop and augmenter counts and
 // the variable-power machines' average are legend captions. Under the headline, what Power
 // needed holds, the utility allowance for trains, drones and pumps included, and where the
-// variable-power machines count at their peak (#1090, powerNeed in public/power.ts).
+// variable-power machines count at their peak (#1090, powerView's need in public/power.ts).
 function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settings']) {
-  const view = powerView(stagePlan, settings),
-    need = powerNeed(view, settings);
+  const view = powerView(stagePlan, settings);
   const required = view.needMW,
     available = view.availableMW,
     short = view.shortMW;
@@ -70,9 +69,8 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
     supply: view.supply.map(p => ({ ...p, value: power(p.mw), width: width(p.mw) })),
     shortWidth: width(short),
     // What the need holds, in one sentence (#1090), and the variable-power machines' peak.
-    parts: partsWords(need),
-    percent: need.percent,
-    peak: need.peak,
+    parts: view.need.words,
+    peak: view.need.peak,
     // The bars' text alternative: every figure they draw, in one sentence.
     label: `${headline}. Needed: ${power(required)} (${list(view.demand)}). Available: ${power(available)} (${list(view.supply)}).`,
   };

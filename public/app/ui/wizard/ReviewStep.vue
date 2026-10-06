@@ -21,7 +21,7 @@ import FuelVerdict from './FuelVerdict.vue';
 import RoundingCost from '../plan/RoundingCost.vue';
 import SupplyNotice from './SupplyNotice.vue';
 import StepHeading from '../form/StepHeading.vue';
-import { allowanceWords, ALLOWANCE_SETTING, powerNeed } from '../../../power.ts';
+import { ALLOWANCE_SETTING } from '../../../power.ts';
 import { moveWizard } from '../../wizard/wizard.ts';
 
 // A number keeps its unit on its line in the narrow Delivery time column (#741): "about 7 h
@@ -32,18 +32,17 @@ const unbroken = (text: string): string => text.replace(/(\d) /g, '$1\u00a0');
 // it needs of what it has, or what it is short, as the Resources page's bar, the headroom notice
 // and the power step give them. Phase 1 runs on biomass, which the plan leaves to the player. A
 // plan made before #1064 shows its generators' output as it always did. Under the need, what it
-// holds for trains, drones and pumps (#1090, powerNeed in public/power.ts), and the
+// holds for trains, drones and pumps (#1090, powerView's need in public/power.ts), and the
 // variable-power machines' peak as a note.
 function powerCells(phase: string, stageResult: StoredStage, settings: StoredSettings) {
   const generation = stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—';
   if (!stageResult.rows)
     return { generation, power: { text: '—', short: false }, allowance: '', peak: '' };
-  const view = powerView(stageResult, settings),
-    need = powerNeed(view, settings);
+  const view = powerView(stageResult, settings);
   return {
     generation: view.modelled ? power(view.generationMW) : generation,
-    allowance: view.needMW > 0 ? allowanceWords(need) : '',
-    peak: need.peak,
+    allowance: view.needMW > 0 ? view.need.allowance : '',
+    peak: view.need.peak,
     power:
       view.shortMW > 0 && phase === '1'
         ? { text: `${power(view.needMW)} from biomass`, short: false }
@@ -127,9 +126,12 @@ const view = computed(() =>
             <td>{{ row.generation }}</td>
             <td :class="row.power.short ? 'warn' : undefined" data-review-power>
               {{ row.power.text
-              }}<small v-if="row.allowance" class="review-allowance" data-review-allowance>{{
-                row.allowance
-              }}</small>
+              }}<template v-if="row.allowance"
+                >{{ ' '
+                }}<small class="review-allowance" data-review-allowance>{{
+                  row.allowance
+                }}</small></template
+              >
             </td>
           </tr>
         </tbody>

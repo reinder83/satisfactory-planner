@@ -7,7 +7,6 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
-import { ALLOWANCE_SETTING, partsWords, powerNeed, type PowerNeed } from './power.ts';
 import { listNames, powerAmount } from './wording.ts';
 import { powerView } from './power.ts';
 
@@ -570,8 +569,8 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
 interface PhasePowerFigures {
   modelled: boolean;
   // What the need holds (#1090): the production lines, the miners and extractors and the utility
-  // allowance for trains, drones and pumps (powerNeed in power.ts).
-  need: PowerNeed;
+  // allowance for trains, drones and pumps, with their words (powerView's need, power.ts).
+  need: ReturnType<typeof powerView>['need'];
   kept: GridGenerator[];
   // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
   previous: number;
@@ -598,7 +597,7 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
   const rank = (row: CalcRow) => SOURCE_ORDER.indexOf(generatorSource(row));
   return {
     modelled: view.modelled,
-    need: powerNeed(view, plan.settings),
+    need: view.need,
     kept: view.generators.filter(entry => entry.kept > 0),
     previous: stage - 1,
     boost: planned.boost || 0,
@@ -684,12 +683,12 @@ function existingPowerText(
       : existingMW <= 0.01
         ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
         : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
-  const allowance = partsWords(figures.need);
+  const allowance = figures.need.words;
   const unlock = missingUnlocks(generators, unlocked);
   const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
   const check =
     (figures.need.peak ? ' ' + figures.need.peak : '') +
-    ` The ${figures.need.percent}% for trains, drones and pumps is ${ALLOWANCE_SETTING} in Preferences: raise it in a new profile for more margin.` +
+    ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it in a new profile for more margin.` +
     ' Before connecting the next factory, check the actual load against what your grid supplies.';
   if (requiredMW - haveMW <= 0.01)
     return (

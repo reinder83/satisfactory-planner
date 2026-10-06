@@ -204,14 +204,19 @@ export interface PowerView {
   generators: GridGenerator[];
   // The variable-power machines' peak and average, when the phase has any.
   variable: { peakMW: number; averageMW: number; machines: string[] } | null;
+  // What the need holds and its words (#1090), which every page that gives the need shows.
+  need: PowerNeed;
 }
+// The view's own figures, from which its need is taken apart.
+type ViewFigures = Omit<PowerView, 'need'>;
 
 type ViewSettings = Pick<StoredSettings, 'availablePowerGW'> &
   Partial<Pick<StoredSettings, 'utilityPercent'>>;
 
 // The stage's power, from its grid, or as a plan made before #1064 stored it.
 export function powerView(stage: StoredStage, settings: ViewSettings): PowerView {
-  return stage.grid ? modelledView(stage, stage.grid, settings) : storedView(stage, settings);
+  const view = stage.grid ? modelledView(stage, stage.grid, settings) : storedView(stage, settings);
+  return { ...view, need: powerNeed(view, settings) };
 }
 
 // Whether a figure is above rounding dust.
@@ -221,7 +226,7 @@ const figure = (value: number | undefined) =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 // A plan with a grid: the parts the plan sized.
-function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSettings): PowerView {
+function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSettings): ViewFigures {
   const left = grid.availableMW - grid.needMW;
   const machines = [
     ...new Set(
@@ -328,7 +333,7 @@ const augmenterCaption = (stage: StoredStage) => {
 // splits it as it did (the augmenter part also holding the boost on new generation). What is
 // missing is the need less what it has, which is the stage's additionalHeadroomMW, as the planner
 // computed it then.
-function storedView(stage: StoredStage, settings: ViewSettings): PowerView {
+function storedView(stage: StoredStage, settings: ViewSettings): ViewFigures {
   const peak = stage.peakMW || 0,
     need = Math.max(peak, stage.requiredMW ?? peak),
     generation = stage.generationMW || 0,
@@ -411,15 +416,20 @@ export interface NeedPart {
 // table, the build plan's "Power available now" and the Resources page. `parts` add up to
 // `needMW`: a plan with a grid (#1064) has its production lines, its miners and extractors and
 // the utility allowance on the lines (trains, drone ports and pumps); a plan made before it has
-// its whole-machine peak and the allowance, as powerView reads them. `percent` is the profile's
-// utility allowance (Extra utilities power in Preferences). `peak` says where Particle
-// Accelerators, Converters or Quantum Encoders count at their peak, so the real draw is lower,
-// else ''. Nothing is computed here: every figure is powerView's.
+// its whole-machine peak and the allowance, as the Resources bar splits it. `percent` is the
+// profile's utility allowance, which the Preferences step calls `setting`. `allowance` and
+// `words` are the shared wording: "incl. 96.62 GW for trains, drones and pumps (20%)" and every
+// part in a sentence. `peak` says where Particle Accelerators, Converters or Quantum Encoders
+// count at their peak, so the real draw is lower, else ''. Nothing is computed here: every
+// figure is the view's.
 export interface PowerNeed {
   needMW: number;
   allowanceMW: number;
   percent: number;
+  setting: string;
   parts: NeedPart[];
+  allowance: string;
+  words: string;
   peak: string;
 }
 
@@ -429,8 +439,8 @@ export const ALLOWANCE_SETTING = 'Extra utilities power';
 // What the allowance is for, after its MW: "for trains, drones and pumps".
 const ALLOWANCE_FOR = 'for trains, drones and pumps';
 
-// A stage's Power needed taken apart, from its powerView (a plan before #1064 included).
-export function powerNeed(view: PowerView, settings: ViewSettings): PowerNeed {
+// A stage's Power needed taken apart, from its view (a plan before #1064 included).
+function powerNeed(view: ViewFigures, settings: ViewSettings): PowerNeed {
   const percent = settings.utilityPercent ?? 20;
   const part = (key: string) => view.demand.find(entry => entry.key === key)?.mw ?? 0;
   const allowanceMW = part('utility');
@@ -459,21 +469,16 @@ export function powerNeed(view: PowerView, settings: ViewSettings): PowerNeed {
     words: `${powerAmount(allowanceMW)} at ${percent}% ${ALLOWANCE_FOR}`,
   });
   const variable = view.variable;
-  const peak = variable
-    ? `${listNames(variable.machines.map(name => name + 's'))} count at their ${powerAmount(variable.peakMW)} peak, though they average ${powerAmount(variable.averageMW)}: the real draw is lower than Power needed, so the real margin is larger.`
-    : '';
-  return { needMW: view.needMW, allowanceMW, percent, parts, peak };
+  return {
+    needMW: view.needMW,
+    allowanceMW,
+    percent,
+    setting: ALLOWANCE_SETTING,
+    parts,
+    allowance: `incl. ${powerAmount(allowanceMW)} ${ALLOWANCE_FOR} (${percent}%)`,
+    words: listNames(parts.map(entry => entry.words)),
+    peak: variable
+      ? `${listNames(variable.machines.map(name => name + 's'))} count at their ${powerAmount(variable.peakMW)} peak, though they average ${powerAmount(variable.averageMW)}: the real draw is lower than Power needed, so the real margin is larger.`
+      : '',
+  };
 }
-
-// "incl. 96.62 GW for trains, drones and pumps (20%)": the allowance, under or after the need.
-export const allowanceWords = (need: PowerNeed): string =>
-  `incl. ${powerAmount(need.allowanceMW)} ${ALLOWANCE_FOR} (${need.percent}%)`;
-
-// "624.99 GW, incl. 96.62 GW for trains, drones and pumps (20%)".
-export const needWords = (need: PowerNeed): string =>
-  `${powerAmount(need.needMW)}, ${allowanceWords(need)}`;
-
-// "483.1 GW for production lines, 45.27 GW for miners and extractors and 96.62 GW at 20% for
-// trains, drones and pumps": every part, in a sentence.
-export const partsWords = (need: PowerNeed): string =>
-  listNames(need.parts.map(part => part.words));
