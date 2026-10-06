@@ -363,6 +363,10 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
   if (wizardDraft.step === 4) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
+    // "Miners you already have" (#1068), drawn only with the box ticked: absent means none.
+    const owned = Number(data.get('ownedMiner'));
+    if (settings.phaseMining && (owned === 2 || owned === 3)) settings.ownedMiner = owned;
+    else delete settings.ownedMiner;
   }
 }
 

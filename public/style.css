@@ -5873,6 +5873,11 @@ th.resource-cell {
 .phase-budgets {
   margin: 8px 0 16px;
 }
+/* "Miners you already have" (#1068) over that table. */
+.owned-miner {
+  max-width: 420px;
+  margin: 8px 0 0;
+}
 .phase-budgets caption {
   caption-side: top;
   text-align: left;
