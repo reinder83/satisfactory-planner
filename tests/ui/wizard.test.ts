@@ -1213,6 +1213,11 @@ test('Goals and Resources show a live estimate beside the form, the other steps 
     text('[data-estimate-power]').trim(),
     `${power(last.grid!.needMW)} of ${power(last.grid!.availableMW)}`,
   );
+  // What that need holds for trains, drones and pumps (#1090).
+  assert.equal(
+    text('[data-estimate-allowance]').trim(),
+    `incl. ${power(last.grid!.allowanceMW)} for trains, drones and pumps (20%)`,
+  );
   assert.ok(text('[data-estimate-tightest]').length > 0, 'the tightest resource is named');
   assert.equal($('[data-estimate-status]')!.getAttribute('aria-live'), 'polite');
   assert.equal($('[data-estimate-warning]'), null, 'nothing over budget');

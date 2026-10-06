@@ -71,7 +71,7 @@ Adding a profile to a save you already play starts from that save's settings ins
 
 5. Review calculated buildings, delivery time, power and feasibility by phase, then create the profile.
 
-   **Power needed** holds the phase's production lines, its miners and extractors, and an allowance for trains, drone ports and pumps: **Extra utilities power** on the Preferences step, 20% of the production lines by default. Review, the build plan's "Power available now" step and the Power & resources page say how much of the figure that allowance is ("624.99 GW, incl. 96.62 GW for trains, drones and pumps (20%)"); Review's note and the Power & resources page lead to the setting, the latter for a new profile, since a calculated profile keeps the settings it was made with. Particle Accelerators, Converters and Quantum Encoders count at their peak, and the pages say so: they draw less on average, so your real margin is larger than the figures show.
+   **Power needed** holds the phase's production lines, its miners and extractors, and an allowance for trains, drone ports and pumps: **Extra utilities power** on the Preferences step, 20% of the production lines by default. Review and its live estimate, the build plan's "Power available now" step and the Power & resources page say how much of the figure that allowance is ("624.99 GW, incl. 96.62 GW for trains, drones and pumps (20%)"); Review's note and the Power & resources page lead to the setting, the latter for a new profile, since a calculated profile keeps the settings it was made with. Particle Accelerators, Converters and Quantum Encoders count at their peak, and the pages say so: they draw less on average, so your real margin is larger than the figures show.
 
 ### Continuing a save you already play
 
