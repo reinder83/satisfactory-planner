@@ -2139,6 +2139,19 @@ tr.muted td:first-child {
   color: var(--dim);
   text-wrap: pretty;
 }
+/* What Power needed holds (#1090): under the headline on the Resources page, and under each
+   phase's need in the wizard's Review, the utility allowance for trains, drones and pumps. */
+.power-parts {
+  margin: -4px 0 12px;
+  text-wrap: pretty;
+}
+.power-parts .btn {
+  margin-left: 4px;
+}
+.review-allowance {
+  display: block;
+  color: var(--dim);
+}
 
 /* ── Storage floor ─────────────────────────────────────── */
 /* A floor's tab (StoragePage.vue) is the user's name for the floor, one word of up to 80

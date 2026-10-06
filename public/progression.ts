@@ -7,6 +7,7 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
+import { ALLOWANCE_SETTING, partsWords, powerNeed, type PowerNeed } from './power.ts';
 import { listNames, powerAmount } from './wording.ts';
 import { powerView } from './power.ts';
 
@@ -568,6 +569,9 @@ function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideT
 // generators the phase before built and this phase keeps, per building.
 interface PhasePowerFigures {
   modelled: boolean;
+  // What the need holds (#1090): the production lines, the miners and extractors and the utility
+  // allowance for trains, drones and pumps (powerNeed in power.ts).
+  need: PowerNeed;
   kept: GridGenerator[];
   // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
   previous: number;
@@ -594,6 +598,7 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
   const rank = (row: CalcRow) => SOURCE_ORDER.indexOf(generatorSource(row));
   return {
     modelled: view.modelled,
+    need: powerNeed(view, plan.settings),
     kept: view.generators.filter(entry => entry.kept > 0),
     previous: stage - 1,
     boost: planned.boost || 0,
@@ -660,7 +665,10 @@ const missingUnlocks = (generators: CalcRow[], { coal, petroleum, nuclear }: Unl
   );
 };
 
-// The text with spare existing power (#1048). It never names a source below the plan's.
+// The text with spare existing power (#1048). It never names a source below the plan's. The need
+// is given with what it holds (#1090): the production lines, the miners and extractors and the
+// utility allowance for trains, drones and pumps, which Extra utilities power in Preferences
+// sets, and where the variable-power machines count at their peak.
 function existingPowerText(
   { plan }: GuideContext,
   figures: PhasePowerFigures,
@@ -676,10 +684,12 @@ function existingPowerText(
       : existingMW <= 0.01
         ? `Your Alien Power ${augmenters === 1 ? 'Augmenter adds' : 'Augmenters add'} ${powerAmount(augmenterMW)}`
         : `You have ${powerAmount(existingMW)} of spare power available, and ${yours}`;
-  const allowance = `${figures.modelled ? 'with extraction and' : 'with'} the ${plan.settings.utilityPercent ?? 20}% utility allowance`;
+  const allowance = partsWords(figures.need);
   const unlock = missingUnlocks(generators, unlocked);
   const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
   const check =
+    (figures.need.peak ? ' ' + figures.need.peak : '') +
+    ` The ${figures.need.percent}% for trains, drones and pumps is ${ALLOWANCE_SETTING} in Preferences: raise it in a new profile for more margin.` +
     ' Before connecting the next factory, check the actual load against what your grid supplies.';
   if (requiredMW - haveMW <= 0.01)
     return (
@@ -689,7 +699,7 @@ function existingPowerText(
         : 'nothing needs building for power in this phase.') +
       check
     );
-  const more = `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more (${powerAmount(requiredMW)} in all, ${allowance})`;
+  const more = `${have}. This phase needs ${powerAmount(requiredMW - haveMW)} more (${powerAmount(requiredMW)} in all: ${allowance})`;
   if (!generators.length)
     return `${more}, and its plan builds no generators for it: see the power headroom on the Resources page.${check}`;
   return `${more}: build ${newGeneration(plan, figures, false)}.${unlockFirst}${check}`;

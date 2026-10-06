@@ -100,26 +100,39 @@ export function readCarry(form: HTMLFormElement | null, data?: FormData) {
 // profile is added to that save. Callers: "Create a save" / "Try another
 // profile" buttons (ui/actions.ts, ProfilesPage.vue) and session.ts when there is no save.
 // Unsaved notes are asked about first; with none it opens before this returns.
-export function startWizard(saveId: string | null = null) {
+// `at` opens All settings on its `step` instead of the guided start, from the settings of
+// `profileId` in that save, which the new profile carries from: "Change Extra utilities power in
+// Preferences" on the Resources page (#1090), which knows the profile its tab shows.
+export function startWizard(
+  saveId: string | null = null,
+  at?: { profileId: string; step: number },
+) {
   const asked = allowSwitch();
-  if (asked === true) openWizard(saveId);
+  if (asked === true) openWizard(saveId, at);
   else
     void asked.then(ok => {
-      if (ok) openWizard(saveId);
+      if (ok) openWizard(saveId, at);
     });
 }
 
-function openWizard(saveId: string | null) {
+function openWizard(saveId: string | null, at?: { profileId: string; step: number }) {
   const existing = workspace.saves.find(s => s.id === saveId);
-  setWizard(newDraft(saveId, existing, startingSettings(existing)));
+  const from = at && existing?.profiles.some(p => p.id === at.profileId) ? at : undefined;
+  const wizardDraft = newDraft(saveId, existing, startingSettings(existing, from?.profileId));
+  if (from) {
+    wizardDraft.carryFrom = from.profileId;
+    wizardDraft.mode = 'advanced';
+    wizardDraft.step = Math.min(Math.max(from.step, 1), 4);
+  }
+  setWizard(wizardDraft);
   navigate('wizard');
 }
 
 // The settings a new draft starts from. A new profile for an existing save starts from a
 // copy of its active profile's settings (the workspace summary exposes plan.settings); anything
 // else from freshSettings.
-function startingSettings(existing: SaveSummary | undefined): WizardSettings {
-  const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
+function startingSettings(existing: SaveSummary | undefined, profileId?: string): WizardSettings {
+  const selected = existing?.profiles.find(p => p.id === (profileId ?? existing.activeProfile));
   const previous: WizardSettings | undefined = selected?.settings;
   return previous ? structuredClone(previous) : freshSettings();
 }

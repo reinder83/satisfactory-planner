@@ -262,7 +262,7 @@ function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSetting
         key: 'utility',
         label: 'Utility allowance',
         mw: grid.allowanceMW,
-        caption: `${percent}% of the production lines for transport and utilities; verify actual load`,
+        caption: `${percent}% of the production lines for trains, drones and pumps; verify actual load`,
       },
       {
         key: 'extraction',
@@ -366,7 +366,7 @@ function storedView(stage: StoredStage, settings: ViewSettings): PowerView {
         label: 'Utility allowance',
         mw: need - peak,
         caption:
-          (settings.utilityPercent ?? 20) + '% for transport and utilities; verify actual load',
+          (settings.utilityPercent ?? 20) + '% for trains, drones and pumps; verify actual load',
       },
     ],
     supply: [
@@ -397,3 +397,83 @@ function storedView(stage: StoredStage, settings: ViewSettings): PowerView {
     variable: null,
   };
 }
+
+// --- What "Power needed" holds (#1090) ---
+
+// One part of a stage's Power needed, with its MW and its words in a sentence: "483.1 GW for
+// production lines".
+export interface NeedPart {
+  key: string;
+  mw: number;
+  words: string;
+}
+// A stage's Power needed taken apart, as every page that gives the figure words it: the review
+// table, the build plan's "Power available now" and the Resources page. `parts` add up to
+// `needMW`: a plan with a grid (#1064) has its production lines, its miners and extractors and
+// the utility allowance on the lines (trains, drone ports and pumps); a plan made before it has
+// its whole-machine peak and the allowance, as powerView reads them. `percent` is the profile's
+// utility allowance (Extra utilities power in Preferences). `peak` says where Particle
+// Accelerators, Converters or Quantum Encoders count at their peak, so the real draw is lower,
+// else ''. Nothing is computed here: every figure is powerView's.
+export interface PowerNeed {
+  needMW: number;
+  allowanceMW: number;
+  percent: number;
+  parts: NeedPart[];
+  peak: string;
+}
+
+// The setting the allowance comes from, as the wizard's Preferences step labels it.
+export const ALLOWANCE_SETTING = 'Extra utilities power';
+
+// What the allowance is for, after its MW: "for trains, drones and pumps".
+const ALLOWANCE_FOR = 'for trains, drones and pumps';
+
+// A stage's Power needed taken apart, from its powerView (a plan before #1064 included).
+export function powerNeed(view: PowerView, settings: ViewSettings): PowerNeed {
+  const percent = settings.utilityPercent ?? 20;
+  const part = (key: string) => view.demand.find(entry => entry.key === key)?.mw ?? 0;
+  const allowanceMW = part('utility');
+  const parts: NeedPart[] = [];
+  if (view.modelled) {
+    parts.push({
+      key: 'load',
+      mw: part('load'),
+      words: `${powerAmount(part('load'))} for production lines`,
+    });
+    if (aboveDust(part('extraction')))
+      parts.push({
+        key: 'extraction',
+        mw: part('extraction'),
+        words: `${powerAmount(part('extraction'))} for miners and extractors`,
+      });
+  } else
+    parts.push({
+      key: 'peak',
+      mw: part('peak'),
+      words: `${powerAmount(part('peak'))} for production lines at their whole-machine peak`,
+    });
+  parts.push({
+    key: 'utility',
+    mw: allowanceMW,
+    words: `${powerAmount(allowanceMW)} at ${percent}% ${ALLOWANCE_FOR}`,
+  });
+  const variable = view.variable;
+  const peak = variable
+    ? `${listNames(variable.machines.map(name => name + 's'))} count at their ${powerAmount(variable.peakMW)} peak, though they average ${powerAmount(variable.averageMW)}: the real draw is lower than Power needed, so the real margin is larger.`
+    : '';
+  return { needMW: view.needMW, allowanceMW, percent, parts, peak };
+}
+
+// "incl. 96.62 GW for trains, drones and pumps (20%)": the allowance, under or after the need.
+export const allowanceWords = (need: PowerNeed): string =>
+  `incl. ${powerAmount(need.allowanceMW)} ${ALLOWANCE_FOR} (${need.percent}%)`;
+
+// "624.99 GW, incl. 96.62 GW for trains, drones and pumps (20%)".
+export const needWords = (need: PowerNeed): string =>
+  `${powerAmount(need.needMW)}, ${allowanceWords(need)}`;
+
+// "483.1 GW for production lines, 45.27 GW for miners and extractors and 96.62 GW at 20% for
+// trains, drones and pumps": every part, in a sentence.
+export const partsWords = (need: PowerNeed): string =>
+  listNames(need.parts.map(part => part.words));
