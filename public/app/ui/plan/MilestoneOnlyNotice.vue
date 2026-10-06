@@ -17,7 +17,7 @@
   (#1068, data-earlier-done) ticks those open steps after a confirmation, in one `checks` update
   that only ticks (stepsBeforeStart in progression.ts: all unlock-<id> steps), then goes on as
   "Go to Phase N" does. It is the later way to say what the wizard's "Everything before Phase N is
-  done" says when a profile is created.
+  done" says when a profile is created (ui/wizard/AlreadyHave.vue).
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';

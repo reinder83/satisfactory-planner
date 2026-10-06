@@ -6,7 +6,7 @@
   what was credited from production you already run, whether fueled augmenters pay off, what
   whole machines cost against exact clocks (RoundingCost.vue, #1066), the
   options for each phase that does not fit, the calculation's assumptions, "What you already have"
-  (EarlierDone.vue, #1068) and, when adding a profile to a save, the carry-over panel.
+  (AlreadyHave.vue, #1068) and, when adding a profile to a save, the carry-over panel.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -18,7 +18,7 @@ import { powerView } from '../../../power.ts';
 import { minerWords } from '../../../mining.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
-import EarlierDone from './EarlierDone.vue';
+import AlreadyHave from './AlreadyHave.vue';
 import type { StoredSettings, StoredStage } from '../../../types/index.ts';
 import FuelVerdict from './FuelVerdict.vue';
 import RoundingCost from '../plan/RoundingCost.vue';
@@ -170,6 +170,6 @@ const view = computed(() =>
       clearly flagged. Profiles are calculated snapshots. Create another profile to compare
       different settings.
     </p>
-    <EarlierDone /><CarryPanel />
+    <AlreadyHave /><CarryPanel />
   </template>
 </template>

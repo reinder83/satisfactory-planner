@@ -18,6 +18,8 @@ export interface AdaFacts {
   // Review's "Everything before Phase N is done" (#1068): the start phase's label while it is ticked,
   // else empty.
   earlierDone?: string;
+  // Review's "Alternates you own" (#1068): how many are ticked.
+  ownedAlternates?: number;
   supplyDeclared: number;
   // 'calculated', or 'none' without an open save.
   kind: string;
@@ -613,6 +615,14 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.earlierDone,
     text: facts =>
       `Everything before ${facts.earlierDone} is recorded as done, so those milestone steps start ticked. Ticked, not deleted: untick one and it is back where it was.`,
+  },
+  {
+    id: 'owned-alternates',
+    on: ['wizard'],
+    tone: 'calm',
+    when: facts => (facts.ownedAlternates ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.ownedAlternates ?? 0, 'alternate')} recorded as owned, so ${facts.ownedAlternates === 1 ? 'its unlock step starts' : 'their unlock steps start'} ticked. The hard drives can go to the rest.`,
   },
   {
     id: 'resources',

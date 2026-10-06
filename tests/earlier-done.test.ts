@@ -10,8 +10,11 @@ import fs from 'node:fs';
 import { calculate } from '../planner.ts';
 import { adaRemarks } from '../public/ada.ts';
 import {
+  type AlternateHunt,
+  alternateHunts,
   earlierPhasesWords,
   milestoneOnlyPhases,
+  ownedAlternateKeys,
   phaseSteps,
   stepsBeforeStart,
 } from '../public/progression.ts';
@@ -130,4 +133,74 @@ test('ADA says the earlier steps start ticked, and that unticking brings one bac
   assert.match(remark.text, /untick one/);
   assert.ok(!adaRemarks({ view: 'wizard', earlierDone: '' }).some(r => r.id === 'earlier-done'));
   assert.ok(!adaRemarks({ view: 'wizard' }).some(r => r.id === 'earlier-done'));
+  const owned = adaRemarks({ view: 'wizard', ownedAlternates: 3 }).find(
+    line => line.id === 'owned-alternates',
+  );
+  assert.match(owned!.text, /^3 alternates recorded as owned, so their unlock steps start ticked/);
+  assert.match(
+    adaRemarks({ view: 'wizard', ownedAlternates: 1 }).find(line => line.id === 'owned-alternates')!
+      .text,
+    /^1 alternate recorded as owned, so its unlock step starts ticked/,
+  );
+  assert.ok(
+    !adaRemarks({ view: 'wizard', ownedAlternates: 0 }).some(r => r.id === 'owned-alternates'),
+  );
+});
+
+// Owned alternates (#1068): the wizard's "Alternates you own" ticks each owned recipe's unlock step,
+// and a phase's hard-drive hunt once every recipe it asks for is owned, so an owned recipe is no
+// longer a hunt. The rest stay open.
+const allAlternates = calculate({ phase: '3', recipes: 'all' });
+
+test('alternateHunts lists each phase hunt and the recipes its hard-drive steps ask for', () => {
+  const hunts = alternateHunts(allAlternates, data);
+  assert.ok(hunts.length, 'a plan with every alternate allowed hunts for some');
+  for (const { phase, hunt, recipes } of hunts) {
+    const ids = phaseSteps(allAlternates, { checks: {} }, data, phase).map(step => step.id);
+    assert.equal(hunt, 'hard-drives-' + phase);
+    assert.ok(ids.includes(hunt));
+    assert.deepEqual(
+      recipes.map(recipe => recipe.key),
+      ids.filter(id => id.startsWith('recipe-unlock-')),
+    );
+    assert.ok(recipes.every(recipe => !recipe.name.startsWith('Unlock ')));
+  }
+  assert.ok(
+    hunts.every(hunt => Number(hunt.phase) >= 3),
+    'none before the start phase',
+  );
+  assert.deepEqual(alternateHunts(calculate({ phase: '3', recipes: 'standard' }), data), []);
+});
+
+test('owned alternates start ticked, and a hunt only once nothing is left to hunt', () => {
+  const hunts = alternateHunts(allAlternates, data);
+  const [first, second] = hunts as [AlternateHunt, AlternateHunt];
+  const owned = new Set([...first.recipes.map(recipe => recipe.key), second.recipes[0]!.key]);
+  const keys = ownedAlternateKeys(hunts, owned);
+  assert.deepEqual(keys, [
+    ...first.recipes.map(recipe => recipe.key),
+    first.hunt,
+    second.recipes[0]!.key,
+  ]);
+  assert.deepEqual(ownedAlternateKeys(hunts, new Set()), []);
+  const { state } = newProfileState(allAlternates, null, null, undefined, [
+    ...keys,
+    'hard-drives-9',
+    'hard-drives-x',
+  ]);
+  for (const key of keys) assert.equal(state.checks[key], true, key);
+  assert.equal(state.checks['hard-drives-9'], undefined, 'no such phase');
+  assert.equal(state.checks['hard-drives-x'], undefined);
+  assert.equal(state.checks[second.hunt], undefined, 'the second phase still has recipes to hunt');
+  // The hunt step counts only the recipes still to find.
+  const steps = phaseSteps(allAlternates, state, data, second.phase);
+  const hunt = steps.find(step => step.id === second.hunt)!;
+  assert.match(
+    hunt.body,
+    new RegExp(`^${second.recipes.length - 1} selected recipe unlocks remain`),
+  );
+  assert.equal(
+    state.version,
+    newProfileState(allAlternates, null, null, undefined, []).state.version,
+  );
 });

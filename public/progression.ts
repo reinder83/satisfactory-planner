@@ -280,7 +280,7 @@ export const milestoneOnlyPhases = (
 
 // The check keys of every step the milestone-only phases before a calculated plan's start phase
 // list (#1068): what "Everything before Phase N is done" ticks, in the wizard's Review
-// (ui/wizard/EarlierDone.vue, sent as the new profile's `built` keys) and later on the build plan
+// (ui/wizard/AlreadyHave.vue, sent as the new profile's `built` keys) and later on the build plan
 // (ui/plan/MilestoneOnlyNotice.vue, a `checks` update). They are all `unlock-<id>` milestone and
 // MAM research steps, facts about the world, and ticking them only adds ticks. None for a plan
 // made for Phase 1 or one with a guide.
@@ -294,6 +294,44 @@ export function stepsBeforeStart(
     phaseSteps(plan, state, data, phase, memo).map(step => step.id),
   );
   return [...new Set(ids)];
+}
+
+// The alternate recipes a calculated plan's hard-drive steps ask for (#1068), per planned phase
+// (its start phase on, post-game left out: it repeats Phase 5): that phase's hunt step
+// (`hard-drives-<stage>`) and one entry per recipe it lists first (`recipe-unlock-<recipe>`, with
+// the recipe's name), as hardDriveTasks lists them. Read by the wizard's "What you already have"
+// (ui/wizard/AlreadyHave.vue), which offers each recipe as owned or still to hunt.
+export interface AlternateHunt {
+  phase: StageKey;
+  hunt: string;
+  recipes: { key: string; name: string }[];
+}
+export function alternateHunts(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
+  data: Progression,
+): AlternateHunt[] {
+  if (plan.guide) return [];
+  const memo: StepsMemo = {},
+    hunts: AlternateHunt[] = [];
+  for (const phase of ['1', '2', '3', '4', '5'] as const) {
+    if (!plan.stages[phase] || milestoneOnlyPhase(plan, phase)) continue;
+    const steps = phaseSteps(plan, { checks: {} }, data, phase, memo);
+    const recipes = steps
+      .filter(step => step.id.startsWith('recipe-unlock-'))
+      .map(step => ({ key: step.id, name: step.title.replace(/^Unlock /, '') }));
+    if (recipes.length) hunts.push({ phase, hunt: 'hard-drives-' + phase, recipes });
+  }
+  return hunts;
+}
+
+// The steps a new profile starts with ticked for the alternates it owns (#1068): each owned
+// recipe's unlock step (`owned` holds `recipe-unlock-<recipe>` keys), and a phase's hunt step when
+// every recipe that phase lists is owned, since nothing is left to hunt there. Only ticks.
+export function ownedAlternateKeys(hunts: AlternateHunt[], owned: ReadonlySet<string>): string[] {
+  return hunts.flatMap(({ hunt, recipes }) => {
+    const mine = recipes.filter(recipe => owned.has(recipe.key)).map(recipe => recipe.key);
+    return mine.length === recipes.length ? [...mine, hunt] : mine;
+  });
 }
 
 // "Phase 1", "Phases 1 and 2", "Phases 1, 2 and 3": the milestone-only phases in words (#1068).

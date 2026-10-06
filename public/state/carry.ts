@@ -131,17 +131,26 @@ export function pickedRecipeUnlocks(plan: RowsPlan | null | undefined): string[]
 // checklist keys those records already use, so nothing new is stored and the
 // answer is as reversible as any other tick.
 //
-// Only three families are accepted, all of them facts about the world rather
+// Only these families are accepted, all of them facts about the world rather
 // than about this plan: a production row this very plan builds, an early-base
-// step, and an unlock. Anything else is dropped rather than rejected, so an
-// older or newer client cannot fail a profile it is otherwise allowed to make.
+// step, and an unlock: a milestone or MAM node (`unlock-`), an alternate recipe the
+// player owns (`recipe-unlock-`, #1068) and a phase's hard-drive hunt once every
+// recipe it asks for is owned (`hard-drives-<phase>`), the same unlock records a
+// carried profile copies (carryPrefixes.unlocks). Anything else is dropped rather
+// than rejected, so an older or newer client cannot fail a profile it is
+// otherwise allowed to make.
 const builtKeys = (raw: unknown, plan: RowsPlan | null): string[] => {
   if (raw === undefined) return [];
   if (!Array.isArray(raw) || raw.length > 2000) fail('Invalid list of finished work.');
   const rows = planRows(plan);
   return [...new Set<unknown>(raw)].filter(
     (key): key is string =>
-      safeKey(key) && (rows.has(key) || key.startsWith('early-base-') || key.startsWith('unlock-')),
+      safeKey(key) &&
+      (rows.has(key) ||
+        key.startsWith('early-base-') ||
+        key.startsWith('unlock-') ||
+        key.startsWith('recipe-unlock-') ||
+        /^hard-drives-[1-5]$/.test(key)),
   );
 };
 // Build the starting progress for a newly created profile. Without a source

@@ -4274,7 +4274,7 @@ button.rail-tile:hover {
   display: none;
 }
 .carry-panel,
-.earlier-done {
+.already-have {
   margin: 18px 0 0;
 }
 .carry-panel .field {
@@ -4287,19 +4287,38 @@ button.rail-tile:hover {
   gap: 10px 18px;
 }
 .carry-list .check-row,
-.earlier-done .check-row {
+.already-have .check-row {
   align-items: flex-start;
   line-height: 1.45;
 }
 .carry-list .check-row b,
-.earlier-done .check-row b {
+.already-have .check-row b {
   font-family: var(--head);
   letter-spacing: 0.06em;
   color: var(--bright);
 }
 .carry-list small,
-.earlier-done small {
+.already-have small {
   font-size: 11px;
+}
+.owned-alternates {
+  margin: 14px 0 0;
+}
+.owned-alternates summary {
+  font-family: var(--head);
+  letter-spacing: 0.06em;
+  color: var(--bright);
+  cursor: pointer;
+  padding: 12px 0;
+}
+.owned-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 10px 18px;
+}
+.owned-list .check-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ── Help tooltips ─────────────────────────────────────── */
