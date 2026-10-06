@@ -4,6 +4,7 @@ import type { LpModel } from '../optimizer.ts';
 import type { PoolRecipe, Solved } from './types.ts';
 import { DATA, RAW } from './data.ts';
 import { extractionEquipment, stageGrid } from '../public/power.ts';
+import { miningMW } from '../public/preferences.ts';
 import type { PhaseContext, PhaseDemands, Solution } from './model.ts';
 
 // Reads the solution back into a stage (see run for its fields). `model` is the model `solved`
@@ -16,7 +17,7 @@ export function readStage(
   period: number,
   model: LpModel,
 ): Solved {
-  const { config, maximum, power } = context;
+  const { config, maximum, power, mining } = context;
   const { storage, delivery, drone, transport, matrix } = demands;
   const { augmenters, fueled, boost } = power;
   // Under `maximum` the delivery rates are whatever the goal achieved.
@@ -30,7 +31,7 @@ export function readStage(
       .map(([item]): [string, number] => [item, solved.values['supply:' + item] || 0])
       .filter(([, rate]) => rate > 0.002),
   );
-  const raw = Object.fromEntries(RAW.map(item => [item, solved.values['raw:' + item] || 0]));
+  const raw = Object.fromEntries(RAW.map(item => [item, rawDraw(solved, item)]));
   const { peakMW, generationMW, availableMW, requiredMW, additionalHeadroomMW, grid } = stagePower(
     context,
     rows,
@@ -68,7 +69,17 @@ export function readStage(
     conversions: rows
       .filter(row => Object.keys(row.outputs).some(item => RAW.includes(item) && item !== 'Water'))
       .map(row => row.name),
+    // The phase's miner, belts, pipes, budgets and nodes (#1065); absent without mining per phase.
+    ...(mining ? { mining } : {}),
   };
+}
+// What the phase draws of a raw resource: its one source, or with mining per phase (#1065) its
+// node kinds' sources ('raw:<item>@<kind>', addNodeKinds in model.ts) together.
+function rawDraw(solved: Solution, item: string): number {
+  let total = 0;
+  for (const [name, value] of Object.entries(solved.values))
+    if (name === 'raw:' + item || name.startsWith('raw:' + item + '@')) total += value || 0;
+  return total;
 }
 // Every Space Elevator part the lines make beyond their other uses goes to the elevator (#1062):
 // a part's delivery rate is all its central balance has left once the lines, protected storage,
@@ -194,7 +205,7 @@ export function buildOrder(rows: CalcRow[]): CalcRow[] {
 // additionalHeadroomMW), and `grid`, which the pages read (stageGrid in public/power.ts). Shared
 // by readStage and the storage-only lines added after the solve (planner/stock.ts, #1061).
 export function stagePower(
-  { config, power }: Pick<PhaseContext, 'config' | 'power'>,
+  { config, power, mining }: Pick<PhaseContext, 'config' | 'power' | 'mining'>,
   rows: CalcRow[],
   raw: ItemRates,
 ) {
@@ -206,7 +217,10 @@ export function stagePower(
     raw,
     powerFactor: config.powerFactor,
     utilityPercent: config.utilityPercent,
-    extractionAt: extractionEquipment(config),
+    // With mining per phase (#1065), the phase's miner and clock, and each resource's MW at the
+    // nodes its draw taps; otherwise the survey's miner and clock on normal nodes.
+    extractionAt: mining ? { ...mining.miner } : extractionEquipment(config),
+    ...(mining ? { extractionMW: miningMW(raw, mining) } : {}),
     boost,
     spareMW: config.availablePowerGW * 1000,
     augmenterMW: spareMW - config.availablePowerGW * 1000,

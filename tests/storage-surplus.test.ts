@@ -306,3 +306,28 @@ test('a plan with storage-only lines exports and imports unchanged (#1061)', () 
     );
   }
 });
+
+test('with mining per phase, storage-only lines stay within the phase’s budgets and its miner’s power (#1061, #1065)', () => {
+  const plan = calculate({
+    wholeMachines: true,
+    storage: 'all',
+    collectables: true,
+    storageFromSurplus: true,
+    phaseMining: true,
+    goal: 'maximum',
+    limitsConfirmed: true,
+  });
+  let stocked = 0;
+  for (const phase of STAGES) {
+    const stage = plan.stages[phase];
+    if (!stage.feasible || !stage.mining) continue;
+    stocked += (stage.rows || []).filter(isStock).length;
+    for (const [item, rate] of Object.entries(stage.raw || {}))
+      assert.ok(
+        rate <= (stage.mining.budgets[item] ?? 0) + 0.01,
+        `Phase ${phase}: ${item} draws ${rate}/min of a ${stage.mining.budgets[item]}/min budget`,
+      );
+    assert.deepEqual(stage.grid?.extractionAt, { ...stage.mining.miner }, `Phase ${phase} miner`);
+  }
+  assert.ok(stocked > 0, 'the plan has storage-only lines');
+});

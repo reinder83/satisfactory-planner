@@ -49,6 +49,7 @@ import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
+import { minerWords, stageMiningAdvice } from '../mining.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
@@ -152,6 +153,27 @@ function onSiteDroppedFacts(
 function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
   const water = calcStage()?.raw?.Water ?? 0;
   return water > 0 ? { waterExtracted: num(water) } : {};
+}
+
+// The open phase's mining (#1065): its miner, the nodes its draw taps and their MW, from the
+// advice the Resources page and the build plan give (stageMiningAdvice); none without mining per
+// phase or anything to mine.
+function miningFacts(): Pick<AdaFacts, 'mining'> {
+  const stagePlan = calcStage(),
+    resources = stageMiningAdvice(stagePlan);
+  if (!stagePlan?.mining || !resources.length) return {};
+  const nodes = resources.reduce((sum, entry) => sum + entry.advice.nodes, 0),
+    satellites = resources.reduce((sum, entry) => sum + entry.advice.satellites, 0);
+  return {
+    mining: {
+      miner: minerWords(stagePlan.mining.miner),
+      nodes: listNames([
+        ...(nodes ? [plural(nodes, 'node')] : []),
+        ...(satellites ? [plural(satellites, 'well satellite')] : []),
+      ]),
+      mw: power(resources.reduce((sum, entry) => sum + entry.advice.mw, 0)),
+    },
+  };
 }
 
 // The generators the phase before built that the open phase keeps (#1064, the stage's grid), as
@@ -298,6 +320,7 @@ function adaFacts(): AdaFacts {
     ...exactClockFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),
+    ...miningFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,
     groups: factoryGroupsState().groups.length,
@@ -311,12 +334,15 @@ function adaFacts(): AdaFacts {
       groupsReorder(calcStage()?.rows || [], state.factoryGroups),
     feasible: calculated ? storedStage.feasible !== false : true,
     reason: calculated ? storedStage.reason || '' : '',
-    // Raw resources this stage uses beyond the profile's resource limits.
+    // Raw resources this stage uses beyond its budgets: the phase's own with mining per phase
+    // (#1065), else the profile's resource limits.
     short: calculated
       ? (workspace.catalog?.raw || []).filter(
           resource =>
             (storedStage.raw?.[resource] || 0) >
-            (calculated?.settings.limits?.[resource] ?? Infinity),
+            (storedStage.mining?.budgets[resource] ??
+              calculated?.settings.limits?.[resource] ??
+              Infinity),
         )
       : [],
     // A shortfall is only measured with a calculated profile, so `grid` is there below.

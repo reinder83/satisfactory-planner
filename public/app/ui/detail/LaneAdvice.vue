@@ -1,13 +1,14 @@
 <!--
   "Belts & pipes" in a factory dialog: for every input of the flow model, how many lanes of
-  the best available mark it needs, how many machines one lane feeds (manifold rows), and
+  the best available mark it needs (and, until its milestone is ticked, which one it needs and the
+  mark to plan with until then, #1065), how many machines one lane feeds (manifold rows), and
   whether the last lane's spare capacity could also carry another factory's demand for the
   same item. Draws nothing without inputs.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { bestLane } from '../../flow.ts';
+import { bestLane, laneUnlockNote } from '../../flow.ts';
 import { phaseLabel } from '../../session.ts';
 import ItemIcon from '../ItemIcon.vue';
 import { factoryLink } from '../actions.ts';
@@ -56,6 +57,8 @@ const advice = computed(() => {
       (belts.next?.milestone
         ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`
         : ''),
+    // What the marks still need (#1065): their milestones, until ticked.
+    unlock: [laneUnlockNote(belts), laneUnlockNote(pipes)].filter(Boolean).join(' '),
     rows: model.inputs.map(input => {
       // perMachine: what one machine at 100% draws; fed: how many such machines one full lane
       // feeds.
@@ -117,8 +120,7 @@ const advice = computed(() => {
   <template v-if="advice">
     <h3>Belts &amp; pipes</h3>
     <p class="small muted">
-      {{ advice.intro }} If a milestone is not unlocked in your save yet, plan with the earlier
-      mark.
+      {{ advice.intro }}<template v-if="advice.unlock"> {{ advice.unlock }}</template>
     </p>
     <div class="logi">
       <div v-for="row in advice.rows" :key="row.name" class="logi-row">

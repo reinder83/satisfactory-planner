@@ -113,6 +113,11 @@ export interface CurrentSettings {
   // Absent unless a recalculation the user started asked for it (the progress state's
   // `exactClocks`, saved from a line's dialog), so a plan without it calculates exactly as before.
   exactClocks?: ExactClocks;
+  // Mining and belts per phase (#1065): each phase plans with the miner, clock, belts and pipes
+  // its HUB tiers unlock, and budgets that follow from them (phaseMining in
+  // public/preferences/mining.ts). Set by the wizard for new plans; absent from every plan made
+  // before it, which keep the same budgets in every phase.
+  phaseMining?: boolean;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;
@@ -320,6 +325,29 @@ export interface StageGrid {
   availableMW: number;
 }
 
+// One kind of node a phase draws a raw resource from (#1065, phaseMining in
+// public/preferences/mining.ts): pure, normal or impure nodes, or resource-well satellites of
+// that purity, with how many the budget covers (fractional when the entered budget is below what
+// the counted nodes give), one node's output per minute at 100%, what the belt or pipe it feeds
+// carries, and its machine's MW at 100% (a pressurizer's share per satellite).
+export interface MiningSource {
+  kind: 'pure' | 'normal' | 'impure' | 'well-pure' | 'well-normal' | 'well-impure';
+  machine: string;
+  nodes: number;
+  base: number;
+  cap: number;
+  machineMW: number;
+}
+// A phase's mining (#1065): its miner mark and clock (1 = 100%), the best belt and pipe it
+// builds, its budget per raw resource and the node kinds behind each (none for Water).
+export interface StageMining {
+  miner: { mark: number; clock: number };
+  belt: { mark: string; cap: number };
+  pipe: { mark: string; cap: number };
+  budgets: ItemRates;
+  sources: Record<string, MiningSource[]>;
+}
+
 // A resource a failed phase needs more of.
 export interface Shortfall {
   name: string;
@@ -405,6 +433,10 @@ export interface StageResult {
   // withOverflow in planner/on-site.ts): { group id: items }. Absent otherwise and from older
   // plans.
   onSiteOverflow?: Record<string, string[]>;
+  // Mining and belts per phase (#1065): the phase's miner, belts, pipes, budgets and nodes, on a
+  // plan with settings.phaseMining. Absent from every other plan, whose phases all have the
+  // settings' budgets.
+  mining?: StageMining;
   // A failed phase is a draft: why, what is short, the hours it would fit in, and whether
   // only whole machines break it.
   reason?: string;

@@ -78,6 +78,10 @@ export interface AdaFacts {
   // The Water the open phase extracts, m³/min as the pages write it (the stage's raw Water,
   // #1024), absent for none; each line taking it says how many Water Extractors to build.
   waterExtracted?: string;
+  // Mining and belts per phase (#1065): the open phase's miner and clock ("Miner Mk.2 at 100%"),
+  // the nodes and well satellites its draw taps and their MW, as the pages write them; absent
+  // for a plan without mining per phase or a phase that mines nothing.
+  mining?: { miner: string; nodes: string; mw: string };
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -463,6 +467,14 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.waterExtracted,
     text: facts =>
       `${facts.phaseLabel} extracts ${facts.waterExtracted} m³ of Water a minute. Each line that takes it says how many Water Extractors to build, at 100% or with Power Shards, with the clocks adding up to exactly what it needs. A full pipe stops the pumps, and I would rather it did not.`,
+  },
+  {
+    id: 'phase-mining',
+    on: ['resources', 'plan'],
+    tone: 'calm',
+    when: facts => !!facts.mining,
+    text: facts =>
+      `${facts.phaseLabel} mines with ${facts.mining!.miner}: ${facts.mining!.nodes} for ${facts.mining!.mw}, best nodes first. The budgets follow what this phase can build and carry, not what the map holds. Faster miners arrive with milestones, not with optimism.`,
   },
   {
     id: 'on-site-pending',

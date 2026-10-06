@@ -467,6 +467,19 @@ test("ADA says how much Water the phase extracts and points at the lines' extrac
   assert.ok(!ids(facts({ view: 'factories' })).includes('water-extractors'), 'absent means none');
 });
 
+test("ADA names the phase's miner and the nodes its draw taps (#1065)", () => {
+  const mining = { miner: 'Miner Mk.2 at 100%', nodes: '13 nodes', mw: '195 MW' };
+  for (const view of ['resources', 'plan']) {
+    const line = adaRemarks(facts({ view, mining })).find(r => r.id === 'phase-mining')!;
+    assert.equal(line.tone, 'calm');
+    assert.match(
+      line.text,
+      /^Phase 3 mines with Miner Mk\.2 at 100%: 13 nodes for 195 MW, best nodes first\. The budgets follow what this phase can build and carry/,
+    );
+  }
+  assert.ok(!ids(facts({ view: 'resources' })).includes('phase-mining'), 'absent means none');
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

@@ -148,6 +148,9 @@ function freshSettings(): WizardSettings {
     wholeMachines: true,
     limitsConfirmed: false,
     limits: { ...workspace.catalog.limits },
+    // Mining and belts per phase (#1065): a new plan's budgets follow each phase's miners and
+    // belts. A draft from an existing profile keeps that profile's choice (absent: off).
+    phaseMining: true,
   };
   settings.storageOverrides = { Concrete: GUIDED_TOPUP_RATE };
   return settings;
@@ -343,7 +346,10 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     settings.roundRates = data.has('roundRates');
     settings.wholeMachines = data.has('wholeMachines');
   }
-  if (wizardDraft.step === 4) settings.limitsConfirmed = data.has('limitsConfirmed');
+  if (wizardDraft.step === 4) {
+    settings.limitsConfirmed = data.has('limitsConfirmed');
+    settings.phaseMining = data.has('phaseMining');
+  }
 }
 
 // Changing purity or distribution on step 1 replaces the budgets with that

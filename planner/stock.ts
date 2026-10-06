@@ -23,11 +23,13 @@ import type { PoolRecipe, Solved } from './types.ts';
 import { RAW, exactBalance } from './data.ts';
 import { generators, recipePool } from './recipes.ts';
 import {
+  phaseBudget,
   phaseContext,
   reachableItems,
   satisfiesModel,
   stockedFromSurplus,
   storageDemand,
+  type PhaseContext,
 } from './model.ts';
 import { buildOrder, stagePower, stageRows, stageSurplus } from './stage.ts';
 
@@ -227,7 +229,8 @@ function stockModel(
     variables: {},
     bounds: {},
   };
-  const { boost, utilityFactor } = phaseContext(config, phase, {}).power;
+  const context = phaseContext(config, phase, {});
+  const { boost, utilityFactor } = context.power;
   const balance = (item: string) =>
     (model.constraints['item:' + item] ??= exactBalance(item) ? { equal: 0 } : { min: 0 });
   if (phase >= 2) addStockPower(model, stage, boost, creditMW, balance);
@@ -249,7 +252,7 @@ function stockModel(
     }
     model.variables[recipe.id] = coefficients;
   }
-  addStockSources(model, config, stage, fromSurplus);
+  addStockSources(model, context, stage, fromSurplus);
   // Each container with no surplus: up to its rate, worth FILL_WORTH when full.
   for (const [item, rate] of Object.entries(missing)) {
     balance(item);
@@ -291,10 +294,11 @@ function addStockPower(
 
 // What the storage-only lines may draw on, almost free, for the items their balances have: the
 // plan's surplus beyond what storage takes of it, the raw budgets it leaves (with their extraction
-// power) and the existing supply it leaves.
+// power) and the existing supply it leaves. With mining per phase (#1065), the budgets are the
+// phase's and the extraction power its miner's.
 function addStockSources(
   model: LpModel,
-  config: CurrentSettings,
+  context: Pick<PhaseContext, 'config' | 'mining'>,
   stage: Solved,
   fromSurplus: ItemRates,
 ) {
@@ -305,9 +309,10 @@ function addStockSources(
   };
   for (const [item, rate] of Object.entries(stage.surplus))
     source('spare:' + item, item, rate - (fromSurplus[item] || 0));
-  const equipment = extractionEquipment(config);
+  const { config, mining } = context;
+  const equipment = mining ? { ...mining.miner } : extractionEquipment(config);
   for (const item of RAW)
-    source('raw:' + item, item, (config.limits[item] ?? 0) - (stage.raw[item] || 0), {
+    source('raw:' + item, item, (phaseBudget(context, item) ?? 0) - (stage.raw[item] || 0), {
       power: extractionMWPerUnit(item, equipment) * config.powerFactor,
     });
   for (const [item, rate] of Object.entries(config.existingSupply))
