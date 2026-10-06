@@ -2148,8 +2148,10 @@ tr.muted td:first-child {
 .power-parts .btn {
   margin-left: 4px;
 }
+/* At least two short lines, so a phone's narrow table does not stack it a word a line. */
 .review-allowance {
   display: block;
+  min-width: 22ch;
   color: var(--dim);
 }
 
