@@ -14,7 +14,8 @@ type FitOptions = Pick<RunOptions, 'maximum' | 'conversion' | 'ignoreLimits' | '
 // no amplification) chooses the recipe network; then the integer fit re-solves over only that
 // network (`recipeIds`), which keeps the integer search small enough for the solver's search
 // limit (SEARCH_LIMITS in optimizer.ts). Hence the warning that the result is not a global
-// mixed-recipe integer optimum.
+// mixed-recipe integer optimum. A capped re-solve whose fit over that network is proven infeasible
+// tries once more with the rows the caps allow (cappedRetry, #1094).
 export function twoStepFit(context: PhaseContext): RunResult {
   const { config, phase, maximum, conversion, ignoreLimits, caps } = context;
   const sharedOptions: FitOptions = { maximum, conversion, ignoreLimits, caps };
@@ -40,8 +41,10 @@ export function twoStepFit(context: PhaseContext): RunResult {
   for (const variant of variants) {
     const credited = integerFit(variant, phase, { ...sharedOptions, recipeIds: ids, baseline });
     if (credited.feasible) return marked(variant, credited);
+    const built = cappedRetry(variant, phase, sharedOptions, ids, baseline, credited);
+    if (built?.feasible) return marked(variant, built);
     // The amplified fit's failure is the one calculate() explains when nothing fits.
-    fit ??= credited;
+    fit ??= built ?? credited;
     const widened = supply?.widened(variant);
     if (widened?.feasible) return marked(variant, widened);
   }
@@ -83,6 +86,38 @@ function integerFit(variant: CurrentSettings, phase: number, options: RunOptions
     return result;
   const fractional = run(variant, phase, { ...options, fractionalNuclear: true });
   return fractional.feasible ? { ...fractional, nuclearFractional: true } : result;
+}
+// A capped re-solve (fullSpeed, and resolveEarlierPhases under phaseTime 'final') caps each recipe
+// at the machines the stage or a later phase already builds. A looser cap can make the exact LP
+// swap a recipe the stage builds for another (Caterium Wire for Fused Wire), and the integer fit
+// over only that network can then be proven infeasible, which the caller reads as "this phase
+// cannot finish sooner" (#1094). So when the fit over the exact LP's network is proven infeasible
+// under caps, fit again over that network widened with every recipe the caps allow, which holds
+// the rows the stage already builds, amplified twins included, so the stage's own plan lies in it.
+// A fit that worked, or whose search stopped, is left as it was, and so is every solve without
+// caps. Returns the retry's result, or null when there is nothing to retry.
+function cappedRetry(
+  variant: CurrentSettings,
+  phase: number,
+  options: FitOptions,
+  ids: Set<string>,
+  baseline: Record<string, number>,
+  failed: RunResult,
+): RunResult | null {
+  const { caps } = options;
+  if (!caps || stoppedSearch(failed)) return null;
+  const allowed = Object.keys(caps).filter(id => caps[id]! > 0);
+  const recipeOf = (id: string) => (id.startsWith('amp:') ? id.slice(4) : id);
+  const recipeIds = new Set([...ids, ...allowed.map(recipeOf)]);
+  // An amplified row the caps allow gets its twin offered, bounded by the caps rather than by an
+  // exact line it may not have in this network (see addRecipes in model.ts).
+  const twins = Object.fromEntries(
+    allowed
+      .filter(id => id.startsWith('amp:') && baseline[recipeOf(id)] === undefined)
+      .map(id => [recipeOf(id), 2 * caps[id]!]),
+  );
+  if (recipeIds.size === ids.size && !Object.keys(twins).length) return null;
+  return integerFit(variant, phase, { ...options, recipeIds, baseline: { ...baseline, ...twins } });
 }
 // Crediting production you already run narrows the recipe network the exact solve picks, and a
 // narrower network has less room to round up to whole machines. Widen it with the recipes this
