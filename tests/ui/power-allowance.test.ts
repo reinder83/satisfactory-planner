@@ -228,9 +228,10 @@ test("the Resources page's link opens Preferences for a new profile from this pr
   assert.equal(wizard?.step, 2);
   assert.equal(wizard?.saveId, 's');
   assert.equal(wizard?.carryFrom, 'original', 'progress is offered from this profile');
-  assert.deepEqual(
-    wizard?.settings,
-    workspace.saves[0]!.profiles.find(profile => profile.id === 'original')!.settings,
-  );
+  // The profile's settings, plus storage from surplus, which every wizard draft sets (#1061).
+  assert.deepEqual(wizard?.settings, {
+    ...workspace.saves[0]!.profiles.find(profile => profile.id === 'original')!.settings,
+    storageFromSurplus: true,
+  });
   assert.ok($('#wizard-form [name="utilityPercent"]'));
 });
