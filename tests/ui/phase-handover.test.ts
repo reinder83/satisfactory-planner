@@ -177,3 +177,21 @@ test('a stored plan from before #1069 opens as it was: a migrated profile has no
   assert.ok(!$$('.task').some(task => /Running since/.test(task.textContent!)));
   assert.deepEqual(state.checks, { 'calc-3-x': true });
 });
+
+test('a finished Post Phase 5 checklist offers no next phase', async () => {
+  const stored = plan();
+  // Every step of `shown` ticked.
+  const ticked = async (shown: Phase) => {
+    await show(stored, shown, {});
+    const ids = $$<HTMLInputElement>('[data-check]').map(box => box.dataset.check!);
+    await show(stored, shown, { checks: Object.fromEntries(ids.map(id => [id, true])) });
+    return text($('[data-phase-complete]'));
+  };
+  const post = await ticked('post');
+  assert.match(
+    post,
+    /Nothing left to build Post Phase 5 has no next phase: keep these lines running\./,
+  );
+  assert.doesNotMatch(post, /Ready for the next phase/);
+  assert.match(await ticked('5'), /Ready for the next phase/);
+});
