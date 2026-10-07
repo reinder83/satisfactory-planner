@@ -139,10 +139,12 @@ export interface SettingChange {
 // A field the old plan does not have is left out: it is a setting added since that plan was
 // made, which the planner fills with its default, not a change the user made.
 export function settingsChanges(
-  before: NameSettings,
-  after: NameSettings,
+  oldSettings: object,
+  newSettings: object,
   goals: { id: string; name: string }[],
 ): { changes: SettingChange[]; others: number } {
+  const before = oldSettings as NameSettings,
+    after = newSettings as NameSettings;
   const changed = (key: string) =>
     before[key] !== undefined && after[key] !== undefined && differs(before[key], after[key]);
   const goalName = (id: unknown) => goals.find(goal => goal.id === id)?.name ?? String(id);

@@ -18,11 +18,7 @@ const view = computed(() =>
       edit = wizardDraft.edit,
       preview = wizardDraft.preview;
     if (!edit || !preview) return null;
-    const settings = settingsChanges(
-      edit.plan.settings as unknown as Record<string, unknown>,
-      preview.settings as unknown as Record<string, unknown>,
-      workspace.catalog.goals,
-    );
+    const settings = settingsChanges(edit.plan.settings, preview.settings, workspace.catalog.goals);
     return {
       settings: settings.changes,
       others: settings.others ? plural(settings.others, 'other setting') + ' changed' : '',
