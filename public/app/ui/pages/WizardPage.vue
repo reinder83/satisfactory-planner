@@ -1,6 +1,6 @@
 <!--
-  #wizard for the five steps ("All settings"), and for the guided start's Review once its
-  questions are answered: step tabs, the current step in #wizard-form (ui/wizard/), and Back /
+  #wizard for the five steps ("All settings"; the guided start draws its own Review, GuidedPage.vue,
+  #1072): step tabs, the current step in #wizard-form (ui/wizard/), and Back /
   Cancel, "← Guided start" and the primary button. Without a draft it offers to create a save.
   The steps keep the legacy readers: their inputs are named as before and not bound to the
   draft, so readWizard (wizard/wizard.ts) reads the form exactly as it did, and moving between
@@ -67,7 +67,11 @@ watch(() => page.value.draft && page.value.step, focusNewStep, { flush: 'post' }
 
 // Settings whose answer changes what the step shows: read the step and redraw.
 function changed(event: Event) {
-  if (['recipes', 'mainPower', 'pureIngots'].includes((event.target as HTMLInputElement).name)) {
+  if (
+    ['recipes', 'mainPower', 'pureIngots', 'droneFuel', 'nuclear'].includes(
+      (event.target as HTMLInputElement).name,
+    )
+  ) {
     readWizard(event.currentTarget as HTMLFormElement);
     render();
   }

@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { guidedQuestions, storageOptions } from '../../../preferences.ts';
+import { guidedQuestions, powerOptions, storageOptions } from '../../../preferences.ts';
 import { num } from '../../format.ts';
 import { draft, workspace } from '../../session.ts';
 import { legacy } from '../bridge.ts';
@@ -44,6 +44,17 @@ const view = computed(() =>
           (storageOptions.find(([value]) => value === settings.storage) || [, settings.storage])[1],
         ],
         ['Machines', settings.wholeMachines === false ? 'Exact ratios' : 'Whole machines'],
+        // The power question's settings (#1072): the main power and the spare power.
+        [
+          'Power',
+          (powerOptions.find(([value]) => value === (settings.mainPower || 'auto')) || [
+            ,
+            settings.mainPower,
+          ])[1] +
+            (settings.availablePowerGW
+              ? `, ${num(settings.availablePowerGW * 1000)} MW spare`
+              : ''),
+        ],
       ],
     };
   }),

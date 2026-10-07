@@ -22,7 +22,7 @@ A profile you leave unnamed is named after what it is: its goal, what differs fr
 
 ### The guided start
 
-A new save opens on a short illustrated sequence rather than the full settings form. Five questions, each a picture and a sentence: which phase you are on, what the plan should do for you, which recipes it may use, what it should keep stocked, and how exact the build should be. Everything else keeps a default that was chosen by measuring what it actually changes — eleven of the settings form's controls, including the world seed, SAM conversion, somersloops held and every resource budget, do not move a default plan at all.
+A new save opens on a short illustrated sequence rather than the full settings form. Six questions, each a picture and a sentence: which phase you are on, what the plan should do for you, which recipes it may use, what it should keep stocked, how exact the build should be, and how it should power your factory (coal, fuel or the planner's choice, with the spare power you already have). The questions speak about your start phase: the stock question quotes the extra buildings from that phase on, and a material your phase cannot make yet says from which phase it is stocked. Everything else keeps a default that was chosen by measuring what it actually changes — eleven of the settings form's controls, including the world seed, SAM conversion, somersloops held and every resource budget, do not move a default plan at all.
 
 Two of the questions are about your world rather than about the plan. On Phase 1 you are asked whether the HUB tutorial is behind you; if it is, its steps start ticked.
 
@@ -30,7 +30,9 @@ From Phase 2 on you are asked **what you are already producing**, as a rate: sea
 
 One assumption comes with it, the same one that already applies to spare power: an existing line's ore and electricity are already spent in your world, so enter your resource budgets and spare power net of it. Review states this every time it credits something, and names what it credited.
 
-**All settings →** is on every screen and opens the five-step wizard below at the step that owns the same question, keeping every answer; **← Guided start** comes back the same way. Picking _I will choose them myself_ for recipes, or _as fast as the map allows_ for the goal, hands over to the step that can answer it properly.
+**All settings →** is on every screen and opens the five-step wizard below at the step that owns the same question, keeping every answer; **← Guided start** comes back the same way. Picking _I will choose them myself_ for recipes shows the recipe list on the same screen, and the questions go on after it; _as fast as the map allows_ for the goal hands over to the Resources step, where you confirm your budgets.
+
+The last step is **Review**: the calculated plan, phase by phase, with **Create profile**. **Back** returns to the questions, and **All settings →** shows the same Review in the five-step wizard, where every setting is a tab away.
 
 Adding a profile to a save you already play starts from that save's settings instead, and asks only **what is different this time?**
 

@@ -53,6 +53,34 @@ export const guidedTopupItems: string[] = [
   'Steel Pipe',
   'Cable',
 ];
+// The first phase whose standard recipes make a top-up item, where that is not Phase 1 (#1072):
+// a profile started earlier still plans that phase, so its chip stays, marked "from Phase 2".
+// Kept in step with the recipe data by a test.
+export const guidedTopupFrom: Record<string, number> = { 'Steel Beam': 2, 'Steel Pipe': 2 };
+// The buildings each stock choice adds in Phases 1-5, measured as the header says: storage-only
+// lines, all optional. The stock question quotes them from the profile's start phase on (#1072).
+const STOCK_BUILDINGS: Record<string, number[]> = {
+  construction: [9, 16, 9, 36, 4],
+  all: [11, 32, 57, 83, 134],
+};
+// "9 more buildings in Phase 1, 16 in Phase 2, 9 in Phase 3" for up to three phases from `phase`
+// on, so a profile is never quoted a phase before the one it starts in.
+function stockBuildings(value: string, phase: string): string {
+  const from = Math.min(Math.max(Number(phase) || 1, 1), 5);
+  return (STOCK_BUILDINGS[value] || [])
+    .map((count, i) => ({ count, phase: i + 1 }))
+    .filter(entry => entry.phase >= from)
+    .slice(0, 3)
+    .map((entry, i) => `${entry.count}${i ? '' : ' more buildings'} in Phase ${entry.phase}`)
+    .join(', ');
+}
+// What the power question says about the phases before the plan's generator choice applies:
+// Phase 1 runs on hand-fed biomass and Phase 2 on coal whatever is chosen (generators in
+// planner/recipes.ts), so a profile starting there is told when its choice begins to count.
+const POWER_LEAD: Record<string, string> = {
+  '1': 'Phase 1 runs on biomass burners you feed by hand, and Phase 2 on Coal Generators. From Phase 3 the plan builds the generators you choose here.',
+  '2': 'Phase 2 runs on Coal Generators. From Phase 3 the plan builds the generators you choose here.',
+};
 // The Space Elevator parts each phase delivers, for the phase cards' artwork.
 // Kept in step with the planner's DELIVERIES by a test; the icons are already
 // bundled and attributed in icons/sources.json, so the guided start adds no new
@@ -111,7 +139,8 @@ export const guidedQuestions: GuidedQuestion[] = [
       },
       {
         value: 'balanced',
-        label: 'Steady progress',
+        // The goal's own name, as the Goals step and the profile name give it (#1072).
+        label: 'Balanced progression',
         detail: 'About 8 hours a phase. A practical middle, and the usual starting point.',
         glyph: 'balanced',
         set: { goal: 'balanced' },
@@ -158,11 +187,11 @@ export const guidedQuestions: GuidedQuestion[] = [
       {
         value: 'custom',
         label: 'I will choose them myself',
+        // Picked below the cards (AltPicker.vue), so the questions go on after it (#1072).
         detail:
-          'Pick recipe by recipe in All settings. Useful when you know which drives you have unlocked.',
+          'Tick them recipe by recipe below. Useful when you know which drives you have unlocked.',
         glyph: 'custom',
         set: { recipes: 'custom' },
-        handoff: 2,
       },
     ],
   },
@@ -172,6 +201,20 @@ export const guidedQuestions: GuidedQuestion[] = [
     short: 'Stocked for you',
     title: 'What should the factory keep stocked for you?',
     lead: 'Beyond the Space Elevator, the plan can keep containers filled for your own building: from what it makes beyond its needs first, with small optional lines only where nothing is spare.',
+    // The measured buildings, quoted from the profile's start phase on (#1072).
+    phased(phase) {
+      return {
+        ...this,
+        options: this.options!.map(option =>
+          STOCK_BUILDINGS[option.value]
+            ? {
+                ...option,
+                detail: `${option.detail} On a default plan: ${stockBuildings(option.value, phase)}.`,
+              }
+            : option,
+        ),
+      };
+    },
     options: [
       {
         value: 'none',
@@ -185,7 +228,7 @@ export const guidedQuestions: GuidedQuestion[] = [
         value: 'construction',
         label: 'My building materials',
         detail:
-          'Plates, rods, concrete, wire, cable, beams, pipes, frames, plastic and rubber each get a container. The plan’s surplus fills them first; an item with no surplus gets a small storage-only line, optional and built last. On a default plan: 9 more buildings in Phase 1, 16 in Phase 2, 9 in Phase 3.',
+          'Plates, rods, concrete, wire, cable, beams, pipes, frames, plastic and rubber each get a container once the plan makes them. The plan’s surplus fills them first; an item with no surplus gets a small storage-only line, optional and built last.',
         glyph: 'stock-build',
         set: { storage: 'construction', collectables: false },
       },
@@ -193,7 +236,7 @@ export const guidedQuestions: GuidedQuestion[] = [
         value: 'all',
         label: 'Everything it can automate',
         detail:
-          'A container for every automatable solid, filled from surplus first. The biggest storage room, and the most storage-only lines: on a default plan 11 more buildings in Phase 1, 32 in Phase 2, 57 in Phase 3, all optional.',
+          'A container for every automatable solid, filled from surplus first. The biggest storage room, and the most storage-only lines, all optional.',
         glyph: 'stock-all',
         set: { storage: 'all', collectables: true },
       },
@@ -221,6 +264,44 @@ export const guidedQuestions: GuidedQuestion[] = [
           'Far fewer machines and less power, but the last machine of each line runs at an odd clock speed you set by hand.',
         glyph: 'precise',
         set: { wholeMachines: false },
+      },
+    ],
+  },
+  // The preferred main power (settings.mainPower, as All settings step 2 writes it) and, in a box
+  // under the cards, the spare power you already have (availablePowerGW, step 1's "Spare existing
+  // power"), #1072. Nothing new is stored; the other main power choices stay in All settings.
+  {
+    id: 'power',
+    step: 2,
+    short: 'Power',
+    title: 'How should the plan power your factory?',
+    lead: 'The plan builds the generators each phase needs, burning what you choose here.',
+    phased(phase) {
+      return POWER_LEAD[phase] ? { ...this, lead: POWER_LEAD[phase] } : this;
+    },
+    options: [
+      {
+        value: 'auto',
+        label: 'Let the planner choose',
+        detail: 'It picks the generators for each phase from what that phase unlocks.',
+        glyph: 'power',
+        set: { mainPower: 'auto' },
+      },
+      {
+        value: 'coal',
+        label: 'Coal',
+        detail:
+          'Coal Generators in every phase. Simple to feed, but at 75 MW each the later phases need a great many.',
+        items: ['Coal Generator', 'Coal'],
+        set: { mainPower: 'coal' },
+      },
+      {
+        value: 'fuel',
+        label: 'Fuel',
+        detail:
+          'Fuel Generators burning Fuel from your oil lines, 250 MW each. Takes a refinery chain to feed.',
+        items: ['Fuel Generator', 'Fuel'],
+        set: { mainPower: 'fuel' },
       },
     ],
   },

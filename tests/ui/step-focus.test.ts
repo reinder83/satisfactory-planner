@@ -136,11 +136,12 @@ test('Continue and Back in the guided start focus the new question’s heading',
   await pressContinue();
   assert.equal(wizard!.guidedStep, 2);
   assert.ok(onStepHeading(), 'Continue: ' + describeFocus());
-  assert.equal(headingName(), `Step 2 of ${flow.length}: ${guidedFlow()[1]!.title}`);
+  // The questions, then Review as the flow's last step (#1072).
+  assert.equal(headingName(), `Step 2 of ${flow.length + 1}: ${guidedFlow()[1]!.title}`);
   await press('[data-guided-back]');
   assert.equal(wizard!.guidedStep, 1);
   assert.ok(onStepHeading(), 'Back: ' + describeFocus());
-  assert.equal(headingName(), `Step 1 of ${guidedFlow().length}: ${guidedFlow()[0]!.title}`);
+  assert.equal(headingName(), `Step 1 of ${flow.length + 1}: ${guidedFlow()[0]!.title}`);
 });
 
 test('Continue from "What is different this time?" focuses the first question', async () => {
