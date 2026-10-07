@@ -12,10 +12,6 @@
 import { deliveryKey } from '../progression.ts';
 import type { StageKey, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
 
-// A delivery's saved key: `<stage>-<item slug>`, as the build plan's counters save it (kept in
-// progression.ts, whose delivery step reads the counts too).
-export { deliveryKey };
-
 // The parts of `stagePlan` whose saved count has reached the target.
 export function deliveredParts(
   stagePlan: StoredStage | undefined,

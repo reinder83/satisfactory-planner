@@ -11,7 +11,7 @@ import {
 import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
 import { powerView } from '../power.ts';
-import { deliveryKey } from './delivered.ts';
+import { deliveryKey } from '../progression.ts';
 import { durationOfHours, num, plural } from './format.ts';
 import {
   calcStage,
