@@ -105,7 +105,7 @@ test('the top-up phases follow the recipe data', () => {
   for (const item of guidedTopupItems) {
     const first = Math.min(
       ...recipes.recipes
-        .filter(recipe => !recipe.alternate && (recipe.outputs as Record<string, number>)[item])
+        .filter(recipe => !recipe.alternate && Object.keys(recipe.outputs).includes(item))
         .map(recipe => recipe.phase),
     );
     assert.equal(guidedTopupFrom[item] || 1, first, item);
@@ -195,7 +195,7 @@ test('Review says which budgets a fitting phase stays within', () => {
         phase,
         { ...stage, mining: undefined, feasible: true },
       ]),
-    ),
+    ) as typeof plan.stages,
   });
   const budget = () => text('table tbody tr:first-child td:nth-child(2)');
   draftAt({ mode: 'advanced', step: 5, preview: preview({ ...workspace.catalog.limits }) });
