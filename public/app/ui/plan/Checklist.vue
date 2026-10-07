@@ -19,13 +19,15 @@ import { computed } from 'vue';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
-  checked,
+  checked as ticked,
   editingTask,
   hideDone,
   planEditing,
   query,
+  requiredOnly,
   setHideDone,
   setQuery,
+  setRequiredOnly,
   stage,
   state,
 } from '../../session.ts';
@@ -59,6 +61,11 @@ const list = computed(() =>
       shown = filteredPlanTasks(tasks),
       removed = removedPlanTasks(),
       idle = idleStepNotes(shown);
+    // Done: ticked, or done by the step's own condition (`satisfied`, stepDone in tasks.ts, #1070).
+    const satisfied = new Map(
+      tasks.flatMap(task => (task.satisfied ? [[task.id, task.satisfied]] : [])),
+    );
+    const checked = (id: string) => ticked(id) || satisfied.has(id);
     const steps = shown.map((task): PlanStepView => {
       const link = taskLink(task);
       return {
@@ -67,6 +74,7 @@ const list = computed(() =>
         body: task.body,
         done: checked(task.id),
         idle: idle.get(task.id),
+        satisfied: satisfied.get(task.id),
         clocks: clockNote(task.id, link?.id),
         icon: taskIcon(task),
         link,
@@ -78,6 +86,8 @@ const list = computed(() =>
       total: tasks.length,
       query,
       hideDone,
+      requiredOnly,
+      optional: tasks.filter(task => task.optional).length,
       editing: planEditing,
       count: shown.length !== tasks.length ? shown.length + ' of ' + tasks.length + ' steps' : '',
       empty: !tasks.length
@@ -132,6 +142,12 @@ function toggleHideDone(event: Event) {
   setHideDone((event.target as HTMLInputElement).checked);
   render();
 }
+
+// "Required steps only" (#1070): hides the optional steps, a view preference like Hide completed.
+function toggleRequiredOnly(event: Event) {
+  setRequiredOnly((event.target as HTMLInputElement).checked);
+  render();
+}
 </script>
 
 <template>
@@ -150,6 +166,14 @@ function toggleHideDone(event: Event) {
         :checked="list.hideDone"
         @change="toggleHideDone"
       />Hide completed</label
+    ><label v-if="list.optional || list.requiredOnly" class="check-row small"
+      ><input
+        type="checkbox"
+        id="required-only"
+        data-required-only
+        :checked="list.requiredOnly"
+        @change="toggleRequiredOnly"
+      />Required steps only</label
     ><span class="small muted">{{ list.count }}</span>
   </div>
   <div v-if="list.editing" class="checklist">

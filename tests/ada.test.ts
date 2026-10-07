@@ -149,6 +149,21 @@ test('ADA counts the same progress the pages show', () => {
     stock(3).text,
     /^3 storage-only lines .* are optional: .* those lines fill .* Build them last/,
   );
+  // Research only a later phase needs is optional and listed last (#1070).
+  assert.ok(!ids(facts()).includes('optional-research'));
+  const research = (count: number, requiredOnly = false) =>
+    adaRemarks(facts({ optionalResearch: count, requiredOnly })).find(
+      r => r.id === 'optional-research',
+    )!;
+  assert.equal(research(1).tone, 'calm');
+  assert.match(
+    research(1).text,
+    /^1 research step at the end of this phase is optional: only a later phase's lines need it\. Tick Required steps only/,
+  );
+  assert.match(
+    research(7, true).text,
+    /^7 research steps .* are optional: .* need them\. Required steps only hides them/,
+  );
   // The generators the phase before built stay and count first (#1064).
   assert.ok(!ids(facts()).includes('kept-generators'));
   const kept = adaRemarks(facts({ keptGenerators: '7 Fuel Generators', keptFrom: 'Phase 3' })).find(

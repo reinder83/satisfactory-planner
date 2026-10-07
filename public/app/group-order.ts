@@ -2,6 +2,7 @@
 // put in order group by group (#869). Shared by the build plan and its build status
 // (orderedPhaseSteps and currentBuildStatus in views/calculated.ts) and the flows between groups
 // (group-links.ts).
+import { powerFirst } from '../progression.ts';
 import type { CalcRow, FactoryGroups, GroupAssignment, OnSiteRate } from '../types/index.ts';
 
 // The place of a row, or the part of one, that is in no factory group.
@@ -283,7 +284,9 @@ export const groupsReorder = (rows: readonly CalcRow[], groups: GroupsInput): bo
 // the ones that carry a row, in groupedRows order, each in the place of one of them: the other
 // steps keep their places and every step its id (#869). The build plan's steps
 // (calcTasks and generatedTaskIds in app/) all come through here. A storage-only line (#1061,
-// `stock`) keeps its place after the storage step: it is optional and built last.
+// `stock`) keeps its place after the storage step: it is optional and built last. A generator
+// line then moves up to just after the lines making its fuel, ahead of its factory's run
+// (powerFirst in progression.ts, #1070), so the power plant still comes before the machines.
 export function groupedSteps<S extends { row?: CalcRow }>(
   steps: readonly S[],
   groups: GroupsInput,
@@ -291,9 +294,11 @@ export function groupedSteps<S extends { row?: CalcRow }>(
   const grouped = (step: S) => !!step.row && !step.row.stock;
   const rowSteps = steps.filter(grouped);
   const byRow = new Map(rowSteps.map(step => [step.row!, step]));
-  const ordered = groupedRows(
-    rowSteps.map(step => step.row!),
-    groups,
+  const ordered = powerFirst(
+    groupedRows(
+      rowSteps.map(step => step.row!),
+      groups,
+    ),
   ).map(row => byRow.get(row)!);
   let next = 0;
   return steps.map(step => (grouped(step) ? ordered[next++]! : step));

@@ -32,6 +32,10 @@ export interface AdaFacts {
   idleLines?: number;
   // Unticked storage-only lines of the open phase (#1061): optional, listed last.
   stockLines?: number;
+  // Unticked research steps of the open phase that only a later phase needs (#1070): optional,
+  // listed last, and whether "Required steps only" hides them.
+  optionalResearch?: number;
+  requiredOnly?: boolean;
   // The generators the phase before built that this phase keeps (#1064), as a name list ("7 Fuel
   // Generators"), and that phase ("Phase 3"); absent when it keeps none.
   keptGenerators?: string;
@@ -326,6 +330,15 @@ const RULES: AdaRule[] = [
     when: facts => (facts.stockLines ?? 0) > 0,
     text: facts =>
       `${plural(facts.stockLines!, 'storage-only line')} at the end of this phase ${facts.stockLines === 1 ? 'is' : 'are'} optional: storage takes the plan's surplus first, and ${facts.stockLines === 1 ? 'that line fills' : 'those lines fill'} only containers nothing spills into. Build ${facts.stockLines === 1 ? 'it' : 'them'} last, or never. Shelves can wait.`,
+  },
+  {
+    // Research only a later phase needs (#1070): marked optional and listed last.
+    id: 'optional-research',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => (facts.optionalResearch ?? 0) > 0,
+    text: facts =>
+      `${plural(facts.optionalResearch!, 'research step')} at the end of this phase ${facts.optionalResearch === 1 ? 'is' : 'are'} optional: only a later phase's lines need ${facts.optionalResearch === 1 ? 'it' : 'them'}. ${facts.requiredOnly ? 'Required steps only hides them for now.' : 'Tick Required steps only to hide them.'} Curiosity is allowed. It is just not on the critical path.`,
   },
   {
     // The generators the phase before built stay and count first (#1064), as "Power available

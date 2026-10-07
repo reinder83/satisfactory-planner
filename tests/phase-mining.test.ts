@@ -438,11 +438,15 @@ test('a stored plan keeps its numbers, budgets and steps until the user recalcul
     assert.deepEqual(stageMiningAdvice(stage), []);
     assert.deepEqual(miningBuildings(stage), []);
   }
-  // Its build plan is step for step what it was: no mining step, no new milestone.
+  // Its build plan has the steps it had: no mining step, no new milestone. #1070 reordered them
+  // and added the delivery and Space Elevator steps, so the keys are compared as a set.
   for (const [phase, ids] of Object.entries(steps))
     assert.deepEqual(
-      phaseSteps(plan, { checks: {} }, data, phase).map(step => step.id),
-      ids,
+      phaseSteps(plan, { checks: {} }, data, phase)
+        .map(step => step.id)
+        .filter(id => !id.startsWith('deliver-') && id !== 'space-elevator')
+        .sort(),
+      [...ids].sort(),
       `Phase ${phase}`,
     );
   // Recalculating its own settings gives the same plan: nothing changes until the user asks.

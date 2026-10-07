@@ -6,7 +6,7 @@
 // that is not done yet. Only the view changes: the saved phase stays what the user picked, and the
 // phase picker saves a new one as before. Nothing here writes progress.
 import { firstPhase, state } from './session.ts';
-import { generatedTaskIds, planTaskIds } from './tasks.ts';
+import { generatedTaskIds, planTaskIds, satisfiedStepIds } from './tasks.ts';
 import type { Phase, StageKey } from '../types/index.ts';
 
 // The phases with a checklist of their own, in order; post-game comes after Phase 5 and has none
@@ -50,5 +50,12 @@ export const generatedStepIds = (phase: Phase): string[] => generatedTaskIds(pha
 // The phase the open profile opens on (openingPhase for its saved phase, first phase and checks).
 // A calculated profile's first phase is Phase 1, so open milestones of a milestone-only phase
 // before its start phase hold that phase open like any earlier phase (#759).
+// A step done by its own condition (satisfiedStepIds in tasks.ts, #1070) holds no phase open.
 export const phaseToOpen = (): Phase =>
-  openingPhase(state.settings.phase, firstPhase(), phaseStepIds, state.checks);
+  openingPhase(state.settings.phase, firstPhase(), openStepIds, state.checks);
+
+// A phase's step ids (phaseStepIds) less those done by their own condition.
+function openStepIds(phase: StageKey): string[] {
+  const satisfied = satisfiedStepIds(phase);
+  return phaseStepIds(phase).filter(id => !satisfied.has(id));
+}

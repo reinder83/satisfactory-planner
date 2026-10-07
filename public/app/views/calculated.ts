@@ -30,6 +30,9 @@ export interface PlanStepData {
   id: string;
   title: string;
   body: string;
+  // Optional, or done by its own condition (GuideTask in progression.ts, #1070).
+  optional?: boolean;
+  satisfied?: string;
 }
 
 // A step's inputs or outputs as "Heavy Oil Residue 46.6 m³/min, Iron Ore 30/min": each item

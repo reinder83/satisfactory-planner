@@ -121,6 +121,10 @@ export let factoryFilter = 'all';
 // ADA's mute switch it is remembered in this browser and never touches a saved profile.
 const HIDE_DONE_KEY = 'planner-hide-done';
 export let hideDone = hideDoneStored();
+// "Required steps only" on the build plan (#1070): hides the optional steps. A view preference
+// remembered in this browser like "Hide completed", never in a saved profile.
+const REQUIRED_ONLY_KEY = 'planner-required-only';
+export let requiredOnly = storedSwitch(REQUIRED_ONLY_KEY);
 export let layoutEditing = false;
 export let planEditing = false;
 // The id of the build-plan step whose edit form is open.
@@ -175,8 +179,19 @@ export function setHideDone(value: boolean) {
   } catch {}
 }
 function hideDoneStored() {
+  return storedSwitch(HIDE_DONE_KEY);
+}
+export function setRequiredOnly(value: boolean) {
+  requiredOnly = value;
   try {
-    return localStorage.getItem(HIDE_DONE_KEY) === 'on';
+    localStorage.setItem(REQUIRED_ONLY_KEY, value ? 'on' : 'off');
+  } catch {}
+}
+// A build-plan switch remembered in this browser: on only when stored as 'on'; off when nothing
+// is stored or the browser refuses storage.
+function storedSwitch(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === 'on';
   } catch {
     return false;
   }

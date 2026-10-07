@@ -33,10 +33,13 @@ export function phaseProgress(
     });
 }
 
-// What planStepIds reads of a profile's progress: its ticks, personal tasks and removed steps.
+// What planStepIds reads of a profile's progress: its ticks, delivery counts, personal tasks and
+// removed steps.
 // profilePhases also reads the phase worked on (`settings.phase`), when there is one.
 interface StepsState {
   checks: Record<string, boolean>;
+  // The delivery counts, which the delivery step's own condition reads (#1070).
+  deliveries?: Record<string, number>;
   customTasks?: CustomTask[];
   taskEdits?: Partial<Pick<TaskEdits, 'removed'>>;
   settings?: { phase?: string };
@@ -56,11 +59,22 @@ export function planStepIds(
   phase: StageKey,
   memo: StepsMemo = {},
 ): string[] {
+  return planSteps(plan, state, data, phase, memo).map(step => step.id);
+}
+
+// planStepIds' steps, each with whether it is done by its own condition (`satisfied`, #1070).
+function planSteps(
+  plan: StoredCalculatedPlan,
+  state: StepsState,
+  data: Progression,
+  phase: StageKey,
+  memo: StepsMemo,
+): { id: string; satisfied?: string }[] {
   const removed = new Set(state.taskEdits?.removed || []);
   return [
-    ...phaseSteps(plan, state, data, phase, memo).map(step => step.id),
-    ...(state.customTasks || []).filter(task => task.phase === phase).map(task => task.id),
-  ].filter(id => !removed.has(id));
+    ...phaseSteps(plan, state, data, phase, memo),
+    ...(state.customTasks || []).filter(task => task.phase === phase),
+  ].filter(step => !removed.has(step.id));
 }
 
 // The save list's per-phase progress of a profile (ProfileSummary.phases, SP-32): phaseProgress's
@@ -85,11 +99,9 @@ export function profilePhases(
     memo: StepsMemo = {};
   return [...milestoneOnly, ...phases].map(entry => {
     if (Number(entry.phase) > working) return entry;
-    const ids = planStepIds(plan, state, data, entry.phase, memo);
-    return {
-      ...entry,
-      steps: { done: ids.filter(id => state.checks[id]).length, total: ids.length },
-    };
+    const steps = planSteps(plan, state, data, entry.phase, memo);
+    const done = steps.filter(step => state.checks[step.id] || step.satisfied).length;
+    return { ...entry, steps: { done, total: steps.length } };
   });
 }
 
@@ -109,6 +121,7 @@ const phasesKey = (plan: StoredCalculatedPlan | null | undefined, state: StepsSt
       : null,
     state.settings?.phase,
     state.checks,
+    state.deliveries ?? {},
     state.customTasks ?? [],
     state.taskEdits?.removed ?? [],
   ]);
