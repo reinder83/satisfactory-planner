@@ -57,15 +57,24 @@ const guided: StoredCalculatedPlan = {
 const PHASES: Phase[] = ['1', '2', '3', '4', '5', 'post'];
 const STAGES: StageKey[] = ['1', '2', '3', '4', '5'];
 
-// What profilePhases sent before #804: every phase's steps, each phase worked out on its own.
+// What profilePhases sent before #804: every phase's steps, each phase worked out on its own, a
+// step done by its own condition (#1070) counted as done.
 function everyPhase(plan: StoredCalculatedPlan, state: ProgressState): PhaseProgress[] {
   const lines = phaseProgress(plan, state.checks)!;
   const milestoneOnly = milestoneOnlyPhases(plan).map(phase => ({ phase, done: 0, total: 0 }));
   return [...milestoneOnly, ...lines].map(entry => {
-    const ids = planStepIds(plan, state, data, entry.phase);
+    const ids = planStepIds(plan, state, data, entry.phase),
+      satisfied = new Set(
+        phaseSteps(plan, state, data, entry.phase)
+          .filter(step => step.satisfied)
+          .map(step => step.id),
+      );
     return {
       ...entry,
-      steps: { done: ids.filter(id => state.checks[id]).length, total: ids.length },
+      steps: {
+        done: ids.filter(id => state.checks[id] || satisfied.has(id)).length,
+        total: ids.length,
+      },
     };
   });
 }
@@ -117,7 +126,7 @@ test('counting phases up to the one worked on gives the card the counts every ph
   const { settings: _, ...noPhase } = progress(fromOne, '3');
   assert.deepEqual(
     profilePhases(fromOne, noPhase, data),
-    everyPhase(fromOne, progress(fromOne, '3')),
+    everyPhase(fromOne, noPhase as ProgressState),
   );
 });
 

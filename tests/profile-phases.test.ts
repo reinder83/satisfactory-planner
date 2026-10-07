@@ -63,7 +63,8 @@ test('the summary counts every step of a phase, so an earlier phase with all lin
     phases = profilePhases(plan, state, data)!;
   const one = phases.find(entry => entry.phase === '1')!;
   assert.equal(one.done, one.total, 'every Phase 1 line is ticked');
-  assert.equal(one.steps!.done, rowsOf('1').length, 'only the lines are ticked');
+  // The lines are ticked; the elevator and the delivery are done since Phase 3 is worked on (#1070).
+  assert.equal(one.steps!.done, rowsOf('1').length + 2, 'only the lines are ticked');
   assert.ok(one.steps!.done < one.steps!.total, 'its other steps are open');
   assert.equal(firstOpen(phases, 3), '1', 'the profile opens on Phase 1');
   // Steps up to the phase worked on (Phase 3), which the card reads; none after it (#804).
