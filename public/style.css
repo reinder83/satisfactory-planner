@@ -606,20 +606,18 @@ input[type='radio'] {
 }
 /* The open profile after the save (#1071), the one name the switcher and the pages show too, cut
    the same way. The save gives way first. */
-.breadcrumbs a {
-  flex: 0 1 auto;
+.breadcrumbs .crumb-save {
+  flex: 0 3 auto;
   min-width: 3em;
 }
 .crumb-sep {
   color: var(--dim);
 }
-.crumb-profile {
-  color: var(--ink);
-  flex: 0 3 auto;
+.breadcrumbs .crumb-profile {
+  flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--ink);
+  border-bottom-color: rgba(220, 227, 232, 0.35);
 }
 .breadcrumbs a {
   color: var(--accent);
@@ -4848,7 +4846,7 @@ button.rail-tile:hover {
   }
   /* At phone width the top bar names only the open profile (#1071); the drawer's switcher names
      its save. */
-  .topbar .breadcrumbs:has(.crumb-profile) a,
+  .topbar .breadcrumbs:has(.crumb-profile) .crumb-save,
   .topbar .crumb-sep {
     display: none;
   }

@@ -20,7 +20,8 @@
   menu and on the profiles page. The breadcrumb's save name is cut the same way (#817), so it
   never pushes the phase track off the window; its title and the profiles page show it in full.
   After it the breadcrumb names the open profile (#1071), the name the switcher, the plan page and
-  the profiles page show, cut the same way; at 720px and below only the profile's name shows. The
+  the profiles page show, cut the same way, also a link to the profiles page; at 720px and below
+  only the profile's name shows. The
   switcher's menu also offers "Edit settings" for the open calculated profile (startEdit).
 
   At 720px and below (SP-37, #272) the sidebar is a drawer: a compact top bar holds ☰, the brand
@@ -475,12 +476,16 @@ async function pickTrack(event: Event) {
           ><img class="topbar-mark" src="./favicon.svg" alt="" />
         </div>
         <div class="breadcrumbs">
-          <a href="#profiles" :title="frame.saveName">{{ frame.saveName }}</a
+          <a href="#profiles" class="crumb-save" :title="frame.saveName">{{ frame.saveName }}</a
           ><template v-if="frame.profileName"
             ><span class="crumb-sep" aria-hidden="true">/</span
-            ><span class="crumb-profile" :title="frame.profileName" data-crumb-profile>{{
-              frame.profileName
-            }}</span></template
+            ><a
+              href="#profiles"
+              class="crumb-profile"
+              :title="frame.profileName"
+              data-crumb-profile
+              >{{ frame.profileName }}</a
+            ></template
           >
         </div>
         <div class="topbar-tools">
