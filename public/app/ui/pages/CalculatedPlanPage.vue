@@ -20,7 +20,8 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { deliveryHoursLeft, deliveryKey } from '../../delivered.ts';
+import { deliveryHoursLeft } from '../../delivered.ts';
+import { deliveryKey } from '../../../progression.ts';
 import { durationOfHours, num } from '../../format.ts';
 import {
   calcStage,

@@ -15,7 +15,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { holdUnsavedChoices, save } from '../../api.ts';
-import { flowRoute, phase, setEditingTask } from '../../session.ts';
+import { checked, flowRoute, phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { removeStepBody } from '../../shared-steps.ts';
 import { filteredPlanTasks, planTasks, taskOrderSlots } from '../../tasks.ts';
@@ -37,6 +37,16 @@ const splitId = computed(() => 'step-split-' + props.step.id);
 // The note of a line a delivered part leaves without work (#1062), which also describes the
 // step's checkbox.
 const idleId = computed(() => 'step-idle-' + props.step.id);
+// The note of a step done by its own condition (#1070), which also describes the checkbox: with no
+// tick to clear, the checkbox is disabled while the condition holds.
+const satisfiedId = computed(() => 'step-satisfied-' + props.step.id);
+const describedBy = computed(
+  () =>
+    [props.step.idle ? idleId.value : '', props.step.satisfied ? satisfiedId.value : '']
+      .filter(Boolean)
+      .join(' ') || undefined,
+);
+const lockedDone = computed(() => !!props.step.satisfied && !checked(props.step.id));
 function aimLine(event: MouseEvent) {
   const link = props.step.link;
   if (!link?.factory || event.button !== 0) return;
@@ -205,13 +215,17 @@ async function deletePersonal(event: Event) {
       :data-check="step.id"
       @change="check"
       :aria-label="'Complete: ' + step.title"
-      :aria-describedby="step.idle ? idleId : undefined"
+      :aria-describedby="describedBy"
       :checked="step.done"
+      :disabled="lockedDone || undefined"
     /><StepIcon :icon="step.icon" />
     <details :data-task="step.id" :open="lead">
       <summary>
         {{ step.title
         }}<span v-if="step.idle" :id="idleId" class="task-idle" data-idle-note>{{ step.idle }}</span
+        ><span v-if="step.satisfied" :id="satisfiedId" class="task-idle" data-satisfied-note>{{
+          step.satisfied
+        }}</span
         ><span v-if="step.clocks" class="task-idle" data-step-clocks>{{ step.clocks }}</span>
       </summary>
       <p>{{ step.body || 'Your own task for this phase.' }}</p>

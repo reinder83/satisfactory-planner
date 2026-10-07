@@ -9,6 +9,7 @@ import {
   milestonesListedIn,
   milestoneTasks,
   phaseSteps,
+  powerFirst,
   powerTasks,
   progression,
   requiredMilestones,
@@ -471,20 +472,38 @@ test('phaseSteps lists a phase of a stored plan in build-plan order', () => {
       ids = steps.map(step => step.id);
     const rows = plan.stages[stage].rows || [];
     const rowSteps = steps.filter(step => step.row);
+    // The power plant before the machines it powers (#1070, powerFirst).
     assert.deepEqual(
       rowSteps.map(step => step.id),
-      rows.map(row => 'calc-' + stage + '-' + row.id),
+      powerFirst(rows).map(row => 'calc-' + stage + '-' + row.id),
       'one step per row, keyed by the stage',
     );
     assert.ok(rowSteps.every(step => step.body === '' && step.title === step.row!.name));
+    // #1070: Phase 1 takes HUB Upgrade 6 straight after the HUB tutorial; later phases keep
+    // their power going, take the required milestones, then the power steps that ask for them.
+    // Research only a later phase needs comes last.
+    const required = guide.milestoneTasks.filter(task => !task.optional),
+      optional = guide.milestoneTasks.filter(task => task.optional);
     const startup =
       phase === '1'
-        ? [guide.baseTasks[0]!, ...guide.powerTasks.slice(0, 2)]
-        : [...guide.powerTasks, ...guide.milestoneTasks];
+        ? [
+            guide.baseTasks[0]!,
+            ...required.filter(task => task.title.startsWith('Tier 0:')),
+            ...guide.powerTasks.slice(0, 2),
+          ]
+        : [
+            ...guide.powerTasks.slice(0, guide.powerStartup),
+            ...required,
+            ...guide.powerTasks.slice(guide.powerStartup),
+          ];
     assert.deepEqual(steps.slice(0, startup.length), startup, 'startup first');
-    const storage = ids.indexOf('calc-' + stage + '-storage');
-    assert.equal(storage, ids.length - guide.retire.length - 1, 'storage, then the retirements');
-    assert.deepEqual(steps.slice(storage + 1), guide.retire);
+    const storage = ids.indexOf('calc-' + stage + '-storage'),
+      delivery = phase === 'post' ? [] : ['deliver-' + stage];
+    assert.deepEqual(
+      ids.slice(storage + 1),
+      [...delivery, ...[...guide.retire, ...optional].map(task => task.id)],
+      'storage, the delivery, the retirements, then the optional research',
+    );
     assert.deepEqual(
       [...ids].sort(),
       [
@@ -497,6 +516,8 @@ test('phaseSteps lists a phase of a stored plan in build-plan order', () => {
         ].map(task => task.id),
         ...rows.map(row => 'calc-' + stage + '-' + row.id),
         'calc-' + stage + '-storage',
+        ...(phase === 'post' ? [] : ['deliver-' + stage]),
+        ...(phase === '1' ? ['space-elevator'] : []),
       ].sort(),
       'every generated step of the phase, once',
     );

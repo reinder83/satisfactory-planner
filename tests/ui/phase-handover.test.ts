@@ -6,10 +6,9 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
-import { deliveryKey } from '../../public/app/delivered.ts';
 import { phase, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { formatNumber } from '../../public/progression.ts';
+import { deliveryKey, formatNumber } from '../../public/progression.ts';
 import {
   $,
   $$,

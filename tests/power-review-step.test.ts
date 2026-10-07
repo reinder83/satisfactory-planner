@@ -400,7 +400,7 @@ test('"Power available now" stays the first step of each phase from 2 on, with i
       );
 });
 
-// Every other step keeps its key and its place (recorded from the release before #1048 on the
+// Every other step keeps its key (and kept its place until #1070 reordered the steps) (recorded from the release before #1048 on the
 // stored first-release plan: as stored, with 44.425 GW of spare power, and without its Fuel
 // Generator lines, for several sets of ticks; production rows, whose steps nothing here touches,
 // left out). The differences are exactly the new Petroleum Power step and, with spare power or a
@@ -426,9 +426,14 @@ test('the build plan keeps every other step key in its place', () => {
   for (const [variant, plan] of Object.entries(variants))
     for (const [label, checks] of Object.entries(ticks))
       for (const phase of PHASES) {
+        // #1070 put the power steps after the unlocks they ask for, research only a later
+        // phase needs last, and added the delivery and Space Elevator steps: the keys are
+        // compared as a set, without those two.
         const now = phaseSteps(plan, { checks }, data, phase)
           .map(step => step.id)
-          .filter(id => !id.startsWith('calc-') || id.endsWith('-storage'));
+          .filter(id => !id.startsWith('calc-') || id.endsWith('-storage'))
+          .filter(id => !id.startsWith('deliver-') && id !== 'space-elevator')
+          .sort();
         const before = recorded[variant]![label]![phase]!;
         const stage = phase === 'post' ? 5 : Number(phase);
         const coalRows = (plan.stages[String(stage) as StageKey]?.rows || []).some(
@@ -444,7 +449,7 @@ test('the build plan keeps every other step key in its place', () => {
         const where = `${variant}, ${label}, Phase ${phase}`;
         assert.deepEqual(
           now.filter(id => id !== PETROLEUM),
-          before.filter(id => id !== PETROLEUM && !dropped(id)),
+          before.filter(id => id !== PETROLEUM && !dropped(id)).sort(),
           where,
         );
         assert.equal(now.includes(PETROLEUM), phase === '3', where);

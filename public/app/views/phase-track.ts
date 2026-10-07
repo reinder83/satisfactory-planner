@@ -3,7 +3,7 @@
 // its build-plan steps ticked, at most 99% while one is open (#770), as the profile card does
 // (profilePhases in state/summary.ts, #746). Post-game has no checklist of its own, and nothing
 // has one while no profile is open, so their segments show no progress. Only saved checks are
-// read.
+// read, and the steps done by their own condition (#1070).
 import { phaseStepIds } from '../opening-phase.ts';
 import {
   calculated,
@@ -13,6 +13,7 @@ import {
   progressionData,
   state,
 } from '../session.ts';
+import { satisfiedStepIds } from '../tasks.ts';
 import type { Phase, StageKey } from '../../types/index.ts';
 
 export interface PhaseSegment {
@@ -37,17 +38,18 @@ export interface PhaseSegment {
 // phase's step ids are kept while the open plan, progress state and progression data are the
 // same objects: session.ts replaces the state on every saved change (setState) rather than
 // editing it, and opening another profile replaces all three. The ticks are counted afresh every
-// time.
+// time. A step done by its own condition (satisfiedStepIds in tasks.ts, #1070) counts as done.
 let cachedFor: readonly unknown[] = [];
-let cachedIds = new Map<StageKey, string[]>();
-function stepIdsOf(phase: StageKey): string[] {
+let cachedIds = new Map<StageKey, { ids: string[]; satisfied: Set<string> }>();
+function stepIdsOf(phase: StageKey): { ids: string[]; satisfied: Set<string> } {
   const key = [calculated, state, progressionData];
   if (key.some((part, i) => part !== cachedFor[i])) {
     cachedFor = key;
     cachedIds = new Map();
   }
   let ids = cachedIds.get(phase);
-  if (!ids) cachedIds.set(phase, (ids = phaseStepIds(phase)));
+  if (!ids)
+    cachedIds.set(phase, (ids = { ids: phaseStepIds(phase), satisfied: satisfiedStepIds(phase) }));
   return ids;
 }
 
@@ -61,8 +63,8 @@ export function phaseTrack(): PhaseSegment[] {
     let done = 0,
       total = 0;
     if (phase !== 'post' && calculated) {
-      const ids = stepIdsOf(phase);
-      done = ids.filter(checked).length;
+      const { ids, satisfied } = stepIdsOf(phase);
+      done = ids.filter(id => checked(id) || satisfied.has(id)).length;
       total = ids.length;
     }
     return { phase, label: phaseLabel(phase), pct: share(done, total) };

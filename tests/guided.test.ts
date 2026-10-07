@@ -11,9 +11,11 @@ import { createApp } from '../server.ts';
 import { calculate, catalog, DELIVERIES, DEFAULT_LIMITS, PURE_LIMITS } from '../planner.ts';
 import { nodeCounts } from '../public/preferences.ts';
 import {
+  deliveryKey,
   firstPlanPhase,
   milestoneOnlyPhase,
   phaseSteps,
+  powerFirst,
   progression,
   recipeIdOf,
   rowStepTitle,
@@ -138,6 +140,8 @@ function ui() {
     recipeIdOf,
     rowStepTitle,
     firstPlanPhase,
+    powerFirst,
+    deliveryKey,
     carryOptions,
     pickedRecipeUnlocks,
     bayCapacity,

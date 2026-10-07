@@ -300,10 +300,21 @@ test('#1044: a stored plan keeps its hard-drive rows, steps and ticks until a re
     ['5', true, 'Alternate: Polyester Fabric'],
   ]);
   assert.deepEqual(rowsOf(stored, DISTILLED)[0], ['4', true, 'Alternate: Distilled Silica']);
+  // #1070 reordered the steps, marked research only a later phase needs "(optional)" and added
+  // the delivery step: the same keys with the same titles, compared in key order.
+  const byKey = (pairs: [string, string][]) =>
+    [...pairs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   for (const [phase, steps] of Object.entries(recorded.steps))
     assert.deepEqual(
-      stepsOf(stored, phase).map(step => [step.id, step.title]),
-      steps,
+      byKey(
+        stepsOf(stored, phase)
+          .filter(step => !step.id.startsWith('deliver-'))
+          .map(step => [
+            step.id,
+            step.optional ? step.title.replace(/ \(optional\)$/, '') : step.title,
+          ]),
+      ),
+      byKey(steps),
       `Phase ${phase}`,
     );
   const four = ids(stored, '4');
