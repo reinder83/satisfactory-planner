@@ -77,7 +77,8 @@ function reviewCells(plan: StoredCalculatedPlan) {
   return Object.fromEntries(
     $$('table tbody tr').map(row => [
       plain(row.querySelector('td')?.textContent),
-      plain(row.querySelector('[data-review-power]')?.textContent),
+      // The need and what it has; what it holds is under it (#1090, power-allowance.test.ts).
+      plain(row.querySelector('[data-review-power]')?.textContent).replace(/ incl\. .*$/, ''),
     ]),
   );
 }

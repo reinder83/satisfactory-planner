@@ -597,12 +597,14 @@ test('the goals step and what Review says about each phase', () => {
   assert.equal(firstRow[0], '1');
   assert.match(firstRow[1] ?? '', /^(Within entered limits|Needs adjustment|Planning draft)$/);
   // The power each phase needs of what it has, as every page gives it (#1064): Phase 1 runs on
-  // biomass; from Phase 2 on the phase's whole generators cover its need.
-  assert.match(firstRow[5] ?? '', /^[\d.,]+ (MW|GW) from biomass$/);
+  // biomass; from Phase 2 on the phase's whole generators cover its need. Each need says what it
+  // holds for trains, drones and pumps (#1090).
+  const allowance = / incl\. [\d.,]+ (MW|GW) for trains, drones and pumps \(20%\)$/.source;
+  assert.match(firstRow[5] ?? '', new RegExp(/^[\d.,]+ (MW|GW) from biomass/.source + allowance));
   const powerCells = $$('[data-review-power]').map(td => (td.textContent || '').trim());
   assert.equal(powerCells.length, 5);
   for (const cell of powerCells.slice(1))
-    assert.match(cell, /^[\d.,]+ (MW|GW) of [\d.,]+ (MW|GW)$/);
+    assert.match(cell, new RegExp(/^[\d.,]+ (MW|GW) of [\d.,]+ (MW|GW)/.source + allowance));
   assert.equal($$('[data-review-power].warn').length, 0, 'no phase is short');
   wizardAt(5);
   assert.doesNotMatch(main(), /was /);
@@ -1210,6 +1212,11 @@ test('Goals and Resources show a live estimate beside the form, the other steps 
   assert.equal(
     text('[data-estimate-power]').trim(),
     `${power(last.grid!.needMW)} of ${power(last.grid!.availableMW)}`,
+  );
+  // What that need holds for trains, drones and pumps (#1090).
+  assert.equal(
+    text('[data-estimate-allowance]').trim(),
+    `incl. ${power(last.grid!.allowanceMW)} for trains, drones and pumps (20%)`,
   );
   assert.ok(text('[data-estimate-tightest]').length > 0, 'the tightest resource is named');
   assert.equal($('[data-estimate-status]')!.getAttribute('aria-live'), 'polite');
