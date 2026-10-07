@@ -235,13 +235,10 @@ export function buildStatus(
     }
     return status;
   });
-  // Lines carried from Phase 1 into Phase 2 run on Phase 1's hand-fed biomass, which no plan
-  // models, so they are left out of the power check; from Phase 2 on the carried generators are
-  // rows too and count with their consumers.
-  const powered =
-    stageKey === '2'
-      ? new Map([...share].map(([id, rowShare]) => [id, built.has(id) ? rowShare : 0]))
-      : share;
+  // Carried lines stay out of the power check in every phase: they run on the phase before's
+  // generators (hand-fed biomass, then coal, then fuel), which are rarely rows of this phase and
+  // never carried, so counting them would warn about power that is in fact running.
+  const powered = new Map([...share].map(([id, rowShare]) => [id, built.has(id) ? rowShare : 0]));
   const { drawMW, supplyMW } = stage.grid
     ? gridPower(stage, stage.grid, powered)
     : storedPower(stage, powered, sparePowerMW);

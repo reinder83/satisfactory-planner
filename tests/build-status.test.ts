@@ -4,6 +4,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { buildStatus } from '../public/app/build-status.ts';
+import { phaseCarry } from '../public/app/handover.ts';
 import { calculate } from '../planner.ts';
 import type { CalcRow, StoredCalculatedPlan, StoredStage } from '../public/types/index.ts';
 
@@ -247,7 +248,7 @@ test('a short input reaches a carried line in proportion to what it asks', () =>
   assert.equal(status.rows[1]!.shortOf, 'Ore');
 });
 
-test('lines carried from Phase 1 into Phase 2 are left out of the power check', () => {
+test('carried lines are left out of the power check in every phase', () => {
   const powered = stage([row('ingot', { Ore: 30 }, { Ingot: 30 }, { power: 50, peakMW: 50 })], {
     peakMW: 50,
     requiredMW: 50,
@@ -255,13 +256,42 @@ test('lines carried from Phase 1 into Phase 2 are left out of the power check', 
     availableMW: 0,
   });
   const carried = new Map([['ingot', 1]]);
-  // In Phase 2 a line carried from Phase 1 runs on Phase 1's hand-fed biomass: not flagged.
-  const phase2 = buildStatus(powered, {}, '2', 0, powered.rows, carried);
-  close(phase2.rows[0]!.share, 1, 'carried share');
-  close(phase2.power.drawMW, 0, 'draw');
-  assert.equal(phase2.power.short, false);
-  // From Phase 3 on a carried line draws like a ticked one.
-  const phase3 = buildStatus(powered, {}, '3', 0, powered.rows, carried);
-  close(phase3.power.drawMW, 50, 'draw');
-  assert.equal(phase3.power.short, true);
+  // A carried line runs on the phase before's generators (hand-fed biomass, coal, fuel), which
+  // are not rows here and never carried: it draws nothing in this phase's check.
+  for (const key of ['2', '3', '4', '5']) {
+    const status = buildStatus(powered, {}, key, 0, powered.rows, carried);
+    close(status.rows[0]!.share, 1, 'carried share');
+    close(status.power.drawMW, 0, 'draw ' + key);
+    assert.equal(status.power.short, false, 'phase ' + key);
+  }
+  // Ticked here, it draws like any other row.
+  assert.equal(
+    buildStatus(powered, { 'calc-3-ingot': true }, '3', 0, powered.rows, carried).power.short,
+    true,
+  );
+});
+
+// The review of #1109: with every line of the phase before marked running and nothing ticked
+// here, a real plan's handover raised a false power warning from Phase 3 on.
+test('a real plan: running all of the phase before raises no power warning in the next', () => {
+  for (const settings of [{ phase: '1' }, { phase: '1', availablePowerGW: 1 }]) {
+    const plan = calculate(settings);
+    for (const [from, to] of [
+      ['1', '2'],
+      ['2', '3'],
+      ['3', '4'],
+    ] as const) {
+      const stage = plan.stages[to] as StoredStage;
+      const before = plan.stages[from] as StoredStage;
+      const running = Object.fromEntries(before.rows!.map(r => [`calc-${from}-${r.id}`, true]));
+      const carry = phaseCarry(plan, running, to)!;
+      assert.ok(carry.shares.size > 0, `${from} → ${to} carries lines`);
+      const status = buildStatus(stage, running, to, 0, stage.rows, carry.shares);
+      assert.equal(
+        status.power.short,
+        false,
+        `${JSON.stringify(settings)} ${from} → ${to}: ${JSON.stringify(status.power)}`,
+      );
+    }
+  }
 });
