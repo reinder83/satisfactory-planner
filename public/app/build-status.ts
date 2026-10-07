@@ -235,9 +235,16 @@ export function buildStatus(
     }
     return status;
   });
+  // Lines carried from Phase 1 into Phase 2 run on Phase 1's hand-fed biomass, which no plan
+  // models, so they are left out of the power check; from Phase 2 on the carried generators are
+  // rows too and count with their consumers.
+  const powered =
+    stageKey === '2'
+      ? new Map([...share].map(([id, rowShare]) => [id, built.has(id) ? rowShare : 0]))
+      : share;
   const { drawMW, supplyMW } = stage.grid
-    ? gridPower(stage, stage.grid, share)
-    : storedPower(stage, share, sparePowerMW);
+    ? gridPower(stage, stage.grid, powered)
+    : storedPower(stage, powered, sparePowerMW);
   // The planner's own balance leaves float dust, so a fully built plan never trips the flag.
   const short = stageKey !== '1' && drawMW > supplyMW + 1e-6 * Math.max(1, supplyMW);
   // Machine-equivalents running among the rows running now (ticked or carried), other than

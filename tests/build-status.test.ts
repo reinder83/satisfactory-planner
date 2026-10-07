@@ -246,3 +246,22 @@ test('a short input reaches a carried line in proportion to what it asks', () =>
   close(status.rows[1]!.share, 1 / 3, 'carried share');
   assert.equal(status.rows[1]!.shortOf, 'Ore');
 });
+
+test('lines carried from Phase 1 into Phase 2 are left out of the power check', () => {
+  const powered = stage([row('ingot', { Ore: 30 }, { Ingot: 30 }, { power: 50, peakMW: 50 })], {
+    peakMW: 50,
+    requiredMW: 50,
+    generationMW: 0,
+    availableMW: 0,
+  });
+  const carried = new Map([['ingot', 1]]);
+  // In Phase 2 a line carried from Phase 1 runs on Phase 1's hand-fed biomass: not flagged.
+  const phase2 = buildStatus(powered, {}, '2', 0, powered.rows, carried);
+  close(phase2.rows[0]!.share, 1, 'carried share');
+  close(phase2.power.drawMW, 0, 'draw');
+  assert.equal(phase2.power.short, false);
+  // From Phase 3 on a carried line draws like a ticked one.
+  const phase3 = buildStatus(powered, {}, '3', 0, powered.rows, carried);
+  close(phase3.power.drawMW, 50, 'draw');
+  assert.equal(phase3.power.short, true);
+});
