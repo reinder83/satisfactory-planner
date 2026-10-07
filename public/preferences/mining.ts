@@ -123,15 +123,20 @@ export interface MiningSettings {
   } | null;
   purity?: string;
   distribution?: string;
+  // The best miner the player already has (#1068, the wizard's "Miners you already have"): 2 or 3.
+  // Raises every phase's miner to at least that mark; absent from every plan made before it.
+  ownedMiner?: number;
 }
 
 // The miner and clock of `phase`: the phase's best miner at its clock (PHASE_CLOCK), neither
-// above the survey's.
+// above the survey's. A miner the player already has (`owned`, settings.ownedMiner, #1068) raises
+// the phase's mark to it, still capped by the survey's; without one every phase is as before.
 export function phaseMiner(
   phase: number,
   survey?: MiningSettings['extraction'],
+  owned?: number,
 ): { mark: number; clock: number } {
-  const mark = bestMark(MINER_MARKS, phase).mark,
+  const mark = Math.max(bestMark(MINER_MARKS, phase).mark, MINER_BASE[owned ?? 0] ? owned! : 1),
     clock = PHASE_CLOCK[phase] ?? 1;
   return {
     mark: Math.min(mark, MINER_BASE[survey?.mark ?? 3] ? (survey?.mark ?? 3) : 3),
@@ -239,7 +244,7 @@ const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 // budget and the node kinds behind it (see the header). `settings` is a plan's settings.
 export function phaseMining(settings: MiningSettings, phase: number): StageMining {
   const survey = settings.extraction ?? null;
-  const miner = phaseMiner(phase, survey);
+  const miner = phaseMiner(phase, survey, settings.ownedMiner);
   const belt = bestMark(BELT_MARKS, phase),
     pipe = bestMark(PIPE_MARKS, phase);
   const reference = {

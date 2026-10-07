@@ -311,6 +311,11 @@ const reservedUses = (raw: unknown): SloopUse[] => {
     ...new Set(raw.filter((use): use is SloopUse => SLOOP_USES.some(([id]) => id === use))),
   ].sort();
 };
+// The best miner the player already has (#1068): `{ ownedMiner: 2 | 3 }`, or nothing for any other
+// value, so the field is absent unless chosen.
+const ownedMinerSetting = (value: unknown): { ownedMiner?: 2 | 3 } =>
+  value === 2 || value === 3 ? { ownedMiner: value } : {};
+
 // Validates and normalises a profile's settings. Every field has a default, so `settings({})` is a
 // complete profile, and a field older profiles never stored must default to the value that makes
 // them calculate exactly as before (e.g. `buildRate` falls back to `storageRate`,
@@ -370,6 +375,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // Mining and belts per phase (#1065): only `true` turns it on, and the field is absent
     // otherwise, so settings without it, and every plan stored before it, stay as they were.
     ...(input.phaseMining === true ? { phaseMining: true } : {}),
+    // The best miner the player already has (#1068): only Mk.2 or Mk.3 is kept, so settings
+    // without it, and every plan stored before it, plan each phase's miner as before.
+    ...ownedMinerSetting(input.ownedMiner),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

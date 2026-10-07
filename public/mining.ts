@@ -51,11 +51,16 @@ export const equipmentWords = (mining: StageMining): string =>
 
 // The miners of each phase from `from` to 5, consecutive phases with the same miner together:
 // "Miner Mk.1 at 100% in Phase 1, Mk.2 at 100% in Phases 2 and 3 and Mk.3 at 250% in Phases 4
-// and 5". `survey` is the settings' node survey, which caps each phase's.
-export function phaseMinersWords(survey: MiningSettings['extraction'], from = 1): string {
+// and 5". `survey` is the settings' node survey, which caps each phase's, and `owned` the miner the
+// player already has (settings.ownedMiner, #1068), which raises it.
+export function phaseMinersWords(
+  survey: MiningSettings['extraction'],
+  from = 1,
+  owned?: number,
+): string {
   const runs: { words: string; phases: number[] }[] = [];
   for (let phase = from; phase <= 5; phase++) {
-    const miner = phaseMiner(phase, survey);
+    const miner = phaseMiner(phase, survey, owned);
     const words = `Mk.${miner.mark} at ${miningNumber(miner.clock * 100)}%`;
     const run = runs.at(-1);
     if (run?.words === words) run.phases.push(phase);

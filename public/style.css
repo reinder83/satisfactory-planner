@@ -4288,7 +4288,8 @@ button.rail-tile:hover {
 .rate-row[hidden] {
   display: none;
 }
-.carry-panel {
+.carry-panel,
+.already-have {
   margin: 18px 0 0;
 }
 .carry-panel .field {
@@ -4300,17 +4301,39 @@ button.rail-tile:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 18px;
 }
-.carry-list .check-row {
+.carry-list .check-row,
+.already-have .check-row {
   align-items: flex-start;
   line-height: 1.45;
 }
-.carry-list .check-row b {
+.carry-list .check-row b,
+.already-have .check-row b {
   font-family: var(--head);
   letter-spacing: 0.06em;
   color: var(--bright);
 }
-.carry-list small {
+.carry-list small,
+.already-have small {
   font-size: 11px;
+}
+.owned-alternates {
+  margin: 14px 0 0;
+}
+.owned-alternates summary {
+  font-family: var(--head);
+  letter-spacing: 0.06em;
+  color: var(--bright);
+  cursor: pointer;
+  padding: 12px 0;
+}
+.owned-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 10px 18px;
+}
+.owned-list .check-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ── Help tooltips ─────────────────────────────────────── */
@@ -5864,6 +5887,11 @@ th.resource-cell {
 /* The budgets step's budgets per phase (#1065): its caption reads as the paragraph above it. */
 .phase-budgets {
   margin: 8px 0 16px;
+}
+/* "Miners you already have" (#1068) over that table. */
+.owned-miner {
+  max-width: 420px;
+  margin: 8px 0 0;
 }
 .phase-budgets caption {
   caption-side: top;
