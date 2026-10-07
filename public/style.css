@@ -5001,6 +5001,12 @@ button.rail-tile:hover {
   text-transform: none;
   color: var(--muted);
 }
+/* Why a step is done by its own condition (#1070): an inline-block, so the done title's
+   line-through does not run through the reason. */
+.task-idle[data-satisfied-note] {
+  display: inline-block;
+  width: 100%;
+}
 /* On a phone each link under a step is a 44px touch target (#749). Height only: the link is
    already wide enough, and inline-flex keeps its label centred (.btn's align-items). */
 @media (max-width: 720px) {

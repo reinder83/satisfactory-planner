@@ -79,7 +79,7 @@ function planSteps(
 
 // The save list's per-phase progress of a profile (ProfileSummary.phases, SP-32): phaseProgress's
 // production lines and `steps`: the phase's build-plan steps (planStepIds, `data` is
-// progression.json) ticked, over all of them. The profile card fills each phase with those, so a
+// progression.json) ticked or done by their own condition (#1070), over all of them. The profile card fills each phase with those, so a
 // phase reads as finished only when the profile would not open on it (openingPhase, #570, #746).
 // The milestone-only phases before the start phase (#759, milestoneOnlyPhases in progression.ts)
 // come first, with no production lines (0 of 0) and their milestones as steps, so the card covers

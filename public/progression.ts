@@ -155,8 +155,10 @@ export interface PhaseStep extends GuideTask {
 // for the phase instead, with their own check ids; a phase the guide leaves out has none (#466).
 // A phase before the profile's start phase is milestone-only (#759, milestoneOnlyPhase): its
 // milestone steps and nothing else, since production is planned from the start phase on.
-// Otherwise: startup, power and milestone steps, hard drives, one step per production row,
-// storage, then the lines this phase retires. Row steps use the saved key
+// Otherwise (#1070): startup, power and the required milestone steps, each power step after the
+// unlock it asks for, mining, hard drives, one step per production row (generators first,
+// powerFirst), storage, the delivery, the storage-only lines, the lines this phase retires, and
+// last the research only a later phase needs (optional). Row steps use the saved key
 // `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
 // It reads only its arguments, so it works out any phase of a stored plan, not just the open one.
 // `memo` (StepsMemo) lets calls for several phases of the same plan and progress share work.
