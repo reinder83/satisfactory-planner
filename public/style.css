@@ -1429,6 +1429,14 @@ p.eyebrow {
 .factory-card .status-chip.held {
   color: var(--accent-hi);
 }
+/* A line running from the phase before, not ticked in this one (#1069). */
+.factory-card .status-chip.carried,
+.factory-card .build-carried {
+  color: var(--blue);
+}
+.factory-card .status-chip.carried {
+  border-color: var(--blue);
+}
 .factory-card .card-top {
   display: flex;
   justify-content: space-between;
@@ -2015,6 +2023,9 @@ tr.current-phase td:first-child {
 }
 tr.current-phase td {
   color: var(--bright);
+}
+.phase-tag.running-tag {
+  color: var(--green);
 }
 .phase-tag {
   display: block;

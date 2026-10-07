@@ -10,7 +10,8 @@
   machines and the adjustable machine's clock on the line below it, then any other outputs.
   A line at exact clocks in a whole-machine plan says so, and so does one whose clocks a
   recalculation would change (lineClockNote in app/exact-clocks.ts, #1066).
-  The chip at the top says whether it runs, or is held back by a missing supplier with the
+  The chip at the top says whether it runs, runs from the phase before with how many machines
+  (#1069), or is held back by a missing supplier with the
   reason above the footer (RunningChip.vue, SP-15); it follows the Running box.
 -->
 <script setup lang="ts">
@@ -19,7 +20,7 @@ import { itemRate, rateOfItem, rateUnit, unitGap } from '../../flow.ts';
 import { num } from '../../format.ts';
 import { lineClockNote } from '../../exact-clocks.ts';
 import { calculated, checked, factoryEditing, stage, state } from '../../session.ts';
-import { heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
+import { carriedCard, heldBack, machineSetup, rowIcon } from '../../views/calculated.ts';
 import {
   allocationText,
   factoryGroupsState,
@@ -98,6 +99,9 @@ const card = computed(() =>
         : main && total
           ? { name: main, mw: row.generationMW / total }
           : { name: 'MW' },
+      // A line not ticked here that runs from the phase before: "Running since Phase 1: 2 of 5
+      // machines" (#1069), and that phase for the chip.
+      carried: carriedCard(row),
       // A row marked running that a missing supplier holds back (build-status.ts, #66).
       held: (() => {
         const hold = heldBack(row.id);
@@ -110,7 +114,10 @@ const card = computed(() =>
 
 <template>
   <article :class="['factory-card', card.done ? 'done' : '', card.generator ? 'generator' : '']">
-    <RunningChip :status="card.held ? 'held' : card.done ? 'running' : 'idle'" />
+    <RunningChip
+      :status="card.held ? 'held' : card.done ? 'running' : card.carried ? 'carried' : 'idle'"
+      :from="card.carried?.from"
+    />
     <div class="card-top">
       <span class="card-icon"><ItemIcon v-if="card.icon" :name="card.icon" /></span>
       <div class="card-main">
@@ -133,6 +140,9 @@ const card = computed(() =>
     <div v-if="card.clocks" class="small allocation" data-exact-clocks>{{ card.clocks }}</div>
     <div v-if="card.allocation" class="small allocation">{{ card.allocation }}</div>
     <div v-if="card.held" class="small build-held" data-build-held>{{ card.held }}</div>
+    <div v-if="card.carried" class="small build-carried" data-carried>
+      {{ card.carried.text }}
+    </div>
     <footer>
       <label class="check-row"
         ><input

@@ -36,6 +36,7 @@ import {
   state,
 } from '../../session.ts';
 import type { StoredCalculatedPlan, StoredStage } from '../../../types/index.ts';
+import { currentCarry } from '../../views/calculated.ts';
 import { storageBays } from '../../views/storage.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -97,6 +98,9 @@ const page = computed(() =>
     // A production line's Running box is its checklist step, `calc-<stage>-<row id>`.
     const rows = stagePlan?.rows || [];
     const running = rows.filter(r => checked('calc-' + stage() + '-' + r.id)).length;
+    // Lines not ticked here that run from the phase before (#1069), counted apart.
+    const carry = currentCarry(),
+      carried = carry?.shares.size || 0;
     const slots = storageBays()
       .flatMap(b => b.items)
       .filter(s => s.name);
@@ -120,6 +124,15 @@ const page = computed(() =>
               href: '#factories',
               text: `${running} of ${rows.length} production lines running, ${buildings} buildings`,
             },
+            ...(carry && carried
+              ? [
+                  {
+                    key: 'carried',
+                    href: '#factories',
+                    text: `${carried} more ${carried === 1 ? 'line' : 'lines'} running since Phase ${carry.from}`,
+                  },
+                ]
+              : []),
             {
               key: 'storage',
               href: '#storage',

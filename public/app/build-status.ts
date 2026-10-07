@@ -11,7 +11,10 @@
 // - An item that falls short is shared among everything the plan gives it to (built consumer
 //   rows at their full inputs, protected storage, drone fuel and the elevator delivery) in
 //   proportion to what the plan gives each. Surplus is left over by definition and takes nothing.
-// - Built rows start at full and are lowered until nothing changes, so byproduct loops (a row fed
+// - A row the phase before marked running and this phase builds again (#1069, phaseCarry in
+//   handover.ts) runs, until it is ticked here, at most at the share its earlier machines make
+//   (its capacity), and asks for its inputs at that share. A ticked row's capacity is 1.
+// - Built rows start at their capacity and are lowered until nothing changes, so byproduct loops (a row fed
 //   by a later one) settle, and a fully built plan comes out at exactly its planned rates.
 // - Power is reported, not applied: a plan whose built factories draw more than its built
 //   generators and the spare power give is flagged, but nothing is slowed down for it. It is
@@ -26,6 +29,8 @@ export interface RowStatus {
   built: boolean;
   // 0-1: the share of its planned rate the row can run at now (0 when not built).
   share: number;
+  // For an unticked row carried from the phase before: the share its earlier machines make.
+  carried?: number;
   // For a built row running below full: the input that holds it back.
   shortOf?: string;
 }
@@ -52,6 +57,8 @@ export interface BuildStatus {
   // the machine-equivalents it frees.
   next: { id: string; gain: number; unblocks: number } | null;
   builtCount: number;
+  // Unticked rows running from the phase before (#1069).
+  carriedCount: number;
   rowCount: number;
 }
 
@@ -64,8 +71,11 @@ const add = (into: Record<string, number>, from: ItemRates | undefined, scale = 
     into[item] = (into[item] || 0) + rate * scale;
 };
 // Per item: what is always available (raw and supplied), and what these built rows ask for
-// together with what the plan gives outside the rows (storage, drone fuel, delivery).
-function books(stage: StoredStage, built: Set<string>) {
+// together with what the plan gives outside the rows (storage, drone fuel, delivery). `capacity`
+// is each running row's largest share: 1 for a ticked row, less for a carried one.
+type Capacity = ReadonlyMap<string, number>;
+const capOf = (capacity: Capacity, id: string) => capacity.get(id) || 0;
+function books(stage: StoredStage, capacity: Capacity) {
   const extra: Record<string, number> = {};
   add(extra, stage.raw);
   add(extra, stage.supplied);
@@ -74,27 +84,31 @@ function books(stage: StoredStage, built: Set<string>) {
   add(demand, stage.drone);
   for (const [item, delivery] of Object.entries(stage.delivery || {}))
     add(demand, { [item]: delivery.rate || 0 });
-  for (const row of stage.rows || []) if (built.has(row.id)) add(demand, row.inputs);
+  for (const row of stage.rows || []) add(demand, row.inputs, capOf(capacity, row.id));
   return { extra, demand };
 }
 
-// Row shares for a given set of built row ids, lowered from full to a fixed point.
-function shares(stage: StoredStage, built: Set<string>): Map<string, number> {
+// Row shares for given row capacities, lowered from the capacity to a fixed point.
+function shares(stage: StoredStage, capacity: Capacity): Map<string, number> {
   const rows = stage.rows || [];
-  const { extra, demand } = books(stage, built);
-  const share = new Map(rows.map(r => [r.id, built.has(r.id) ? 1 : 0]));
+  const { extra, demand } = books(stage, capacity);
+  const share = new Map(rows.map(r => [r.id, capOf(capacity, r.id)]));
   for (let round = 0; round < 100; round++) {
     const supply: Record<string, number> = { ...extra };
     for (const row of rows) add(supply, row.outputs, share.get(row.id)!);
     let changed = false;
     for (const row of rows) {
-      if (!built.has(row.id)) continue;
-      let rowShare = 1;
+      const cap = capOf(capacity, row.id);
+      if (!cap) continue;
+      // A short input reaches each consumer in proportion to what it asks, so a carried row
+      // gets that part of its capacity.
+      let fed = 1;
       for (const item of Object.keys(row.inputs || {}))
-        rowShare = Math.min(
-          rowShare,
+        fed = Math.min(
+          fed,
           demand[item]! > EPSILON ? settle((supply[item] || 0) / demand[item]!) : 1,
         );
+      const rowShare = cap * fed;
       if (Math.abs(rowShare - share.get(row.id)!) > EPSILON) changed = true;
       share.set(row.id, rowShare);
     }
@@ -104,8 +118,8 @@ function shares(stage: StoredStage, built: Set<string>): Map<string, number> {
 }
 
 // What the built rows make, the delivery that reaches the elevator, and the mean delivery share.
-function flows(stage: StoredStage, built: Set<string>, share: Map<string, number>) {
-  const { extra: produced, demand } = books(stage, built);
+function flows(stage: StoredStage, capacity: Capacity, share: Map<string, number>) {
+  const { extra: produced, demand } = books(stage, capacity);
   for (const row of stage.rows || []) add(produced, row.outputs, share.get(row.id)!);
   const delivery: DeliveryStatus[] = Object.entries(stage.delivery || {}).map(
     ([item, stageDelivery]) => {
@@ -187,21 +201,30 @@ function storedPower(stage: StoredStage, share: Map<string, number>, sparePowerM
 // `checks` is the profile's progress checks and `stageKey` the stage's key in the plan ('1'-'5'),
 // as in the build plan's step ids. `buildOrder` is the stage's rows in the order the build plan
 // lists them (groupedRows in group-order.ts, #869), which decides ties for the next step.
+// `carried` is the share each unticked row carried from the phase before makes (phaseCarry in
+// handover.ts, #1069); without it only the ticked rows run, as before.
 export function buildStatus(
   stage: StoredStage,
   checks: Record<string, boolean>,
   stageKey: string,
   sparePowerMW = 0,
   buildOrder: readonly CalcRow[] = stage.rows || [],
+  carried: ReadonlyMap<string, number> = new Map(),
 ): BuildStatus {
   const rows = stage.rows || [];
   const built = new Set(rows.filter(r => checks[`calc-${stageKey}-${r.id}`]).map(r => r.id));
-  const share = shares(stage, built);
-  const { produced, demand, delivery, deliveryShare } = flows(stage, built, share);
+  const capacity = new Map<string, number>();
+  for (const row of rows) {
+    const cap = built.has(row.id) ? 1 : carried.get(row.id) || 0;
+    if (cap > 0) capacity.set(row.id, cap);
+  }
+  const share = shares(stage, capacity);
+  const { produced, demand, delivery, deliveryShare } = flows(stage, capacity, share);
   const statusRows: RowStatus[] = rows.map(row => {
     const rowShare = share.get(row.id)!;
     const status: RowStatus = { id: row.id, built: built.has(row.id), share: rowShare };
-    if (status.built && rowShare < 1) {
+    if (!status.built && capacity.has(row.id)) status.carried = capOf(capacity, row.id);
+    if (capacity.has(row.id) && rowShare < capOf(capacity, row.id)) {
       // The input with the lowest supply against everything that asks for it (the ratio
       // shares() limits the row by), so a competing consumer or storage counts too.
       let worst = Infinity;
@@ -212,27 +235,36 @@ export function buildStatus(
     }
     return status;
   });
+  // Carried lines stay out of the power check in every phase: they run on the phase before's
+  // generators (hand-fed biomass, then coal, then fuel), which are rarely rows of this phase and
+  // never carried, so counting them would warn about power that is in fact running.
+  const powered = new Map([...share].map(([id, rowShare]) => [id, built.has(id) ? rowShare : 0]));
   const { drawMW, supplyMW } = stage.grid
-    ? gridPower(stage, stage.grid, share)
-    : storedPower(stage, share, sparePowerMW);
+    ? gridPower(stage, stage.grid, powered)
+    : storedPower(stage, powered, sparePowerMW);
   // The planner's own balance leaves float dust, so a fully built plan never trips the flag.
   const short = stageKey !== '1' && drawMW > supplyMW + 1e-6 * Math.max(1, supplyMW);
-  // Machine-equivalents running among the rows built now, under a set of shares.
-  const running = (sharesById: Map<string, number>) =>
+  // Machine-equivalents running among the rows running now (ticked or carried), other than
+  // `skip`, under a set of shares.
+  const running = (sharesById: Map<string, number>, skip: string) =>
     rows.reduce(
-      (sum, row) => sum + (built.has(row.id) ? (row.equivalent || 0) * sharesById.get(row.id)! : 0),
+      (sum, row) =>
+        sum +
+        (capacity.has(row.id) && row.id !== skip
+          ? (row.equivalent || 0) * sharesById.get(row.id)!
+          : 0),
       0,
     );
-  const runningNow = running(share);
   // The unbuilt row whose completion adds the most delivery, then the one that frees the most
-  // built machines; ties go to build order. With neither, the first unbuilt row in build order.
+  // running machines; ties go to build order. With neither, the first unbuilt row in build order.
+  // A carried row counts as unbuilt: completing it is the step to tick here.
   let next: BuildStatus['next'] = null;
   for (const row of buildOrder) {
     if (built.has(row.id)) continue;
-    const trial = new Set(built).add(row.id);
+    const trial = new Map(capacity).set(row.id, 1);
     const trialShares = shares(stage, trial);
     const gain = Math.max(0, flows(stage, trial, trialShares).deliveryShare - deliveryShare);
-    const unblocks = Math.max(0, running(trialShares) - runningNow);
+    const unblocks = Math.max(0, running(trialShares, row.id) - running(share, row.id));
     const better =
       !next ||
       gain > next.gain + 1e-6 ||
@@ -247,6 +279,7 @@ export function buildStatus(
     power: { drawMW, supplyMW, short },
     next,
     builtCount: built.size,
+    carriedCount: capacity.size - built.size,
     rowCount: rows.length,
   };
 }
