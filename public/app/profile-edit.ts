@@ -62,7 +62,7 @@ export function defaultProfileName(
   date = new Date(),
 ): string {
   const from = base ?? FRESH;
-  const goal = goals.find(entry => entry.id === settings.goal)?.name ?? 'Profile';
+  const goal = (goals || []).find(entry => entry.id === settings.goal)?.name ?? 'Profile';
   const changes = NAME_PARTS.filter(
     ([key]) => settings[key] !== undefined && differs(settings[key], from[key] ?? FRESH[key]),
   )
@@ -147,7 +147,7 @@ export function settingsChanges(
     after = newSettings as NameSettings;
   const changed = (key: string) =>
     before[key] !== undefined && after[key] !== undefined && differs(before[key], after[key]);
-  const goalName = (id: unknown) => goals.find(goal => goal.id === id)?.name ?? String(id);
+  const goalName = (id: unknown) => (goals || []).find(goal => goal.id === id)?.name ?? String(id);
   const changes: SettingChange[] = [
     ...(changed('goal')
       ? [{ label: 'Goal', before: goalName(before.goal), after: goalName(after.goal) }]
