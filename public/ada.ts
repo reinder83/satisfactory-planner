@@ -286,7 +286,7 @@ const RULES: AdaRule[] = [
     tone: 'praise',
     when: facts => facts.steps?.total && facts.steps.done === facts.steps.total,
     text: facts =>
-      `All ${facts.steps.total} steps of ${facts.phaseLabel} are ticked. Well done, in the corporate sense. Move the phase selector at the top once the delivery is in.`,
+      `All ${facts.steps.total} steps of ${facts.phaseLabel} are ticked. Well done, in the corporate sense. ${facts.phaseLabel === 'Post Phase 5' ? 'There is no Phase 6, pioneer: keep the lines running.' : 'Move the phase selector at the top once the delivery is in.'}`,
   },
   {
     id: 'nearly',

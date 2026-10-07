@@ -777,3 +777,25 @@ test('ADA says the clocks asked for wait for a recalculation, and what whole mac
   assert.match(cost.text, /dialog can set that one line to exact clocks/);
   assert.ok(!ids(facts({ view: 'plan' })).includes('rounding-cost'), 'absent without the record');
 });
+
+test('a completed Post Phase 5 points to no Phase 6 (#1069)', () => {
+  const done = (phaseLabel: string) =>
+    first(
+      facts({
+        phaseLabel,
+        steps: { done: 10, total: 10 },
+        next: '',
+        factories: { done: 3, total: 6 },
+      }),
+    );
+  assert.equal(done('Post Phase 5').id, 'complete');
+  assert.match(
+    done('Post Phase 5').text,
+    /There is no Phase 6, pioneer: keep the lines running\.$/,
+  );
+  assert.doesNotMatch(done('Post Phase 5').text, /phase selector/);
+  assert.match(
+    done('Phase 3').text,
+    /Move the phase selector at the top once the delivery is in\.$/,
+  );
+});

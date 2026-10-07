@@ -6,6 +6,7 @@
 import { groupedRows, groupedSteps } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
+import { carriedLine, carriedText } from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
 import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
@@ -75,8 +76,16 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
   // The stage of the phase shown, which need not be the current phase (#1022).
   const snapshot = calculated.stages[shownPhase === 'post' ? '5' : shownPhase];
   return orderedPhaseSteps(shownPhase).map(({ row, ...step }) =>
-    row ? { ...step, body: rowStepBody(row, snapshot) } : step,
+    row ? { ...step, body: carriedStepText(row, shownPhase) + rowStepBody(row, snapshot) } : step,
   );
+}
+
+// The opening sentence of a step for a line the phase before marked running and this phase builds
+// again (carriedText in handover.ts, #1069): what already runs and what to add or change; '' for
+// any other line. It reads the saved ticks of the phase before and changes none.
+function carriedStepText(row: CalcRow, shownPhase: Phase): string {
+  const carried = calculated && carriedLine(calculated, state.checks, shownPhase, row.id);
+  return carried ? carriedText(carried, row) : '';
 }
 
 // A production row's build-plan step text: its machines, inputs and outputs, with the pointer

@@ -22,6 +22,7 @@ import {
   checked as ticked,
   editingTask,
   hideDone,
+  phase,
   planEditing,
   query,
   requiredOnly,
@@ -103,6 +104,8 @@ const list = computed(() =>
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
+      // Post Phase 5 has no next phase to get ready for (#1069).
+      post: phase() === 'post',
       removed: planEditing ? removedViews(removed) : [],
     };
   }),
@@ -203,8 +206,16 @@ function toggleRequiredOnly(event: Event) {
       <div class="task lead is-complete" data-phase-complete>
         <div class="step-no">Phase checklist complete</div>
         <div class="lead-done">
-          <b>Ready for the next phase</b>
-          <p>Verify the delivery, then choose your next phase using the selector above.</p>
+          <template v-if="list.post"
+            ><b>Nothing left to build</b>
+            <p>Post Phase 5 has no next phase: keep these lines running.</p></template
+          >
+          <template v-else
+            ><b>Ready for the next phase</b>
+            <p>
+              Verify the delivery, then choose your next phase using the selector above.
+            </p></template
+          >
           <p v-if="list.hideDone">Untick “Hide completed” to review the steps.</p>
         </div>
       </div>
