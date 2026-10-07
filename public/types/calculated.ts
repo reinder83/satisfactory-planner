@@ -122,6 +122,11 @@ export interface CurrentSettings {
   // phase it raises every phase's miner to at least that mark (phaseMiner in
   // public/preferences/mining.ts). Absent unless chosen, and from every plan made before it.
   ownedMiner?: 2 | 3;
+  // The alternate recipes the player already owns (#1068, All settings step 2): recipe ids, sorted.
+  // recipePool adds each to every phase from the one it becomes available in, whatever `recipes`
+  // says, so a Standard plan can use them; their unlock steps start ticked. Absent unless one is
+  // owned, and from every plan made before it, which therefore calculates exactly as before.
+  ownedAlternates?: string[];
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;

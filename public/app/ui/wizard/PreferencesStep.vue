@@ -1,7 +1,8 @@
 <!--
   All settings step 2, preferences: recipes, ingots, SAM, power and drone fuel, nuclear,
   storage and refill rates, somersloops and augmenters, then the somersloop ledger, the
-  per-item storage rates and, for custom recipe access, the alternate recipe picker. Recipe
+  per-item storage rates, for custom recipe access the alternate recipe picker, and the
+  alternates you already own (OwnedAlternates, #1068, under every recipe access). Recipe
   access, preferred power, the ingot choice, drone fuel and nuclear change what the step shows,
   so WizardPage reads the step and redraws when they change. A rate that only means something
   with a choice made (the drone fuel supply and the battery bridge, the minimum of uranium
@@ -16,6 +17,7 @@ import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import SelectField from '../form/SelectField.vue';
 import AltPicker from './AltPicker.vue';
+import OwnedAlternates from './OwnedAlternates.vue';
 import SloopLedger from './SloopLedger.vue';
 import StorageRates from './StorageRates.vue';
 import StepHeading from '../form/StepHeading.vue';
@@ -192,7 +194,9 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
       required
     />
   </div>
-  <SloopLedger /><StorageRates /><AltPicker v-if="settings.recipes === 'custom'" />
+  <SloopLedger /><StorageRates /><AltPicker
+    v-if="settings.recipes === 'custom'"
+  /><OwnedAlternates />
   <div class="notice info">
     SAM conversion controls raw resource conversion, not SAM ingredients required by late-game
     parts. Pure recipes still need unlocking. Gathered items get storage positions but cannot have

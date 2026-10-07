@@ -315,6 +315,13 @@ const reservedUses = (raw: unknown): SloopUse[] => {
 // value, so the field is absent unless chosen.
 const ownedMinerSetting = (value: unknown): { ownedMiner?: 2 | 3 } =>
   value === 2 || value === 3 ? { ownedMiner: value } : {};
+// The alternate recipes the player already owns (#1068): known alternate ids, deduplicated and
+// sorted, so equal choices give equal settings; the field is absent unless one is left.
+const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } => {
+  if (!Array.isArray(value)) return {};
+  const ids = [...new Set(value.filter((id): id is string => ALT_IDS.has(id)))].sort();
+  return ids.length ? { ownedAlternates: ids } : {};
+};
 
 // Validates and normalises a profile's settings. Every field has a default, so `settings({})` is a
 // complete profile, and a field older profiles never stored must default to the value that makes
@@ -378,6 +385,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The best miner the player already has (#1068): only Mk.2 or Mk.3 is kept, so settings
     // without it, and every plan stored before it, plan each phase's miner as before.
     ...ownedMinerSetting(input.ownedMiner),
+    // The alternates the player already owns (#1068): only known alternate ids are kept, so
+    // settings without them, and every plan stored before them, plan the same recipe pool.
+    ...ownedAlternatesSetting(input.ownedAlternates),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

@@ -58,6 +58,8 @@ export function rankAlternates(
           recipe.alternate &&
           recipe.phase <= phaseNumber &&
           !owned.includes(recipe.id) &&
+          // An alternate the player already owns (#1068) needs no hard drive to rank.
+          !config.ownedAlternates?.includes(recipe.id) &&
           !NO_HARD_DRIVE.includes(recipe.id) &&
           !(config.pureIngots && pureNames.includes(recipe.name)),
       )

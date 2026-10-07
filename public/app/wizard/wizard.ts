@@ -339,6 +339,7 @@ export function readWizard(form: HTMLFormElement) {
   readFields(data, wizardDraft);
   readSloops(form, data, settings);
   readAlternates(form, data, settings);
+  readOwnedAlternates(form, data, settings);
   const supply = readSupply(form, data);
   if (supply) settings.existingSupply = supply;
   readStorageOverrides(form, data, settings);
@@ -424,6 +425,16 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
     .getAll('altpref')
     .map(String)
     .filter(id => alternates.includes(id));
+}
+
+// "Alternates you already own" on All settings step 2 (#1068, ui/wizard/OwnedAlternates.vue),
+// when it is on screen: its ticked boxes (name="ownedAlt") become settings.ownedAlternates, and
+// none removes the field, so a plan without owned alternates keeps the settings it always had.
+function readOwnedAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+  if (!form.querySelector('.owned-alt-list')) return;
+  const owned = data.getAll('ownedAlt').map(String);
+  if (owned.length) settings.ownedAlternates = owned;
+  else delete settings.ownedAlternates;
 }
 
 // The per-item storage rates ("rate:<item>"), when they are on screen: blank or non-numeric
@@ -613,16 +624,26 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   );
 }
 
+// The unlock steps (`recipe-unlock-<recipe>`) of the alternates the player already has (#1068):
+// those chosen on All settings step 2, which the preview was calculated with
+// (`settingsOwnedKeys`, its settings.ownedAlternates), and those ticked on Review
+// (draft.ownedAlternates).
+export const settingsOwnedKeys = (wizardDraft: WizardDraft): string[] =>
+  (wizardDraft.preview?.settings.ownedAlternates || []).map(id => 'recipe-unlock-' + id);
+export const ownedUnlockKeys = (wizardDraft: WizardDraft): Set<string> =>
+  new Set([...(wizardDraft.ownedAlternates || []), ...settingsOwnedKeys(wizardDraft)]);
+
 // The steps Review's "What you already have" ticks in the new profile (#1068), from the preview:
 // with "Everything before Phase N is done" every step the milestone-only phases before its start
 // phase list (stepsBeforeStart, unlock-<id> keys), and for the alternates owned their unlock steps
 // and each phase's hunt that has nothing left to hunt (ownedAlternateKeys). newProfileState accepts
 // them as finished work; records carried from another profile still win there, an untick included.
+// The alternates owned are those ticked there and those chosen on step 2 (ownedUnlockKeys).
 // None while every box is clear.
 export function alreadyHaveKeys(wizardDraft: WizardDraft): string[] {
   const plan = wizardDraft.preview;
   if (!plan || !progressionData?.buildings) return [];
-  const owned = new Set(wizardDraft.ownedAlternates || []);
+  const owned = ownedUnlockKeys(wizardDraft);
   return [
     ...(wizardDraft.earlierDone ? stepsBeforeStart(plan, { checks: {} }, progressionData) : []),
     ...(owned.size ? ownedAlternateKeys(alternateHunts(plan, progressionData), owned) : []),

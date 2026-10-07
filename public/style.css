@@ -3408,6 +3408,57 @@ button.rail-tile:hover {
   padding: 2px 7px;
   white-space: nowrap;
 }
+/* "Alternates you already own" on step 2 (#1068): the alternate picker's frame, folded. Its own
+   classes: readAlternates reads the custom picker by .alt-list. */
+.owned-alt-picker {
+  margin: 16px 0 0;
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+}
+.owned-alt-picker > p {
+  padding: 0 13px;
+  margin: 8px 0;
+}
+.owned-alt-picker > summary {
+  padding: 10px 13px;
+  cursor: pointer;
+  font-family: var(--head);
+  letter-spacing: 0.06em;
+  color: var(--bright);
+}
+.owned-alt-picker[open] > summary {
+  border-bottom: 1px solid var(--line2);
+}
+.owned-alt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 13px 6px;
+}
+.owned-alt-tools input[type='search'] {
+  background: #0f1214;
+  border: 1px solid #343b41;
+  padding: 7px 10px;
+  min-width: min(280px, 100%);
+}
+.owned-alt-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 13px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 2px 18px;
+}
+.owned-alt-row {
+  font-size: 11.5px;
+}
+.owned-alt-row[hidden] {
+  display: none;
+}
+.owned-alt-row small {
+  font-size: 10.5px;
+}
 .alt-force-hint {
   display: flex;
   gap: 11px;
@@ -5494,6 +5545,7 @@ button.rail-tile:hover {
   .used-input,
   .setting-help [role='tooltip'],
   .alt-picker-head input,
+  .owned-alt-tools input[type='search'],
   .rate-picker #rate-filter,
   .supply-options,
   .guided-chip,
