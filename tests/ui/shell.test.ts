@@ -127,8 +127,12 @@ test('the phase track shows each phase’s progress and switches phases like the
     null,
     'post-game has no checklist',
   );
-  // The breadcrumb names the save only; the phase is the track's (or the select's).
-  assert.equal($('.breadcrumbs')!.textContent!.trim(), $('.breadcrumbs a')!.textContent);
+  // The breadcrumb names the save and the open profile (#1071), not the phase: that is the
+  // track's (or the select's).
+  assert.equal(
+    $('.breadcrumbs')!.textContent!.trim(),
+    $('.breadcrumbs a')!.textContent + '/' + $('[data-crumb-profile]')!.textContent,
+  );
   assert.ok($('#phase-picker'), 'the select stays for phone widths');
   // Choosing a segment saves the phase, as the select does, and redraws both.
   const calls = stubFetch<{ type: string; value: string }>({ '/api/update': applyUpdate });

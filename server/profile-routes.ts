@@ -1,9 +1,13 @@
 // The routes over the scoped profile (see scope.ts): reading it, its progress backup, changing
-// or restoring its progress, the whole-machine copy and the hard-drive payoff ranking.
+// or restoring its progress, the whole-machine copy, Edit settings' recalculation in place and
+// the hard-drive payoff ranking.
 import {
   checkBase,
+  checkPlan,
+  checkRecalculate,
   checkRoundUp,
   currentPayoff,
+  recalculatedProfile,
   roundUpSettings,
   wholeMachineProfile,
 } from '../public/state.ts';
@@ -16,6 +20,12 @@ import { frozenMapping } from './persistence.ts';
 import { response } from './routing.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
+
+// A profile name from a request, trimmed (as save-routes.ts checks it).
+const profileName = (value: unknown): string =>
+  typeof value === 'string' && value.trim() && value.length <= 80
+    ? value.trim()
+    : fail('Enter a name with 1–80 characters.');
 
 export function profileRoutes({
   commit,
@@ -52,6 +62,52 @@ export function profileRoutes({
       { saveId: save.id, profileId, reviewCount, workspace: currentSummary(user) },
       201,
     );
+  }
+  // Edit settings, "Recalculate in place" (#1071): calculates body.settings, then replaces the
+  // scoped profile's plan, name and progress (recalculatedProfile in public/state/carry.ts,
+  // shared with browser-api.ts: its progress carried from itself with the carry picks body.carry,
+  // like a new profile carried from it) and keeps the previous version whole as a new profile
+  // named body.backupName, right after it. body.planCreatedAt names the plan the settings were
+  // edited from; a profile recalculated since is refused (409). Only the user starts it: nothing
+  // calls this route but the wizard's "Recalculate in place" button. The previous version is read
+  // inside the commit, so ticks made meanwhile in another tab are carried and kept in the backup.
+  async function recalculate({ req, user, save, profile, body }: ScopedRequest) {
+    const input = await body();
+    checkRecalculate(profile, input.planCreatedAt, 0);
+    const title = profileName(input.name),
+      backupName = profileName(input.backupName);
+    limits.throttle(req);
+    const plan = calculate(input.settings),
+      backupId = randomId();
+    let carried = { reviewCount: 0, carried: 0 };
+    await commit(draft => {
+      const draftSave = draft.saves.find(s => s.id === save.id && s.userId === user.id);
+      const index = draftSave?.profiles.findIndex(p => p.id === profile.id) ?? -1;
+      if (!draftSave || index < 0) fail('Profile not found.', 404);
+      const previous = draftSave.profiles[index]!;
+      checkRecalculate(previous, input.planCreatedAt, draftSave.profiles.length);
+      const next = recalculatedProfile(
+        previous,
+        plan,
+        title,
+        input.carry,
+        input.built,
+        backupId,
+        backupName,
+      );
+      carried = next;
+      draftSave.profiles.splice(index, 1, next.profile, next.backup);
+      draftSave.activeProfile = profile.id;
+      draft.users.find(account => account.id === user.id)!.activeSave = draftSave.id;
+    });
+    return response({
+      saveId: save.id,
+      profileId: profile.id,
+      backupId,
+      reviewCount: carried.reviewCount,
+      carriedChecks: carried.carried,
+      workspace: currentSummary(user),
+    });
   }
   // Hard-drive payoff (#203): ranks the alternates the scoped calculated profile does not
   // allow yet for body.phase (rankAlternates in planner.ts) and stores the result on the
@@ -91,7 +147,10 @@ export function profileRoutes({
       payoff: currentPayoff(profile),
     });
   }
-  function progressState({ profile }: ScopedRequest) {
+  // A tab that shows a plan this profile no longer has is refused (checkPlan, #1071), so it opens
+  // the new plan rather than adopting the new plan's state.
+  function progressState({ req, profile }: ScopedRequest) {
+    checkPlan(profile, [req.headers['x-planner-plan']].flat()[0]);
     return response(profile.state);
   }
   // Progress-only backup of the scoped profile, a separate format from the full-save
@@ -147,8 +206,11 @@ export function profileRoutes({
         ?.profiles.find(p => p.id === profile.id);
       if (!draftProfile) fail('Profile not found.', 404);
       // A whole-value write from a tab that has not seen the latest change is refused (409).
-      if (!imported)
+      // So is any write from a tab still showing the plan before an in-place recalculation.
+      if (!imported) {
+        checkPlan(draftProfile, [req.headers['x-planner-plan']].flat()[0], input);
         checkBase(draftProfile.state, input, [req.headers['x-planner-revision']].flat()[0]);
+      }
       // mutate() checks the operation and throws for one it does not know.
       const state = imported
         ? restoreProgress(draftProfile.state, imported, frozen)
@@ -161,6 +223,7 @@ export function profileRoutes({
   }
   return {
     roundUp,
+    recalculate,
     rankPayoff,
     profileContext,
     progressState,

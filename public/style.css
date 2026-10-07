@@ -600,6 +600,24 @@ input[type='radio'] {
    accessible name) and title, and the profiles page shows it in full. */
 .topbar .breadcrumbs {
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+/* The open profile after the save (#1071), the one name the switcher and the pages show too, cut
+   the same way. The save gives way first. */
+.breadcrumbs .crumb-save {
+  flex: 0 3 auto;
+  min-width: 3em;
+}
+.crumb-sep {
+  color: var(--dim);
+}
+.breadcrumbs .crumb-profile {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  border-bottom-color: rgba(220, 227, 232, 0.35);
 }
 .breadcrumbs a {
   color: var(--accent);
@@ -4825,6 +4843,12 @@ button.rail-tile:hover {
   }
   .topbar .breadcrumbs {
     max-width: 100%;
+  }
+  /* At phone width the top bar names only the open profile (#1071); the drawer's switcher names
+     its save. */
+  .topbar .breadcrumbs:has(.crumb-profile) .crumb-save,
+  .topbar .crumb-sep {
+    display: none;
   }
 }
 @media (max-width: 420px) {

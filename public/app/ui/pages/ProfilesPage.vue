@@ -5,7 +5,9 @@
   asks before dropping unsaved notes. "Create a save" is also offered by the wizard, so both
   use newSave in ui/actions.ts. Opening the page asks for the workspace summary again (#418), once
   the queued writes have landed, so each card's tick count, phase and phase bar are current,
-  including changes made in another tab; until the reply the last summary is shown.
+  including changes made in another tab; until the reply the last summary is shown. Each card's
+  "Edit settings" (#1071) opens All settings on that profile's settings, to recalculate it in
+  place (startEdit in wizard/wizard.ts); "Try another profile" still adds a new one.
 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -33,7 +35,7 @@ import {
 } from '../../session.ts';
 import { listNames } from '../../../wording.ts';
 import { render } from '../../shell.ts';
-import { startWizard } from '../../wizard/wizard.ts';
+import { startEdit, startWizard } from '../../wizard/wizard.ts';
 import { invalidate, legacy } from '../bridge.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
@@ -73,6 +75,7 @@ const page = computed(() =>
         id: profile.id,
         name: profile.name,
         open: save.id === currentSave.id && profile.id === currentProfile.id,
+        editable: !!profile.settings,
         summary: profile.settings
           ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
           : '',
@@ -233,6 +236,18 @@ async function remove(event: Event, save: SaveCard, profile: ProfileCard) {
 // "Open profile" / "Continue current profile": make it the active profile on the server,
 // load it and show its plan (openProfile in ui/actions.ts, which the sidebar's profile switcher
 // uses too).
+// "Edit settings": busy while the profile's plan is read (startEdit), and a failed read says so.
+async function editCard(save: SaveCard, profile: ProfileCard) {
+  if (busy.value) return;
+  busy.value = key('edit', save, profile);
+  try {
+    await startEdit(save.id, profile.id);
+  } catch (error) {
+    toast((error as Error).message, true);
+  } finally {
+    busy.value = '';
+  }
+}
 function openCard(save: SaveCard, profile: ProfileCard) {
   if (busy.value === key('open', save, profile)) return;
   return openProfile(
@@ -375,6 +390,17 @@ async function rename(
           >
             {{ profile.open ? 'Continue current profile' : 'Open profile' }}
           </button>
+          <button
+            v-if="profile.editable"
+            type="button"
+            class="btn"
+            :data-edit-profile="profile.id"
+            :data-edit-save="save.id"
+            :aria-disabled="busy === key('edit', save, profile) || undefined"
+            @click="editCard(save, profile)"
+          >
+            Edit settings
+          </button>
           <ActionMenu
             :id="menuId(save, profile)"
             :label="'More actions for ' + profile.name"
@@ -425,10 +451,11 @@ async function rename(
     </div>
   </section>
   <p class="small muted">
-    Duplicate copies a profile with its progress so you can try changes without touching the
-    original. Share downloads a file with the plan, storage layout, factories and step edits —
-    without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
-    save or profile with ✎ beside its name; renaming does not change progress. Profiles keep a
-    frozen calculation so later planner updates cannot silently change your targets.
+    Edit settings recalculates a profile in place, keeps its progress and keeps the current version
+    as a separate profile. Duplicate copies a profile with its progress so you can try changes
+    without touching the original. Share downloads a file with the plan, storage layout, factories
+    and step edits — without your checkmarks or notes — that anyone can import under Backup → Import
+    saves. Rename a save or profile with ✎ beside its name; renaming does not change progress.
+    Profiles keep a frozen calculation so later planner updates cannot silently change your targets.
   </p>
 </template>

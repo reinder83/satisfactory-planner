@@ -57,7 +57,8 @@ import {
   stubFetch,
 } from './setup.ts';
 import { openAltRecipe } from '../../public/app/wizard/recipes.ts';
-import { noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
+import { NAME_HINT, noteWizardEdit, startWizard } from '../../public/app/wizard/wizard.ts';
+import { nameDate } from '../../public/app/profile-edit.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -294,10 +295,11 @@ test('moving between steps reads the step being left, and Review calculates', as
   assert.equal(calls[0]![1].settings.somersloops, 104);
   assert.deepEqual(calls[0]![1].settings.sloopReserved, ['shards']);
   assert.equal(wizard!.step, 5);
+  // Named after the goal, what differs from a new save's defaults and the day (#1071).
   assert.equal(
     $('#main h2')!.textContent,
-    'Step 5 of 5: Review Balanced progression',
-    'named after the goal',
+    'Step 5 of 5: Review Balanced progression · exact ratios · from Phase 3 · ' + nameDate(),
+    'named after the goal, what changed and the date',
   );
   assert.equal($$('#main tbody tr').length, 3, 'the phases from the start phase on');
   // Back steps without validating; Continue moves on.
@@ -564,11 +566,9 @@ test('the goals step and what Review says about each phase', () => {
     'every phase is the default',
   );
   assert.ok($<HTMLInputElement>('input[name=goal][value=timed]')!.checked);
-  assert.equal(
-    $<HTMLInputElement>('input[name=profileName]')!.value,
-    'Target completion time',
-    'the goal’s name',
-  );
+  // Blank until a name is typed: the profile is then named after what it is (#1071).
+  assert.equal($<HTMLInputElement>('input[name=profileName]')!.value, '');
+  assert.equal($<HTMLInputElement>('input[name=profileName]')!.placeholder, NAME_HINT);
   wizardAt(3, {}, { goal: 'timed', phaseTime: 'final', multiplier: 10 });
   assert.equal($<HTMLSelectElement>('select[name=phaseTime]')!.value, 'final');
   assert.match(text('.goal-card:has(input[value=timed])'), /Suggested/);
@@ -863,9 +863,10 @@ test('past the last question the plan is calculated and Review takes over', asyn
   assert.equal(wizard!.step, 5);
   // One flow (#1072): Review is the guided start's last step, not a second set of five tabs.
   assert.equal(vuePage('wizard', wizard), GuidedPage);
-  assert.equal(
-    $('#main h2')!.textContent,
-    `Step ${last + 1} of ${last + 1}: Review Balanced progression`,
+  // The name is the descriptive default (#1071): the goal, what differs and the date.
+  assert.match(
+    $('#main h2')!.textContent!,
+    new RegExp(`^Step ${last + 1} of ${last + 1}: Review Balanced progression · `),
   );
   assert.equal($$('[data-wizard-step]').length, 0, 'no five step tabs');
   assert.equal($$('.guided-progress [role=listitem]').length, last + 1);
@@ -925,7 +926,7 @@ test('a second profile for a save is asked what changed, naming the profile safe
   assert.ok($('.guided-card'), 'choosing only the phase asks only the phase');
   assert.equal(
     $<HTMLInputElement>('input[name=profileName]')!.placeholder,
-    'Named after your goal if left blank',
+    'Named after its goal, changes and date if left blank',
   );
 });
 
