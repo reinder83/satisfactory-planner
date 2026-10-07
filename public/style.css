@@ -5510,6 +5510,7 @@ button.rail-tile:hover {
   .used-input,
   .setting-help [role='tooltip'],
   .alt-picker-head input,
+  .owned-alt-tools input[type='search'],
   .rate-picker #rate-filter,
   .supply-options,
   .guided-chip,
