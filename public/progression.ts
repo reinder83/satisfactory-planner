@@ -7,16 +7,22 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from './types/index.ts';
-import { listNames, powerAmount } from './wording.ts';
+import { listNames, powerAmount, slug } from './wording.ts';
 import { powerView } from './power.ts';
 import { miningLinearMW, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStepBody } from './mining.ts';
 
-// A generated guidance step: its checklist key, title and text.
+// A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
+// can do without (#1070: research only a later phase needs, a storage-only line), which "Required
+// steps only" hides. `satisfied` is set while the step's own condition holds (the hard-drive step
+// with no recipe left to unlock, the delivery with every counter at its target): the build plan
+// then shows it done, says why, and writes no tick.
 export interface GuideTask {
   id: string;
   title: string;
   body: string;
+  optional?: boolean;
+  satisfied?: string;
 }
 
 // The id prefix and name suffix of an amplified twin (amplified() in planner/recipes.ts, which a
@@ -92,6 +98,8 @@ export const formatNumber = (value: unknown): string => numberFormat.format(Numb
 // new empty object per plan and progress; without one, nothing is kept.
 export interface StepsMemo {
   planned?: ProgressionEntry[];
+  // Per milestone id, the planned phases whose own lines need it (requiredMilestones), in order.
+  neededIn?: Map<string, number[]>;
 }
 
 // The generated guidance steps of a calculated profile for one phase, called by phaseSteps below
@@ -114,17 +122,24 @@ export function progression(
   milestoneTasks: GuideTask[];
   hardDrives: GuideTask[];
   retire: GuideTask[];
+  powerStartup: number;
 } {
   const context = guideContext(plan, state, data, phase);
+  const milestones =
+    phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage, memo);
   return {
     baseTasks: baseTasks(context),
     powerTasks: powerTasks(context),
-    milestoneTasks: milestoneTasks(
-      context,
-      phase === 'post' ? [] : milestonesListedIn(plan, state, data, context.stage, memo),
+    milestoneTasks: optionalResearch(
+      milestoneTasks(context, milestones),
+      context.stage,
+      data,
+      memo.neededIn ?? new Map(),
     ),
     hardDrives: hardDriveTasks(context),
     retire: retireTasks(context),
+    // How many of powerTasks start up power before any unlock (powerStartupCount).
+    powerStartup: powerStartupCount(context),
   };
 }
 
@@ -140,8 +155,10 @@ export interface PhaseStep extends GuideTask {
 // for the phase instead, with their own check ids; a phase the guide leaves out has none (#466).
 // A phase before the profile's start phase is milestone-only (#759, milestoneOnlyPhase): its
 // milestone steps and nothing else, since production is planned from the start phase on.
-// Otherwise: startup, power and milestone steps, hard drives, one step per production row,
-// storage, then the lines this phase retires. Row steps use the saved key
+// Otherwise (#1070): startup, power and the required milestone steps, each power step after the
+// unlock it asks for, mining, hard drives, one step per production row (generators first,
+// powerFirst), storage, the delivery, the storage-only lines, the lines this phase retires, and
+// last the research only a later phase needs (optional). Row steps use the saved key
 // `calc-<stage>-<row id>`, the same key as that factory card's Running box, and must stay stable.
 // It reads only its arguments, so it works out any phase of a stored plan, not just the open one.
 // `memo` (StepsMemo) lets calls for several phases of the same plan and progress share work.
@@ -160,36 +177,159 @@ export function phaseSteps(
     );
   const stage = (phase === 'post' ? '5' : phase) as StageKey,
     steps = progression(plan, state, data, phase, memo);
-  // Phase 1 interleaves base, power and milestone steps into a starting order; later
-  // phases put power first, then milestones.
+  // Research only a later phase needs is optional here and comes last (#1070, optionalResearch).
+  const required = steps.milestoneTasks.filter(task => !task.optional),
+    optional = steps.milestoneTasks.filter(task => task.optional);
+  // Later phases keep the power they run going first, then take the phase's milestones, then the
+  // power steps that ask for those unlocks (#1070).
   const startup =
     stage === '1'
-      ? [
-          // Phase 1 always has its seven base steps (baseTasks).
-          steps.baseTasks[0]!,
-          ...steps.powerTasks.slice(0, 2),
-          ...steps.baseTasks.slice(1, 5),
-          ...steps.milestoneTasks,
-          ...steps.powerTasks.slice(2),
-          ...steps.baseTasks.slice(5),
-        ]
-      : [...steps.powerTasks, ...steps.milestoneTasks];
+      ? phaseOneStartup(steps, required, plan, state, data)
+      : [
+          ...steps.powerTasks.slice(0, steps.powerStartup),
+          ...required,
+          ...steps.powerTasks.slice(steps.powerStartup),
+        ];
   const rows = plan.stages[stage]?.rows || [];
   const rowStep = (row: CalcRow): PhaseStep => ({
     id: 'calc-' + stage + '-' + row.id,
     title: rowStepTitle(plan, state, row),
     body: '',
     row,
+    ...(row.stock ? { optional: true } : {}),
   });
   return [
     ...startup,
     ...miningTask(plan, stage),
     ...steps.hardDrives,
-    ...rows.filter(row => !row.stock).map(rowStep),
+    // The power plant before the machines it powers (powerFirst).
+    ...powerFirst(rows.filter(row => !row.stock)).map(rowStep),
     storageStep(plan.stages[stage], stage),
+    ...deliveryTask(plan, state, phase),
     // Storage-only lines (#1061) are optional, so they come after everything the plan needs.
     ...rows.filter(row => row.stock).map(rowStep),
     ...steps.retire,
+    ...optional,
+  ];
+}
+
+// Phase 1's start (#1070): the HUB tutorial and its last upgrade (Tier 0, HUB Upgrade 6, which
+// the biomass steps ask for), the power start-up, the starter base, the other milestones, the
+// power steps after their unlocks, the base's last steps and building the Space Elevator. Phase 1
+// always has its seven base steps (baseTasks), and its first two power steps are "Power available
+// now" and Biomass.
+function phaseOneStartup(
+  steps: ReturnType<typeof progression>,
+  required: GuideTask[],
+  plan: Pick<StoredCalculatedPlan, 'settings'>,
+  state: GuideState,
+  data: Progression,
+): GuideTask[] {
+  const tierZero = new Set(
+    data.entries.filter(entry => !entry.mam && entry.tier === 0).map(entry => 'unlock-' + entry.id),
+  );
+  return [
+    steps.baseTasks[0]!,
+    ...required.filter(task => tierZero.has(task.id)),
+    ...steps.powerTasks.slice(0, 2),
+    ...steps.baseTasks.slice(1, 5),
+    ...required.filter(task => !tierZero.has(task.id)),
+    ...steps.powerTasks.slice(2),
+    ...steps.baseTasks.slice(5),
+    ...elevatorTask(plan, state),
+  ];
+}
+
+// The production lines in build order with each generator line moved up (#1070): straight after
+// the last line that makes one of its inputs (the Fuel lines for a Fuel Generator), or first when
+// it burns only what is mined, so the power plant is built before the machines it powers. Several
+// generators keep their order, and so do the other lines. phaseSteps applies it to the planner's
+// order and groupedSteps (app/group-order.ts) to the factories' order; applied twice it changes
+// nothing more.
+export function powerFirst<T extends Pick<CalcRow, 'inputs' | 'outputs' | 'generationMW'>>(
+  rows: readonly T[],
+): T[] {
+  const generates = (row: T) => row.generationMW > 0;
+  const ordered = rows.filter(row => !generates(row));
+  let next = 0;
+  for (const generator of rows.filter(generates)) {
+    const inputs = Object.keys(generator.inputs || {});
+    let at = next;
+    ordered.forEach((row, i) => {
+      if (inputs.some(item => (row.outputs || {})[item])) at = Math.max(at, i + 1);
+    });
+    ordered.splice(at, 0, generator);
+    next = at + 1;
+  }
+  return ordered;
+}
+
+// A Space Elevator delivery's saved key (#1062): `<stage>-<item slug>`, as the build plan's
+// counters save it (app/delivered.ts reads it from here).
+export const deliveryKey = (stageKey: StageKey, item: string): string =>
+  stageKey + '-' + slug(item);
+
+// The parts a stage hands in at the Space Elevator, each with its target count.
+const deliveryParts = (stagePlan: StoredStage | undefined): [string, number][] =>
+  Object.entries(stagePlan?.delivery || {})
+    .filter(([, part]) => part.target > 0)
+    .map(([item, part]) => [item, part.target]);
+
+// The phase worked on (`state.settings.phase`) as a number, Post Phase 5 as 6 (after Phase 5);
+// NaN without one.
+const workingPhase = (state: GuideState): number =>
+  state.settings?.phase === 'post' ? 6 : Number(state.settings?.phase);
+
+// The reason the elevator and delivery steps of a phase before the one worked on show as done
+// (#1070): moving on to a later phase proves that phase's delivery was sent and the elevator
+// stands, the rule elevatorTask applies to a profile made for a later phase. So a profile saved
+// before these steps existed keeps its finished phases finished and opens where it did.
+const LATER_PHASE = 'Done: you are working in a later phase.';
+
+// "Build the Space Elevator" (#1070), once, in Phase 1 of a profile made for Phase 1: a profile
+// made for a later phase has delivered Phase 1, so its elevator stands. Its key is
+// `space-elevator`; it shows as done while the phase worked on is after Phase 1.
+function elevatorTask(
+  plan: Pick<StoredCalculatedPlan, 'settings'>,
+  state: GuideState,
+): GuideTask[] {
+  if (Number(plan.settings.phase || 1) !== 1) return [];
+  return [
+    {
+      id: 'space-elevator',
+      title: 'Build the Space Elevator',
+      body: 'HUB Upgrade 6 unlocks it. Build it where the elevator lines can belt their parts into it, with room around its inputs. It takes this phase’s delivery; count each part sent with the delivery counters on this page.',
+      ...(workingPhase(state) > 1 ? { satisfied: LATER_PHASE } : {}),
+    },
+  ];
+}
+
+// "Send the Phase N delivery" (#1070), in each planned phase whose stage hands parts in (not Post
+// Phase 5): its key is `deliver-<stage>`. It shows as done while every part's delivery counter
+// (state.deliveries, deliveryKey) is at its target, or while the phase worked on is later than
+// this one, without writing a tick; ticking it by hand also works for a player who does not count.
+function deliveryTask(
+  plan: Pick<StoredCalculatedPlan, 'stages'>,
+  state: GuideState,
+  phase: string,
+): GuideTask[] {
+  if (phase === 'post') return [];
+  const stage = phase as StageKey,
+    parts = deliveryParts(plan.stages[stage]);
+  if (!parts.length) return [];
+  const counted = (item: string) => state.deliveries?.[deliveryKey(stage, item)] ?? 0;
+  const sent = parts.every(([item, target]) => counted(item) >= target);
+  return [
+    {
+      id: 'deliver-' + stage,
+      title: `Send the Phase ${stage} delivery`,
+      body: `Load the Space Elevator with ${listNames(parts.map(([item, target]) => formatNumber(target) + ' ' + item))} and send it. Count the parts with the delivery counters on this page: this step shows as done once every counter reaches its target.`,
+      ...(sent
+        ? { satisfied: 'Done: every delivery counter is at its target.' }
+        : workingPhase(state) > Number(stage)
+          ? { satisfied: LATER_PHASE }
+          : {}),
+    },
   ];
 }
 
@@ -201,10 +341,15 @@ function miningTask(plan: Pick<StoredCalculatedPlan, 'stages'>, stage: StageKey)
   return body ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', body }] : [];
 }
 
-// What phaseSteps reads of a profile's progress: its ticks, and its factory groups' names, which
-// name a group's own line made on site.
+// What phaseSteps reads of a profile's progress: its ticks, its factory groups' names, which
+// name a group's own line made on site, its delivery counts and the phase worked on.
 export interface GuideState {
   checks: Record<string, boolean>;
+  // The Space Elevator delivery counts (deliveryKey), which the delivery step reads.
+  deliveries?: Record<string, number>;
+  // The phase worked on ('1'-'5' or 'post'): a later one marks the elevator and delivery steps
+  // of the phases before it done (#1070).
+  settings?: { phase?: string };
   factoryGroups?: { groups?: { id: string; name: string }[] };
 }
 
@@ -496,27 +641,61 @@ export function milestonesListedIn(
   stage: number,
   memo: StepsMemo = {},
 ): ProgressionEntry[] {
-  memo.planned ??= plannedMilestones(plan, state, data);
-  return memo.planned.filter(entry => milestonePhase(entry, data) === stage);
+  if (!memo.planned) plannedMilestones(plan, state, data, memo);
+  return memo.planned!.filter(entry => milestonePhase(entry, data) === stage);
 }
 
 // Every milestone one of the profile's planned phases (its start phase on) needs and can
 // research by then, each once, in the order they were first needed: what milestonesListedIn
-// shares out over the phases.
+// shares out over the phases. Kept in `memo.planned`, with the phases needing each one in
+// `memo.neededIn` (optionalResearch below reads those).
 function plannedMilestones(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   state: { checks: Record<string, boolean> },
   data: Progression,
-): ProgressionEntry[] {
+  memo: StepsMemo,
+): void {
   const start = Number(plan.settings.phase || 1),
-    listed = new Map<string, ProgressionEntry>();
+    listed = new Map<string, ProgressionEntry>(),
+    neededIn = new Map<string, number[]>();
   const planned = (['1', '2', '3', '4', '5'] as const).filter(
     key => Number(key) >= start && plan.stages[key],
   );
   for (const key of planned)
-    for (const entry of requiredMilestones(guideContext(plan, state, data, key)))
+    for (const entry of requiredMilestones(guideContext(plan, state, data, key))) {
+      neededIn.set(entry.id, [...(neededIn.get(entry.id) ?? []), Number(key)]);
       if (!entry.alternate && researchable(entry, data, Number(key))) listed.set(entry.id, entry);
-  return [...listed.values()];
+    }
+  memo.planned = [...listed.values()];
+  memo.neededIn = neededIn;
+}
+
+// The MAM research steps of a planned phase that none of its own lines needs (#1070): listed
+// here because their costs first become available in this phase (milestonesListedIn), but only
+// a later phase's lines use them. They are marked optional, say which phase needs them, and go
+// after the phase's production lines; their check keys stay `unlock-<id>`. HUB milestones and the
+// research every phase asks for (requiredMilestones) stay required.
+function optionalResearch(
+  tasks: GuideTask[],
+  stage: number,
+  data: Progression,
+  neededIn: Map<string, number[]>,
+): GuideTask[] {
+  return tasks.map(task => {
+    const id = task.id.slice('unlock-'.length),
+      entry = data.entries.find(known => known.id === id),
+      phases = neededIn.get(id) ?? [];
+    if (!entry?.mam || phases.includes(stage)) return task;
+    const later = phases.find(phase => phase > stage);
+    return {
+      ...task,
+      title: task.title + ' (optional)',
+      body:
+        `Optional in this phase: none of its lines needs it${later ? `; Phase ${later}’s lines do` : ''}. Research it now if the materials are at hand, or later. ` +
+        task.body,
+      optional: true,
+    };
+  });
 }
 
 // Depth-first, so every prerequisite in the list comes before what needs it; otherwise keeps
@@ -589,6 +768,8 @@ export function hardDriveTasks(context: GuideContext): GuideTask[] {
       id: 'hard-drives-' + stage,
       title: 'Collect and scan hard drives for the selected alternates',
       body: `${missing.length} selected recipe unlocks remain unconfirmed. Complete Field Research and build the MAM. Take materials and portable power for crash sites, collect hard drives, and run 10-minute scans while building. Choices are random: this is not a guaranteed drive count. Finish each recipe’s prerequisite milestones/research first.`,
+      // With every recipe it lists unlocked, the hunt is over: shown done without a tick (#1070).
+      ...(missing.length ? {} : { satisfied: 'Done: every recipe it lists is unlocked.' }),
     },
     ...alternates.map(row => {
       const alternate = data.entries.find(
@@ -626,6 +807,13 @@ export function powerTasks(context: GuideContext): GuideTask[] {
     ...droneFuelTasks(context),
   ];
 }
+
+// How many of powerTasks' first steps keep the power the player already has going, "Power
+// available now" and the biomass start-up: they ask for no unlock of this phase, so phaseSteps
+// lists them before the phase's milestones and the rest after them (#1070), each power step after
+// the unlock it asks for.
+const powerStartupCount = (context: GuideContext): number =>
+  1 + biomassStartupTasks(context, unlockedPower(context)).length;
 
 function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
   const known = (name: string) => {

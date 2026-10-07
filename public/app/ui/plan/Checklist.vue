@@ -19,14 +19,16 @@ import { computed } from 'vue';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
-  checked,
+  checked as ticked,
   editingTask,
   hideDone,
   phase,
   planEditing,
   query,
+  requiredOnly,
   setHideDone,
   setQuery,
+  setRequiredOnly,
   stage,
   state,
 } from '../../session.ts';
@@ -60,6 +62,11 @@ const list = computed(() =>
       shown = filteredPlanTasks(tasks),
       removed = removedPlanTasks(),
       idle = idleStepNotes(shown);
+    // Done: ticked, or done by the step's own condition (`satisfied`, stepDone in tasks.ts, #1070).
+    const satisfied = new Map(
+      tasks.flatMap(task => (task.satisfied ? [[task.id, task.satisfied]] : [])),
+    );
+    const checked = (id: string) => ticked(id) || satisfied.has(id);
     const steps = shown.map((task): PlanStepView => {
       const link = taskLink(task);
       return {
@@ -68,6 +75,7 @@ const list = computed(() =>
         body: task.body,
         done: checked(task.id),
         idle: idle.get(task.id),
+        satisfied: satisfied.get(task.id),
         clocks: clockNote(task.id, link?.id),
         icon: taskIcon(task),
         link,
@@ -79,6 +87,8 @@ const list = computed(() =>
       total: tasks.length,
       query,
       hideDone,
+      requiredOnly,
+      optional: tasks.filter(task => task.optional).length,
       editing: planEditing,
       count: shown.length !== tasks.length ? shown.length + ' of ' + tasks.length + ' steps' : '',
       empty: !tasks.length
@@ -94,6 +104,8 @@ const list = computed(() =>
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
+      // "Required steps only" hides every step still open: only optional ones are left (#1070).
+      optionalLeft: requiredOnly && tasks.some(t => t.optional && !checked(t.id)),
       // Post Phase 5 has no next phase to get ready for (#1069).
       post: phase() === 'post',
       removed: planEditing ? removedViews(removed) : [],
@@ -135,6 +147,12 @@ function toggleHideDone(event: Event) {
   setHideDone((event.target as HTMLInputElement).checked);
   render();
 }
+
+// "Required steps only" (#1070): hides the optional steps, a view preference like Hide completed.
+function toggleRequiredOnly(event: Event) {
+  setRequiredOnly((event.target as HTMLInputElement).checked);
+  render();
+}
 </script>
 
 <template>
@@ -153,6 +171,14 @@ function toggleHideDone(event: Event) {
         :checked="list.hideDone"
         @change="toggleHideDone"
       />Hide completed</label
+    ><label v-if="list.optional || list.requiredOnly" class="check-row small"
+      ><input
+        type="checkbox"
+        id="required-only"
+        data-required-only
+        :checked="list.requiredOnly"
+        @change="toggleRequiredOnly"
+      />Required steps only</label
     ><span class="small muted">{{ list.count }}</span>
   </div>
   <div v-if="list.editing" class="checklist">
@@ -194,6 +220,11 @@ function toggleHideDone(event: Event) {
           >
           <p v-if="list.hideDone">Untick “Hide completed” to review the steps.</p>
         </div>
+      </div>
+    </div>
+    <div v-else-if="list.optionalLeft && !list.query.trim()" class="checklist">
+      <div class="empty-state" data-optional-left>
+        Only optional steps are left. Untick “Required steps only” to see them.
       </div>
     </div>
     <div v-else-if="!list.done.length" class="checklist">

@@ -4,6 +4,15 @@
 // public/app/ with the shared modules' exports supplied by hand (tests/helpers/app-source.ts),
 // and this one is followed and loaded with the app instead.
 
+// "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
+// saved keys (calculated delivery ids, deliveryKey in progression.ts), so its output must stay
+// the same. public/app/format.ts passes it on to the app.
+export const slug = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
 // "A", "A and B", "A, B and C": names, phase numbers and items in prose (#611, #735). An empty
 // list gives ''.
 export const listNames = (names: readonly string[]): string =>
