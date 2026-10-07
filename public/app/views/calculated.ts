@@ -238,12 +238,20 @@ export function draftFixes(
         ? `Raise “Hours per phase” (Goals) to at least ${num(snapshot.minHours)} h.`
         : `Switch the goal (Goals) to “Target completion time” with at least ${num(snapshot.minHours)} hours per phase.`,
     );
-  else if (snapshot.shortfalls?.length && !snapshot.wholeMachinesOnly)
+  else if (snapshot.shortfalls?.length && !snapshot.wholeMachinesOnly) {
+    // Storage fed from surplus is not a demand of a whole-machine draft's solve (#1100), so
+    // lowering it does not help; a draft stored before that, whose solve held storage, names it.
+    const fromSurplus =
+      settings?.wholeMachines &&
+      settings.storageFromSurplus === true &&
+      !Object.values(snapshot.storage ?? {}).some(rate => rate > 0);
+    const demands = `${fromSurplus ? '' : 'the protected storage refill rate, '}drone-fuel supply or extra Singularity Cells (Preferences)`;
     fixes.push(
       settings?.goal === 'maximum'
-        ? 'Lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences).'
-        : `More time alone will not fit: lower the protected storage refill rate, drone-fuel supply or extra Singularity Cells (Preferences)${settings?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
+        ? `Lower ${demands}.`
+        : `More time alone will not fit: lower ${demands}${settings?.roundRates ? ', or untick delivery-rate rounding (Goals)' : ''}.`,
     );
+  }
   if (snapshot.shortfalls?.length && settings?.recipes === 'standard')
     fixes.push('Allow alternate recipes (Preferences) to cut raw resource use.');
   if (snapshot.shortfalls?.length && settings?.sam === 'avoid')
