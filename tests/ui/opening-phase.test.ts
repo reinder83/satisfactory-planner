@@ -116,7 +116,13 @@ test('another phase of a calculated profile is worked out as its build plan show
     open({ calculated: plan, phase: otherPhase(stage), state: structuredClone(edits) });
     assert.equal(phase(), otherPhase(stage));
     assert.deepEqual(phaseStepIds(stage), shown, 'Phase ' + stage + ' steps');
-    assert.deepEqual(calcTasks(stage), generated, 'Phase ' + stage + ' generated steps');
+    // The same steps; a later phase worked on only marks the elevator and delivery done (#1070).
+    const bare = (steps: typeof generated) => steps.map(({ satisfied: _, ...step }) => step);
+    const other = calcTasks(stage);
+    assert.deepEqual(bare(other), bare(generated), 'Phase ' + stage + ' generated steps');
+    for (const step of other)
+      if (step.satisfied !== generated.find(found => found.id === step.id)?.satisfied)
+        assert.match(step.id, /^(space-elevator|deliver-)/, step.id);
   }
 });
 

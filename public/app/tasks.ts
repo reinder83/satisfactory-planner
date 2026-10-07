@@ -15,6 +15,7 @@ import {
   milestoneOnly,
   phase,
   query,
+  requiredOnly,
   stage,
   state,
 } from './session.ts';
@@ -23,11 +24,14 @@ import { factoryGroupsState } from './views/factories.ts';
 import type { CalcRow, Phase, TaskEdits } from '../types/index.ts';
 
 // A build-plan step: a calculated (or plan guide's) one or a personal one. id is its saved check key;
-// personal tasks have no body.
+// personal tasks have no body. A generated step may be `optional` ("Required steps only" hides it)
+// or `satisfied`: done by its own condition, with the reason, and no tick written (#1070).
 export interface Step {
   id: string;
   title: string;
   body?: string;
+  optional?: boolean;
+  satisfied?: string;
 }
 
 // The production line a step links to (taskLink): its "Production line ↗" button opens the
@@ -381,12 +385,27 @@ export function taskIcon(step: Step): StepIconData {
   return item ? { item } : { kind: taskKind(step) };
 }
 
-// Applies the "Hide completed" toggle and the step search to a list of steps.
+// Whether a step is done: ticked, or its own condition holds (`satisfied`, #1070).
+export const stepDone = (step: Step): boolean => checked(step.id) || !!step.satisfied;
+
+// The ids of phase `shownPhase`'s generated steps that are done by their own condition
+// (`satisfied`, #1070), which hold no phase open (phaseStepIds in opening-phase.ts).
+export const satisfiedStepIds = (shownPhase: Phase = phase()): Set<string> =>
+  new Set(
+    calculated
+      ? orderedPhaseSteps(shownPhase)
+          .filter(step => step.satisfied)
+          .map(step => step.id)
+      : [],
+  );
+
+// Applies "Hide completed", "Required steps only" (#1070) and the step search to a list of steps.
 export function filteredPlanTasks(steps: Step[]): Step[] {
   const search = query.trim().toLowerCase();
   return steps.filter(
     step =>
-      (!hideDone || !checked(step.id)) &&
+      (!hideDone || !stepDone(step)) &&
+      (!requiredOnly || !step.optional) &&
       (!search || (step.title + ' ' + (step.body || '')).toLowerCase().includes(search)),
   );
 }

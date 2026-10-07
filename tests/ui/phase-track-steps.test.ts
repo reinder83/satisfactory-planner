@@ -32,13 +32,16 @@ test('a phase with every production line Running but other steps open is not 100
   open({ calculated: plan, phase: '3', state: { checks: ticked(lines) } });
   const steps = phaseStepIds('1');
   assert.ok(steps.length > lines.length, 'Phase 1 has steps besides its lines');
-  const percent = Math.round((lines.length / steps.length) * 100);
+  // The lines, and the elevator and delivery, done since Phase 3 is worked on (#1070).
+  const percent = Math.round(((lines.length + 2) / steps.length) * 100);
   assert.ok(percent < 100);
   assert.equal(segment('1').pct, percent, 'Phase 1 counts its build-plan steps');
   assert.equal(phaseToOpen(), '1', 'the profile opens on Phase 1, which the track shows open');
   render();
   assert.equal(segmentName('1'), `Phase 1, ${percent}% done`);
-  assert.equal(segmentName('2'), 'Phase 2, 0% done');
+  // Phase 2's only done step is its delivery, done since Phase 3 is worked on (#1070).
+  const two = Math.round((1 / phaseStepIds('2').length) * 100);
+  assert.equal(segmentName('2'), `Phase 2, ${two}% done`);
   assert.equal(segmentName('post'), 'Post Phase 5', 'post-game has no progress');
   assert.equal(segment('post').pct, null);
 });

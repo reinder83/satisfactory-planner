@@ -46,9 +46,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {
+  deliveryKey,
   firstPlanPhase,
   milestoneOnlyPhase,
   phaseSteps,
+  powerFirst,
   progression,
   recipeIdOf,
   rowStepTitle,
@@ -99,6 +101,8 @@ function ui() {
     recipeIdOf,
     rowStepTitle,
     firstPlanPhase,
+    powerFirst,
+    deliveryKey,
     carryOptions,
     initialState,
     pickedRecipeUnlocks,

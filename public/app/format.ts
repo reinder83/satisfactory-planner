@@ -1,5 +1,5 @@
 // Small DOM and text helpers shared by every screen.
-import { duration, durationOfHours } from '../wording.ts';
+import { duration, durationOfHours, slug } from '../wording.ts';
 
 // The first element matching `selector`, or null. `E` narrows the element type for TypeScript
 // callers (`$<HTMLDialogElement>('#detail')`); it is not checked at run time.
@@ -35,14 +35,6 @@ export const num = (value: number | null | undefined): string =>
 export const num3 = (value: number | null | undefined): string =>
   Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
-// "Heavy Modular Frame" -> "heavy-modular-frame". Used for icon file names and for some
-// saved keys (calculated delivery ids), so its output must stay the same.
-export const slug = (text: string): string =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-
 export const plural = (count: number, word: string): string =>
   num(count) + ' ' + word + (count === 1 ? '' : 's');
 
@@ -50,6 +42,9 @@ export const plural = (count: number, word: string): string =>
 // words (#643): "45 minutes", "about 7 h 52 min". They live in public/wording.ts, which the
 // planner's warnings use too (#763).
 export { duration, durationOfHours };
+// "Heavy Modular Frame" -> "heavy-modular-frame" (slug in public/wording.ts, which the build
+// plan's delivery step reads too): icon file names and calculated delivery ids.
+export { slug };
 
 // The item searches (ui/form/ItemSearch.vue): up to `limit` of `items` for the typed text,
 // case-insensitive, names that start with it first, then names that merely contain it.

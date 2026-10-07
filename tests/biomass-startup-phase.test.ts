@@ -105,10 +105,11 @@ test('ticking the Phase 3 start-up does not start Phase 4 or 5 (#872)', () => {
     ONCE.length,
     'the ticks count in Phase 3',
   );
-  // The save list's counts, with Phase 5 worked on.
+  // The save list's counts, with Phase 5 worked on: the ticks, and the delivery of each phase
+  // before it, done since a later phase is worked on (#1070).
   state.settings.phase = '5';
   const phases = profilePhases(plan, state, data)!;
-  assert.equal(phases.find(entry => entry.phase === '3')!.steps!.done, ONCE.length);
-  for (const phase of ['4', '5'])
-    assert.equal(phases.find(entry => entry.phase === phase)!.steps!.done, 0, 'Phase ' + phase);
+  assert.equal(phases.find(entry => entry.phase === '3')!.steps!.done, ONCE.length + 1);
+  assert.equal(phases.find(entry => entry.phase === '4')!.steps!.done, 1, 'Phase 4');
+  assert.equal(phases.find(entry => entry.phase === '5')!.steps!.done, 0, 'Phase 5');
 });

@@ -39,8 +39,14 @@ beforeEach(() => {
   setFactoryEditing(false);
 });
 
+// #1070 reordered the steps (power after its unlocks and before the lines it powers, research only
+// a later phase needs last) and added the delivery step: the order is recorded again after it
+// (step-ids-2026-10-07.json), and the ids recorded before the rename are all still there.
 test('the build plan lists the step ids recorded on main before the rename', () => {
   const recorded: Record<string, Record<string, string[]>> = JSON.parse(
+    fs.readFileSync('tests/fixtures/step-ids-2026-10-07.json', 'utf8'),
+  );
+  const beforeRename: Record<string, Record<string, string[]>> = JSON.parse(
     fs.readFileSync('tests/fixtures/step-ids-2026-10-04.json', 'utf8'),
   );
   for (const [label, factoryGroups] of [
@@ -54,10 +60,12 @@ test('the build plan lists the step ids recorded on main before the rename', () 
         phase,
         state: factoryGroups ? { factoryGroups } : {},
       });
+      const ids = planTasks().map(task => task.id);
+      assert.deepEqual(ids, recorded[label]![phase], `${label}, phase ${phase}`);
       assert.deepEqual(
-        planTasks().map(task => task.id),
-        recorded[label]![phase],
-        `${label}, phase ${phase}`,
+        ids.filter(id => !id.startsWith('deliver-')).sort(),
+        [...beforeRename[label]![phase]!].sort(),
+        `${label}, phase ${phase}: the ids recorded before the rename`,
       );
     }
 });

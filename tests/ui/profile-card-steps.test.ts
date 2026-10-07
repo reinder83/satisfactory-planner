@@ -29,14 +29,23 @@ import type {
 const PHASES: Phase[] = ['1', '2', '3', '4', '5', 'post'];
 const STAGES: StageKey[] = ['1', '2', '3', '4', '5'];
 
-// What profilePhases sent before #804: every phase's steps.
+// What profilePhases sent before #804: every phase's steps, a step done by its own condition
+// (#1070) counted as done.
 function everyPhase(plan: StoredCalculatedPlan, state: ProgressState): PhaseProgress[] {
   const milestoneOnly = milestoneOnlyPhases(plan).map(phase => ({ phase, done: 0, total: 0 }));
   return [...milestoneOnly, ...phaseProgress(plan, state.checks)!].map(entry => {
-    const ids = planStepIds(plan, state, progressionData, entry.phase);
+    const ids = planStepIds(plan, state, progressionData, entry.phase),
+      satisfied = new Set(
+        phaseSteps(plan, state, progressionData, entry.phase)
+          .filter(step => step.satisfied)
+          .map(step => step.id),
+      );
     return {
       ...entry,
-      steps: { done: ids.filter(id => state.checks[id]).length, total: ids.length },
+      steps: {
+        done: ids.filter(id => state.checks[id] || satisfied.has(id)).length,
+        total: ids.length,
+      },
     };
   });
 }

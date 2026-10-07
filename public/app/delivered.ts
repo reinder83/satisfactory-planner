@@ -9,12 +9,8 @@
 //     (deliveryHoursLeft), and Logistics marks a delivered part's link to the Space Elevator.
 // Post Phase 5 reads Phase 5's stage, but it keeps every Phase 5 line running ("Retain these
 // Phase 5 capacities"), so its build plan dims nothing (the caller passes no stage then).
-import { slug } from './format.ts';
+import { deliveryKey } from '../progression.ts';
 import type { StageKey, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
-
-// A delivery's saved key: `<stage>-<item slug>`, as the build plan's counters save it.
-export const deliveryKey = (stageKey: StageKey, item: string): string =>
-  stageKey + '-' + slug(item);
 
 // The parts of `stagePlan` whose saved count has reached the target.
 export function deliveredParts(
