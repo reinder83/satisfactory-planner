@@ -93,6 +93,8 @@ const view = computed(() =>
         phase: lastPhase,
         buildings: last.rows ? num(last.rows.reduce((sum, row) => sum + row.machines, 0)) : '—',
         power: `${power(lastPower.needMW)} of ${power(lastPower.availableMW)}`,
+        // What the need holds for trains, drones and pumps (#1090), as Review gives it.
+        allowance: lastPower.needMW > 0 ? lastPower.need.allowance : '',
         short,
         tightest,
         rounding: rounding
@@ -170,6 +172,9 @@ onBeforeUnmount(() => {
         <dt class="eyebrow">Power needed at Phase {{ view.figures.phase }}</dt>
         <dd data-estimate-power :class="view.figures.short ? 'warn' : undefined">
           {{ view.figures.power }}
+        </dd>
+        <dd v-if="view.figures.allowance" data-estimate-allowance>
+          <small>{{ view.figures.allowance }}</small>
         </dd>
       </div>
       <div v-if="view.figures.rounding">

@@ -23,6 +23,8 @@ import FuelVerdict from './FuelVerdict.vue';
 import RoundingCost from '../plan/RoundingCost.vue';
 import SupplyNotice from './SupplyNotice.vue';
 import StepHeading from '../form/StepHeading.vue';
+import { ALLOWANCE_SETTING } from '../../../power.ts';
+import { moveWizard } from '../../wizard/wizard.ts';
 
 // A number keeps its unit on its line in the narrow Delivery time column (#741): "about 7 h
 // 52 min" may wrap after "about" or between "h" and "52", never between "7" and "h".
@@ -31,13 +33,18 @@ const unbroken = (text: string): string => text.replace(/(\d) /g, '$1\u00a0');
 // The New generation and Power needed columns (#1064): the generators the phase builds, and what
 // it needs of what it has, or what it is short, as the Resources page's bar, the headroom notice
 // and the power step give them. Phase 1 runs on biomass, which the plan leaves to the player. A
-// plan made before #1064 shows its generators' output as it always did.
+// plan made before #1064 shows its generators' output as it always did. Under the need, what it
+// holds for trains, drones and pumps (#1090, powerView's need in public/power.ts), and the
+// variable-power machines' peak as a note.
 function powerCells(phase: string, stageResult: StoredStage, settings: StoredSettings) {
   const generation = stageResult.generationMW !== undefined ? power(stageResult.generationMW) : '—';
-  if (!stageResult.rows) return { generation, power: { text: '—', short: false } };
+  if (!stageResult.rows)
+    return { generation, power: { text: '—', short: false }, allowance: '', peak: '' };
   const view = powerView(stageResult, settings);
   return {
     generation: view.modelled ? power(view.generationMW) : generation,
+    allowance: view.needMW > 0 ? view.need.allowance : '',
+    peak: view.need.peak,
     power:
       view.shortMW > 0 && phase === '1'
         ? { text: `${power(view.needMW)} from biomass`, short: false }
@@ -95,6 +102,8 @@ const view = computed(() =>
           fixes: draftFixes(stageResult, preview.settings),
         })),
       warnings: preview.warnings,
+      // The utility allowance the plan was calculated with (#1090).
+      percent: preview.settings.utilityPercent ?? 20,
       // What whole machines cost in each phase listed (#1066).
       rounding: stages.map(([phase, stageResult]) => ({ phase, stage: stageResult })),
     };
@@ -139,7 +148,13 @@ const view = computed(() =>
             </td>
             <td>{{ row.generation }}</td>
             <td :class="row.power.short ? 'warn' : undefined" data-review-power>
-              {{ row.power.text }}
+              {{ row.power.text
+              }}<template v-if="row.allowance"
+                >{{ ' '
+                }}<small class="review-allowance" data-review-allowance>{{
+                  row.allowance
+                }}</small></template
+              >
             </td>
           </tr>
         </tbody>
@@ -150,6 +165,16 @@ const view = computed(() =>
       storage-only lines for items with no surplus: optional, built last, at exact clocks.
     </p>
     <SupplyNotice :plan="view.plan" /><FuelVerdict :plan="view.plan" />
+    <p class="small muted" data-review-power-note>
+      Power needed counts the production lines, the miners and extractors, and
+      {{ view.percent }}% of the production lines for trains, drones and pumps.
+      <button type="button" class="btn quiet" data-review-preferences @click="moveWizard(2)">
+        Change {{ ALLOWANCE_SETTING }} in Preferences
+      </button>
+      <template v-for="row in view.rows" :key="row.phase"
+        ><template v-if="row.peak"><br />Phase {{ row.phase }}: {{ row.peak }}</template></template
+      >
+    </p>
     <RoundingCost :entries="view.rounding" layout="table" />
     <div v-for="phaseDraft in view.drafts" :key="phaseDraft.phase" class="notice warn">
       <b>{{ phaseDraft.heading }}</b> {{ phaseDraft.reason

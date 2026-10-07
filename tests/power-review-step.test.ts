@@ -53,8 +53,19 @@ const gw = (mw: number) =>
     ? (mw / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' GW'
     : mw.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' MW';
 
+// Where the 20% allowance comes from (#1090), before the check.
+const PREFERENCES =
+  ' The 20% for trains, drones and pumps is Extra utilities power in Preferences: raise it in a new profile for more margin.';
 const CHECK =
+  PREFERENCES +
   ' Before connecting the next factory, check the actual load against what your grid supplies.';
+// What a grid's need holds (#1090), as the step words it: the production lines, the miners and
+// extractors and the allowance for trains, drones and pumps.
+const parts = (grid: { loadMW: number; extractionMW: number; allowanceMW: number }) =>
+  `${gw(grid.loadMW)} for production lines, ${gw(grid.extractionMW)} for miners and extractors and ${gw(grid.allowanceMW)} at 20% for trains, drones and pumps`;
+// Where the variable-power machines count at their peak (#1090), named as the step names them.
+const peak = (grid: { variablePeakMW: number; variableAverageMW: number }, machines: string) =>
+  ` ${machines} count at their ${gw(grid.variablePeakMW)} peak, though they average ${gw(grid.variableAverageMW)}: the real draw is lower than Power needed, so the real margin is larger.`;
 const TARGET =
   ' Full-phase generation shown in the calculator is a future target, not power already unlocked. Tick the relevant HUB/MAM unlocks to update this advice.';
 
@@ -128,7 +139,7 @@ test("the owner's case: spare power, Coal Power ticked, nuclear planned, no coal
   assert.equal(step.title, 'Power available now');
   assert.equal(
     step.body,
-    "You have 44.43 GW of spare power available. This phase needs 38.13 GW more (82.55 GW in all, with the 20% utility allowance): build its nuclear power, 50 × Uranium power (Nuclear Power Plant), which provides 125 GW, 86.87 GW spare because this profile's minimum is 50 uranium reactors. Unlock Nuclear Power first." +
+    "You have 44.43 GW of spare power available. This phase needs 38.13 GW more (82.55 GW in all: 6.06 GW for production lines at their whole-machine peak and 76.49 GW at 20% for trains, drones and pumps): build its nuclear power, 50 × Uranium power (Nuclear Power Plant), which provides 125 GW, 86.87 GW spare because this profile's minimum is 50 uranium reactors. Unlock Nuclear Power first." +
       CHECK,
   );
   assert.doesNotMatch(step.body, /coal/i);
@@ -141,7 +152,7 @@ test('spare power that covers the phase: nothing needs building', () => {
   for (const checks of [{}, { [COAL]: true }, { ...OIL, [COAL]: true }])
     assert.equal(
       review(plan, checks, '3').body,
-      "You have 44.43 GW of spare power available, which covers this phase's 11.64 GW (with the 20% utility allowance): nothing needs building for power in this phase." +
+      "You have 44.43 GW of spare power available, which covers this phase's 11.64 GW (1.25 GW for production lines at their whole-machine peak and 10.38 GW at 20% for trains, drones and pumps): nothing needs building for power in this phase." +
         CHECK,
     );
 });
@@ -150,7 +161,7 @@ test('spare power that covers the phase, with the minimum uranium reactor built 
   const plan = planWith('4', 44.425, 30000, [generator('uranium', 1)]);
   assert.equal(
     review(plan, {}, '4').body,
-    "You have 44.43 GW of spare power available, which covers this phase's 30 GW (with the 20% utility allowance): nothing needs building for that. The plan still builds its nuclear power, 1 × Uranium power (Nuclear Power Plant), which adds 2.5 GW because this profile's minimum is 1 uranium reactor. Unlock Nuclear Power first." +
+    "You have 44.43 GW of spare power available, which covers this phase's 30 GW (6.06 GW for production lines at their whole-machine peak and 23.94 GW at 20% for trains, drones and pumps): nothing needs building for that. The plan still builds its nuclear power, 1 × Uranium power (Nuclear Power Plant), which adds 2.5 GW because this profile's minimum is 1 uranium reactor. Unlock Nuclear Power first." +
       CHECK,
   );
 });
@@ -162,7 +173,7 @@ test('spare power plus new generation: the lines highest source first, and what 
   const plan = planWith('4', 44.425, 50025, rows);
   assert.equal(
     review(plan, { [COAL]: true }, '4').body,
-    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all, with the 20% utility allowance): build its nuclear, turbofuel and coal power, 2 × Uranium power (Nuclear Power Plant), 4 × Turbofuel power (Fuel Generator) and 3 × Coal power (Coal Generator), which provides 6.2 GW, 600 MW spare. Unlock Petroleum Power and Nuclear Power first.' +
+    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all: 6.06 GW for production lines at their whole-machine peak and 43.96 GW at 20% for trains, drones and pumps): build its nuclear, turbofuel and coal power, 2 × Uranium power (Nuclear Power Plant), 4 × Turbofuel power (Fuel Generator) and 3 × Coal power (Coal Generator), which provides 6.2 GW, 600 MW spare. Unlock Petroleum Power and Nuclear Power first.' +
       CHECK,
   );
 });
@@ -171,13 +182,13 @@ test('spare power plus new generation that falls short, or none at all', () => {
   const short = planWith('4', 44.425, 50025, [generator('Turbofuel', 10)]);
   assert.equal(
     review(short, { [PETROLEUM]: true }, '4').body,
-    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all, with the 20% utility allowance): build its turbofuel power, 10 × Turbofuel power (Fuel Generator), which provides 2.5 GW, 3.1 GW short of the need: see the power headroom on the Resources page.' +
+    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all: 6.06 GW for production lines at their whole-machine peak and 43.96 GW at 20% for trains, drones and pumps): build its turbofuel power, 10 × Turbofuel power (Fuel Generator), which provides 2.5 GW, 3.1 GW short of the need: see the power headroom on the Resources page.' +
       CHECK,
   );
   const none = planWith('4', 44.425, 50025, []);
   assert.equal(
     review(none, {}, '4').body,
-    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all, with the 20% utility allowance), and its plan builds no generators for it: see the power headroom on the Resources page.' +
+    'You have 44.43 GW of spare power available. This phase needs 5.6 GW more (50.03 GW in all: 6.06 GW for production lines at their whole-machine peak and 43.96 GW at 20% for trains, drones and pumps), and its plan builds no generators for it: see the power headroom on the Resources page.' +
       CHECK,
   );
 });
@@ -212,13 +223,13 @@ test('a calculated plan: "needs X more", the new generation and the spare from w
   assert.ok(spare > 0 && spare < 2500, 'less than one plant over the need');
   assert.equal(
     review(plan, { ...OIL, [COAL]: true }, '4').body,
-    `You have 44.43 GW of spare power available. This phase needs ${gw(requiredMW - 44425)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its nuclear power, ${uranium.machines} × Uranium power (Nuclear Power Plant), which provides ${gw(grid.generationMW)}, ${gw(spare)} spare from building whole plants. Unlock Nuclear Power first.` +
+    `You have 44.43 GW of spare power available. This phase needs ${gw(requiredMW - 44425)} more (${gw(requiredMW)} in all: ${parts(grid)}): build its nuclear power, ${uranium.machines} × Uranium power (Nuclear Power Plant), which provides ${gw(grid.generationMW)}, ${gw(spare)} spare from building whole plants. Unlock Nuclear Power first.${peak(grid, 'Particle Accelerators')}` +
       CHECK,
   );
   // Phase 3 runs on the spare power alone.
   assert.match(
     review(plan, { ...OIL, [COAL]: true }, '3').body,
-    /^You have 44\.43 GW of spare power available, which covers this phase's [\d.]+ GW \(with extraction and the 20% utility allowance\): nothing needs building for power in this phase\./,
+    /^You have 44\.43 GW of spare power available, which covers this phase's [\d.]+ GW \([\d.]+ [MG]W for production lines, [\d.]+ [MG]W for miners and extractors and [\d.]+ [MG]W at 20% for trains, drones and pumps\): nothing needs building for power in this phase\./,
   );
 });
 
@@ -243,7 +254,7 @@ test('a calculated Phase 5 that recycles: the spare from the waste chain period'
   const body = review(plan, {}, '5').body;
   assert.ok(
     body.startsWith(
-      `You have 20 GW of spare power available. This phase needs ${gw(requiredMW - 20000)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its nuclear `,
+      `You have 20 GW of spare power available. This phase needs ${gw(requiredMW - 20000)} more (${gw(requiredMW)} in all: ${parts(grid)}): build its nuclear `,
     ),
     body,
   );
@@ -260,7 +271,14 @@ test('a calculated Phase 5 that recycles: the spare from the waste chain period'
     ),
     body,
   );
-  assert.ok(body.endsWith(' Nuclear Power first.' + CHECK), body);
+  assert.ok(
+    body.endsWith(
+      ' Nuclear Power first.' +
+        peak(grid, 'Converters, Particle Accelerators and Quantum Encoders') +
+        CHECK,
+    ),
+    body,
+  );
 });
 
 test('without spare power: a ticked source below the planned one is not advised', () => {
@@ -463,7 +481,7 @@ test('Phase 5 with augmenters that, with the spare power, cover the phase: nothi
   assert.equal(augmenterMW, 50000, '10 × 500 MW plus the boost on the 40 GW installed');
   assert.equal(
     review(plan, {}, '5').body,
-    `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(grid.needMW)} (with extraction and the 20% utility allowance): nothing needs building for power in this phase.` +
+    `You have 20 GW of spare power available, and your 10 augmenters add 50 GW, which cover this phase's ${gw(grid.needMW)} (${parts(grid)}): nothing needs building for power in this phase.${peak(grid, 'Converters, Particle Accelerators and Quantum Encoders')}` +
       CHECK,
   );
 });
@@ -483,7 +501,7 @@ test('Phase 5 with augmenters and new generation: the parts add up to the plan',
   const body = review(plan, {}, '5').body;
   assert.ok(
     body.startsWith(
-      `You have 10 GW of spare power available, and your 4 augmenters add ${gw(augmenterMW)}. This phase needs ${gw(requiredMW - spareMW - augmenterMW)} more (${gw(requiredMW)} in all, with extraction and the 20% utility allowance): build its `,
+      `You have 10 GW of spare power available, and your 4 augmenters add ${gw(augmenterMW)}. This phase needs ${gw(requiredMW - spareMW - augmenterMW)} more (${gw(requiredMW)} in all: ${parts(grid)}): build its `,
     ),
     body,
   );

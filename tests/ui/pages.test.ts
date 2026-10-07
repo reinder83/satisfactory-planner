@@ -1050,7 +1050,7 @@ test('the calculated resources page shows every budget with its icon and what is
   );
   assert.equal(
     $('#main [data-power-part="utility"] small')!.textContent,
-    '20% of the production lines for transport and utilities; verify actual load',
+    '20% of the production lines for trains, drones and pumps; verify actual load',
   );
   assert.match($('#main .backup-grid')!.textContent, /No raw-resource conversion required\./);
   assert.match($('#main .backup-grid')!.textContent, /None credited in this phase\./);
