@@ -132,3 +132,46 @@ export function handoverText({ from, kept, add, clocks, build, retire }: Handove
     : `nothing marked running there carries over, so build all ${lines(build)}`;
   return `From Phase ${from}: ${keep}${retire ? `; retire ${formatNumber(retire)}` : ''}.`;
 }
+
+// The share of this phase's line that a carried line's machines already make: the phase before's
+// machine-equivalents against this phase's, at most 1 (a line this phase shrinks runs whole). The
+// build status (build-status.ts) runs a carried line at this share until it is ticked here.
+const equivalentOf = (row: CalcRow): number =>
+  row.equivalent > 0 ? row.equivalent : Math.max(0, row.machines - 1) + clockOf(row) / 100;
+export function carriedShare({ before }: CarriedLine, row: CalcRow): number {
+  const needed = equivalentOf(row);
+  return needed > 0 ? Math.min(1, equivalentOf(before) / needed) : 1;
+}
+
+// The lines of `phase` that run from the phase before and are not ticked running here yet, with
+// the share each one makes (carriedShare): what the plan summary, "Built so far" and the build
+// status count at the phase before's size. null where nothing is handed over into `phase`.
+export interface PhaseCarry {
+  from: StageKey;
+  shares: Map<string, number>;
+}
+export function phaseCarry(
+  plan: HandoverPlan,
+  checks: Record<string, boolean>,
+  phase: Phase,
+): PhaseCarry | null {
+  const from = previousStage(plan, phase);
+  if (!from) return null;
+  const shares = new Map<string, number>();
+  for (const row of plan.stages[phase as StageKey]?.rows || []) {
+    if (checks['calc-' + phase + '-' + row.id]) continue;
+    const carried = carriedLine(plan, checks, phase, row.id);
+    if (carried) shares.set(row.id, carriedShare(carried, row));
+  }
+  return { from, shares };
+}
+
+// A carried line's state on its factory card and in its dialog: "Running since Phase 1: 2 of 5
+// machines", or "3 machines, 2 needed here" when this phase needs fewer.
+export function carriedMachinesText({ from, before }: CarriedLine, row: CalcRow): string {
+  const count =
+    before.machines <= row.machines
+      ? `${formatNumber(before.machines)} of ${machinesWord(row.machines)}`
+      : `${machinesWord(before.machines)}, ${formatNumber(row.machines)} needed here`;
+  return `Running since Phase ${from}: ${count}`;
+}

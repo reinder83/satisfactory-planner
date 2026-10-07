@@ -20,6 +20,7 @@ import { calcStage, calculated, checked, phase, phaseLabel, stage } from '../../
 import {
   buildRowName,
   calcExpansion,
+  carriedLineText,
   easierSetup,
   machineSetup,
   rowIcon,
@@ -121,6 +122,8 @@ const view = computed(() =>
           ? inputText(row.outputs)
           : '',
       expansion: calcExpansion(row.id),
+      // What runs from the phase before and what this phase changes on it (#1069).
+      carried: carriedLineText(row),
     };
   }),
 );
@@ -198,13 +201,17 @@ const view = computed(() =>
         >
           <td>
             {{ expansionRow.label
-            }}<small v-if="expansionRow.tag" class="phase-tag">{{ expansionRow.tag }}</small>
+            }}<small v-if="expansionRow.tag" class="phase-tag">{{ expansionRow.tag }}</small
+            ><small v-if="expansionRow.running" class="phase-tag running-tag" data-expansion-running
+              >marked running</small
+            >
           </td>
           <td>{{ expansionRow.required }}</td>
           <td>{{ expansionRow.add }}</td>
         </tr>
       </tbody>
     </table>
+    <p v-if="view.carried" class="small" data-expansion-carried>{{ view.carried }}</p>
     <p class="small muted">
       The optimizer may choose a different recipe in another phase. Keep earlier buildings until the
       replacement chain runs. Screws and wire can be made beside consumers.

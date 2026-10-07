@@ -204,3 +204,45 @@ test('real plans, current and saved: nothing built delivers nothing, fully built
       assert.ok(full.deliveryShare === 1 || !full.delivery.length);
     }
 });
+
+// A line the phase before marked running and this phase builds again (#1069, phaseCarry in
+// handover.ts) runs at the share its earlier machines make until it is ticked here.
+test('a carried line runs at its earlier size, and ticking it here runs it whole', () => {
+  const carried = new Map([
+    ['ingot', 0.5],
+    ['plate', 1],
+  ]);
+  const status = buildStatus(chain, {}, '1', 0, chain.rows, carried);
+  assert.deepEqual(
+    status.rows.map(r => [r.id, r.built, r.carried, r.shortOf]),
+    [
+      ['ingot', false, 0.5, undefined],
+      ['plate', false, 1, 'Ingot'],
+    ],
+  );
+  close(status.rows[0]!.share, 0.5, 'ingot share');
+  // The plates get half their ingots: half the delivery.
+  close(status.rows[1]!.share, 0.5, 'plate share');
+  close(status.delivery[0]!.now, 10, 'plates now');
+  assert.equal(status.builtCount, 0);
+  assert.equal(status.carriedCount, 2);
+  // Completing the ingot line is the step that adds the rest.
+  assert.equal(status.next!.id, 'ingot');
+  close(status.next!.gain, 0.5, 'gain');
+  // Ticked here, a carried line runs whole and counts as built, not carried.
+  const ticked1 = buildStatus(chain, ticked('ingot'), '1', 0, chain.rows, carried);
+  assert.equal(ticked1.builtCount, 1);
+  assert.equal(ticked1.carriedCount, 1);
+  assert.equal(ticked1.rows[0]!.carried, undefined);
+  close(ticked1.delivery[0]!.now, 20, 'plates now');
+});
+
+test('a short input reaches a carried line in proportion to what it asks', () => {
+  // Two consumers of 30 Ore each (60 asked at full) from 30 Ore: one ticked, one carried at half.
+  const competing = stage([row('x', { Ore: 30 }, { X: 1 }), row('y', { Ore: 30 }, { Y: 1 })]);
+  const status = buildStatus(competing, ticked('x'), '1', 0, competing.rows, new Map([['y', 0.5]]));
+  // 45 asked, 30 there: each gets two thirds of what it asks.
+  close(status.rows[0]!.share, 2 / 3, 'ticked share');
+  close(status.rows[1]!.share, 1 / 3, 'carried share');
+  assert.equal(status.rows[1]!.shortOf, 'Ore');
+});

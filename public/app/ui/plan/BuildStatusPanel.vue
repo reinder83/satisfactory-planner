@@ -1,13 +1,14 @@
 <!--
   "Built so far" on a calculated profile's plan page (#66): from the factory rows ticked as
-  built, how much of each Space Elevator part reaches the elevator now, the step to build next,
+  built and the lines running from the phase before at their earlier size (#1069),
+  how much of each Space Elevator part reaches the elevator now, the step to build next,
   built rows held back by a missing supplier, and a power warning. The numbers come from
   currentBuildStatus() (views/calculated.ts, build-status.ts); nothing here recalculates the plan.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import { num } from '../../format.ts';
-import { buildRowName, currentBuildStatus } from '../../views/calculated.ts';
+import { buildRowName, currentBuildStatus, currentCarry } from '../../views/calculated.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
 import { factoryLink } from '../actions.ts';
@@ -39,6 +40,9 @@ const view = computed(() =>
     };
     return {
       built: status.builtCount,
+      // Lines not ticked here that run from the phase before, at that size (#1069).
+      carried: status.carriedCount,
+      from: currentCarry()?.from || '',
       total: status.rowCount,
       share: percent(status.deliveryShare),
       delivery: status.delivery.map(delivery => ({
@@ -61,15 +65,20 @@ const view = computed(() =>
   <section v-if="view" class="panel build-status" data-build-status>
     <h2>Built so far</h2>
     <p class="small muted">
-      {{ view.built }} of {{ view.total }} production lines marked running. Raw resources count as
-      mined; the rest follows from what is built.
+      {{ view.built }} of {{ view.total }} production lines marked running.
+      <span v-if="view.carried" data-build-carried
+        >{{ view.carried }} more {{ view.carried === 1 ? 'runs' : 'run' }} from Phase
+        {{ view.from }}, counted at {{ view.carried === 1 ? 'its' : 'their' }} Phase
+        {{ view.from }} size.</span
+      >
+      Raw resources count as mined; the rest follows from what is built.
     </p>
     <div v-for="delivery in view.delivery" :key="delivery.item" class="delivery">
       <label>{{ delivery.item }}</label>
       <div class="progress-track"><span :style="{ width: delivery.width + '%' }"></span></div>
       <span class="small muted" data-build-rate>{{ delivery.text }}</span>
     </div>
-    <p v-if="view.built && !view.share" class="small" data-build-none>
+    <p v-if="(view.built || view.carried) && !view.share" class="small" data-build-none>
       Nothing reaches the elevator yet.
     </p>
     <p v-else-if="view.delivery.length" class="small">

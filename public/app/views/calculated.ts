@@ -6,7 +6,13 @@
 import { groupedRows, groupedSteps } from '../group-order.ts';
 import { phaseSteps, rowStepTitle, type PhaseStep } from '../../progression.ts';
 import { buildStatus, type BuildStatus } from '../build-status.ts';
-import { carriedLine, carriedText } from '../handover.ts';
+import {
+  carriedLine,
+  carriedMachinesText,
+  carriedText,
+  phaseCarry,
+  type PhaseCarry,
+} from '../handover.ts';
 import { FLUIDS, itemRate, rateOfItem } from '../flow.ts';
 import { num } from '../format.ts';
 import { adviceText, lineAdvice, recycleModel } from '../recycle.ts';
@@ -356,8 +362,30 @@ export function calcExpansion(id: string) {
       ...expansionPhase(stagePhase),
       required: required || '—',
       add: add ? '+' + add : '—',
+      // The line's Running tick in that phase (#1069).
+      running: !!required && !!state.checks['calc-' + stagePhase + '-' + id],
     };
   });
+}
+
+// What a line the phase before marked running already does in the phase shown, and what this
+// phase changes on it (carriedText in handover.ts, #1069), for the production line dialog under
+// its expansion table; '' for any other line.
+export const carriedLineText = (row: CalcRow): string => carriedStepText(row, phase()).trim();
+
+// The lines of the phase shown that run from the phase before and are not ticked here yet, with
+// the share of each that already runs (phaseCarry in handover.ts, #1069). It reads the saved
+// ticks and changes none.
+export const currentCarry = (): PhaseCarry | null =>
+  calculated ? phaseCarry(calculated, state.checks, phase()) : null;
+
+// A line's card state while it runs from the phase before and is not ticked here yet: that phase
+// and "Running since Phase 1: 2 of 5 machines" (carriedMachinesText in handover.ts, #1069), else
+// null.
+export function carriedCard(row: CalcRow): { from: string; text: string } | null {
+  if (!calculated || state.checks['calc-' + phase() + '-' + row.id]) return null;
+  const carried = carriedLine(calculated, state.checks, phase(), row.id);
+  return carried ? { from: carried.from, text: carriedMachinesText(carried, row) } : null;
 }
 
 // An expansion table row's phase (SP-22): its label, and whether it is the phase being worked
@@ -373,7 +401,8 @@ export function expansionPhase(rowPhase: string) {
 }
 
 // The open calculated stage's build-so-far status (build-status.ts, #66): what the factory rows
-// ticked as built produce now. null without a calculated plan with rows. The pages and ADA ask
+// ticked as built, and the lines running from the phase before at their earlier size (#1069),
+// produce now. null without a calculated plan with rows. The pages and ADA ask
 // for it on every redraw, and finding the next step recalculates the stage once per unbuilt row,
 // so the last answer is kept until the plan, the stage or a row tick changes.
 let buildCache: { key: string; status: BuildStatus | null } | null = null;
@@ -384,16 +413,23 @@ export function currentBuildStatus(): BuildStatus | null {
   const prefix = 'calc-' + stage() + '-';
   // The rows in the build plan's order, which a change of factory groups can change (#869).
   const ordered = groupedRows(snapshot.rows, state.factoryGroups);
+  // The lines still running from the phase before, at the share they make (#1069).
+  const carried = currentCarry()?.shares || new Map<string, number>();
   const key =
     stage() +
     '|' +
     snapshot.rows.map(r => (state.checks[prefix + r.id] ? 1 : 0)).join('') +
     '|' +
-    ordered.map(r => r.id).join(',');
+    ordered.map(r => r.id).join(',') +
+    '|' +
+    [...carried].map(([id, share]) => id + ':' + share).join(',');
   if (buildPlan !== calculated || buildCache?.key !== key) {
     buildPlan = calculated;
     const spareMW = (calculated.settings.availablePowerGW || 0) * 1000;
-    buildCache = { key, status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered) };
+    buildCache = {
+      key,
+      status: buildStatus(snapshot, state.checks, stage(), spareMW, ordered, carried),
+    };
   }
   return buildCache.status;
 }

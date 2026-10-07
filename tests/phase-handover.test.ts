@@ -5,7 +5,14 @@
 // reads the stored plan and the saved checks: no tick is written, changed or dropped.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { carriedLine, carriedText, handoverText, phaseHandover } from '../public/app/handover.ts';
+import {
+  carriedLine,
+  carriedMachinesText,
+  carriedText,
+  handoverText,
+  phaseCarry,
+  phaseHandover,
+} from '../public/app/handover.ts';
 import { formatNumber as n, retiredLines } from '../public/progression.ts';
 import type { CalcRow, StoredCalculatedPlan } from '../public/types/index.ts';
 
@@ -140,9 +147,42 @@ test('the handover reads the saved ticks and running marks, never changes them',
     storedBefore = structuredClone(stored);
   for (const line of stored.stages['2']!.rows!) {
     const carried = carriedLine(stored, checks, '2', line.id);
-    if (carried) carriedText(carried, line);
+    if (carried) carriedText(carried, line) + carriedMachinesText(carried, line);
   }
   handoverText(phaseHandover(stored, checks, '2')!);
+  phaseCarry(stored, checks, '2');
   assert.deepEqual(checks, before, 'no tick is added, changed or dropped');
   assert.deepEqual(stored, storedBefore, 'the stored plan is not recalculated or changed');
+});
+
+// The counts (#1069): the plan summary, "Built so far" and the build status count the lines the
+// phase before ran and this phase has not ticked yet, each at the share its earlier machines make.
+test('the carried lines of a phase and the share each already makes', () => {
+  const stored = plan(),
+    carry = phaseCarry(stored, { ...ALL_RUNNING, 'calc-2-Iron Plate': true }, '2')!;
+  assert.equal(carry.from, '1');
+  // Iron Plate is ticked in Phase 2 and Cable is new, so neither is carried.
+  assert.deepEqual([...carry.shares.keys()], ['Iron Ingot', 'Iron Rod', 'Screw']);
+  const close = (actual: number | undefined, expected: number) =>
+    assert.ok(Math.abs(actual! - expected) < 1e-9, `${actual} is not ${expected}`);
+  close(carry.shares.get('Iron Ingot'), 7.0775 / 13.8225);
+  close(carry.shares.get('Iron Rod'), 0.0775 / 0.8225);
+  // A line this phase shrinks runs whole.
+  close(carry.shares.get('Screw'), 1);
+  // Nothing marked running, no handover into Phase 1, none into Post Phase 5, none on a guide.
+  assert.equal(phaseCarry(stored, {}, '2')!.shares.size, 0);
+  assert.equal(phaseCarry(stored, ALL_RUNNING, '1'), null);
+  assert.equal(phaseCarry(stored, ALL_RUNNING, 'post'), null);
+  assert.equal(phaseCarry({ ...stored, guide: { phases: {} } }, ALL_RUNNING, '2'), null);
+});
+
+test('a carried line says how many of its machines already run', () => {
+  const machines = (id: string) => {
+    const stored = plan(),
+      line = stored.stages['2']!.rows!.find(candidate => candidate.id === id)!;
+    return carriedMachinesText(carriedLine(stored, ALL_RUNNING, '2', id)!, line);
+  };
+  assert.equal(machines('Iron Ingot'), 'Running since Phase 1: 8 of 14 machines');
+  assert.equal(machines('Iron Rod'), 'Running since Phase 1: 1 of 1 machine');
+  assert.equal(machines('Screw'), 'Running since Phase 1: 5 machines, 3 needed here');
 });
