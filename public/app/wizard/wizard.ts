@@ -15,10 +15,14 @@ import {
 } from '../../preferences.ts';
 import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../progression.ts';
 import { carryOptions } from '../../state.ts';
-import { allowSwitch, navigate, post, toast } from '../api.ts';
+import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
+import { backupName, defaultProfileName } from '../profile-edit.ts';
 import {
+  calculated,
+  currentProfile,
+  currentSave,
   draft,
   loadContext,
   progressionData,
@@ -33,6 +37,7 @@ import { extractionOf } from './extraction.ts';
 import { guidedBuiltKeys, guidedFlow } from './guided.ts';
 import { readSupply } from './supply.ts';
 import type {
+  ContextReply,
   CurrentSettings,
   FirstReleaseSettings,
   ItemRates,
@@ -88,6 +93,23 @@ export interface WizardDraft {
   extractionUndo?: Survey | null;
   // What extractionUndo undoes: "Reset all counts", or a refill that replaced typed counts.
   extractionUndoKind?: 'reset' | 'refill';
+  // Edit settings (#1071, startEdit): the profile whose settings the draft edits, with the plan
+  // they were read from. Review then lists what changes, and its button recalculates that
+  // profile in place. Draft only, never stored.
+  edit?: EditTarget | null;
+}
+
+// The profile Edit settings recalculates: its id, its name and plan when the edit started.
+export interface EditTarget {
+  profileId: string;
+  name: string;
+  plan: StoredCalculatedPlan;
+}
+
+// The reply of POST /api/recalculate (#1071): the profile's id stays, backupId is the previous
+// version's.
+interface RecalculatedProfile extends CreatedProfile {
+  backupId: string;
 }
 
 // The reply of POST /api/profiles.
@@ -142,6 +164,55 @@ function openWizard(saveId: string | null, at?: { profileId: string; step: numbe
   navigate('wizard');
 }
 
+// "Edit settings" on a calculated profile (#1071): All settings on step 1, from the settings its
+// plan was calculated with, named as it is, ending on Review with "Recalculate in place". The
+// open profile's plan is at hand; another profile's is read first (GET /api/context, which
+// changes nothing). Nothing is recalculated until the user presses that button. Unsaved notes
+// are asked about first, as for startWizard.
+export async function startEdit(saveId: string, profileId: string) {
+  const asked = allowSwitch();
+  if (asked !== true && !(await asked)) return;
+  const open = currentSave?.id === saveId && currentProfile?.id === profileId && calculated;
+  const context = open
+    ? { profile: { name: currentProfile.name }, plan: calculated! }
+    : await request<ContextReply>('/api/context', {
+        headers: { 'X-Save-Id': saveId, 'X-Profile-Id': profileId },
+      });
+  const existing = workspace.saves.find(s => s.id === saveId);
+  if (!context.plan || !existing) {
+    toast('This profile has no calculated plan to edit.', true);
+    return;
+  }
+  const wizardDraft = newDraft(saveId, existing, structuredClone(context.plan.settings));
+  wizardDraft.name = context.profile.name;
+  wizardDraft.carryFrom = profileId;
+  wizardDraft.mode = 'advanced';
+  wizardDraft.edit = { profileId, name: context.profile.name, plan: context.plan };
+  setWizard(wizardDraft);
+  navigate('wizard');
+}
+
+// The profile name box's placeholder, on the Goals step and the guided start (#1071).
+export const NAME_HINT = 'Named after its goal, changes and date if left blank';
+
+// The name the profile gets: the typed one, else one that says what it is (defaultProfileName in
+// profile-edit.ts): its goal, what differs from the profile it carries from (a new save's
+// defaults when it carries from none) and today's date. Review shows it, and the create sends it.
+export function profileNameOf(wizardDraft: WizardDraft): string {
+  const typed = wizardDraft.name.trim();
+  if (typed) return typed;
+  const source = wizardDraft.saveId
+    ? workspace.saves
+        .find(s => s.id === wizardDraft.saveId)
+        ?.profiles.find(p => p.id === wizardDraft.carryFrom)
+    : undefined;
+  return defaultProfileName(
+    wizardDraft.settings,
+    source?.settings as Record<string, unknown> | undefined,
+    workspace.catalog.goals,
+  );
+}
+
 // The settings a new draft starts from. A new profile for an existing save starts from a
 // copy of its active profile's settings (the workspace summary exposes plan.settings); anything
 // else from freshSettings.
@@ -187,7 +258,7 @@ function freshSettings(): WizardSettings {
 // `settings`. The draft. Fields:
 //   step              five-step wizard position, 1-5 (5 = Review)
 //   saveId, saveName  target save (null = create one) and its name
-//   name              profile name; blank takes the goal's name on calculate
+//   name              profile name; blank takes profileNameOf's on Review and create
 //   settings          everything the planner calculates from; both the guided
 //                     questions and the five steps write it; sent to
 //                     /api/preview and /api/profiles
@@ -468,7 +539,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
     {
       saveId: wizardDraft.saveId,
       saveName: wizardDraft.saveName,
-      name: wizardDraft.name,
+      name: profileNameOf(wizardDraft),
       settings: wizardDraft.settings,
       carryFrom: wizardDraft.saveId ? wizardDraft.carryFrom : null,
       carry: wizardDraft.carry,
@@ -501,6 +572,47 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
   );
 }
 
+// Review of Edit settings, "Recalculate in place" (#1071): POST /api/recalculate replaces the
+// edited profile's plan, name and progress (carried from itself with the carry panel's picks,
+// the rules a new profile carried from it follows) and keeps its previous version as a profile
+// of its own named "<name> (before edit, <date>)". The request names the plan the edit started
+// from, so a profile recalculated meanwhile elsewhere is refused rather than replaced. Then the
+// profile opens on its plan page. Only this button calls it. A failure goes in the form's error
+// line, and nothing has changed.
+export async function recalculateProfile(form: HTMLFormElement, button: HTMLElement | null) {
+  const wizardDraft = draft(),
+    edit = wizardDraft.edit!;
+  readCarry(form);
+  const kept = backupName(
+    edit.name,
+    new Date(),
+    workspace?.saves.find(save => save.id === wizardDraft.saveId)?.profiles.map(p => p.name),
+  );
+  const done = await post<RecalculatedProfile>(
+    '/api/recalculate',
+    {
+      name: profileNameOf(wizardDraft),
+      backupName: kept,
+      settings: wizardDraft.settings,
+      planCreatedAt: edit.plan.createdAt,
+      carry: wizardDraft.carry,
+      built: [...guidedBuiltKeys(wizardDraft), ...alreadyHaveKeys(wizardDraft)],
+    },
+    { save: wizardDraft.saveId!, profile: edit.profileId },
+    calcProgress(button, 'Recalculating…'),
+  );
+  setWorkspace(done.workspace);
+  await loadContext(done.saveId, done.profileId);
+  setWizard(null);
+  navigate('plan');
+  const review = done.reviewCount
+    ? ' ' + plural(done.reviewCount, 'production line') + ' left unticked for review.'
+    : '';
+  toast(
+    `Recalculated in place.${review} The previous version is kept as “${kept}” under Profiles.`,
+  );
+}
+
 // The steps Review's "What you already have" ticks in the new profile (#1068), from the preview:
 // with "Everything before Phase N is done" every step the milestone-only phases before its start
 // phase list (stepsBeforeStart, unlock-<id> keys), and for the alternates owned their unlock steps
@@ -524,7 +636,9 @@ export const submitLabel = (wizardDraft: WizardDraft) =>
       ? 'Calculate plan'
       : 'Continue →'
     : wizardDraft.step === 5
-      ? 'Create profile'
+      ? wizardDraft.edit
+        ? 'Recalculate in place'
+        : 'Create profile'
       : wizardDraft.step === 4
         ? 'Calculate plan'
         : 'Continue →';
@@ -563,10 +677,6 @@ export async function calculateWizard(form: HTMLFormElement | null) {
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]'),
     label = submit?.textContent ?? '';
   try {
-    // The goal is one of the catalog's: the guided cards and the Goals step only offer those.
-    wizardDraft.name =
-      wizardDraft.name.trim() ||
-      workspace.catalog.goals.find(g => g.id === wizardDraft.settings.goal)!.name;
     wizardDraft.preview = await post<StoredCalculatedPlan>(
       '/api/preview',
       { settings: wizardDraft.settings },

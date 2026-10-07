@@ -111,7 +111,7 @@ test('the footer is a menu button naming the open profile, with the save’s pro
   );
   assert.deepEqual(
     $$('#profile-switcher [role="menuitem"]').map(b => b.textContent!.trim()),
-    ['All saves & profiles', 'Set up user accounts'],
+    ['Edit settings', 'All saves & profiles', 'Set up user accounts'],
     'no Sign out while accounts are off',
   );
   assert.ok(
@@ -124,7 +124,7 @@ test('the footer is a menu button naming the open profile, with the save’s pro
   await nextTick();
   assert.deepEqual(
     $$('#profile-switcher [role="menuitem"]').map(b => b.textContent!.trim()),
-    ['All saves & profiles', 'Account', 'Sign out'],
+    ['Edit settings', 'All saves & profiles', 'Account', 'Sign out'],
   );
 });
 

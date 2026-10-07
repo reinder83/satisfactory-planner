@@ -344,8 +344,8 @@ test('a profile card shows one action and keeps the others in its ⋯ menu (#238
   const visible = [...card.querySelectorAll<HTMLElement>('.profile-actions > button')];
   assert.deepEqual(
     visible.map(b => b.textContent!.trim()),
-    ['Open profile'],
-    'only the primary action is a button of its own',
+    ['Open profile', 'Edit settings'],
+    'the primary action and Edit settings (#1071) are buttons of their own',
   );
   const trigger = card.querySelector<HTMLButtonElement>('[data-profile-menu="p"]')!;
   const menu = $('#profile-menu-s-p')!;
