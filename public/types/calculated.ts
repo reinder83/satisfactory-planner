@@ -357,6 +357,10 @@ export interface Shortfall {
   name: string;
   needed: number;
   budget: number;
+  // A whole-machine draft's amount that the real fit did not confirm (#1091): its check still
+  // fell short or stopped at a search limit, so the draft says "at least". Absent otherwise and
+  // from older plans, which say "about".
+  atLeast?: boolean;
 }
 
 // A stage as calculate() returns it today: a plan, or for a phase that does not fit, a draft

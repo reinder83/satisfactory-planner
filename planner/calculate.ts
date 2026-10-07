@@ -116,7 +116,7 @@ function solvePhases(
     const result = planPhase(config, phase, first => (unrouted[phase] = first));
     stages[phase] = result.feasible
       ? withExactPlan(config, phase, result)
-      : draftStage(config, phase, result);
+      : draftStage(config, phase, result, settings => planPhase(settings, phase));
   }
   return stages;
 }
