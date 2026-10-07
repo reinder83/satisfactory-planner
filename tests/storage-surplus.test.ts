@@ -331,3 +331,69 @@ test('with mining per phase, storage-only lines stay within the phase’s budget
   }
   assert.ok(stocked > 0, 'the plan has storage-only lines');
 });
+
+// #1100: the exact steps of a whole-machine plan (the two-step fit's exact LP and the draft's
+// diagnostics) solve a copy of the settings without whole machines, so they put the full storage
+// rates back in, and a phase whose budgets could not hold them failed entirely.
+const tightLimestone = (extra: object) =>
+  calculate({
+    wholeMachines: true,
+    storage: 'construction',
+    storageOverrides: { Concrete: 20 }, // the guided start's default
+    limitsConfirmed: true,
+    ...extra,
+  });
+// Phase 1 under a Limestone budget of 40/min: it fits, and storage gets what the budget leaves.
+function fitsWithLimestone(extra: object) {
+  const stage = tightLimestone({ storageFromSurplus: true, ...extra }).stages['1'];
+  const budget = stage.mining?.budgets.Limestone ?? 40;
+  assert.equal(budget, 40);
+  assert.equal(stage.feasible, true, stage.reason);
+  // 40 Limestone/min makes 13.3 Concrete/min of the 20 asked.
+  assert.equal(stage.storageAsked?.Concrete, 20);
+  assert.ok(stage.storage!.Concrete! > 13 && stage.storage!.Concrete! < 20);
+  assert.ok((stage.raw!.Limestone ?? 0) <= budget + 0.01, `Limestone ${stage.raw!.Limestone}`);
+}
+test('a phase fits when its budgets cannot hold the full storage rates (#1100)', () => {
+  fitsWithLimestone({ limits: { ...settings({}).limits, Limestone: 40 } });
+});
+test('with mining per phase, a phase fits when its budgets cannot hold storage (#1100, #1065)', () => {
+  // Phase 1 gets a tenth of the survey's 400 Limestone/min.
+  fitsWithLimestone({ limits: { ...settings({}).limits, Limestone: 400 }, phaseMining: true });
+});
+
+test('a draft under storageFromSurplus does not name protected storage (#1100)', () => {
+  const limits = { ...settings({}).limits, 'Iron Ore': 0 };
+  const fed = tightLimestone({ storageFromSurplus: true, limits }).stages['1'];
+  assert.equal(fed.feasible, false);
+  assert.match(fed.reason!, /More time alone will not fit/);
+  assert.doesNotMatch(fed.reason!, /protected storage/);
+  // The draft's diagnostic leaves storage out, as the solve does (its fixes: tests/ui/draft-fixes).
+  assert.equal(fed.raw!.Limestone ?? 0, 0);
+  assert.deepEqual(fed.storage, {});
+  assert.match(tightLimestone({ limits }).stages['1'].reason!, /protected storage/);
+});
+
+test('without storageFromSurplus, the exact steps plan storage as a demand, as before (#1100)', () => {
+  // Plans stored before #1061 have no storageFromSurplus, so this is how they recalculate.
+  const stage = tightLimestone({ limits: { ...settings({}).limits, Limestone: 40 } }).stages['1'];
+  assert.equal(stage.feasible, false);
+  assert.deepEqual(stage.shortfalls, [{ name: 'Limestone', needed: 60, budget: 40 }]);
+  assert.match(stage.reason!, /continuous demands \(protected storage, drone fuel/);
+  assert.equal(stage.storage!.Concrete, 20);
+  // The rounding cost's exact plan (#1066) is the plan with exact clocks, storage included, with
+  // and without the setting: what the plan's pages set beside the whole-machine figures, whose
+  // storage is filled too.
+  for (const fromSurplus of [false, true]) {
+    const exact = calculate({ storage: 'construction', storageFromSurplus: fromSurplus });
+    const whole = planOf('construction', fromSurplus);
+    for (const phase of ['1', '2'] as StageKey[])
+      assert.deepEqual(
+        whole.stages[phase].exactPlan?.raw,
+        Object.fromEntries(
+          Object.entries(exact.stages[phase].raw!).filter(([, rate]) => rate > 0.001),
+        ),
+        `Phase ${phase}, storageFromSurplus ${fromSurplus}`,
+      );
+  }
+});
