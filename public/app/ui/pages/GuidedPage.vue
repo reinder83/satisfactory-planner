@@ -18,7 +18,7 @@ import { browserMode } from '../../../browser-api.ts';
 import { draft, wizard } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { guidedFlow, moveGuided, readGuidedForm, toAdvanced } from '../../wizard/guided.ts';
-import { cancelWizard } from '../../wizard/wizard.ts';
+import { NAME_HINT, cancelWizard } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import BrowserNotice from '../BrowserNotice.vue';
 import InputField from '../form/InputField.vue';
@@ -125,9 +125,7 @@ function submit() {
           error-id="guided-name-error"
           :check="!page.adding"
           maxlength="80"
-          :placeholder="
-            page.adding ? 'Named after your goal if left blank' : 'e.g. My Satisfactory save'
-          "
+          :placeholder="page.adding ? NAME_HINT : 'e.g. My Satisfactory save'"
         />
       </div>
       <GuidedTopics v-if="page.topics" />

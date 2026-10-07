@@ -6,7 +6,8 @@
   draft, so readWizard (wizard/wizard.ts) reads the form exactly as it did, and moving between
   steps reads the one being left. The form is keyed by step, so every step starts from the
   draft and a new step clears the error line. Enter or the primary button moves on until
-  Review, which calculates, and on Review creates the profile. The submit stops here, since
+  Review, which calculates, and on Review creates the profile, or for Edit settings (#1071)
+  recalculates the edited profile in place ("Recalculate in place"). The submit stops here, since
   nothing else handles the wizard form. Beside Goals and Resources is the live estimate
   (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
   sits under the form, with a one-line summary at the foot of the screen (#412).
@@ -22,6 +23,7 @@ import {
   createProfile,
   moveWizard,
   readWizard,
+  recalculateProfile,
   submitLabel,
   wizardError,
 } from '../../wizard/wizard.ts';
@@ -48,9 +50,12 @@ const page = computed(() =>
     return {
       draft: true as const,
       step: wizardDraft.step,
-      title: wizardDraft.saveId
-        ? 'Add a profile to ' + wizardDraft.saveName
-        : 'Create your factory plan',
+      eyebrow: wizardDraft.edit ? 'EDIT SETTINGS' : 'NEW PROFILE',
+      title: wizardDraft.edit
+        ? 'Edit the settings of ' + wizardDraft.edit.name
+        : wizardDraft.saveId
+          ? 'Add a profile to ' + wizardDraft.saveName
+          : 'Create your factory plan',
       submit: submitLabel(wizardDraft),
     };
   }),
@@ -89,7 +94,8 @@ async function submit(event: Event) {
   if (isBusy(button)) return;
   await whileBusy(button, async () => {
     try {
-      await createProfile(form, button);
+      if (wizardDraft.edit) await recalculateProfile(form, button);
+      else await createProfile(form, button);
     } catch (error) {
       wizardError(form, error as Error);
       // calcProgress rewrote the button's label, so give it the right one back.
@@ -107,7 +113,7 @@ async function submit(event: Event) {
   </template>
   <template v-else>
     <BrowserNotice v-if="browserMode" />
-    <PageHeader eyebrow="NEW PROFILE" :title="page.title" />
+    <PageHeader :eyebrow="page.eyebrow" :title="page.title" />
     <div class="wizard-progress">
       <button
         v-for="(title, i) in STEPS"

@@ -12,6 +12,7 @@
 // POST /api/duplicate-profile  copy a profile within its save
 // POST /api/import-saves       add transferred saves as new copies
 // POST /api/round-up           recalculate as whole machines into a new profile
+// POST /api/recalculate        Edit settings: recalculate a profile in place, with a backup
 // POST /api/rank-alternates    hard-drive payoff ranking on the worker, stored on the profile
 // GET  /api/context, /api/state, /api/export   read the scoped profile
 // POST /api/select, /api/remove-profile, /api/rename, /api/update, /api/import
@@ -25,7 +26,9 @@ import {
   calculatedProfile,
   checkBase,
   checkNewProfileKind,
+  checkRecalculate,
   checkRoundUp,
+  recalculatedProfile,
   currentPayoff,
   phaseProgress,
   roundUpSettings,
@@ -293,6 +296,43 @@ export function createBrowserApi(
       return { saveId: save.id, profileId, reviewCount, workspace: summary(data) };
     });
   }
+  // Mirrors POST /api/recalculate (#1071): read, calculate body.settings outside any transaction,
+  // then replace the scoped profile's plan, name and progress (recalculatedProfile, shared with
+  // the server) and keep its previous version whole as a profile of its own right after it. The
+  // previous version is read again inside the transaction, so ticks made meanwhile in another tab
+  // are carried and kept in the backup; one recalculated meanwhile is refused (checkRecalculate).
+  async function recalculate({ url, headers, body, options }: RouteRequest) {
+    const before = scope(await store.transaction(), url, headers);
+    checkRecalculate(before.profile, body.planCreatedAt, 0);
+    const name = cleanName(body.name),
+      backupName = cleanName(body.backupName),
+      plan = await calculator(body.settings, options.onProgress),
+      backupId = randomId();
+    return store.transaction(data => {
+      const { save, profile } = scope(data, url, headers);
+      checkRecalculate(profile, body.planCreatedAt, save.profiles.length);
+      const next = recalculatedProfile(
+        profile,
+        plan,
+        name,
+        body.carry,
+        body.built,
+        backupId,
+        backupName,
+      );
+      save.profiles.splice(save.profiles.indexOf(profile), 1, next.profile, next.backup);
+      save.activeProfile = profile.id;
+      data.activeSave = save.id;
+      return {
+        saveId: save.id,
+        profileId: profile.id,
+        backupId,
+        reviewCount: next.reviewCount,
+        carriedChecks: next.carried,
+        workspace: summary(data),
+      };
+    });
+  }
   // Mirrors POST /api/rank-alternates: read the profile, rank on the worker outside any
   // transaction, then store the result on the profile if its plan is still the one ranked.
   async function rankPayoff({ url, headers, body, options }: RouteRequest) {
@@ -408,6 +448,7 @@ export function createBrowserApi(
     '/api/duplicate-profile': duplicateProfile,
     '/api/import-saves': importSaves,
     '/api/round-up': roundUp,
+    '/api/recalculate': recalculate,
     '/api/rank-alternates': rankPayoff,
   };
   const readRoutes: Record<string, Handler<ScopedRequest>> = {

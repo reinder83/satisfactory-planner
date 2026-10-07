@@ -1,6 +1,7 @@
 <!--
   All settings step 3, goal: the goal cards (radio "goal", with the one these settings suggest
-  marked), the profile name (the goal's name until one is typed), hours per phase, what the
+  marked), the profile name (blank until one is typed: the profile is then named after its goal,
+  what changed and the date, profileNameOf in wizard/wizard.ts, #1071), hours per phase, what the
   target time applies to, and the rounding and whole-machine checkboxes. readWizard reads the
   two checkboxes only on this step, since an unticked box is absent from the form. Under the
   whole-machine box, what it costs on these settings, measured by the live estimate's
@@ -12,6 +13,7 @@ import { computed } from 'vue';
 import { measuredRounding } from '../../exact-clocks.ts';
 import { num } from '../../format.ts';
 import { draft, workspace } from '../../session.ts';
+import { NAME_HINT } from '../../wizard/wizard.ts';
 import { estimate } from '../../wizard/estimate.ts';
 import { power } from '../../wizard/fields.ts';
 import { legacy } from '../bridge.ts';
@@ -34,7 +36,7 @@ const view = computed(() =>
       goals: goals.map(g => ({ ...g, on: settings.goal === g.id })),
       recommended: settings.multiplier > 5 ? 'timed' : 'balanced',
       // The goal is always one of the catalog's.
-      name: wizardDraft.name || goals.find(g => g.id === settings.goal)!.name,
+      name: wizardDraft.name,
       hours: settings.hours,
       phaseTime: settings.phaseTime || 'every',
       roundRates: !!settings.roundRates,
@@ -81,8 +83,8 @@ const view = computed(() =>
       name="profileName"
       :value="view.name"
       type="text"
-      required
       maxlength="80"
+      :placeholder="NAME_HINT"
     />
     <InputField
       label="Hours per phase (target-time option)"

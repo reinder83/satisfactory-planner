@@ -1,6 +1,6 @@
 <!--
   The page frame: sidebar navigation, ADA, save status, the profile switcher, and the top bar
-  with the breadcrumb (the save) and the phase picker. The current page is drawn into the empty
+  with the breadcrumb (the save and the open profile) and the phase picker. The current page is drawn into the empty
   <main> by render() in shell.ts.
 
   The phase picker is a phase track (SP-44, #279): one segment per phase, each with its
@@ -19,6 +19,9 @@
   scroll; the whole name stays in the button's text (its accessible name), in its title, in the
   menu and on the profiles page. The breadcrumb's save name is cut the same way (#817), so it
   never pushes the phase track off the window; its title and the profiles page show it in full.
+  After it the breadcrumb names the open profile (#1071), the name the switcher, the plan page and
+  the profiles page show, cut the same way; at 720px and below only the profile's name shows. The
+  switcher's menu also offers "Edit settings" for the open calculated profile (startEdit).
 
   At 720px and below (SP-37, #272) the sidebar is a drawer: a compact top bar holds ☰, the brand
   mark, the breadcrumb, the phase picker and the save status, and ☰ opens the sidebar full
@@ -31,7 +34,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import { purities } from '../../preferences.ts';
-import { allowSwitch, pending, save } from '../api.ts';
+import { allowSwitch, pending, save, toast } from '../api.ts';
+import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
 import {
   calculated,
@@ -83,6 +87,9 @@ const frame = computed(() =>
     } as Record<string, string>,
     // The empty workspace's placeholder save has no id; the breadcrumb says so as the status does.
     saveName: currentSave.id ? currentSave.name : 'No save yet',
+    // The open profile, after the save in the breadcrumb (#1071): one name everywhere.
+    profileName: currentSave.id ? currentProfile?.name || '' : '',
+    editable: !!(currentSave.id && calculated),
     canPickPhase: !!currentSave.id,
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
@@ -129,6 +136,13 @@ function switchTo(id: string, open: boolean) {
   return openProfile(currentSave.id, id, on => (switching.value = on));
 }
 // A page of the switcher's menu, through the address as a sidebar link would.
+// "Edit settings" in the switcher (#1071): All settings on the open profile's settings.
+function editOpen() {
+  closeMenu(false);
+  void startEdit(currentSave.id, currentProfile.id).catch(error =>
+    toast((error as Error).message, true),
+  );
+}
 const go = (page: View) => {
   closeMenu(false);
   location.hash = page;
@@ -387,6 +401,17 @@ async function pickTrack(event: Event) {
             </button>
           </div>
           <button
+            v-if="frame.editable"
+            type="button"
+            role="menuitem"
+            tabindex="-1"
+            class="btn"
+            data-edit-open-profile
+            @click="editOpen"
+          >
+            Edit settings
+          </button>
+          <button
             type="button"
             role="menuitem"
             tabindex="-1"
@@ -450,7 +475,13 @@ async function pickTrack(event: Event) {
           ><img class="topbar-mark" src="./favicon.svg" alt="" />
         </div>
         <div class="breadcrumbs">
-          <a href="#profiles" :title="frame.saveName">{{ frame.saveName }}</a>
+          <a href="#profiles" :title="frame.saveName">{{ frame.saveName }}</a
+          ><template v-if="frame.profileName"
+            ><span class="crumb-sep" aria-hidden="true">/</span
+            ><span class="crumb-profile" :title="frame.profileName" data-crumb-profile>{{
+              frame.profileName
+            }}</span></template
+          >
         </div>
         <div class="topbar-tools">
           <div

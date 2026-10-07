@@ -472,6 +472,56 @@ export function wholeMachineProfile<P extends RowsPlan, S extends SavedState>(
     reviewCount,
   };
 }
+// Edit settings, "Recalculate in place" (/api/recalculate, #1071): the refusals both editions
+// give (profile-routes.ts recalculate and browser-api.ts recalculate). Only a calculated profile
+// has settings to edit. `planCreatedAt` is the plan the user edited the settings of: a profile
+// recalculated since (in another tab or on another device) is refused (409), never replaced
+// with settings made from the plan before it. The previous version is kept as a profile of its
+// own, so the save needs room for one more.
+export const recalculateNeedsCalculated =
+  'Only a calculated profile can be recalculated. Create a calculated profile instead.';
+export const recalculatedElsewhere =
+  'This profile was recalculated in another tab or on another device. Open it again to edit ' +
+  'the settings it has now.';
+export const noRoomForBackup =
+  'This save already has 30 profiles, so there is no room to keep the current version as a ' +
+  'backup. Remove a profile first.';
+export function checkRecalculate(
+  profile: { kind: StoredProfileKind; plan?: { createdAt: string } | null },
+  planCreatedAt: unknown,
+  profileCount: number,
+) {
+  if (profile.kind !== 'calculated' || !profile.plan) fail(recalculateNeedsCalculated);
+  if (planCreatedAt !== profile.plan.createdAt) fail(recalculatedElsewhere, 409);
+  if (profileCount >= 30) fail(noRoomForBackup);
+}
+// The in-place recalculation both editions write (#1071): the profile keeps its id and gets the
+// new plan, `name` and the progress calculatedProfile carries from its own previous version
+// (the same carry rules and picks as a new profile carried from it, so ticks whose rows still
+// need no more machines and no more input stay ticked and the rest are kept for review). Its
+// revision moves past the previous one, so a whole-value write from a tab that still shows the
+// previous version is refused (checkBase). The previous version is kept whole as `backup`: a
+// copy of the stored profile (plan, progress, payoff ranking) under `backupId` and `backupName`,
+// which the callers add right after it. Nothing is deleted. Limits and selection stay with the
+// callers.
+export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>(
+  previous: T,
+  plan: P,
+  name: string,
+  raw: unknown,
+  built: unknown,
+  backupId: string,
+  backupName: string,
+) {
+  const started = calculatedProfile(previous.id, name, plan, previous, raw, built);
+  started.profile.state.revision = (previous.state.revision ?? 0) + 1;
+  return {
+    profile: started.profile,
+    backup: { ...structuredClone(previous), id: backupId, name: backupName },
+    reviewCount: started.reviewCount,
+    carried: started.carried,
+  };
+}
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.
 // Used by /api/export-saves?share=1 in server/save-routes.ts and browser-api.ts; the input is

@@ -6,7 +6,9 @@
   what was credited from production you already run, whether fueled augmenters pay off, what
   whole machines cost against exact clocks (RoundingCost.vue, #1066), the
   options for each phase that does not fit, the calculation's assumptions, "What you already have"
-  (AlreadyHave.vue, #1068) and, when adding a profile to a save, the carry-over panel.
+  (AlreadyHave.vue, #1068) and, when adding a profile to a save, the carry-over panel. Edit
+  settings (#1071) first lists what the edit changes (EditDiff.vue), and its carry panel says what
+  of the profile's own progress it keeps.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -18,6 +20,7 @@ import { powerView } from '../../../power.ts';
 import { minerWords } from '../../../mining.ts';
 import { legacy } from '../bridge.ts';
 import CarryPanel from './CarryPanel.vue';
+import EditDiff from './EditDiff.vue';
 import AlreadyHave from './AlreadyHave.vue';
 import type { StoredSettings, StoredStage } from '../../../types/index.ts';
 import FuelVerdict from './FuelVerdict.vue';
@@ -25,7 +28,7 @@ import RoundingCost from '../plan/RoundingCost.vue';
 import SupplyNotice from './SupplyNotice.vue';
 import StepHeading from '../form/StepHeading.vue';
 import { ALLOWANCE_SETTING } from '../../../power.ts';
-import { moveWizard } from '../../wizard/wizard.ts';
+import { moveWizard, profileNameOf } from '../../wizard/wizard.ts';
 
 // A number keeps its unit on its line in the narrow Delivery time column (#741): "about 7 h
 // 52 min" may wrap after "about" or between "h" and "52", never between "7" and "h".
@@ -71,7 +74,8 @@ const view = computed(() =>
     const from = Number(preview.settings.phase || 1);
     const stages = Object.entries(preview.stages).filter(([phase]) => Number(phase) >= from);
     return {
-      name: wizardDraft.name,
+      name: profileNameOf(wizardDraft),
+      editing: !!wizardDraft.edit,
       plan: preview,
       rows: stages.map(([phase, stageResult]) => ({
         phase,
@@ -115,7 +119,13 @@ const view = computed(() =>
 <template>
   <template v-if="view">
     <StepHeading :step="5" :total="5">Review {{ view.name }}</StepHeading>
-    <p>Nothing has been created yet. Your other profiles and their progress stay intact.</p>
+    <p v-if="view.editing" data-edit-intro>
+      Nothing has changed yet. <b>Recalculate in place</b> gives this profile the new plan and
+      carries its progress over; the current version is kept as a separate profile, so you can go
+      back to it.
+    </p>
+    <p v-else>Nothing has been created yet. Your other profiles and their progress stay intact.</p>
+    <EditDiff v-if="view.editing" />
     <div class="table-wrap">
       <table>
         <thead>

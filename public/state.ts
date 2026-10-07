@@ -33,7 +33,8 @@
 //                            carryGuide, shareState and the
 //                            profiles /api/profiles and /api/round-up add (calculatedProfile,
 //                            roundUpState, wholeMachineProfile) and their refusals
-//                            (checkNewProfileKind, checkRoundUp)
+//                            (checkNewProfileKind, checkRoundUp), and Edit settings' recalculation
+//                            in place (recalculatedProfile, checkRecalculate)
 //   state/summary.ts         phaseProgress, planStepIds, profilePhases, profilePhasesCache and
 //                            currentPayoff
 //   state/factory-groups.ts  defaultFactoryGroups and its seed data
@@ -62,9 +63,14 @@ export {
   carryOptions,
   carryPicks,
   checkNewProfileKind,
+  checkRecalculate,
   checkRoundUp,
   newProfileState,
+  noRoomForBackup,
   pickedRecipeUnlocks,
+  recalculatedElsewhere,
+  recalculatedProfile,
+  recalculateNeedsCalculated,
   retiredProfileType,
   roundUpNeedsCalculated,
   roundUpSettings,

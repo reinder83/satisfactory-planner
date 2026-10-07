@@ -14,6 +14,12 @@ Each **user → named save → profile** has independent progress. Trying anothe
 
 Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save.
 
+A profile you leave unnamed is named after what it is: its goal, what differs from the profile it starts from (or from a new save's defaults) and the day, for example _Minimal construction · exact ratios · Oct 7_. Profiles you already have keep their names.
+
+### Edit a profile's settings
+
+**Edit settings** on a profile card, or in the profile menu at the foot of the sidebar, opens the settings that profile was calculated with. Change what you need; nothing is recalculated until you say so. Review then lists **what changes**: the settings you changed, and per phase the production lines (how many, how many are new or gone), the buildings and the power needed. **Recalculate in place** gives the profile the new plan and keeps your progress: unlocks, the storage room, notes and deliveries stay, and a production line you marked running stays ticked where the new plan needs no more machines and no more input, otherwise it is kept unticked for you to review. The version before the edit is kept whole as a separate profile, _<name> (before edit, Oct 7, 2:05 PM)_, with all of its progress, so you can open it again at any time. The top bar names the open profile after its save, as the profile menu and the build plan do.
+
 ### The guided start
 
 A new save opens on a short illustrated sequence rather than the full settings form. Five questions, each a picture and a sentence: which phase you are on, what the plan should do for you, which recipes it may use, what it should keep stocked, and how exact the build should be. Everything else keeps a default that was chosen by measuring what it actually changes — eleven of the settings form's controls, including the world seed, SAM conversion, somersloops held and every resource budget, do not move a default plan at all.
