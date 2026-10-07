@@ -17,6 +17,8 @@ import { power } from '../../wizard/fields.ts';
 import { powerView } from '../../../power.ts';
 import { minerWords } from '../../../mining.ts';
 import { legacy } from '../bridge.ts';
+import { guidedFlow, guidedReview } from '../../wizard/guided.ts';
+import { resourceDefaults } from '../../../preferences.ts';
 import CarryPanel from './CarryPanel.vue';
 import AlreadyHave from './AlreadyHave.vue';
 import type { StoredSettings, StoredStage } from '../../../types/index.ts';
@@ -69,6 +71,19 @@ const view = computed(() =>
       preview = wizardDraft.preview;
     if (!preview) return null;
     const from = Number(preview.settings.phase || 1);
+    // Without mining per phase, the budgets a fitting phase stays within: the user's own, or the
+    // world's defaults when none were entered (#1072).
+    const defaults = resourceDefaults(
+      preview.settings.purity,
+      preview.settings.distribution,
+    ).limits;
+    const budgets = Object.entries(preview.settings.limits || {}).some(
+      ([resource, limit]) => defaults[resource] !== limit,
+    )
+      ? 'Within your budgets'
+      : 'Within the default budgets';
+    // The guided start shows this as its last step (#1072), numbered as its own.
+    const total = guidedReview(wizardDraft) ? guidedFlow().length + 1 : 5;
     const stages = Object.entries(preview.stages).filter(([phase]) => Number(phase) >= from);
     return {
       name: wizardDraft.name,
@@ -89,7 +104,7 @@ const view = computed(() =>
         budget: stageResult.feasible
           ? stageResult.mining
             ? `Within ${minerWords(stageResult.mining.miner)} on ${stageResult.mining.belt.mark} belts`
-            : 'Within entered limits'
+            : budgets
           : budgetMeasured(stageResult)
             ? 'Needs adjustment'
             : 'Planning draft',
@@ -103,6 +118,7 @@ const view = computed(() =>
           fixes: draftFixes(stageResult, preview.settings),
         })),
       warnings: preview.warnings,
+      total,
       // The utility allowance the plan was calculated with (#1090).
       percent: preview.settings.utilityPercent ?? 20,
       // What whole machines cost in each phase listed (#1066).
@@ -114,7 +130,7 @@ const view = computed(() =>
 
 <template>
   <template v-if="view">
-    <StepHeading :step="5" :total="5">Review {{ view.name }}</StepHeading>
+    <StepHeading :step="view.total" :total="view.total">Review {{ view.name }}</StepHeading>
     <p>Nothing has been created yet. Your other profiles and their progress stay intact.</p>
     <div class="table-wrap">
       <table>

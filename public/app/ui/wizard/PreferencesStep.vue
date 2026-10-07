@@ -2,8 +2,11 @@
   All settings step 2, preferences: recipes, ingots, SAM, power and drone fuel, nuclear,
   storage and refill rates, somersloops and augmenters, then the somersloop ledger, the
   per-item storage rates and, for custom recipe access, the alternate recipe picker. Recipe
-  access, preferred power and the ingot choice change what the step shows, so WizardPage reads
-  the step and redraws when they change.
+  access, preferred power, the ingot choice, drone fuel and nuclear change what the step shows,
+  so WizardPage reads the step and redraws when they change. A rate that only means something
+  with a choice made (the drone fuel supply and the battery bridge, the minimum of uranium
+  reactors) shows only then, so no screen says "no drone fuel" beside a supply of 10 (#1072);
+  its stored value is kept, as the planner ignores it without the choice.
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
@@ -77,6 +80,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
       :value="settings.droneFuel || 'none'"
     />
     <InputField
+      v-if="settings.droneFuel && settings.droneFuel !== 'none'"
       label="Drone fuel supply (items/min, entire fleet)"
       name="droneFuelRate"
       :value="settings.droneFuelRate ?? 10"
@@ -86,6 +90,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
       required
     />
     <InputField
+      v-if="settings.droneFuel === 'Packaged Ionized Fuel'"
       label="Phase 4 battery bridge /min (ionized fuel only)"
       name="droneBridgeRate"
       :value="settings.droneBridgeRate ?? 10"
@@ -102,6 +107,7 @@ const settings = computed(() => legacy(() => ({ ...draft().settings })));
     />
     <SelectField label="Nuclear goal" name="nuclear" :options="NUCLEAR" :value="settings.nuclear" />
     <InputField
+      v-if="settings.nuclear !== 'none'"
       label="Minimum uranium reactors from Phase 4"
       name="uraniumReactors"
       :value="settings.uraniumReactors"

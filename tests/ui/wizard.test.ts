@@ -143,7 +143,7 @@ test('#wizard shows the survey, the guided questions or the five steps, by the d
   guidedAt(1);
   assert.equal(vuePage('wizard', wizard), GuidedPage);
   wizard!.guidedStep = guidedFlow().length + 1;
-  assert.equal(vuePage('wizard', wizard), WizardPage, 'answered: the five steps’ Review');
+  assert.equal(vuePage('wizard', wizard), GuidedPage, 'answered: its own Review (#1072)');
 });
 
 test('without a draft the wizard offers to create a save', () => {
@@ -595,7 +595,10 @@ test('the goals step and what Review says about each phase', () => {
     ['Phase', 'Budget', 'Delivery time', 'Buildings', 'New generation', 'Power needed'],
   );
   assert.equal(firstRow[0], '1');
-  assert.match(firstRow[1] ?? '', /^(Within entered limits|Needs adjustment|Planning draft)$/);
+  assert.match(
+    firstRow[1] ?? '',
+    /^(Within the default budgets|Within your budgets|Needs adjustment|Planning draft)$/,
+  );
   // The power each phase needs of what it has, as every page gives it (#1064): Phase 1 runs on
   // biomass; from Phase 2 on the phase's whole generators cover its need. Each need says what it
   // holds for trains, drones and pumps (#1090).
@@ -785,7 +788,8 @@ test('every guided screen offers All settings at the step that owns its question
     assert.ok($('.guided-card') || $('.supply-list'), 'cards, or the rows for the rate question');
     assert.match($('[data-guided-advanced]')!.dataset.guidedAdvanced!, /^[1-4]$/);
     assert.equal($('[data-guided-advanced]')!.dataset.guidedAdvanced, String(flow[step - 1]!.step));
-    assert.equal($$('.guided-progress [role=listitem]').length, flow.length);
+    // The questions, then Review as the flow's last step (#1072).
+    assert.equal($$('.guided-progress [role=listitem]').length, flow.length + 1);
     // SP-35: numbered steps, the current one marked for assistive software, and 'n of total'.
     const current = $('.guided-progress .current')!;
     assert.equal(current.getAttribute('aria-current'), 'step');
@@ -795,10 +799,10 @@ test('every guided screen offers All settings at the step that owns its question
     assert.equal(current.querySelector('i')!.getAttribute('aria-hidden'), 'true');
     assert.deepEqual(
       $$('.guided-progress i').map(i => i.textContent),
-      flow.map((_, i) => String(i + 1)),
+      [...flow, 'review'].map((_, i) => String(i + 1)),
     );
     assert.equal($$('.guided-progress .done').length, step - 1, 'the steps before it are done');
-    assert.equal($('[data-guided-count]')!.textContent, step + ' of ' + flow.length);
+    assert.equal($('[data-guided-count]')!.textContent, step + ' of ' + (flow.length + 1));
     assert.equal(
       $('#wizard-form button[type=submit]')!.textContent.trim(),
       step === flow.length ? 'Calculate plan' : 'Continue →',
@@ -857,8 +861,54 @@ test('past the last question the plan is calculated and Review takes over', asyn
   await submit();
   assert.equal(calls.length, 1);
   assert.equal(wizard!.step, 5);
+  // One flow (#1072): Review is the guided start's last step, not a second set of five tabs.
+  assert.equal(vuePage('wizard', wizard), GuidedPage);
+  assert.equal(
+    $('#main h2')!.textContent,
+    `Step ${last + 1} of ${last + 1}: Review Balanced progression`,
+  );
+  assert.equal($$('[data-wizard-step]').length, 0, 'no five step tabs');
+  assert.equal($$('.guided-progress [role=listitem]').length, last + 1);
+  assert.equal($('.guided-progress .current')!.textContent, `${last + 1}Review`);
+  assert.equal($('[data-guided-count]')!.textContent, `${last + 1} of ${last + 1}`);
+  assert.equal($$('#wizard-form button[type=submit]').length, 1, 'one Create button');
+  assert.equal(text('#wizard-form button[type=submit]'), 'Create profile');
+  assert.equal($('input[name=saveName]'), null, 'the name was asked with the questions');
+  // Back returns to the last question; All settings shows the same Review in the five steps.
+  await click('[data-guided-back]');
+  assert.equal(wizard!.guidedStep, last);
+  assert.ok($('.guided-card'));
+  stubFetch({ '/api/preview': generated() });
+  await submit();
+  await click('[data-guided-advanced]');
+  assert.equal(wizard!.mode, 'advanced');
+  assert.equal(wizard!.step, 5);
+  assert.ok(wizard!.preview, 'the plan is kept');
   assert.equal(vuePage('wizard', wizard), WizardPage);
   assert.match($('#main h2')!.textContent, /^Step 5 of 5: Review /);
+});
+
+test('the guided Review creates the profile with the guided answers, once (#1072)', async () => {
+  guidedAt(1);
+  guidedAt(guidedFlow().length, { tutorial: 'done' });
+  stubFetch({ '/api/preview': generated() });
+  await submit();
+  const calls = stubFetch<ProfileRequest>({
+    '/api/profiles': { workspace: workspace, saveId: 's', profileId: 'p3', carriedChecks: 2 },
+    '/api/context': {
+      save: { id: 's', name: 'World' },
+      profile: { id: 'p3', kind: 'calculated', name: 'Balanced progression' },
+      state: { settings: { phase: '3' }, checks: {}, notes: {}, deliveries: {}, customTasks: [] },
+      plan: generated(),
+    },
+  });
+  await submit();
+  await settle();
+  const created = calls.filter(([path]) => path === '/api/profiles');
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0]![1].built, ['early-base-hub', 'unlock-Schematic_Tutorial5_C']);
+  assert.equal(wizard, null, 'the draft is done');
+  assert.equal(view, 'plan');
 });
 
 test('a second profile for a save is asked what changed, naming the profile safely', async () => {
@@ -897,7 +947,7 @@ test('ticking topics keeps the "what is different" screen; Continue asks exactly
   assert.equal(wizard!.guidedStep, 1);
   assert.equal($('.guided-topics'), null);
   assert.ok($('input[name="guided:goal"]'), 'the first chosen question is on screen');
-  assert.equal($$('.guided-progress [role=listitem]').length, 2);
+  assert.equal($$('.guided-progress [role=listitem]').length, 3, 'the two, then Review');
 });
 
 test('a failed calculation with no topics ticked stays on the "what is different" screen', async () => {
@@ -918,7 +968,9 @@ test('a failed calculation with no topics ticked stays on the "what is different
   stubFetch({ '/api/preview': generated() });
   await submit();
   assert.equal(wizard!.step, 5);
-  assert.match($('#main h2')!.textContent, /^Step 5 of 5: Review /);
+  assert.equal(vuePage('wizard', wizard), GuidedPage, 'the guided start’s own Review (#1072)');
+  assert.equal($('.guided-topics'), null);
+  assert.match($('#main h2')!.textContent, /^Step ([0-9]+) of [0-9]+: Review /);
 });
 
 test('"← Guided start" after All settings with no topics ticked returns to the topics', async () => {

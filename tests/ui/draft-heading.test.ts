@@ -126,7 +126,7 @@ test('the wizard Review Budget column names a budget only when one is short', ()
       return [cells[0], cells[1]];
     }),
   );
-  assert.equal(budget['1'], 'Within entered limits');
+  assert.equal(budget['1'], 'Within the default budgets', 'no budgets entered (#1072)');
   kinds.forEach((kind, i) =>
     assert.equal(
       budget[String(i + 2)],
