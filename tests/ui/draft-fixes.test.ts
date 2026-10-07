@@ -27,7 +27,13 @@ test('a draft under storageFromSurplus does not advise lowering storage (#1100)'
 
 test('other drafts keep the storage advice, as before (#1100)', () => {
   const stored = draft({ Concrete: 20 });
-  for (const settings of [{}, { wholeMachines: true }, { storageFromSurplus: true }, whole])
+  const variants: Partial<CurrentSettings>[] = [
+    {},
+    { wholeMachines: true },
+    { storageFromSurplus: true },
+    whole,
+  ];
+  for (const settings of variants)
     assert.match(fixes(stored, settings), /lower the protected storage refill rate/);
   // Without whole machines the setting changes nothing, storage or not.
   assert.match(fixes(draft({}), { storageFromSurplus: true }), /protected storage refill/);
