@@ -7,9 +7,11 @@ import { required } from './format.ts';
 import { entryPlace, placeEntry, placedState, startPlace } from './history-place.ts';
 import {
   boot,
+  calculated,
   currentProfile,
   currentSave,
   editingTask,
+  loadContext,
   setState,
   setView,
   setWorkspace,
@@ -124,13 +126,17 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
   saveIndicator();
   const stillOpen = () =>
     scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id;
+  // The plan this write was made on, named now rather than when it runs: if the profile turns
+  // out to have been recalculated in another tab, this write and those queued after it are
+  // refused (checkPlan, #1071), even once this tab has opened the new plan.
+  const shown = planHeader();
   const run = writeQueue.then(async () => {
     // An update names the revision this tab's state has now, after the writes queued before
     // it, so a whole-value write made on stale data is refused instead of undoing another
     // tab's change (checkBase in state.ts, #165). Omitted once another profile is open.
     const base: Record<string, string> =
       endpoint === '/api/update' && stillOpen() && typeof state.revision === 'number'
-        ? { 'X-Planner-Revision': String(state.revision) }
+        ? { 'X-Planner-Revision': String(state.revision), ...shown }
         : {};
     try {
       const next = await request<ProgressState>(endpoint, {
@@ -173,16 +179,41 @@ export function queuedWrite(endpoint: string, body: unknown): Promise<ProgressSt
 // again (listeners.ts) and after a refused write (`force`, queuedWrite). Without force it leaves
 // the page alone while a write is pending, a note has unsaved text, a step is being edited or
 // the wizard is open, so nothing typed is redrawn away. Returns whether the state changed.
+//
+// The request names the plan this tab shows. A profile recalculated in place elsewhere since
+// (#1071) answers 409 (checkPlan): its state belongs to the new plan, so the tab opens the new
+// plan with it instead (loadContext), and says so, rather than showing the new state's ticks on
+// the old plan's lines and writing values worked out from them. After a refused write (`force`)
+// the refusal's own message says it.
 export async function refreshState(force = false): Promise<boolean> {
   const quiet = () => !pending && !hasUnsavedNotes() && !editingTask && !wizard;
   if (!stateLoaded || !currentSave?.id || (!force && !quiet())) return false;
   const scope = { ...scopeHeaders() };
-  const next = await request<ProgressState>('/api/state', { headers: scope });
-  const same = scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id;
-  if (!same || next.revision === state.revision || (!force && !quiet())) return false;
+  const same = () =>
+    scope['X-Save-Id'] === currentSave.id && scope['X-Profile-Id'] === currentProfile.id;
+  let next: ProgressState;
+  try {
+    next = await request<ProgressState>('/api/state', { headers: { ...scope, ...planHeader() } });
+  } catch (error) {
+    if ((error as { status?: number }).status !== 409 || !same()) throw error;
+    await loadContext(scope['X-Save-Id'], scope['X-Profile-Id'], false);
+    render();
+    if (!force) toast(recalculatedNotice);
+    return true;
+  }
+  if (!same() || next.revision === state.revision || (!force && !quiet())) return false;
   setState(next);
   render();
   return true;
+}
+export const recalculatedNotice =
+  'This profile was recalculated in another tab or on another device. Showing the new plan.';
+
+// The plan the open profile shows, for the X-Planner-Plan header both editions compare with the
+// stored plan (checkPlan in state/carry.ts, #1071): its createdAt, blank for a profile without a
+// plan. Omitted with no profile open.
+function planHeader(): Record<string, string> {
+  return stateLoaded && currentSave?.id ? { 'X-Planner-Plan': calculated?.createdAt ?? '' } : {};
 }
 
 // Asks for the workspace summary again when the tab comes back into use (listeners.ts: the

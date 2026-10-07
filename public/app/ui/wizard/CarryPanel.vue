@@ -80,9 +80,12 @@ const view = computed(() =>
       >
     </div>
     <p class="small muted">
-      Production lines this plan expands are carried unticked for review. Steps this plan does not
-      contain stay with
-      {{ view.editing ? 'the version kept as a backup' : 'the profile you carried from' }}.
+      Production lines this plan expands are carried unticked for review.
+      {{
+        view.editing
+          ? 'Ticks of steps this plan does not contain are kept, here and in the version kept as a backup.'
+          : 'Steps this plan does not contain stay with the profile you carried from.'
+      }}
     </p>
   </section>
 </template>

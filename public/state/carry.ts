@@ -495,6 +495,27 @@ export function checkRecalculate(
   if (planCreatedAt !== profile.plan.createdAt) fail(recalculatedElsewhere, 409);
   if (profileCount >= 30) fail(noRoomForBackup);
 }
+// A tab names the plan it shows (the X-Planner-Plan header: the plan's createdAt) when it asks
+// for the profile's state (/api/state) and with each progress write (/api/update), in both
+// editions (#1071). Once the profile has been recalculated in place elsewhere, the state belongs
+// to another plan: the request is refused (409), so the tab opens the new plan instead of
+// adopting its state, and no value worked out from the old plan's steps, slots or clocks (a
+// step order, an exact clock, a tick on a line the user saw) lands on the new one. A note
+// written with its own `base` text is compared by that text alone (checkBase): a note is not
+// part of the plan. Without the header (an older page, a script) nothing is compared.
+export const planReplaced =
+  'This profile was recalculated in another tab or on another device, so this change was not ' +
+  'saved. The new plan is shown now.';
+export function checkPlan(
+  profile: { plan?: { createdAt: string } | null },
+  shown: string | null | undefined,
+  update?: unknown,
+) {
+  if (shown === null || shown === undefined) return;
+  const note = update as { type?: unknown; base?: unknown } | null | undefined;
+  if (note?.type === 'note' && typeof note.base === 'string') return;
+  if (shown !== (profile.plan?.createdAt ?? '')) fail(planReplaced, 409);
+}
 // The in-place recalculation both editions write (#1071): the profile keeps its id and gets the
 // new plan, `name` and the progress calculatedProfile carries from its own previous version
 // (the same carry rules and picks as a new profile carried from it, so ticks whose rows still

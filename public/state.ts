@@ -63,6 +63,8 @@ export {
   carryOptions,
   carryPicks,
   checkNewProfileKind,
+  checkPlan,
+  planReplaced,
   checkRecalculate,
   checkRoundUp,
   newProfileState,

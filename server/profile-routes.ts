@@ -3,6 +3,7 @@
 // the hard-drive payoff ranking.
 import {
   checkBase,
+  checkPlan,
   checkRecalculate,
   checkRoundUp,
   currentPayoff,
@@ -146,7 +147,10 @@ export function profileRoutes({
       payoff: currentPayoff(profile),
     });
   }
-  function progressState({ profile }: ScopedRequest) {
+  // A tab that shows a plan this profile no longer has is refused (checkPlan, #1071), so it opens
+  // the new plan rather than adopting the new plan's state.
+  function progressState({ req, profile }: ScopedRequest) {
+    checkPlan(profile, [req.headers['x-planner-plan']].flat()[0]);
     return response(profile.state);
   }
   // Progress-only backup of the scoped profile, a separate format from the full-save
@@ -202,8 +206,11 @@ export function profileRoutes({
         ?.profiles.find(p => p.id === profile.id);
       if (!draftProfile) fail('Profile not found.', 404);
       // A whole-value write from a tab that has not seen the latest change is refused (409).
-      if (!imported)
+      // So is any write from a tab still showing the plan before an in-place recalculation.
+      if (!imported) {
+        checkPlan(draftProfile, [req.headers['x-planner-plan']].flat()[0], input);
         checkBase(draftProfile.state, input, [req.headers['x-planner-revision']].flat()[0]);
+      }
       // mutate() checks the operation and throws for one it does not know.
       const state = imported
         ? restoreProgress(draftProfile.state, imported, frozen)

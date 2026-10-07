@@ -305,10 +305,12 @@ export const phaseLabel = (phaseKey: string) =>
 
 // Opens a save/profile: fetches its state and plan from /api/context and resets the
 // per-page UI state and the factory dialog. Does not render; callers render or navigate.
-// Waits for queued saves first so they land in the profile they were made in. The tab remembers
-// what it opened (rememberTab), so a reload opens it again (#1052).
-export async function loadContext(saveId: string, profileId: string) {
-  await writeQueue;
+// Waits for queued saves first so they land in the profile they were made in, except when
+// refreshState (api.ts) reopens a profile recalculated elsewhere from inside the save queue: the
+// writes queued there name the plan they were made on and are refused (checkPlan). The tab
+// remembers what it opened (rememberTab), so a reload opens it again (#1052).
+export async function loadContext(saveId: string, profileId: string, afterWrites = true) {
+  if (afterWrites) await writeQueue;
   setContext(
     await request<ContextReply>(
       '/api/context?save=' +

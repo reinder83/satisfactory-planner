@@ -19,7 +19,7 @@ import { openBrowserStore } from '../public/browser-store.ts';
 import { fakeIndexedDB } from './helpers/fake-indexeddb.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import { backupName, defaultProfileName, nameDate } from '../public/app/profile-edit.ts';
-import { recalculatedElsewhere } from '../public/state.ts';
+import { planReplaced, recalculatedElsewhere } from '../public/state.ts';
 import type {
   BrowserWorkspace,
   Catalog,
@@ -168,6 +168,49 @@ test('the Docker server recalculates a profile in place, carries its ticks and k
     assert.equal(stale.status, 409);
     assert.equal(((await stale.json()) as { error: string }).error, recalculatedElsewhere);
     assert.deepEqual(await stored(), file, 'a refused recalculation writes nothing');
+
+    // A tab still showing the plan before (X-Planner-Plan, checkPlan) is refused its state, so it
+    // opens the new plan, and every progress write it made on the old plan, even one naming the
+    // latest revision. Nothing is written.
+    const oldPlan = { ...headers, 'X-Planner-Plan': again.plan!.createdAt };
+    const newPlan = { ...headers, 'X-Planner-Plan': after.plan!.createdAt };
+    const staleState = await fetch(url + '/api/state', { headers: oldPlan });
+    assert.equal(staleState.status, 409);
+    assert.equal(((await staleState.json()) as { error: string }).error, planReplaced);
+    const latest = { 'X-Planner-Revision': String(after.state.revision) };
+    const order = { type: 'taskOrder', phase: '1', ids: ['calc-1-a', 'calc-1-b'] };
+    for (const update of [
+      order,
+      { type: 'exactClocks', value: { '1': [] } },
+      { type: 'check', key: kept[0], value: true },
+    ]) {
+      const refused = await send('/api/update', update, { ...oldPlan, ...latest });
+      assert.equal(refused.status, 409, update.type);
+      assert.equal(((await refused.json()) as { error: string }).error, planReplaced);
+    }
+    assert.deepEqual(await stored(), file, 'a write on the old plan writes nothing');
+    // A note typed over its saved text is compared by that text alone (not part of the plan).
+    await ok(
+      await send(
+        '/api/update',
+        { type: 'note', key: 'global', value: 'Mine', base: 'Keep me' },
+        oldPlan,
+      ),
+    );
+    // The new plan, and a request that names no plan (an older page, a script), are answered.
+    assert.equal(
+      (await ok<{ revision: number }>(await fetch(url + '/api/state', { headers: newPlan })))
+        .revision,
+      after.state.revision + 1,
+    );
+    await ok(await fetch(url + '/api/state', { headers }));
+    await ok(
+      await send('/api/update', order, {
+        ...newPlan,
+        'X-Planner-Revision': String(after.state.revision + 1),
+      }),
+    );
+    file = await stored();
     // A name is required for the profile and for the backup.
     const unnamed = await send(
       '/api/recalculate',
@@ -311,6 +354,14 @@ test('a new profile is named after its goal, what changed and the day; a backup 
   const long = backupName('N'.repeat(80), day);
   assert.ok(long.length <= 80, 'a backup name fits the 80 characters a name may have');
   assert.match(long, /^N+ \(before edit, .+\)$/);
+  // A second edit within the same minute gets a backup name of its own.
+  const first = backupName('Minimal', day);
+  const second = backupName('Minimal', day, ['Minimal', first]);
+  assert.match(second, /^Minimal \(before edit 2, .+\)$/);
+  assert.match(backupName('Minimal', day, [first, second]), /^Minimal \(before edit 3, .+\)$/);
+  const longSecond = backupName('N'.repeat(80), day, [long]);
+  assert.ok(longSecond.length <= 80);
+  assert.match(longSecond, /^N+ \(before edit 2, .+\)$/);
 });
 
 // The oldest released format: the first full export (2026-09-13), an original profile with a

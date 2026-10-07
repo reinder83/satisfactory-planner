@@ -25,6 +25,7 @@ import {
   mutate,
   calculatedProfile,
   checkBase,
+  checkPlan,
   checkNewProfileKind,
   checkRecalculate,
   checkRoundUp,
@@ -370,7 +371,9 @@ export function createBrowserApi(
       payoff: currentPayoff(profile),
     };
   }
-  function progressState({ profile }: ScopedRequest) {
+  // As on the server: a tab showing a plan this profile no longer has is refused (checkPlan).
+  function progressState({ headers, profile }: ScopedRequest) {
+    checkPlan(profile, headers['X-Planner-Plan']);
     return profile.state;
   }
   // GET /api/export: the progress-only backup format for one profile.
@@ -412,6 +415,7 @@ export function createBrowserApi(
   // validateState.
   function updateProgress({ headers, body, profile }: ScopedRequest) {
     // As on the server: a stale whole-value write is refused (checkBase, #165).
+    checkPlan(profile, headers['X-Planner-Plan'], body);
     checkBase(profile.state, body, headers['X-Planner-Revision']);
     // The body is the operation as sent; mutate checks it.
     return writeProgress(profile, mutate(structuredClone(profile.state), body as UpdateOp));

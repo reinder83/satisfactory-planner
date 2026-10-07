@@ -72,16 +72,21 @@ export function defaultProfileName(
 }
 
 // The name the previous version of an edited profile is kept under: "<name> (before edit, Oct
-// 7, 2:05 PM)", the name cut so the whole fits in 80 characters.
-export function backupName(name: string, date = new Date()): string {
+// 7, 2:05 PM)", the name cut so the whole fits in 80 characters. A second edit within the same
+// minute, whose backup would get a name one of `taken` (the save's profile names) has, is
+// numbered: "<name> (before edit 2, Oct 7, 2:05 PM)".
+export function backupName(name: string, date = new Date(), taken: readonly string[] = []): string {
   const when = date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
-  const suffix = ` (before edit, ${when})`;
-  return name.slice(0, Math.max(1, NAME_LIMIT - suffix.length)).trimEnd() + suffix;
+  for (let count = 1; ; count++) {
+    const suffix = ` (before edit${count > 1 ? ' ' + count : ''}, ${when})`;
+    const named = name.slice(0, Math.max(1, NAME_LIMIT - suffix.length)).trimEnd() + suffix;
+    if (!taken.includes(named)) return named;
+  }
 }
 
 // Two setting values differ: compared as JSON with the object keys sorted, so a map saved in

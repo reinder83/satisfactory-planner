@@ -582,7 +582,11 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
   const wizardDraft = draft(),
     edit = wizardDraft.edit!;
   readCarry(form);
-  const kept = backupName(edit.name);
+  const kept = backupName(
+    edit.name,
+    new Date(),
+    workspace?.saves.find(save => save.id === wizardDraft.saveId)?.profiles.map(p => p.name),
+  );
   const done = await post<RecalculatedProfile>(
     '/api/recalculate',
     {
