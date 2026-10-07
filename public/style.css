@@ -3397,7 +3397,17 @@ button.rail-tile:hover {
   padding: 2px 7px;
   white-space: nowrap;
 }
-/* "Alternates you already own" on step 2 (#1068): the picker's frame, folded. */
+/* "Alternates you already own" on step 2 (#1068): the alternate picker's frame, folded. Its own
+   classes: readAlternates reads the custom picker by .alt-list. */
+.owned-alt-picker {
+  margin: 16px 0 0;
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+}
+.owned-alt-picker > p {
+  padding: 0 13px;
+  margin: 8px 0;
+}
 .owned-alt-picker > summary {
   padding: 10px 13px;
   cursor: pointer;
@@ -3422,7 +3432,21 @@ button.rail-tile:hover {
   min-width: min(280px, 100%);
 }
 .owned-alt-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 13px 10px;
+  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 2px 18px;
+}
+.owned-alt-row {
+  font-size: 11.5px;
+}
+.owned-alt-row[hidden] {
+  display: none;
+}
+.owned-alt-row small {
+  font-size: 10.5px;
 }
 .alt-force-hint {
   display: flex;

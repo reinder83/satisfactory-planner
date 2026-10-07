@@ -56,7 +56,7 @@ test('step 2 lists the hard-drive alternates up to the start phase, and reads th
   const hardDrive = workspace.catalog.alternates.filter(alt => !alt.mam && !alt.milestone);
   const boxes = $$<HTMLInputElement>('input[data-owned-alt]');
   assert.equal(boxes.length, hardDrive.length, 'one box per hard-drive alternate');
-  const row = (id: string) => boxes.find(box => box.value === id)!.closest('.alt-row')!;
+  const row = (id: string) => boxes.find(box => box.value === id)!.closest('.owned-alt-row')!;
   const later = hardDrive.find(alt => alt.phase > 3)!;
   assert.equal(row(later.id).hasAttribute('hidden'), true, 'a later phase is folded away');
   assert.equal(row(SCREW).hasAttribute('hidden'), false);
@@ -73,6 +73,22 @@ test('step 2 lists the hard-drive alternates up to the start phase, and reads th
   await settle();
   readWizard($<HTMLFormElement>('#wizard-form')!);
   assert.equal('ownedAlternates' in wizard!.settings, false, 'none owned leaves the field out');
+});
+
+test('under Standard recipes the owned list leaves the picked alternates alone', async () => {
+  // A Standard profile can still carry picks from when it was custom: the owned list is not the
+  // custom picker, so reading step 2 neither clears nor replaces them.
+  const plan = generated();
+  const RIP = 'Recipe_Alternate_ReinforcedIronPlate_2_C';
+  const settings = { ...structuredClone(plan.settings), alternateRecipes: [RIP] };
+  settings.preferredRecipes = [RIP];
+  wizardAt(2, plan, { settings });
+  await settle();
+  assert.equal($('.alt-picker'), null, 'Standard shows no custom picker');
+  assert.equal($('.alt-list'), null);
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.deepEqual(wizard!.settings.alternateRecipes, [RIP]);
+  assert.deepEqual(wizard!.settings.preferredRecipes, [RIP]);
 });
 
 test('step 2 opens on the owned alternates of a draft that has them', async () => {

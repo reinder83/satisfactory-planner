@@ -68,7 +68,7 @@ function tick(row: OwnedRow, on: boolean) {
 </script>
 
 <template>
-  <details class="alt-picker owned-alt-picker" data-owned-alt-picker :open="startOpen">
+  <details class="owned-alt-picker" data-owned-alt-picker :open="startOpen">
     <summary>Alternates you already own · {{ picked.size }} ticked</summary>
     <p class="small muted">
       Tick the alternate recipes you have already unlocked in game. The plan may use them whatever
@@ -88,8 +88,8 @@ function tick(row: OwnedRow, on: boolean) {
         ></label
       >
     </div>
-    <div class="alt-list owned-alt-list" role="group" aria-label="Alternates you already own">
-      <div v-for="row in view.rows" :key="row.id" class="alt-row" :hidden="!shown(row)">
+    <div class="owned-alt-list" role="group" aria-label="Alternates you already own">
+      <div v-for="row in view.rows" :key="row.id" class="owned-alt-row" :hidden="!shown(row)">
         <label class="check-row"
           ><input
             type="checkbox"
