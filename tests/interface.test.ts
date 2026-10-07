@@ -700,7 +700,15 @@ test('a profile plans production from the phase it was created for', () => {
   assert.equal(rows.length, 3, 'only the phases this profile builds are listed');
   assert.deepEqual(
     rows[0],
-    { phase: '3', label: 'Phase 3', current: true, tag: 'current', required: 4, add: '+4' },
+    {
+      phase: '3',
+      label: 'Phase 3',
+      current: true,
+      tag: 'current',
+      required: 4,
+      add: '+4',
+      running: false,
+    },
     'the starting phase builds its own machines from scratch',
   );
   // Each row is labelled; only the phase worked on is current (SP-22).
