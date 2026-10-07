@@ -193,7 +193,7 @@ export function draftHeading(snapshot: StoredStage, phase?: string): string {
 // One short budget in draftFixes' words: "Iron Ore to about 1,200/min (entered: 1,000/min)". With
 // mining per phase (#1065) the phase gets a share of the entered budget, so the entered budget it
 // would take, and what the phase gets now: "Iron Ore to about 12,000/min (entered: 9,210/min;
-// this phase gets 921/min of it with Miner Mk.1 at 100%)".
+// this phase gets 921/min of it with Miner Mk.1 at 100%)". "to at least" for an unconfirmed amount.
 function shortfallWords(
   shortfall: NonNullable<StoredStage['shortfalls']>[number],
   snapshot: StoredStage,
@@ -201,10 +201,12 @@ function shortfallWords(
 ): string {
   const entered = settings?.limits?.[shortfall.name];
   const mining = snapshot.mining;
+  // A whole-machine draft amount the real fit did not confirm is a floor (#1091).
+  const about = shortfall.atLeast ? 'at least' : 'about';
   if (!mining || entered === undefined || !(shortfall.budget > 0))
-    return `${shortfall.name} to about ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`;
+    return `${shortfall.name} to ${about} ${itemRate(shortfall.name, shortfall.needed)} (entered: ${itemRate(shortfall.name, shortfall.budget)})`;
   const share = shortfall.budget / entered;
-  return `${shortfall.name} to about ${itemRate(shortfall.name, Math.ceil(shortfall.needed / share))} (entered: ${itemRate(shortfall.name, entered)}; this phase gets ${itemRate(shortfall.name, shortfall.budget)} of it with ${minerWords(mining.miner)})`;
+  return `${shortfall.name} to ${about} ${itemRate(shortfall.name, Math.ceil(shortfall.needed / share))} (entered: ${itemRate(shortfall.name, entered)}; this phase gets ${itemRate(shortfall.name, shortfall.budget)} of it with ${minerWords(mining.miner)})`;
 }
 
 // Older snapshots carry only a reason sentence; shortfalls/minHours render as concrete options when present.

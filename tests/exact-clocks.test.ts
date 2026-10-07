@@ -12,6 +12,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { calculate, catalog, DATA, RAW, run, settings } from '../planner.ts';
 import { roundsToWholeMachines } from '../planner/model.ts';
+import { draftStage } from '../planner/draft.ts';
 import { fullSpeed } from '../planner/adjustments.ts';
 import { generators } from '../planner/recipes.ts';
 import { resourceDefaults } from '../public/preferences.ts';
@@ -312,6 +313,69 @@ test('a whole-machine draft asks for the least extra budget, never a resource it
   // The amount asked for is enough: the plan fits with it.
   const raised = { ...input.limits, 'Crude Oil': stage.shortfalls![0]!.needed };
   assert.equal(calculate({ ...input, limits: raised }).stages['5'].feasible, true);
+});
+
+// #1091: the draft measured the shortfall on the exact plan's network, while the plan with the
+// raised budget picks its own network and runs the full whole-machine fit. On impure 5× with
+// storage "all" it named Crude Oil 7,928/min, and at 7,928 the plan was a draft again asking for
+// 8,081. Now the named amounts are checked with the real fit, so following them once gives a plan.
+test('a whole-machine draft names budgets that fit when applied once', () => {
+  const limits = resourceDefaults('impure', 'original').limits;
+  for (const [phase, goal] of [
+    ['5', 'balanced'],
+    ['4', 'timed'],
+  ] as const) {
+    const input = { phase, goal, purity: 'impure', multiplier: 5, storage: 'all', limits };
+    const stage = calculate({ ...input, wholeMachines: true }).stages['5'];
+    assert.equal(stage.wholeMachinesOnly, true, `${phase} ${goal}`);
+    assert.ok(stage.shortfalls!.length, `${phase} ${goal}`);
+    const raised = { ...limits };
+    for (const { name, needed, atLeast } of stage.shortfalls!) {
+      assert.equal(atLeast, undefined, `${name} is confirmed`);
+      raised[name] = needed;
+    }
+    const again = calculate({ ...input, wholeMachines: true, limits: raised }).stages['5'];
+    assert.equal(again.feasible, true, `${phase} ${goal}: ${JSON.stringify(stage.shortfalls)}`);
+  }
+});
+
+// A draft whose measured amount already fits names exactly what it named before the check
+// (draftStage without `replan` is the measurement alone), and the plan with that amount fits.
+test('a whole-machine draft that already fits is unchanged by the check', () => {
+  const input = {
+    phase: '5',
+    purity: 'impure',
+    multiplier: 5,
+    wholeMachines: true,
+    limits: resourceDefaults('impure', 'original').limits,
+  };
+  const stage = calculate(input).stages['5'];
+  assert.equal(stage.wholeMachinesOnly, true);
+  const measured = draftStage(settings(input), 5, { feasible: false, solverStatus: 'Infeasible' });
+  assert.deepEqual(stage.shortfalls, measured.shortfalls);
+  assert.equal(stage.reason, measured.reason);
+  const raised = { ...input.limits };
+  for (const { name, needed } of stage.shortfalls!) raised[name] = needed;
+  const plan = calculate({ ...input, limits: raised });
+  for (const phase of ['1', '2', '3', '4', '5'] as StageKey[])
+    assert.equal(plan.stages[phase].shortfalls, undefined, `Phase ${phase}`);
+  // When the check cannot confirm the amount (its search stops, or it stays short with nothing
+  // more to measure), the draft keeps a floor and says so.
+  for (const solverStatus of ['Time limit reached', 'Infeasible']) {
+    let plans = 0;
+    const unconfirmed = draftStage(
+      settings(input),
+      5,
+      { feasible: false, solverStatus: 'Infeasible' },
+      () => (plans++, { feasible: false, solverStatus }),
+    );
+    assert.ok(plans >= 1 && plans <= 3, `${solverStatus}: ${plans} plans`);
+    assert.deepEqual(
+      unconfirmed.shortfalls!.map(({ name, atLeast }) => [name, atLeast]),
+      [['Crude Oil', true]],
+      solverStatus,
+    );
+  }
 });
 
 // The interface decides which lines offer the choice by the planner's own rule.
