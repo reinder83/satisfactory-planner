@@ -2,7 +2,9 @@
   #plan on a calculated profile: the calculation's warnings, the notice that the lines asked to run
   at exact clocks need a recalculation (ui/plan/ExactClocksRecalc.vue, #1066), a summary line (factories,
   storage and power, each linking to its page, and the delivery time, what is left of it once a
-  delivery count is saved, #1062; SP-43), why it opened on an
+  delivery count is saved, #1062; SP-43), the next phase once the delivery is complete
+  (ui/plan/NextPhase.vue, #1069) or Post Phase 5's finish card, the handover from the phase before
+  (ui/plan/HandoverSummary.vue, #1069), why it opened on an
   earlier phase than the saved one when it did (ui/plan/OpenedEarlierNotice.vue, #666), the checklist
   with its progress bar (calcTasks in views/calculated.ts, with this profile's edits and personal tasks) with a
   link to the phase notes (on the Notes page, #243), and a side column with the Space Elevator deliveries,
@@ -44,7 +46,9 @@ import Checklist from '../plan/Checklist.vue';
 import DeliveryCounter from '../plan/DeliveryCounter.vue';
 import EditStepsToggle from '../plan/EditStepsToggle.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
+import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
+import NextPhase from '../plan/NextPhase.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
@@ -101,6 +105,8 @@ const page = computed(() =>
       title: phaseLabel(phase()),
       profileName: currentProfile.name,
       post: phase() === 'post',
+      // Post Phase 5's finish card (#1069): whether Phase 5's delivery is complete.
+      finished: phase() === 'post' && deliveryHoursLeft(stagePlan, '5', state.deliveries) === 0,
       // A plan guide's steps replace the generated ones (#466).
       guided: !!calculated.guide,
       milestones,
@@ -152,12 +158,16 @@ const page = computed(() =>
     <CalcWarnings />
     <ExactClocksRecalc />
     <PlanSummary v-if="!page.milestones" :items="page.summary" />
-    <div v-if="page.post" class="notice info">
+    <NextPhase />
+    <div v-if="page.post" class="notice info" data-finish-card>
+      <b>{{ page.finished ? 'Project Assembly complete.' : 'After Phase 5.' }}</b> Post Phase 5 is
+      not a sixth phase: it has no Space Elevator delivery and no new production lines.<br />
       Retain these Phase 5 capacities. Prioritize storage and teleporter supply; reduce former
       elevator exports as needed and sink spare parts.
     </div>
     <OpenedEarlierNotice />
     <MilestoneOnlyNotice />
+    <HandoverSummary />
     <div :class="page.milestones ? undefined : 'split'">
       <section>
         <div class="section-head">

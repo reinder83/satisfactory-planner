@@ -1263,13 +1263,16 @@ export function baseTasks({ stage }: GuideContext): GuideTask[] {
   ];
 }
 
-// Lines an earlier phase built that this phase's plan drops. Its resource and power budgets do
-// not include them, and a replacement is usually a different machine rather than an upgrade in
-// place, so say what becomes of them. Only what the previous phase ran: each line is retired
-// once, in the phase straight after the last one that needed it. A generator line is not
-// retired where this phase keeps its building's generators (#1064, the stage's grid): they burn
-// this phase's fuel instead, as "Power available now" says.
-export function retireTasks({ plan, stage, stageOf }: GuideContext): GuideTask[] {
+// The lines retireTasks below retires in phase `stage` (2-5), most machines first: the ones the
+// phase before ran (from the start phase on) that neither this phase nor a later one builds,
+// leaving out a generator line whose building's generators this phase keeps. The build plan's
+// handover summary counts them too (app/handover.ts, #1069).
+export function retiredLines(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
+  stage: number,
+): { name: string; machine: string; machines: number }[] {
+  const stageOf = (phaseNumber: number): StoredStage | undefined =>
+    plan.stages[String(phaseNumber) as StageKey];
   const start = Number(plan.settings.phase || 1),
     previous = stage - 1,
     retired = new Map<string, { name: string; machine: string; machines: number }>();
@@ -1284,7 +1287,18 @@ export function retireTasks({ plan, stage, stageOf }: GuideContext): GuideTask[]
         retired.set(row.id, { name: row.name, machine: row.machine, machines: row.machines });
   for (let later = stage; later <= 5; later++)
     for (const row of stageOf(later)?.rows || []) retired.delete(row.id);
-  const all = [...retired.values()].sort((a, b) => b.machines - a.machines),
+  return [...retired.values()].sort((a, b) => b.machines - a.machines);
+}
+
+// Lines an earlier phase built that this phase's plan drops. Its resource and power budgets do
+// not include them, and a replacement is usually a different machine rather than an upgrade in
+// place, so say what becomes of them. Only what the previous phase ran: each line is retired
+// once, in the phase straight after the last one that needed it. A generator line is not
+// retired where this phase keeps its building's generators (#1064, the stage's grid): they burn
+// this phase's fuel instead, as "Power available now" says.
+export function retireTasks({ plan, stage }: GuideContext): GuideTask[] {
+  const previous = stage - 1;
+  const all = retiredLines(plan, stage),
     listed = all.slice(0, 10),
     rest = all.length - listed.length;
   if (!listed.length) return [];
