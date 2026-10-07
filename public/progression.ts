@@ -184,7 +184,7 @@ export function phaseSteps(
   // power steps that ask for those unlocks (#1070).
   const startup =
     stage === '1'
-      ? phaseOneStartup(steps, required, plan, data)
+      ? phaseOneStartup(steps, required, plan, state, data)
       : [
           ...steps.powerTasks.slice(0, steps.powerStartup),
           ...required,
@@ -222,6 +222,7 @@ function phaseOneStartup(
   steps: ReturnType<typeof progression>,
   required: GuideTask[],
   plan: Pick<StoredCalculatedPlan, 'settings'>,
+  state: GuideState,
   data: Progression,
 ): GuideTask[] {
   const tierZero = new Set(
@@ -235,7 +236,7 @@ function phaseOneStartup(
     ...required.filter(task => !tierZero.has(task.id)),
     ...steps.powerTasks.slice(2),
     ...steps.baseTasks.slice(5),
-    ...elevatorTask(plan),
+    ...elevatorTask(plan, state),
   ];
 }
 
@@ -274,24 +275,39 @@ const deliveryParts = (stagePlan: StoredStage | undefined): [string, number][] =
     .filter(([, part]) => part.target > 0)
     .map(([item, part]) => [item, part.target]);
 
+// The phase worked on (`state.settings.phase`) as a number, Post Phase 5 as 6 (after Phase 5);
+// NaN without one.
+const workingPhase = (state: GuideState): number =>
+  state.settings?.phase === 'post' ? 6 : Number(state.settings?.phase);
+
+// The reason the elevator and delivery steps of a phase before the one worked on show as done
+// (#1070): moving on to a later phase proves that phase's delivery was sent and the elevator
+// stands, the rule elevatorTask applies to a profile made for a later phase. So a profile saved
+// before these steps existed keeps its finished phases finished and opens where it did.
+const LATER_PHASE = 'Done: you are working in a later phase.';
+
 // "Build the Space Elevator" (#1070), once, in Phase 1 of a profile made for Phase 1: a profile
 // made for a later phase has delivered Phase 1, so its elevator stands. Its key is
-// `space-elevator`.
-function elevatorTask(plan: Pick<StoredCalculatedPlan, 'settings'>): GuideTask[] {
+// `space-elevator`; it shows as done while the phase worked on is after Phase 1.
+function elevatorTask(
+  plan: Pick<StoredCalculatedPlan, 'settings'>,
+  state: GuideState,
+): GuideTask[] {
   if (Number(plan.settings.phase || 1) !== 1) return [];
   return [
     {
       id: 'space-elevator',
       title: 'Build the Space Elevator',
       body: 'HUB Upgrade 6 unlocks it. Build it where the elevator lines can belt their parts into it, with room around its inputs. It takes this phase’s delivery; count each part sent with the delivery counters on this page.',
+      ...(workingPhase(state) > 1 ? { satisfied: LATER_PHASE } : {}),
     },
   ];
 }
 
 // "Send the Phase N delivery" (#1070), in each planned phase whose stage hands parts in (not Post
 // Phase 5): its key is `deliver-<stage>`. It shows as done while every part's delivery counter
-// (state.deliveries, deliveryKey) is at its target, without writing a tick; ticking it by hand
-// also works for a player who does not count.
+// (state.deliveries, deliveryKey) is at its target, or while the phase worked on is later than
+// this one, without writing a tick; ticking it by hand also works for a player who does not count.
 function deliveryTask(
   plan: Pick<StoredCalculatedPlan, 'stages'>,
   state: GuideState,
@@ -308,7 +324,11 @@ function deliveryTask(
       id: 'deliver-' + stage,
       title: `Send the Phase ${stage} delivery`,
       body: `Load the Space Elevator with ${listNames(parts.map(([item, target]) => formatNumber(target) + ' ' + item))} and send it. Count the parts with the delivery counters on this page: this step shows as done once every counter reaches its target.`,
-      ...(sent ? { satisfied: 'Done: every delivery counter is at its target.' } : {}),
+      ...(sent
+        ? { satisfied: 'Done: every delivery counter is at its target.' }
+        : workingPhase(state) > Number(stage)
+          ? { satisfied: LATER_PHASE }
+          : {}),
     },
   ];
 }
@@ -322,11 +342,14 @@ function miningTask(plan: Pick<StoredCalculatedPlan, 'stages'>, stage: StageKey)
 }
 
 // What phaseSteps reads of a profile's progress: its ticks, its factory groups' names, which
-// name a group's own line made on site, and its delivery counts.
+// name a group's own line made on site, its delivery counts and the phase worked on.
 export interface GuideState {
   checks: Record<string, boolean>;
   // The Space Elevator delivery counts (deliveryKey), which the delivery step reads.
   deliveries?: Record<string, number>;
+  // The phase worked on ('1'-'5' or 'post'): a later one marks the elevator and delivery steps
+  // of the phases before it done (#1070).
+  settings?: { phase?: string };
   factoryGroups?: { groups?: { id: string; name: string }[] };
 }
 

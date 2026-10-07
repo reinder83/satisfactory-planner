@@ -4,10 +4,15 @@
 // delivery with every counter at its target, the hard-drive hunt with every recipe unlocked)
 // shows as done, says why, and counts as done, while nothing is ticked or written.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { setHideDone, setRequiredOnly, state } from '../../public/app/session.ts';
+import { phaseToOpen } from '../../public/app/opening-phase.ts';
 import { render } from '../../public/app/shell.ts';
+import { planTasks } from '../../public/app/tasks.ts';
+import { calcTasks } from '../../public/app/views/calculated.ts';
+import { phaseTrack } from '../../public/app/views/phase-track.ts';
 import { $, $$, generatedWith, go, open, page } from './setup.ts';
 import type { CurrentCalculatedPlan, ProgressState } from '../../public/types/index.ts';
 
@@ -93,4 +98,41 @@ test('the delivery step shows as done once every counter is full, without a tick
   render();
   await nextTick();
   assert.equal(box('deliver-1'), null);
+});
+
+// A Phase 4 profile saved before #1070 (every step of Phases 1-3 ticked, as main listed them, and
+// no delivery counts) opens on Phase 4 with Phases 1-3 full: working in a later phase marks their
+// elevator and delivery steps done, with the reason, and writes no tick.
+test('a profile saved before these steps opens on its later working phase, earlier phases done', async () => {
+  const recorded: Record<string, Record<string, string[]>> = JSON.parse(
+    fs.readFileSync('tests/fixtures/step-ids-before-1070.json', 'utf8'),
+  );
+  const checks = Object.fromEntries(
+    ['1', '2', '3'].flatMap(phase => recorded['phase 1']![phase]!).map(id => [id, true]),
+  );
+  open({ calculated: phaseOne(), phase: '4', state: { checks } });
+  assert.equal(phaseToOpen(), '4');
+  const track = phaseTrack();
+  for (const phase of ['1', '2', '3'])
+    assert.equal(track.find(segment => segment.phase === phase)!.pct, 100, 'Phase ' + phase);
+  const one = calcTasks('1');
+  for (const id of ['space-elevator', 'deliver-1'])
+    assert.equal(
+      one.find(step => step.id === id)!.satisfied,
+      'Done: you are working in a later phase.',
+    );
+  assert.equal(state.checks['space-elevator'], undefined, 'no tick written');
+  assert.equal(state.checks['deliver-1'], undefined, 'no tick written');
+});
+
+test('with "Required steps only" on and only optional steps left, the list says so', async () => {
+  await show();
+  const required = planTasks().filter(step => !step.optional);
+  await show({ checks: Object.fromEntries(required.map(step => [step.id, true])) });
+  assert.equal($('[data-optional-left]'), null, 'the optional steps are listed');
+  setRequiredOnly(true);
+  render();
+  await nextTick();
+  assert.equal($('[data-open-steps]'), null, 'no step left to lead');
+  assert.match($('[data-optional-left]')!.textContent!, /^\s*Only optional steps are left\./);
 });

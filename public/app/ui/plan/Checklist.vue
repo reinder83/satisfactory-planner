@@ -104,6 +104,8 @@ const list = computed(() =>
       done: steps.filter(s => s.done),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
+      // "Required steps only" hides every step still open: only optional ones are left (#1070).
+      optionalLeft: requiredOnly && tasks.some(t => t.optional && !checked(t.id)),
       // Post Phase 5 has no next phase to get ready for (#1069).
       post: phase() === 'post',
       removed: planEditing ? removedViews(removed) : [],
@@ -218,6 +220,11 @@ function toggleRequiredOnly(event: Event) {
           >
           <p v-if="list.hideDone">Untick “Hide completed” to review the steps.</p>
         </div>
+      </div>
+    </div>
+    <div v-else-if="list.optionalLeft && !list.query.trim()" class="checklist">
+      <div class="empty-state" data-optional-left>
+        Only optional steps are left. Untick “Required steps only” to see them.
       </div>
     </div>
     <div v-else-if="!list.done.length" class="checklist">

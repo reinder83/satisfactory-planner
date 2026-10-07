@@ -259,3 +259,41 @@ test('the save list counts a step done by its own condition as done (both editio
   assert.deepEqual(counted({}), { done: 0, total: stepIds.length });
   assert.deepEqual(counted({ '1-smart-plating': target }), { done: 1, total: stepIds.length });
 });
+
+// A profile saved before #1070 has no tick for the new elevator and delivery steps. Working in a
+// later phase proves phase N's delivery was sent and the elevator stands, so they count as done
+// by their own condition: its finished phases stay finished and it opens where it did.
+test('a profile saved before these steps, working in Phase 4, keeps Phases 1-3 finished', () => {
+  const plan = plans()['phase 1']!;
+  const checks = Object.fromEntries(
+    ['1', '2', '3'].flatMap(phase => recorded['phase 1']![phase]!).map(id => [id, true]),
+  );
+  const state = { ...initialState(), checks, settings: { phase: '4' } };
+  const phases = profilePhases(plan, state, data)!;
+  for (const phase of ['1', '2', '3']) {
+    const steps = phases.find(entry => entry.phase === phase)!.steps!;
+    assert.equal(steps.done, steps.total, 'Phase ' + phase);
+  }
+  const step = (phase: string, id: string, working: string) =>
+    phaseSteps(plan, { checks: {}, settings: { phase: working } }, data, phase).find(
+      found => found.id === id,
+    )!;
+  const LATER = 'Done: you are working in a later phase.';
+  for (const id of ['space-elevator', 'deliver-1'])
+    assert.equal(step('1', id, '4').satisfied, LATER);
+  assert.equal(step('3', 'deliver-3', '4').satisfied, LATER);
+  // The phase worked on and later ones still wait for their delivery; Post Phase 5 is after 5.
+  assert.equal(step('4', 'deliver-4', '4').satisfied, undefined);
+  assert.equal(step('1', 'space-elevator', '1').satisfied, undefined);
+  assert.equal(step('5', 'deliver-5', '5').satisfied, undefined);
+  assert.equal(step('5', 'deliver-5', 'post').satisfied, LATER);
+  // Full counters keep their own reason.
+  const target = parts(plan, '1')['Smart Plating']!.target;
+  const counted = phaseSteps(
+    plan,
+    { checks: {}, deliveries: { '1-smart-plating': target }, settings: { phase: '4' } },
+    data,
+    '1',
+  ).find(found => found.id === 'deliver-1')!;
+  assert.equal(counted.satisfied, 'Done: every delivery counter is at its target.');
+});
