@@ -189,10 +189,11 @@ const MAIN_FINAL: Record<string, { buildings: number; hours: number }> = {
   '5': { buildings: 661, hours: 7.936507936507936 },
 };
 
-test("under phaseTime 'final', a routed phase that cannot be pulled ahead keeps the first plan when that one can (#1092 review)", () => {
-  // Both Phase 3 plans take 8.33 hours, so the routed one stands on buildings. The capped re-solve
-  // of the routed plan is not pulled ahead (#1094), while the first plan's is, to 6.95 hours, as
-  // on main: Phase 3 keeps the first plan, pulled ahead.
+test("under phaseTime 'final', a routed phase finishes no later than main's (#1092 review, #1094)", () => {
+  // Both Phase 3 plans take 8.33 hours, so the routed one stands on buildings. Its capped re-solve
+  // used to come back Infeasible (#1094), so Phase 3 kept the first plan, pulled ahead to main's
+  // 6.95 hours. That re-solve now fits and is pulled ahead further, to 6.68 hours, with no central
+  // line. (The first-plan fallback is tested in tests/capped-refit.test.ts.)
   const plan = calculate({ ...exactClockSettings(), multiplier: 2, phaseTime: 'final' });
   for (const phase of PHASES) {
     const stage = plan.stages[phase],
@@ -204,17 +205,26 @@ test("under phaseTime 'final', a routed phase that cannot be pulled ahead keeps 
     assert.ok(buildings(stage) <= main.buildings, `Phase ${phase}: ${buildings(stage)} buildings`);
   }
   const third = plan.stages['3'];
-  assert.ok(Math.abs(third.hours! - MAIN_FINAL['3']!.hours) < 1e-6, `Phase 3: ${third.hours} h`);
+  assert.ok(Math.abs(third.hours! - 6.680306587761387) < 1e-6, `Phase 3: ${third.hours} h`);
   assert.equal(third.aheadOf, 25 / 3);
-  assert.equal(third.onSiteOverflow, undefined, 'the first plan, without the route');
-  assert.equal(row(third, FUSED)?.machines, 1, 'with its central line');
-  // Phase 4's routed plan is pulled ahead itself, so it stays routed: no central line, fewer
-  // buildings than main. Phase 5 is not re-solved and keeps its route.
+  assert.equal(row(third, FUSED), undefined, 'the routed plan: no central line');
+  assert.ok(buildings(third) < MAIN_FINAL['3']!.buildings);
+  // Phase 4's routed plan is pulled ahead too, so it stays routed: no central line, fewer
+  // buildings than main. Phase 5 is not re-solved and keeps its route. A pulled-ahead phase keeps
+  // saying it is routed (#1099), so the assumptions name all three.
   assert.ok(plan.stages['4'].aheadOf !== undefined);
   assert.equal(row(plan.stages['4'], FUSED), undefined, 'Phase 4: no central line');
   assert.ok(buildings(plan.stages['4']) < MAIN_FINAL['4']!.buildings);
-  assert.deepEqual(plan.stages['5'].onSiteOverflow, { [ALPHA]: ['Quickwire'] });
   assert.equal(row(plan.stages['5'], FUSED), undefined, 'Phase 5: no central line');
+  for (const phase of PHASES) {
+    assert.deepEqual(plan.stages[phase].onSiteOverflow, { [ALPHA]: ['Quickwire'] }, phase);
+    assert.ok(
+      plan.warnings.includes(
+        `Phase ${phase}: a central line would have sent almost all the Quickwire it made to the AWESOME Sink, so the own lines of Alpha also give the rest of the plan what they make beyond the factory's needs, and fewer central machines are built.`,
+      ),
+      `Phase ${phase}'s warning`,
+    );
+  }
   // The warning names Phases 3 and 4, as on main.
   assert.ok(
     plan.warnings.includes(

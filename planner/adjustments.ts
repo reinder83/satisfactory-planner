@@ -41,8 +41,8 @@ export function pullFinalPhaseForward(
 // A phase planned with a group's excess routed to the central demand (#1063) that is not pulled
 // ahead tries its first plan (`unrouted`) as well: when that one is pulled ahead to finish sooner
 // than the routed plan, the phase keeps the first plan, pulled ahead, so routing never leaves a
-// phase later than it would have been (the routed plan's capped re-solve may not fit where the
-// first plan's does, #1094). The phases are re-solved from Phase 4 down, so the caps of an earlier
+// phase later than it would have been (the routed plan's capped re-solve may finish later than
+// the first plan's). The phases are re-solved from Phase 4 down, so the caps of an earlier
 // phase hold the machines of the plan a later phase keeps; each phase's own re-solve reads only its
 // own and later phases' plans. Returns the phases it pulled ahead and those whose search stopped.
 function resolveEarlierPhases(
@@ -76,7 +76,7 @@ function resolveEarlierPhases(
     const ahead = pullAhead(phase, stage);
     const first = unrouted[phase];
     if (sooner(ahead)) {
-      stages[phase] = { ...ahead, aheadOf: stage.aheadOf ?? stage.hours! };
+      stages[phase] = { ...ahead, aheadOf: stage.aheadOf ?? stage.hours!, ...siteMarks(stage) };
       pulled.push(phase);
       continue;
     }
@@ -84,7 +84,11 @@ function resolveEarlierPhases(
       built[phase] = machines(first);
       const firstAhead = pullAhead(phase, first);
       if (sooner(firstAhead)) {
-        stages[phase] = { ...firstAhead, aheadOf: first.aheadOf ?? first.hours };
+        stages[phase] = {
+          ...firstAhead,
+          aheadOf: first.aheadOf ?? first.hours,
+          ...siteMarks(first),
+        };
         pulled.push(phase);
         continue;
       }
@@ -95,6 +99,14 @@ function resolveEarlierPhases(
   }
   return { pulled: pulled.reverse(), stopped: stopped.reverse() };
 }
+// What a re-solve of `stage` keeps saying about its items made on site: it makes them centrally
+// (onSiteDropped, #875) or routes a group's excess to the central balance (onSiteOverflow, #1063).
+// stageSettings re-solves it that way, so the plan that replaces it keeps the marks, and the
+// plan's warnings and ADA still name its phase (#1099).
+const siteMarks = (stage: CurrentStage) => ({
+  ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
+  ...(stage.onSiteOverflow ? { onSiteOverflow: stage.onSiteOverflow } : {}),
+});
 // The phaseTime 'final' warning: which earlier phases finish sooner, and which searches stopped.
 // Only the phases resolveEarlierPhases pulled ahead count: a phase that minimal construction
 // already runs at full speed (fullSpeed), Phase 5 included, is not an earlier phase pulled ahead.
@@ -202,8 +214,7 @@ export function fullSpeed(config: CurrentSettings, phase: number, stage: Solved)
   return {
     ...fast,
     aheadOf: stage.hours,
-    ...(stage.onSiteDropped ? { onSiteDropped: stage.onSiteDropped } : {}),
-    ...(stage.onSiteOverflow ? { onSiteOverflow: stage.onSiteOverflow } : {}),
+    ...siteMarks(stage),
   };
 }
 // Whether no plan within the stage's own machines can finish sooner, so fullSpeed's re-solve could
