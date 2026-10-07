@@ -10,6 +10,8 @@
     (alternateHunts), ticked when the player owns it. An owned recipe's unlock step starts ticked,
     and a phase's hard-drive hunt too once every recipe it lists is owned (ownedAlternateKeys); the
     rest stay to hunt. Later, the recipe's own unlock step on the build plan is the same record.
+    A recipe chosen under "Alternates you already own" on step 2 (settings.ownedAlternates, which
+    the plan was calculated with) shows here ticked and fixed: it is changed on step 2.
 
   Everything starts off. The choices are the draft's `earlierDone` and `ownedAlternates`, set as
   each box changes (so a redraw keeps them), and createProfile sends the steps they tick as the new
@@ -20,6 +22,7 @@
 import { computed } from 'vue';
 import { draft, phaseLabel, progressionData } from '../../session.ts';
 import { legacy } from '../bridge.ts';
+import { settingsOwnedKeys } from '../../wizard/wizard.ts';
 import {
   alternateHunts,
   earlierPhasesWords,
@@ -34,9 +37,15 @@ const view = computed(() =>
     // progression.json arrives at boot; without it (or a plan) there is nothing to offer.
     if (!plan || !progressionData?.buildings) return null;
     const count = stepsBeforeStart(plan, { checks: {} }, progressionData).length,
-      owned = new Set(wizardDraft.ownedAlternates || []);
+      owned = new Set(wizardDraft.ownedAlternates || []),
+      fixed = new Set(settingsOwnedKeys(wizardDraft));
     const alternates = alternateHunts(plan, progressionData).flatMap(({ phase, recipes }) =>
-      recipes.map(recipe => ({ ...recipe, phase: phaseLabel(phase), on: owned.has(recipe.key) })),
+      recipes.map(recipe => ({
+        ...recipe,
+        phase: phaseLabel(phase),
+        fixed: fixed.has(recipe.key),
+        on: owned.has(recipe.key) || fixed.has(recipe.key),
+      })),
     );
     if (!count && !alternates.length) return null;
     return {
@@ -103,10 +112,14 @@ function chooseAlternate(event: Event) {
             data-owned-alternate
             :value="alternate.key"
             :checked="alternate.on"
+            :disabled="alternate.fixed"
             @change="chooseAlternate"
           /><span
             ><b>{{ alternate.name }}</b
-            ><br /><small class="muted">First used in {{ alternate.phase }}</small></span
+            ><br /><small class="muted"
+              >First used in {{ alternate.phase
+              }}{{ alternate.fixed ? ' · owned, set on step 2' : '' }}</small
+            ></span
           ></label
         >
       </div>

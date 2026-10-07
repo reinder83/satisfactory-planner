@@ -3397,6 +3397,33 @@ button.rail-tile:hover {
   padding: 2px 7px;
   white-space: nowrap;
 }
+/* "Alternates you already own" on step 2 (#1068): the picker's frame, folded. */
+.owned-alt-picker > summary {
+  padding: 10px 13px;
+  cursor: pointer;
+  font-family: var(--head);
+  letter-spacing: 0.06em;
+  color: var(--bright);
+}
+.owned-alt-picker[open] > summary {
+  border-bottom: 1px solid var(--line2);
+}
+.owned-alt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 13px 6px;
+}
+.owned-alt-tools input[type='search'] {
+  background: #0f1214;
+  border: 1px solid #343b41;
+  padding: 7px 10px;
+  min-width: min(280px, 100%);
+}
+.owned-alt-list {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+}
 .alt-force-hint {
   display: flex;
   gap: 11px;

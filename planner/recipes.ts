@@ -42,13 +42,18 @@ export const primaryOutput = (recipe: Pick<Recipe, 'outputs'>): string | undefin
 // 5. Nuclear fuel and waste-processing recipes only with a nuclear strategy, except that from
 //    Phase 4 uranium drone fuel admits the Uranium Fuel Rod and Encased Uranium Cell recipes.
 // 6. Preferred recipes (custom only) push out the competitors for their primary product.
+// Alternates the player already owns (`ownedAlternates`, #1068) count as selected in 1 and 2
+// whatever the recipe setting, from the phase each becomes available in; without them the pool is
+// the one every earlier release planned with.
 export function recipePool(config: CurrentSettings, phase: number, conversion: boolean): Recipe[] {
+  const owned = config.ownedAlternates || [];
   return DATA.recipes
     .filter(
       recipe =>
         !STANDARD_ALTERNATES.includes(recipe.id) ||
         config.recipes !== 'custom' ||
-        config.alternateRecipes.includes(recipe.id),
+        config.alternateRecipes.includes(recipe.id) ||
+        owned.includes(recipe.id),
     )
     .map(recipe =>
       STANDARD_ALTERNATES.includes(recipe.id)
@@ -61,6 +66,7 @@ export function recipePool(config: CurrentSettings, phase: number, conversion: b
         (config.recipes === 'all' ||
           !recipe.alternate ||
           (config.recipes === 'custom' && config.alternateRecipes.includes(recipe.id)) ||
+          owned.includes(recipe.id) ||
           (config.pureIngots && pureNames.includes(recipe.name))),
     )
     .filter(
