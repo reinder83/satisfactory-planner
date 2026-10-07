@@ -2,9 +2,9 @@
 import { listNames } from '../public/wording.ts';
 import { phaseMining } from '../public/preferences.ts';
 import type { CurrentSettings, CurrentStage, ItemRates } from '../public/types/index.ts';
-import type { Solved, RunResult } from './types.ts';
+import type { Solved, RunResult, RunOptions } from './types.ts';
 import { RAW } from './data.ts';
-import { run, goalHours } from './model.ts';
+import { run, goalHours, stockedFromSurplus } from './model.ts';
 import type { Unsolved } from './calculate.ts';
 import { warningDuration } from './warnings.ts';
 
@@ -30,10 +30,7 @@ interface DraftContext {
 export function draftStage(config: CurrentSettings, phase: number, result: Unsolved): CurrentStage {
   const conversion = phase === 5 && config.sam !== 'avoid';
   const plain: CurrentSettings = { ...config, amplifySloops: 0 };
-  const diagnostic = run({ ...plain, wholeMachines: false }, phase, {
-    conversion,
-    ignoreLimits: true,
-  });
+  const diagnostic = exactRun(plain, phase, { conversion, ignoreLimits: true });
   const stage: CurrentStage = { ...diagnostic, feasible: false };
   if (result.solverStatus && !/infeasible/i.test(result.solverStatus))
     stage.reason =
@@ -55,9 +52,16 @@ export function draftStage(config: CurrentSettings, phase: number, result: Unsol
   }
   return stage;
 }
+// The draft's exact LP: `plain` without whole machines. Protected storage is left out of it where
+// the whole-machine solve leaves it out (#1100), so the draft explains the phase that was solved.
+const exactRun = (plain: CurrentSettings, phase: number, options: RunOptions) =>
+  run({ ...plain, wholeMachines: false }, phase, {
+    ...options,
+    storageLeftOut: stockedFromSurplus(plain),
+  });
 // Does the exact LP fit the real budgets at `hours` hours for this phase?
 const fitsInHours = ({ plain, phase, conversion }: DraftContext, hours: number) =>
-  run({ ...plain, wholeMachines: false, goal: 'timed', hours }, phase, { conversion }).feasible;
+  exactRun({ ...plain, goal: 'timed', hours }, phase, { conversion }).feasible;
 // Only rounding up to whole machines breaks a budget here. Re-fit the same recipe network with
 // each budget allowed to run over at a high cost (`overBudget`), so the fit raises a budget only as
 // far as whole machines need it: the least extra budget, not what a fit with room to spare would
@@ -69,7 +73,7 @@ function wholeMachinesReason(
   { phase, plain, conversion, budgets }: DraftContext,
 ) {
   stage.wholeMachinesOnly = true;
-  const network = run({ ...plain, wholeMachines: false }, phase, { conversion });
+  const network = exactRun(plain, phase, { conversion });
   const rounded: RunResult = network.feasible
     ? run(
         plain,
@@ -127,6 +131,8 @@ function shortfallReason(
     stage.minHours = Math.ceil(high * 4) / 4;
   }
   const names = shortfalls.map(shortfall => shortfall.name);
+  // Storage fed from surplus is not a demand of the solve (#1100), so the reason does not name it.
+  const storage = stockedFromSurplus(config) ? '' : 'protected storage, ';
   return (
     (names.length
       ? `This phase needs more ${listNames(names)} than the entered budgets provide.`
@@ -134,7 +140,7 @@ function shortfallReason(
     (stage.minHours
       ? ` It fits the current budgets at ${warningDuration(stage.minHours)} for this phase.`
       : config.goal === 'maximum'
-        ? ' Raise those budgets, or reduce the protected storage, drone-fuel and Singularity Cell demands.'
-        : ' More time alone will not fit: continuous demands (protected storage, drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.')
+        ? ` Raise those budgets, or reduce the ${storage}drone-fuel and Singularity Cell demands.`
+        : ` More time alone will not fit: continuous demands (${storage}drone fuel, cells and minimum rounded delivery rates) already exceed the budgets.`)
   );
 }

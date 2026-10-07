@@ -139,6 +139,7 @@ export const phaseContext = (
     roundStopped = false,
     overBudget = false,
     loadBound = null,
+    storageLeftOut = stockedFromSurplus(config),
   }: RunOptions,
 ): PhaseContext => ({
   config,
@@ -153,6 +154,7 @@ export const phaseContext = (
   roundStopped,
   overBudget,
   loadBound,
+  storageLeftOut,
   power: phasePower(config, phase),
   mining: config.phaseMining ? phaseMining(config, phase) : null,
 });
@@ -236,9 +238,10 @@ export function phaseDemands(context: PhaseContext, reachable: Set<string>): Pha
   const add = (item: string, rate: number) => (demand[item] = (demand[item] || 0) + rate);
   // Under whole machines with storageFromSurplus, protected storage is not a demand of the solve
   // (#1061): it takes the plan's surplus first, and the lines for what no surplus covers are added
-  // after the phase is planned, at exact clocks (withStock in stock.ts). Without whole machines
-  // the lines are exact anyway, and a plan without the setting plans storage as before.
-  const storage = stockedFromSurplus(config) ? {} : storageDemand(config, reachable);
+  // after the phase is planned, at exact clocks (withStock in stock.ts). That holds for the exact
+  // steps of such a plan too (`storageLeftOut`, #1100). Without whole machines the lines are exact
+  // anyway, and a plan without the setting plans storage as before.
+  const storage = context.storageLeftOut ? {} : storageDemand(config, reachable);
   for (const [item, rate] of Object.entries(storage)) if (rate > 0) demand[item] = rate;
   // Under `maximum` deliveries are not a fixed demand; the goal variable (addSources) draws them.
   const delivery = deliveryDemand(context);

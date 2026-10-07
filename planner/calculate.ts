@@ -145,7 +145,9 @@ function planPhase(
 // the plan's pages set beside the whole-machine figures. Only where both fit: a phase whose exact
 // plan does not fit records nothing, and neither does a plan without whole machines. It shares
 // the phase's search deadline; the exact plan is a linear solve unless production amplification
-// asks for an integer search, and one that stops records nothing either.
+// asks for an integer search, and one that stops records nothing either. Under storageFromSurplus
+// the exact plan still plans storage as a demand (#1100): the whole-machine figures it is set
+// beside include what withStock adds for storage, so both sides carry storage.
 function withExactPlan(config: CurrentSettings, phase: number, stage: Solved): Solved {
   if (!config.wholeMachines) return stage;
   const exact = planPhase({ ...config, wholeMachines: false }, phase);

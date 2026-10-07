@@ -25,6 +25,11 @@ export interface RunOptions {
   roundStopped?: boolean;
   overBudget?: boolean;
   loadBound?: LoadBound | null;
+  // Whether protected storage is left out of the solve (#1061). By default it is when the settings
+  // feed storage from surplus (stockedFromSurplus in model.ts). The exact steps of a whole-machine
+  // plan solve a copy of the settings without whole machines, so they pass the answer for the
+  // calculation's own settings instead (#1100).
+  storageLeftOut?: boolean;
 }
 // The fixed figures a solve bounded by its load is planned with (#1086, planner/load.ts), in MW:
 // what the power constraint is credited with, and the most the non-nuclear generators may give.

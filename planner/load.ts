@@ -141,6 +141,7 @@ const runOptions = ({
   roundStopped,
   overBudget,
   loadBound,
+  storageLeftOut,
 }: PhaseContext) => ({
   maximum,
   conversion,
@@ -152,4 +153,5 @@ const runOptions = ({
   roundStopped,
   overBudget,
   loadBound,
+  storageLeftOut,
 });
