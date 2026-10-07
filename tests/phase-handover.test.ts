@@ -51,7 +51,7 @@ const plan = (): Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'> =>
         ],
       },
     },
-  }) as unknown as Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>;
+  }) as Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>;
 
 const ALL_RUNNING = Object.freeze({
   'calc-1-Iron Ingot': true,
@@ -104,7 +104,7 @@ test('only a line marked running in the phase before carries', () => {
   late.settings.phase = '2';
   assert.equal(carriedLine(late, ALL_RUNNING, '2', 'Iron Ingot'), null);
   // A plan guide (a profile migrated from the handbook) has its own steps.
-  const guided = { ...plan(), guide: { phases: {} } } as unknown as typeof stored;
+  const guided = { ...plan(), guide: { phases: {} } } as typeof stored;
   assert.equal(carriedLine(guided, ALL_RUNNING, '2', 'Iron Ingot'), null);
 });
 
