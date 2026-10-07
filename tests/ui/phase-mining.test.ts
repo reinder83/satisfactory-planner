@@ -6,6 +6,7 @@
 // shows none of it and keeps its entered budgets.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { nextTick } from 'vue';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
 import { bestLane, laneUnlockNote } from '../../public/app/flow.ts';
 import { setWizard, wizard } from '../../public/app/session.ts';
@@ -222,6 +223,36 @@ test('the budgets step offers the per-phase budgets with each phase’s share, a
   assert.equal($<HTMLInputElement>('[name="phaseMining"]')!.checked, false);
   assert.equal($('[data-phase-budgets]'), null);
   assert.match(plain($('#wizard-form')?.textContent), /Off: every phase plans with these budgets/);
+});
+
+// "Miners you already have" (#1068): under the box, a choice that raises every phase's miner; the
+// table follows it at once, and the form reads it only with the box ticked.
+test('the budgets step offers the miners you already have, and the table follows them', async () => {
+  open({ workspace: { catalog: items } });
+  draftAt(4, { phaseMining: true, phase: '3' });
+  go('wizard');
+  render();
+  const select = $<HTMLSelectElement>('select[data-owned-miner]')!;
+  assert.ok(select, 'offered with the box ticked');
+  assert.equal(select.value, '', 'none by default');
+  const phaseThree = () => plain($$('[data-phase-budgets] tbody tr')[0]!.textContent);
+  assert.match(phaseThree(), /^3 Miner Mk.2 at 100%/);
+  select.value = '3';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await nextTick();
+  assert.match(phaseThree(), /^3 Miner Mk.3 at 100%/, 'the table follows the choice');
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.equal(wizard!.settings.ownedMiner, 3);
+  // Unticking the box drops it: the choice means nothing without mining per phase.
+  $<HTMLInputElement>('[name="phaseMining"]')!.checked = false;
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.equal('ownedMiner' in wizard!.settings, false);
+  page();
+  open({ workspace: { catalog: items } });
+  draftAt(4, {});
+  go('wizard');
+  render();
+  assert.equal($('select[data-owned-miner]'), null, 'not offered with the box clear');
 });
 
 test('Review names the miner and belts each phase’s budgets follow', () => {

@@ -3,7 +3,9 @@
   button that opens the node survey (ui/pages/SurveyPage.vue) to work them out, the
   phaseMining box (#1065: each phase's budgets follow its miners and belts) with what each
   phase would get, and the limitsConfirmed box, which maximum output needs. The phaseMining box
-  is read with the form like every other field; its table follows the box as it is ticked.
+  is read with the form like every other field; its table follows the box as it is ticked. With
+  it ticked, "Miners you already have" (#1068, ownedMiner, data-owned-miner) raises every phase's
+  miner to the mark chosen; the table follows the choice too.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -25,7 +27,10 @@ const view = computed(() =>
       confirmed: !!settings.limitsConfirmed,
       // Each phase from the profile's start phase: its miner, belts and pipes, and its share of
       // these budgets (the share does not depend on the amounts, only on the nodes behind them).
-      phases: phaseBudgetRows(settings, Number(settings.phase || 1)).map(row => ({
+      phases: phaseBudgetRows(
+        { ...settings, ownedMiner: ownedMiner.value },
+        Number(settings.phase || 1),
+      ).map(row => ({
         phase: row.phase,
         equipment: row.equipment,
         share: budgetShareWords(row),
@@ -35,6 +40,17 @@ const view = computed(() =>
 );
 // Whether the phaseMining box is ticked on screen, for the table under it.
 const perPhase = ref(!!draft().settings.phaseMining);
+// The miner chosen on screen under it (#1068), for the same table: 2, 3 or undefined.
+const ownedMiner = ref<number | undefined>(draft().settings.ownedMiner);
+function chooseMiner(event: Event) {
+  ownedMiner.value = Number((event.target as HTMLSelectElement).value) || undefined;
+}
+// "Follow the phases", then each mark the phases would otherwise reach only later.
+const MINER_CHOICES = [
+  ['', 'None beyond what each phase unlocks'],
+  ['2', 'Miner Mk.2'],
+  ['3', 'Miner Mk.3'],
+] as const;
 </script>
 
 <template>
@@ -85,13 +101,26 @@ const perPhase = ref(!!draft().settings.phaseMining);
       @change="perPhase = ($event.target as HTMLInputElement).checked"
     />Each phase's budgets follow the miners and belts it can build</label
   >
+  <label v-if="perPhase" class="field owned-miner"
+    >Miners you already have
+    <select
+      name="ownedMiner"
+      data-owned-miner
+      :value="ownedMiner ? String(ownedMiner) : ''"
+      @change="chooseMiner"
+    >
+      <option v-for="[value, label] in MINER_CHOICES" :key="value" :value="value">
+        {{ label }}
+      </option>
+    </select></label
+  >
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>
       <caption class="small muted">
         These budgets are the most any phase draws. Each phase gets what its miner, clock and belts
         take from the same nodes: crude oil from Phase 3, resource wells from Phase 4, and
-        overclocking from Phase 4, with Power Shards from Power Slugs. A node survey's miner and
-        clock cap every phase's.
+        overclocking from Phase 4, with Power Shards from Power Slugs. A miner you already have
+        raises every phase's to its mark; a node survey's miner and clock cap every phase's.
       </caption>
       <thead>
         <tr>

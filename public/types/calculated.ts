@@ -118,6 +118,10 @@ export interface CurrentSettings {
   // public/preferences/mining.ts). Set by the wizard for new plans; absent from every plan made
   // before it, which keep the same budgets in every phase.
   phaseMining?: boolean;
+  // The best miner the player already has (#1068, All settings step 4): 2 or 3. With mining per
+  // phase it raises every phase's miner to at least that mark (phaseMiner in
+  // public/preferences/mining.ts). Absent unless chosen, and from every plan made before it.
+  ownedMiner?: 2 | 3;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;

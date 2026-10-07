@@ -13,11 +13,20 @@ import {
   presetSurvey,
   resourceDefaults,
 } from '../../preferences.ts';
+import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../../progression.ts';
 import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, toast } from '../api.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
-import { draft, loadContext, setWizard, setWorkspace, wizard, workspace } from '../session.ts';
+import {
+  draft,
+  loadContext,
+  progressionData,
+  setWizard,
+  setWorkspace,
+  wizard,
+  workspace,
+} from '../session.ts';
 import { render } from '../shell.ts';
 import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
@@ -67,6 +76,11 @@ export interface WizardDraft {
   guidedAsk: string[] | null;
   guidedTopics?: string[];
   tutorial: string;
+  // Review's "What you already have" (#1068, ui/wizard/AlreadyHave.vue): "Everything before Phase
+  // N is done" and the `recipe-unlock-<recipe>` keys of the alternates owned. Draft only, sent as
+  // the steps they tick (alreadyHaveKeys), never stored as settings.
+  earlierDone?: boolean;
+  ownedAlternates?: string[];
   supplyRows?: { name: string; rate: string }[];
   extraction?: Survey;
   extractionStep?: number;
@@ -362,6 +376,10 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
   if (wizardDraft.step === 4) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
+    // "Miners you already have" (#1068), drawn only with the box ticked: absent means none.
+    const owned = data.has('ownedMiner') ? Number(data.get('ownedMiner')) : 0;
+    if (settings.phaseMining && (owned === 2 || owned === 3)) settings.ownedMiner = owned;
+    else delete settings.ownedMiner;
   }
 }
 
@@ -453,7 +471,7 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       settings: wizardDraft.settings,
       carryFrom: wizardDraft.saveId ? wizardDraft.carryFrom : null,
       carry: wizardDraft.carry,
-      built: guidedBuiltKeys(wizardDraft),
+      built: [...guidedBuiltKeys(wizardDraft), ...alreadyHaveKeys(wizardDraft)],
     },
     true,
     calcProgress(button, 'Saving profile…'),
@@ -462,8 +480,13 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
   await loadContext(created.saveId, created.profileId);
   setWizard(null);
   navigate('plan');
+  // Steps ticked in a profile that carries nothing were not carried from anywhere: they are the
+  // finished work it was told about (the HUB tutorial, "What you already have", #1068).
+  const carriedFrom = !!(wizardDraft.saveId && wizardDraft.carryFrom);
   const carried = [
-    created.carriedChecks ? plural(created.carriedChecks, 'step') + ' carried over' : '',
+    created.carriedChecks
+      ? plural(created.carriedChecks, 'step') + (carriedFrom ? ' carried over' : ' start ticked')
+      : '',
     created.reviewCount
       ? plural(created.reviewCount, 'expanded production line') + ' left for review'
       : '',
@@ -475,6 +498,22 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
       (carried ? ': ' + carried + '. ' : '. ') +
       'Your other progress is unchanged.',
   );
+}
+
+// The steps Review's "What you already have" ticks in the new profile (#1068), from the preview:
+// with "Everything before Phase N is done" every step the milestone-only phases before its start
+// phase list (stepsBeforeStart, unlock-<id> keys), and for the alternates owned their unlock steps
+// and each phase's hunt that has nothing left to hunt (ownedAlternateKeys). newProfileState accepts
+// them as finished work; records carried from another profile still win there, an untick included.
+// None while every box is clear.
+export function alreadyHaveKeys(wizardDraft: WizardDraft): string[] {
+  const plan = wizardDraft.preview;
+  if (!plan || !progressionData?.buildings) return [];
+  const owned = new Set(wizardDraft.ownedAlternates || []);
+  return [
+    ...(wizardDraft.earlierDone ? stepsBeforeStart(plan, { checks: {} }, progressionData) : []),
+    ...(owned.size ? ownedAlternateKeys(alternateHunts(plan, progressionData), owned) : []),
+  ];
 }
 
 // The primary button's label on the current screen: the guided questions, the five steps.
