@@ -1,7 +1,6 @@
 // The page component for each hash route. render() in shell.ts mounts it into <main>.
 import type { Component } from 'vue';
 import { flowGroupOf, type View } from '../session.ts';
-import { guidedFlow } from '../wizard/guided.ts';
 import type { WizardDraft } from '../wizard/wizard.ts';
 import AccountPage from './pages/AccountPage.vue';
 import BackupPage from './pages/BackupPage.vue';
@@ -23,8 +22,8 @@ import WizardPage from './pages/WizardPage.vue';
 const NEEDS_SAVE: View[] = ['plan', 'factories', 'logistics', 'storage', 'resources', 'notes'];
 
 // The component for `view`, or null for an unknown one. #wizard depends on the draft
-// (`draft`, the wizard object): the node survey, the guided questions until they are
-// answered, and otherwise the five steps, whose Review also ends the guided start.
+// (`draft`, the wizard object): the node survey, the guided start (its questions and, once they
+// are answered, its own Review, #1072), and otherwise the five steps.
 // #factories depends on the address (`route`, the hash without its #): a group's flow page,
 // #factories/<group>/flow (#894), or the factories page itself.
 export function vuePage(
@@ -46,7 +45,7 @@ export function vuePage(
   if (view === 'resources') return CalculatedResourcesPage;
   if (view === 'wizard') {
     if (draft?.mode === 'extraction') return SurveyPage;
-    if (draft?.mode === 'guided' && draft.guidedStep <= guidedFlow().length) return GuidedPage;
+    if (draft?.mode === 'guided') return GuidedPage;
     return WizardPage;
   }
   return null;

@@ -13,7 +13,7 @@ Most calculators stop at the numbers. This one keeps going: which milestone to u
 ## What it does
 
 - **Plans every phase.** Production lines, power, storage and elevator deliveries for Phases 1–5 and post-game, calculated with a real solver within your resource budgets.
-- **Starts in five questions.** A short guided start (your phase, your goal, which recipes, what to keep stocked, how exact) — or the full settings wizard if you want every control.
+- **Starts in six questions.** A short guided start (your phase, your goal, which recipes, what to keep stocked, how exact, how to power it) — or the full settings wizard if you want every control.
 - **Fits your world.** Count your nodes or just pick your World Randomization settings and it works out the budgets. Already producing something? Enter the rate and the plan builds only the rest.
 - **Turns the plan into a checklist.** A chronological build order with HUB milestones, MAM research, hard drives and power upgrades in the order you need them.
 - **Whole machines.** Solid-part lines run at 100% by default, with the surplus listed and what that costs against exact clocks; any single line can be set to exact clocks, and fluids and power stay precisely balanced.
@@ -30,7 +30,7 @@ The [user guide](docs/USER-GUIDE.md) covers every screen and exactly what the ca
 
 **[reinder83.github.io/satisfactory-planner](https://reinder83.github.io/satisfactory-planner/)** — nothing to install, no account.
 
-1. Open the planner and answer the guided start's five questions.
+1. Open the planner and answer the guided start's six questions.
 2. Check the **Review**: buildings, delivery time and power per phase.
 3. Create the profile and work through the **Build plan**, ticking steps as you build.
 

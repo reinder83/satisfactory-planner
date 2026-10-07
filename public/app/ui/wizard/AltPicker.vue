@@ -1,6 +1,7 @@
 <!--
   The alternate recipe picker on All settings step 2, shown when Recipe access is "Pick
-  specific alternate recipes". Ticked boxes (name="alt") become settings.alternateRecipes and
+  specific alternate recipes", and on the guided recipes question under "I will choose them
+  myself" (#1072). Ticked boxes (name="alt") become settings.alternateRecipes and
   ticked stars (name="altpref") settings.preferredRecipes, read back by readWizard with the
   rest of the step. A recipe the power or ingot preference already requires is a locked,
   ticked box with no name, so it is never read back as a pick. The ticks, stars and filter
@@ -16,6 +17,7 @@ import { $, required } from '../../format.ts';
 import { draft, wizard, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { alternatesUsed, openAltRecipe } from '../../wizard/recipes.ts';
+import { readGuidedForm } from '../../wizard/guided.ts';
 import { calcProgress, readWizard, wizardError } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { turbofuelRecipes } from '../../../preferences.ts';
@@ -117,7 +119,11 @@ async function best() {
   busy.value = true;
   const wizardDraft = draft();
   try {
-    readWizard(required<HTMLFormElement>('#wizard-form'));
+    // The guided recipes question shows this picker too (#1072): read its screen as the guided
+    // start reads it: the five steps' reader would take it for the step the draft last showed.
+    const form = required<HTMLFormElement>('#wizard-form');
+    if (wizardDraft.mode === 'guided') readGuidedForm(form);
+    else readWizard(form);
     const preview = await post<StoredCalculatedPlan>(
       '/api/preview',
       { settings: { ...wizardDraft.settings, recipes: 'all' } },

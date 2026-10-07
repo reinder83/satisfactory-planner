@@ -42,6 +42,7 @@ export {
   GUIDED_TOPUP_RATE,
   guidedQuestions,
   guidedStandingQuestion,
+  guidedTopupFrom,
   guidedTopupItems,
   phaseParts,
   tutorialKeys,

@@ -343,8 +343,9 @@ function readSloops(form: HTMLFormElement, data: FormData, settings: WizardSetti
     settings.sloopReserved = data.getAll('sloop').map(String) as WizardSettings['sloopReserved'];
 }
 
-// The recipe picker's ticked alternates, and the starred ones among them, when it is on screen.
-function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+// The recipe picker's ticked alternates, and the starred ones among them, when it is on screen:
+// All settings step 2, and the guided recipes question's "I will choose them myself" (#1072).
+export function readAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
   if (!form.querySelector('.alt-list')) return;
   const alternates = data.getAll('alt').map(String);
   settings.alternateRecipes = alternates;
@@ -536,6 +537,8 @@ export async function moveWizard(target: number) {
   if (target > wizard.step && !form.reportValidity()) return;
   readWizard(form);
   if (target !== 5) {
+    // From the guided start's Review ("Change … in Preferences"), the step is All settings'.
+    wizard.mode = 'advanced';
     wizard.step = target;
     render();
     return;

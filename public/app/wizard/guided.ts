@@ -15,7 +15,13 @@ import { $ } from '../format.ts';
 import { draft, wizard } from '../session.ts';
 import { render } from '../shell.ts';
 import { readSupply } from './supply.ts';
-import { calculateWizard, readWizard, wizardBusy, type WizardDraft } from './wizard.ts';
+import {
+  calculateWizard,
+  readAlternates,
+  readWizard,
+  wizardBusy,
+  type WizardDraft,
+} from './wizard.ts';
 import type { GuidedQuestion, ItemRates } from '../../types/index.ts';
 
 // --- The guided start -------------------------------------------------------
@@ -48,23 +54,26 @@ export const GUIDED_GLYPHS: Record<string, string> = {
   tutorial: '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/>',
   'tutorial-done':
     '<path d="M6 4v16"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/><path d="M13 18l2 2 4-4"/>',
+  power: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
 };
 
 // The questions actually asked. The tutorial/already-built question follows the
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
-// Order: the preferences.ts list (phase, goal, recipes, stock, exact), with the
+// Order: the preferences.ts list (phase, goal, recipes, stock, exact, power), with the
 // tutorial question (Phase 1) or the "already producing" question (later
 // phases) inserted after phase for a new save. When wizard.guidedAsk is set
 // (the "What is different" screen), only those ids are kept. vuePage (ui/pages.ts)
 // and the screens compare guidedStep with this length to know when the questions
-// are finished; ada-panel.ts reads it too.
+// are finished; ada-panel.ts reads it too. A question worded for the start phase is asked as
+// that phase's (phased, #1072).
 export function guidedFlow(): GuidedQuestion[] {
   const wizardDraft = draft(),
     ask = wizardDraft.guidedAsk,
+    phase = String(wizardDraft.settings.phase || '3'),
     list: GuidedQuestion[] = [];
   for (const question of guidedQuestions) {
-    list.push(question);
+    list.push(question.phased ? question.phased(phase) : question);
     if (question.id === 'phase' && !wizardDraft.saveId)
       list.push(guidedStandingQuestion(String(wizardDraft.settings.phase || '3')));
   }
@@ -79,6 +88,8 @@ export const guidedAnswer = (question: GuidedQuestion): string => {
     settings = wizardDraft.settings;
   if (question.id === 'tutorial') return wizardDraft.tutorial || 'doing';
   if (question.id === 'exact') return settings.wholeMachines === false ? 'precise' : 'whole';
+  // Another main power chosen in All settings (turbofuel, nuclear) picks no card, and is kept.
+  if (question.id === 'power') return settings.mainPower || 'auto';
   if (question.id === 'stock')
     return question.options?.some(o => o.value === settings.storage)
       ? settings.storage
@@ -98,8 +109,9 @@ export function guidedBuiltKeys(wizardDraft: WizardDraft): string[] {
 // Copy the current guided screen into the draft. The mapping from answer to
 // settings is the chosen option's `set` object (preferences.ts), merged into
 // wizard.settings: the same fields All settings writes (phase, goal, recipes,
-// pureIngots, storage, collectables, wholeMachines). The tutorial answer is kept
-// on the draft instead. Clears the preview, so Review must recalculate.
+// pureIngots, storage, collectables, wholeMachines, mainPower), with the spare power box and the
+// recipe picker of "I will choose them myself" read as All settings reads them (#1072). The
+// tutorial answer is kept on the draft instead. Clears the preview, so Review must recalculate.
 // On the "What is different" screen the ticked topics are kept as guidedTopics,
 // so a redraw keeps them; only `topics` (leaving the screen) makes them
 // guidedAsk, which ends that screen and narrows guidedFlow().
@@ -126,6 +138,17 @@ function readGuided(form: HTMLFormElement, topics: boolean) {
     if (supply) settings.existingSupply = supply;
   }
   if (formData.has('hours')) settings.hours = Number(formData.get('hours'));
+  // The power question's box (#1072). Total installed power is never below the spare part of it
+  // (settings() refuses that), so a total entered before grows with it; none entered follows it.
+  if (formData.has('availablePowerMW')) {
+    settings.availablePowerGW = Number(formData.get('availablePowerMW')) / 1000;
+    if (
+      settings.installedPowerGW !== undefined &&
+      settings.installedPowerGW < settings.availablePowerGW
+    )
+      settings.installedPowerGW = settings.availablePowerGW;
+  }
+  readAlternates(form, formData, settings);
   // A guided plan never raises the general construction rate: it is the single
   // most expensive control in the app and the per-item floors below do the same
   // job for a fortieth of the buildings.
@@ -177,8 +200,8 @@ export async function moveGuided(target: number) {
     return;
   }
   // A choice that only All settings can answer hands over rather than pretending
-  // to ask it here: picking recipes one by one, or confirming resource budgets
-  // before maximum output.
+  // to ask it here: confirming resource budgets before maximum output. (Picking recipes one by
+  // one is asked here since #1072, with the picker under the cards.)
   const previous = flow[Math.min(wizardDraft.guidedStep - 1, flow.length - 1)];
   const handoff = previous?.options?.find(o => o.value === guidedAnswer(previous))?.handoff;
   if (handoff && target > wizardDraft.guidedStep) {
@@ -237,5 +260,21 @@ export function toGuided() {
   const flow = guidedFlow();
   if (!(wizardDraft.guidedStep >= 1)) wizardDraft.guidedStep = 1;
   wizardDraft.guidedStep = Math.min(wizardDraft.guidedStep, Math.max(flow.length, 1));
+  render();
+}
+
+// Whether the guided start shows its Review (#1072): its questions are answered and the plan is
+// calculated (calculateWizard moves guidedStep past the last question and sets step 5). Then
+// GuidedPage draws Review as the flow's last step, never the five steps' frame.
+export const guidedReview = (wizardDraft: WizardDraft): boolean =>
+  wizardDraft.mode === 'guided' &&
+  wizardDraft.step === 5 &&
+  !!wizardDraft.preview &&
+  wizardDraft.guidedStep > guidedFlow().length;
+
+// "All settings →" on the guided Review: the same Review in the five steps, with the plan and
+// every answer kept, so any setting is one tab away.
+export function reviewInAllSettings() {
+  draft().mode = 'advanced';
   render();
 }

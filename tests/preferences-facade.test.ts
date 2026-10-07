@@ -52,6 +52,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'extractorShards',
     'guidedQuestions',
     'guidedStandingQuestion',
+    'guidedTopupFrom',
     'guidedTopupItems',
     'helpText',
     'isWellKind',

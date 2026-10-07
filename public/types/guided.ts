@@ -16,7 +16,7 @@ export interface GuidedOption {
 }
 
 export interface GuidedQuestion {
-  // 'phase', 'goal', 'recipes', 'stock', 'exact', 'tutorial' or 'supply'.
+  // 'phase', 'goal', 'recipes', 'stock', 'exact', 'power', 'tutorial' or 'supply'.
   id: string;
   // The All settings step that owns the same settings.
   step: number;
@@ -26,4 +26,7 @@ export interface GuidedQuestion {
   // The existing-production question has rows instead of options.
   options?: GuidedOption[];
   kind?: 'supply';
+  // The question as a profile starting in `phase` is asked it (guidedFlow), where its wording
+  // depends on the phase (#1072).
+  phased?: (this: GuidedQuestion, phase: string) => GuidedQuestion;
 }

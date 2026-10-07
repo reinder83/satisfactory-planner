@@ -286,18 +286,18 @@ test('the tutorial question is asked at Phase 1 and the already-running one afte
   vm.runInContext(`wizard.settings.phase='1'`, context);
   assert.equal(
     vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
-    'phase,tutorial,goal,recipes,stock,exact',
+    'phase,tutorial,goal,recipes,stock,exact,power',
   );
   vm.runInContext(`wizard.settings.phase='3'`, context);
   assert.equal(
     vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
-    'phase,supply,goal,recipes,stock,exact',
+    'phase,supply,goal,recipes,stock,exact,power',
   );
   // A save that already has profiles uses the Review step's carry panel instead.
   vm.runInContext(`wizard.saveId='s1'`, context);
   assert.equal(
     vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
-    'phase,goal,recipes,stock,exact',
+    'phase,goal,recipes,stock,exact,power',
   );
 });
 
