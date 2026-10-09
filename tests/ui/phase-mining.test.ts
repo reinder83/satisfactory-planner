@@ -330,7 +330,7 @@ test('the belt advice uses the belt you already have, and asks no milestone for 
   assert.equal(belts.owned, true);
   assert.equal(laneUnlockNote(belts), '');
   assert.equal(bestLane(true, '4').mark, 'Mk.2', 'pipes as before');
-  assert.equal(bestLane(true, '4').owned, false);
+  assert.equal('owned' in bestLane(true, '4'), false);
   // The factory dialog's "Belts & pipes" says whose belts they are.
   const model: FlowModel = {
     stage: '4',
@@ -354,7 +354,7 @@ test('the belt advice uses the belt you already have, and asks no milestone for 
   page();
   open({ calculated: owning(4), phase: '4' });
   assert.equal(bestLane(false, '4').mark, 'Mk.5');
-  assert.equal(bestLane(false, '4').owned, false);
+  assert.equal('owned' in bestLane(false, '4'), false);
   // ADA names the belt where it is better than the phase's own (the stage as the planner stores
   // it with Mk.6 belts), and not where the plan has none.
   const adaLine = (plan: StoredCalculatedPlan) => {

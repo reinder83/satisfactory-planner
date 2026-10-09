@@ -48,11 +48,12 @@ export interface LaneMilestone {
 }
 
 // The best mark available (bestLane), with the next one up. `owned`: a belt available only because
-// the player already has it (settings.ownedBelt, #1068), its milestone neither ticked nor due yet.
+// the player already has it (settings.ownedBelt, #1068), its milestone neither ticked nor due yet;
+// absent otherwise, so a plan without one gives the lanes it always gave.
 export interface BestLane extends Lane {
   fluid: boolean;
   unit: string;
-  owned: boolean;
+  owned?: true;
   milestone: LaneMilestone | null;
   next: (Lane & { milestone: LaneMilestone | null }) | null;
 }
@@ -281,7 +282,7 @@ export function bestLane(fluid: boolean, stageKey?: string): BestLane {
     ...best,
     fluid,
     unit: fluid ? ' m³/min' : '/min',
-    owned,
+    ...(owned ? { owned: true as const } : {}),
     milestone: bestMilestone,
     next: next ? { ...next, milestone: laneMilestone(next) } : null,
   };
