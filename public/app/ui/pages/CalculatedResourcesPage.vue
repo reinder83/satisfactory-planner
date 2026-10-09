@@ -24,7 +24,8 @@ import { legacy } from '../bridge.ts';
 import ItemIcon from '../ItemIcon.vue';
 import { ALLOWANCE_SETTING } from '../../../power.ts';
 import { currentProfile, currentSave } from '../../session.ts';
-import { startWizard } from '../../wizard/wizard.ts';
+import { startEdit } from '../../wizard/wizard.ts';
+import { toast } from '../../api.ts';
 import PageHeader from '../PageHeader.vue';
 import { toggleCheck } from '../actions.ts';
 import CalcWarnings from '../plan/CalcWarnings.vue';
@@ -79,11 +80,14 @@ function headroom(stagePlan: StoredStage, settings: StoredCalculatedPlan['settin
   };
 }
 
-// "Change Extra utilities power in Preferences" (#1090): a calculated profile is a snapshot, so a
-// different utility allowance is a new profile in this save, started from this profile's
-// settings on the Preferences step of All settings, with this profile's progress offered for
-// carrying as any new profile is. This profile stays as it is.
-const toPreferences = () => startWizard(currentSave.id, { profileId: currentProfile.id, step: 2 });
+// "Change Extra utilities power in Edit settings" (#1090, #1071): Edit settings of the profile
+// this tab shows, opened on the Preferences step of All settings, whose Review recalculates it in
+// place with its progress carried and keeps the current version as a backup profile, once the
+// user presses "Recalculate in place". Nothing changes until then.
+const toPreferences = () =>
+  void startEdit(currentSave.id, currentProfile.id, 2).catch(error =>
+    toast((error as Error).message, true),
+  );
 
 // null once the open profile is no longer a calculated one: until render() swaps this page
 // out, it draws nothing rather than reading a plan that is not there.
@@ -204,7 +208,7 @@ const page = computed(() =>
       <p v-if="page.power.parts" class="small power-parts" data-power-parts>
         Power needed: {{ page.power.parts }}.
         <button type="button" class="btn quiet" data-power-preferences @click="toPreferences">
-          Change {{ ALLOWANCE_SETTING }} in Preferences (new profile) →
+          Change {{ ALLOWANCE_SETTING }} in Edit settings →
         </button>
       </p>
       <p v-if="page.power.peak" class="small muted" data-power-peak>{{ page.power.peak }}</p>

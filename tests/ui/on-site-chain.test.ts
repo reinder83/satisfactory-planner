@@ -34,6 +34,7 @@ import {
 import {
   $,
   $$,
+  answerConfirms,
   applyUpdate,
   generated,
   generatedWith,
@@ -188,14 +189,21 @@ test('#967: tick Wire and Copper Ingot is offered at once; one recalculation pla
   let next: StoredCalculatedPlan | undefined;
   const calls = stubFetch<UpdateOp>({
     '/api/update': applyUpdate,
-    '/api/profiles': (body: typeof sent) => {
+    '/api/recalculate': (body: typeof sent) => {
       sent = body;
       next = generatedWith(body!.settings);
-      return { saveId: 's', profileId: 'p2', reviewCount: 0, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 0,
+        carriedChecks: 0,
+        workspace,
+      };
     },
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
-      profile: { id: 'p2', kind: 'calculated', name: 'Made on site' },
+      profile: { id: 'p', kind: 'calculated', name: 'Made on site' },
       state,
       plan: next,
     }),
@@ -217,12 +225,13 @@ test('#967: tick Wire and Copper Ingot is offered at once; one recalculation pla
 
   // One recalculation, from a plan with no line of Alpha's own yet.
   assert.equal(ownLines(plan, ALPHA).length, 0);
+  answerConfirms(true);
   $<HTMLButtonElement>('[data-recalc-on-site]')!.click();
   await settle();
   await settle();
-  assert.equal(calls.filter(([path]) => path === '/api/profiles').length, 1);
+  assert.equal(calls.filter(([path]) => path === '/api/recalculate').length, 1);
   assert.deepEqual(sent!.settings.onSite![ALPHA]!.items, ['Copper Ingot', 'Wire']);
-  assert.ok(calculated?.settings.onSite, 'the new profile is open');
+  assert.ok(calculated?.settings.onSite, 'the recalculated plan is open');
   for (const phase of ['3', '4', '5'] as const) {
     const lines = ownLines(calculated, ALPHA, phase);
     assert.deepEqual(
@@ -244,7 +253,7 @@ test('#967: tick Wire and Copper Ingot is offered at once; one recalculation pla
   assert.equal(marked(ALPHA), null);
   assert.equal(notice(), null);
   assert.equal(onSiteChange(calculated, state.factoryGroups), null);
-  // In the new profile the picker still offers Copper Ingot for the Wire it marks.
+  // In the recalculated plan the picker still offers Copper Ingot for the Wire it marks.
   setFactoryEditing(true);
   render();
   await settle();

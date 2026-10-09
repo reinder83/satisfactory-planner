@@ -528,7 +528,7 @@ const RULES: AdaRule[] = [
       (facts.onSiteLinesOnly
         ? "What your factories' lines use changed, so the lines this plan makes on site for them no longer fit, and this plan has not been told yet. "
         : 'What your factories make on site differs from this plan, and this plan has not been told yet. ') +
-      'Nothing recalculates by itself: Recalculate with items made on site, on the Factories page, makes a new profile that plans it. This one stays as it is. I will wait. I am very good at waiting.',
+      'Nothing recalculates by itself: Recalculate in place with items made on site, on the Factories page, plans it and keeps this version as a backup. I will wait. I am very good at waiting.',
   },
   {
     // The lines asked to run at exact clocks differ from the plan's (#1066).
@@ -537,7 +537,7 @@ const RULES: AdaRule[] = [
     tone: 'warn',
     when: facts => (facts.exactClocksPending ?? 0) > 0,
     text: facts =>
-      `You changed the clocks of ${plural(facts.exactClocksPending!, 'production line')}, and this plan has not been told yet. Nothing recalculates by itself: Recalculate with exact clocks makes a new profile that plans ${facts.exactClocksPending === 1 ? 'it' : 'them'}. This one stays as it is. Precision, deferred.`,
+      `You changed the clocks of ${plural(facts.exactClocksPending!, 'production line')}, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with exact clocks plans ${facts.exactClocksPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Precision, deferred.`,
   },
   {
     // What whole machines cost in the open phase (#1066), from the calculation's own record.

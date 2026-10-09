@@ -533,7 +533,8 @@ test('ADA says a change to the items made on site waits for a recalculation (#87
     )!;
     assert.equal(line.tone, 'warn');
     assert.match(line.text, /Nothing recalculates by itself/);
-    assert.match(line.text, /Recalculate with items made on site/);
+    assert.match(line.text, /Recalculate in place with items made on site/);
+    assert.match(line.text, /keeps this version as a backup/);
     assert.ok(!ids(facts({ view, onSitePending: false })).includes('on-site-pending'));
     assert.ok(!ids(facts({ view })).includes('on-site-pending'), 'absent means none');
   }
@@ -787,15 +788,18 @@ test('ADA says the clocks asked for wait for a recalculation, and what whole mac
     )!;
     assert.equal(line.tone, 'warn');
     assert.match(line.text, /^You changed the clocks of 2 production lines/);
-    assert.match(line.text, /Nothing recalculates by itself: Recalculate with exact clocks/);
-    assert.match(line.text, /plans them\./);
+    assert.match(
+      line.text,
+      /Nothing recalculates by itself: Recalculate in place with exact clocks/,
+    );
+    assert.match(line.text, /plans them and keeps this version as a backup\./);
     assert.ok(!ids(facts({ view })).includes('exact-clocks-pending'), 'absent means none');
   }
   assert.match(
     adaRemarks(facts({ view: 'plan', exactClocksPending: 1 })).find(
       r => r.id === 'exact-clocks-pending',
     )!.text,
-    /^You changed the clocks of 1 production line,.* plans it\./,
+    /^You changed the clocks of 1 production line,.* plans it and keeps/,
   );
   const cost = adaRemarks(
     facts({ view: 'plan', roundingCost: { buildings: '1,226 buildings', power: '33.4 GW' } }),

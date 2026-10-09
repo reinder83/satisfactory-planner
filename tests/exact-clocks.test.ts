@@ -52,6 +52,7 @@ import type {
   SaveExport,
   StageKey,
   StoredCalculatedPlan,
+  WorkspaceSummary,
 } from '../public/types/index.ts';
 
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -513,19 +514,31 @@ async function checkEdition(
   assert.deepEqual(validateTransfer(exported).saves[0]!.profiles[0]!.state.exactClocks, {
     '3': [line.id],
   });
-  // "Recalculate with exact clocks": a new profile with the choice in its settings.
+  // "Recalculate in place with exact clocks" (#1071): this profile, with the choice in its
+  // settings, and the version before kept as a profile of its own.
   const settings = exactClocksSettings(after.plan.settings, change.wanted);
-  await request('/api/profiles', {
-    saveId: after.save.id,
-    name: 'Whole · exact clocks',
+  const done = (await request('/api/recalculate', {
+    name: 'Whole',
+    backupName: 'Whole (before edit)',
     settings,
-    carryFrom: after.profile.id,
-  });
+    planCreatedAt: after.plan.createdAt,
+  })) as { profileId: string; backupId: string };
+  assert.equal(done.profileId, after.profile.id, 'recalculated in place');
   const recalculated = await context();
+  assert.equal(recalculated.profile.id, after.profile.id);
   assert.deepEqual(recalculated.plan.settings.exactClocks, { '3': [line.id] });
   assert.equal('exactClocks' in recalculated.state, false);
   assert.equal(exactClocksChange(recalculated.plan, recalculated.state), null);
   assert.equal(lineClockNote(recalculated.plan, recalculated.state, '3', line.id), 'Exact clocks');
+  const summary = (await request('/api/workspace')) as WorkspaceSummary;
+  assert.deepEqual(
+    summary.saves[0]!.profiles.map(p => [p.id, p.name]),
+    [
+      [after.profile.id, 'Whole'],
+      [done.backupId, 'Whole (before edit)'],
+    ],
+    'the version with the choice unplanned is kept',
+  );
 }
 
 test('the Docker server saves the choice without recalculating the plan', async () => {

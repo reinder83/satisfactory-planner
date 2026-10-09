@@ -1,6 +1,6 @@
 // Which phase a profile opens on (#570), in both editions: loadContext() in session.ts works it
-// out for every profile it opens, a new one (the wizard's Create profile, Round up production,
-// Recalculate with transport fuel) and an existing one (boot, Open profile). The profile opens on
+// out for every profile it opens, a new one (the wizard's Create profile, Round up production)
+// and an existing one (boot, Open profile, a recalculation in place). The profile opens on
 // the phase the user said they are in, its saved working phase, unless an earlier phase it plans
 // still has an open check: then it opens on the first such phase, so the build plan starts at work
 // that is not done yet. Only the view changes: the saved phase stays what the user picked, and the
