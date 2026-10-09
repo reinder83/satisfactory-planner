@@ -61,7 +61,8 @@ const advice = computed(() => {
       (belts.next?.milestone
         ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`
         : ''),
-    // What the marks still need (#1065): their milestones, until ticked.
+    // What the marks still need (#1065): their milestones, until ticked. The template joins it to
+    // the intro with a space inside the expression: a text node of only a leading space is dropped.
     unlock: [laneUnlockNote(belts), laneUnlockNote(pipes)].filter(Boolean).join(' '),
     rows: model.inputs.map(input => {
       // perMachine: what one machine at 100% draws; fed: how many such machines one full lane
@@ -124,7 +125,7 @@ const advice = computed(() => {
   <template v-if="advice">
     <h3>Belts &amp; pipes</h3>
     <p class="small muted">
-      {{ advice.intro }}<template v-if="advice.unlock"> {{ advice.unlock }}</template>
+      {{ advice.intro + (advice.unlock ? ' ' + advice.unlock : '') }}
     </p>
     <div class="logi">
       <div v-for="row in advice.rows" :key="row.name" class="logi-row">

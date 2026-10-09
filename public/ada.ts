@@ -91,6 +91,9 @@ export interface AdaFacts {
   // the nodes and well satellites its draw taps and their MW, as the pages write them; absent
   // for a plan without mining per phase or a phase that mines nothing.
   mining?: { miner: string; nodes: string; mw: string };
+  // The open phase's belt when it is one the player already has (#1068), better than its milestones
+  // give: "Mk.6 belts (1,200/min)". Absent otherwise.
+  ownedBelt?: string;
   customTasks: number;
   removedSteps: number;
   groups: number;
@@ -493,6 +496,14 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.mining,
     text: facts =>
       `${facts.phaseLabel} mines with ${facts.mining!.miner}: ${facts.mining!.nodes} for ${facts.mining!.mw}, best nodes first. The budgets follow what this phase can build and carry, not what the map holds. Faster miners arrive with milestones, not with optimism.`,
+  },
+  {
+    id: 'owned-belt',
+    on: ['resources', 'logistics'],
+    tone: 'calm',
+    when: facts => !!facts.ownedBelt,
+    text: facts =>
+      `${facts.phaseLabel} carries its nodes on the ${facts.ownedBelt} you already have, better than its milestones give: its budgets and the belt advice count on them. Belts you already own are the cheapest upgrade there is.`,
   },
   {
     id: 'on-site-pending',

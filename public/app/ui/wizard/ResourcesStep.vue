@@ -7,6 +7,7 @@
   it ticked, "Miners you already have" (#1068, ownedMiner, data-owned-miner) raises every phase's
   miner to the mark chosen, and "Belts you already have" (#1068, ownedBelt, data-owned-belt) every
   phase's belt; the table follows both choices too.
+-->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { BELT_MARKS, resourceDefaults } from '../../../preferences.ts';
