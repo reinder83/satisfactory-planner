@@ -81,8 +81,8 @@ function rowsByKey(rows: Element[], keys: string[], key: (row: Element) => strin
 
 // Where focus goes when an action opens another page or another profile and its control goes
 // with the page it was on (#304): Open profile, Duplicate, the wizard's Create profile and
-// Cancel, New profile, All settings and Guided start, Round up production and Recalculate with
-// transport fuel (#300). One rule for all of them: the new page's heading (PageHeader's h1,
+// Cancel, New profile, All settings and Guided start, Round up production and the recalculation
+// offers in place (Recalculate in place with transport fuel, #300). One rule for all of them: the new page's heading (PageHeader's h1,
 // tabindex="-1"), which a screen reader reads out and where the next Tab starts, else <main>.
 // Focus that is still somewhere on the page is left alone, so a sidebar link keeps focus after
 // it is clicked, as it always has: the frame stays, and the user may want the next link.
@@ -203,8 +203,8 @@ export function refocusOn(trigger: EventTarget | null, selector: string): () => 
   };
 }
 
-// For an action that opens another profile on the page already shown (Round up production,
-// Recalculate with transport fuel): the page is redrawn rather than replaced, so its button
+// For an action that opens another profile, or a new plan of this one, on the page already shown
+// (Round up production, the recalculation offers in place, ui/recalc-offer.ts): the page is redrawn rather than replaced, so its button
 // just disappears. Call it before the work, like refocusAfterRemoval(), and the function it
 // returns after the redraw; that focuses the heading once the redraw has landed, when focus was
 // lost (on <body>, or still on the trigger's element).

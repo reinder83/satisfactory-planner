@@ -195,8 +195,8 @@ export function linkLoad(
 }
 
 // The fuel the links' vehicles burn in each phase of a plan, from the profile's start phase on
-// (#206): { phase: { fuel: rate/min } }, rounded up to hundredths. "Recalculate with transport
-// fuel" hands this to the planner as settings.transportFuel. Phases without fuel are left out.
+// (#206): { phase: { fuel: rate/min } }, rounded up to hundredths. "Recalculate in place with
+// transport fuel" hands this to the planner as settings.transportFuel. Phases without fuel are left out.
 export function transportFuel(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   groups: FactoryGroups,

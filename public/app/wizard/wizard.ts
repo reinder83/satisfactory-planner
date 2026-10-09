@@ -18,7 +18,8 @@ import { carryOptions } from '../../state.ts';
 import { allowSwitch, navigate, post, request, toast } from '../api.ts';
 import { markBusy } from '../busy.ts';
 import { esc, plural, required } from '../format.ts';
-import { backupName, defaultProfileName } from '../profile-edit.ts';
+import { defaultProfileName } from '../profile-edit.ts';
+import { keptName, postRecalculation, recalculatedText } from '../recalculate.ts';
 import {
   calculated,
   currentProfile,
@@ -106,12 +107,6 @@ export interface EditTarget {
   plan: StoredCalculatedPlan;
 }
 
-// The reply of POST /api/recalculate (#1071): the profile's id stays, backupId is the previous
-// version's.
-interface RecalculatedProfile extends CreatedProfile {
-  backupId: string;
-}
-
 // The reply of POST /api/profiles.
 interface CreatedProfile {
   workspace: WorkspaceSummary;
@@ -136,31 +131,18 @@ export function readCarry(form: HTMLFormElement | null, data?: FormData) {
 // profile is added to that save. Callers: "Create a save" / "Try another
 // profile" buttons (ui/actions.ts, ProfilesPage.vue) and session.ts when there is no save.
 // Unsaved notes are asked about first; with none it opens before this returns.
-// `at` opens All settings on its `step` instead of the guided start, from the settings of
-// `profileId` in that save, which the new profile carries from: "Change Extra utilities power in
-// Preferences" on the Resources page (#1090), which knows the profile its tab shows.
-export function startWizard(
-  saveId: string | null = null,
-  at?: { profileId: string; step: number },
-) {
+export function startWizard(saveId: string | null = null) {
   const asked = allowSwitch();
-  if (asked === true) openWizard(saveId, at);
+  if (asked === true) openWizard(saveId);
   else
     void asked.then(ok => {
-      if (ok) openWizard(saveId, at);
+      if (ok) openWizard(saveId);
     });
 }
 
-function openWizard(saveId: string | null, at?: { profileId: string; step: number }) {
+function openWizard(saveId: string | null) {
   const existing = workspace.saves.find(s => s.id === saveId);
-  const from = at && existing?.profiles.some(p => p.id === at.profileId) ? at : undefined;
-  const wizardDraft = newDraft(saveId, existing, startingSettings(existing, from?.profileId));
-  if (from) {
-    wizardDraft.carryFrom = from.profileId;
-    wizardDraft.mode = 'advanced';
-    wizardDraft.step = Math.min(Math.max(from.step, 1), 4);
-  }
-  setWizard(wizardDraft);
+  setWizard(newDraft(saveId, existing, startingSettings(existing)));
   navigate('wizard');
 }
 
@@ -168,8 +150,9 @@ function openWizard(saveId: string | null, at?: { profileId: string; step: numbe
 // plan was calculated with, named as it is, ending on Review with "Recalculate in place". The
 // open profile's plan is at hand; another profile's is read first (GET /api/context, which
 // changes nothing). Nothing is recalculated until the user presses that button. Unsaved notes
-// are asked about first, as for startWizard.
-export async function startEdit(saveId: string, profileId: string) {
+// are asked about first, as for startWizard. `step` opens another step than 1 (1-4): the
+// Resources page's "Change Extra utilities power in Edit settings" opens Preferences (#1090).
+export async function startEdit(saveId: string, profileId: string, step = 1) {
   const asked = allowSwitch();
   if (asked !== true && !(await asked)) return;
   const open = currentSave?.id === saveId && currentProfile?.id === profileId && calculated;
@@ -187,6 +170,7 @@ export async function startEdit(saveId: string, profileId: string) {
   wizardDraft.name = context.profile.name;
   wizardDraft.carryFrom = profileId;
   wizardDraft.mode = 'advanced';
+  wizardDraft.step = Math.min(Math.max(step, 1), 4);
   wizardDraft.edit = { profileId, name: context.profile.name, plan: context.plan };
   setWizard(wizardDraft);
   navigate('wizard');
@@ -216,8 +200,8 @@ export function profileNameOf(wizardDraft: WizardDraft): string {
 // The settings a new draft starts from. A new profile for an existing save starts from a
 // copy of its active profile's settings (the workspace summary exposes plan.settings); anything
 // else from freshSettings.
-function startingSettings(existing: SaveSummary | undefined, profileId?: string): WizardSettings {
-  const selected = existing?.profiles.find(p => p.id === (profileId ?? existing.activeProfile));
+function startingSettings(existing: SaveSummary | undefined): WizardSettings {
+  const selected = existing?.profiles.find(p => p.id === existing.activeProfile);
   const previous: WizardSettings | undefined = selected?.settings;
   return previous ? structuredClone(previous) : freshSettings();
 }
@@ -589,19 +573,19 @@ export async function createProfile(form: HTMLFormElement, button: HTMLElement |
 // of its own named "<name> (before edit, <date>)". The request names the plan the edit started
 // from, so a profile recalculated meanwhile elsewhere is refused rather than replaced. Then the
 // profile opens on its plan page. Only this button calls it. A failure goes in the form's error
-// line, and nothing has changed.
+// line, and nothing has changed. The plan's recalculation offers send the same request
+// (recalculate.ts, ui/recalc-offer.ts).
 export async function recalculateProfile(form: HTMLFormElement, button: HTMLElement | null) {
   const wizardDraft = draft(),
     edit = wizardDraft.edit!;
   readCarry(form);
-  const kept = backupName(
-    edit.name,
-    new Date(),
-    workspace?.saves.find(save => save.id === wizardDraft.saveId)?.profiles.map(p => p.name),
-  );
-  const done = await post<RecalculatedProfile>(
-    '/api/recalculate',
+  // An edit always has a save: Edit settings opens one of its profiles.
+  const saveId = wizardDraft.saveId!,
+    kept = keptName(saveId, edit.name);
+  const done = await postRecalculation(
     {
+      saveId,
+      profileId: edit.profileId,
       name: profileNameOf(wizardDraft),
       backupName: kept,
       settings: wizardDraft.settings,
@@ -609,19 +593,13 @@ export async function recalculateProfile(form: HTMLFormElement, button: HTMLElem
       carry: wizardDraft.carry,
       built: [...guidedBuiltKeys(wizardDraft), ...alreadyHaveKeys(wizardDraft)],
     },
-    { save: wizardDraft.saveId!, profile: edit.profileId },
     calcProgress(button, 'Recalculating…'),
   );
   setWorkspace(done.workspace);
   await loadContext(done.saveId, done.profileId);
   setWizard(null);
   navigate('plan');
-  const review = done.reviewCount
-    ? ' ' + plural(done.reviewCount, 'production line') + ' left unticked for review.'
-    : '';
-  toast(
-    `Recalculated in place.${review} The previous version is kept as “${kept}” under Profiles.`,
-  );
+  toast(recalculatedText(done.reviewCount, kept));
 }
 
 // The unlock steps (`recipe-unlock-<recipe>`) of the alternates the player already has (#1068):

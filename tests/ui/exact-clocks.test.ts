@@ -15,7 +15,18 @@ import { render } from '../../public/app/shell.ts';
 import { cancelEstimate, setEstimatePaused } from '../../public/app/wizard/estimate.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, applyUpdate, catalog, generatedWith, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  answerConfirms,
+  applyUpdate,
+  catalog,
+  evil,
+  generatedWith,
+  go,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type {
   CalcRow,
   CurrentCalculatedPlan,
@@ -185,38 +196,85 @@ test('a line that uses up a fluid says exact clocks would not remove its sink (#
   );
 });
 
-test('“Recalculate with exact clocks” makes a new profile that plans the lines asked for', async () => {
+test('“Recalculate in place with exact clocks” recalculates this profile in place, keeping a backup (#1071)', async () => {
   const plan = wholePlan(),
     line = overflowing(plan);
   openWhole(plan, { version: 16, exactClocks: { '3': [line.id] } });
   await settle();
-  let sent: { settings: StoredCalculatedPlan['settings']; carryFrom: string; name: string };
+  const notice = $('[data-exact-clocks-recalc]')!.textContent!.replace(/\s+/g, ' ');
+  assert.match(
+    notice,
+    /Recalculate in place with exact clocks recalculates this profile in place and carries your progress; the current version is kept as a backup under Profiles\./,
+  );
+  let sent: {
+    settings: StoredCalculatedPlan['settings'];
+    name: string;
+    backupName: string;
+    planCreatedAt: string;
+    carryFrom?: string;
+  };
   let next: StoredCalculatedPlan | undefined;
-  stubFetch({
-    '/api/profiles': (body: typeof sent) => {
+  const calls = stubFetch({
+    '/api/recalculate': (body: typeof sent) => {
       sent = body;
       next = generatedWith(body.settings);
-      return { saveId: 's', profileId: 'p2', reviewCount: 0, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 2,
+        carriedChecks: 5,
+        workspace,
+      };
     },
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
-      profile: { id: 'p2', kind: 'calculated', name: 'Whole · exact clocks' },
+      profile: { id: 'p', kind: 'calculated', name: evil },
       state: { ...state, exactClocks: undefined, version: 1 },
       plan: next,
     }),
   });
+  const asked = answerConfirms(true);
   $<HTMLButtonElement>('[data-recalc-exact-clocks]')!.click();
   await settle();
   await settle();
+  assert.equal(asked.length, 1, 'it asks first');
+  assert.match(asked[0]!, /with the production lines at the clocks you chose/);
+  assert.match(
+    asked[0]!,
+    /is kept as “.* \(before edit, [^”]+\)” under Profiles, with all of its progress\./,
+  );
   assert.deepEqual(sent!.settings.exactClocks, { '3': [line.id] });
-  assert.equal(sent!.carryFrom, 'p');
-  assert.match(sent!.name, / · exact clocks$/);
-  assert.deepEqual(calculated?.settings.exactClocks, { '3': [line.id] }, 'the new profile is open');
+  assert.equal(sent!.planCreatedAt, plan.createdAt, 'the plan the offer was made on');
+  assert.equal(sent!.name, evil, 'the profile keeps its name');
+  assert.ok(asked[0]!.includes(sent!.backupName), 'the backup is named as the question said');
+  assert.equal(sent!.carryFrom, undefined, 'no new profile');
+  const index = calls.findIndex(([path]) => path === '/api/recalculate');
+  assert.equal(calls.headers[index]!['X-Profile-Id'], 'p', 'the open profile is recalculated');
+  assert.deepEqual(calculated?.settings.exactClocks, { '3': [line.id] }, 'its new plan is open');
   assert.equal($('[data-exact-clocks-recalc]'), null, 'and needs no recalculation');
+  assert.match(
+    $('#toast')!.textContent!,
+    /^Recalculated in place\. 2 production lines left unticked for review\. The previous version is kept as “.*” under Profiles\.$/,
+  );
   const row = calculated!.stages['3']!.rows!.find(candidate => candidate.id === line.id)!;
   assert.ok(row.equivalent < line.equivalent);
   const [main] = Object.keys(line.outputs) as [string];
   assert.ok((calculated!.stages['3']!.surplus?.[main] || 0) < 0.01, 'nothing of it overflows');
+});
+
+test('“Recalculate in place with exact clocks” does nothing when the question is cancelled', async () => {
+  const plan = wholePlan(),
+    line = overflowing(plan);
+  openWhole(plan, { version: 16, exactClocks: { '3': [line.id] } });
+  await settle();
+  const calls = stubFetch({});
+  const asked = answerConfirms(false);
+  $<HTMLButtonElement>('[data-recalc-exact-clocks]')!.click();
+  await settle();
+  assert.equal(asked.length, 1);
+  assert.deepEqual(calls, [], 'nothing is sent');
+  assert.ok($('[data-exact-clocks-recalc]'), 'the notice stays');
 });
 
 test('a fluid line always runs at exact clocks; an exact plan offers no choice and no cost', async () => {

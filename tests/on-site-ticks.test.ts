@@ -372,9 +372,10 @@ test('ticks kept for review are state version 15, validated, carried and never s
   );
 });
 
-// The browser edition end to end: a profile with the central Wire line ticked, recalculated into
-// a new profile with the groups' marks (settings.onSite, as #877 will send it), kept on reload.
-// The Docker edition shares newProfileState through calculatedProfile (save-routes.ts).
+// The browser edition end to end: a profile with the central Wire line ticked, recalculated in
+// place with the groups' marks (settings.onSite, as "Recalculate in place with items made on site"
+// sends it, #1071), kept on reload. The Docker edition shares newProfileState through
+// recalculatedProfile (profile-routes.ts); both are tested in tests/recalc-offers.test.ts.
 test('the browser edition keeps an old central tick for review across a reload', async () => {
   const records = new Map<string, unknown>();
   const open = () =>
@@ -395,17 +396,23 @@ test('the browser edition keeps an old central tick for review across a reload',
   await post('/api/import', progress({ [key(WIRE)]: true }));
   const first = (await api('/api/state')) as ProgressState;
   assert.equal(first.checks[key(WIRE)], true);
-  const second = (await post('/api/profiles', {
-    saveId: made.saveId,
-    name: 'Made on site',
+  const shown = (await api('/api/context')) as { plan: { createdAt: string } };
+  const second = (await post('/api/recalculate', {
+    name: 'First',
+    backupName: 'First (before edit)',
     settings: { ...BASE, onSite: onSiteSettings(plainPlan(), twoGroups()) },
-    carryFrom: made.profileId,
-  })) as { reviewCount: number };
+    planCreatedAt: shown.plan.createdAt,
+  })) as { reviewCount: number; profileId: string };
+  assert.equal(second.profileId, made.profileId, 'recalculated in place');
   assert.ok(second.reviewCount >= 1);
   api = open();
   const state = (await api('/api/state')) as ProgressState;
   assert.deepEqual(state.onSiteReview, { checks: { [key(WIRE)]: true } });
   assert.equal(state.checks[key(WIRE)], false);
   const summary = (await api('/api/workspace')) as WorkspaceSummary;
-  assert.equal(summary.saves[0]!.profiles.length, 2, 'the first profile stays');
+  assert.deepEqual(
+    summary.saves[0]!.profiles.map(p => p.name),
+    ['First', 'First (before edit)'],
+    'the version before stays, as a backup',
+  );
 });

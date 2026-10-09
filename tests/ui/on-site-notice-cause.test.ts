@@ -143,8 +143,9 @@ test("#985: a marking group's last consumer moved out: the notice says so, not t
     'This plan needs a recalculation. ' +
       ALPHA_DROPS_WIRE +
       '. Now: Beta makes Wire on site. This plan: Alpha makes Wire on site; Beta makes Wire on ' +
-      'site. Nothing changes until you start it. Recalculate with items made on site creates a ' +
-      'new profile that plans it and opens it; this profile stays as it is.',
+      'site. Nothing changes until you start it. Recalculate in place with items made on site ' +
+      'recalculates this profile in place and carries your progress; the current version is ' +
+      'kept as a backup under Profiles.',
   );
   assert.doesNotMatch(notice()!, MARKS_CHANGED);
   assert.ok($('[data-on-site-recalc] [data-recalc-on-site]'));

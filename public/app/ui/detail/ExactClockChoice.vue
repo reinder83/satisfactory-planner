@@ -4,7 +4,7 @@
   for this line": ticked, its last machine is to be underclocked to the exact remainder instead of
   sending the overflow to storage or the sink. The box saves the choice (`exactClocks`, the whole
   map, through save() in api.ts) and recalculates nothing: the note under it says the plan runs the
-  line as it was calculated until the user starts "Recalculate with exact clocks" on the build plan
+  line as it was calculated until the user starts "Recalculate in place with exact clocks" on the build plan
   (ExactClocksRecalc.vue). Choosing what the plan already has forgets the saved choice (null), so a
   state goes back to the version it had. A fluid line, and a nuclear one, always runs at exact
   clocks and says so instead, as does a storage-only line (#1061); generators and amplified lines
@@ -67,7 +67,7 @@ const view = computed(() =>
         : undefined;
     const note =
       planned !== wanted
-        ? 'Saved. The plan keeps running this line as it was calculated until you recalculate: the build plan offers “Recalculate with exact clocks”, which makes a new profile and leaves this one as it is.'
+        ? 'Saved. The plan keeps running this line as it was calculated until you recalculate: the build plan offers “Recalculate in place with exact clocks”, which recalculates this profile and keeps the current version as a backup under Profiles.'
         : planned
           ? 'This plan runs the line at exact clocks: whole machines at 100% and the last one underclocked to the exact remainder.'
           : spare > 0.005 && main
