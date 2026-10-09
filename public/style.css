@@ -5333,6 +5333,49 @@ button.rail-tile:hover {
 .on-site-summary > span {
   display: block;
 }
+/* A factory's part of the handover from the phase before (#1069), under its heading: one line
+   in the blue of the ◑ From Phase chips, unfolding to its lines by what the phase does with them. */
+.factory-handover {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.factory-handover > summary {
+  padding: 4px 0;
+  color: var(--blue);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.factory-handover > summary:hover {
+  color: var(--bright);
+}
+.factory-handover dl {
+  margin: 6px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+.factory-handover dt {
+  margin-top: 8px;
+  font-family: var(--head);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.factory-handover dt:first-child {
+  margin-top: 0;
+}
+.factory-handover dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  /* The fold is a 44px target on a phone. */
+  .factory-handover > summary {
+    padding: 12px 0;
+  }
+}
 @media (max-width: 720px) {
   .on-site-items,
   .on-site-elsewhere .on-site-items {

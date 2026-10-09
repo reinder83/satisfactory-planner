@@ -10,7 +10,8 @@
   "Made on site" picker above its cards while editing (OnSitePicker.vue, #877), and otherwise what
   the open plan makes on site for it in this phase, its own lines, then the items it marks that give
   it no line, each with why, the ones that share a reason under one note (onSiteSummaries and
-  onSiteEntriesText in app/on-site-picker.ts, #931, #955). The section's id
+  onSiteEntriesText in app/on-site-picker.ts, #931, #955), and its part of the handover from the
+  phase before (FactoryHandover.vue, #1069). The section's id
   (`section-<group>`) and its heading (`data-section-heading`) are where the jump bar leads.
 -->
 <script setup lang="ts" generic="T">
@@ -31,6 +32,7 @@ import { whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import CollapseToggle from './CollapseToggle.vue';
+import FactoryHandover from './FactoryHandover.vue';
 import OnSitePicker from './OnSitePicker.vue';
 import { onSiteEntriesText, onSiteSummaries } from '../../on-site-picker.ts';
 
@@ -169,6 +171,7 @@ async function remove(event: Event, id: string) {
           >Marked, not made on site: {{ section.marked }}</span
         >
       </p>
+      <FactoryHandover :place="section.id" />
     </template>
     <div v-show="!section.collapsed" :id="'cards-' + section.id" class="cards">
       <template v-if="section.members.length"

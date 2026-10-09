@@ -3,7 +3,8 @@
   (`factoryFilter`, FilterChips.vue; Held back is a row ticked Running that a missing supplier
   holds back, and Local a row a plan guide builds beside its consumers), user groups first,
   then a plan guide's shared sites (#468), then the ungrouped rows; Post Phase 5 adds a guide's
-  completion modules. When nothing is left, it says why and offers All back. What moves between the groups has its own page,
+  completion modules. Each factory, and the ungrouped lines, show their part of the handover from
+  the phase before (FactoryHandover.vue, #1069). When nothing is left, it says why and offers All back. What moves between the groups has its own page,
   #logistics (LogisticsPage.vue, #229); a line under the rows points there.
   Without whole-machine production it offers "Round up production", which asks /api/round-up
   for a recalculated profile revision and opens it; the previous profile stays as it is. When the
@@ -56,7 +57,9 @@ import EditGroupsToggle from '../factories/EditGroupsToggle.vue';
 import GroupEditBar from '../factories/GroupEditBar.vue';
 import GroupEditPanel from '../factories/GroupEditPanel.vue';
 import GroupSections from '../factories/GroupSections.vue';
+import FactoryHandover from '../factories/FactoryHandover.vue';
 import FilterChips from '../factories/FilterChips.vue';
+import { UNGROUPED } from '../../group-order.ts';
 import JumpBar from '../factories/JumpBar.vue';
 import OnSiteRecalc from '../factories/OnSiteRecalc.vue';
 import ExactClocksRecalc from '../plan/ExactClocksRecalc.vue';
@@ -241,6 +244,7 @@ async function roundUp(event: Event) {
       ><CalcFactoryCard v-for="row in site.members" :key="row.id" :row="row"
     /></SiteSection>
     <p v-if="page.label" class="eyebrow">UNGROUPED PRODUCTION LINES</p>
+    <FactoryHandover v-if="page.singles.length" :place="UNGROUPED" />
     <div class="cards">
       <CalcFactoryCard v-for="row in page.singles" :key="row.id" :row="row" />
       <div v-if="!page.rows.length" class="empty-state" data-filter-empty>
