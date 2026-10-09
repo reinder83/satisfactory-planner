@@ -2,7 +2,7 @@
 // Re-exported by ../planner.ts.
 import { durationOfHours, listNames } from '../public/wording.ts';
 import { extractionEquipment } from '../public/power.ts';
-import { phaseMinersWords } from '../public/mining.ts';
+import { ownedBeltsWords, phaseMinersWords } from '../public/mining.ts';
 import type {
   CurrentSettings,
   CalcRow,
@@ -242,11 +242,13 @@ function budgetWarnings({ config }: FinishedPlan): string[] {
     );
   return warnings;
 }
-// Mining and belts per phase (#1065): what each phase's budgets follow.
+// Mining and belts per phase (#1065): what each phase's budgets follow, with the belts the player
+// already has (#1068) where they raise a phase's.
 function miningWarnings({ config }: FinishedPlan): string[] {
   if (!config.phaseMining) return [];
+  const belts = ownedBeltsWords(Number(config.phase), config.ownedBelt);
   return [
-    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner)}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
+    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
   ];
 }
 // What every plan assumes about unlocks and power.

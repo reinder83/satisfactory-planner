@@ -9,6 +9,8 @@
 // Phase 3 (Tier 5) and resource wells from Phase 4 (Tier 8). Miners and extractors run at 100%
 // in Phases 1–3 and up to 250% from Phase 4 (PHASE_CLOCK), with Power Shards from Power Slugs
 // (owner's choice on #1096). A node survey's miner and clock cap each phase's (never raise it).
+// A miner or belt the player already has (settings.ownedMiner, settings.ownedBelt, #1068) raises
+// each phase's to it (phaseMiner, phaseBelt).
 // One node gives its yield at that miner and clock, never more than the belt or pipe it feeds
 // carries: a pure node's Mk.3 at 250% gives 780/min on Phase 4's Mk.5 belts, not 1,200.
 //
@@ -126,6 +128,9 @@ export interface MiningSettings {
   // The best miner the player already has (#1068, the wizard's "Miners you already have"): 2 or 3.
   // Raises every phase's miner to at least that mark; absent from every plan made before it.
   ownedMiner?: number;
+  // The best conveyor belt the player already has (#1068, "Belts you already have"): 3 to 6 for
+  // Mk.3 to Mk.6. Raises every phase's belt to at least that mark; absent unless chosen.
+  ownedBelt?: number;
 }
 
 // The miner and clock of `phase`: the phase's best miner at its clock (PHASE_CLOCK), neither
@@ -142,6 +147,15 @@ export function phaseMiner(
     mark: Math.min(mark, MINER_BASE[survey?.mark ?? 3] ? (survey?.mark ?? 3) : 3),
     clock: Math.min(clock, survey?.clock ?? REFERENCE.clock),
   };
+}
+
+// The belt of `phase`: the best its HUB tiers unlock (BELT_MARKS), raised to a belt the player
+// already has (`owned`, settings.ownedBelt, #1068: 3 to 6 for Mk.3 to Mk.6); any other value, or
+// none, leaves every phase as before. Nothing caps it: a node survey records no belt.
+export function phaseBelt(phase: number, owned?: number): LaneMark {
+  const unlocked = bestMark(BELT_MARKS, phase);
+  const mine = owned ? BELT_MARKS.find(mark => mark.mark === `Mk.${owned}`) : undefined;
+  return mine && mine.cap > unlocked.cap ? mine : unlocked;
 }
 
 // One node's output per minute at `clock` (1 = 100%), never more than its belt or pipe carries.
@@ -245,7 +259,7 @@ const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 export function phaseMining(settings: MiningSettings, phase: number): StageMining {
   const survey = settings.extraction ?? null;
   const miner = phaseMiner(phase, survey, settings.ownedMiner);
-  const belt = bestMark(BELT_MARKS, phase),
+  const belt = phaseBelt(phase, settings.ownedBelt),
     pipe = bestMark(PIPE_MARKS, phase);
   const reference = {
     mark: survey?.mark && MINER_BASE[survey.mark] ? survey.mark : REFERENCE.mark,

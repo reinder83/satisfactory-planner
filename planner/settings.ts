@@ -315,6 +315,11 @@ const reservedUses = (raw: unknown): SloopUse[] => {
 // value, so the field is absent unless chosen.
 const ownedMinerSetting = (value: unknown): { ownedMiner?: 2 | 3 } =>
   value === 2 || value === 3 ? { ownedMiner: value } : {};
+// The best conveyor belt the player already has (#1068): `{ ownedBelt: 3 | 4 | 5 | 6 }` for Mk.3 to
+// Mk.6, or nothing for any other value (Phase 1 already has Mk.2 belts), so the field is absent
+// unless chosen.
+const ownedBeltSetting = (value: unknown): { ownedBelt?: 3 | 4 | 5 | 6 } =>
+  value === 3 || value === 4 || value === 5 || value === 6 ? { ownedBelt: value } : {};
 // The alternate recipes the player already owns (#1068): known alternate ids, deduplicated and
 // sorted, so equal choices give equal settings; the field is absent unless one is left.
 const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } => {
@@ -385,6 +390,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The best miner the player already has (#1068): only Mk.2 or Mk.3 is kept, so settings
     // without it, and every plan stored before it, plan each phase's miner as before.
     ...ownedMinerSetting(input.ownedMiner),
+    // The best belt the player already has (#1068): only Mk.3 to Mk.6 is kept, so settings
+    // without it, and every plan stored before it, plan each phase's belt as before.
+    ...ownedBeltSetting(input.ownedBelt),
     // The alternates the player already owns (#1068): only known alternate ids are kept, so
     // settings without them, and every plan stored before them, plan the same recipe pool.
     ...ownedAlternatesSetting(input.ownedAlternates),
