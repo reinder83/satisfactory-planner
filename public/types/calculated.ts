@@ -122,6 +122,12 @@ export interface CurrentSettings {
   // phase it raises every phase's miner to at least that mark (phaseMiner in
   // public/preferences/mining.ts). Absent unless chosen, and from every plan made before it.
   ownedMiner?: 2 | 3;
+  // The best conveyor belt the player already has (#1068, All settings step 4): 3 to 6 for Mk.3
+  // to Mk.6. With mining per phase it raises every phase's belt to at least that mark, so a node
+  // gives up to what that belt carries (phaseBelt in public/preferences/mining.ts), and the belt
+  // advice (bestLane in public/app/flow.ts) counts that mark as available. Absent unless chosen,
+  // and from every plan made before it.
+  ownedBelt?: 3 | 4 | 5 | 6;
   // The alternate recipes the player already owns (#1068, All settings step 2): recipe ids, sorted.
   // recipePool adds each to every phase from the one it becomes available in, whatever `recipes`
   // says, so a Standard plan can use them; their unlock steps start ticked. Absent unless one is

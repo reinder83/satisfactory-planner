@@ -51,6 +51,7 @@ import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
 import { minerWords, stageMiningAdvice } from '../mining.ts';
+import { phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
@@ -158,8 +159,9 @@ function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
 
 // The open phase's mining (#1065): its miner, the nodes its draw taps and their MW, from the
 // advice the Resources page and the build plan give (stageMiningAdvice); none without mining per
-// phase or anything to mine.
-function miningFacts(): Pick<AdaFacts, 'mining'> {
+// phase or anything to mine. With it, the belt the player already has (#1068) where it is better
+// than the one the phase's milestones give.
+function miningFacts(): Pick<AdaFacts, 'mining' | 'ownedBelt'> {
   const stagePlan = calcStage(),
     resources = stageMiningAdvice(stagePlan);
   if (!stagePlan?.mining || !resources.length) return {};
@@ -174,6 +176,9 @@ function miningFacts(): Pick<AdaFacts, 'mining'> {
       ]),
       mw: power(resources.reduce((sum, entry) => sum + entry.advice.mw, 0)),
     },
+    ...(stagePlan.mining.belt.mark !== phaseBelt(Number(stage())).mark
+      ? { ownedBelt: `${stagePlan.mining.belt.mark} belts (${num(stagePlan.mining.belt.cap)}/min)` }
+      : {}),
   };
 }
 

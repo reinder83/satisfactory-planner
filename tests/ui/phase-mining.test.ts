@@ -6,9 +6,11 @@
 // shows none of it and keeps its entered budgets.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { nextTick } from 'vue';
+import { createApp, h, nextTick } from 'vue';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
-import { bestLane, laneUnlockNote } from '../../public/app/flow.ts';
+import { bestLane, lanePlan, laneUnlockNote } from '../../public/app/flow.ts';
+import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
+import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { setWizard, wizard } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { readWizard, startWizard } from '../../public/app/wizard/wizard.ts';
@@ -22,6 +24,7 @@ import type {
   Phase,
   StoredCalculatedPlan,
 } from '../../public/types/index.ts';
+import type { FlowModel } from '../../public/app/flow.ts';
 import type { WizardSettings } from '../../public/app/wizard/wizard.ts';
 
 // The numbers read as in en-US, whatever the machine's locale.
@@ -253,6 +256,139 @@ test('the budgets step offers the miners you already have, and the table follows
   go('wizard');
   render();
   assert.equal($('select[data-owned-miner]'), null, 'not offered with the box clear');
+});
+
+// "Belts you already have" (#1068): beside the miners, a choice that raises every phase's belt; the
+// table follows it at once, and the form reads it only with the box ticked and a mark chosen.
+test('the budgets step offers the belts you already have, and the table follows them', async () => {
+  open({ workspace: { catalog: items } });
+  draftAt(4, { phaseMining: true, phase: '2', ownedMiner: 3 });
+  go('wizard');
+  render();
+  const select = $<HTMLSelectElement>('select[data-owned-belt]')!;
+  assert.ok(select, 'offered with the box ticked');
+  assert.equal(select.value, '', 'none by default');
+  assert.deepEqual(
+    [...select.options].map(option => plain(option.textContent)),
+    [
+      'None beyond what each phase unlocks',
+      'Mk.3 belts (270/min)',
+      'Mk.4 belts (480/min)',
+      'Mk.5 belts (780/min)',
+      'Mk.6 belts (1,200/min)',
+    ],
+  );
+  const phaseTwo = () => plain($$('[data-phase-budgets] tbody tr')[0]!.textContent);
+  assert.match(phaseTwo(), /^2 Miner Mk\.3 at 100% · Mk\.3 belts \(270\/min\)/);
+  const share = phaseTwo().split(' ').at(-1);
+  select.value = '4';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await nextTick();
+  assert.match(
+    phaseTwo(),
+    /^2 Miner Mk\.3 at 100% · Mk\.4 belts \(480\/min\)/,
+    'the table follows',
+  );
+  assert.notEqual(phaseTwo().split(' ').at(-1), share, 'and so does the share of the budgets');
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.equal(wizard!.settings.ownedBelt, 4);
+  // None chosen leaves the field out.
+  select.value = '';
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.equal('ownedBelt' in wizard!.settings, false);
+  // Unticking the box drops it: the choice means nothing without mining per phase.
+  select.value = '5';
+  $<HTMLInputElement>('[name="phaseMining"]')!.checked = false;
+  readWizard($<HTMLFormElement>('#wizard-form')!);
+  assert.equal('ownedBelt' in wizard!.settings, false);
+  page();
+  open({ workspace: { catalog: items } });
+  draftAt(4, {});
+  go('wizard');
+  render();
+  assert.equal($('select[data-owned-belt]'), null, 'not offered with the box clear');
+  // A draft from a profile with a belt shows it chosen.
+  page();
+  open({ workspace: { catalog: items } });
+  draftAt(4, { phaseMining: true, phase: '2', ownedBelt: 6 });
+  go('wizard');
+  render();
+  assert.equal($<HTMLSelectElement>('select[data-owned-belt]')!.value, '6');
+});
+
+// The belt advice counts a belt the plan says the player already has (#1068), as the plan's mining
+// does: no milestone to tick for it, and a plan without one advises as before.
+test('the belt advice uses the belt you already have, and asks no milestone for it', () => {
+  const owning = (ownedBelt: 4 | 6) => {
+    const plan = structuredClone(mined);
+    plan.settings.ownedBelt = ownedBelt;
+    return plan;
+  };
+  open({ calculated: owning(6), phase: '4' });
+  const belts = bestLane(false, '4');
+  assert.equal(belts.mark, 'Mk.6');
+  assert.equal(belts.owned, true);
+  assert.equal(laneUnlockNote(belts), '');
+  assert.equal(bestLane(true, '4').mark, 'Mk.2', 'pipes as before');
+  assert.equal('owned' in bestLane(true, '4'), false);
+  // The factory dialog's "Belts & pipes" says whose belts they are.
+  const model: FlowModel = {
+    stage: '4',
+    equivalent: 4,
+    machineCount: 4,
+    inputs: [{ name: 'Iron Ore', rate: 900, link: null, plan: lanePlan(900, false, '4') }],
+    outputs: [],
+    machineName: '',
+    recipe: null,
+    bar: null,
+    sameItemConsumers: () => [],
+  };
+  const dialog = document.createElement('div');
+  createApp({ render: () => h(LaneAdvice, { model }) }).mount(dialog);
+  assert.match(
+    plain(dialog.querySelector('p')?.textContent),
+    /^Phase 4 plans with the Mk\.6 belts you already have \(1,200\/min\); its milestones give Mk\.2 pipes \(600 m³\/min\)\. Mk\.2 pipes need Tier 6/,
+  );
+  assert.match(plain(dialog.querySelector('.logi-row')?.textContent), /1 × Mk\.6 belt/);
+  // A belt below the phase's own changes nothing.
+  page();
+  open({ calculated: owning(4), phase: '4' });
+  assert.equal(bestLane(false, '4').mark, 'Mk.5');
+  assert.equal('owned' in bestLane(false, '4'), false);
+  // ADA names the belt where it is better than the phase's own (the stage as the planner stores
+  // it with Mk.6 belts), and not where the plan has none.
+  const adaLine = (plan: StoredCalculatedPlan) => {
+    page();
+    open({ calculated: plan, phase: '4' });
+    go('resources');
+    adaClearFault();
+    for (let i = 0; i < 60; i++) {
+      setAdaIndex(i);
+      const line = adaCurrent();
+      if (line?.id === 'owned-belt') return line.text;
+    }
+    return undefined;
+  };
+  const raised = owning(6);
+  raised.stages['4'].mining!.belt = { mark: 'Mk.6', cap: 1200 };
+  assert.match(
+    adaLine(raised) ?? '',
+    /^Phase 4 carries its nodes on the Mk\.6 belts \(1,200\/min\) you already have/,
+  );
+  assert.equal(adaLine(structuredClone(mined)), undefined);
+  // On Logistics only the pipes still need their milestone.
+  page();
+  open({
+    calculated: owning(6),
+    phase: '4',
+    state: { factoryGroups: defaultFactoryGroups(mined) },
+  });
+  go('logistics');
+  render();
+  assert.equal(
+    plain($('[data-lane-unlock]')?.textContent),
+    'Mk.2 pipes need Tier 6 · Pipeline Engineering Mk.2, which is not ticked yet: until then, plan with Mk.1 pipes (300 m³/min).',
+  );
 });
 
 test('Review names the miner and belts each phase’s budgets follow', () => {

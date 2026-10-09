@@ -495,6 +495,20 @@ test("ADA names the phase's miner and the nodes its draw taps (#1065)", () => {
   assert.ok(!ids(facts({ view: 'resources' })).includes('phase-mining'), 'absent means none');
 });
 
+test('ADA says when a phase carries its nodes on belts you already have (#1068)', () => {
+  for (const view of ['resources', 'logistics']) {
+    const line = adaRemarks(facts({ view, ownedBelt: 'Mk.6 belts (1,200/min)' })).find(
+      r => r.id === 'owned-belt',
+    )!;
+    assert.equal(line.tone, 'calm');
+    assert.match(
+      line.text,
+      /^Phase 3 carries its nodes on the Mk\.6 belts \(1,200\/min\) you already have, better than its milestones give: its budgets and the belt advice count on them\./,
+    );
+  }
+  assert.ok(!ids(facts({ view: 'resources' })).includes('owned-belt'), 'absent means none');
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

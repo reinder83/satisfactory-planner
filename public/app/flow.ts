@@ -47,10 +47,13 @@ export interface LaneMilestone {
   marked: boolean;
 }
 
-// The best mark available (bestLane), with the next one up.
+// The best mark available (bestLane), with the next one up. `owned`: a belt available only because
+// the player already has it (settings.ownedBelt, #1068), its milestone neither ticked nor due yet;
+// absent otherwise, so a plan without one gives the lanes it always gave.
 export interface BestLane extends Lane {
   fluid: boolean;
   unit: string;
+  owned?: true;
   milestone: LaneMilestone | null;
   next: (Lane & { milestone: LaneMilestone | null }) | null;
 }
@@ -246,28 +249,40 @@ function laneMilestone(lane: Lane): LaneMilestone | null {
     : null;
 }
 
+// The belt mark the open plan says the player already has (settings.ownedBelt, #1068): "Mk.4", or
+// null for a plan without one (every plan made before it).
+const ownedBeltMark = (): string | null =>
+  calculated?.settings.ownedBelt ? `Mk.${calculated.settings.ownedBelt}` : null;
+
 // The highest belt (or pipe) mark available at phase `stageKey` (default: the current stage). A mark
 // counts as available when its milestone is ticked, belongs to this phase or earlier, or is
-// unknown; Mk.1 is the fallback. Returns the lane with its display unit, its milestone and the
+// unknown; Mk.1 is the fallback. A belt the player already has (ownedBeltMark, #1068) and the
+// belts below it count as available too, as the plan's mining counts them. Returns the lane with
+// its display unit, its milestone, whether only owning it makes it available (`owned`) and the
 // next mark up (with that mark's milestone), which LaneAdvice.vue mentions as the next upgrade.
 export function bestLane(fluid: boolean, stageKey?: string): BestLane {
   const lanes = laneMarks(fluid);
   const stageNo = Number(stageKey ?? stage());
+  const ownedUpTo = fluid ? -1 : lanes.findIndex(lane => lane.mark === ownedBeltMark());
   // Both lists start with Mk.1.
   let best = lanes[0]!,
-    bestMilestone = laneMilestone(best);
-  for (const lane of lanes) {
+    bestMilestone = laneMilestone(best),
+    owned = false;
+  lanes.forEach((lane, index) => {
     const milestone = laneMilestone(lane);
-    if (!milestone || milestone.marked || milestone.phase <= stageNo) {
+    const unlocked = !milestone || milestone.marked || milestone.phase <= stageNo;
+    if (unlocked || index <= ownedUpTo) {
       best = lane;
       bestMilestone = milestone;
+      owned = !unlocked;
     }
-  }
+  });
   const next = lanes[lanes.indexOf(best) + 1];
   return {
     ...best,
     fluid,
     unit: fluid ? ' m³/min' : '/min',
+    ...(owned ? { owned: true as const } : {}),
     milestone: bestMilestone,
     next: next ? { ...next, milestone: laneMilestone(next) } : null,
   };
@@ -275,12 +290,13 @@ export function bestLane(fluid: boolean, stageKey?: string): BestLane {
 
 // What a belt or pipe mark the phase plans with still needs (#1065): "Mk.5 belts need Tier 7 ·
 // Logistics Mk.5, which is not ticked yet: until then, plan with Mk.4 belts (480/min).", or ''
-// once its milestone is ticked (or for Mk.1, which needs none).
+// once its milestone is ticked (or for Mk.1, which needs none), and for a belt the player already
+// has (#1068).
 export function laneUnlockNote(lane: BestLane): string {
   const marks = laneMarks(lane.fluid);
   const milestone = lane.milestone,
     previous = marks[marks.findIndex(mark => mark.mark === lane.mark) - 1];
-  if (!milestone || milestone.marked || !previous) return '';
+  if (!milestone || milestone.marked || lane.owned || !previous) return '';
   const word = lane.fluid ? 'pipes' : 'belts';
   return `${lane.mark} ${word} need Tier ${milestone.tier} · ${milestone.name}, which is not ticked yet: until then, plan with ${previous.mark} ${word} (${num(previous.cap)}${lane.unit}).`;
 }
