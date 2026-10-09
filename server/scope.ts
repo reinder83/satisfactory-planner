@@ -11,9 +11,10 @@ import type { Workspace } from './persistence.ts';
 
 // progression.json, which the summary's per-phase step counts read (profilePhases, #746): the
 // file the interface loads, in public/ (the Docker image's built public/ has it too). Read once,
-// on the first summary. It is the server's own shipped data, so it is used as it is.
+// on the first summary. It is the server's own shipped data, so it is used as it is. A
+// recalculation in place reads it too, for the steps the new plan lists (profile-routes.ts, #1112).
 let progression: Progression | undefined;
-const progressionData = (): Progression =>
+export const progressionData = (): Progression =>
   (progression ??= JSON.parse(
     readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
   ) as Progression);
