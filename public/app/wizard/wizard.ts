@@ -463,6 +463,11 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     const owned = data.has('ownedMiner') ? Number(data.get('ownedMiner')) : 0;
     if (settings.phaseMining && (owned === 2 || owned === 3)) settings.ownedMiner = owned;
     else delete settings.ownedMiner;
+    // "Belts you already have" (#1068), likewise: Mk.3 to Mk.6, absent means none.
+    const belt = data.has('ownedBelt') ? Number(data.get('ownedBelt')) : 0;
+    if (settings.phaseMining && (belt === 3 || belt === 4 || belt === 5 || belt === 6))
+      settings.ownedBelt = belt;
+    else delete settings.ownedBelt;
   }
 }
 

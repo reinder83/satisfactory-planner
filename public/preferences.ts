@@ -107,6 +107,7 @@ export {
   miningAdvice,
   miningLinearMW,
   miningMW,
+  phaseBelt,
   phaseForTier,
   phaseMiner,
   phaseMining,

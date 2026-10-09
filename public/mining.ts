@@ -6,6 +6,7 @@ import {
   EXTRACTOR_OPTIONS,
   isWellKind,
   miningAdvice,
+  phaseBelt,
   phaseMiner,
   phaseMining,
 } from './preferences.ts';
@@ -75,6 +76,28 @@ export function phaseMinersWords(
       ),
     )
   );
+}
+
+// The belts of each phase from `from` to 5 with a belt the player already has (settings.ownedBelt,
+// #1068), consecutive phases with the same belt together: "Mk.4 belts in Phases 2 and 3, Mk.5 in
+// Phase 4 and Mk.6 in Phase 5, at least the Mk.4 belts you already have". Empty without one, or
+// with one no phase from `from` on is raised to.
+export function ownedBeltsWords(from = 1, owned?: number): string {
+  const runs: { mark: string; phases: number[] }[] = [];
+  let raised = false;
+  for (let phase = from; phase <= 5; phase++) {
+    const belt = phaseBelt(phase, owned);
+    raised ||= belt !== phaseBelt(phase);
+    const run = runs.at(-1);
+    if (run?.mark === belt.mark) run.phases.push(phase);
+    else runs.push({ mark: belt.mark, phases: [phase] });
+  }
+  if (!raised) return '';
+  const words = runs.map(
+    (run, index) =>
+      `${run.mark}${index ? '' : ' belts'} in Phase${run.phases.length > 1 ? 's' : ''} ${listNames(run.phases.map(String))}`,
+  );
+  return `${listNames(words)}, at least the Mk.${owned} belts you already have`;
 }
 
 // How many nodes of each kind an advice taps, in words: "6 pure and 7 normal nodes",

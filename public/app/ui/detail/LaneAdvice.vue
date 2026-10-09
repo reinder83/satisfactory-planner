@@ -1,7 +1,8 @@
 <!--
   "Belts & pipes" in a factory dialog: for every input of the flow model, how many lanes of
   the best available mark it needs (and, until its milestone is ticked, which one it needs and the
-  mark to plan with until then, #1065), how many machines one lane feeds (manifold rows), and
+  mark to plan with until then, #1065; a belt the plan says the player already has needs none,
+  #1068), how many machines one lane feeds (manifold rows), and
   whether the last lane's spare capacity could also carry another factory's demand for the
   same item. Draws nothing without inputs.
 -->
@@ -51,8 +52,11 @@ const advice = computed(() => {
   const belts = bestLane(false, model.stage),
     pipes = bestLane(true, model.stage);
   return {
+    // A belt the player already has (#1068) is theirs, not the phase's milestones'.
     intro:
-      `${phaseLabel(model.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and ` +
+      (belts.owned
+        ? `${phaseLabel(model.stage)} plans with the ${belts.mark} belts you already have (${num(belts.cap)}/min); its milestones give `
+        : `${phaseLabel(model.stage)} milestones give ${belts.mark} belts (${num(belts.cap)}/min) and `) +
       `${pipes.mark} pipes (${num(pipes.cap)} m³/min).` +
       (belts.next?.milestone
         ? ` ${belts.next.mark} belts (${num(belts.next.cap)}/min) unlock at Tier ${belts.next.milestone.tier} · ${belts.next.milestone.name} in Phase ${belts.next.milestone.phase}.`

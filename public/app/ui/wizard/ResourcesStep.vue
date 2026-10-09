@@ -5,11 +5,12 @@
   phase would get, and the limitsConfirmed box, which maximum output needs. The phaseMining box
   is read with the form like every other field; its table follows the box as it is ticked. With
   it ticked, "Miners you already have" (#1068, ownedMiner, data-owned-miner) raises every phase's
-  miner to the mark chosen; the table follows the choice too.
--->
+  miner to the mark chosen, and "Belts you already have" (#1068, ownedBelt, data-owned-belt) every
+  phase's belt; the table follows both choices too.
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { resourceDefaults } from '../../../preferences.ts';
+import { BELT_MARKS, resourceDefaults } from '../../../preferences.ts';
+import { num } from '../../format.ts';
 import { budgetShareWords, phaseBudgetRows } from '../../../mining.ts';
 import { draft, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
@@ -28,7 +29,7 @@ const view = computed(() =>
       // Each phase from the profile's start phase: its miner, belts and pipes, and its share of
       // these budgets (the share does not depend on the amounts, only on the nodes behind them).
       phases: phaseBudgetRows(
-        { ...settings, ownedMiner: ownedMiner.value },
+        { ...settings, ownedMiner: ownedMiner.value, ownedBelt: ownedBelt.value },
         Number(settings.phase || 1),
       ).map(row => ({
         phase: row.phase,
@@ -50,6 +51,18 @@ const MINER_CHOICES = [
   ['', 'None beyond what each phase unlocks'],
   ['2', 'Miner Mk.2'],
   ['3', 'Miner Mk.3'],
+] as const;
+// The belt chosen on screen beside it (#1068), for the same table: 3 to 6, or undefined.
+const ownedBelt = ref<number | undefined>(draft().settings.ownedBelt);
+function chooseBelt(event: Event) {
+  ownedBelt.value = Number((event.target as HTMLSelectElement).value) || undefined;
+}
+// "Follow the phases", then each belt Phase 1 does not already have, with what one carries.
+const BELT_CHOICES = [
+  ['', 'None beyond what each phase unlocks'],
+  ...BELT_MARKS.filter(belt => belt.tier > 2).map(
+    belt => [belt.mark.slice(3), `${belt.mark} belts (${num(belt.cap)}/min)`] as const,
+  ),
 ] as const;
 </script>
 
@@ -114,13 +127,26 @@ const MINER_CHOICES = [
       </option>
     </select></label
   >
+  <label v-if="perPhase" class="field owned-belt"
+    >Belts you already have
+    <select
+      name="ownedBelt"
+      data-owned-belt
+      :value="ownedBelt ? String(ownedBelt) : ''"
+      @change="chooseBelt"
+    >
+      <option v-for="[value, label] in BELT_CHOICES" :key="value" :value="value">
+        {{ label }}
+      </option>
+    </select></label
+  >
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>
       <caption class="small muted">
         These budgets are the most any phase draws. Each phase gets what its miner, clock and belts
         take from the same nodes: crude oil from Phase 3, resource wells from Phase 4, and
-        overclocking from Phase 4, with Power Shards from Power Slugs. A miner you already have
-        raises every phase's to its mark; a node survey's miner and clock cap every phase's.
+        overclocking from Phase 4, with Power Shards from Power Slugs. A miner or belt you already
+        have raises every phase's to its mark; a node survey's miner and clock cap every phase's.
       </caption>
       <thead>
         <tr>
