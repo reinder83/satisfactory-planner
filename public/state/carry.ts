@@ -7,6 +7,8 @@ import type {
   CalcRow,
   FactoryGroups,
   GroupAssignment,
+  Phase,
+  Progression,
   StoredProfileKind,
   ProgressState,
   SavedState,
@@ -14,12 +16,13 @@ import type {
   StoredCalculatedPlan,
   StoredProfile,
 } from '../types/index.ts';
-import { recipeIdOf } from '../progression.ts';
+import { phaseSteps, recipeIdOf, type StepsMemo } from '../progression.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
 import {
   type RowsPlan,
   fail,
   initialState,
+  isPhase,
   plain,
   safeKey,
   validateEdits,
@@ -525,6 +528,12 @@ export function checkPlan(
 // copy of the stored profile (plan, progress, payoff ranking) under `backupId` and `backupName`,
 // which the callers add right after it. Nothing is deleted. Limits and selection stay with the
 // callers.
+//
+// Unlike a new profile, the user goes on in this very profile (#1112), so it also keeps the phase
+// worked on (inPlacePhase) and, with `data` (progression.json), the record of every other step the
+// new plan still lists under the same id (keepListedSteps): the Space Elevator, the mining,
+// retirement and delivery steps, the augmenters, the hand-fed somersloops. Both editions pass
+// `data`; without it (tests of other behaviour) only the carry rules above apply.
 export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>(
   previous: T,
   plan: P,
@@ -533,15 +542,77 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   built: unknown,
   backupId: string,
   backupName: string,
+  data?: Progression,
 ) {
   const started = calculatedProfile(previous.id, name, plan, previous, raw, built);
-  started.profile.state.revision = (previous.state.revision ?? 0) + 1;
+  const state = started.profile.state;
+  state.settings.phase = inPlacePhase(
+    previous.state.settings?.phase,
+    previous.plan,
+    started.profile.plan,
+  );
+  if (data) keepListedSteps(state, previous.state, started.profile.plan, data);
+  state.revision = (previous.state.revision ?? 0) + 1;
   return {
     profile: started.profile,
     backup: { ...structuredClone(previous), id: backupId, name: backupName },
     reviewCount: started.reviewCount,
-    carried: started.carried,
+    carried: Object.values(state.checks).filter(Boolean).length,
   };
+}
+// The phase worked on after a recalculation in place (#1112): the one the user had, unless the
+// edit moved the plan's start phase past it, which raises it to the new start phase. A phase the
+// user was on before the old start phase (a milestone-only phase, #759) stays, since the new plan
+// offers it too; a plan with a guide offers nothing before its start phase (firstPlanPhase).
+export function inPlacePhase(
+  saved: unknown,
+  previousPlan: Pick<StoredCalculatedPlan, 'settings'> | null | undefined,
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'guide'>,
+): Phase {
+  const start = (plan.settings?.phase || '3') as Phase;
+  if (!isPhase(saved)) return start;
+  if (saved === 'post' || Number(saved) >= Number(start)) return saved;
+  const before = Number(previousPlan?.settings?.phase || 1);
+  return !plan.guide && Number(saved) < before ? saved : start;
+}
+// The build plan's step ids of every phase of `plan`, as phaseSteps lists them for `state`.
+const PLAN_PHASES = ['1', '2', '3', '4', '5', 'post'] as const;
+function listedStepIds(
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
+  state: ProgressState,
+  data: Progression,
+): Set<string> {
+  const memo: StepsMemo = {};
+  return new Set(
+    PLAN_PHASES.flatMap(phase => phaseSteps(plan, state, data, phase, memo).map(step => step.id)),
+  );
+}
+// Copies the source's record of each step the new plan still lists (listedStepIds, worked out
+// with the carried progress and phase) that the carry options do not decide: not a production
+// line of the new plan (kept only where it needs no more work, the review rule above, and the
+// lines made on site), and not a key the options copy by prefix (carryPrefixes), so a record the
+// user chose not to carry stays behind. What is left are steps of the world the user goes on in
+// (`space-elevator`, `mining-<phase>`, `retire-<phase>`, `deliver-<phase>`, `alien-power-augmenter`,
+// `sloop-hand-fed`, the storage step `calc-<phase>-storage`, a guide's own steps). A step the new
+// plan no longer lists is not copied; the backup keeps it.
+function keepListedSteps(
+  state: ProgressState,
+  source: Pick<SavedState, 'checks'>,
+  plan: Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>,
+  data: Progression,
+): void {
+  const rows = planRows(plan),
+    decided = Object.values(carryPrefixes).flat(),
+    listed = listedStepIds(plan, state, data);
+  for (const [key, value] of Object.entries(source.checks || {}))
+    if (
+      listed.has(key) &&
+      typeof value === 'boolean' &&
+      safeKey(key) &&
+      !rows.has(key) &&
+      !decided.some(prefix => key.startsWith(prefix))
+    )
+      state.checks[key] = value;
 }
 // Sharing a profile hands over the plan-shaped content (layout, groups, step
 // edits, personal tasks) while the recipient starts with fresh progress.

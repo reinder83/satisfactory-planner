@@ -320,6 +320,7 @@ export function createBrowserApi(
         body.built,
         backupId,
         backupName,
+        progression,
       );
       save.profiles.splice(save.profiles.indexOf(profile), 1, next.profile, next.backup);
       save.activeProfile = profile.id;

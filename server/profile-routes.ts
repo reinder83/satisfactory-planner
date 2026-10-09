@@ -18,6 +18,7 @@ import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { frozenMapping } from './persistence.ts';
 import { response } from './routing.ts';
+import { progressionData } from './scope.ts';
 import type { Body, ScopedRequest, WorkspaceContext } from './routing.ts';
 import type { ProgressState, StageKey, StoredPayoff, UpdateOp } from '../public/types/index.ts';
 
@@ -66,8 +67,9 @@ export function profileRoutes({
   // Edit settings, "Recalculate in place" (#1071): calculates body.settings, then replaces the
   // scoped profile's plan, name and progress (recalculatedProfile in public/state/carry.ts,
   // shared with browser-api.ts: its progress carried from itself with the carry picks body.carry,
-  // like a new profile carried from it) and keeps the previous version whole as a new profile
-  // named body.backupName, right after it. body.planCreatedAt names the plan the settings were
+  // like a new profile carried from it, plus the phase worked on and the ticks of the steps the
+  // new plan still lists, from progression.json, #1112) and keeps the previous version whole as a
+  // new profile named body.backupName, right after it. body.planCreatedAt names the plan the settings were
   // edited from; a profile recalculated since is refused (409). Only the user starts it: nothing
   // calls this route but the wizard's "Recalculate in place" button. The previous version is read
   // inside the commit, so ticks made meanwhile in another tab are carried and kept in the backup.
@@ -94,6 +96,7 @@ export function profileRoutes({
         input.built,
         backupId,
         backupName,
+        progressionData(),
       );
       carried = next;
       draftSave.profiles.splice(index, 1, next.profile, next.backup);
