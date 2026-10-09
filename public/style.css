@@ -4382,18 +4382,21 @@ button.rail-tile:hover {
   gap: 10px 18px;
 }
 .carry-list .check-row,
-.already-have .check-row {
+.already-have .check-row,
+.guided-have .check-row {
   align-items: flex-start;
   line-height: 1.45;
 }
 .carry-list .check-row b,
-.already-have .check-row b {
+.already-have .check-row b,
+.guided-have .check-row b {
   font-family: var(--head);
   letter-spacing: 0.06em;
   color: var(--bright);
 }
 .carry-list small,
-.already-have small {
+.already-have small,
+.guided-have small {
   font-size: 11px;
 }
 .owned-alternates {
@@ -5732,6 +5735,21 @@ button.rail-tile:hover {
 .guided-follow {
   margin: 6px 0 0;
   max-width: 420px;
+}
+/* "What you already have" (#1068, GuidedHave.vue): Review's switch, step 4's two selects side by
+   side where there is room, and step 2's folded picker. */
+.guided-have {
+  max-width: 760px;
+}
+.guided-have-gear {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 0 18px;
+  margin: 12px 0 0;
+}
+.guided-have-gear p {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 /* The materials you carry out by hand. A floor for one of them costs about a
    percent; the general construction rate that would reach the same number

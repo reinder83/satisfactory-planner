@@ -3,9 +3,11 @@
 // the settings each answer writes are data in preferences.ts (guidedQuestions,
 // guidedStandingQuestion); this module sequences and reads them, and
 // ui/pages/GuidedPage.vue (with ui/guided/) draws them. Draft fields used:
-// guidedStep (1-based index into guidedFlow()), guidedAsk, guidedTopics, tutorial.
+// guidedStep (1-based index into guidedFlow()), guidedAsk, guidedTopics, tutorial, and
+// earlierDone, which Review's "What you already have" shares (#1068).
 import {
   GUIDED_TOPUP_RATE,
+  guidedHaveQuestion,
   guidedQuestions,
   guidedStandingQuestion,
   guidedTopupItems,
@@ -18,6 +20,8 @@ import { readSupply } from './supply.ts';
 import {
   calculateWizard,
   readAlternates,
+  readOwnedAlternates,
+  readOwnedEquipment,
   readWizard,
   wizardBusy,
   type WizardDraft,
@@ -61,8 +65,8 @@ export const GUIDED_GLYPHS: Record<string, string> = {
 // phase because it depends on the answer; for a save that already has profiles
 // the Review step's carry panel is the better instrument, so it is left out.
 // Order: the preferences.ts list (phase, goal, recipes, stock, exact, power), with the
-// tutorial question (Phase 1) or the "already producing" question (later
-// phases) inserted after phase for a new save. When wizard.guidedAsk is set
+// tutorial question (Phase 1), or "What you already have" (#1068) and the "already producing"
+// question (later phases), inserted after phase for a new save. When wizard.guidedAsk is set
 // (the "What is different" screen), only those ids are kept. vuePage (ui/pages.ts)
 // and the screens compare guidedStep with this length to know when the questions
 // are finished; ada-panel.ts reads it too. A question worded for the start phase is asked as
@@ -74,8 +78,10 @@ export function guidedFlow(): GuidedQuestion[] {
     list: GuidedQuestion[] = [];
   for (const question of guidedQuestions) {
     list.push(question.phased ? question.phased(phase) : question);
-    if (question.id === 'phase' && !wizardDraft.saveId)
-      list.push(guidedStandingQuestion(String(wizardDraft.settings.phase || '3')));
+    if (question.id !== 'phase' || wizardDraft.saveId) continue;
+    // "What you already have" (#1068): only where there is something before the start phase.
+    if (phase !== '1') list.push(guidedHaveQuestion(phase));
+    list.push(guidedStandingQuestion(phase));
   }
   return ask ? list.filter(q => ask.includes(q.id)) : list;
 }
@@ -149,6 +155,7 @@ function readGuided(form: HTMLFormElement, topics: boolean) {
       settings.installedPowerGW = settings.availablePowerGW;
   }
   readAlternates(form, formData, settings);
+  if (form.querySelector?.('[data-guided-have]')) readHave(form, formData, wizardDraft);
   // A guided plan never raises the general construction rate: it is the single
   // most expensive control in the app and the per-item floors below do the same
   // job for a fortieth of the buildings.
@@ -166,6 +173,17 @@ function readGuided(form: HTMLFormElement, topics: boolean) {
   if (settings.goal !== 'timed') settings.phaseTime = 'every';
   if (settings.storage === 'none') settings.storageOverrides = {};
   wizardDraft.preview = null;
+}
+
+// "What you already have" (#1068, ui/guided/GuidedHave.vue), read as the screens it borrows from
+// read it: Review's "Everything before Phase N is done" onto the draft (earlierDone, which Review
+// shows ticked and createProfile sends as built work), All settings step 2's alternates you
+// already own and step 4's miner and belt into the settings. Left as it is, it leaves every field
+// absent, so the profile is the one the guided start made before.
+function readHave(form: HTMLFormElement, formData: FormData, wizardDraft: WizardDraft) {
+  wizardDraft.earlierDone = formData.has('earlierDone');
+  readOwnedAlternates(form, formData, wizardDraft.settings);
+  readOwnedEquipment(formData, wizardDraft.settings, true);
 }
 
 // Go to question `target` (1-based): read the screen, then re-render, hand over

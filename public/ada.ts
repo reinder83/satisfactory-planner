@@ -15,6 +15,8 @@ export interface AdaFacts {
   guidedStep: number;
   guidedTotal: number;
   tutorialDone: boolean;
+  // The guided start's "What you already have" is the question on screen (#1068).
+  guidedHave?: boolean;
   // Review's "Everything before Phase N is done" (#1068): the start phase's label while it is ticked,
   // else empty.
   earlierDone?: string;
@@ -631,6 +633,14 @@ const RULES: AdaRule[] = [
     when: facts => facts.tutorialDone,
     text: () =>
       `The HUB tutorial is recorded as finished, so its steps start ticked. They are ticked, not deleted — untick one and it is back at the top of the list.`,
+  },
+  {
+    id: 'guided-have',
+    on: ['wizard'],
+    tone: 'calm',
+    when: facts => !!facts.guidedHave,
+    text: () =>
+      `Tell me what is already behind you and I stop sending you to unlock it. Leave it all as it is and I assume you arrive with nothing, which is modest of you.`,
   },
   {
     id: 'earlier-done',
