@@ -1525,16 +1525,24 @@ export function baseTasks({ stage }: GuideContext): GuideTask[] {
 // The lines retireTasks below retires in phase `stage` (2-5), most machines first: the ones the
 // phase before ran (from the start phase on) that neither this phase nor a later one builds,
 // leaving out a generator line whose building's generators this phase keeps. The build plan's
-// handover summary counts them too (app/handover.ts, #1069).
+// handover summary counts them too, and the Factories page lists them under each factory by the
+// row's id (app/handover.ts, #1069).
+export interface RetiredLine {
+  id: string;
+  name: string;
+  machine: string;
+  machines: number;
+  onSite?: CalcRow['onSite'];
+}
 export function retiredLines(
   plan: Pick<StoredCalculatedPlan, 'settings' | 'stages'>,
   stage: number,
-): { name: string; machine: string; machines: number }[] {
+): RetiredLine[] {
   const stageOf = (phaseNumber: number): StoredStage | undefined =>
     plan.stages[String(phaseNumber) as StageKey];
   const start = Number(plan.settings.phase || 1),
     previous = stage - 1,
-    retired = new Map<string, { name: string; machine: string; machines: number }>();
+    retired = new Map<string, RetiredLine>();
   const kept = new Set(
     (stageOf(stage)?.grid?.generators || [])
       .filter(entry => entry.kept > 0)
@@ -1543,11 +1551,22 @@ export function retiredLines(
   if (previous >= start)
     for (const row of stageOf(previous)?.rows || [])
       if (!(row.power < 0 && kept.has(row.machine)))
-        retired.set(row.id, { name: row.name, machine: row.machine, machines: row.machines });
+        retired.set(row.id, {
+          id: row.id,
+          name: row.name,
+          machine: row.machine,
+          machines: row.machines,
+          ...(row.onSite ? { onSite: row.onSite } : {}),
+        });
   for (let later = stage; later <= 5; later++)
     for (const row of stageOf(later)?.rows || []) retired.delete(row.id);
   return [...retired.values()].sort((a, b) => b.machines - a.machines);
 }
+
+// A retired line as the retire step and the Factories page's handover name it: "2 × Wire
+// (Constructor)".
+export const retiredLineText = (line: RetiredLine): string =>
+  `${formatNumber(line.machines)} × ${line.name} (${line.machine})`;
 
 // Lines an earlier phase built that this phase's plan drops. Its resource and power budgets do
 // not include them, and a replacement is usually a different machine rather than an upgrade in
@@ -1565,7 +1584,7 @@ export function retireTasks({ plan, stage }: GuideContext): GuideTask[] {
     {
       id: 'retire-' + stage,
       title: 'Retire the lines this phase no longer uses',
-      body: `Phase ${stage} does not run ${listed.map(line => `${formatNumber(line.machines)} × ${line.name} (${line.machine})`).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
+      body: `Phase ${stage} does not run ${listed.map(retiredLineText).join('; ')}${rest ? ` and ${rest} more line${rest > 1 ? 's' : ''}` : ''}, all last needed in Phase ${previous}. Its resource and power budgets do not include them. Commission and prove the replacement chain first: a replacement is usually a different machine, so expect to dismantle or repurpose rather than upgrade in place. Leaving them running is not harmful where ore and power are spare — the output reaches storage and then the sink — but it is production this phase does not count.`,
     },
   ];
 }

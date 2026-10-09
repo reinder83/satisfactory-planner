@@ -4,9 +4,15 @@
 // to add or change rather than the whole line again ("add 6 machines", "raise the last Smelter
 // from 7.75% to 82.25%"), and the build plan opens with a summary of the handover: the lines kept,
 // the machines added to them, the clocks changed, the lines still to build and the ones retired.
-// Everything here reads the stored plan and the saved checks: nothing is ticked, stored or
-// recalculated, and a line's Running box in this phase stays the user's to tick.
-import { formatNumber, milestoneOnlyPhase, retiredLines } from '../progression.ts';
+// The Factories page gives each factory its part of it (handoverLines, placeHandover). Everything
+// here reads the stored plan and the saved checks: nothing is ticked, stored or recalculated, and
+// a line's Running box in this phase stays the user's to tick.
+import {
+  formatNumber,
+  milestoneOnlyPhase,
+  retiredLines,
+  type RetiredLine,
+} from '../progression.ts';
 import type { CalcRow, Phase, StageKey, StoredCalculatedPlan } from '../types/index.ts';
 
 type HandoverPlan = Pick<StoredCalculatedPlan, 'settings' | 'stages' | 'guide'>;
@@ -57,30 +63,39 @@ function lineChange({ before }: CarriedLine, row: CalcRow) {
   return { oldClock, newClock, extra, clockChange };
 }
 
+// What a carried line's step changes, after what already runs: "Add 6 machines, and raise the last
+// Phase 1 Smelter from 7.75% to 100%.", "Nothing to add: raise the last Smelter from 7.75% to
+// 82.25%.", "This phase needs 2 machines fewer: …" or "Nothing to add or change." The build-plan
+// step says it (carriedText), and so does each factory's handover on the Factories page
+// (ui/factories/FactoryHandover.vue).
+export function carriedChange(carried: CarriedLine, row: CalcRow): string {
+  const { oldClock, newClock, extra, clockChange } = lineChange(carried, row),
+    machine = row.machine;
+  if (extra > 0)
+    return (
+      `Add ${machinesWord(extra)}` +
+      (clockChange
+        ? `, and raise the last Phase ${carried.from} ${machine} from ${percent(oldClock)} to 100%.`
+        : '.')
+    );
+  if (extra < 0)
+    return (
+      `This phase needs ${machinesWord(-extra)} fewer: switch off ${formatNumber(-extra)}` +
+      (newClock < 100 - SAME ? ` and set the last one to ${percent(newClock)}.` : '.')
+    );
+  if (clockChange)
+    return `Nothing to add: ${newClock > oldClock ? 'raise' : 'lower'} the last ${machine} from ${percent(oldClock)} to ${percent(newClock)}.`;
+  return 'Nothing to add or change.';
+}
+
 // The sentence that opens a carried line's step: what already runs, then what to add or change.
 export function carriedText(carried: CarriedLine, row: CalcRow): string {
   const { before, from } = carried,
-    { oldClock, newClock, extra, clockChange } = lineChange(carried, row),
-    machine = row.machine,
-    phaseName = 'Phase ' + from;
+    oldClock = clockOf(before);
   const running =
-    `Running since ${phaseName}: ${formatNumber(before.machines)} × ${before.machine}` +
+    `Running since Phase ${from}: ${formatNumber(before.machines)} × ${before.machine}` +
     (oldClock < 100 - SAME ? `, the last at ${percent(oldClock)}.` : '.');
-  let change: string;
-  if (extra > 0)
-    change =
-      `Add ${machinesWord(extra)}` +
-      (clockChange
-        ? `, and raise the last ${phaseName} ${machine} from ${percent(oldClock)} to 100%.`
-        : '.');
-  else if (extra < 0)
-    change =
-      `This phase needs ${machinesWord(-extra)} fewer: switch off ${formatNumber(-extra)}` +
-      (newClock < 100 - SAME ? ` and set the last one to ${percent(newClock)}.` : '.');
-  else if (clockChange)
-    change = `Nothing to add: ${newClock > oldClock ? 'raise' : 'lower'} the last ${machine} from ${percent(oldClock)} to ${percent(newClock)}.`;
-  else change = 'Nothing to add or change.';
-  return running + ' ' + change + ' ';
+  return running + ' ' + carriedChange(carried, row) + ' ';
 }
 
 // The handover into `phase`: the phase it comes from, the lines kept (marked running there and
@@ -100,24 +115,106 @@ export function phaseHandover(
   checks: Record<string, boolean>,
   phase: Phase,
 ): Handover | null {
+  const handover = handoverLines(plan, checks, phase);
+  return handover && handoverCount(handover.from, handover.lines, handover.retired);
+}
+
+// What each line of `phase` is in the handover from the phase before, as each factory on the
+// Factories page lists it (ui/factories/FactoryHandover.vue): kept as it runs ('keep'), kept with
+// machines to add or switch off or a clock to change ('add', with carriedChange's sentence), new
+// in this phase ('new': the phase before does not build it) or built there but not marked running
+// ('build'); and the lines retired (retiredLines, the retire step's list). `running` is whether
+// the line is ticked running in this phase. null where nothing is handed over, and once every
+// line of the phase is marked running, as phaseHandover, whose counts these are.
+export type HandoverStatus = 'keep' | 'add' | 'new' | 'build';
+export interface HandoverLine {
+  row: CalcRow;
+  status: HandoverStatus;
+  // carriedChange's sentence for an 'add' line, else ''.
+  change: string;
+  // The machines added to a kept line (0 for one this phase shrinks), and whether a clock changes.
+  added: number;
+  clock: boolean;
+  running: boolean;
+}
+export interface HandoverLines {
+  from: StageKey;
+  lines: HandoverLine[];
+  retired: RetiredLine[];
+}
+export function handoverLines(
+  plan: HandoverPlan,
+  checks: Record<string, boolean>,
+  phase: Phase,
+): HandoverLines | null {
   const from = previousStage(plan, phase);
   const rows = plan.stages[phase as StageKey]?.rows || [];
-  if (!from || !rows.length || rows.every(row => checks['calc-' + phase + '-' + row.id]))
-    return null;
-  const handover: Handover = { from, kept: 0, add: 0, clocks: 0, build: 0, retire: 0 };
-  for (const row of rows) {
+  const running = (row: CalcRow) => !!checks['calc-' + phase + '-' + row.id];
+  if (!from || !rows.length || rows.every(running)) return null;
+  const before = new Set((plan.stages[from]?.rows || []).map(row => row.id));
+  const lines = rows.map((row): HandoverLine => {
     const carried = carriedLine(plan, checks, phase, row.id);
-    if (!carried) {
+    const base = { row, change: '', added: 0, clock: false, running: running(row) };
+    if (!carried) return { ...base, status: before.has(row.id) ? 'build' : 'new' };
+    const change = lineChange(carried, row),
+      kept = change.extra === 0 && !change.clockChange;
+    return {
+      ...base,
+      status: kept ? 'keep' : 'add',
+      change: kept ? '' : carriedChange(carried, row),
+      added: Math.max(0, change.extra),
+      clock: change.clockChange || (change.extra < 0 && change.newClock < 100 - SAME),
+    };
+  });
+  return { from, lines, retired: retiredLines(plan, Number(phase)) };
+}
+
+// The handover's counts over some of its lines: the whole phase's (phaseHandover) or a factory's.
+export function handoverCount(
+  from: StageKey,
+  lines: HandoverLine[],
+  retired: RetiredLine[],
+): Handover {
+  const handover: Handover = { from, kept: 0, add: 0, clocks: 0, build: 0, retire: retired.length };
+  for (const line of lines) {
+    if (line.status === 'new' || line.status === 'build') {
       handover.build++;
       continue;
     }
-    const change = lineChange(carried, row);
     handover.kept++;
-    handover.add += Math.max(0, change.extra);
-    if (change.clockChange || (change.extra < 0 && change.newClock < 100 - SAME)) handover.clocks++;
+    handover.add += line.added;
+    if (line.clock) handover.clocks++;
   }
-  handover.retire = retiredLines(plan, Number(phase)).length;
   return handover;
+}
+
+// One factory's part of the handover, or Ungrouped's: the lines and retired lines `inPlace` picks
+// by row, counted for handoverText and listed by status. null when no line of the place is left to
+// mark running in this phase, as the build plan's summary goes once every line of the phase is.
+export interface PlaceHandover {
+  counts: Handover;
+  keep: HandoverLine[];
+  add: HandoverLine[];
+  new: HandoverLine[];
+  build: HandoverLine[];
+  retire: RetiredLine[];
+}
+export function placeHandover(
+  handover: HandoverLines,
+  inPlace: (row: Pick<CalcRow, 'id' | 'onSite'>) => boolean,
+): PlaceHandover | null {
+  const lines = handover.lines.filter(line => inPlace(line.row)),
+    retired = handover.retired.filter(inPlace);
+  if (!lines.some(line => !line.running)) return null;
+  const having = (status: HandoverStatus) => lines.filter(line => line.status === status);
+  return {
+    counts: handoverCount(handover.from, lines, retired),
+    keep: having('keep'),
+    add: having('add'),
+    new: having('new'),
+    build: having('build'),
+    retire: retired,
+  };
 }
 
 // The handover summary's sentence (ui/plan/HandoverSummary.vue).

@@ -45,6 +45,7 @@ import { idleStepNotes, planTasks, removedPlanTasks, stepDone, taskEditsState } 
 import { backupDays } from './views/backup.ts';
 import { buildRowName, currentBuildStatus } from './views/calculated.ts';
 import { byproductCount } from './recycle.ts';
+import { handoverLines } from './handover.ts';
 import { factoryGroupsState } from './views/factories.ts';
 import { storageBays, storageMatches } from './views/storage.ts';
 import { power } from './wizard/fields.ts';
@@ -155,6 +156,18 @@ function onSiteDroppedFacts(
 function waterFacts(): Pick<AdaFacts, 'waterExtracted'> {
   const water = calcStage()?.raw?.Water ?? 0;
   return water > 0 ? { waterExtracted: num(water) } : {};
+}
+
+// The handover from the phase before (#1069), as each factory's Handover on the Factories page
+// counts it (handoverLines in handover.ts): the lines kept running and those with something to
+// add or change. None where nothing is handed over or nothing is kept.
+function handoverFacts(): Pick<AdaFacts, 'handover'> {
+  const handover = calculated && handoverLines(calculated, state.checks, phase());
+  if (!handover) return {};
+  const kept = handover.lines.filter(line => line.status === 'keep' || line.status === 'add');
+  if (!kept.length) return {};
+  const changed = kept.filter(line => line.status === 'add').length;
+  return { handover: { from: handover.from, kept: kept.length, changed } };
 }
 
 // The open phase's mining (#1065): its miner, the nodes its draw taps and their MW, from the
@@ -334,6 +347,7 @@ function adaFacts(): AdaFacts {
     ...exactClockFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),
+    ...handoverFacts(),
     ...miningFacts(),
     customTasks: state.customTasks.filter(t => t.phase === phase()).length,
     removedSteps: removedPlanTasks().length,

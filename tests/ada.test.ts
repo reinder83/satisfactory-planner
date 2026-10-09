@@ -482,6 +482,23 @@ test("ADA says how much Water the phase extracts and points at the lines' extrac
   assert.ok(!ids(facts({ view: 'factories' })).includes('water-extractors'), 'absent means none');
 });
 
+test("ADA counts the lines kept from the phase before and points at each factory's Handover (#1069)", () => {
+  const remark = (handover: AdaFacts['handover']) =>
+    adaRemarks(facts({ view: 'factories', handover })).find(r => r.id === 'factory-handover');
+  const line = remark({ from: '2', kept: 13, changed: 4 })!;
+  assert.equal(line.tone, 'calm');
+  assert.equal(
+    line.text,
+    "Phase 3 keeps 13 lines running since Phase 2, 4 of them with machines to add or a clock to change. Each factory's Handover says which, and what is new or retired. Reuse beats rebuilding. I checked.",
+  );
+  assert.match(
+    remark({ from: '2', kept: 1, changed: 0 })!.text,
+    /^Phase 3 keeps 1 line running since Phase 2\. Each/,
+  );
+  assert.equal(remark({ from: '2', kept: 0, changed: 0 }), undefined, 'nothing kept, nothing said');
+  assert.equal(remark(undefined), undefined, 'absent means no handover');
+});
+
 test("ADA names the phase's miner and the nodes its draw taps (#1065)", () => {
   const mining = { miner: 'Miner Mk.2 at 100%', nodes: '13 nodes', mw: '195 MW' };
   for (const view of ['resources', 'plan']) {
