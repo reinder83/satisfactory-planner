@@ -210,28 +210,28 @@ test("Review's percentage leads to Extra utilities power on the Preferences step
   assert.ok($('#wizard-form [name="utilityPercent"]'), 'the Preferences step shows the setting');
 });
 
-test("the Resources page's link opens Preferences for a new profile from this profile", async () => {
+test("the Resources page's link opens Edit settings of this profile on Preferences (#1071)", async () => {
   const plan = generated();
   plan.settings.utilityPercent = 35;
   page();
   open({ calculated: structuredClone(plan), phase: '3', profileId: 'original' });
-  // Another tab opened profile p last (#1052): the link still starts from this tab's profile.
+  // Another tab opened profile p last (#1052): the link still edits this tab's profile.
   workspace.saves[0]!.activeProfile = 'p';
   go('resources');
   render();
   const button = $<HTMLButtonElement>('[data-power-preferences]')!;
-  assert.match(plain(button.textContent), /^Change Extra utilities power in Preferences/);
+  assert.equal(plain(button.textContent), 'Change Extra utilities power in Edit settings →');
   button.click();
   await tick();
   render();
   assert.equal(wizard?.mode, 'advanced');
   assert.equal(wizard?.step, 2);
   assert.equal(wizard?.saveId, 's');
-  assert.equal(wizard?.carryFrom, 'original', 'progress is offered from this profile');
-  // The profile's settings, plus storage from surplus, which every wizard draft sets (#1061).
-  assert.deepEqual(wizard?.settings, {
-    ...workspace.saves[0]!.profiles.find(profile => profile.id === 'original')!.settings,
-    storageFromSurplus: true,
-  });
-  assert.ok($('#wizard-form [name="utilityPercent"]'));
+  assert.equal(wizard?.edit?.profileId, 'original', 'it edits this profile, in place');
+  assert.equal(wizard?.edit?.plan.createdAt, plan.createdAt);
+  assert.equal(wizard?.carryFrom, 'original', 'progress is carried from this profile');
+  // The settings this profile's plan was calculated with, plus storage from surplus, which every
+  // wizard draft sets (#1061).
+  assert.deepEqual(wizard?.settings, { ...plan.settings, storageFromSurplus: true });
+  assert.equal(($('#wizard-form [name="utilityPercent"]') as HTMLInputElement | null)?.value, '35');
 });

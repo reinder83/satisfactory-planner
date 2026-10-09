@@ -18,7 +18,18 @@ import { render } from '../../public/app/shell.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
 import { onSiteChange, onSiteOffers } from '../../public/app/on-site-picker.ts';
 import { mutate, validateState } from '../../public/state.ts';
-import { $, $$, applyUpdate, evil, generated, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  answerConfirms,
+  applyUpdate,
+  evil,
+  generated,
+  go,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type {
   CalcRow,
   CurrentCalculatedPlan,
@@ -82,7 +93,13 @@ function adaSays(id: string): string {
   return '';
 }
 // Requests that would recalculate a plan, in either edition's API.
-const RECALCULATING = ['/api/profiles', '/api/calculate', '/api/round-up', '/api/preview'];
+const RECALCULATING = [
+  '/api/profiles',
+  '/api/recalculate',
+  '/api/calculate',
+  '/api/round-up',
+  '/api/preview',
+];
 const recalculations = (calls: [string, unknown][]) =>
   calls.filter(([path]) => RECALCULATING.some(prefix => path.startsWith(prefix)));
 
@@ -267,35 +284,62 @@ test('a saved change marks the plan as needing a recalculation, and recalculates
   assert.match(notice(), /Now: Motors makes Wire on site\./);
 });
 
-test('Recalculate with items made on site makes a new profile from the marks now', async () => {
+test('Recalculate in place with items made on site recalculates this profile from the marks now (#1071)', async () => {
   const plan = generated();
   await show(plan, { factoryGroups: groups({ [MOTORS]: ['Wire'] }) });
-  let sent: { settings: StoredCalculatedPlan['settings']; carryFrom: string; name: string };
+  assert.match(
+    notice(),
+    /Recalculate in place with items made on site recalculates this profile in place and carries your progress; the current version is kept as a backup under Profiles\./,
+  );
+  let sent: {
+    settings: StoredCalculatedPlan['settings'];
+    name: string;
+    backupName: string;
+    planCreatedAt: string;
+    carryFrom?: string;
+  };
   const calls = stubFetch({
-    '/api/profiles': (body: typeof sent) => {
+    '/api/recalculate': (body: typeof sent) => {
       sent = body;
-      return { saveId: 's', profileId: 'p2', reviewCount: 1, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 1,
+        carriedChecks: 3,
+        workspace,
+      };
     },
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
-      profile: { id: 'p2', kind: 'calculated', name: 'Made on site' },
+      profile: { id: 'p', kind: 'calculated', name: evil },
       state: { ...state, factoryGroups: groups({ [MOTORS]: ['Wire'] }) },
       plan: { ...plan, settings: sent!.settings },
     }),
   });
+  const asked = answerConfirms(true);
   $<HTMLButtonElement>('[data-recalc-on-site]')!.click();
   await settle();
   await settle();
-  assert.equal(calls[0]![0], '/api/profiles');
-  assert.equal(sent!.carryFrom, 'p');
-  assert.equal(sent!.name, `${evil} · made on site`.slice(0, 80));
+  assert.equal(asked.length, 1, 'it asks first');
+  assert.match(asked[0]!, /with the items your factories make on site/);
+  assert.ok(asked[0]!.includes(`is kept as “${sent!.backupName}” under Profiles`));
+  assert.equal(calls[0]![0], '/api/recalculate');
+  assert.equal(calls.headers[0]!['X-Profile-Id'], 'p');
+  assert.equal(sent!.carryFrom, undefined, 'no new profile');
+  assert.equal(sent!.name, evil, 'the profile keeps its name');
+  assert.match(sent!.backupName, / \(before edit, [^)]+\)$/);
+  assert.equal(sent!.planCreatedAt, plan.createdAt);
   assert.deepEqual(sent!.settings.onSite, onSiteSettings(plan, groups({ [MOTORS]: ['Wire'] })));
   assert.deepEqual(sent!.settings.onSite![MOTORS]!.items, ['Wire']);
   // Everything else is the plan's own settings.
   const { onSite: _sent, ...rest } = sent!.settings;
   assert.deepEqual(rest, plan.settings);
-  assert.match($('#toast')!.textContent!, /1 completed production line checks need review/);
-  // The new profile's plan has the marks, so there is nothing more to recalculate.
+  assert.match(
+    $('#toast')!.textContent!,
+    /^Recalculated in place\. 1 production line left unticked for review\. The previous version is kept as “/,
+  );
+  // The recalculated plan has the marks, so there is nothing more to recalculate.
   assert.equal($('[data-on-site-recalc]'), null);
   assert.equal(onSiteChange(calculated!, state.factoryGroups), null);
 });
@@ -318,9 +362,16 @@ test('clearing every mark asks for a plan without settings.onSite', async () => 
   assert.match(notice(), /This plan: Motors makes Wire on site\./);
   let sent: { settings: StoredCalculatedPlan['settings'] } | undefined;
   stubFetch({
-    '/api/profiles': (body: typeof sent) => {
+    '/api/recalculate': (body: typeof sent) => {
       sent = body;
-      return { saveId: 's', profileId: 'p', reviewCount: 0, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 0,
+        carriedChecks: 0,
+        workspace,
+      };
     },
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
@@ -329,6 +380,7 @@ test('clearing every mark asks for a plan without settings.onSite', async () => 
       plan: { ...plan, settings: sent!.settings },
     }),
   });
+  answerConfirms(true);
   $<HTMLButtonElement>('[data-recalc-on-site]')!.click();
   await settle();
   await settle();

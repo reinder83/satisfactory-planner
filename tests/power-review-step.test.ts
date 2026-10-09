@@ -55,7 +55,7 @@ const gw = (mw: number) =>
 
 // Where the 20% allowance comes from (#1090), before the check.
 const PREFERENCES =
-  ' The 20% for trains, drones and pumps is Extra utilities power in Preferences: raise it in a new profile for more margin.';
+  ' The 20% for trains, drones and pumps is Extra utilities power in Preferences: raise it with Edit settings for more margin.';
 const CHECK =
   PREFERENCES +
   ' Before connecting the next factory, check the actual load against what your grid supplies.';

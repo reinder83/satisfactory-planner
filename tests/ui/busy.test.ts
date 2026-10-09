@@ -1,8 +1,8 @@
 // A control busy with its save keeps focus (#299, public/app/busy.ts): Edge and Chrome move focus
 // to <body> the moment a focused control becomes disabled, so a busy control is aria-disabled
 // instead, and a second press while it is busy sends nothing. A control that stays disabled
-// because of what it did, or whose page goes (Round up production, Recalculate with transport
-// fuel: #300; to the new page’s heading, #304), sends focus on. happy-dom keeps focus on a disabled control, so the observer below
+// because of what it did, or whose page goes (Round up production, Recalculate in place with
+// transport fuel: #300; to the new page’s heading, #304), sends focus on. happy-dom keeps focus on a disabled control, so the observer below
 // does what the browsers do. Writes are held until release(), as on a slow connection.
 // The focused element is compared by what identifies it, never two elements with assert.equal
 // (#287).
@@ -498,7 +498,7 @@ test('Round up production keeps focus while it calculates, then focus goes to th
   );
 });
 
-test('Recalculate with transport fuel keeps focus while it calculates, then focus goes to the new page’s heading (#300, #304)', async () => {
+test('Recalculate in place with transport fuel keeps focus while it calculates, then focus goes to the redrawn page’s heading (#300, #304, #1071)', async () => {
   const plan = generated();
   const factoryGroups = {
     groups: [
@@ -525,9 +525,16 @@ test('Recalculate with transport fuel keeps focus while it calculates, then focu
   await nextTick();
   let fuel: object | undefined;
   const net = heldFetch((path, body: { settings: { transportFuel: object } }) => {
-    if (path === '/api/profiles') {
+    if (path === '/api/recalculate') {
       fuel = body.settings.transportFuel;
-      return { saveId: 's', profileId: 'p', reviewCount: 0, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 0,
+        carriedChecks: 0,
+        workspace,
+      };
     }
     if (path.startsWith('/api/context'))
       return {
@@ -538,8 +545,10 @@ test('Recalculate with transport fuel keeps focus while it calculates, then focu
       };
     throw Error('unexpected ' + path);
   });
+  const asked = answerConfirms(true);
   press('[data-recalc-transport]');
   await settle();
+  assert.equal(asked.length, 1, 'it asks first');
   assert.ok(busy('[data-recalc-transport]'));
   assert.ok(focusedOn('[data-recalc-transport]'), describeFocus());
   press('[data-recalc-transport]');
@@ -548,7 +557,7 @@ test('Recalculate with transport fuel keeps focus while it calculates, then focu
   await net.release();
   await net.release();
   await settle();
-  assert.equal($('[data-recalc-transport]'), null, 'the new profile plans the fuel');
+  assert.equal($('[data-recalc-transport]'), null, 'the recalculated plan plans the fuel');
   assert.ok(focusedOn('#main h1'), describeFocus());
 });
 

@@ -980,7 +980,7 @@ function existingPowerText(
   const unlockFirst = unlock.length ? ` Unlock ${listNames(unlock)} first.` : '';
   const check =
     (figures.need.peak ? ' ' + figures.need.peak : '') +
-    ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it in a new profile for more margin.` +
+    ` The ${figures.need.percent}% for trains, drones and pumps is ${figures.need.setting} in Preferences: raise it with Edit settings for more margin.` +
     ' Before connecting the next factory, check the actual load against what your grid supplies.';
   if (requiredMW - haveMW <= 0.01)
     return (

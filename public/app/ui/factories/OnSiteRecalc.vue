@@ -4,36 +4,23 @@
   the open plan has (onSiteChange in app/on-site-picker.ts, #877, #938, #970). The plan is never
   recalculated by itself (AGENTS.md): the notice says what changed, in words for the cause (#985):
   a change to the marks, or a group whose lines no longer use, or now use, an item it marks, and
-  what a recalculation would give against what the plan has. "Recalculate with items made
-  on site", after the unsaved-notes check, creates a new profile in this save with settings.onSite
-  worked out from the groups now (onSiteSettings), carrying this profile's progress the way a new
-  profile does (ticks with no single line to land on are kept for review, #876). It opens; this
-  profile stays as it is. As "Recalculate with transport fuel" (GroupLinks.vue): the button shows
-  the calculation's progress, busy (app/busy.ts) so it keeps focus (#299), and the new profile's
-  page has no notice, so focus then goes to its heading (refocusOnOpenedPage, #300, #304).
+  what a recalculation would give against what the plan has. "Recalculate in place with items
+  made on site" recalculates this profile in place with settings.onSite worked out from the groups
+  now (onSiteSettings), after a confirmation that names the backup kept of the current version
+  (recalculateOffer in ui/recalc-offer.ts, #1071): the progress is carried as Edit settings
+  carries it, and ticks with no single line to land on are kept for review (#876). As
+  "Recalculate in place with transport fuel" (GroupLinks.vue).
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { allowSwitch, post, toast, writeQueue } from '../../api.ts';
-import {
-  calculated,
-  currentProfile,
-  currentSave,
-  loadContext,
-  setWorkspace,
-} from '../../session.ts';
-import { render } from '../../shell.ts';
+import { calculated } from '../../session.ts';
 import { onSiteChange, onSiteRecalcSettings } from '../../on-site-picker.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
-import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
-import { isBusy, whileBusy } from '../../busy.ts';
-import { refocusOnOpenedPage } from '../refocus.ts';
-import type { WorkspaceSummary } from '../../../types/index.ts';
+import { IN_PLACE_NOTE, recalculateOffer } from '../recalc-offer.ts';
 
-const LABEL = 'Recalculate with items made on site';
-const SUFFIX = ' · made on site';
+const LABEL = 'Recalculate in place with items made on site';
 
 const change = computed(() =>
   legacy(() => (calculated ? onSiteChange(calculated, factoryGroupsState()) : null)),
@@ -41,46 +28,13 @@ const change = computed(() =>
 // A plan transcribed from the retired handbook says what a recalculation does to it (#480).
 const transcribed = computed(() => legacy(() => isTranscribed(calculated)));
 
-async function recalculate(event: Event) {
-  const button = event.currentTarget as HTMLButtonElement,
-    wanted = change.value;
-  if (isBusy(button) || !calculated || !wanted || !(await allowSwitch())) return;
-  const settings = onSiteRecalcSettings(calculated.settings, wanted),
-    refocus = refocusOnOpenedPage(button);
-  await whileBusy(button, async () => {
-    try {
-      await writeQueue;
-      const result = await post<{
-        workspace: WorkspaceSummary;
-        saveId: string;
-        profileId: string;
-        reviewCount: number;
-      }>(
-        '/api/profiles',
-        {
-          saveId: currentSave.id,
-          name: (currentProfile.name.replace(/ · made on site$/, '') + SUFFIX).slice(0, 80),
-          settings,
-          carryFrom: currentProfile.id,
-        },
-        true,
-        calcProgress(button, 'Recalculating…'),
-      );
-      setWorkspace(result.workspace);
-      await loadContext(result.saveId, result.profileId);
-      render();
-      toast(
-        'Created a profile that plans the items made on site. ' +
-          (result.reviewCount
-            ? result.reviewCount +
-              ' completed production line checks need review; the previous profile is unchanged.'
-            : 'The previous profile is unchanged.'),
-      );
-      void refocus();
-    } catch (error) {
-      toast((error as Error).message, true);
-      button.textContent = LABEL;
-    }
+function recalculate(event: Event) {
+  const wanted = change.value;
+  if (!calculated || !wanted) return;
+  void recalculateOffer(event.currentTarget as HTMLButtonElement, {
+    settings: onSiteRecalcSettings(calculated.settings, wanted),
+    change: 'with the items your factories make on site',
+    label: LABEL,
   });
 }
 </script>
@@ -103,8 +57,8 @@ async function recalculate(event: Event) {
     </p>
     <p>
       <button class="btn primary" data-recalc-on-site @click="recalculate">{{ LABEL }}</button>
-      creates a new profile that plans it and opens it; this profile stays as it is.<template
-        v-if="transcribed"
+      {{ IN_PLACE_NOTE
+      }}<template v-if="transcribed"
         ><br /><span data-resolve-warning>{{ RESOLVE_WARNING }}</span></template
       >
     </p>

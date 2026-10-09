@@ -27,7 +27,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue';
-import { allowSwitch, post, save, toast, writeQueue } from '../../api.ts';
+import { save, toast } from '../../api.ts';
 import { num, plural } from '../../format.ts';
 import { bestLane, FLUIDS, laneUnlockNote, lanePlan, rateOfItem } from '../../flow.ts';
 import { stageMiningAdvice } from '../../../mining.ts';
@@ -55,28 +55,17 @@ import {
   trickleItems,
   transportFuel,
 } from '../../logistics.ts';
-import {
-  calcStage,
-  calculated,
-  currentProfile,
-  currentSave,
-  loadContext,
-  setWorkspace,
-  stage as stageKey,
-  state,
-  workspace,
-} from '../../session.ts';
+import { calcStage, calculated, stage as stageKey, state, workspace } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { factoryGroupsState } from '../../views/factories.ts';
 import { fuelledModes } from '../../../state.ts';
 import { isTranscribed, RESOLVE_WARNING } from '../../../handbook-migration.ts';
-import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
-import { refocusOnOpenedPage } from '../refocus.ts';
+import { IN_PLACE_NOTE, recalculateOffer } from '../recalc-offer.ts';
 import ItemIcon from '../ItemIcon.vue';
-import type { ItemRates, LinkMode, StageKey, WorkspaceSummary } from '../../../types/index.ts';
+import type { ItemRates, LinkMode, StageKey } from '../../../types/index.ts';
 
 const view = computed(() =>
   legacy(() => {
@@ -197,6 +186,7 @@ const view = computed(() =>
   }),
 );
 const fuels = computed(() => legacy(() => workspace.catalog.vehicleFuels || []));
+const TRANSPORT_LABEL = 'Recalculate in place with transport fuel';
 
 // The line under a belted link whose trickle items share a mixed belt (trickleItems, #1067):
 // "The 14 items under 120/min share a mixed belt; Smart Splitters sort them where it arrives." The
@@ -305,55 +295,19 @@ const fuel = computed(() =>
   }),
 );
 
-// "Recalculate with transport fuel": after the unsaved-notes check, a new profile in this save
-// with the fuel as extra demand (planner settings.transportFuel), carrying this profile's
-// progress the way a new profile does (calc rows that grew are left for review). It opens; this
-// profile stays as it is. The button shows the calculation's progress meanwhile, busy
-// (app/busy.ts) so it keeps focus (#299). The new profile's page has no such button, so focus
-// then goes to the page's heading (refocusOnOpenedPage in ui/refocus.ts, #300, #304).
-async function recalculate(event: Event) {
-  const button = event.currentTarget as HTMLButtonElement,
-    want = fuel.value?.want;
-  if (isBusy(button) || !calculated || !want || !(await allowSwitch())) return;
-  const settings = { ...calculated.settings, transportFuel: want },
-    refocus = refocusOnOpenedPage(button);
-  await whileBusy(button, async () => {
-    try {
-      await writeQueue;
-      const result = await post<{
-        workspace: WorkspaceSummary;
-        saveId: string;
-        profileId: string;
-        reviewCount: number;
-      }>(
-        '/api/profiles',
-        {
-          saveId: currentSave.id,
-          name: (currentProfile.name.replace(/ · transport fuel$/, '') + ' · transport fuel').slice(
-            0,
-            80,
-          ),
-          settings,
-          carryFrom: currentProfile.id,
-        },
-        true,
-        calcProgress(button, 'Recalculating…'),
-      );
-      setWorkspace(result.workspace);
-      await loadContext(result.saveId, result.profileId);
-      render();
-      toast(
-        'Created a profile that plans the vehicle fuel. ' +
-          (result.reviewCount
-            ? result.reviewCount +
-              ' completed production line checks need review; the previous profile is unchanged.'
-            : 'The previous profile is unchanged.'),
-      );
-      void refocus();
-    } catch (error) {
-      toast((error as Error).message, true);
-      button.textContent = 'Recalculate with transport fuel';
-    }
+// "Recalculate in place with transport fuel": recalculates this profile in place with the fuel as
+// extra demand (planner settings.transportFuel), after a confirmation that names the backup kept
+// of the current version (recalculateOffer in ui/recalc-offer.ts, #1071): the progress is carried
+// as Edit settings carries it (calc rows that grew are left for review). The button shows the
+// calculation's progress meanwhile, busy so it keeps focus (#299); the recalculated page has no
+// such button, so focus then goes to the page's heading (#300, #304).
+function recalculate(event: Event) {
+  const want = fuel.value?.want;
+  if (!calculated || !want) return;
+  void recalculateOffer(event.currentTarget as HTMLButtonElement, {
+    settings: { ...calculated.settings, transportFuel: want },
+    change: 'with the vehicle fuel the links between factories burn now',
+    label: TRANSPORT_LABEL,
   });
 }
 </script>
@@ -524,10 +478,10 @@ async function recalculate(event: Event) {
         ><template v-else>No link burns fuel any more. </template
         ><template v-if="fuel.had">This plan was calculated with {{ fuel.had }}. </template>
         <button class="btn primary" data-recalc-transport @click="recalculate">
-          Recalculate with transport fuel
+          {{ TRANSPORT_LABEL }}
         </button>
-        creates a new profile that plans for it and opens it; this profile stays as it is.<template
-          v-if="transcribed"
+        {{ IN_PLACE_NOTE
+        }}<template v-if="transcribed"
           ><br /><span data-resolve-warning>{{ RESOLVE_WARNING }}</span></template
         ></template
       >
