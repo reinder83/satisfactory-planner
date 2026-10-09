@@ -106,9 +106,10 @@ export function profilePhases(
 }
 
 // What profilePhases' result for a profile depends on, as one string: its plan (a profile's plan
-// is never replaced or edited: a recalculation or round-up makes a new profile, so its creation
-// time, start phase, guide and row counts tell plans apart), the phase worked on, its ticks, its
-// personal tasks and its removed steps. Any tick, edit or phase change changes it.
+// is never edited: a recalculation, in place (#1071) or into a new profile, and a round-up give it
+// a new plan, so its creation time, start phase, guide and row counts tell plans apart), the
+// phase worked on, its ticks, its personal tasks and its removed steps. Any tick, edit or phase
+// change changes it.
 const phasesKey = (plan: StoredCalculatedPlan | null | undefined, state: StepsState): string =>
   JSON.stringify([
     plan

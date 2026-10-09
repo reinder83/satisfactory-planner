@@ -96,7 +96,7 @@ test("transportFuel adds up each phase's fuelled links from the start phase on",
   assert.deepEqual(transportFuel(plan, none, gameCatalog, FLUIDS), {});
 });
 
-test('a revision with transport fuel carries it and the progress, and the old profile is untouched', async () => {
+test('recalculating in place with transport fuel plans it, carries the progress and keeps the old version (#1071)', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'planner-transport-'));
   const server = await createApp({ dataDir: dir, password: '' });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -121,19 +121,25 @@ test('a revision with transport fuel carries it and the progress, and the old pr
       createdHeaders,
     );
     const before = await context(createdHeaders);
-    const revised = await post('/api/profiles', {
-      saveId: created.saveId,
-      name: 'Base · transport fuel',
-      settings: { ...before.plan!.settings, transportFuel: { '3': { 'Packaged Fuel': 8 } } },
-      carryFrom: created.profileId,
-    });
-    const next = await context({ 'X-Save-Id': revised.saveId, 'X-Profile-Id': revised.profileId });
+    const revised = await post(
+      '/api/recalculate',
+      {
+        name: 'Base',
+        backupName: 'Base (before edit)',
+        settings: { ...before.plan!.settings, transportFuel: { '3': { 'Packaged Fuel': 8 } } },
+        planCreatedAt: before.plan!.createdAt,
+      },
+      createdHeaders,
+    );
+    assert.equal(revised.profileId, created.profileId, 'the profile is recalculated in place');
+    const next = await context(createdHeaders);
     assert.deepEqual(next.plan!.settings.transportFuel, { '3': { 'Packaged Fuel': 8 } });
     assert.deepEqual(next.plan!.stages['3'].transport, { 'Packaged Fuel': 8 });
     assert.equal(next.state.checks['unlock-Schematic_1-1_C'], true, 'progress carried');
-    const after = await context(createdHeaders);
-    assert.deepEqual(after.plan, before.plan, 'the previous profile is untouched');
-    assert.deepEqual(after.state, before.state);
+    const kept = await context({ 'X-Save-Id': created.saveId, 'X-Profile-Id': revised.backupId });
+    assert.equal(kept.profile.name, 'Base (before edit)');
+    assert.deepEqual(kept.plan, before.plan, 'the previous version is kept whole');
+    assert.deepEqual(kept.state, before.state);
   } finally {
     await new Promise(resolve => server.close(resolve));
     await fs.rm(dir, { recursive: true, force: true });

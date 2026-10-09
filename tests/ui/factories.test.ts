@@ -2701,7 +2701,7 @@ test('between groups: splitting an old mines vehicle keeps it for sources that a
   noMarkup();
 });
 
-test('between groups: recalculating with transport fuel creates a revision that plans it (#206)', async () => {
+test('between groups: recalculating in place with transport fuel plans it and keeps a backup (#206, #1071)', async () => {
   const rows = plan.stages['3'].rows!;
   const assignments = Object.fromEntries(
     rows.map((r, i) => [r.id, [{ group: i % 2 ? 'fg-parts1' : 'fg-smelt1', rate: null }]]),
@@ -2729,16 +2729,25 @@ test('between groups: recalculating with transport fuel creates a revision that 
     note(),
     /The vehicles on these links burn up to Phase 3: [\d.,]+ Packaged Fuel\/min/,
   );
-  // The new revision's context: the same plan, now with the fuel in its settings. Its Phase 1
+  // The recalculated profile's context: the same plan, now with the fuel in its settings. Its Phase 1
   // and 2 milestones are ticked, so it opens on Phase 3 rather than on them (#570, #759).
   const earlier = Object.fromEntries(
     [...phaseStepIds('1'), ...phaseStepIds('2')].map(id => [id, true]),
   );
-  let sent: { settings: { transportFuel: object }; carryFrom: string; name: string } | undefined;
+  let sent:
+    | { settings: { transportFuel: object }; carryFrom?: string; name: string; backupName: string }
+    | undefined;
   const calls = stubFetch({
-    '/api/profiles': (body: typeof sent) => {
+    '/api/recalculate': (body: typeof sent) => {
       sent = body;
-      return { saveId: 's', profileId: 'p', reviewCount: 2, workspace };
+      return {
+        saveId: 's',
+        profileId: 'p',
+        backupId: 'b',
+        reviewCount: 2,
+        carriedChecks: 4,
+        workspace,
+      };
     },
     '/api/context': () => ({
       save: { id: 's', name: 'World' },
@@ -2750,14 +2759,28 @@ test('between groups: recalculating with transport fuel creates a revision that 
       },
     }),
   });
+  assert.match(
+    note(),
+    /Recalculate in place with transport fuel recalculates this profile in place and carries your progress; the current version is kept as a backup under Profiles\./,
+  );
+  const asked = answerConfirms(true);
   $('[data-recalc-transport]')!.click();
   await settle();
   await settle();
-  assert.equal(calls[0]![0], '/api/profiles');
-  assert.equal(sent!.carryFrom, 'p');
-  assert.equal(sent!.name, `${evil} · transport fuel`);
+  assert.equal(asked.length, 1, 'it asks first');
+  assert.match(asked[0]!, /with the vehicle fuel the links between factories burn now/);
+  assert.equal(calls[0]![0], '/api/recalculate');
+  assert.equal(sent!.carryFrom, undefined, 'no new profile');
+  assert.equal(sent!.name, evil, 'the profile keeps its name');
+  assert.ok(
+    asked[0]!.includes(`“${sent!.backupName}”`),
+    'the backup is the one the question named',
+  );
   assert.deepEqual(Object.keys(sent!.settings.transportFuel), ['3', '4', '5']);
-  assert.match($('#toast')!.textContent!, /2 completed production line checks need review/);
+  assert.match(
+    $('#toast')!.textContent!,
+    /2 production lines left unticked for review\. The previous version is kept as/,
+  );
   assert.match(note(), /This plan already includes the vehicle fuel/);
   assert.equal($('[data-recalc-transport]'), null);
   noMarkup();
@@ -3189,9 +3212,9 @@ test('a guided plan: the nuclear-site notice in a dialog, and the Local chip', a
   await settle();
 });
 
-// A transcribed handbook (engine 'handbook-…', #486) warns before round-up and Recalculate with
-// transport fuel solve it afresh (decision 7B on #387, #480); any other plan does not.
-test('round-up and Recalculate with transport fuel warn first on a transcribed plan (#480)', async () => {
+// A transcribed handbook (engine 'handbook-…', #486) warns before round-up and Recalculate in
+// place with transport fuel solve it afresh (decision 7B on #387, #480); any other plan does not.
+test('round-up and Recalculate in place with transport fuel warn first on a transcribed plan (#480)', async () => {
   for (const engine of ['handbook-2026-09-13', plan.engine]) {
     const profilePlan = { ...structuredClone(plan), engine };
     profilePlan.settings.wholeMachines = false;
@@ -3205,7 +3228,7 @@ test('round-up and Recalculate with transport fuel warn first on a transcribed p
     await nextTick();
     assert.equal(asked.length, 1, engine);
     assert.equal(asked[0]!.includes(RESOLVE_WARNING), engine.startsWith('handbook-'), engine);
-    // Recalculate with transport fuel says it beside its button.
+    // Recalculate in place with transport fuel says it beside its button.
     const rows = profilePlan.stages['3'].rows!;
     open({
       calculated: profilePlan,
