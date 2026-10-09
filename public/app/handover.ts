@@ -217,7 +217,8 @@ export function placeHandover(
   };
 }
 
-// The handover summary's sentence (ui/plan/HandoverSummary.vue).
+// The handover summary's sentence (ui/plan/HandoverSummary.vue), and each factory's on the
+// Factories page (ui/factories/FactoryHandover.vue), where a single line to build is common.
 export function handoverText({ from, kept, add, clocks, build, retire }: Handover): string {
   const lines = (count: number) => `${formatNumber(count)} line${count === 1 ? '' : 's'}`;
   const changes = [
@@ -226,7 +227,7 @@ export function handoverText({ from, kept, add, clocks, build, retire }: Handove
   ].join(' and ');
   const keep = kept
     ? `keep ${lines(kept)} already running${changes ? ', ' + changes : ''}${build ? `; build the other ${formatNumber(build)}` : ''}`
-    : `nothing marked running there carries over, so build all ${lines(build)}`;
+    : `nothing marked running there carries over, so build ${build === 1 ? 'its one line' : `all ${lines(build)}`}`;
   return `From Phase ${from}: ${keep}${retire ? `; retire ${formatNumber(retire)}` : ''}.`;
 }
 

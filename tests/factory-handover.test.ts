@@ -172,7 +172,7 @@ test("a factory's handover counts and lists its own lines and the lines it retir
   assert.deepEqual(ids(wire.new), ['Cable']);
   assert.equal(
     handoverText(wire.counts),
-    'From Phase 1: nothing marked running there carries over, so build all 1 line.',
+    'From Phase 1: nothing marked running there carries over, so build its one line.',
   );
   const ungrouped = placeHandover(handover, inPlace(UNGROUPED))!;
   assert.deepEqual(ids(ungrouped.build), ['Copper Ingot']);
