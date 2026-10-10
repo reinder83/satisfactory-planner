@@ -30,9 +30,12 @@ import {
   progressionData,
   setWizard,
   setWorkspace,
+  state,
   wizard,
   workspace,
 } from '../session.ts';
+import { foundWords, ownedFromTicks, ticksPhase, withOwnedFound } from '../owned-ticks.ts';
+import type { FoundWords } from '../owned-ticks.ts';
 import { render } from '../shell.ts';
 import { confirmAction } from '../ui/confirm.ts';
 import { extractionOf } from './extraction.ts';
@@ -101,11 +104,13 @@ export interface WizardDraft {
   edit?: EditTarget | null;
 }
 
-// The profile Edit settings recalculates: its id, its name and plan when the edit started.
+// The profile Edit settings recalculates: its id, its name and plan when the edit started, and
+// what its ticks showed beyond the plan's owned settings, which the draft starts from (#1068).
 export interface EditTarget {
   profileId: string;
   name: string;
   plan: StoredCalculatedPlan;
+  fromTicks?: FoundWords;
 }
 
 // The reply of POST /api/profiles.
@@ -153,12 +158,15 @@ function openWizard(saveId: string | null) {
 // changes nothing). Nothing is recalculated until the user presses that button. Unsaved notes
 // are asked about first, as for startWizard. `step` opens another step than 1 (1-4): the
 // Resources page's "Change Extra utilities power in Edit settings" opens Preferences (#1090).
+// "What you already have" (the owned miner, belt, alternates and generators) starts from the
+// profile's ticks where they show more than its plan counts (#1068, ownedFromTicks), so the
+// recalculation includes them; the page says so (ui/wizard/TicksPrefill.vue).
 export async function startEdit(saveId: string, profileId: string, step = 1) {
   const asked = allowSwitch();
   if (asked !== true && !(await asked)) return;
   const open = currentSave?.id === saveId && currentProfile?.id === profileId && calculated;
   const context = open
-    ? { profile: { name: currentProfile.name }, plan: calculated! }
+    ? { profile: { name: currentProfile.name }, plan: calculated!, state }
     : await request<ContextReply>('/api/context', {
         headers: { 'X-Save-Id': saveId, 'X-Profile-Id': profileId },
       });
@@ -167,12 +175,29 @@ export async function startEdit(saveId: string, profileId: string, step = 1) {
     toast('This profile has no calculated plan to edit.', true);
     return;
   }
-  const wizardDraft = newDraft(saveId, existing, structuredClone(context.plan.settings));
+  const alternates = workspace.catalog?.alternates,
+    found = ownedFromTicks(
+      context.plan,
+      context.state?.checks || {},
+      ticksPhase(context.plan, context.state?.settings.phase),
+      alternates,
+    );
+  const settings = structuredClone(context.plan.settings);
+  const wizardDraft = newDraft(
+    saveId,
+    existing,
+    found ? withOwnedFound(settings, found) : settings,
+  );
   wizardDraft.name = context.profile.name;
   wizardDraft.carryFrom = profileId;
   wizardDraft.mode = 'advanced';
   wizardDraft.step = Math.min(Math.max(step, 1), 4);
-  wizardDraft.edit = { profileId, name: context.profile.name, plan: context.plan };
+  wizardDraft.edit = {
+    profileId,
+    name: context.profile.name,
+    plan: context.plan,
+    ...(found ? { fromTicks: foundWords(found, alternates) } : {}),
+  };
   setWizard(wizardDraft);
   navigate('wizard');
 }
