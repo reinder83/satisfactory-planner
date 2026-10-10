@@ -18,6 +18,7 @@ import {
 import { render } from '../../public/app/shell.ts';
 import { planTasks } from '../../public/app/tasks.ts';
 import { headroomAdvice } from '../../public/app/views/calculated.ts';
+import { SEARCH_PAUSE_MS } from '../../public/app/ui/search-field.ts';
 import {
   answerConfirms,
   applyUpdate,
@@ -54,6 +55,14 @@ const settle = async () => {
   await nextTick();
 };
 const steps = () => $$('#main .checklist [data-check]').map(e => e.dataset.check);
+// Types `value` into the step search and waits for the list, which filters once typing pauses
+// (#1060).
+const findStep = async (value: string) => {
+  $<HTMLInputElement>('#plan-search')!.value = value;
+  $('#plan-search')!.dispatchEvent(new Event('input'));
+  await new Promise(resolve => setTimeout(resolve, SEARCH_PAUSE_MS));
+  await nextTick();
+};
 const kindOf = (title: string) =>
   $$('#main .checklist .task')
     .find(t => t.querySelector('summary')!.textContent.includes(title))
@@ -210,17 +219,12 @@ test('post-game reads the Phase 5 stage and adds its priority notice', () => {
 test('the checklist can be searched and can hide completed steps', async () => {
   render();
   assert.ok($('#plan-search') && $('#hide-done'));
-  $<HTMLInputElement>('#plan-search')!.value = 'steel';
-  $('#plan-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findStep('steel');
   assert.deepEqual(steps(), ['phase-3-steel']);
   assert.equal($('.checklist-tools .muted')!.textContent, '1 of 9 steps');
-  $<HTMLInputElement>('#plan-search')!.value = 'no-such-step';
-  $('#plan-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findStep('no-such-step');
   assert.equal($('#main .empty-state')!.textContent, 'No steps match this search.');
-  $<HTMLInputElement>('#plan-search')!.value = '';
-  $('#plan-search')!.dispatchEvent(new Event('input'));
+  await findStep('');
   state.checks['phase-3-survey'] = true;
   $<HTMLInputElement>('#hide-done')!.checked = true;
   $('#hide-done')!.dispatchEvent(new Event('change'));
@@ -320,12 +324,9 @@ test('the lead step offers its factory; search, Hide completed and editing still
     assert.ok(!each.classList.contains('quiet'), 'full buttons on the lead step');
   assert.ok($('#main .task.lead [data-mark-done]'));
   // The search looks in both groups; a completed match shows under Done.
-  $<HTMLInputElement>('#plan-search')!.value = tasks[0]!.title;
-  $('#plan-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findStep(tasks[0]!.title);
   assert.ok(doneIds().includes(ids[0]));
-  $<HTMLInputElement>('#plan-search')!.value = '';
-  $('#plan-search')!.dispatchEvent(new Event('input'));
+  await findStep('');
   // Hide completed drops the Done group and keeps the lead.
   $<HTMLInputElement>('#hide-done')!.checked = true;
   $('#hide-done')!.dispatchEvent(new Event('change'));

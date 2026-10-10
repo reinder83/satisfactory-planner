@@ -46,6 +46,7 @@ import {
 } from '../../tasks.ts';
 import { sharedRemovedNote, sharedStepPhases } from '../../shared-steps.ts';
 import { legacy } from '../bridge.ts';
+import { searchField } from '../search-field.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
@@ -147,11 +148,15 @@ function emptyPhase(anyRemoved: boolean) {
     : 'Every step of this phase is removed. Choose Edit steps to restore them.';
 }
 
-// The step search, as you type.
-function search(event: Event) {
-  setQuery((event.target as HTMLInputElement).value);
-  render();
-}
+// The step search: the box keeps what is typed, and the list filters once typing pauses
+// (searchField, #1060).
+const { typed: typedQuery, input: search } = searchField(
+  () => legacy(() => query),
+  value => {
+    setQuery(value);
+    render();
+  },
+);
 
 function toggleHideDone(event: Event) {
   setHideDone((event.target as HTMLInputElement).checked);
@@ -172,7 +177,7 @@ function toggleRequiredOnly(event: Event) {
       class="search"
       placeholder="Find a step…"
       aria-label="Find a step"
-      :value="list.query"
+      :value="typedQuery"
       @input="search"
     /><label class="check-row small"
       ><input

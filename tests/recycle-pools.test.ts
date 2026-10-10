@@ -3,22 +3,14 @@
 // rounded so the parts add up, with each part's share as a simple fraction, rather than every
 // maker's share of every user (0.01 m³ a pair). On a small hand-made stage: three lines make
 // Heavy Oil Residue, three take it, one of them hardly any.
+// The numbers read as in en-US whatever this machine's locale is.
+import './helpers/en-us-numbers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { num } from '../public/app/format.ts';
 import { adviceSentence, adviceText, lineAdvice, recycleModel } from '../public/app/recycle.ts';
 import type { AdviceWords } from '../public/app/recycle.ts';
 import type { CalcRow, FactoryGroups, StoredStage } from '../public/types/index.ts';
-
-// The numbers read as in en-US whatever this machine's locale is.
-const toLocale = Number.prototype.toLocaleString;
-Number.prototype.toLocaleString = function (
-  this: number,
-  _locale?: unknown,
-  options?: Intl.NumberFormatOptions,
-) {
-  return toLocale.call(this, 'en-US', options);
-};
 
 const FLUIDS = new Set(['Heavy Oil Residue', 'Crude Oil', 'Water']);
 const words: AdviceWords = {

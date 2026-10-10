@@ -12,6 +12,7 @@ import { phaseStepIds } from '../../public/app/opening-phase.ts';
 import { taskIcon } from '../../public/app/tasks.ts';
 import { machineCounts, machineLine } from '../../public/app/views/factories.ts';
 import { calcTasks } from '../../public/app/views/calculated.ts';
+import { SEARCH_PAUSE_MS } from '../../public/app/ui/search-field.ts';
 import { power } from '../../public/app/wizard/fields.ts';
 import { lineLoad } from '../../public/power.ts';
 import LaneAdvice from '../../public/app/ui/detail/LaneAdvice.vue';
@@ -116,6 +117,15 @@ beforeEach(() => {
 
 // SP-19 (#254): a card has one control for its dialog, the name, and one for the Running box; the
 // name's hit area covering the card is CSS (tests/style.test.ts, and checked in a browser).
+// Types `value` into the production line search and waits for the page, which filters once
+// typing pauses (#1060).
+async function findLine(value: string) {
+  $<HTMLInputElement>('#factory-search')!.value = value;
+  $('#factory-search')!.dispatchEvent(new Event('input'));
+  await new Promise(resolve => setTimeout(resolve, SEARCH_PAUSE_MS));
+  await nextTick();
+}
+
 test('each factory card has one dialog button and one Running box (SP-19)', async () => {
   const tabStops = (card: Element) =>
     [...card.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea')].map(
@@ -158,9 +168,7 @@ test('shared sites group their outputs above the individual factory list', async
   await nextTick();
   assert.ok($$('#main .site-group h2').some(h => h.textContent === 'Nuclear site'));
   assert.ok($(`#main .site-group [data-calc-factory="${row('uranium-fuel-rod', '5')}"]`));
-  $<HTMLInputElement>('#factory-search')!.value = 'plastic';
-  $('#factory-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findLine('plastic');
   assert.deepEqual(
     $$('#main .site-group h2').map(h => h.textContent),
     ['Oil campus'],
@@ -168,9 +176,7 @@ test('shared sites group their outputs above the individual factory list', async
   );
   assert.equal($('#main > .eyebrow'), null, 'so does the ungrouped label');
   assert.equal($('#main .empty-state'), null, 'no empty state while a site still matches');
-  $<HTMLInputElement>('#factory-search')!.value = 'no-such-part';
-  $('#factory-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findLine('no-such-part');
   assert.equal(
     $('#main .empty-state')!.textContent!.trim(),
     'No production lines match this search.',
@@ -194,11 +200,7 @@ const press = (key: string) =>
   document.activeElement!.dispatchEvent(
     new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
   );
-const find = async (text: string) => {
-  $<HTMLInputElement>('#factory-search')!.value = text;
-  $('#factory-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
-};
+const find = (text: string) => findLine(text);
 const emptyText = () => $('[data-filter-empty]')!.firstChild!.textContent!.trim();
 
 test('the status chips filter on the saved factory checks, and the Running boxes work', async () => {
@@ -1175,9 +1177,7 @@ test('the calculated factories page shows its rows, round-up offer and warnings'
   assert.match($('#main .notice.warn')!.textContent, /Planning draft/);
   const first = rows[0]!;
   assert.equal($<HTMLInputElement>(`[data-check="calc-3-${first.id}"]`)!.checked, false);
-  $<HTMLInputElement>('#factory-search')!.value = first.name;
-  $('#factory-search')!.dispatchEvent(new Event('input'));
-  await nextTick();
+  await findLine(first.name);
   assert.ok($$('#main .factory-card').length >= 1);
   assert.ok($$('#main .factory-card').length < rows.length);
 });

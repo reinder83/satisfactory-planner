@@ -9,6 +9,8 @@ import {
 } from '../public/transfer.ts';
 import { calculatedProfile, checkNewProfileKind, renameOfferFields } from '../public/state.ts';
 import { calculate } from '../planner.ts';
+import { reviewedPlans } from '../public/reviewed-plans.ts';
+import type { CurrentCalculatedPlan } from '../public/types/index.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
 import { migrationData, type Save } from './persistence.ts';
@@ -29,6 +31,8 @@ export function saveRoutes({
   scope,
   scopeNamed,
 }: WorkspaceContext) {
+  // The plans Review showed, per user, for Create profile (#1060, public/reviewed-plans.ts).
+  const reviewed = reviewedPlans<CurrentCalculatedPlan>();
   // Full-save export (public/transfer.ts format) of the user's saves, scoped by the query as
   // selectForExport describes; share=1 strips progress with shareState. Each save keeps the shape
   // this route has always written: no userId, and a profile's plan null when it has none.
@@ -115,15 +119,18 @@ export function saveRoutes({
   }
   // Runs the calculator for the wizard without storing anything; throttled because a
   // solve is expensive. A live estimate (`?estimate=1`) counts against its own allowance and
-  // solving-time budget (limits.ts). Both checks run before the body is read.
-  async function preview({ req, url, body }: UserRequest) {
+  // solving-time budget (limits.ts). Both checks run before the body is read. Review's plan (not
+  // an estimate) is kept in memory for Create profile (reviewedPlans, #1060).
+  async function preview({ req, url, user, body }: UserRequest) {
     const budget = url.searchParams.get('estimate') === '1' ? limits.estimateBudget(req) : null;
     if (budget) limits.throttleEstimate(req);
     else limits.throttle(req);
     const input = await body();
     const start = performance.now();
     try {
-      return response(calculate(input.settings));
+      const plan = calculate(input.settings);
+      if (!budget) reviewed.keep(user.id, input.settings, plan);
+      return response(plan);
     } finally {
       if (budget) budget.count += performance.now() - start;
     }
@@ -131,15 +138,16 @@ export function saveRoutes({
   // Creates a profile in one of the user's saves (saveId) or in a new save (saveName). It is
   // calculated now and the snapshot stored; kind 'original' is refused (checkNewProfileKind), since
   // that profile type is retired (#387, #496). carryFrom names a sibling profile in the same save to start from
-  // (copied, never moved) and built lists finished work; see newProfileState. The plan is
-  // calculated before the commit; the save lookup and limits are checked inside it.
+  // (copied, never moved) and built lists finished work; see newProfileState. The plan is the
+  // one Review showed for these exact settings (reviewedPlans, #1060), else calculated, before the
+  // commit; the save lookup and limits are checked inside it.
   async function createProfile({ req, user, body }: UserRequest) {
     limits.throttle(req);
     const input = await body();
     checkNewProfileKind(input.kind);
     const saveName = input.saveId ? null : name(input.saveName),
       profileName = name(input.name);
-    const plan = calculate(input.settings);
+    const plan = reviewed.take(user.id, input.settings) ?? calculate(input.settings);
     const profileId = randomId();
     // A saveId that is not one of the user's save ids is refused inside the commit.
     let saveId = (input.saveId || randomId()) as string;

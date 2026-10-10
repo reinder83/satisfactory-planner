@@ -18,9 +18,24 @@ export const slug = (text: string): string =>
 export const listNames = (names: readonly string[]): string =>
   names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0] || '';
 
+// A number as the pages show one, locale-formatted with at most `digits` decimals (2 unless
+// given), a missing value as 0: exactly what Number(value || 0).toLocaleString(undefined,
+// { maximumFractionDigits: digits }) gives, but with one Intl.NumberFormat per digit count.
+// toLocaleString with options builds a new formatter on every call, which made the build plan's
+// step texts most of a tick's time on a phone (#1060, as in phaseSteps, #772). num in
+// public/app/format.ts and the shared modules' numbers go through it.
+const formatters = new Map<number, Intl.NumberFormat>();
+export function localeNumber(value: number | null | undefined, digits = 2): string {
+  let formatter = formatters.get(digits);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits });
+    formatters.set(digits, formatter);
+  }
+  return formatter.format(Number(value || 0));
+}
+
 // A whole count as the pages show numbers (num in public/app/format.ts): locale-formatted.
-const count = (value: number) =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const count = (value: number) => localeNumber(value);
 
 // A power figure as the pages show it: MW, or GW above 1,000 MW ("643.9 MW", "44.43 GW"). The
 // pages' power() (public/app/wizard/fields.ts) and the build plan's power step (#1048) use it.
