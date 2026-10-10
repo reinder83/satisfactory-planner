@@ -5258,8 +5258,9 @@ button.rail-tile:hover {
   font-size: 11px;
   color: var(--muted);
 }
-/* The note wraps inside the field's and ✕'s columns: its full width would otherwise widen the ✕
-   column (the auto track it spans) and squeeze the group name. */
+/* Both wrap inside the field's and ✕'s columns: their full width would otherwise widen the ✕
+   column (the auto track they span) and squeeze the group name (#994). */
+.assign-row .assign-unit,
 .assign-row .assign-tiny {
   contain: inline-size;
 }
