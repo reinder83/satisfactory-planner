@@ -53,6 +53,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'extractorMW',
     'extractorOption',
     'extractorShards',
+    'guidedBudgetsQuestion',
     'guidedHaveQuestion',
     'guidedQuestions',
     'guidedStandingQuestion',

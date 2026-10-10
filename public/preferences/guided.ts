@@ -99,8 +99,7 @@ export const phaseParts: Record<number, string[]> = {
 };
 // Each question names the advanced step that owns the same settings, so
 // "All settings" lands where you already were instead of at the top.
-// Each option's `set` is merged into the settings; `handoff` names the All settings step
-// the guided flow jumps to after it; `glyph` or `items` picks the card's artwork.
+// Each option's `set` is merged into the settings; `glyph` or `items` picks the card's artwork.
 export const guidedQuestions: GuidedQuestion[] = [
   {
     id: 'phase',
@@ -155,10 +154,10 @@ export const guidedQuestions: GuidedQuestion[] = [
       {
         value: 'maximum',
         label: 'As fast as the map allows',
-        detail: 'Fastest delivery inside your resource budgets. You confirm those budgets first.',
+        // The budgets are confirmed on the next screen (guidedBudgetsQuestion, #1072).
+        detail: 'Fastest delivery inside your resource budgets. You confirm those budgets next.',
         glyph: 'maximum',
         set: { goal: 'maximum' },
-        handoff: 4,
       },
     ],
   },
@@ -355,6 +354,20 @@ export const guidedHaveQuestion = (phase: string): GuidedQuestion => ({
   title: 'What do you already have?',
   lead: `Tell the plan what is already behind you, so Phase ${phase} does not send you to unlock it again. Everything here is optional: skip it and the plan lists every earlier unlock for you to tick, and plans with the miners and belts Phase ${phase} unlocks.`,
 });
+// The resource budgets maximum output needs confirmed (#1072), asked right after the goal question
+// while the goal is "As fast as the map allows" (guidedFlow). Not a choice of cards: the screen
+// (ui/guided/GuidedBudgets.vue) has All settings step 4's budget boxes and its "I have checked
+// these budgets" box, which Continue needs ticked, since calculate() refuses maximum output
+// without it. It writes the settings.limits and limitsConfirmed step 4 writes; nothing new is
+// stored.
+export const guidedBudgetsQuestion: GuidedQuestion = {
+  id: 'budgets',
+  step: 4,
+  short: 'Your budgets',
+  kind: 'budgets',
+  title: 'Are these resource budgets right for your save?',
+  lead: 'As fast as the map allows uses as much of each budget as it can, so the plan is only as right as these numbers. Enter what this plan may extract per minute, after your existing factories and power fuel.',
+};
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.
 // Used by guidedBuiltKeys in app/wizard/guided.ts.

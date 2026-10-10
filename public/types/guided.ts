@@ -11,12 +11,11 @@ export interface GuidedOption {
   items?: string[];
   // Merged into the draft's settings when chosen.
   set: Partial<CurrentSettings>;
-  // The All settings step the flow hands over to after this answer.
-  handoff?: number;
 }
 
 export interface GuidedQuestion {
-  // 'phase', 'goal', 'recipes', 'stock', 'exact', 'power', 'tutorial', 'supply' or 'have'.
+  // 'phase', 'goal', 'budgets', 'recipes', 'stock', 'exact', 'power', 'tutorial', 'supply' or
+  // 'have'.
   id: string;
   // The All settings step that owns the same settings.
   step: number;
@@ -24,9 +23,9 @@ export interface GuidedQuestion {
   title: string;
   lead: string;
   // The existing-production question has rows instead of options, and "What you already have"
-  // (#1068) its own controls.
+  // (#1068) and the budgets for maximum output (#1072) their own controls.
   options?: GuidedOption[];
-  kind?: 'supply' | 'have';
+  kind?: 'supply' | 'have' | 'budgets';
   // The question as a profile starting in `phase` is asked it (guidedFlow), where its wording
   // depends on the phase (#1072).
   phased?: (this: GuidedQuestion, phase: string) => GuidedQuestion;

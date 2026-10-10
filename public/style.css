@@ -5750,10 +5750,6 @@ button.rail-tile:hover {
   line-height: 1.6;
   color: #99a2a9;
 }
-.guided-card .badge {
-  align-self: flex-start;
-  margin-top: 2px;
-}
 .guided-art {
   display: flex;
   align-items: center;
@@ -5793,6 +5789,20 @@ button.rail-tile:hover {
 .guided-have-gear p {
   grid-column: 1 / -1;
   margin: 0;
+}
+/* The budgets maximum output needs confirmed (#1072, GuidedBudgets.vue): step 4's boxes, three
+   across where there is room and two on a phone, as on step 4. */
+.guided-budgets {
+  max-width: 760px;
+}
+.guided-budgets-survey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.guided-budgets .resource-inputs {
+  margin: 0 0 14px;
 }
 /* The materials you carry out by hand. A floor for one of them costs about a
    percent; the general construction rate that would reach the same number
