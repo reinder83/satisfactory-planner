@@ -43,6 +43,9 @@ export default {
     root: fileURLToPath(new URL('.', import.meta.url)),
     include: ['tests/ui/**/*.test.ts'],
     environment: 'happy-dom',
+    // happy-dom fires a hashchange on history.replaceState() and pushState(); browsers never do
+    // (#991). This drops those events before any listener sees them; see the file.
+    setupFiles: ['tests/ui/browser-history.ts'],
     // A test that renders many pages (the headroom notice on every phase: 18 pages, ~1.6 s here)
     // takes over 5 s on the NAS runner's CPU (#400), vitest's default. The limit only matters
     // for a test that hangs, so it is generous.

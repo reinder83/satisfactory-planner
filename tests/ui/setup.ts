@@ -35,6 +35,9 @@ import type {
   WorkspaceSummary,
 } from '../../public/types/index.ts';
 
+// A stand-in for a link, a typed address or Back that adds no history entry (#991).
+export { followInPlace } from './browser-history.ts';
+
 // Vitest runs from the repository root. The retired handbook, as the server's migration reads
 // it (#397: public/plan.json, its released copy, is gone).
 export const handbook: Handbook = JSON.parse(

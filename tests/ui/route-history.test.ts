@@ -7,7 +7,8 @@
 //
 // happy-dom's own history differs from a browser's where this matters: setting location.hash
 // copies the current entry's state into the new entry, replaceState drops the entries after the
-// current one, and a replaceState that changes the hash fires a hashchange. So the tests run on
+// current one, and a replaceState that changes the hash fires a hashchange (which
+// browser-history.ts drops for every component test, #991). So the tests run on
 // a browser's session history (browserHistory below): a list of entries with their state, where
 // a link or typed address (setting location.hash) adds an entry after the current one and fires
 // a hashchange, pushState and replaceState fire none, and go(), back() and forward() move a
@@ -20,17 +21,25 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, test, vi } from '
 import { entryPlace, placeEntry, startPlace } from '../../public/app/history-place.ts';
 import { setFactoryEditing, setFactoryFilter, setQuery, view } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { $, answerConfirms, applyUpdate, generated, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  answerConfirms,
+  applyUpdate,
+  followInPlace,
+  generated,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { FactoryGroups, UpdateOp } from '../../public/types/index.ts';
 
 // Puts a browser's session history over happy-dom's (see above). The address on screen is set
-// through happy-dom's own replaceState, whose hashchange is let through for a link, typed address
-// or move through the history and dropped for pushState and replaceState, which fire none in a
-// browser. Returns `idle`, true while no move or hashchange is on its way, and `restore`.
+// through happy-dom's own replaceState (followInPlace), whose hashchange is let through for a
+// link, typed address or move through the history and dropped for pushState and replaceState,
+// which fire none in a browser. Returns `idle`, true while no move or hashchange is on its way, and `restore`.
 function browserHistory() {
   const entries: { url: string; state: unknown }[] = [{ url: location.href, state: history.state }];
   let current = 0;
-  const realReplace = History.prototype.replaceState;
   const hashProperty = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(location), 'hash')!;
   const dispatch = window.dispatchEvent;
   const silent: string[] = [];
@@ -38,7 +47,7 @@ function browserHistory() {
   const arrived = new WeakSet<Event>();
   const show = (url: string, quiet: boolean) => {
     const oldURL = location.href;
-    realReplace.call(history, null, '', url);
+    followInPlace(url);
     if (location.hash === new URL(oldURL).hash) return;
     if (quiet) silent.push(`${oldURL} ${location.href}`);
     else underway++;
