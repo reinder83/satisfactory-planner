@@ -85,7 +85,13 @@ test('an edited mining step shows the edited words instead of the table, and kee
     phase: '3',
     state: {
       checks: { 'mining-3': true },
-      taskEdits: { bodies: { 'mining-3': 'My own mining notes.' } },
+      taskEdits: {
+        order: {},
+        removed: [],
+        titles: {},
+        links: {},
+        bodies: { 'mining-3': 'My own mining notes.' },
+      },
     },
   });
   go('plan');

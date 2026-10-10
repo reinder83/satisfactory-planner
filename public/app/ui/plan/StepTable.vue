@@ -9,6 +9,8 @@
 import type { StepTable } from '../../../step-table.ts';
 
 defineProps<{ table: StepTable }>();
+// An empty cell hides on a phone; a short one (a rate, a count, an amount) never wraps.
+const cellClass = (cell: string) => ({ empty: !cell, short: cell.length <= 16 });
 </script>
 
 <template>
@@ -29,7 +31,7 @@ defineProps<{ table: StepTable }>();
         <tr v-for="row in table.rows" :key="row[0]" data-step-table-row>
           <template v-for="(cell, index) in row" :key="index">
             <th v-if="index === 0" scope="row">{{ cell }}</th>
-            <td v-else :data-label="table.columns[index]" :class="{ empty: !cell }">{{ cell }}</td>
+            <td v-else :data-label="table.columns[index]" :class="cellClass(cell)">{{ cell }}</td>
           </template>
         </tr>
       </tbody>
@@ -37,7 +39,7 @@ defineProps<{ table: StepTable }>();
         <tr data-step-table-total>
           <template v-for="(cell, index) in table.total" :key="index">
             <th v-if="index === 0" scope="row">{{ cell }}</th>
-            <td v-else :data-label="table.columns[index]" :class="{ empty: !cell }">{{ cell }}</td>
+            <td v-else :data-label="table.columns[index]" :class="cellClass(cell)">{{ cell }}</td>
           </template>
         </tr>
       </tfoot>

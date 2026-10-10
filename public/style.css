@@ -1088,9 +1088,9 @@ p {
   text-wrap: pretty;
 }
 /* A step's body as a table (#1136, StepTable.vue): the mining step's resources, one row each,
-   with a total row. It scrolls inside its own box where it is wider than the step, and on a phone
-   each row stacks into one block, each cell under its column's name, so the page never scrolls
-   sideways. */
+   with a total row. Where the step is 480px wide or less (a phone, or a narrow plan column) each
+   row stacks into one block, each cell under its column's name, so the page never scrolls
+   sideways; wider, the table scrolls inside its own box if it must. */
 .step-table table {
   width: 100%;
   border-collapse: collapse;
@@ -1101,6 +1101,7 @@ p {
 .step-table {
   max-width: 100%;
   overflow-x: auto;
+  container: step-table / inline-size;
 }
 .step-table th,
 .step-table td {
@@ -1127,13 +1128,13 @@ p {
   border-top: 1px solid var(--line);
   border-bottom: 0;
 }
+.step-table td.short {
+  white-space: nowrap;
+}
 .step-table tbody tr:nth-child(even) {
   background: var(--row);
 }
-@media (max-width: 480px) {
-  .step-table {
-    overflow-x: visible;
-  }
+@container step-table (max-width: 480px) {
   .step-table table,
   .step-table tbody,
   .step-table tfoot,
@@ -1167,6 +1168,9 @@ p {
   }
   .step-table td.empty {
     display: none;
+  }
+  .step-table td.short {
+    white-space: normal;
   }
   .step-table tfoot tr {
     border-bottom: 0;
@@ -6272,6 +6276,10 @@ th.resource-cell {
 .water-overclock {
   max-width: 420px;
   margin: 8px 0 0;
+}
+.owned-overclock,
+.water-overclock {
+  align-items: flex-start;
 }
 /* "Generators you already have" (#1068, OwnedGenerators.vue): a count per kind, as many side by
    side as fit, under the budgets on step 4 and on the guided start's "What you already have". */
