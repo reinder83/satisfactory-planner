@@ -43,7 +43,8 @@ import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
 import { idleStepNotes, planTasks, removedPlanTasks, stepDone, taskEditsState } from './tasks.ts';
 import { backupDays } from './views/backup.ts';
-import { buildRowName, currentBuildStatus } from './views/calculated.ts';
+import { buildRowName, currentBuildStatus, ownedTicksNotice } from './views/calculated.ts';
+import { foundList, foundWords } from './owned-ticks.ts';
 import { byproductCount } from './recycle.ts';
 import { handoverLines } from './handover.ts';
 import { factoryGroupsState } from './views/factories.ts';
@@ -252,6 +253,13 @@ function onSitePendingFacts(): Pick<AdaFacts, 'onSitePending' | 'onSiteLinesOnly
   return { onSitePending: !!change, onSiteLinesOnly: !!change && !change.marksChanged };
 }
 
+// What the ticks show the player already has beyond the plan's settings, while the build plan's
+// notice offers it (ownedTicksNotice, #1068), as the notice lists it.
+function ownedTicksFacts(): Pick<AdaFacts, 'ownedTicks'> {
+  const found = ownedTicksNotice();
+  return found ? { ownedTicks: foundList(foundWords(found, workspace.catalog?.alternates)) } : {};
+}
+
 // The lines a recalculation with the clocks asked for would change (exactClocksChange, #1066), and
 // what whole machines cost in the open phase (roundingCost), in the side column's words: more
 // buildings and power than exact clocks, only where the whole-machine plan takes more.
@@ -383,6 +391,7 @@ function adaFacts(): AdaFacts {
     siteReview: Object.keys(state.onSiteReview?.checks || {}).length,
     ...onSitePendingFacts(),
     ...exactClockFacts(),
+    ...ownedTicksFacts(),
     byproducts: byproductCount(calcStage() ?? { feasible: false }),
     ...waterFacts(),
     ...handoverFacts(),

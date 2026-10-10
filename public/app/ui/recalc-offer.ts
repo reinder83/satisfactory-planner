@@ -1,6 +1,7 @@
 // The plan's own recalculation offers (#1071): "Recalculate in place with exact clocks"
-// (plan/ExactClocksRecalc.vue), "… with items made on site" (factories/OnSiteRecalc.vue) and
-// "… with transport fuel" (factories/GroupLinks.vue). Each recalculates the open profile in place
+// (plan/ExactClocksRecalc.vue), "… with items made on site" (factories/OnSiteRecalc.vue),
+// "… with transport fuel" (factories/GroupLinks.vue) and "… with what you have"
+// (plan/OwnedTicksNotice.vue, #1068). Each recalculates the open profile in place
 // through the request Edit settings' "Recalculate in place" sends (POST /api/recalculate,
 // recalculate.ts): same id and name, the new plan, the progress carried from itself with every
 // carry pick (as the new profile these offers used to create was carried), so a line marked

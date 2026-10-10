@@ -78,6 +78,7 @@ import {
   richShape,
   waterExtractors,
   BELT_MARKS,
+  MINER_MARKS,
   PIPE_MARKS,
   EXTRACTOR_OPTIONS,
   isWellKind,
@@ -191,6 +192,8 @@ function ui() {
     waterExtractors,
     // The belt and pipe marks (flow.ts) and the mining per phase (mining.ts, #1065).
     BELT_MARKS,
+    // The miner marks, which the ticks keep current (owned-ticks.ts, #1068).
+    MINER_MARKS,
     PIPE_MARKS,
     EXTRACTOR_OPTIONS,
     isWellKind,
