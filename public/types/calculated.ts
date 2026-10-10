@@ -45,6 +45,14 @@ export type DroneFuel =
   | 'Uranium Fuel Rod'
   | 'Plutonium Fuel Rod';
 export type SloopUse = 'shards' | 'dna' | 'biofuel';
+// The generators a player may already have (#1068, OWNED_GENERATORS in
+// public/preferences/fuels.ts), by building, and how many of each.
+export type OwnedGeneratorMachine =
+  | 'Biomass Burner'
+  | 'Coal Generator'
+  | 'Fuel Generator'
+  | 'Nuclear Power Plant';
+export type OwnedGenerators = Partial<Record<OwnedGeneratorMachine, number>>;
 
 // Node or well-satellite counts by purity.
 export interface NodeCounts {
@@ -133,6 +141,14 @@ export interface CurrentSettings {
   // says, so a Standard plan can use them; their unlock steps start ticked. Absent unless one is
   // owned, and from every plan made before it, which therefore calculates exactly as before.
   ownedAlternates?: string[];
+  // The generators the player already has (#1068, All settings step 4 and the guided start), by
+  // building: whole counts from 1. They count as generators of the plan's own generator lines in
+  // that building, from the start phase on, wherever a phase has such a line (carryGenerators in
+  // public/power.ts): the phase runs at least that many, and their fuel stays in the budgets,
+  // since generators burn fuel only for the power drawn. Not spare power, whose fuel is already
+  // off the budgets. Biomass Burners only change the build plan's burner bank. Absent unless one
+  // is entered, and from every plan made before it, which therefore calculates exactly as before.
+  ownedGenerators?: OwnedGenerators;
   extraction: ExtractionRecord | null;
   cellsPerMinute: number;
   installedPowerGW: number;
@@ -314,6 +330,9 @@ export interface GridGenerator {
   own: number;
   // Of `machines`, the ones the phase before already built and the phase keeps (0 for none).
   kept: number;
+  // The ones the player already has (#1068, settings.ownedGenerators), which the phase runs at
+  // least: `machines` is at least this. Absent for none, and from every plan made before it.
+  owned?: number;
   // One generator's capacity in MW, before the augmenter boost.
   unitMW: number;
 }

@@ -42,6 +42,11 @@ export interface AdaFacts {
   // Generators"), and that phase ("Phase 3"); absent when it keeps none.
   keptGenerators?: string;
   keptFrom?: string;
+  // The generators the player already has (#1068, settings.ownedGenerators) that the open phase
+  // counts among its own ("4 Coal Generators"), and those of a building it plans none in, which it
+  // does not count ("8 Coal Generators"); each absent for none.
+  ownedGenerators?: string;
+  idleGenerators?: string;
   factories: { done: number; total: number };
   storage: { done: number; total: number };
   // The storage search when no container on any floor answers it (#240), else ''.
@@ -358,6 +363,26 @@ const RULES: AdaRule[] = [
     when: facts => !!facts.keptGenerators,
     text: facts =>
       `This phase keeps the ${facts.keptGenerators} ${facts.keptFrom} built and counts them before it adds any. A generator that still has fuel to burn is not scrap.`,
+  },
+  {
+    // The generators the player already has (#1068): counted among the phase's own, whose fuel
+    // the budgets still carry, or not counted where the phase plans none of that building, as
+    // "Power available now" says.
+    id: 'owned-generators',
+    on: ['plan', 'resources'],
+    tone: 'calm',
+    when: facts => !!facts.ownedGenerators || !!facts.idleGenerators,
+    text: facts =>
+      [
+        facts.ownedGenerators
+          ? `This phase counts the ${facts.ownedGenerators} you already have before it builds any. Their fuel still comes out of your budgets: owning a generator saves the building, not what it burns.`
+          : '',
+        facts.idleGenerators
+          ? `This phase plans none of your ${facts.idleGenerators}, so it does not count them. Keep them fed outside the plan and they are spare power, which Edit settings takes. Idle generators make excellent furniture.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
   },
   // Factory, storage, delivery and notes counters for the current phase.
   {

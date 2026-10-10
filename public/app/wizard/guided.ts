@@ -22,6 +22,7 @@ import {
   readAlternates,
   readOwnedAlternates,
   readOwnedEquipment,
+  readOwnedGenerators,
   readWizard,
   wizardBusy,
   type WizardDraft,
@@ -178,12 +179,13 @@ function readGuided(form: HTMLFormElement, topics: boolean) {
 // "What you already have" (#1068, ui/guided/GuidedHave.vue), read as the screens it borrows from
 // read it: Review's "Everything before Phase N is done" onto the draft (earlierDone, which Review
 // shows ticked and createProfile sends as built work), All settings step 2's alternates you
-// already own and step 4's miner and belt into the settings. Left as it is, it leaves every field
-// absent, so the profile is the one the guided start made before.
+// already own and step 4's miner, belt and generators you already have into the settings. Left as
+// it is, it leaves every field absent, so the profile is the one the guided start made before.
 function readHave(form: HTMLFormElement, formData: FormData, wizardDraft: WizardDraft) {
   wizardDraft.earlierDone = formData.has('earlierDone');
   readOwnedAlternates(form, formData, wizardDraft.settings);
   readOwnedEquipment(formData, wizardDraft.settings, true);
+  readOwnedGenerators(form, formData, wizardDraft.settings);
 }
 
 // Go to question `target` (1-based): read the screen, then re-render, hand over

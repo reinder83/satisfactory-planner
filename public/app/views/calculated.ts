@@ -30,6 +30,7 @@ import {
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { minerWords } from '../../mining.ts';
+import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
 
 // A build-plan step before the user's edits: its saved check key, title and text.
@@ -82,8 +83,44 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
   // The stage of the phase shown, which need not be the current phase (#1022).
   const snapshot = calculated.stages[shownPhase === 'post' ? '5' : shownPhase];
   return orderedPhaseSteps(shownPhase).map(({ row, ...step }) =>
-    row ? { ...step, body: carriedStepText(row, shownPhase) + rowStepBody(row, snapshot) } : step,
+    row
+      ? {
+          ...step,
+          body:
+            carriedStepText(row, shownPhase) +
+            ownedGeneratorsText(row, snapshot) +
+            rowStepBody(row, snapshot),
+        }
+      : step,
   );
+}
+
+// The opening sentence of a generator line's step where the player already has generators of its
+// building that the phase counts (#1068, settings.ownedGenerators, ownedBeyondKept in power.ts):
+// how many of its machines they are, and how many are left to build. With one line in the
+// building: "You already have 4 of these 6 Coal Generators: build 2 more. " or "You already have
+// 8 Coal Generators, enough for this line's 6: build none. "; with several, counted over them
+// together ("… of the 30 Fuel Generators this phase's 2 Fuel Generator lines run: build 27 more
+// between them. "). '' for any other line. It reads the stored plan and changes nothing.
+export function ownedGeneratorsText(row: CalcRow, snapshot: StoredStage | undefined): string {
+  if (!(row.power < 0)) return '';
+  const entry = ownedBeyondKept(snapshot?.grid).find(owned => owned.machine === row.machine);
+  if (!entry) return '';
+  const have = entry.owned ?? 0,
+    plural = (count: number) => row.machine + (count === 1 ? '' : 's');
+  const lines = (snapshot?.rows || []).filter(
+    other => other.power < 0 && other.machine === row.machine,
+  ).length;
+  const left = entry.machines - Math.max(have, entry.kept);
+  if (lines > 1) {
+    const run = `this phase's ${lines} ${row.machine} lines run`;
+    return have < entry.own
+      ? `You already have ${num(have)} of the ${num(entry.own)} ${plural(entry.own)} ${run}: build ${num(left)} more between them. `
+      : `You already have ${num(have)} ${plural(have)}, enough for the ${num(entry.own)} ${run}: build none. `;
+  }
+  return have < entry.own
+    ? `You already have ${num(have)} of these ${num(entry.own)} ${plural(entry.own)}: build ${num(left)} more. `
+    : `You already have ${num(have)} ${plural(have)}, enough for this line's ${num(entry.own)}: build none. `;
 }
 
 // The opening sentence of a step for a line the phase before marked running and this phase builds

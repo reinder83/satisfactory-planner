@@ -12,7 +12,8 @@ const modules = fs
 // rawResources was added after the split, as the raw-resource list the planner and the interface
 // share (#921), the Water Extractor figures and counts for the byproduct advice (#1024), and the
 // extraction power the plan's power model charges (#1064), and the mining and belts per phase
-// (#1065), with the belt you already have (phaseBelt, #1068).
+// (#1065), with the belt you already have (phaseBelt, #1068), and the generators you already have
+// (OWNED_GENERATORS, ownedGeneratorCounts, #1068).
 test('preferences.ts re-exports the names it exported before the split', () => {
   assert.deepEqual(Object.keys(preferences).sort(), [
     'BELT_MARKS',
@@ -28,6 +29,8 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'MINER_MW',
     'OIL_BASE',
     'OIL_EXTRACTOR_MW',
+    'OWNED_GENERATORS',
+    'OWNED_GENERATORS_MAX',
     'PHASE_CLOCK',
     'PIPE_MARKS',
     'PRESSURIZER_MW',
@@ -68,6 +71,7 @@ test('preferences.ts re-exports the names it exported before the split', () => {
     'nodePresets',
     'nodeYield',
     'oilNodeResources',
+    'ownedGeneratorCounts',
     'phaseBelt',
     'phaseForTier',
     'phaseMiner',
