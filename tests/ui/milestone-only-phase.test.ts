@@ -293,3 +293,44 @@ test('Logistics in a milestone-only phase shows the milestone-only notice and Go
   assert.equal($('x-evil'), null);
 });
 
+// #1014: the made-on-site recalculation notice is about the whole plan, so the Factories page of
+// a milestone-only phase shows it too, with its button, above the milestone-only notice.
+test('the Factories page of a milestone-only phase shows the made-on-site recalculation notice', async () => {
+  // Alpha holds the Stator line and marks Wire, which the plan does not make on site.
+  const factoryGroups = {
+    groups: [{ id: 'fg-alpha1', name: 'Alpha' }],
+    assignments: { Recipe_Stator_C: [{ group: 'fg-alpha1', rate: null }] },
+    local: { 'fg-alpha1': ['Wire'] },
+  };
+  for (const shown of ['3', '1'] as Phase[]) {
+    open({ calculated: phaseThreePlan(), phase: shown, state: { factoryGroups } });
+    go('factories');
+    render();
+    await settle();
+    const recalc = $('#main [data-on-site-recalc]');
+    assert.ok(recalc, `Phase ${shown} shows the notice`);
+    assert.match(text(recalc), /This plan needs a recalculation\./);
+    assert.equal(
+      text($('#main [data-recalc-on-site]')),
+      'Recalculate in place with items made on site',
+    );
+  }
+  assert.ok($('#main [data-milestone-only]'), 'Phase 1 still says why it has no lines');
+  const notices = $$('#main .notice');
+  assert.ok(
+    notices.indexOf($('#main [data-on-site-recalc]')!) <
+      notices.indexOf($('#main [data-milestone-only]')!),
+    'the recalculation first, as on the build plan',
+  );
+  // ADA's on-site-pending remark, among the ones it cycles through here, points at the button
+  // this page now has.
+  const lines = Array.from({ length: 40 }, (_, i) => {
+    setAdaIndex(i);
+    return adaCurrent()?.text || '';
+  });
+  assert.ok(
+    lines.some(line =>
+      /Recalculate in place with items made on site, on the Factories page/.test(line),
+    ),
+  );
+});
