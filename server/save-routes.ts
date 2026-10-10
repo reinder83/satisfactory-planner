@@ -7,7 +7,7 @@ import {
   remapImportedIds,
   selectForExport,
 } from '../public/transfer.ts';
-import { calculatedProfile, checkNewProfileKind } from '../public/state.ts';
+import { calculatedProfile, checkNewProfileKind, renameOfferFields } from '../public/state.ts';
 import { calculate } from '../planner.ts';
 import { randomId } from './accounts.ts';
 import { fail } from './errors.ts';
@@ -49,6 +49,8 @@ export function saveRoutes({
           // The kept-version link (#1071); selectForExport leaves out one whose profile is not
           // exported.
           ...(profile.backupOf === undefined ? {} : { backupOf: profile.backupOf }),
+          // The dismissed "Rename to …" offer (#1071), so an import does not offer it again.
+          ...renameOfferFields(profile),
         })),
       }));
     const { exported } = selectForExport(owned, exportQuery(url.searchParams), message =>
@@ -68,8 +70,13 @@ export function saveRoutes({
       const source = draftSave?.profiles.find(p => p.id === profile.id);
       if (!draftSave || !source) fail('Profile not found.', 404);
       if (draftSave.profiles.length >= 30) fail('You can keep up to 30 profiles per save.');
-      // A copy is not a kept version (#1071): it leaves the source's backupOf link behind.
-      const { backupOf: _link, ...copy } = structuredClone(source);
+      // A copy is not a kept version (#1071): it leaves the source's backupOf link behind, and
+      // the dismissed "Rename to …" offer too, since it has a name of its own.
+      const {
+        backupOf: _link,
+        renameOfferDismissed: _dismissed,
+        ...copy
+      } = structuredClone(source);
       draftSave.profiles.push({
         ...copy,
         id: profileId,
@@ -227,6 +234,19 @@ export function saveRoutes({
     });
     return response(currentSummary(user));
   }
+  // "Keep the name" on a profile card's "Rename to …" offer (#1071, public/state/rename-offer.ts):
+  // marks the scoped profile so the offer does not come back. Only the flag changes; the name,
+  // plan and progress stay. Running it again changes nothing.
+  async function dismissRenameOffer({ req, url, user, body }: UserRequest) {
+    await body();
+    const { save, profile } = scope(req, url, user);
+    await commit(draft => {
+      draft.saves
+        .find(s => s.id === save.id)!
+        .profiles.find(p => p.id === profile.id)!.renameOfferDismissed = true;
+    });
+    return response(currentSummary(user));
+  }
   return {
     exportSaves,
     duplicateProfile,
@@ -236,5 +256,6 @@ export function saveRoutes({
     selectProfile,
     removeProfile,
     rename,
+    dismissRenameOffer,
   };
 }

@@ -18,6 +18,7 @@ import type {
 } from '../types/index.ts';
 import { phaseSteps, recipeIdOf, type StepsMemo } from '../progression.ts';
 import { defaultFactoryGroups } from './factory-groups.ts';
+import { renameOfferFields, withoutRenameOffer } from './rename-offer.ts';
 import {
   type RowsPlan,
   fail,
@@ -556,12 +557,19 @@ export function recalculatedProfile<P extends RowsPlan, T extends StoredProfile>
   state.revision = (previous.state.revision ?? 0) + 1;
   return {
     // A profile that is itself a kept version keeps its link (restore.ts): it stays the version
-    // kept for that profile, now recalculated.
+    // kept for that profile, now recalculated. A dismissed "Rename to …" offer stays dismissed
+    // (rename-offer.ts); the backup, which gets a name of its own, leaves it behind.
     profile: {
       ...started.profile,
       ...(previous.backupOf === undefined ? {} : { backupOf: previous.backupOf }),
+      ...renameOfferFields(previous),
     },
-    backup: { ...structuredClone(previous), id: backupId, name: backupName, backupOf: previous.id },
+    backup: {
+      ...withoutRenameOffer(structuredClone(previous)),
+      id: backupId,
+      name: backupName,
+      backupOf: previous.id,
+    },
     reviewCount: started.reviewCount,
     carried: Object.values(state.checks).filter(Boolean).length,
   };

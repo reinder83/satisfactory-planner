@@ -222,6 +222,7 @@ test('a JSON body that is not an object is refused with 400 before any route rea
           '/api/select',
           '/api/remove-profile',
           '/api/rename',
+          '/api/dismiss-rename-offer',
           '/api/duplicate-profile',
           '/api/rank-alternates',
           '/api/import',

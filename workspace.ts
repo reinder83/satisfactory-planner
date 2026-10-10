@@ -34,6 +34,7 @@ export type { Route, RouteReply } from './server/routing.ts';
 //   GET  /api/export-saves       full-save export, optionally one save/profile or a share
 //   POST /api/import-saves       import a full-save export as new copies
 //   POST /api/duplicate-profile, /api/profiles, /api/select, /api/remove-profile, /api/rename
+//   POST /api/dismiss-rename-offer   keep the scoped profile's name: its Rename to … offer goes
 //   POST /api/preview            calculate without saving
 //   GET  /api/context, /api/state, /api/export   the scoped profile
 //   POST /api/round-up           whole-machine copy of a calculated profile
@@ -108,6 +109,7 @@ export async function openWorkspace({
     'POST /api/select': saves.selectProfile,
     'POST /api/remove-profile': saves.removeProfile,
     'POST /api/rename': saves.rename,
+    'POST /api/dismiss-rename-offer': saves.dismissRenameOffer,
   };
   const scopedRoutes: Record<string, Handler<ScopedRequest>> = {
     'POST /api/round-up': profiles.roundUp,

@@ -15,6 +15,7 @@
 // (validateTransfer rebuilds each profile). A link that names no other profile of the same save
 // (its profile removed, or a copy imported without it) offers no restore.
 import type { StoredProfile, StoredProfileKind } from '../types/index.ts';
+import { renameOfferFields } from './rename-offer.ts';
 import { fail } from './validate.ts';
 
 // The id of the profile `profile` restores into: the one its link names, when that is another
@@ -99,13 +100,22 @@ export function checkRestore<T extends Restorable>(
 // one's, so a whole-value write from a tab that still shows one of the old versions is refused.
 // The inputs are cloned, never changed.
 export function restoredVersions<T extends StoredProfile>(target: T, backup: T, keptName: string) {
-  const content = ({ id: _id, name: _name, backupOf: _link, ...rest }: T) => structuredClone(rest);
+  // A dismissed "Rename to …" offer (rename-offer.ts) belongs to the name, so it stays with the
+  // profile that keeps its name, and the version kept under a new name has none.
+  const content = ({
+    id: _id,
+    name: _name,
+    backupOf: _link,
+    renameOfferDismissed: _dismissed,
+    ...rest
+  }: T) => structuredClone(rest);
   const revision = Math.max(target.state.revision ?? 0, backup.state.revision ?? 0) + 1;
   const restored = {
     ...content(backup),
     id: target.id,
     name: target.name,
     ...(target.backupOf === undefined ? {} : { backupOf: target.backupOf }),
+    ...renameOfferFields(target),
   } as T;
   const kept = { ...content(target), id: backup.id, name: keptName, backupOf: target.id } as T;
   restored.state.revision = revision;
