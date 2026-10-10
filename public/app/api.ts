@@ -62,7 +62,8 @@ export function toast(message: string, error = false, action: ToastAction | null
   el.className = 'show' + (error ? ' error' : '');
   clearTimeout(toastTimer);
   const hide = () => {
-    if (toastAction && el.matches(':hover, :focus-within')) toastTimer = setTimeout(hide, 1000);
+    if (toastAction && (el.contains(document.activeElement) || el.matches(':hover')))
+      toastTimer = setTimeout(hide, 1000);
     else hideToast();
   };
   toastTimer = setTimeout(hide, toastMs(error, action));
