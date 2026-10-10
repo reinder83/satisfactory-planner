@@ -6,7 +6,8 @@
 
 // Registration order: app.ts imports this module, and tests/ui/app-modules.test.ts pins
 // the order. In order: image error (capture), hashchange, #detail backdrop click, #detail
-// cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange, focus.
+// cancel (Escape), beforeunload, wizard input and change (capture), visibilitychange, focus,
+// keydown (the toast's Ctrl+Z).
 import {
   acceptRoute,
   flushNotes,
@@ -15,6 +16,7 @@ import {
   pending,
   refreshState,
   refreshWorkspace,
+  toastShortcut,
 } from './api.ts';
 import { required } from './format.ts';
 import { onBackdropClick } from './backdrop.ts';
@@ -112,6 +114,9 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('focus', () => {
   refreshWorkspace().catch(() => {});
 });
+
+// Ctrl+Z (⌘Z) presses the button of a toast that offers one, such as Undo after a tick (#1054).
+document.addEventListener('keydown', toastShortcut);
 
 // A toast that would cover the focused control it is about goes to the top (#663).
 watchToast(required('#toast'));

@@ -1034,6 +1034,17 @@ p {
 .task:has(input:checked) {
   background: #101315;
 }
+/* A step just ticked stays in its place for a few seconds (#1054), then fades as it goes to
+   "Done (n)"; under prefers-reduced-motion it goes at once (tick-hold.ts), with no fade. */
+.task.is-leaving {
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task.is-leaving {
+    transition: none;
+  }
+}
 /* A word longer than the title column (a pasted URL in a personal step's title or details)
    breaks inside the column instead of running past the row (#659). Words that fit keep whole. */
 .task details {
@@ -3852,6 +3863,18 @@ button.rail-tile:hover {
   background: #241a18;
   color: #f3c4b8;
 }
+/* A toast with a button after its message, such as Undo after ticking a build-plan step (#1054):
+   the button sits at the end of the line, and on a phone stays a 44px touch target (.btn). */
+#toast.show:has(.toast-action) {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+#toast .toast-action {
+  flex: none;
+  margin-left: auto;
+  padding: 6px 12px;
+}
 /* At the top when the focused control it is about lies under the bottom strip (#663,
    app/toast-place.ts), over the sticky edit bar so it stays readable. */
 #toast[data-place='top'] {
@@ -5568,7 +5591,8 @@ button.rail-tile:hover {
     color: #101417;
   }
   /* #toast.show too: the screen rule that shows the toast is more specific than #toast, so it
-     would win here and print a toast that is still up (#730). */
+     would win here and print a toast that is still up (#730); so is the one for a toast with a
+     button (Undo after a tick, #1054). */
   .sidebar,
   .topbar,
   .toolbar,
@@ -5577,6 +5601,7 @@ button.rail-tile:hover {
   .btn,
   #toast,
   #toast.show,
+  #toast.show:has(.toast-action),
   .estimate-peek,
   .phase-track,
   .ada-ticker,

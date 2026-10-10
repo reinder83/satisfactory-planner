@@ -99,6 +99,8 @@ A profile plans production from the phase it was created for onward: if you star
 
 The wizard supports Phases 1–5. Post-game retains Phase 5 capacity and directs surplus to storage and sinks. Its optional storage template includes 132 addresses, collectables bays Q/R and the workshop underneath. New saves have no pre-completed steps.
 
+When you tick a step on the build plan, or press **Mark done**, it is saved at once but stays where it is for a few seconds before it moves into **Done**, so the next step never slides under your pointer. A short message says what you finished, how many steps of the phase are done and which step is next, with **Undo** (or Ctrl+Z, ⌘Z on a Mac) to untick it again.
+
 ## Storage room and notes
 
 On the storage map, **Complete room** marks all four checklist steps for the room's selected containers. Each container also has a direct **Done** checkbox; click its item icon/name for individual checks and notes. Unchecking Done clears that container's four steps. Notes save themselves as you type, everywhere in the planner — the line under each notes box says when it was saved, or offers Retry if a save failed; emptying a note deletes it. If someone changes the same note in another tab or on another device while you are typing in it, nothing is overwritten: the other version appears under your note, and you choose **Keep mine**, **Keep theirs** or **Keep both** (theirs first, yours under it). Until you choose, your text stays in the box unsaved, and leaving the page asks first. Existing container addresses and progress keys are unchanged.

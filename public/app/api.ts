@@ -41,13 +41,73 @@ export type RequestOptions = RequestInit & {
 export let pending = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-// Shows a message in the #toast strip. Errors stay up longer than confirmations.
-export function toast(message: string, error = false) {
+// A button a toast offers after its message, such as Undo after ticking a build-plan step
+// (#1054): `run` is called once, after the toast hides.
+export type ToastAction = { label: string; run: () => void };
+let toastAction: ToastAction | null = null;
+
+// How long a toast stays up: errors longer than confirmations, and one with a button longer
+// still, so it can be reached.
+const toastMs = (error: boolean, action: ToastAction | null) =>
+  action ? 8000 : error ? 9000 : 3500;
+
+// Shows a message in the #toast strip, with a button after it when given one. A toast with a
+// button stays up while the pointer is over it or focus is in it, so it never hides under the
+// user's hand or takes focus to <body> with it.
+export function toast(message: string, error = false, action: ToastAction | null = null) {
   const el = required('#toast');
   el.textContent = message;
+  toastAction = action;
+  if (action) el.append(' ', toastButton(action));
   el.className = 'show' + (error ? ' error' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.className = ''), error ? 9000 : 3500);
+  const hide = () => {
+    if (toastAction && (el.contains(document.activeElement) || el.matches(':hover')))
+      toastTimer = setTimeout(hide, 1000);
+    else hideToast();
+  };
+  toastTimer = setTimeout(hide, toastMs(error, action));
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastAction = null;
+  required('#toast').className = '';
+}
+
+function toastButton(action: ToastAction) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn toast-action';
+  button.dataset.toastAction = '';
+  button.textContent = action.label;
+  button.setAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
+  button.addEventListener('click', () => runToastAction(action));
+  return button;
+}
+
+function runToastAction(action: ToastAction) {
+  if (toastAction !== action) return;
+  hideToast();
+  action.run();
+}
+
+// Ctrl+Z (⌘Z on a Mac) presses the button of the toast showing, so it is one key away wherever
+// focus is (#1054); left alone while typing in a field, where it undoes the typing, and while a
+// dialog is open.
+export function toastShortcut(event: KeyboardEvent) {
+  if (!toastAction || event.defaultPrevented || event.shiftKey || event.altKey) return;
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
+  const target = event.target as Element | null;
+  if (
+    target?.closest?.(
+      'input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable]',
+    )
+  )
+    return;
+  if (document.querySelector('dialog[open]')) return;
+  event.preventDefault();
+  runToastAction(toastAction);
 }
 
 // The one request path for the whole UI. Resolves to the parsed JSON body; rejects with

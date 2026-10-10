@@ -10,11 +10,12 @@
   (`lead`, SP-42) is the first unfinished one: unfolded, marked "Next step", with Mark done. A
   line that only made a Space Elevator part already delivered in full (`step.idle`, #1062) is
   dimmed, with its note under the title; a line at exact clocks, or one whose clocks a
-  recalculation would change (`step.clocks`, #1066), says so there too.
+  recalculation would change (`step.clocks`, #1066), says so there too. A step just ticked is
+  `held` in place for a few seconds (tick-hold.ts, #1054), and `leaving` as it fades out of it.
 -->
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
-import { holdUnsavedChoices, save } from '../../api.ts';
+import { computed, ref } from 'vue';
+import { holdUnsavedChoices, save, toast } from '../../api.ts';
 import { checked, flowRoute, phase, setEditingTask } from '../../session.ts';
 import { render } from '../../shell.ts';
 import { removeStepBody } from '../../shared-steps.ts';
@@ -24,11 +25,18 @@ import StepIcon from './StepIcon.vue';
 import { factoryLink, toggleCheck } from '../actions.ts';
 import { confirmAction } from '../confirm.ts';
 import { aimFlowLine, refocusAfterRemoval, refocusOn } from '../refocus.ts';
+import { announceTick, focusStep, holdStep, letGo, settled, tickNews } from './tick-hold.ts';
 import type { PlanStepView } from '../../tasks.ts';
 
 const props = withDefaults(
-  defineProps<{ step: PlanStepView; editing?: boolean; lead?: boolean }>(),
-  { editing: false, lead: false },
+  defineProps<{
+    step: PlanStepView;
+    editing?: boolean;
+    lead?: boolean;
+    held?: boolean;
+    leaving?: boolean;
+  }>(),
+  { editing: false, lead: false, held: false, leaving: false },
 );
 
 // "Open factory: <name> →" is a real link, so it opens in a new tab too; followed here, the flow
@@ -55,55 +63,47 @@ function aimLine(event: MouseEvent) {
   aimFlowLine(link.factory.id, link.id, props.step.id);
 }
 
-// Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42),
-// so its row is drawn anew and focus would fall to <body>. Ticked, focus goes to the same
-// control in the step that took its place, the next lead's when it led; unticked, to the step
-// itself where it now stands among the unfinished ones. Each step is known by its checklist key,
-// so a step ticked while an earlier tick is still saving finds its place again by its neighbours
-// once its own save lands, when the earlier step has already gone to Done (#822).
-const openRows = {
-  row: '#main [data-open-steps] > .task',
-  fallback: ['#main .done-group > summary', '#plan-search'],
-  key: (row: Element) => row.querySelector<HTMLElement>('[data-check]')?.dataset.check,
-};
-function focusStep(id: string, control: string) {
-  return async () => {
-    await nextTick();
-    const current = document.activeElement;
-    if (current && current !== document.body && current.isConnected) return;
-    [...document.querySelectorAll<HTMLElement>('#main .task')]
-      .find(row => row.querySelector<HTMLElement>(`[data-check]`)?.dataset.check === id)
-      ?.querySelector<HTMLElement>(control)
-      ?.focus();
-  };
-}
+// Ticking a step moves it between the unfinished steps and "Done (n)" (Checklist.vue, SP-42).
+// Ticked, it stays where it is for a few seconds first (tick-hold.ts, #1054): focus stays on its
+// checkbox, the toast says what changed and offers Undo, and a second click lands on the step
+// the user sees there. When it leaves, focus goes to the same control in the step that took its
+// place. Unticked, it goes back among the unfinished ones at once, and focus goes with it.
 async function check(event: Event) {
   const checkbox = event.target as HTMLInputElement;
-  const refocus = checkbox.checked
-    ? refocusAfterRemoval(checkbox, { ...openRows, control: 'input[data-check]' })
-    : focusStep(props.step.id, 'input[data-check]');
-  await toggleCheck(event);
-  await refocus();
+  const { id, title } = props.step;
+  if (!checkbox.checked) {
+    letGo(id);
+    if (!(await toggleCheck(event))) return;
+    toast(tickNews(id, title, false));
+    await focusStep(id, 'input[data-check]');
+    return;
+  }
+  holdStep(id, checkbox, 'input[data-check]');
+  const saved = await toggleCheck(event);
+  if (saved) announceTick(id, title);
+  await settled(id, saved);
 }
 
-// "Mark done" on the lead step: the same saved checklist key as its checkbox. Focus goes on to
-// the next lead step's Mark done.
+// "Mark done" on the lead step: the same saved checklist key as its checkbox, held in place the
+// same way. Meanwhile it says "Marked done" and does nothing more, keeping focus; when the step
+// leaves, focus goes on to the next lead step's Mark done.
 const marking = ref(false);
 async function markDone(event: Event) {
-  if (marking.value) return;
-  const refocus = refocusAfterRemoval(event.currentTarget, {
-    ...openRows,
-    control: '[data-mark-done]',
-  });
+  if (marking.value || props.step.done) return;
+  const { id, title } = props.step;
   marking.value = true;
+  holdStep(id, event.currentTarget, '[data-mark-done]');
+  let saved = false;
   try {
-    await save({ type: 'check', key: props.step.id, value: true });
+    await save({ type: 'check', key: id, value: true });
+    saved = true;
     render();
-    await refocus();
   } catch {
   } finally {
     marking.value = false;
   }
+  if (saved) announceTick(id, title);
+  await settled(id, saved);
 }
 
 // ↑ / ↓: move the step past its neighbour on screen and save this phase's whole order
@@ -208,7 +208,14 @@ async function deletePersonal(event: Event) {
 
 <template>
   <article
-    :class="['task', editing ? 'is-editing' : '', lead ? 'lead' : '', step.idle ? 'is-idle' : '']"
+    :class="[
+      'task',
+      editing ? 'is-editing' : '',
+      lead ? 'lead' : '',
+      step.idle ? 'is-idle' : '',
+      held ? 'is-held' : '',
+      leaving ? 'is-leaving' : '',
+    ]"
   >
     <div v-if="lead" class="step-no">Next step</div>
     <input
@@ -235,10 +242,10 @@ async function deletePersonal(event: Event) {
         type="button"
         class="btn primary lead-done-btn"
         data-mark-done
-        :aria-disabled="marking || undefined"
+        :aria-disabled="marking || step.done || undefined"
         @click="markDone"
       >
-        Mark done</button
+        {{ step.done ? 'Marked done' : 'Mark done' }}</button
       ><a
         v-if="step.link?.factory"
         :class="['btn', lead ? '' : 'quiet', 'task-link']"

@@ -19,6 +19,7 @@ import {
   type HandbookConversion,
 } from '../../public/handbook-migration.ts';
 import { unmountShell } from '../../public/app/ui/mount.ts';
+import { dropHold, setHoldDelay } from '../../public/app/ui/plan/tick-hold.ts';
 import type { View } from '../../public/app/session.ts';
 import type {
   Catalog,
@@ -290,6 +291,15 @@ afterEach(() => {
 afterEach(() => {
   setView('plan');
   setWizard(null);
+});
+
+// A ticked build-plan step stays in its place for a few seconds before it goes to "Done (n)"
+// (#1054). Most tests only check where it ends up, so here it goes as soon as its save lands, as
+// before; tests/ui/tick-hold.test.ts sets the real delays. No hold outlives its test.
+setHoldDelay(0, 0);
+afterEach(() => {
+  dropHold();
+  setHoldDelay(0, 0);
 });
 
 // Replies to fetch() calls from a table of path -> reply (a value, or a function of the
