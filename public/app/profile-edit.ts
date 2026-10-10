@@ -10,7 +10,8 @@
 // (settingsChanges, phaseChanges), both read from the plans and nothing stored.
 import { distributions, purities } from '../preferences.ts';
 import { ALLOWANCE_SETTING, powerView } from '../power.ts';
-import { num } from './format.ts';
+import { num, plural } from './format.ts';
+import { listNames } from '../wording.ts';
 import { power } from './wizard/fields.ts';
 import type { Choice, StoredCalculatedPlan, StoredStage } from '../types/index.ts';
 
@@ -184,7 +185,42 @@ const SETTING_LABELS: [key: string, label: string, words: (value: unknown) => st
   ['storageRate', 'Storage rate', value => num(Number(value))],
   ['utilityPercent', ALLOWANCE_SETTING, value => `${num(Number(value))}%`],
   ['phaseMining', 'Mining and belts per phase', onOff],
+  ['ownedMiner', 'Miners you already have', value => (value ? `Miner Mk.${value}` : 'None')],
+  ['ownedBelt', 'Belts you already have', value => (value ? `Mk.${value} belts` : 'None')],
+  [
+    'ownedAlternates',
+    'Alternates you already own',
+    value => (Array.isArray(value) && value.length ? plural(value.length, 'recipe') : 'None'),
+  ],
+  ['ownedGenerators', 'Generators you already have', generatorWords],
 ];
+// Settings that are absent unless chosen (#1065, #1068): absent is their "off" or "none", so a
+// plan without one that the edit turns on is a change, not a setting added since the plan.
+const ABSENT_IS_NONE = new Set([
+  'phaseMining',
+  'ownedMiner',
+  'ownedBelt',
+  'ownedAlternates',
+  'ownedGenerators',
+]);
+// Such a setting's value, with every way of saying none or off as null.
+function noneAsNull(value: unknown): unknown {
+  if (value === undefined || value === null || value === false) return null;
+  if (Array.isArray(value)) return value.length ? value : null;
+  if (typeof value === 'object') return Object.keys(value).length ? value : null;
+  return value;
+}
+// "4 Coal Generators and 2 Fuel Generators", or "None".
+function generatorWords(value: unknown): string {
+  const counts = Object.entries(value && typeof value === 'object' ? value : {}).filter(
+    (entry): entry is [string, number] => typeof entry[1] === 'number' && entry[1] > 0,
+  );
+  return counts.length
+    ? listNames(
+        counts.map(([machine, count]) => `${num(count)} ${machine}${count === 1 ? '' : 's'}`),
+      )
+    : 'None';
+}
 
 export interface SettingChange {
   label: string;
@@ -195,7 +231,8 @@ export interface SettingChange {
 // What an edit changes in the settings, old plan against the new preview, both as the planner
 // stored them: the goal first, then the settings above, and how many others changed besides.
 // A field the old plan does not have is left out: it is a setting added since that plan was
-// made, which the planner fills with its default, not a change the user made.
+// made, which the planner fills with its default, not a change the user made. A setting absent
+// unless chosen (ABSENT_IS_NONE) counts from none, so turning it on is named.
 export function settingsChanges(
   oldSettings: object,
   newSettings: object,
@@ -204,7 +241,9 @@ export function settingsChanges(
   const before = oldSettings as NameSettings,
     after = newSettings as NameSettings;
   const changed = (key: string) =>
-    before[key] !== undefined && after[key] !== undefined && differs(before[key], after[key]);
+    ABSENT_IS_NONE.has(key)
+      ? differs(noneAsNull(before[key]), noneAsNull(after[key]))
+      : before[key] !== undefined && after[key] !== undefined && differs(before[key], after[key]);
   const goalName = (id: unknown) => (goals || []).find(goal => goal.id === id)?.name ?? String(id);
   const changes: SettingChange[] = [
     ...(changed('goal')
