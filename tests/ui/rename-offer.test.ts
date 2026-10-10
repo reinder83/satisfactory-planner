@@ -10,7 +10,7 @@ import { beforeEach, test } from 'vitest';
 import { setWorkspace, workspace } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { nameDate } from '../../public/app/profile-edit.ts';
-import type { ProfileSummary, WorkspaceSummary } from '../../public/types/index.ts';
+import type { ProfileSummary, StoredSettings, WorkspaceSummary } from '../../public/types/index.ts';
 import { $, $$, evil, generated, go, open, page } from './setup.ts';
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 20)).then(() => nextTick());
@@ -32,7 +32,7 @@ const SETTINGS = {
   powerFactor: 1,
   recipes: 'standard',
   wholeMachines: true,
-} as ProfileSummary['settings'];
+} as StoredSettings;
 
 const card = (id: string, name: string, extra: Partial<ProfileSummary> = {}): ProfileSummary => ({
   id,
