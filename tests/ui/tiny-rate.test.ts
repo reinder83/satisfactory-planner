@@ -1,14 +1,28 @@
-// A rate below 0.001 in a factory card's group editor (AssignEditor.vue) gets a soft note under
-// its field (#942): a share that small of a factory's output counts as rounding dust, so the
-// group's flow, the Logistics page and the build plan may leave the factory out of the group.
-// The rate is still saved; validation does not refuse it.
+// A rate too small a part of its production line to count, in a factory card's group editor
+// (AssignEditor.vue), gets a soft note under its field (#942): rowShares (group-order.ts) leaves
+// out a share of rate / total at or below LINK_DUST, so the group's flow, the Logistics page and
+// the build plan leave the line out of the group. The note uses the line's own total (#1005), and
+// falls back to a rate below 0.001 when the editor has none. The rate is still saved; validation
+// does not refuse it.
 import assert from 'node:assert/strict';
-import { nextTick } from 'vue';
+import { createApp, h, nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
+import { LINK_DUST, rowTotal } from '../../public/app/group-order.ts';
 import { setFactoryEditing } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import AssignEditor from '../../public/app/ui/factories/AssignEditor.vue';
 import type { UpdateOp } from '../../public/types/index.ts';
-import { $, applyUpdate, generated, go, migratedRow, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  applyUpdate,
+  generated,
+  go,
+  migratedPlan,
+  migratedRow,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 
 beforeEach(() => page());
 
@@ -30,10 +44,13 @@ const typeRate = async (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event('input'));
   await nextTick();
 };
-const NOTE = 'Under 0.001/min: so small this factory may not count it.';
+const NOTE = "So small a part of this production line's output that this factory won't count it.";
+const FALLBACK = 'Under 0.001/min: so small this factory may not count it.';
 
-async function editGroups(rate: number) {
-  const wire = migratedRow('wire');
+// The migrated plan's Wire line makes 9,600/min: a rate counts above 0.0096/min.
+const WIRE_TOTAL = 9600;
+
+async function editGroups(rate: number, row = migratedRow('wire')) {
   open({
     state: {
       factoryGroups: {
@@ -42,7 +59,7 @@ async function editGroups(rate: number) {
           { id: 'fg-plates1', name: 'Stitched plates' },
         ],
         assignments: {
-          [wire]: [
+          [row]: [
             { group: 'fg-cable01', rate },
             { group: 'fg-plates1', rate: null },
           ],
@@ -54,10 +71,15 @@ async function editGroups(rate: number) {
   setFactoryEditing(true);
   render();
   await nextTick();
-  return wire;
+  return row;
 }
 
-test('a saved rate below 0.001 has a note under its field, which describes the field', async () => {
+test('the Wire line makes 9,600/min in the migrated plan', () => {
+  const wire = migratedPlan().stages['3']!.rows!.find(row => row.id === migratedRow('wire'))!;
+  assert.equal(rowTotal(wire), WIRE_TOTAL);
+});
+
+test('a saved rate too small a part of its line to count has a note, which describes the field', async () => {
   const wire = await editGroups(0.0002);
   const fixed = field(wire, 'fg-cable01'),
     rest = field(wire, 'fg-plates1');
@@ -76,14 +98,19 @@ test('a saved rate below 0.001 has a note under its field, which describes the f
   assert.equal(new Set(notes.map(note => note.id)).size, notes.length);
 });
 
-test('the note follows what is typed, and the tiny rate is still saved', async () => {
+test('the note follows what is typed, at the line’s own threshold, and the rate is still saved', async () => {
   const calls = stubFetch<UpdateOp>({ '/api/update': applyUpdate });
   const wire = await editGroups(300);
   const fixed = field(wire, 'fg-cable01');
   assert.equal(fixed.getAttribute('aria-describedby'), null, 'an ordinary rate has none');
   for (const [typed, note] of [
     ['0.0009', [NOTE]],
-    ['0.001', []],
+    // At or above 0.001/min, but still at most a millionth of 9,600/min (#1005).
+    ['0.001', [NOTE]],
+    ['0.009', [NOTE]],
+    [String(WIRE_TOTAL * LINK_DUST * 0.999), [NOTE]],
+    [String(WIRE_TOTAL * LINK_DUST * 1.001), []],
+    ['0.011', []],
     ['1e-5', [NOTE]],
     ['0', []], // refused on save with its own message
     ['-0.0001', []],
@@ -106,17 +133,31 @@ test('the note follows what is typed, and the tiny rate is still saved', async (
   assert.deepEqual(described(field(wire, 'fg-cable01')), [NOTE], 'the saved rate keeps it');
 });
 
-test('a generator’s field keeps its unit and adds the note in MW', async () => {
+test('a rate under 0.001/min that counts for a small line has no note (#1005)', async () => {
+  // A line of the migrated plan making under 500/min: 0.0005/min of it is over a millionth.
+  const small = migratedPlan().stages['3']!.rows!.find(row => {
+    const total = rowTotal(row);
+    return total > 1 && total < 500 && !row.generationMW;
+  })!;
+  assert.ok(small, 'the migrated plan has a small line');
+  assert.ok(0.0005 / rowTotal(small) > LINK_DUST, 'the rate counts');
+  await editGroups(0.0005, small.id);
+  assert.deepEqual(described(field(small.id, 'fg-cable01')), []);
+});
+
+test('a generator’s field keeps its unit and adds the note at its own MW threshold', async () => {
   const plan = generated();
-  const coal = plan.stages['3'].rows!.find(
+  const generator = plan.stages['3'].rows!.find(
     r => r.generationMW > 0 && !Object.keys(r.outputs).length,
   )!;
+  // The default plan's fuel power line makes over 1,000 MW: 0.001 MW is too small a part of it.
+  assert.ok(rowTotal(generator) > 1000, `${generator.id} makes ${rowTotal(generator)} MW`);
   open({
     calculated: plan,
     state: {
       factoryGroups: {
         groups: [{ id: 'fg-power', name: 'Power' }],
-        assignments: { [coal.id]: [{ group: 'fg-power', rate: 0.0005 }] },
+        assignments: { [generator.id]: [{ group: 'fg-power', rate: 0.0005 }] },
       },
     },
   });
@@ -124,8 +165,25 @@ test('a generator’s field keeps its unit and adds the note in MW', async () =>
   setFactoryEditing(true);
   render();
   await nextTick();
-  assert.deepEqual(described(field(coal.id, 'fg-power')), [
-    'MW',
-    'Under 0.001 MW: so small this factory may not count it.',
-  ]);
+  const input = field(generator.id, 'fg-power');
+  assert.deepEqual(described(input), ['MW', NOTE]);
+  await typeRate(input, '0.001');
+  assert.deepEqual(described(input), ['MW', NOTE], 'not under 0.001 MW, still too small');
+  await typeRate(input, String(rowTotal(generator) * LINK_DUST * 1.01));
+  assert.deepEqual(described(input), ['MW'], 'a rate that counts has no note');
+});
+
+test('an editor without a total falls back to a rate below 0.001', async () => {
+  const wire = await editGroups(0.0009);
+  const el = document.createElement('div');
+  document.body.append(el);
+  const app = createApp({ render: () => h(AssignEditor, { factoryKey: wire }) });
+  app.mount(el);
+  await nextTick();
+  const input = el.querySelector<HTMLInputElement>('[data-group="fg-cable01"]')!;
+  assert.deepEqual(described(input), [FALLBACK]);
+  await typeRate(input, '0.001');
+  assert.deepEqual(described(input), []);
+  app.unmount();
+  el.remove();
 });

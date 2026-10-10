@@ -8,8 +8,9 @@
   `unit` (a calculated generator's card, #374) names what a rate is measured in: a nuclear
   plant's first output, its waste per minute, with `mw` the power one of them stands for, shown
   beside the field while typing; an output-less generator's rate is in MW. Without it the field
-  is "Production per minute", the factory's output. A rate typed or saved below 0.001 gets a soft
-  note under its field (tinyNote, #942); it is still saved.
+  is "Production per minute", the factory's output. `total` is what a rate is a part of (rowTotal
+  of the calculated row): a rate too small a part of it to count gets a soft note under its field
+  (tinyNote, #942, #1005); it is still saved.
 -->
 <script lang="ts">
 // Numbers each editor, so the ids of its hints are unique on the page.
@@ -26,6 +27,7 @@ import { whileBusy } from '../../busy.ts';
 import { refocusAfterRemoval } from '../refocus.ts';
 import { leaveDraft, resetDraft, useDrafts } from '../draft.ts';
 import { power } from '../../wizard/fields.ts';
+import { LINK_DUST } from '../../group-order.ts';
 import type { GroupAssignment } from '../../../types/index.ts';
 
 // What a rate is measured in: an item per minute, with the MW one stands for, or 'MW'.
@@ -34,7 +36,7 @@ export interface RateUnit {
   mw?: number;
 }
 
-const props = defineProps<{ factoryKey: string; unit?: RateUnit }>();
+const props = defineProps<{ factoryKey: string; unit?: RateUnit; total?: number }>();
 
 // Each editor names its hints apart: a factory in two groups has an editor in each section.
 const uid = 'assign-unit-' + ++editors;
@@ -59,12 +61,19 @@ function hint(unit: RateUnit, raw: string): string {
   );
 }
 
-// A soft note under a rate below 0.001 (#942): a share that small of the factory's output counts
-// as rounding dust, so the group's flow, the Logistics page and the build plan may leave the
-// factory out of the group. Such a rate is still saved; it is almost always a typo.
-function tinyNote(unit: RateUnit | undefined, raw: string): string {
+// A soft note under a rate too small a part of the line's output to count (#942): rowShares
+// (group-order.ts) leaves out a share of `rate / total` at or below LINK_DUST, so the group's
+// flow, the Logistics page and the build plan leave the line out of the group (#1005). Without a
+// total, the note falls back to a rate below 0.001. Such a rate is still saved; it is almost
+// always a typo.
+function tinyNote(unit: RateUnit | undefined, raw: string, total: number | undefined): string {
   const rate = raw.trim() === '' ? NaN : Number(raw);
-  if (!(rate > 0 && rate < 0.001)) return '';
+  if (!(rate > 0)) return '';
+  if (total !== undefined && total > LINK_DUST)
+    return rate / total <= LINK_DUST
+      ? "So small a part of this production line's output that this factory won't count it."
+      : '';
+  if (rate >= 0.001) return '';
   return `Under 0.001${unit?.name === 'MW' ? ' MW' : '/min'}: so small this factory may not count it.`;
 }
 
@@ -80,7 +89,7 @@ const editor = computed(() =>
         const name = nameOf(membership),
           unit = props.unit,
           raw = rates[membership.group] ?? String(membership.rate ?? ''),
-          tiny = tinyNote(unit, raw),
+          tiny = tinyNote(unit, raw, props.total),
           hintId = unit ? uid + '-' + i : undefined,
           tinyId = tiny ? uid + '-tiny-' + i : undefined;
         return {
