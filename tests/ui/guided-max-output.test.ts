@@ -15,7 +15,18 @@ import { cancelEstimate } from '../../public/app/wizard/estimate.ts';
 import { moveExtraction } from '../../public/app/wizard/extraction.ts';
 import { guidedFlow } from '../../public/app/wizard/guided.ts';
 import { carryOptions } from '../../public/state.ts';
-import { $, $$, catalog, evil, generated, generatedWith, go, open, page, stubFetch } from './setup.ts';
+import {
+  $,
+  $$,
+  catalog,
+  evil,
+  generated,
+  generatedWith,
+  go,
+  open,
+  page,
+  stubFetch,
+} from './setup.ts';
 import type { WizardDraft, WizardSettings } from '../../public/app/wizard/wizard.ts';
 
 const IRON = 'limit:Iron Ore';

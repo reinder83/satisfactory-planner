@@ -32,7 +32,7 @@ From Phase 2 on you are asked **what you are already producing**, as a rate: sea
 
 One assumption comes with it, the same one that already applies to spare power: an existing line's ore and electricity are already spent in your world, so enter your resource budgets and spare power net of it. Review states this every time it credits something, and names what it credited.
 
-**All settings →** is on every screen and opens the five-step wizard below at the step that owns the same question, keeping every answer; **← Guided start** comes back the same way. Picking _I will choose them myself_ for recipes shows the recipe list on the same screen, and the questions go on after it; _as fast as the map allows_ for the goal hands over to the Resources step, where you confirm your budgets.
+**All settings →** is on every screen and opens the five-step wizard below at the step that owns the same question, keeping every answer; **← Guided start** comes back the same way. Picking _I will choose them myself_ for recipes shows the recipe list on the same screen, and the questions go on after it. Picking _as fast as the map allows_ for the goal adds one screen after it: your resource budgets, the boxes of the Resources step, which you can change there or work out from your nodes. Maximum output needs them confirmed, so **Continue** waits for **I have checked these budgets for my save**; then the questions go on as for any other goal.
 
 The last step is **Review**: the calculated plan, phase by phase, with **Create profile**. **Back** returns to the questions, and **All settings →** shows the same Review in the five-step wizard, where every setting is a tab away.
 
