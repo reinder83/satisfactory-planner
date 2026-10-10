@@ -984,13 +984,14 @@ function plannedFor(planned: StoredStage, settings: GuideContext['plan']['settin
 
 // Power sources from the highest tier down, as generatorSource names them, and the HUB unlock
 // each needs. The unlocks are in tier order too (POWER_UNLOCKS), so a source ranks by its unlock.
-const SOURCE_ORDER = ['nuclear', 'rocket fuel', 'turbofuel', 'fuel', 'coal'];
+const SOURCE_ORDER = ['nuclear', 'ionized fuel', 'rocket fuel', 'turbofuel', 'fuel', 'coal'];
 const POWER_UNLOCKS = ['Coal Power', 'Petroleum Power', 'Nuclear Power'] as const;
 const SOURCE_UNLOCK: Record<string, (typeof POWER_UNLOCKS)[number]> = {
   coal: 'Coal Power',
   fuel: 'Petroleum Power',
   turbofuel: 'Petroleum Power',
   'rocket fuel': 'Petroleum Power',
+  'ionized fuel': 'Petroleum Power',
   nuclear: 'Nuclear Power',
 };
 // A power unlock's tier: 1 for Coal Power up to 3 for Nuclear Power, 0 for none.
@@ -1331,12 +1332,15 @@ function generationTasks(context: GuideContext, unlocked: UnlockedPower): GuideT
 }
 
 // The fuel power step's text: the fuels this phase's Fuel Generator lines burn (Fuel, Turbofuel,
-// Rocket Fuel, as generators() in planner/recipes.ts names them), with only their unlocks (#880).
+// Rocket Fuel, Ionized Fuel, as generators() in planner/recipes.ts names them), with only their unlocks (#880).
 function fuelPowerBody(fuels: string[]): string {
   const research = [
     fuels.includes('Turbofuel') ? ' For turbofuel, complete its Sulfur MAM research.' : '',
     fuels.includes('Rocket Fuel')
       ? ' Rocket fuel also needs its own MAM node, nitrogen supply and Blender access.'
+      : '',
+    fuels.includes('Ionized Fuel')
+      ? ' Ionized fuel needs its own Sulfur MAM node, a Rocket Fuel supply and Power Shards.'
       : '',
   ].join('');
   return `This phase's Fuel Generators burn ${listNames(fuels)}. Complete Oil Processing and Petroleum Power first.${research} Confirm any fuel alternates in the hard-drive checklist. Start with an unlocked fuel recipe and upgrade only after the full new chain is ready.`;
@@ -1377,8 +1381,9 @@ const isGenerator = (row: CalcRow): boolean => row.generationMW > 0;
 const generatorFuel = (row: CalcRow): string =>
   Object.keys(row.inputs).find(item => item !== 'Water') || '';
 
-// A generator line's power source in words, as the settings name it: coal, fuel, turbofuel,
-// rocket fuel or nuclear (any Nuclear Power Plant).
+// A generator line's power source in words, as the settings name it: coal (any Coal Generator,
+// also one burning Compacted Coal or Petroleum Coke, #1055), fuel, turbofuel, rocket fuel, ionized
+// fuel or nuclear (any Nuclear Power Plant).
 const generatorSource = (row: CalcRow): string =>
   row.machine === 'Nuclear Power Plant'
     ? 'nuclear'
@@ -1423,12 +1428,14 @@ function sparePowerStep(
   };
 }
 
-// The unlocks and commissioning each power source needs before its generators run.
+// The unlocks and commissioning each power source needs before its generators run; coal's by
+// the fuels its lines burn (coalPrerequisites).
 const SOURCE_PREREQUISITES: Record<string, string> = {
-  coal: 'Coal power needs Coal Power unlocked, coal extraction and water.',
   fuel: 'Fuel power needs Oil Processing and Petroleum Power.',
   turbofuel:
     'Turbofuel power needs Oil Processing, Petroleum Power and the Sulfur MAM Turbofuel research; use coal until they are complete, and commission all byproduct handling.',
+  'ionized fuel':
+    'Ionized fuel power needs Petroleum Power, its own Sulfur MAM node, a running Rocket Fuel chain and Power Shards.',
   'rocket fuel':
     'Rocket fuel power needs Blender access, nitrogen and Rocket Fuel in the Sulfur MAM tree; build and prime its chain before switching generators over.',
   nuclear:
@@ -1454,11 +1461,30 @@ function generatorStep(
       : 'Expand';
   const sources = [...new Set(generators.map(generatorSource))];
   const lines = generators.map(row => generatorLine(row, builtBefore(row), previous, rows));
-  const prerequisites = sources.map(source => SOURCE_PREREQUISITES[source]).filter(Boolean);
+  const prerequisites = sources
+    .map(source =>
+      source === 'coal' ? coalPrerequisites(generators) : SOURCE_PREREQUISITES[source],
+    )
+    .filter(Boolean);
   return {
     title: `${verb} ${listNames(sources)} power ${verb === 'Keep' ? 'ahead of' : 'before'} the next production block`,
     body: `Phase ${stage}'s plan generates power with ${lines.join('; ')}. Each line has its own step in this phase with its machines and output.${unburnedText(unburned)} ${prerequisites.join(' ')} ${closingAdvice(verb, previous)}`,
   };
+}
+
+// What the phase's Coal Generator lines need before they run, by the fuels they burn (#1055): "Coal
+// power needs Coal Power unlocked, coal extraction and water." for Coal alone, as before; Petroleum
+// Coke needs Oil Processing, and Compacted Coal the lines that make it.
+function coalPrerequisites(generators: CalcRow[]): string {
+  const fuels = generators.filter(row => row.machine === 'Coal Generator').map(generatorFuel);
+  const needs = [
+    'Coal Power unlocked',
+    ...(fuels.includes('Coal') ? ['coal extraction'] : []),
+    ...(fuels.includes('Compacted Coal') ? ['a Compacted Coal supply'] : []),
+    ...(fuels.includes('Petroleum Coke') ? ['Oil Processing for the Petroleum Coke'] : []),
+    'water',
+  ];
+  return `Coal power needs ${listNames(needs)}.`;
 }
 
 // The step's closing advice, by its case (#881). Keep: no line needs more machines, so there is
