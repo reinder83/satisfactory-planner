@@ -176,7 +176,7 @@ function recycleModelOf(snapshot: StoredStage): RecycleModel {
 
 // How the advice names a line (as its build-plan step is titled: "Wire for Alpha") and words a rate.
 const recycleWords: AdviceWords = {
-  name: row => (calculated ? rowStepTitle(calculated, state, row) : row.name),
+  name: row => stepRowName(row),
   fluid: item => FLUIDS.has(item),
   // Called through, not referenced: flow.ts and this module import each other.
   itemRate: (item, rate) => itemRate(item, rate),
@@ -504,13 +504,18 @@ export function currentBuildStatus(): BuildStatus | null {
   return buildCache.status;
 }
 
-// A row of the open phase by its id, named as its build-plan step is (rowStepTitle): "Wire for
-// Alpha" for a factory group's own line made on site (#911), else the row's name; the id itself
-// for a row the phase lacks. The build status (BuildStatusPanel.vue) and ADA name rows by it.
+// A row of the open plan named as its build-plan step is (rowStepTitle): "Wire for Alpha" for a
+// factory group's own line made on site (#911), else the row's name. A step's linked-line choices
+// name the lines by it (taskLinkChoices, #954).
+export const stepRowName = (row: CalcRow): string =>
+  calculated ? rowStepTitle(calculated, state, row) : row.name;
+
+// A row of the open phase by its id, named as its build-plan step is (stepRowName); the id
+// itself for a row the phase lacks. The build status (BuildStatusPanel.vue) and ADA name rows
+// by it.
 export function buildRowName(rowId: string): string {
   const row = calcStage()?.rows?.find(candidate => candidate.id === rowId);
-  if (!row) return rowId;
-  return calculated ? rowStepTitle(calculated, state, row) : row.name;
+  return row ? stepRowName(row) : rowId;
 }
 
 // A row marked running that a missing supplier holds back (build-status.ts, #66): the share of
