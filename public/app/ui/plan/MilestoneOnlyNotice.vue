@@ -1,8 +1,9 @@
 <!--
-  On a calculated profile's build plan, factories and resources pages while a milestone-only phase
-  is shown (#759, milestoneOnly() in session.ts): a phase before the profile's start phase, which
-  lists only the milestones that belong there. Says so, and where production starts, so an empty
-  factories or resources page is not taken for a missing plan, and offers "Go to Phase N" as the
+  On a calculated profile's build plan, factories, logistics, resources and factory flow pages
+  while a milestone-only phase is shown (#759, milestoneOnly() in session.ts): a phase before the
+  profile's start phase, which lists only the milestones that belong there. Says so, and where
+  production starts, so an empty factories, logistics or resources page is not taken for a
+  missing plan, and offers "Go to Phase N" as the
   one next step (#786). Draws nothing in any other phase.
 
   When the profile opened here although its saved working phase is a later one (#570,

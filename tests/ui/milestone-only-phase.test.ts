@@ -19,6 +19,7 @@ import {
   state,
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
+import { adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { phaseTrack } from '../../public/app/views/phase-track.ts';
 import { $, $$, applyUpdate, generated, go, open, page, stubFetch } from './setup.ts';
 import type { ContextReply, Phase, StageKey, UpdateOp } from '../../public/types/index.ts';
@@ -260,3 +261,35 @@ test('factories and resources in a milestone-only phase offer Go to Phase 3', as
     assert.equal(document.activeElement, $('#main h1'), view + ' focus goes to the heading');
   }
 });
+
+// #1021: Logistics on a milestone-only phase says why it is empty, with the Factories page's
+// notice and its "Go to Phase 3", rather than "This phase has no production lines".
+test('Logistics in a milestone-only phase shows the milestone-only notice and Go to Phase 3', async () => {
+  open({ calculated: phaseThreePlan(), phase: '3' });
+  const calls = await openThrough('3', {});
+  go('logistics');
+  render();
+  await settle();
+  assert.equal(phase(), '1');
+  assert.equal($('#main [data-logistics-empty]'), null, 'not the empty-phase line');
+  const notice = $('#main [data-milestone-only]');
+  assert.match(text(notice), /^You are working on Phase 3\. /);
+  assert.match(text(notice), /no production lines, storage or power to build here/);
+  assert.equal($('#main .subtitle'), null, 'no subtitle about what moves in Phase 1');
+  const button = $<HTMLButtonElement>('#main [data-go-to-start-phase]')!;
+  assert.equal(text(button), 'Go to Phase 3');
+  button.focus();
+  button.click();
+  await settle();
+  await settle();
+  assert.equal(phase(), '3', 'shows Phase 3');
+  assert.equal($('#main [data-milestone-only]'), null, 'the notice is gone');
+  assert.equal(document.activeElement, $('#main h1'), 'focus goes to the heading');
+  assert.deepEqual(
+    calls.map(([path]) => path.split('?')[0]),
+    ['/api/context'],
+    'nothing is written: the saved phase already is Phase 3',
+  );
+  assert.equal($('x-evil'), null);
+});
+
