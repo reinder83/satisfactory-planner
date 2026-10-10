@@ -440,11 +440,19 @@ export type ChoiceDraft = {
   discard: () => void;
 };
 export const choiceDrafts = new Set<ChoiceDraft>();
+// The unsaved choices inside `root`, in page order (#979): `choiceDrafts` keeps the order they
+// were mounted in, and a picker folded and unfolded again, or one of a group added while editing,
+// mounts after the ones below it.
 const unsavedChoicesIn = (root: ParentNode) =>
-  [...choiceDrafts].filter(choice => {
-    const el = choice.el();
-    return !!el && root.contains(el) && choice.unsaved();
-  });
+  [...choiceDrafts]
+    .flatMap(choice => {
+      const el = choice.el();
+      return el && root.contains(el) && choice.unsaved() ? [{ choice, el }] : [];
+    })
+    .sort((a, b) =>
+      a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_PRECEDING ? 1 : -1,
+    )
+    .map(({ choice }) => choice);
 
 // Whether `root` shows a choice that is not saved yet: the close-tab warning asks then.
 export function hasUnsavedChoices(root: ParentNode = document) {
