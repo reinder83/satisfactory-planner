@@ -31,6 +31,11 @@ export interface StoredProfile {
   // version" can swap it back (public/state/restore.ts). Absent from every other profile and from
   // every profile stored before it; older releases keep it without reading it.
   backupOf?: string;
+  // The user dismissed the "Rename to …" offer of a profile named after its goal (#1071,
+  // public/state/rename-offer.ts), so it is not offered again. Only ever true; absent from every
+  // other profile and from every profile stored before it; older releases keep it without reading
+  // it.
+  renameOfferDismissed?: true;
 }
 
 // POST /api/rank-alternates: rankAlternates (planner.ts) on the profile's plan settings, with
@@ -143,8 +148,11 @@ export interface ProfileSummary {
   // The profile of the same save this one is a kept version of (restoreTarget, #1071): only set
   // while that profile exists, so only such a card offers "Restore this version".
   backupOf?: string;
-  // The createdAt of the profile's plan, which a restore names (the stale-tab guard, #1071).
+  // The createdAt of the profile's plan, which a restore names (the stale-tab guard, #1071), and
+  // the date a "Rename to …" offer ends with.
   planCreatedAt?: string;
+  // The "Rename to …" offer was dismissed (StoredProfile.renameOfferDismissed, #1071).
+  renameOfferDismissed?: true;
   // A calculated profile's progress per phase it offers (SP-32): the milestone-only phases before
   // its start phase (#783, only with `steps`), then each phase from the start phase. The
   // production lines ticked Running over the phase's lines, and its build-plan steps ticked
@@ -224,6 +232,8 @@ export interface SaveExport {
       state: SavedState;
       // The kept-version link (StoredProfile.backupOf), only to a profile of the same save.
       backupOf?: string;
+      // The dismissed "Rename to …" offer (StoredProfile.renameOfferDismissed).
+      renameOfferDismissed?: true;
     }[];
   }[];
 }

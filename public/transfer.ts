@@ -1,4 +1,4 @@
-import { restoreTarget, safeKey, shareState, validateState } from './state.ts';
+import { renameOfferFields, restoreTarget, safeKey, shareState, validateState } from './state.ts';
 import {
   migrateOriginalProfile,
   usableHandbook,
@@ -32,6 +32,7 @@ interface IncomingProfile {
   };
   state: unknown;
   backupOf?: unknown;
+  renameOfferDismissed?: unknown;
 }
 interface IncomingSave {
   id: unknown;
@@ -43,8 +44,11 @@ interface IncomingSave {
 // passwords or sessions. Written by /api/export-saves in server/save-routes.ts and
 // browser-api.ts and read back by their /api/import-saves, so saves move between editions.
 //   { format, version: 1, exportedAt, saves: [{ id, name, activeProfile, profiles: [
-//     { id, name, kind: 'calculated', plan, state, backupOf? }] }] }
+//     { id, name, kind: 'calculated', plan, state, backupOf?, renameOfferDismissed? }] }] }
 // backupOf (#1071) is the id of the profile of the same save a profile is a kept version of; an
+// export from before it has none, and releases before it leave it out when they import.
+// renameOfferDismissed (#1071, true or absent) says the user kept the goal's name a profile was
+// given before #1105, so its card does not offer "Rename to …" again (state/rename-offer.ts); an
 // export from before it has none, and releases before it leave it out when they import.
 // An export from before the handbook was retired (#387) may also hold a profile of kind
 // 'original' with its own handbook instead of a plan; it is still read, and importableTransfer
@@ -291,6 +295,8 @@ export function validateTransfer(data: unknown): Omit<ImportableSaveExport, 'exp
         ...(handbook ? { handbook: handbook as Handbook } : {}),
         state: importedState(profile.state),
         ...(typeof profile.backupOf === 'string' ? { backupOf: profile.backupOf } : {}),
+        // A dismissed "Rename to …" offer (#1071); any other value is left out, not refused.
+        ...renameOfferFields(profile),
       };
     });
     // A kept-version link (#1071) survives only where it names another profile of this save; any

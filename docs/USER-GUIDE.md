@@ -14,7 +14,7 @@ Each **user → named save → profile** has independent progress. Trying anothe
 
 Open **Saves & profiles → Create a save**, or **Try another profile** on an existing save.
 
-A profile you leave unnamed is named after what it is: its goal, what differs from the profile it starts from (or from a new save's defaults) and the day, for example _Minimal construction · exact ratios · Oct 7_. Profiles you already have keep their names.
+A profile you leave unnamed is named after what it is: its goal, what differs from the profile it starts from (or from a new save's defaults) and the day, for example _Minimal construction · exact ratios · Oct 7_. Profiles you already have keep their names: a card still named after its goal alone, such as _Balanced progression_, offers **Rename to “Balanced progression · exact ratios · Oct 7”**, with the day its plan was made (numbered _· 2_ when two cards would get the same name). Nothing changes until you press it; **✕** keeps the name, and the offer does not come back.
 
 ### Edit a profile's settings
 

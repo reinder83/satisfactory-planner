@@ -9,10 +9,14 @@
   "Edit settings" (#1071) opens All settings on that profile's settings, to recalculate it in
   place (startEdit in wizard/wizard.ts); "Try another profile" still adds a new one. The card of
   a version such a recalculation kept says which profile it was kept for, and its ⋯ menu offers
-  "Restore this version…" (restore below, app/restore-version.ts).
+  "Restore this version…" (restore below, app/restore-version.ts). A card still named after its
+  goal alone, as profiles made before #1105 are, offers "Rename to “<descriptive name>”" until the
+  user acts on it (renameOffers in app/profile-edit.ts): accepting renames the profile through
+  /api/rename, and the ✕ keeps the name and stores that (/api/dismiss-rename-offer), so the offer
+  does not come back. Either way focus goes to the card's ✎ button.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../../browser-api.ts';
 import {
   allowSwitch,
@@ -46,6 +50,7 @@ import BrowserNotice from '../BrowserNotice.vue';
 import InlineName from '../InlineName.vue';
 import PageHeader from '../PageHeader.vue';
 import { newSave, openProfile } from '../actions.ts';
+import { renameOffers } from '../../profile-edit.ts';
 import {
   postRestore,
   restoreKeptName,
@@ -76,26 +81,32 @@ const page = computed(() =>
       .map(save => ({ id: save.id, name: save.name, profile: save.activeProfile })),
     openSave: currentSave.name,
     openProfile: currentProfile.name,
-    saves: workspace.saves.map(save => ({
-      id: save.id,
-      name: save.name,
-      profiles: save.profiles.map(profile => ({
-        id: profile.id,
-        name: profile.name,
-        // A version a recalculation in place (or a restore) kept (#1071): the profile it was kept
-        // for, which "Restore this version" swaps it back into, with the plans both show.
-        keptFor: save.profiles.find(p => p.id === profile.backupOf),
-        planCreatedAt: profile.planCreatedAt,
-        open: save.id === currentSave.id && profile.id === currentProfile.id,
-        editable: !!profile.settings,
-        summary: profile.settings
-          ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
-          : '',
-        // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
-        progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
-        bar: phaseBar(profile),
-      })),
-    })),
+    saves: workspace.saves.map(save => {
+      // Without the catalog's goals (a summary stubbed without one) nothing is offered.
+      const offers = renameOffers(save.profiles, workspace.catalog?.goals ?? []);
+      return {
+        id: save.id,
+        name: save.name,
+        profiles: save.profiles.map(profile => ({
+          id: profile.id,
+          name: profile.name,
+          // The name the card offers in place of its goal's name (#1071), else undefined.
+          renameTo: offers.get(profile.id),
+          // A version a recalculation in place (or a restore) kept (#1071): the profile it was kept
+          // for, which "Restore this version" swaps it back into, with the plans both show.
+          keptFor: save.profiles.find(p => p.id === profile.backupOf),
+          planCreatedAt: profile.planCreatedAt,
+          open: save.id === currentSave.id && profile.id === currentProfile.id,
+          editable: !!profile.settings,
+          summary: profile.settings
+            ? `${profile.settings.purity} purity · ${num(profile.settings.multiplier)}× elevator · ${num(profile.settings.powerFactor)}× power`
+            : '',
+          // "1 check complete", not "1 checks" (#421), and none yet for a fresh profile.
+          progress: `${profile.completed ? plural(profile.completed, 'check') + ' complete' : 'No checks complete yet'} · ${phaseLabel(profile.phase)}`,
+          bar: phaseBar(profile),
+        })),
+      };
+    }),
   })),
 );
 // A calculated profile's progress bar (SP-32): a segment per phase it offers, as the top bar's
@@ -192,6 +203,51 @@ async function restore(save: SaveCard, profile: ProfileCard) {
       } catch {
         // The list on screen stays; the toast has said why nothing was restored.
       }
+  } finally {
+    busy.value = '';
+  }
+}
+
+// Once a card's offer is accepted or dismissed it is gone, so focus goes to the card's ✎ button,
+// whose label names the profile as it is now called.
+async function focusRename(save: SaveCard, profile: ProfileCard) {
+  await nextTick();
+  document
+    .querySelector<HTMLElement>(
+      `button[data-rename-profile="${CSS.escape(profile.id)}"][data-rename-profile-save="${CSS.escape(save.id)}"]`,
+    )
+    ?.focus();
+}
+// "Rename to “…”" (#1071): the card's ordinary rename (rename below), to the offered name. A
+// failure is toasted by rename() and the offer stays.
+async function acceptOffer(save: SaveCard, profile: ProfileCard) {
+  if (!profile.renameTo || busy.value === key('offer', save, profile)) return;
+  busy.value = key('offer', save, profile);
+  try {
+    await rename('profile', save, profile, profile.renameTo);
+    await focusRename(save, profile);
+  } catch {
+    // rename() has said why.
+  } finally {
+    busy.value = '';
+  }
+}
+// The offer's ✕: the name stays, and the profile is marked so the offer does not come back.
+async function dismissOffer(save: SaveCard, profile: ProfileCard) {
+  if (busy.value === key('offer', save, profile)) return;
+  busy.value = key('offer', save, profile);
+  try {
+    setWorkspace(
+      await post<WorkspaceSummary>(
+        '/api/dismiss-rename-offer',
+        {},
+        { save: save.id, profile: profile.id },
+      ),
+    );
+    render();
+    await focusRename(save, profile);
+  } catch (error) {
+    toast((error as Error).message, true);
   } finally {
     busy.value = '';
   }
@@ -419,6 +475,27 @@ async function rename(
           :hook="{ 'data-rename-profile': profile.id, 'data-rename-profile-save': save.id }"
           :save="name => rename('profile', save, profile, name)"
         />
+        <div v-if="profile.renameTo" class="rename-offer" :data-rename-offer="profile.id">
+          <button
+            type="button"
+            class="btn rename-offer-accept"
+            :data-rename-offer-accept="profile.id"
+            :aria-disabled="busy === key('offer', save, profile) || undefined"
+            @click="acceptOffer(save, profile)"
+          >
+            Rename to “{{ profile.renameTo }}”
+          </button>
+          <button
+            type="button"
+            class="btn rename-offer-dismiss"
+            :data-rename-offer-dismiss="profile.id"
+            :aria-label="`Keep the name “${profile.name}”`"
+            :aria-disabled="busy === key('offer', save, profile) || undefined"
+            @click="dismissOffer(save, profile)"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
+        </div>
         <p v-if="profile.keptFor" class="small muted" :data-kept-for="profile.id">
           Kept version of “{{ profile.keptFor.name }}”
         </p>
@@ -528,7 +605,8 @@ async function rename(
     Duplicate copies a profile with its progress so you can try changes without touching the
     original. Share downloads a file with the plan, storage layout, factories and step edits —
     without your checkmarks or notes — that anyone can import under Backup → Import saves. Rename a
-    save or profile with ✎ beside its name; renaming does not change progress. Profiles keep a
+    save or profile with ✎ beside its name; renaming does not change progress. A profile still named
+    after its goal alone offers a name that says what it is; ✕ keeps its name. Profiles keep a
     frozen calculation so later planner updates cannot silently change your targets.
   </p>
 </template>
