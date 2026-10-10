@@ -574,47 +574,144 @@ export function rowSlots(lines: readonly FlowLine[]): Map<string, number> {
   return slot;
 }
 
+// One output row's trunk: the places of its output row (`at`) and of the input rows it feeds
+// (`ends`, `at` first), and their span from `lo` to `hi`.
+interface Trunk {
+  line: string;
+  row: FlowRow;
+  to: string[];
+  links: FlowLink[];
+  at: number;
+  ends: number[];
+  lo: number;
+  hi: number;
+}
+const spanOf = (trunk: Trunk) => trunk.hi - trunk.lo;
+// Two trunks overlap when they share a row, an end included: two lanes ending on one input row
+// meet there.
+const overlaps = (a: Trunk, b: Trunk) => a.lo <= b.hi && b.lo <= a.hi;
+const fits = (lane: readonly Trunk[], trunk: Trunk) => !lane.some(other => overlaps(trunk, other));
+const longestOn = (lane: readonly Trunk[]) => Math.max(...lane.map(spanOf));
+
 // The lanes of a group's links (#883 round 3). Every output row with a link to another line of
-// the group gets one lane (a line's self link, #898, rides none), a trunk spanning from that row to the furthest input row it feeds,
-// counted in rows down the one-column cards (each card's input rows, then its output rows).
-// The shortest trunks sit nearest the cards, and a lane is reused once no trunk on it overlaps,
-// so a group needs as few lanes as its overlapping trunks. Deterministic: ties go by span, then
-// the higher trunk, then the earlier output row. Lanes are returned in the output rows' order.
+// the group gets one lane (a line's self link, #898, rides none), a trunk spanning from that row
+// to the furthest input row it feeds, counted in rows down the one-column cards (each card's
+// input rows, then its output rows). Trunks share a lane only where they do not overlap. The
+// shortest trunks sit nearest the cards (`shortestFirst`); where that needs more lanes than the
+// most trunks over one row, the group gets exactly that many (`byStart`, #899). Deterministic:
+// the same rows give the same lanes. Lanes are returned in the output rows' order.
 export function assignLanes(lines: readonly FlowLine[]): FlowLane[] {
-  const slot = rowSlots(lines);
-  const trunks = lines.flatMap(line =>
-    line.outputs.flatMap(row => {
-      const links = row.links.filter(link => link.to.kind === 'line' && !link.self);
-      if (!links.length) return [];
-      const to = links.map(link => `in|${link.to.id}|${link.item}`);
-      const ends = [row.id, ...to].map(id => slot.get(id) ?? 0);
-      return [{ line: line.id, row, to, links, lo: Math.min(...ends), hi: Math.max(...ends) }];
-    }),
-  );
-  const taken: { lo: number; hi: number }[][] = [];
-  const laneOf = new Map<string, number>();
-  const bySpan = [...trunks].sort(
-    (a, b) =>
-      a.hi - a.lo - (b.hi - b.lo) || a.lo - b.lo || slot.get(a.row.id)! - slot.get(b.row.id)!,
-  );
-  for (const trunk of bySpan) {
-    let lane = taken.findIndex(spans =>
-      spans.every(span => trunk.hi < span.lo || trunk.lo > span.hi),
-    );
-    if (lane < 0) lane = taken.push([]) - 1;
-    // findIndex or push gave an index of `taken`.
-    taken[lane]!.push(trunk);
-    laneOf.set(trunk.row.id, lane);
-  }
+  const trunks = laneTrunks(lines);
+  let lanes = shortestFirst(trunks);
+  if (lanes.length > mostOverlapping(trunks)) lanes = closestFirst(byStart(trunks));
+  const laneOf = new Map(lanes.flatMap((onLane, lane) => onLane.map(trunk => [trunk, lane])));
   return trunks.map(trunk => ({
-    // Every trunk was placed in the loop above.
-    lane: laneOf.get(trunk.row.id)!,
+    // Every trunk is on one of the lanes.
+    lane: laneOf.get(trunk)!,
     line: trunk.line,
     item: trunk.row.item,
     from: trunk.row.id,
     to: trunk.to,
     links: trunk.links,
   }));
+}
+
+// The trunk of each output row with a link to another line of the group, in the rows' order.
+function laneTrunks(lines: readonly FlowLine[]): Trunk[] {
+  const slot = rowSlots(lines);
+  return lines.flatMap(line =>
+    line.outputs.flatMap(row => {
+      const links = row.links.filter(link => link.to.kind === 'line' && !link.self);
+      if (!links.length) return [];
+      const to = links.map(link => `in|${link.to.id}|${link.item}`);
+      const ends = [row.id, ...to].map(id => slot.get(id) ?? 0);
+      const at = ends[0] ?? 0;
+      return [
+        { line: line.id, row, to, links, at, ends, lo: Math.min(...ends), hi: Math.max(...ends) },
+      ];
+    }),
+  );
+}
+
+// The trunks shortest first, each in the first lane it fits, so the shortest sit nearest the
+// cards. Ties go by the higher trunk, then the earlier output row. Placing intervals shortest
+// first can take one lane more than needed (#899), which `assignLanes` checks.
+function shortestFirst(trunks: readonly Trunk[]): Trunk[][] {
+  const lanes: Trunk[][] = [];
+  const order = [...trunks].sort((a, b) => spanOf(a) - spanOf(b) || a.lo - b.lo || a.at - b.at);
+  for (const trunk of order) {
+    const lane = lanes.find(onLane => fits(onLane, trunk));
+    if (lane) lane.push(trunk);
+    else lanes.push([trunk]);
+  }
+  return lanes;
+}
+
+// The most trunks over any one row, which no assignment can do with fewer lanes. The most
+// intervals overlap at the top of one of them.
+const mostOverlapping = (trunks: readonly Trunk[]): number =>
+  Math.max(
+    0,
+    ...trunks.map(
+      trunk => trunks.filter(other => other.lo <= trunk.lo && trunk.lo <= other.hi).length,
+    ),
+  );
+
+// The fewest lanes (#899): the trunks by their top row, each in a lane it fits. A lane is added
+// only when every lane has a trunk over the new trunk's top row, so the lanes never outnumber
+// the trunks over one row. Of the lanes it fits, a trunk takes the one whose longest trunk is
+// nearest its own length (the first on a tie), so short trunks share lanes with short ones.
+// Ties go by the shorter trunk, then the earlier output row.
+function byStart(trunks: readonly Trunk[]): Trunk[][] {
+  const lanes: Trunk[][] = [];
+  const order = [...trunks].sort((a, b) => a.lo - b.lo || a.hi - b.hi || a.at - b.at);
+  for (const trunk of order) {
+    const lane = nearestLength(
+      lanes.filter(onLane => fits(onLane, trunk)),
+      spanOf(trunk),
+    );
+    if (lane) lane.push(trunk);
+    else lanes.push([trunk]);
+  }
+  return lanes;
+}
+
+// The lane whose longest trunk is nearest `length`, the first on a tie (none without lanes).
+function nearestLength(lanes: Trunk[][], length: number): Trunk[] | undefined {
+  const gap = (lane: readonly Trunk[]) => Math.abs(longestOn(lane) - length);
+  let nearest: Trunk[] | undefined;
+  for (const lane of lanes) if (!nearest || gap(lane) < gap(nearest)) nearest = lane;
+  return nearest;
+}
+
+// How many branches of the trunks on lane `outer` cross a trunk on lane `inner`, nearer the
+// cards: a branch runs from its lane to its row on the cards, past every inner trunk around it.
+const crossings = (inner: readonly Trunk[], outer: readonly Trunk[]): number =>
+  outer.reduce(
+    (count, trunk) =>
+      count +
+      trunk.ends.filter(row => inner.some(other => other.lo < row && row < other.hi)).length,
+    0,
+  );
+
+// `byStart`'s lanes in order from the cards: by their longest trunk, the shortest nearest, then
+// two neighbouring lanes swapped wherever that crosses fewer wires. Each swap leaves fewer
+// crossings in all, so the swapping ends.
+function closestFirst(lanes: readonly Trunk[][]): Trunk[][] {
+  const order = [...lanes].sort((a, b) => longestOn(a) - longestOn(b));
+  for (let swapped = true; swapped; ) {
+    swapped = false;
+    for (let i = 0; i + 1 < order.length; i++) {
+      // i + 1 is below the length.
+      const inner = order[i]!,
+        outer = order[i + 1]!;
+      if (crossings(outer, inner) >= crossings(inner, outer)) continue;
+      order[i] = outer;
+      order[i + 1] = inner;
+      swapped = true;
+    }
+  }
+  return order;
 }
 
 // The lane geometry, in px: lanes `step` apart, the innermost `inner` from the cards and the
