@@ -336,8 +336,11 @@ function deliveryTask(
 // The phase's mining step (#1065), on a plan with mining per phase: the miners and extractors
 // its draw needs, best nodes first (miningStepBody in mining.ts). Its key is `mining-<stage>`;
 // a plan without mining per phase has no such step, so its build plan is as it was.
-function miningTask(plan: Pick<StoredCalculatedPlan, 'stages'>, stage: StageKey): GuideTask[] {
-  const body = miningStepBody(plan.stages[stage], stage);
+function miningTask(
+  plan: Pick<StoredCalculatedPlan, 'stages'> & { settings?: StoredCalculatedPlan['settings'] },
+  stage: StageKey,
+): GuideTask[] {
+  const body = miningStepBody(plan.stages[stage], stage, plan.settings);
   return body ? [{ id: 'mining-' + stage, title: 'Tap the resource nodes', body }] : [];
 }
 

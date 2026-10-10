@@ -357,7 +357,7 @@ test('the build plan has a mining step per phase, after the milestones and befor
     assert.ok(index > 0, `Phase ${key}`);
     assert.ok(steps.findIndex(step => step.id.startsWith('calc-' + key + '-')) > index);
     const body = steps[index]!.body;
-    assert.equal(body, miningStepBody(plan.stages[key] as StoredStage, key));
+    assert.equal(body, miningStepBody(plan.stages[key] as StoredStage, key, plan.settings));
     assert.match(body, /^Phase \d mines with Miner Mk\.\d at \d+% and carries on Mk\.\d belts/);
     assert.match(body, /Iron Ore [\d,.]+\/min: tap \d+ pure/);
   }

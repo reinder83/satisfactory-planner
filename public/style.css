@@ -6165,7 +6165,9 @@ th.resource-cell {
 }
 /* "Miners you already have" and "Belts you already have" (#1068) over that table. */
 .owned-miner,
-.owned-belt {
+.owned-belt,
+.owned-overclock,
+.water-overclock {
   max-width: 420px;
   margin: 8px 0 0;
 }

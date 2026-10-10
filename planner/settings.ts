@@ -401,6 +401,10 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The best belt the player already has (#1068): only Mk.3 to Mk.6 is kept, so settings
     // without it, and every plan stored before it, plan each phase's belt as before.
     ...ownedBeltSetting(input.ownedBelt),
+    // The player can overclock, and Water Extractors overclocked (#1137): only `true` is kept, so
+    // settings without them, and every plan stored before them, plan each phase's clock as before.
+    ...(input.overclock === true ? { overclock: true as const } : {}),
+    ...(input.waterOverclock === true ? { waterOverclock: true as const } : {}),
     // The alternates the player already owns (#1068): only known alternate ids are kept, so
     // settings without them, and every plan stored before them, plan the same recipe pool.
     ...ownedAlternatesSetting(input.ownedAlternates),

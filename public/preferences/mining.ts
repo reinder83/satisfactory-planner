@@ -8,7 +8,11 @@
 // the phase (Mk.2 belts in Phase 1 up to Mk.6 belts, Tier 9, in Phase 5); Oil Extractors from
 // Phase 3 (Tier 5) and resource wells from Phase 4 (Tier 8). Miners and extractors run at 100%
 // in Phases 1–3 and up to 250% from Phase 4 (PHASE_CLOCK), with Power Shards from Power Slugs
-// (owner's choice on #1096). A node survey's miner and clock cap each phase's (never raise it).
+// (owner's choice on #1096), and up to 250% in every phase once the player can overclock
+// (settings.overclock, #1137: the MAM's Power Shards research, or "I can overclock"); a node's
+// belt or pipe still caps each machine. A node survey's miner and clock cap each phase's (never
+// raise it). Water Extractors run at 100% unless settings.waterOverclock asks for the phase's
+// clock (#1137); a stage stored before it has no `water` and used its miner's clock.
 // A miner or belt the player already has (settings.ownedMiner, settings.ownedBelt, #1068) raises
 // each phase's to it (phaseMiner, phaseBelt).
 // One node gives its yield at that miner and clock, never more than the belt or pipe it feeds
@@ -94,6 +98,13 @@ export const EXTRACTOR_TIERS = {
 // the MAM's Blue Power Slugs and Overclock Production, which the build plan asks for in every
 // phase (requiredMilestones in progression.ts); Synthetic Power Shards are a Phase 5 research.
 export const PHASE_CLOCK: Readonly<Record<number, number>> = { 1: 1, 2: 1, 3: 1, 4: 2.5, 5: 2.5 };
+// The clock miners and extractors run at in every phase once the player can overclock
+// (settings.overclock, #1137): 250%, three Power Shards each, a node's belt or pipe capping it.
+export const OVERCLOCK = 2.5;
+// The clock of `phase` before a survey caps it: PHASE_CLOCK, or OVERCLOCK when the player can
+// overclock (#1137).
+export const phaseClock = (phase: number, overclock?: boolean): number =>
+  overclock ? OVERCLOCK : (PHASE_CLOCK[phase] ?? 1);
 // The clocks a fluid extractor's advice offers, as the Water Extractors' do (#1024): 100% and
 // 250% with three Power Shards each, each only up to the phase's clock (fluidClocks in
 // public/mining.ts).
@@ -131,18 +142,25 @@ export interface MiningSettings {
   // The best conveyor belt the player already has (#1068, "Belts you already have"): 3 to 6 for
   // Mk.3 to Mk.6. Raises every phase's belt to at least that mark; absent unless chosen.
   ownedBelt?: number;
+  // The player can overclock (#1137: the MAM's Power Shards research ticked, or "I can overclock"
+  // in "What you already have"): every phase's clock is OVERCLOCK. Absent unless chosen.
+  overclock?: boolean;
+  // Water Extractors run at the phase's clock instead of 100% (#1137). Absent unless chosen.
+  waterOverclock?: boolean;
 }
 
-// The miner and clock of `phase`: the phase's best miner at its clock (PHASE_CLOCK), neither
+// The miner and clock of `phase`: the phase's best miner at its clock (phaseClock), neither
 // above the survey's. A miner the player already has (`owned`, settings.ownedMiner, #1068) raises
 // the phase's mark to it, still capped by the survey's; without one every phase is as before.
+// `overclock` (settings.overclock, #1137) runs every phase at OVERCLOCK.
 export function phaseMiner(
   phase: number,
   survey?: MiningSettings['extraction'],
   owned?: number,
+  overclock?: boolean,
 ): { mark: number; clock: number } {
   const mark = Math.max(bestMark(MINER_MARKS, phase).mark, MINER_BASE[owned ?? 0] ? owned! : 1),
-    clock = PHASE_CLOCK[phase] ?? 1;
+    clock = phaseClock(phase, overclock);
   return {
     mark: Math.min(mark, MINER_BASE[survey?.mark ?? 3] ? (survey?.mark ?? 3) : 3),
     clock: Math.min(clock, survey?.clock ?? REFERENCE.clock),
@@ -258,7 +276,7 @@ const budgetOf = (value: number) => Math.floor(value * 100 + 1e-6) / 100;
 // budget and the node kinds behind it (see the header). `settings` is a plan's settings.
 export function phaseMining(settings: MiningSettings, phase: number): StageMining {
   const survey = settings.extraction ?? null;
-  const miner = phaseMiner(phase, survey, settings.ownedMiner);
+  const miner = phaseMiner(phase, survey, settings.ownedMiner, settings.overclock);
   const belt = phaseBelt(phase, settings.ownedBelt),
     pipe = bestMark(PIPE_MARKS, phase);
   const reference = {
@@ -290,6 +308,7 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
   }
   return {
     miner,
+    water: settings.waterOverclock ? phaseClock(phase, settings.overclock) : 1,
     belt: { mark: belt.mark, cap: belt.cap },
     pipe: { mark: pipe.mark, cap: pipe.cap },
     budgets,
@@ -300,6 +319,10 @@ export function phaseMining(settings: MiningSettings, phase: number): StageMinin
 // MW per m³/min of Water at the phase's clock: Water Extractors, which need no node.
 export const waterMWPerUnit = (clock: number): number =>
   (WATER_EXTRACTOR.mw / WATER_EXTRACTOR.rate) * clock ** (EXPONENT - 1);
+// The clock a phase's Water Extractors run at: its `water` (#1137), or, for a stage stored before
+// it, its miner's clock, as that stage was calculated.
+export const waterClock = (mining: Pick<StageMining, 'miner' | 'water'>): number =>
+  mining.water ?? mining.miner.clock;
 
 // --- How many nodes a draw taps ---
 
@@ -421,7 +444,7 @@ export function miningMW(raw: ItemRates, mining: StageMining): ItemRates {
     const sources = mining.sources[resource];
     out[resource] = sources
       ? miningAdvice(rate, sources, mining.miner.clock).mw
-      : rate * waterMWPerUnit(mining.miner.clock);
+      : rate * waterMWPerUnit(waterClock(mining));
   }
   return out;
 }
@@ -434,7 +457,7 @@ export function miningLinearMW(raw: ItemRates, mining: StageMining): number {
     if (!(rate > RATE_DUST)) continue;
     const sources = mining.sources[resource];
     if (!sources) {
-      total += rate * waterMWPerUnit(mining.miner.clock);
+      total += rate * waterMWPerUnit(waterClock(mining));
       continue;
     }
     let left = rate;

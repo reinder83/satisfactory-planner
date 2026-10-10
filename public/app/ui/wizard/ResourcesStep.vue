@@ -33,7 +33,12 @@ const view = computed(() =>
       // Each phase from the profile's start phase: its miner, belts and pipes, and its share of
       // these budgets (the share does not depend on the amounts, only on the nodes behind them).
       phases: phaseBudgetRows(
-        { ...settings, ownedMiner: ownedMiner.value, ownedBelt: ownedBelt.value },
+        {
+          ...settings,
+          ownedMiner: ownedMiner.value,
+          ownedBelt: ownedBelt.value,
+          overclock: overclock.value,
+        },
         Number(settings.phase || 1),
       ).map(row => ({
         phase: row.phase,
@@ -49,6 +54,8 @@ const perPhase = ref(!!draft().settings.phaseMining);
 // 3 to 6, or undefined.
 const ownedMiner = ref<number | undefined>(draft().settings.ownedMiner);
 const ownedBelt = ref<number | undefined>(draft().settings.ownedBelt);
+// "I can overclock" (#1137, settings.overclock), for the same table.
+const overclock = ref(!!draft().settings.overclock);
 </script>
 
 <template>
@@ -87,14 +94,34 @@ const ownedBelt = ref<number | undefined>(draft().settings.ownedBelt);
       @change="perPhase = ($event.target as HTMLInputElement).checked"
     />Each phase's budgets follow the miners and belts it can build</label
   >
-  <OwnedEquipment v-if="perPhase" v-model:miner="ownedMiner" v-model:belt="ownedBelt" />
+  <OwnedEquipment
+    v-if="perPhase"
+    v-model:miner="ownedMiner"
+    v-model:belt="ownedBelt"
+    v-model:overclock="overclock"
+  />
+  <label v-if="perPhase" class="check-row water-overclock"
+    ><input
+      type="checkbox"
+      name="waterOverclock"
+      data-water-overclock
+      :checked="!!draft().settings.waterOverclock"
+    /><span
+      >Overclock Water Extractors too<br /><small class="muted"
+        >Off: they plan at 100%, since you can always build more of them. On: up to the miners'
+        clock, with Power Shards.</small
+      ></span
+    ></label
+  >
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>
       <caption class="small muted">
         These budgets are the most any phase draws. Each phase gets what its miner, clock and belts
-        take from the same nodes: crude oil from Phase 3, resource wells from Phase 4, and
-        overclocking from Phase 4, with Power Shards from Power Slugs. A miner or belt you already
-        have raises every phase's to its mark; a node survey's miner and clock cap every phase's.
+        take from the same nodes: crude oil from Phase 3 and resource wells from Phase 4. Miners and
+        extractors run up to 250% once you can overclock (Power Shards researched in the MAM), and
+        from Phase 4 in any case, never more than their belt or pipe carries. A miner or belt you
+        already have raises every phase's to its mark; a node survey's miner and clock cap every
+        phase's.
       </caption>
       <thead>
         <tr>

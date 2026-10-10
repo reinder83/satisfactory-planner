@@ -6,6 +6,8 @@
 // - a better miner: the HUB milestone that unlocks Miner Mk.2 or Mk.3 ticked (`unlock-<entry>`
 //   of MINER_MARKS: Advanced Steel Production, Leading-Edge Production);
 // - a better belt: the milestone of Mk.3 to Mk.6 belts ticked (`unlock-<entry>` of BELT_MARKS);
+// - overclocking (#1137): the MAM's Overclock Production research ticked (`unlock-` +
+//   OVERCLOCK_RESEARCH), where it raises a phase's clock from the working phase on;
 // - an alternate: a hard-drive alternate's unlock step ticked (`recipe-unlock-<recipe>`);
 // - generators: a generator line marked running (`calc-<phase>-<row id>`, a row with negative
 //   power in one of the OWNED_GENERATORS buildings), as many as that phase runs.
@@ -30,6 +32,7 @@ import {
   OWNED_GENERATORS,
   ownedGeneratorCounts,
   phaseBelt,
+  phaseClock,
   phaseMiner,
 } from '../preferences.ts';
 import { listNames } from '../wording.ts';
@@ -50,6 +53,7 @@ import type {
 export interface OwnedFound {
   miner?: number;
   belt?: number;
+  overclock?: true;
   alternates: string[];
   generators: OwnedGenerators;
 }
@@ -98,6 +102,19 @@ function beltFound(settings: StoredSettings, checks: Checks, phase: number): num
   return phaseBelt(phase, ticked).cap > phaseBelt(phase, settings.ownedBelt).cap
     ? ticked
     : undefined;
+}
+
+// The MAM research that lets the player overclock with Power Shards (#1137): Overclock Production
+// in the Power Slugs tree, after Blue Power Slugs (the Power Shard recipe). The build plan asks for
+// both in every phase (requiredMilestones in progression.ts).
+export const OVERCLOCK_RESEARCH = 'Research_PowerSlugs_2_C';
+// Whether the ticks show overclocking the plan does not count: the research ticked, mining per
+// phase on, settings.overclock absent, and some phase from `phase` on that it would run faster.
+function overclockFound(settings: StoredSettings, checks: Checks, phase: number): boolean {
+  if (!settings.phaseMining || settings.overclock) return false;
+  if (checks['unlock-' + OVERCLOCK_RESEARCH] !== true) return false;
+  for (let at = phase; at <= 5; at++) if (phaseClock(at, true) > phaseClock(at)) return true;
+  return false;
 }
 
 // Whether the plan's recipe pool holds the alternate already, whatever the ticks say.
@@ -199,11 +216,13 @@ export function ownedFromTicks(
   const found: OwnedFound = {
     ...markField('miner', minerFound(settings, checks, phase)),
     ...markField('belt', beltFound(settings, checks, phase)),
+    ...(overclockFound(settings, checks, phase) ? { overclock: true as const } : {}),
     alternates: alternatesFound(settings, checks, alternates),
     generators: generatorsFound(plan, checks, phase),
   };
   return found.miner ||
     found.belt ||
+    found.overclock ||
     found.alternates.length ||
     Object.keys(found.generators).length
     ? found
@@ -221,6 +240,7 @@ export function withOwnedFound<S extends StoredSettings>(settings: S, found: Own
     ...settings,
     ...(found.miner ? { ownedMiner: found.miner } : {}),
     ...(found.belt ? { ownedBelt: found.belt } : {}),
+    ...(found.overclock ? { overclock: true as const } : {}),
     ...(found.alternates.length
       ? {
           ownedAlternates: [
@@ -240,6 +260,7 @@ export function foundSince(found: OwnedFound, dismissed: OwnedFound | null): boo
   return (
     (found.miner ?? 0) > (dismissed.miner ?? 0) ||
     (found.belt ?? 0) > (dismissed.belt ?? 0) ||
+    (!!found.overclock && !dismissed.overclock) ||
     found.alternates.some(id => !dismissed.alternates.includes(id)) ||
     (Object.entries(found.generators) as [OwnedGeneratorMachine, number][]).some(
       ([machine, count]) => count > (dismissed.generators[machine] ?? 0),
@@ -259,6 +280,7 @@ export function dismissedFound(value: unknown): OwnedFound | null {
   return {
     ...(miner ? { miner } : {}),
     ...(belt ? { belt } : {}),
+    ...(record.overclock === true ? { overclock: true as const } : {}),
     alternates: Array.isArray(record.alternates)
       ? record.alternates.filter((id): id is string => typeof id === 'string')
       : [],
@@ -282,6 +304,7 @@ export function foundWords(
     unlocked: [
       ...(found.miner ? [`Miner Mk.${found.miner}`] : []),
       ...(found.belt ? [`Mk.${found.belt} belts`] : []),
+      ...(found.overclock ? ['Power Shards (Overclock Production)'] : []),
     ],
     alternates: found.alternates.map(name),
     generators: (Object.entries(found.generators) as [string, number][]).map(

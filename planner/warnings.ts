@@ -248,7 +248,7 @@ function miningWarnings({ config }: FinishedPlan): string[] {
   if (!config.phaseMining) return [];
   const belts = ownedBeltsWords(Number(config.phase), config.ownedBelt);
   return [
-    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
+    `Each phase's resource budgets follow the miners, belts and pipes its milestones unlock (${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}${belts ? '; ' + belts : ''}): a node gives no more than its belt or pipe carries, crude oil comes from Phase 3 and resource wells from Phase 4. Overclocking takes Power Shards: the plan counts on them from Phase 4, from Power Slugs (MAM: Blue Power Slugs and Overclock Production), and runs every miner at 100% before then. The entered budgets are the most any phase draws.`,
   ];
 }
 // What every plan assumes about unlocks and power.
@@ -262,7 +262,7 @@ function assumptionWarnings({ config }: FinishedPlan): string[] {
 // with mining per phase (#1065), each phase's miners on the nodes its draw taps.
 const extractionText = (config: CurrentSettings) => {
   if (config.phaseMining)
-    return `${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner)}, on the nodes each phase taps`;
+    return `${phaseMinersWords(config.extraction, Number(config.phase), config.ownedMiner, config.overclock)}, on the nodes each phase taps`;
   const { mark, clock } = extractionEquipment(config);
   return `Miner Mk.${mark} at ${Math.round(clock * 100)}% on normal nodes`;
 };

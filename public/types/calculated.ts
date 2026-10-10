@@ -136,6 +136,14 @@ export interface CurrentSettings {
   // advice (bestLane in public/app/flow.ts) counts that mark as available. Absent unless chosen,
   // and from every plan made before it.
   ownedBelt?: 3 | 4 | 5 | 6;
+  // The player can overclock (#1137: the MAM's Power Shards research, or "I can overclock" in
+  // "What you already have"): with mining per phase every phase's miners and extractors run up to
+  // 250%, capped by a node's belt or pipe (phaseClock in public/preferences/mining.ts). Absent
+  // unless chosen, and from every plan made before it, which plan 100% in Phases 1–3 as before.
+  overclock?: true;
+  // Water Extractors run at the phase's clock rather than 100% (#1137, All settings step 4).
+  // Absent unless chosen: 100%.
+  waterOverclock?: true;
   // The alternate recipes the player already owns (#1068, All settings step 2): recipe ids, sorted.
   // recipePool adds each to every phase from the one it becomes available in, whatever `recipes`
   // says, so a Standard plan can use them; their unlock steps start ticked. Absent unless one is
@@ -376,6 +384,9 @@ export interface MiningSource {
 // builds, its budget per raw resource and the node kinds behind each (none for Water).
 export interface StageMining {
   miner: { mark: number; clock: number };
+  // The clock its Water Extractors run at (#1137): 1, or the phase's clock with
+  // settings.waterOverclock. Absent from stages stored before it, which used the miner's clock.
+  water?: number;
   belt: { mark: string; cap: number };
   pipe: { mark: string; cap: number };
   budgets: ItemRates;

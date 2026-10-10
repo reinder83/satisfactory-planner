@@ -511,6 +511,9 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
     readOwnedEquipment(data, settings);
+    // Water Extractors overclocked (#1137): kept only with phaseMining on, absent otherwise.
+    if (settings.phaseMining && data.has('waterOverclock')) settings.waterOverclock = true;
+    else delete settings.waterOverclock;
   }
 }
 
@@ -531,6 +534,11 @@ export function readOwnedEquipment(data: FormData, settings: WizardSettings, kee
     if (settings.phaseMining && (belt === 3 || belt === 4 || belt === 5 || belt === 6))
       settings.ownedBelt = belt;
     else delete settings.ownedBelt;
+  }
+  // "I can overclock" (#1137): its hidden `overclockAsked` says the box was drawn.
+  if (!keepHidden || data.has('overclockAsked') || !settings.phaseMining) {
+    if (settings.phaseMining && data.has('overclock')) settings.overclock = true;
+    else delete settings.overclock;
   }
 }
 

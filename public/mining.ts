@@ -58,10 +58,11 @@ export function phaseMinersWords(
   survey: MiningSettings['extraction'],
   from = 1,
   owned?: number,
+  overclock?: boolean,
 ): string {
   const runs: { words: string; phases: number[] }[] = [];
   for (let phase = from; phase <= 5; phase++) {
-    const miner = phaseMiner(phase, survey, owned);
+    const miner = phaseMiner(phase, survey, owned, overclock);
     const words = `Mk.${miner.mark} at ${miningNumber(miner.clock * 100)}%`;
     const run = runs.at(-1);
     if (run?.words === words) run.phases.push(phase);
@@ -196,7 +197,9 @@ function fluidWords(rate: number, sources: MiningSource[], clock: number): strin
 // What a stage's draw of each raw resource taps, the resources with nodes that it draws from,
 // in the stage's raw order (Water has no nodes: each line that takes it says how many Water
 // Extractors to build, #1024). Empty for a stage without mining per phase.
-export function stageMiningAdvice(stage: StoredStage | undefined): ResourceMining[] {
+export function stageMiningAdvice(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+): ResourceMining[] {
   const mining = stage?.mining;
   if (!mining) return [];
   const out: ResourceMining[] = [];
@@ -222,19 +225,62 @@ export function stageMiningAdvice(stage: StoredStage | undefined): ResourceMinin
   return out;
 }
 
+// The first phase in which the MAM's Power Shards research is worth advising (#1137): before it
+// the player cannot use the MAM yet, so the step says nothing about overclocking.
+export const OVERCLOCK_ADVICE_FROM = 2;
+// What researching Power Shards would save on a stage's nodes (#1137): the miners and extractors
+// its draw takes now, and how many it would take overclocked (phaseMiner with overclock, each
+// machine up to 250% and never past its belt or pipe). Null when the player can overclock
+// already (settings.overclock), before OVERCLOCK_ADVICE_FROM, when overclocking would not raise
+// the phase's clock (Phases 4 and 5 already run 250%, or a survey caps it) or would save none.
+export function overclockSaving(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: number,
+  settings: MiningSettings | undefined,
+): { now: number; overclocked: number } | null {
+  const mining = stage?.mining;
+  if (!mining || !settings || settings.overclock || phase < OVERCLOCK_ADVICE_FROM) return null;
+  const clock = phaseMiner(phase, settings.extraction, settings.ownedMiner, true).clock;
+  if (!(clock > mining.miner.clock + 1e-9)) return null;
+  let now = 0,
+    overclocked = 0;
+  for (const entry of stageMiningAdvice(stage)) {
+    now += entry.advice.nodes;
+    overclocked += miningAdvice(entry.rate, mining.sources[entry.resource]!, clock).nodes;
+  }
+  return overclocked < now ? { now, overclocked } : null;
+}
+// The advice to research Power Shards (#1137), or '' (overclockSaving).
+export function overclockAdviceWords(saving: { now: number; overclocked: number } | null): string {
+  if (!saving) return '';
+  const saved = saving.now - saving.overclocked;
+  return `Research Power Shards in the MAM (Blue Power Slugs, then Overclock Production) to halve the miners on these nodes: overclocked up to what their belts and pipes carry, the same draw takes ${miningNumber(saving.overclocked)} machines instead of ${miningNumber(saving.now)}, ${miningNumber(saved)} fewer.`;
+}
+
 // The build plan's mining step for a stage (#1065), or null without mining per phase or with
-// nothing to mine: the phase's equipment, then each resource's nodes.
-export function miningStepBody(stage: StoredStage | undefined, phase: string): string | null {
+// nothing to mine: the phase's equipment, then each resource's nodes, and the Power Shards in all
+// (#1137). `settings` (the plan's) adds the advice to research Power Shards (overclockSaving).
+export function miningStepBody(
+  stage: Pick<StoredStage, 'mining' | 'raw'> | undefined,
+  phase: string,
+  settings?: MiningSettings,
+): string | null {
   const resources = stageMiningAdvice(stage);
   if (!stage?.mining || !resources.length) return null;
   const mining = stage.mining;
-  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, 0);
+  const total = resources.reduce((sum, entry) => sum + entry.advice.mw, 0),
+    shards = resources.reduce((sum, entry) => sum + entry.advice.shards, 0);
+  const shardWords = shards
+    ? ` and ${miningNumber(shards)} Power Shard${shards === 1 ? '' : 's'}`
+    : '';
+  const advice = overclockAdviceWords(overclockSaving(stage, Number(phase), settings));
   return [
-    `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)} for the miners and extractors.`,
+    `Phase ${phase} mines with ${minerWords(mining.miner)} and carries on ${mining.belt.mark} belts (${miningNumber(mining.belt.cap)}/min) and ${mining.pipe.mark} pipes (${miningNumber(mining.pipe.cap)} m³/min); the budgets follow from them. Tap the best nodes first: ${powerAmount(total)}${shardWords} for the miners and extractors.`,
     ...resources.map(
       entry =>
         `${entry.resource} ${miningNumber(entry.rate)}${entry.fluid ? ' m³' : ''}/min: ${entry.words.charAt(0).toLowerCase()}${entry.words.slice(1)}`,
     ),
+    ...(advice ? [advice] : []),
   ].join(' ');
 }
 

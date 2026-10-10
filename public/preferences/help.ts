@@ -71,7 +71,7 @@ export const helpText: Record<string, string> = {
   extractionMark:
     'The miner you will have running on these nodes. A Mk.1 gives 60 a minute on a normal node, a Mk.2 gives 120 and a Mk.3 gives 240, before overclocking. Plan for the miner the phase can build, not the one you have today. With budgets per phase, each phase uses the best miner it can build, up to this one.',
   extractionClock:
-    'Overclocking multiplies extraction. 250% needs three Power Shards per miner and is what the planner’s default budgets assume. With budgets per phase, miners run at 100% in Phases 1–3 and up to 250% from Phase 4, with Power Shards from Power Slugs, and never faster than this.',
+    'Overclocking multiplies extraction. 250% needs three Power Shards per miner and is what the planner’s default budgets assume. With budgets per phase, miners and oil extractors run up to 250% once you can overclock (Power Shards researched in the MAM, or “I can overclock” under what you already have), and from Phase 4 in any case, never more than their belt or pipe carries and never faster than this. Without Power Shards they run at 100%, and the build plan says how many miners the research would save. Water Extractors run at 100% unless you choose to overclock them.',
   extractionNodes:
     'How many nodes of each purity your world has for this resource. A count, not a budget: zero means your world has none of that purity, so an all-pure world leaves the first two boxes at zero. The interactive map linked above will count them for you if you upload your save.',
   extractionWells:
