@@ -589,8 +589,9 @@ interface Trunk {
 const spanOf = (trunk: Trunk) => trunk.hi - trunk.lo;
 // Two trunks overlap when they share a row, an end included: two lanes ending on one input row
 // meet there.
-const overlaps = (a: Trunk, b: Trunk) => a.lo <= b.hi && b.lo <= a.hi;
-const fits = (lane: readonly Trunk[], trunk: Trunk) => !lane.some(other => overlaps(trunk, other));
+const trunksOverlap = (a: Trunk, b: Trunk) => a.lo <= b.hi && b.lo <= a.hi;
+const fits = (lane: readonly Trunk[], trunk: Trunk) =>
+  !lane.some(other => trunksOverlap(trunk, other));
 const longestOn = (lane: readonly Trunk[]) => Math.max(...lane.map(spanOf));
 
 // The lanes of a group's links (#883 round 3). Every output row with a link to another line of
