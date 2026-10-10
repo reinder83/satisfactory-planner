@@ -367,7 +367,9 @@ test('raw resources and nuclear recipes are never followed (#921, #933)', async 
   const held = alpha();
   held.assignments.Recipe_NuclearFuelRod_C = [{ group: ALPHA, rate: null }];
   const offers = onSiteOffers(plan, held, ALPHA);
-  assert.ok(offers.includes('Encased Uranium Cell'));
+  // Nor is the part itself offered (#1007): no group gets a line of it.
+  assert.ok(offers.includes('Stator'));
+  assert.ok(!offers.includes('Encased Uranium Cell'));
   assert.deepEqual(onSiteOffers(plan, held, ALPHA, ['Encased Uranium Cell']), offers);
 });
 
