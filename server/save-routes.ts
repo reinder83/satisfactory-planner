@@ -46,6 +46,9 @@ export function saveRoutes({
           kind: profile.kind,
           plan: profile.plan || null,
           state: profile.state,
+          // The kept-version link (#1071); selectForExport leaves out one whose profile is not
+          // exported.
+          ...(profile.backupOf === undefined ? {} : { backupOf: profile.backupOf }),
         })),
       }));
     const { exported } = selectForExport(owned, exportQuery(url.searchParams), message =>
