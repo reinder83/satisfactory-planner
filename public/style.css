@@ -5591,7 +5591,8 @@ button.rail-tile:hover {
     color: #101417;
   }
   /* #toast.show too: the screen rule that shows the toast is more specific than #toast, so it
-     would win here and print a toast that is still up (#730). */
+     would win here and print a toast that is still up (#730); so is the one for a toast with a
+     button (Undo after a tick, #1054). */
   .sidebar,
   .topbar,
   .toolbar,
@@ -5600,6 +5601,7 @@ button.rail-tile:hover {
   .btn,
   #toast,
   #toast.show,
+  #toast.show:has(.toast-action),
   .estimate-peek,
   .phase-track,
   .ada-ticker,
