@@ -15,7 +15,7 @@ import { calculate, recipePool, settings } from '../planner.ts';
 import { siteCopies, siteRoutes } from '../planner/on-site.ts';
 import { groupLinks, itemBooks, UNGROUPED } from '../public/app/group-links.ts';
 import { onSitePlannable, onSiteSettings } from '../public/app/on-site.ts';
-import { onSiteChange, onSiteSummaries, RAW_NOTE } from '../public/app/on-site-picker.ts';
+import { BYPRODUCT_NOTE, onSiteChange, onSiteSummaries } from '../public/app/on-site-picker.ts';
 import { newProfileState, validateState } from '../public/state.ts';
 import { validateTransfer } from '../public/transfer.ts';
 import type {
@@ -161,7 +161,7 @@ test('#1012: Heavy Oil Residue, a fluid the plan makes only as a byproduct, gets
   assert.equal(onSiteSettings(plan, groups), undefined);
   assert.equal(onSiteChange(plan, groups), null);
   assert.deepEqual(onSiteSummaries(plan, groups, plan.stages['3'])[ALPHA]!.marked, [
-    { item: 'Heavy Oil Residue', note: RAW_NOTE },
+    { item: 'Heavy Oil Residue', note: BYPRODUCT_NOTE },
   ]);
   // ... and the planner, asked for one, does not copy Plastic or Rubber for it.
   const shares = { Recipe_ResidualFuel_C: 1 };
@@ -377,7 +377,7 @@ test('#1012: on a whole-machine plan the central Dark Matter Residue byproduct f
 });
 
 // Gamma uses a third of the Dark Matter Crystal line, less than the central byproduct: Gamma's
-// line drops to nothing, so none is built; the mark reads as one with no line in this phase, and
+// line drops to nothing, so none is built; the mark reads as one the central byproduct covers, and
 // the notice asks for nothing, recalculation after recalculation.
 function checkFullyCovered(base: CurrentCalculatedPlan) {
   const groups = gammaGroups(true);
@@ -395,7 +395,7 @@ function checkFullyCovered(base: CurrentCalculatedPlan) {
     assert.equal(onSiteChange(plan, groups), null, 'no notice');
     assert.deepEqual(onSiteSummaries(plan, groups, plan.stages['5'])[GAMMA], {
       made: [],
-      marked: [{ item: DMR, note: '(no line in this phase)' }],
+      marked: [{ item: DMR, note: BYPRODUCT_NOTE }],
     });
     assert.deepEqual(ownLines(plan), ownLines(first));
     near(residue(rowsOf(plan, '5')).central, made.central, 'the same central line');

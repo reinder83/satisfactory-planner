@@ -1,7 +1,8 @@
 // Made on site polish (#1019):
 // - #1007: the picker offers no item a recalculation could never give a line (a radioactive item
 //   such as Encased Uranium Cell, or Heavy Oil Residue, which the plan makes only as a
-//   byproduct); one still marked stays listed with the heading's note "(can't be made on site)";
+//   byproduct); one still marked stays listed with the heading's note, "(can't be made on site)",
+//   or for Heavy Oil Residue "(a byproduct of central lines covers it)" (#1027 review);
 // - #979: with several unsaved pickers, Done editing focuses the first one's Save on the page,
 //   also after that group was folded and unfolded (which mounts its picker again, last);
 // - #978: a note after two or more marks in a group's heading reads plural.
@@ -16,6 +17,7 @@ import {
 } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import {
+  BYPRODUCT_NOTE,
   onSiteEntriesText,
   onSiteOffers,
   RAW_NOTE,
@@ -122,7 +124,7 @@ test('#1007: an item the plan makes only as a byproduct is not offered either', 
   assert.ok(generated().stages['3'].rows!.some(row => row.id === 'Recipe_ResidualFuel_C'));
   assert.ok(!onSiteOffers(generated(), residual, ALPHA).includes('Heavy Oil Residue'));
   await show(generated(), { ...residual, local: { [ALPHA]: ['Heavy Oil Residue'] } }, true);
-  assert.equal(noteOf(ALPHA, 'Heavy Oil Residue'), RAW_NOTE);
+  assert.equal(noteOf(ALPHA, 'Heavy Oil Residue'), BYPRODUCT_NOTE);
 });
 
 test('#979: Done editing focuses the first unsaved picker on the page, also after a fold', async () => {

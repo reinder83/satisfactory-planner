@@ -21,6 +21,10 @@
 // rounded so the parts add up (roundedParts), rather than every maker's share of every user, which
 // split it to 0.01 m³ a pair.
 //
+// The dialog and the build plan give a line's advice for the whole line. A group's flow page gives
+// a row split over several places only its part in that group (the `place` argument): what that
+// part sends and takes, at that part's rates, with the other places named as seen from the group.
+//
 // It reads only its arguments (no session), so the pages pass the stage of the phase they show.
 import { num, plural } from './format.ts';
 import { nearestFraction, roundedParts, sensibleDecimals } from './apportion.ts';
@@ -180,49 +184,69 @@ interface Peer {
   rate: number;
 }
 
+// Whether `end` is the row the advice is about: any part of it for the whole line, only its part
+// in `place` for one place's part of a split row.
+const isRow = (end: RecycleEnd, rowId: string, place?: string): boolean =>
+  end.kind === 'line' && end.id === rowId && (place === undefined || end.place === place);
+
 // The transfers of `item` out of (`side` 'from') or into (`side` 'to') row `rowId`, summed per
-// other end, the row itself first, then the largest rate first.
-function peersOf(model: RecycleModel, rowId: string, item: string, side: 'from' | 'to'): Peer[] {
+// other end, the row itself first, then the largest rate first. With `place`, only the row's part
+// in that place: what a group's flow page shows of a row split over several places.
+function peersOf(
+  model: RecycleModel,
+  rowId: string,
+  item: string,
+  side: 'from' | 'to',
+  place?: string,
+): Peer[] {
   const other = side === 'from' ? 'to' : 'from';
   const peers = new Map<string, Peer>();
   for (const transfer of model.transfers) {
     const end = transfer[side];
-    if (transfer.item !== item || end.kind !== 'line' || end.id !== rowId) continue;
+    if (transfer.item !== item || !isRow(end, rowId, place)) continue;
     const peer = transfer[other];
     // The row's own use is one, whatever places a split row is in; another line once per place.
+    // For one place's part, the row's part in another place counts as another line.
     const key =
       peer.kind !== 'line'
         ? `place|${peer.id}`
-        : peer.id === rowId
+        : isRow(peer, rowId, place)
           ? 'self'
           : `line|${peer.id}|${peer.place}`;
     const entry = peers.get(key) ?? { end: peer, rate: 0 };
     entry.rate += transfer.rate;
     peers.set(key, entry);
   }
-  const self = (peer: Peer) => (peer.end.kind === 'line' && peer.end.id === rowId ? 0 : 1);
+  const self = (peer: Peer) => (isRow(peer.end, rowId, place) ? 0 : 1);
   return [...peers.values()]
     .filter(peer => peer.rate > LINK_DUST)
     .sort((a, b) => self(a) - self(b) || b.rate - a.rate);
 }
 
-// What a paragraph is about (`row`'s `item`), and what it reads to name the other lines.
+// What a paragraph is about (`row`'s `item`), and what it reads to name the other lines. `place`
+// is set for one place's part of the row (a group's flow page): the advice then follows only that
+// part, and names the other places as seen from it.
 interface Wording {
   model: RecycleModel;
   words: AdviceWords;
   row: CalcRow;
   item: string;
   rowOf: (id: string) => CalcRow | undefined;
+  place?: string;
 }
+
+// Whether `end` is the row the paragraph is about (isRow), in its place when it has one.
+const isOwn = (wording: Wording, end: RecycleEnd) => isRow(end, wording.row.id, wording.place);
 
 // "116.27 m³" for a fluid, "39.52" for a solid: an amount of the item without "/min".
 const amountOf = (wording: Wording, rate: number) =>
   num(rate) + (wording.words.fluid(wording.item) ? ' m³' : '');
 
-// " in Electronics" when a line is in another place than `row`'s own (homeGroup), " (ungrouped)"
-// for a line in no group seen from a group, else ''.
+// " in Electronics" when a line is in another place than `row`'s own (homeGroup, or the place
+// whose part the advice follows), " (ungrouped)" for a line in no group seen from a group, else ''.
 function whereOf(wording: Wording, end: RecycleEnd): string {
-  if (end.kind !== 'line' || end.place === homeGroup(wording.row, wording.model.groups)) return '';
+  const here = wording.place ?? homeGroup(wording.row, wording.model.groups);
+  if (end.kind !== 'line' || end.place === here) return '';
   if (end.place === UNGROUPED) return ' (ungrouped)';
   return ' in ' + placeName(end.place, wording.model.groups.groups, wording.model.stage.raw);
 }
@@ -246,31 +270,39 @@ const DESTINATION_WORDS: Record<string, string> = {
 // ("Pipe all of it back into this line's own Water input."), then the lines using it, the largest
 // first, each linked, "in <group>" when it is in another place and "back to …, which feeds this
 // line" for a loop; a solid's leftover is stored or sunk (the owner's choice 5), and a fluid,
-// which the planner balances exactly, never gets that advice.
+// which the planner balances exactly, never gets that advice. With `place`, the advice for the
+// row's part in that place only (a group's flow page), its lead that part's rate.
 export function byproductAdvice(
   row: CalcRow,
   model: RecycleModel,
   words: AdviceWords,
+  place?: string,
 ): AdviceLine[] {
   const rows = new Map((model.stage.rows || []).map(other => [other.id, other]));
+  const share = shareIn(row, model, place);
+  if (share <= LINK_DUST) return [];
   return byproductsOf(row).flatMap(item => {
-    const wording: Wording = { model, words, row, item, rowOf: id => rows.get(id) };
+    const wording: Wording = { model, words, row, item, rowOf: id => rows.get(id), place };
     const pool = poolFor(wording, 'from');
     const parts = pool
       ? poolParts(wording, pool, 'Pool it with the others: ')
-      : byproductParts(wording, peersOf(model, row.id, item, 'from'));
+      : byproductParts(wording, peersOf(model, row.id, item, 'from', place));
     return parts.length
       ? [
           {
             kind: 'byproduct',
             item,
-            lead: item + ' ' + words.itemRate(item, row.outputs[item]!),
+            lead: item + ' ' + words.itemRate(item, row.outputs[item]! * share),
             parts,
           },
         ]
       : [];
   });
 }
+
+// The part of `row` in `place` (rowPlaces), or 1, the whole line, without a place.
+const shareIn = (row: CalcRow, model: RecycleModel, place?: string): number =>
+  place === undefined ? 1 : rowPlaces(row, model.groups).get(place) || 0;
 
 // The advice for a solid byproduct no line uses (the owner's choice 5 in #1022).
 const NO_LINE = 'No line uses it: store it or send it to the AWESOME Sink.';
@@ -288,7 +320,7 @@ function byproductParts(wording: Wording, peers: Peer[]): AdvicePart[] {
   const phrases = sent.map(peer =>
     destinationPhrase(wording, peer, all ? 'all of it' : amountOf(wording, peer.rate)),
   );
-  const self = sent[0]!.end.kind === 'line' && sent[0]!.end.id === wording.row.id;
+  const self = isOwn(wording, sent[0]!.end);
   const restText =
     rest > LINK_DUST
       ? `${phrases.length > 1 ? ', and ' : andAfter(phrases[0]!)}store or sink the other ${amountOf(wording, rest)}`
@@ -302,8 +334,7 @@ const LOOP_CLAUSE = ', which feeds this line';
 function destinationPhrase(wording: Wording, peer: Peer, amount: string): AdvicePart[] {
   const end = peer.end;
   if (end.kind === 'place') return [`${amount} ${DESTINATION_WORDS[end.id]}`];
-  if (end.id === wording.row.id)
-    return [`${amount} back into this line’s own ${wording.item} input`];
+  if (isOwn(wording, end)) return [`${amount} back into this line’s own ${wording.item} input`];
   const loop = feeds(wording.rowOf(end.id), wording.row, wording.item);
   return [
     `${amount} ${loop ? 'back ' : ''}to `,
@@ -333,12 +364,20 @@ const andAfter = (phrase: AdvicePart[]): string =>
 // extraction and existing supply" for an item that has both (the planner refuses existing supply
 // of a raw resource, so no plan it made has both). Extracted Water gets a paragraph whether or
 // not a byproduct covers some of it ("No byproduct covers it: extract all of it." when none does),
-// with the Water Extractors for what is extracted (#1024).
-export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWords): AdviceLine[] {
+// with the Water Extractors for what is extracted (#1024). With `place`, the advice for the row's
+// part in that place only, as byproductAdvice.
+export function inputAdvice(
+  row: CalcRow,
+  model: RecycleModel,
+  words: AdviceWords,
+  place?: string,
+): AdviceLine[] {
   const rows = new Map((model.stage.rows || []).map(other => [other.id, other]));
+  const share = shareIn(row, model, place);
+  if (share <= LINK_DUST) return [];
   return Object.keys(row.inputs || {}).flatMap(item => {
-    const wording: Wording = { model, words, row, item, rowOf: id => rows.get(id) };
-    const peers = peersOf(model, row.id, item, 'to');
+    const wording: Wording = { model, words, row, item, rowOf: id => rows.get(id), place };
+    const peers = peersOf(model, row.id, item, 'to', place);
     const lines = peers.filter(peer => peer.end.kind === 'line');
     const byproduct = (peer: Peer) =>
       peer.end.kind === 'line' && isByproductOf(rows.get(peer.end.id), item);
@@ -369,7 +408,7 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
       {
         kind: 'input' as const,
         item,
-        lead: item + ' ' + words.itemRate(item, row.inputs[item]!),
+        lead: item + ' ' + words.itemRate(item, row.inputs[item]! * share),
         parts: pool
           ? poolParts(wording, pool, 'From one pool: ')
           : lines.length
@@ -417,7 +456,7 @@ export function extractorAdvice(rate: number): string {
 function sourcePhrase(wording: Wording, peer: Peer, amount: string): AdvicePart[] {
   const end = peer.end;
   if (end.kind !== 'line') return [];
-  if (end.id === wording.row.id) return [`${amount} from this line’s own byproduct`];
+  if (isOwn(wording, end)) return [`${amount} from this line’s own byproduct`];
   const source = wording.rowOf(end.id);
   const words = !isByproductOf(source, wording.item)
     ? 'from '
@@ -450,7 +489,7 @@ function poolFor(wording: Wording, side: 'from' | 'to'): Pool | undefined {
   const places = new Set<string>();
   for (const transfer of wording.model.transfers) {
     const end = transfer[side];
-    if (transfer.item === wording.item && end.kind === 'line' && end.id === wording.row.id)
+    if (transfer.item === wording.item && end.kind === 'line' && isOwn(wording, end))
       places.add(end.place);
   }
   if (places.size !== 1) return undefined;
@@ -525,9 +564,7 @@ function poolParts(wording: Wording, pool: Pool, lead: string): AdvicePart[] {
 // "extractors" for a raw resource, "existing supply", or a destination ("the Space Elevator").
 function poolEnd(wording: Wording, end: RecycleEnd): AdvicePart[] {
   if (end.kind === 'line')
-    return end.id === wording.row.id
-      ? ['this line']
-      : [lineLink(wording, end.id), whereOf(wording, end)];
+    return isOwn(wording, end) ? ['this line'] : [lineLink(wording, end.id), whereOf(wording, end)];
   const { stage, groups } = wording.model;
   if (isSource(end.id))
     return [(stage.raw?.[wording.item] || 0) > LINK_DUST ? 'extractors' : 'existing supply'];
@@ -569,10 +606,16 @@ export const adviceText = (lines: AdviceLine[]): string =>
     })
     .join(' ');
 
-// Every paragraph of a line's advice: its byproducts, then the inputs a byproduct covers.
-export const lineAdvice = (row: CalcRow, model: RecycleModel, words: AdviceWords): AdviceLine[] => [
-  ...byproductAdvice(row, model, words),
-  ...inputAdvice(row, model, words),
+// Every paragraph of a line's advice: its byproducts, then the inputs a byproduct covers. With
+// `place`, for the line's part in that place only (a group's flow page shows a split row's part).
+export const lineAdvice = (
+  row: CalcRow,
+  model: RecycleModel,
+  words: AdviceWords,
+  place?: string,
+): AdviceLine[] => [
+  ...byproductAdvice(row, model, words, place),
+  ...inputAdvice(row, model, words, place),
 ];
 
 // How many byproducts the lines of a phase make, one per line and byproduct (ADA's

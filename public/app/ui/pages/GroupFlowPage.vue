@@ -180,6 +180,7 @@ const printPage = () => window.print();
           >
             <FlowCard
               :line="line"
+              :group="page.flow.group"
               :names="names"
               :running="page.running(line.id)"
               :hot="active === line.id"
