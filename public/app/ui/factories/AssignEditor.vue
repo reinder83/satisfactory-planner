@@ -263,7 +263,7 @@ async function add(event: Event) {
           {{ group.name }}
         </option></select
       ><button
-        class="btn quiet unavailable"
+        class="btn quiet"
         :data-assign-go="factoryKey"
         :aria-label="target ? 'Add to ' + target.name : 'Add to a factory'"
         :disabled="!target"

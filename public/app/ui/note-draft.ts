@@ -18,14 +18,16 @@
 // keystroke ever replaces another person's text without that choice.
 //
 // A failed write keeps the draft and shows "Not saved" with Retry, which sends it again, as
-// typing more does. Each box registers with api.ts (noteBoxes), so allowSwitch() sends a note
-// still waiting for its pause before the page goes away and asks only about a note that would
-// be lost. If a write fails after its box has gone (the page changed while it was on its
-// way), the draft is kept here, for this save, profile and key, and the box shows it again,
-// marked "Not saved", when it next opens; with the text it was typed over, so a note changed
-// meanwhile opens as a conflict.
-import { computed, onBeforeUnmount, onMounted, ref, watch, type ShallowRef } from 'vue';
-import { noteBoxes, save, toast, type NoteBox } from '../api.ts';
+// typing more does. While a box says "Not saved" (a failed write or a version to choose), so
+// does the save status in the sidebar and top bar (notesNotSaved in api.ts, ui/Shell.vue).
+// Each box registers with api.ts (noteBoxes), so allowSwitch() sends a note still waiting for
+// its pause before the page goes away and asks only about a note that would be lost. If a write
+// fails after its box has gone (the page changed while it was on its way), the draft is kept
+// here, for this save, profile and key, and the box shows it again, marked "Not saved", when it
+// next opens; with the text it was typed over, so a note changed meanwhile opens as a conflict.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ShallowRef } from 'vue';
+import { noteBoxes, save, saveIndicator, toast, type NoteBox } from '../api.ts';
+import { keepToastOff } from '../toast-place.ts';
 import { currentProfile, currentSave, state } from '../session.ts';
 import { legacy } from './bridge.ts';
 
@@ -59,10 +61,12 @@ let writes = 0;
 
 const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-// `el` is the box's textarea (a template ref).
+// `el` is the box's textarea and `notice` the conflict notice under it, while it shows (template
+// refs).
 export function useNoteAutosave(
   noteKey: () => string,
   el: Readonly<ShallowRef<HTMLTextAreaElement | null>>,
+  notice?: Readonly<ShallowRef<HTMLElement | null>>,
 ) {
   // The save, profile and key this box shows; `scope` alone is the save and profile.
   const scope = () => legacy(() => (currentSave?.id || '') + '/' + (currentProfile?.id || ''));
@@ -98,7 +102,8 @@ export function useNoteAutosave(
     conflict.value = null;
   }
   // Another version was saved underneath the text on screen: show both and wait for a choice.
-  // A box folded away in its phase panel opens, so the choice is in sight.
+  // A box folded away in its phase panel opens, so the choice is in sight, and the toast about
+  // it (save()'s refusal, or the one below) moves off the notice once that is drawn.
   function clash(theirs: string) {
     clearTimeout(timer);
     timer = undefined;
@@ -106,6 +111,9 @@ export function useNoteAutosave(
     status.value = 'conflict';
     const panel = el.value?.closest('details');
     if (panel && !panel.open) panel.open = true;
+    void nextTick(() => {
+      if (notice?.value) keepToastOff(notice.value);
+    });
   }
 
   // Writes the text now, unless the saved note (or the write on its way) already has it.
@@ -258,17 +266,24 @@ export function useNoteAutosave(
       );
   });
 
+  // The box says "Not saved": its write failed, or it asks which version to keep.
+  const failed = () => status.value === 'failed' || status.value === 'conflict';
   const box: NoteBox = {
     el: () => el.value,
     flush,
     conflict: () => conflict.value !== null,
+    failed,
     unsaved: () =>
       status.value === 'failed' || conflict.value !== null || blank(current()) !== blank(saved()),
     unsent: () => (timer === undefined && blank(current()) !== target()) || conflict.value !== null,
   };
+  // The save status counts the boxes that say "Not saved" (notesNotSaved in api.ts): it is
+  // drawn again when one starts or stops saying so, comes or goes.
+  watch(failed, saveIndicator);
   onMounted(() => {
     mounted = true;
     noteBoxes.add(box);
+    if (failed()) saveIndicator();
     // A draft taken over from a write that failed after its box went away: the note changed
     // meanwhile, so ask which to keep.
     if (orphan && blank(saved()) !== blank(orphan.base) && blank(saved()) !== blank(orphan.text))
@@ -278,6 +293,7 @@ export function useNoteAutosave(
     flush();
     mounted = false;
     noteBoxes.delete(box);
+    if (failed()) saveIndicator();
   });
 
   // The status line under the box.

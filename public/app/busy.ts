@@ -2,10 +2,10 @@
 // control the moment it becomes disabled: Edge and Chrome put it on <body>, where nothing shows a
 // focus ring and a screen reader loses its place, and it stays there once the control is enabled
 // again. So a busy control is never `disabled`: it gets aria-disabled="true" instead (announced
-// as unavailable, and drawn like a disabled one by style.css), a text field is also read-only,
-// and a click on it is swallowed until the work is done, so a second press cannot send the same
-// change twice (a checkbox is not ticked, a button's handler does not run, a form is not
-// submitted by its busy button or by Enter in one of its fields).
+// as unavailable, and dimmed like a disabled one by style.css, with the wait cursor), a text
+// field is also read-only, and a click on it is swallowed until the work is done, so a second
+// press cannot send the same change twice (a checkbox is not ticked, a button's handler does not
+// run, a form is not submitted by its busy button or by Enter in one of its fields).
 //
 // Two forms, one rule:
 // - whileBusy(el, work) for a control its handler marks itself (an @change on a checkbox, select

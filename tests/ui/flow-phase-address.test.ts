@@ -115,36 +115,6 @@ async function load(hash: string, saved: Phase = '3') {
 const writes = (calls: [string, unknown][]) =>
   calls.filter(([path]) => path.startsWith('/api/update'));
 
-// Runs `steps` with history.replaceState behaving as in a browser: happy-dom fires a hashchange
-// when replaceState changes the hash, which browsers never do (#991). That extra event runs the
-// app's hashchange listener, which records the new address as the page on screen (acceptRoute
-// in api.ts) and so hides whether the app recorded it itself. happy-dom dispatches the event
-// later through window.dispatchEvent, with the change's old and new address, so each change
-// replaceState makes is noted and its event dropped there.
-async function withBrowserReplaceState(steps: () => Promise<void>) {
-  const replace = history.replaceState,
-    dispatch = window.dispatchEvent,
-    replaced: string[] = [];
-  history.replaceState = function (data: unknown, unused: string, url?: string | URL | null) {
-    const oldURL = location.href;
-    replace.call(history, data, unused, url);
-    if (location.hash !== new URL(oldURL).hash) replaced.push(`${oldURL} ${location.href}`);
-  };
-  window.dispatchEvent = function (event: Event) {
-    const change = event instanceof HashChangeEvent ? `${event.oldURL} ${event.newURL}` : null;
-    const index = change === null ? -1 : replaced.indexOf(change);
-    if (index < 0) return dispatch.call(window, event);
-    replaced.splice(index, 1);
-    return true;
-  };
-  try {
-    await steps();
-  } finally {
-    history.replaceState = replace;
-    window.dispatchEvent = dispatch;
-  }
-}
-
 beforeAll(async () => {
   page();
   // The hashchange listener is page-wide (listeners.ts), registered once on import.
@@ -272,48 +242,46 @@ test('an address from before #926 still opens the flow page, and then keeps its 
 // The address render() rewrites is the page on screen (#973's review): keeping a note that was
 // not saved on Back puts that address back, so it still names the phase shown, and a reload then
 // shows that phase. In a browser replaceState fires no hashchange, so only the app itself can
-// record the rewritten address (withBrowserReplaceState, #991).
+// record the rewritten address (tests/ui/browser-history.ts, #991).
 test('keeping an unsaved note on Back puts back the address of the phase shown', async () => {
-  await withBrowserReplaceState(async () => {
-    await load('plan');
-    await follow(`factories/${GROUP}/flow?phase=1`);
-    assert.equal(phase(), '1');
-    assert.ok($('[data-milestone-only]'), 'Phase 1 is milestone-only');
-    $<HTMLButtonElement>('[data-go-to-start-phase]')!.click();
-    await settle();
-    assert.equal(phase(), '3');
-    assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`, 'the address follows');
-    const drawn = cards();
-    assert.ok(drawn > 0, 'the group’s lines are drawn');
-    // A card's ↗, and a note in its dialog whose write fails.
-    $<HTMLButtonElement>('#main .gf-card .gf-head .rail-link')!.click();
-    await settle();
-    stubFetch({
-      '/api/update': () => {
-        throw new Error('offline');
-      },
-    });
-    const note = $<HTMLTextAreaElement>('#detail-note')!;
-    note.value = 'Belt the screws';
-    note.dispatchEvent(new Event('input'));
-    note.dispatchEvent(new Event('blur'));
-    await settle();
-    assert.match($('#detail-note-status')?.textContent ?? '', /^Not saved/);
-    // Back, and Cancel in "Leave without saving?".
-    const asked = answerConfirms(false);
-    await follow('plan');
-    await settle();
-    assert.equal(asked.length, 1, 'the leave question was asked');
-    assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`, 'the address of Phase 3');
-    assert.equal(phase(), '3');
-    assert.equal(cards(), drawn, 'the page stays as it was');
-    // Drop the note, so no draft waits for a later test's box (#864).
-    stubFetch({ '/api/update': (update: UpdateOp) => applyUpdate(update) });
-    note.value = '';
-    note.dispatchEvent(new Event('input'));
-    note.dispatchEvent(new Event('blur'));
-    await settle();
+  await load('plan');
+  await follow(`factories/${GROUP}/flow?phase=1`);
+  assert.equal(phase(), '1');
+  assert.ok($('[data-milestone-only]'), 'Phase 1 is milestone-only');
+  $<HTMLButtonElement>('[data-go-to-start-phase]')!.click();
+  await settle();
+  assert.equal(phase(), '3');
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`, 'the address follows');
+  const drawn = cards();
+  assert.ok(drawn > 0, 'the group’s lines are drawn');
+  // A card's ↗, and a note in its dialog whose write fails.
+  $<HTMLButtonElement>('#main .gf-card .gf-head .rail-link')!.click();
+  await settle();
+  stubFetch({
+    '/api/update': () => {
+      throw new Error('offline');
+    },
   });
+  const note = $<HTMLTextAreaElement>('#detail-note')!;
+  note.value = 'Belt the screws';
+  note.dispatchEvent(new Event('input'));
+  note.dispatchEvent(new Event('blur'));
+  await settle();
+  assert.match($('#detail-note-status')?.textContent ?? '', /^Not saved/);
+  // Back, and Cancel in "Leave without saving?".
+  const asked = answerConfirms(false);
+  await follow('plan');
+  await settle();
+  assert.equal(asked.length, 1, 'the leave question was asked');
+  assert.equal(location.hash, `#factories/${GROUP}/flow?phase=3`, 'the address of Phase 3');
+  assert.equal(phase(), '3');
+  assert.equal(cards(), drawn, 'the page stays as it was');
+  // Drop the note, so no draft waits for a later test's box (#864).
+  stubFetch({ '/api/update': (update: UpdateOp) => applyUpdate(update) });
+  note.value = '';
+  note.dispatchEvent(new Event('input'));
+  note.dispatchEvent(new Event('blur'));
+  await settle();
   // A reload of that address shows Phase 3, not the Phase 1 the profile opens on.
   await load(location.hash.slice(1));
   assert.equal(phase(), '3');
