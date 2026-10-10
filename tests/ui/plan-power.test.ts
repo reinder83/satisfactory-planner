@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { afterAll, beforeAll, beforeEach, test } from 'vitest';
 import { render } from '../../public/app/shell.ts';
 import { power } from '../../public/app/wizard/fields.ts';
+import { powerView } from '../../public/power.ts';
 import { $, generated, generatedWith, open, page } from './setup.ts';
 import type { StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -24,6 +25,10 @@ afterAll(() => {
   Number.prototype.toLocaleString = toLocale;
 });
 beforeEach(() => page());
+
+const close = (actual: number, expected: number, what: string) =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} is not ${expected}`);
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const summaryPower = () =>
   $('#main [data-plan-summary] [data-summary="power"]')!.textContent!.trim();
@@ -83,7 +88,7 @@ test('a plan stored before #1064 keeps its summary: the new power and the spare 
   assert.equal(summaryPower(), `${power(none.stages['3'].generationMW)} new power`);
 });
 
-test('with augmenters a stored summary adds their boost, as the Resources bar does (#1050 review)', () => {
+test('with augmenters a stored summary adds what they add, as the Resources bar does (#1050 review)', () => {
   const plan = storedBefore1064(generated());
   const stage = plan.stages['3'];
   plan.settings.availablePowerGW = 20;
@@ -96,6 +101,45 @@ test('with augmenters a stored summary adds their boost, as the Resources bar do
   render();
   assert.equal(
     summaryPower(),
-    `${power(stage.generationMW)} new power + 3 GW augmenter boost + 20 GW existing spare power`,
+    `${power(stage.generationMW)} new power + 3 GW from 2 augmenters + 20 GW existing spare power`,
   );
+});
+
+// Phase 5 with augmenters and new generators (#1020, from the #1050 re-review): the summary, the
+// Resources page's bar and "Power available now" split the power one way, as stageSupply and a
+// plan with a grid do: the new generators with the augmenters' boost on them, and what the
+// augmenters add besides (their 500 MW each and their boost on installed generation). The
+// summary used to put the boost on the new generators with the augmenters, as the bar did, while
+// the step counted it with the generators. The totals are unchanged.
+test("a stored plan's summary, bar and power step split the augmenters' boost alike", () => {
+  const plan = storedBefore1064(generated());
+  const stage = plan.stages['3'];
+  plan.settings.availablePowerGW = 1;
+  plan.settings.installedPowerGW = 1;
+  const generation = stage.generationMW || 0;
+  assert.ok(generation > 100, 'the phase builds generators');
+  // 4 augmenters, fuelled: 2 GW and a 40% boost on the base production (the new generation and
+  // 1 GW installed), as the planner stored availableMW before #1064.
+  stage.augmenters = 4;
+  stage.augmenterMW = 2000;
+  stage.boost = 0.4;
+  stage.availableMW = generation * 1.4 + 1000 + 2000 + 400;
+  const boosted = generation * 1.4,
+    augmenters = 2400;
+  open({ calculated: plan });
+  render();
+  assert.equal(
+    summaryPower(),
+    `${power(boosted)} new power with the augmenters' boost + ${power(augmenters)} from 4 augmenters + ${power(1000)} existing spare power`,
+  );
+  const view = powerView(stage, plan.settings);
+  const part = (key: string) => view.supply.find(entry => entry.key === key)!;
+  close(part('generation').mw, boosted, 'the bar gives the new generators with the boost');
+  assert.match(part('generation').caption, /with the augmenters' boost/);
+  close(part('boost').mw, augmenters, 'and the augmenters their own part');
+  close(part('spare').mw, 1000, 'the spare power');
+  close(view.availableMW, stage.availableMW, 'the total is as stored');
+  const step = $('[data-task="startup-3-power-review"] p')!.textContent!;
+  assert.match(step, new RegExp(`your 4 augmenters add ${escaped(power(augmenters))}`));
+  assert.match(step, new RegExp(`which (provides|adds) ${escaped(power(boosted))}`));
 });

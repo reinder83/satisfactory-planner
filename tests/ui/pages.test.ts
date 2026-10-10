@@ -1267,10 +1267,19 @@ test('the calculated resources page lists somersloops, augmenters, conversions a
     /· 12 somersloops in production: amplified machines give double output at four times the power$/,
   );
   const spare = plan.settings.availablePowerGW * 1000;
+  // The boost on the new generation goes with the new generation, as "Power available now" and
+  // stageSupply count it (#1020); the augmenters' part is the rest of what they add.
+  const generation = stage.generationMW ?? 0,
+    withBoost = generation + Math.min(5000 - generation - spare, generation * 0.2);
   assert.equal(
     $('#main [data-power-part="boost"] b')!.textContent,
-    power(5000 - (stage.generationMW ?? 0) - spare),
+    power(5000 - withBoost - spare),
     'what the augmenters add to the available power',
+  );
+  assert.equal(
+    $('#main [data-power-part="generation"] b')!.textContent,
+    power(withBoost),
+    'the new generation with their boost',
   );
   assert.equal(
     $('#main [data-power-part="boost"] small')!.textContent,
