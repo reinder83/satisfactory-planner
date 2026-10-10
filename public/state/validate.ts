@@ -6,6 +6,7 @@
 // (public/types/state.ts). Input arrives as unknown and is narrowed by the checks below
 // (plain, safeKey, label, ...), which are type guards; nothing is trusted before them.
 import { vehicleFuels } from '../preferences.ts';
+import { ALTERNATE_RECIPE_IDS } from './alternates.ts';
 import { ITEM_NAMES } from './items.ts';
 import type {
   CustomTask,
@@ -215,21 +216,22 @@ const amplifiedUnlockBase = (key: unknown): string | undefined =>
 // step the plan no longer shows always are. In a saved step order the twin's id becomes the
 // recipe's where the recipe's step is not listed yet, so the step keeps the place the user gave
 // it. A removed twin step is not carried: removing the duplicate must not hide the recipe's step,
-// and its id stays in the list. Run on every state validateState returns, and by the browser
-// edition on each record it reads (browser-store.ts), since that edition serves stored progress
-// without validating it; so it takes any saved shape and leaves what it does not recognise (a
-// malformed value) for validateState to refuse. Returns whether it changed anything, which is when
-// the stored data needs its pre-merge copy (workspace.json.pre-901 and the browser edition's
-// pre-901 key).
+// and its id stays in the list. Run through mergeOldUnlockKeys (below) on every state
+// validateState returns, and by the browser edition on each record it reads (browser-store.ts),
+// since that edition serves stored progress without validating it; so it takes any saved shape
+// and leaves what it does not recognise (a malformed value) for validateState to refuse. Returns
+// whether it changed anything.
 export function mergeAmplifiedUnlocks(state: { checks?: unknown; taskEdits?: unknown }): boolean {
-  const checks = plain(state.checks) && mergeAmplifiedChecks(state.checks);
+  const checks = plain(state.checks) && mergeTicks(state.checks, amplifiedUnlockBase);
   const edits = plain(state.taskEdits) && mergeAmplifiedEdits(state.taskEdits);
   return checks || edits;
 }
-function mergeAmplifiedChecks(checks: Raw) {
+// Moves each tick whose key baseOf maps to a step id onto that step: ticked when either was, and
+// the old key deleted. A value that is not a boolean, on either key, is left for validateState.
+function mergeTicks(checks: Raw, baseOf: (key: string) => string | undefined) {
   let changed = false;
   for (const [key, ticked] of Object.entries(checks)) {
-    const base = amplifiedUnlockBase(key);
+    const base = baseOf(key);
     const own = base === undefined ? undefined : checks[base];
     if (base === undefined || typeof ticked !== 'boolean') continue;
     if (own !== undefined && typeof own !== 'boolean') continue;
@@ -264,9 +266,43 @@ function mergeAmplifiedEdits(edits: Raw) {
   }
   return changed;
 }
-// Whether mergeAmplifiedUnlocks would change this saved state, without changing it.
-export const holdsAmplifiedUnlocks = (state: { checks?: unknown; taskEdits?: unknown }) =>
-  mergeAmplifiedUnlocks(structuredClone({ checks: state.checks, taskEdits: state.taskEdits }));
+// A factory group's own line's unlock key from releases before #1041. A group's own line made on
+// site (#875) has the row id '<recipe>:<group>' (siteRowId in planner/on-site.ts), and a new
+// profile's picked unlocks (pickedRecipeUnlocks in carry.ts) ticked
+// 'recipe-unlock-<recipe>:<group>' for it: a step the build plan never showed, mostly beside a
+// tick on the recipe's own 'recipe-unlock-<recipe>'. Recipe ids have no ':' and group ids match
+// GROUP_ID, so the key is recognised without the plan; it counts only when <recipe> is an
+// alternate recipe the game data has held (ALTERNATE_RECIPE_IDS), the only rows that wrote one.
+// Returns the recipe's step id for such a key, else undefined: any other key, one with a bogus
+// prefix or an unknown recipe included, stays as it is.
+const UNLOCK = 'recipe-unlock-';
+const GROUP_ID = /^fg-[a-z0-9]{4,32}$/;
+const alternates = new Set(ALTERNATE_RECIPE_IDS);
+const groupLineUnlockBase = (key: string): string | undefined => {
+  if (!key.startsWith(UNLOCK)) return undefined;
+  const [recipe = '', group = '', ...rest] = key.slice(UNLOCK.length).split(':');
+  return !rest.length && alternates.has(recipe) && GROUP_ID.test(group)
+    ? UNLOCK + recipe
+    : undefined;
+};
+// Merges each 'recipe-unlock-<recipe>:<group>' tick into its recipe's step, in place (#1041,
+// #1020), as an amplified twin's tick is merged: the recipe's step is ticked when either was, and
+// the group line's key goes, so running this again changes nothing and a later untick stays.
+// Only ticks: the step was never shown, so it has no step edits. Returns whether it changed
+// anything.
+export const mergeGroupLineUnlocks = (state: { checks?: unknown }): boolean =>
+  plain(state.checks) && mergeTicks(state.checks, groupLineUnlockBase);
+// Both key migrations, the twin's first, so a key naming both would be merged all the way.
+// validateState runs it on every state it returns, and the browser edition on each record it
+// reads. Returns whether it changed anything, which is when the stored data needs its pre-merge
+// copy (workspace.json.pre-901 and the browser edition's pre-901 key).
+export function mergeOldUnlockKeys(state: { checks?: unknown; taskEdits?: unknown }): boolean {
+  const amplified = mergeAmplifiedUnlocks(state);
+  return mergeGroupLineUnlocks(state) || amplified;
+}
+// Whether mergeOldUnlockKeys would change this saved state, without changing it.
+export const holdsOldUnlockKeys = (state: { checks?: unknown; taskEdits?: unknown }) =>
+  mergeOldUnlockKeys(structuredClone({ checks: state.checks, taskEdits: state.taskEdits }));
 // Returns a clean copy of factoryGroups, or a blank one when absent. Every assignment must
 // name a group from the same list, each group at most once per row. The items a group makes on
 // site (local, #874) must each be a known item (items.ts), at most once per group, and the group
@@ -665,7 +701,8 @@ export const baysOn = (edits: StorageEdits, id: string) =>
 // imports (transfer.ts). Returns a fresh, normalised copy and never changes its input.
 // Versions 1–16 are accepted as they are; there is no field-by-field upgrade, because each
 // version only adds optional sections that default to blank. The one rewrite is of keys, not of
-// a version: an amplified twin's unlock records merge into its recipe's (mergeAmplifiedUnlocks).
+// a version: an amplified twin's unlock records and a group line's unlock tick merge into their
+// recipe's (mergeOldUnlockKeys).
 // A higher version is refused with an update message, so a newer save is never downgraded or
 // stripped. Anything malformed throws with status 400 instead of being dropped, so a bad import
 // cannot replace good progress. Unknown top-level fields and settings other than phase are not
@@ -724,9 +761,10 @@ export function validateState(state: unknown): ProgressState {
   });
   clean.storageEdits = validateEdits(state.storageEdits);
   clean.taskEdits = validateTaskEdits(state.taskEdits);
-  // An amplified twin's unlock records go to its recipe's step (#901). This adds no content, so
-  // the version below is what it was, and a release before it reads the state as before.
-  mergeAmplifiedUnlocks(clean);
+  // An amplified twin's unlock records (#901) and a group line's unlock tick (#1041) go to their
+  // recipe's step. This adds no content, so the version below is what it was, and a release
+  // before it reads the state as before.
+  mergeOldUnlockKeys(clean);
   clean.factoryGroups = validateGroups(state.factoryGroups);
   const origin = validateOrigin(state.handbookOrigin);
   if (origin) clean.handbookOrigin = origin;

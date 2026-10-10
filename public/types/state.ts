@@ -18,6 +18,9 @@ import type { ExactClocks } from './calculated.ts';
 // migration mapped (handbookOrigin.mapping), 14 a group that makes items on site
 // (factoryGroups.local), 15 ticks a recalculation kept for review because of lines made on site
 // (onSiteReview), 16 the production lines asked to run at exact clocks (exactClocks).
+// Merging old unlock keys into their recipe's step (mergeOldUnlockKeys: an amplified twin's
+// 'recipe-unlock-amp:<recipe>', #901, and a group line's 'recipe-unlock-<recipe>:<group>', #1041)
+// renames keys and adds no content, so it has no version of its own.
 export type StateVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
 // Ticks a recalculation into a new profile could not carry onto one line of the new plan, because
@@ -143,6 +146,9 @@ export interface ProgressState {
   // Bumped by the store on every accepted write.
   revision: number;
   // Ticked checklist items: 'calc-<phase>-<rowId>', 'factory-<phase>-<id>', 'slot-…', ….
+  // An unlock is 'recipe-unlock-<recipe>' for every line of the recipe; validateState merges an
+  // amplified twin's 'recipe-unlock-amp:<recipe>' (#901) and a group line's
+  // 'recipe-unlock-<recipe>:<group>' (#1041, a known alternate only) into it.
   checks: Record<string, boolean>;
   // 'global', 'phase-<phase>', 'factory-<id>' and 'slot-<address>' notes.
   notes: Record<string, string>;

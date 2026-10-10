@@ -18,7 +18,7 @@ import {
   type FrozenMapping,
   type MigrationData,
 } from '../public/handbook-migration.ts';
-import { holdsAmplifiedUnlocks } from '../public/state.ts';
+import { holdsOldUnlockKeys } from '../public/state.ts';
 import { errorCode } from './errors.ts';
 import type {
   Handbook,
@@ -93,11 +93,12 @@ const newer = () =>
     { newer: true },
   );
 
-// A workspace loaded from a workspace.json whose progress still holds an amplified twin's unlock
-// records from releases before #901 (holdsAmplifiedUnlocks), with that file as it was read.
-// validateState merges them in memory (mergeAmplifiedUnlocks), so the first write of the
-// workspace would replace the only copy of the unmerged records, and workspace.json.bak then
-// holds the merged workspace too. keepPreMerge writes it first.
+// A workspace loaded from a workspace.json whose progress still holds old unlock keys (an
+// amplified twin's unlock records from releases before #901, a group line's unlock tick from
+// releases before #1041: holdsOldUnlockKeys), with that file as it was read. validateState
+// merges them in memory (mergeOldUnlockKeys), so the first write of the workspace would replace
+// the only copy of the unmerged records, and workspace.json.bak then holds the merged workspace
+// too. keepPreMerge writes it first.
 const preMerge = new WeakMap<Workspace, string>();
 // Keeps the file as read in workspace.json.pre-901 before the first write of such a workspace:
 // written once and never replaced ('wx'), like workspace.json.pre-handbook. A failure throws,
@@ -136,7 +137,7 @@ function parseWorkspace(raw: string, validateState: ValidateState): Workspace {
       try {
         // Checked before validateState, which merges the records.
         const state: unknown = profile.state;
-        if (state && typeof state === 'object' && holdsAmplifiedUnlocks(state))
+        if (state && typeof state === 'object' && holdsOldUnlockKeys(state))
           preMerge.set(workspace, raw);
         profile.state = validateState(state);
       } catch (error) {
