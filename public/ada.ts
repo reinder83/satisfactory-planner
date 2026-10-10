@@ -85,6 +85,10 @@ export interface AdaFacts {
   // with (exactClocksChange in app/exact-clocks.ts, #1066): how many lines a recalculation would
   // change.
   exactClocksPending?: number;
+  // What the ticks show the player already has beyond the plan's settings (#1068, ownedFromTicks in
+  // app/owned-ticks.ts), as the build plan's notice lists it ("Miner Mk.3 and Mk.5 belts"); absent
+  // when nothing, or when the notice was dismissed.
+  ownedTicks?: string;
   // What whole machines cost in the open phase against exact clocks (roundingCost in
   // app/exact-clocks.ts, #1066), as the plan's side column words it; absent without the record.
   roundingCost?: { buildings: string; power: string };
@@ -565,6 +569,15 @@ const RULES: AdaRule[] = [
     when: facts => (facts.exactClocksPending ?? 0) > 0,
     text: facts =>
       `You changed the clocks of ${plural(facts.exactClocksPending!, 'production line')}, and this plan has not been told yet. Nothing recalculates by itself: Recalculate in place with exact clocks plans ${facts.exactClocksPending === 1 ? 'it' : 'them'} and keeps this version as a backup. Precision, deferred.`,
+  },
+  {
+    // The ticks show more than the plan's "What you already have" settings count (#1068).
+    id: 'owned-ticks',
+    on: ['plan'],
+    tone: 'calm',
+    when: facts => !!facts.ownedTicks,
+    text: facts =>
+      `Your ticks say you have ${facts.ownedTicks}, and this plan was calculated without them. Nothing recalculates by itself: Recalculate in place with what you have plans with them and keeps this version as a backup. Progress noted; plan pending.`,
   },
   {
     // What whole machines cost in the open phase (#1066), from the calculation's own record.

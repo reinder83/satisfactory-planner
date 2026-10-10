@@ -21,6 +21,7 @@ import type {
   StoredPayoff,
   WorkspaceSummary,
 } from '../types/index.ts';
+import type { OwnedFound } from './owned-ticks.ts';
 
 // The hash routes, one per page.
 export const VIEWS = [
@@ -222,6 +223,42 @@ export function setSectionCollapsed(id: string, value: boolean) {
   for (const old of [...collapsedSections].slice(0, -COLLAPSED_MAX)) collapsedSections.delete(old);
   try {
     localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedSections]));
+  } catch {}
+}
+// What the build plan's "Your ticks show more than this plan counts" notice found when it was
+// dismissed (#1068, ui/plan/OwnedTicksNotice.vue), per "<save>/<profile>", so it shows again only
+// when the ticks add something new (foundSince in owned-ticks.ts). Like the folded sections a view
+// preference remembered in this browser, never in a saved profile: nothing stored, or anything
+// unreadable, shows the notice. Kept in memory as well, so Dismiss still works where the browser
+// refuses storage, and capped so it cannot grow unbounded.
+const TICKS_NOTICE_KEY = 'planner-ticks-notice';
+const TICKS_NOTICE_MAX = 200;
+const ticksNoticeDismissals = new Map<string, unknown>(ticksNoticeStored());
+function ticksNoticeStored(): [string, unknown][] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(TICKS_NOTICE_KEY) || '{}');
+    return stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? Object.entries(stored)
+      : [];
+  } catch {
+    return [];
+  }
+}
+const ticksNoticePath = () => `${currentSave?.id}/${currentProfile?.id}`;
+// The open profile's dismissal as stored: unchecked (dismissedFound checks it), undefined for none.
+export const ticksNoticeDismissed = (): unknown => ticksNoticeDismissals.get(ticksNoticePath());
+export function setTicksNoticeDismissed(found: OwnedFound) {
+  const path = ticksNoticePath();
+  ticksNoticeDismissals.delete(path);
+  ticksNoticeDismissals.set(path, found);
+  // A Map keeps insertion order, so the oldest entries go first.
+  for (const old of [...ticksNoticeDismissals.keys()].slice(0, -TICKS_NOTICE_MAX))
+    ticksNoticeDismissals.delete(old);
+  try {
+    localStorage.setItem(
+      TICKS_NOTICE_KEY,
+      JSON.stringify(Object.fromEntries(ticksNoticeDismissals)),
+    );
   } catch {}
 }
 export function setLayoutEditing(value: boolean) {

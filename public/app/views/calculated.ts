@@ -21,12 +21,22 @@ import {
   calcStage,
   calculated,
   fromStart,
+  milestoneOnly,
   phase,
   phaseLabel,
   progressionData,
   stage,
   state,
+  ticksNoticeDismissed,
+  workspace,
 } from '../session.ts';
+import {
+  dismissedFound,
+  foundSince,
+  ownedFromTicks,
+  ticksPhase,
+  type OwnedFound,
+} from '../owned-ticks.ts';
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
 import { minerWords } from '../../mining.ts';
@@ -431,6 +441,20 @@ export function carriedCard(row: CalcRow): { from: string; text: string } | null
   if (!calculated || state.checks['calc-' + phase() + '-' + row.id]) return null;
   const carried = carriedLine(calculated, state.checks, phase(), row.id);
   return carried ? { from: carried.from, text: carriedMachinesText(carried, row) } : null;
+}
+
+// The build plan's "Your ticks show more than this plan counts" notice (#1068,
+// ui/plan/OwnedTicksNotice.vue, ADA's owned-ticks line): what the open profile's ticks show
+// beyond its plan's settings (ownedFromTicks in owned-ticks.ts), while the page shows the saved
+// working phase (not an earlier phase it opened on, nor a milestone-only one), and only when it
+// holds something the user has not dismissed in this browser (ticksNoticeDismissed). Null
+// otherwise. It reads the ticks and changes nothing.
+export function ownedTicksNotice(): OwnedFound | null {
+  if (!calculated || milestoneOnly()) return null;
+  const working = ticksPhase(calculated, state.settings.phase);
+  if (Number(stage()) !== working) return null;
+  const found = ownedFromTicks(calculated, state.checks, working, workspace.catalog?.alternates);
+  return found && foundSince(found, dismissedFound(ticksNoticeDismissed())) ? found : null;
 }
 
 // An expansion table row's phase (SP-22): its label, and whether it is the phase being worked
