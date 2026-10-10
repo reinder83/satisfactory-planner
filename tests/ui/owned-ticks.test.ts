@@ -21,6 +21,7 @@ import {
 import { render } from '../../public/app/shell.ts';
 import type {
   CurrentCalculatedPlan,
+  Phase,
   ProgressState,
   StoredSettings,
   UpdateOp,
@@ -57,7 +58,7 @@ const plan = (): CurrentCalculatedPlan =>
 
 // Each test opens its own profile id: a dismissal is remembered per save and profile.
 let profileCount = 0;
-function show(phase: string, checks: Record<string, boolean> = {}, thePlan = plan()) {
+function show(phase: Phase, checks: Record<string, boolean> = {}, thePlan = plan()) {
   const profileId = 'p' + ++profileCount;
   open({ calculated: thePlan, phase, profileId, state: { checks } as Partial<ProgressState> });
   setWorkspace({ ...workspace, catalog: catalog() });
@@ -187,7 +188,7 @@ test('the button asks first, then recalculates in place with the owned fields ra
   );
   assert.match(asked[0]!, /is kept as “.*\(before edit, [^”]+\)” under Profiles/);
   assert.equal(document.querySelector('x-evil'), null, 'the name is text');
-  assert.deepEqual(calls, [], 'nothing is sent');
+  assert.equal(calls.length, 0, 'nothing is sent');
   asked = answerConfirms(true);
   $<HTMLButtonElement>('[data-recalc-owned-ticks]')!.click();
   await settle();
