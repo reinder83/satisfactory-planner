@@ -215,6 +215,12 @@ export function planTasks(shownPhase: Phase = phase()): Step[] {
   return applyTaskEdits(generatedTasks(shownPhase), personalTasks(shownPhase), shownPhase);
 }
 
+// How many of `steps` (the shown phase's, planTasks()) are not ticked: the open steps that keep a
+// profile opened on an earlier phase there (#570). The opened-earlier notice and ADA's
+// `opened-earlier` line count them alike (#974).
+export const openStepCount = (steps: Step[] = planTasks()): number =>
+  steps.filter(task => !checked(task.id)).length;
+
 // The ids of planTasks(shownPhase), in the same order: the same edits applied to the step ids
 // alone (generatedTaskIds), for callers that read only the ids (phaseStepIds in
 // opening-phase.ts, #768).
