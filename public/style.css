@@ -3732,6 +3732,12 @@ button.rail-tile:hover {
   min-width: 14ch;
   overflow-wrap: anywhere;
 }
+/* The table's ♻ advice (FlowTable.vue): a sentence, kept wide enough to read on a phone, where
+   the table scrolls inside its wrapper; a group's long name in it breaks inside the cell. */
+.gf-text td.gf-cell-advice {
+  min-width: 28ch;
+  overflow-wrap: anywhere;
+}
 /* On a phone the recipe links are 44px touch targets, like the quiet links of #832: height only,
    with the underline moved onto the text so it stays under the words in the taller box (#886).
    So are the factory links in a factory dialog's flow rows (#891); their row grows around them.
