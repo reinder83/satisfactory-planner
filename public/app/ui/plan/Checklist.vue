@@ -7,7 +7,9 @@
 
   Outside edit mode (SP-42, #277) the first unfinished step leads the list, unfolded, with
   Mark done and its Open factory. The other unfinished steps follow in order, and completed
-  ones fold into "Done (n)" under the list, so ticking the lead step promotes the next one.
+  ones fold into "Done (n)" under the list, so ticking the lead step promotes the next one. A
+  step just ticked stays in its place among the unfinished ones for a few seconds first, drawn
+  ticked (tick-hold.ts, #1054), so the next step never slides under the pointer at once.
   A line that only made a Space Elevator part already delivered in full (#1062) is dimmed with
   a note under its title, and its unfinished step comes after the other unfinished ones. A line
   at exact clocks, or one whose clocks a recalculation would change (#1066), says so there too.
@@ -15,7 +17,7 @@
   stays flat in the plan's order, since ↑ / ↓ move a step past its neighbour on screen.
 -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount } from 'vue';
 import { lineClockNote } from '../../exact-clocks.ts';
 import {
   calculated,
@@ -47,6 +49,7 @@ import { legacy } from '../bridge.ts';
 import PlanStep from './PlanStep.vue';
 import RemovedSteps from './RemovedSteps.vue';
 import StepEditForm from './StepEditForm.vue';
+import { dropHold, isHeld, isLeaving } from './tick-hold.ts';
 import type { PlanStepView, RemovedStepView, Step } from '../../tasks.ts';
 
 // A production line's own step at exact clocks, or one whose clocks a recalculation would change
@@ -99,9 +102,10 @@ const list = computed(() =>
       steps,
       // Outside edit mode: the unfinished steps (the first leads) and the completed ones. The
       // steps of lines a delivered part leaves without work (#1062) come last among the
-      // unfinished ones, dimmed, and never lead.
-      open: [...steps.filter(s => !s.done && !s.idle), ...steps.filter(s => !s.done && s.idle)],
-      done: steps.filter(s => s.done),
+      // unfinished ones, dimmed, and never lead. A step just ticked is held in its place among
+      // them for a few seconds (tick-hold.ts, #1054).
+      open: [...steps.filter(s => open(s) && !s.idle), ...steps.filter(s => open(s) && s.idle)],
+      done: steps.filter(s => !open(s)),
       // Every step of the phase is ticked (not only the ones the search shows).
       complete: tasks.length > 0 && tasks.every(t => checked(t.id)),
       // "Required steps only" hides every step still open: only optional ones are left (#1070).
@@ -112,6 +116,12 @@ const list = computed(() =>
     };
   }),
 );
+
+// Unfinished, or ticked a moment ago and still held in place.
+const open = (step: PlanStepView) => !step.done || isHeld(step.id);
+
+// A page change drops the hold: the steps are drawn where their ticks put them when it comes back.
+onBeforeUnmount(dropHold);
 
 // "Removed steps in this phase", each step noting the other phases that list it too (#744).
 function removedViews(removed: Step[]): RemovedStepView[] {
@@ -202,6 +212,8 @@ function toggleRequiredOnly(event: Event) {
         :key="step.id"
         :step="step"
         :lead="i === 0 && !step.idle"
+        :held="step.done && isHeld(step.id)"
+        :leaving="step.done && isLeaving(step.id)"
       />
     </div>
     <div v-else-if="list.complete && !list.query.trim()" class="checklist">
