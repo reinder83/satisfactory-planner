@@ -90,7 +90,7 @@ export interface StorageEdits {
   bayFloors?: Record<string, string>;
   // The order of the bays on a floor (#191): floor id → bay letters, set by Move left / Move right
   // in layout edit mode. A bay missing from its floor's list keeps its default place; letters no
-  // longer on the floor are skipped. Only kept for a floor with an order (version 9).
+  // longer on the floor are skipped. Only kept for a floor with an order (version 10).
   bayOrder?: Record<string, string[]>;
 }
 
@@ -119,7 +119,8 @@ export interface FactoryGroups {
   // Plan row id (not a 'calc-' key) to its group shares.
   assignments: Record<string, GroupAssignment[]>;
   // The transport picked for a link between two places (#205), keyed '<from>:<to>' with a
-  // group id or a place from group-links.ts. Absent or missing a key: belt or pipe (version 8).
+  // group id or a place from group-links.ts. Absent or missing a key: belt or pipe (version 7;
+  // 9 for a link to or from the vehicles' fuel, 11 for one from a `supply/<item>` place).
   links?: Record<string, LinkTransport>;
   // The items a group makes on site (#868, #874), by group id: item names from the game data
   // (state/items.ts), each at most once. Absent, or missing a group: none (version 14).
