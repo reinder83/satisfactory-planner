@@ -66,18 +66,21 @@ export type FactoryLink = { calcFactory: string };
 // "Running", calculated rows, storage and commissioning checklists, the power checks, the
 // factory dialog's target check. It saves when ticked; a failed write puts the box back.
 // The box is busy while it saves (app/busy.ts): it keeps focus, and a second press meanwhile does
-// not tick it (#299).
-export function toggleCheck(event: Event) {
+// not tick it (#299). Resolves whether the change was saved.
+export async function toggleCheck(event: Event): Promise<boolean> {
   const el = event.target as HTMLInputElement;
   const value = el.checked;
-  return whileBusy(el, async () => {
+  const saved = await whileBusy(el, async () => {
     try {
       await save({ type: 'check', key: el.dataset.check || '', value });
       render();
+      return true;
     } catch {
       el.checked = !value;
+      return false;
     }
   });
+  return saved === true;
 }
 
 // A link to another factory's dialog, as the flow models, the group chain and the plan's

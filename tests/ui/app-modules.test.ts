@@ -51,6 +51,8 @@ test('the app entry point loads as ES modules and registers its listeners in ord
     'document visibilitychange',
     // #1052: coming back to the window asks where the user's other tabs are.
     'window focus',
+    // #1054: Ctrl+Z presses the toast's Undo.
+    'document keydown',
     'rendered',
   ]);
   // Importing the entry point compiles every component through Vite, cold: no other test file
