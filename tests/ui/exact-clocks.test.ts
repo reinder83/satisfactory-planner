@@ -173,8 +173,11 @@ test('a line’s dialog saves exact clocks without recalculating; the plan asks 
 
 test('a line that uses up a fluid says exact clocks would not remove its sink (#1063)', async () => {
   // Phase 3 on coal power: the Petroleum Coke line uses up the Heavy Oil Residue of the Plastic
-  // and Rubber lines, and all its coke goes to the sink.
-  const plan = generatedWith({ ...WHOLE, phase: '3', mainPower: 'coal', limitsConfirmed: true });
+  // and Rubber lines, and all its coke goes to the sink. The plan as stored before #1055: a
+  // recalculation now burns that coke in Coal Generators (tests/generator-fuels.test.ts).
+  const plan: StoredCalculatedPlan = JSON.parse(
+    fs.readFileSync('tests/fixtures/coal-power-plan-2026-10-10.json', 'utf8'),
+  );
   const coke = plan.stages['3'].rows!.find(row => row.id === 'Recipe_PetroleumCoke_C')!;
   assert.ok(coke, 'a Petroleum Coke line');
   openWhole(plan);
