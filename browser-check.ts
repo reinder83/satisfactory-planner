@@ -202,6 +202,32 @@ try {
     key,
     'the next step leads',
   );
+  // The phase track only shows a phase (#1053, the WAI-ARIA tabs pattern): the arrow keys move
+  // focus and show nothing, Enter or Space shows the phase focused without saving it, "Work on
+  // Phase N" is offered meanwhile, and a reload opens the working phase again.
+  const shownSegment = () =>
+    page.locator('[data-phase-track] [aria-selected="true"]').getAttribute('data-phase-seg');
+  const focusedSegment = () =>
+    page.evaluate(() => document.activeElement?.getAttribute('data-phase-seg'));
+  await page.locator('[data-phase-track] [aria-selected="true"]').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await focusedSegment(), '2', 'the arrow key moves focus');
+  assert.equal(await shownSegment(), '1', 'and shows nothing');
+  await page.keyboard.press('Enter');
+  await page.locator('[data-work-on-phase]').waitFor();
+  assert.equal(await shownSegment(), '2', 'Enter shows Phase 2');
+  assert.equal(await focusedSegment(), '2', 'focus stays on its tab');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press(' ');
+  await page.locator('[data-work-on-phase]').waitFor({ state: 'detached' });
+  assert.equal(await shownSegment(), '1', 'Space shows Phase 1');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.locator('[data-work-on-phase]').waitFor();
+  await page.reload();
+  await page.locator('[data-phase-track] [aria-selected="true"]').waitFor();
+  assert.equal(await shownSegment(), '1', 'a reload opens the working phase');
+  assert.equal(await page.locator('[data-work-on-phase]').count(), 0);
   // A long unbroken word in a step's title or details breaks inside the title column, in edit
   // mode and out of it, rather than running past the row at phone width (#659).
   const longTitle = 'Check Supercalifragilisticexpialidocious at the iron site';

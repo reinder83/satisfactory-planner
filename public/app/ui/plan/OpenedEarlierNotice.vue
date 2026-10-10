@@ -62,7 +62,12 @@ async function goToSavedPhase(event: Event) {
 
 <template>
   <div v-if="notice" class="notice info" data-opened-earlier>
-    You are working on {{ notice.saved }}.{{ notice.reason && ' ' + notice.reason }}<br /><button type="button" class="btn" data-go-to-saved-phase @click="goToSavedPhase">
+    You are working on {{ notice.saved }}.{{ notice.reason && ' ' + notice.reason }}<br /><button
+      type="button"
+      class="btn"
+      data-go-to-saved-phase
+      @click="goToSavedPhase"
+    >
       Go to {{ notice.saved }}
     </button>
   </div>

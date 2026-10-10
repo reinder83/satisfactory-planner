@@ -588,8 +588,8 @@ async function workOnShown() {
                 data-working-phase
                 >, working phase</span
               ><span v-if="segment.pct !== null" class="phase-track-bar" aria-hidden="true"
-                ><span :style="{ width: segment.pct + '%' }"></span></span
-              >
+                ><span :style="{ width: segment.pct + '%' }"></span
+              ></span>
             </button>
           </div>
           <label class="small phase-select"
