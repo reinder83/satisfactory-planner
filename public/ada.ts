@@ -89,6 +89,10 @@ export interface AdaFacts {
   // The Water the open phase extracts, m³/min as the pages write it (the stage's raw Water,
   // #1024), absent for none; each line taking it says how many Water Extractors to build.
   waterExtracted?: string;
+  // The handover from the phase before (#1069, handoverLines in app/handover.ts): that phase, the
+  // lines it marked running that this phase builds again, and how many of those get machines
+  // added or switched off or a clock changed; absent where nothing is handed over or none is kept.
+  handover?: { from: string; kept: number; changed: number };
   // Mining and belts per phase (#1065): the open phase's miner and clock ("Miner Mk.2 at 100%"),
   // the nodes and well satellites its draw taps and their MW, as the pages write them; absent
   // for a plan without mining per phase or a phase that mines nothing.
@@ -482,6 +486,16 @@ const RULES: AdaRule[] = [
     when: facts => (facts.byproducts ?? 0) > 0,
     text: facts =>
       `${plural(facts.byproducts!, 'byproduct')} to recycle in ${facts.phaseLabel}. Each line's dialog says where to send its own, and the build plan's step says the same. I did the sums. The plumbing is yours.`,
+  },
+  {
+    id: 'factory-handover',
+    on: ['factories'],
+    tone: 'calm',
+    when: facts => (facts.handover?.kept ?? 0) > 0,
+    text: facts => {
+      const { from, kept, changed } = facts.handover!;
+      return `${facts.phaseLabel} keeps ${plural(kept, 'line')} running since Phase ${from}${changed ? `, ${changed} of them with machines to add or a clock to change` : ''}. Each factory's Handover says which, and what is new or retired. Reuse beats rebuilding. I checked.`;
+    },
   },
   {
     id: 'water-extractors',
