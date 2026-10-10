@@ -1,5 +1,5 @@
 // Small DOM and text helpers shared by every screen.
-import { duration, durationOfHours, slug } from '../wording.ts';
+import { duration, durationOfHours, localeNumber, slug } from '../wording.ts';
 
 // The first element matching `selector`, or null. `E` narrows the element type for TypeScript
 // callers (`$<HTMLDialogElement>('#detail')`); it is not checked at run time.
@@ -29,11 +29,9 @@ export const esc = (value: unknown): string =>
   String(value ?? '').replace(/[&<>"']/g, match => ENTITIES[match] ?? match);
 
 // Locale-formatted numbers with at most 2 (num) or 3 (num3) decimals. A missing value
-// formats as 0.
-export const num = (value: number | null | undefined): string =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-export const num3 = (value: number | null | undefined): string =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+// formats as 0. One formatter per digit count (localeNumber in wording.ts, #1060).
+export const num = (value: number | null | undefined): string => localeNumber(value, 2);
+export const num3 = (value: number | null | undefined): string => localeNumber(value, 3);
 
 export const plural = (count: number, word: string): string =>
   num(count) + ' ' + word + (count === 1 ? '' : 's');

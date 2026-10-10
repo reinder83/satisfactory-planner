@@ -6,7 +6,8 @@
   the saved key `calc-storage-layout`. There is no ground-floor-built notice and no ground-floor
   moves (decision 3B on #387): a migrated profile's `storage-filter-moves` is an ordinary storage
   task. When the remembered floor no longer exists (a removed floor), the page switches to the
-  first one.
+  first one. The room covers every phase; on a milestone-only phase (#759) MilestoneOnlyNotice.vue
+  says so above it and offers "Go to Phase N", as the other pages do (#1053).
 -->
 <script setup lang="ts">
 import { computed, nextTick } from 'vue';
@@ -46,6 +47,7 @@ import LayoutEditor from '../storage/LayoutEditor.vue';
 import StorageBay from '../storage/StorageBay.vue';
 import StorageChecklist from '../storage/StorageChecklist.vue';
 import WorkshopPanel from '../storage/WorkshopPanel.vue';
+import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 
 // The most search results listed at once (#240); a short query can match most of the room.
 const RESULT_LIMIT = 24;
@@ -294,6 +296,7 @@ function toggleLayout() {
     title="Storage room"
     subtitle="Showing your selected storage supply across all phases. Unselected positions are reserved; addresses stay stable."
   />
+  <MilestoneOnlyNotice place="storage" />
   <EditBar
     v-if="page.editing"
     label="Editing the layout"

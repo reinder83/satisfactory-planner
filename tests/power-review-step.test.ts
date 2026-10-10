@@ -6,6 +6,8 @@
 // existing power (availablePowerGW) with the stage's own figures, never advises a source below
 // the one ticked or planned, and Petroleum Power is listed from Phase 3 like Coal Power from
 // Phase 2. Numbers are written as in en-US.
+// The numbers read as in en-US whatever this machine's locale is.
+import './helpers/en-us-numbers.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,16 +20,6 @@ import type {
   StoredCalculatedPlan,
   StoredStage,
 } from '../public/types/index.ts';
-
-// The numbers read as in en-US whatever this machine's locale is.
-const toLocale = Number.prototype.toLocaleString;
-Number.prototype.toLocaleString = function (
-  this: number,
-  _locale?: unknown,
-  options?: Intl.NumberFormatOptions,
-) {
-  return toLocale.call(this, 'en-US', options);
-};
 
 const data: Progression = JSON.parse(
   fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),

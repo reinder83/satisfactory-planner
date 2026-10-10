@@ -281,7 +281,9 @@ test('changing the phase asks too, and a choice left behind shows the saved one 
   phasePicker.value = '4';
   phasePicker.dispatchEvent(new Event('change'));
   await settle();
-  assert.deepEqual(sentTypes(), ['phase'], 'only the phase is saved, never the choice');
+  // The phase picked is only shown since #1053 (it was saved before), so nothing is sent.
+  assert.deepEqual(sentTypes(), [], 'nothing is saved, never the choice');
+  assert.equal(phasePicker.value, '4', 'Phase 4 is shown');
   assert.equal(box('Wire').checked, false, 'the picker shows the saved choice again');
   assert.equal(status(), 'Discarded. The saved choice is back.');
 });

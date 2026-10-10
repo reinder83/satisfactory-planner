@@ -1,8 +1,10 @@
 // The phase picker names the working phase as the notices below it do (#992). It always shows the
-// phase on screen, and picking one saves it as the working phase. While that is the working phase
-// it is "Working on" (aria-label "Working phase"); while the tab shows an earlier one (the phase a
-// profile opened on, #570, a milestone-only phase included, #759) it is "Showing", and both the
-// select and the phase track name the working phase, as "You are working on Phase 3" does.
+// phase on screen; picking one only shows it, and "Work on Phase N" saves it as the working phase
+// (#1053). While that is the working phase its label is "Working on"; while the tab shows another
+// (one picked, or the phase a profile opened on, #570, a milestone-only phase included, #759) it
+// is "Showing". Both the select and the phase track are named after the working phase, as "You
+// are working on Phase 3" is, and the track marks its segment for screen readers. Before #1053
+// they were named "Working phase" with the working phase shown, and its segment was not marked.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
@@ -45,11 +47,12 @@ test('the picker says "Working on" while the working phase is shown', async () =
   await show('3', '3');
   assert.deepEqual(picker(), {
     label: 'Working on',
-    selectName: 'Working phase',
-    trackName: 'Working phase',
+    selectName: 'Showing phase, working on Phase 3',
+    trackName: 'Showing phase, working on Phase 3',
     value: '3',
-    marked: undefined,
+    marked: '3',
   });
+  assert.equal($('[data-work-on-phase]'), null, 'nothing to save');
 });
 
 test('on a milestone-only phase the profile opened on, the picker says "Showing" and names the working phase', async () => {
@@ -79,23 +82,31 @@ test('on an earlier planned phase the profile opened on, the picker names the sa
   assert.match(text($('[data-opened-earlier]')), /You are working on Phase 4\./);
 });
 
-test('picking a phase saves it as the working phase, and the picker says "Working on" again', async () => {
+test('picking a phase only shows it; "Work on Phase 2" saves it, and the picker says "Working on" again', async () => {
   await show('3', '1');
   const calls = stubFetch<{ type: string; value: string }>({ '/api/update': applyUpdate });
   const select = $<HTMLSelectElement>('#phase-picker')!;
   select.value = '2';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await settle();
+  assert.deepEqual(calls, [], 'picking only shows the phase');
+  assert.equal(phase(), '2');
+  assert.equal(picker().label, 'Showing');
+  const work = $<HTMLButtonElement>('[data-work-on-phase]')!;
+  assert.equal(text(work), 'Work on Phase 2');
+  work.click();
+  await settle();
   await settle();
   assert.deepEqual(calls.at(-1), ['/api/update', { type: 'phase', value: '2' }]);
   assert.equal(state.settings.phase, '2', 'saved as the working phase');
   assert.deepEqual(picker(), {
     label: 'Working on',
-    selectName: 'Working phase',
-    trackName: 'Working phase',
+    selectName: 'Showing phase, working on Phase 2',
+    trackName: 'Showing phase, working on Phase 2',
     value: '2',
-    marked: undefined,
+    marked: '2',
   });
+  assert.equal($('[data-work-on-phase]'), null);
 });
 
 test('the Notes page calls the shown phase "Showing" and the working phase "Working on"', async () => {

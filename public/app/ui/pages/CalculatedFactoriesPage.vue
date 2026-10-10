@@ -48,6 +48,7 @@ import {
 } from '../../views/factories.ts';
 import { calcProgress } from '../../wizard/wizard.ts';
 import { legacy } from '../bridge.ts';
+import { searchField } from '../search-field.ts';
 import { isBusy, whileBusy } from '../../busy.ts';
 import { confirmAction } from '../confirm.ts';
 import { refocusOnOpenedPage } from '../refocus.ts';
@@ -150,10 +151,15 @@ const page = computed(() =>
 // page says so (MilestoneOnlyNotice.vue) instead of drawing an empty toolbar and filter.
 const milestones = computed(() => legacy(() => milestoneOnly()));
 
-function search(event: Event) {
-  setQuery((event.target as HTMLInputElement).value);
-  render();
-}
+// The production line search: the box keeps what is typed, and the page filters once typing
+// pauses (searchField, #1060).
+const { typed: typedQuery, input: search } = searchField(
+  () => legacy(() => query),
+  value => {
+    setQuery(value);
+    render();
+  },
+);
 
 // "Round up production": after the unsaved-notes check, create the rounded revision and open
 // it. The button shows the calculation's progress meanwhile, busy (app/busy.ts) so it keeps
@@ -230,7 +236,7 @@ async function roundUp(event: Event) {
         class="search"
         aria-label="Find a production line"
         placeholder="Find a part or recipe…"
-        :value="page.query"
+        :value="typedQuery"
         @input="search"
       /><FilterChips
         :chips="page.chips"

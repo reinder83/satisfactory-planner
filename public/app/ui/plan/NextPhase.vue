@@ -1,10 +1,10 @@
 <!--
   On a calculated profile's build plan, once the phase's Space Elevator delivery is complete
   (#1062, deliveryHoursLeft in app/delivered.ts is 0): says the phase is delivered and offers the
-  next one (#1069), "Go to Phase 3", or after Phase 5 "Go to Post Phase 5", which picks it the way
-  the phase track does: saved, the search cleared and the page redrawn. Only on the saved working
-  phase: a phase shown before it (opened earlier, or named by a route) leaves the way back to
-  OpenedEarlierNotice. Nothing in Post Phase 5 (its finish card is on the page) or a
+  next one (#1069), "Go to Phase 3", or after Phase 5 "Go to Post Phase 5", which saves it as the
+  working phase, as "Work on Phase N" in the top bar does (#1053), and shows it: the search cleared
+  and the page redrawn. Only on the saved working phase: any other phase shown (picked in the phase
+  picker, opened earlier, or named by a route) leaves the way back to OpenedEarlierNotice. Nothing in Post Phase 5 (its finish card is on the page) or a
   milestone-only phase. It only reads the delivery counts: no tick is written.
 -->
 <script setup lang="ts">

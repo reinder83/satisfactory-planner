@@ -39,6 +39,7 @@ const SHARED = [
   'power.ts',
   'preferences.ts',
   'progression.ts',
+  'reviewed-plans.ts',
   'state.ts',
   'step-table.ts',
   'storage-room.ts',

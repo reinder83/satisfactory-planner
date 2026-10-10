@@ -41,6 +41,7 @@ import {
 } from '../owned-ticks.ts';
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
+import { perRedraw } from '../per-redraw.ts';
 import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
@@ -77,22 +78,30 @@ const outputList = (row: CalcRow): string =>
 export const rowIcon = (row: CalcRow): string =>
   row.generationMW > 0 ? row.machine : Object.keys(row.outputs || {})[0] || '';
 
+// The session values the build plan's steps are worked out from: a save replaces the progress
+// state and opening a profile the plan, so the steps of a phase are worked out once per redraw
+// for them (perRedraw in per-redraw.ts, #1060), however many components ask.
+const stepInputs = () => [calculated, state, progressionData];
+
 // The generated steps of the open calculated profile for phase `shownPhase` (the current phase
 // unless given), as phaseSteps in progression.ts lists them with the production steps put in
 // order by the profile's factory groups (groupedSteps in group-order.ts, #869). calcTasks below
 // and generatedTaskIds (tasks.ts) both read them, so the steps and their ids agree.
-export function orderedPhaseSteps(shownPhase: Phase = phase()): PhaseStep[] {
+export const orderedPhaseSteps = (shownPhase: Phase = phase()): PhaseStep[] =>
+  orderedStepsOf(shownPhase);
+const orderedStepsOf = perRedraw(stepInputs, (shownPhase: Phase): PhaseStep[] => {
   if (!calculated) return [];
   return groupedSteps(
     phaseSteps(calculated, state, progressionData, shownPhase),
     state.factoryGroups,
   );
-}
+});
 
 // The generated checklist of a calculated profile for phase `shownPhase` (the current phase
 // unless given), before the user's step edits and personal tasks (tasks.ts adds those): the
 // steps orderedPhaseSteps lists, with each production row's step described.
-export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
+export const calcTasks = (shownPhase: Phase = phase()): PlanStepData[] => calcTasksOf(shownPhase);
+const calcTasksOf = perRedraw(stepInputs, (shownPhase: Phase): PlanStepData[] => {
   // A page of the profile just left can be drawn once more; it then has no steps.
   if (!calculated) return [];
   // The stage of the phase shown, which need not be the current phase (#1022).
@@ -108,7 +117,7 @@ export function calcTasks(shownPhase: Phase = phase()): PlanStepData[] {
         }
       : step,
   );
-}
+});
 
 // The opening sentence of a generator line's step where the player already has generators of its
 // building that the phase counts (#1068, settings.ownedGenerators, ownedBeyondKept in power.ts):
@@ -148,12 +157,24 @@ function carriedStepText(row: CalcRow, shownPhase: Phase): string {
 
 // A production row's build-plan step text: its machines, inputs and outputs, with the pointer
 // to an easier rounded option only where the dialog shows one (#379), then the factory dialog's
-// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022).
+// byproduct advice in `snapshot`, the stage of the phase the step is in (#1022). The machine
+// setup is worked out once per row (#1060).
 const rowStepBody = (row: CalcRow, snapshot: StoredStage | undefined): string =>
   siteLineText(row) +
   stockLineText(row) +
-  `${machineSetup(row).summary} ${machineSetup(row).partial ? 'Adjustable machine: ≈ ' + num(machineSetup(row).clock) + '% → ≈ ' + machineSetup(row).lastOutput + '.' + (easierSetup(machineSetup(row)) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + machineSetup(row).fullOutput + '.'} ${row.amplified ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. ` : ''}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
+  `${setupText(machineSetup(row))} ${sloopText(row)}Inputs: ${rateList(row.inputs) || 'none'}. Outputs: ${outputList(row)}.` +
   recycleStepText(row, snapshot);
+
+// A step's machines (machineSetup): the summary, then the adjustable machine's clock and output
+// with the pointer to an easier rounded option, or what each machine makes.
+const setupText = (setup: ReturnType<typeof machineSetup>): string =>
+  `${setup.summary} ${setup.partial ? 'Adjustable machine: ≈ ' + num(setup.clock) + '% → ≈ ' + setup.lastOutput + '.' + (easierSetup(setup) ? ' Open the production line for an easier rounded option.' : '') : 'Each machine: ' + setup.fullOutput + '.'}`;
+
+// The somersloops an amplified line takes, as a sentence with a space after it; '' for any other.
+const sloopText = (row: CalcRow): string =>
+  row.amplified
+    ? `Insert ${row.slots} somersloop${(row.slots ?? 0) > 1 ? 's' : ''} in each machine — ${row.sloops} in total — for double output from the same inputs at four times the power. `
+    : '';
 
 // A step's byproduct advice (adviceText in recycle.ts) after a space, or '' for none.
 function recycleStepText(row: CalcRow, snapshot: StoredStage | undefined): string {

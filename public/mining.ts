@@ -10,7 +10,7 @@ import {
   phaseMiner,
   phaseMining,
 } from './preferences.ts';
-import { listNames, powerAmount } from './wording.ts';
+import { listNames, localeNumber, powerAmount } from './wording.ts';
 import type {
   ItemRates,
   MiningSource,
@@ -22,8 +22,7 @@ import type { MiningAdvice, MiningRun, MiningSettings } from './preferences/mini
 import type { StepTable } from './step-table.ts';
 
 // A number as the pages show one (num in app/format.ts): locale-formatted, at most 2 decimals.
-const miningNumber = (value: number) =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const miningNumber = (value: number) => localeNumber(value);
 // A clock (1 = 100%) as a percentage to 0.01%, the game's clock input: rounded up for a solid,
 // so its miners never give less than the draw, and down for a fluid, which must never overflow
 // its pipe (#1024).
