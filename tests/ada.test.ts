@@ -298,12 +298,23 @@ test('ADA notices the states that are not just a number', () => {
 
 // A profile opened on an earlier phase than its saved one, which still has open checks (#570).
 test('ADA says why the build plan opened on an earlier phase', () => {
-  const line = adaRemarks(facts({ phaseLabel: 'Phase 1', openedFrom: 'Phase 3' })).find(
-    r => r.id === 'opened-earlier',
-  )!;
+  const line = adaRemarks(
+    facts({ phaseLabel: 'Phase 1', openedFrom: 'Phase 3', openedOpen: 4 }),
+  ).find(r => r.id === 'opened-earlier')!;
   assert.equal(line.tone, 'calm');
   assert.match(line.text, /working on Phase 3, but Phase 1 still has open steps/);
   assert.ok(!ids(facts({ openedFrom: '' })).includes('opened-earlier'), 'not on the saved phase');
+});
+
+// The phase opened on stays shown after its last open step is ticked (#974): ADA then says the
+// steps are done, as the notice above the plan does, never that some are still open.
+test('ADA says the shown phase is done once its last open step is ticked', () => {
+  const line = adaRemarks(
+    facts({ phaseLabel: 'Phase 1', openedFrom: 'Phase 3', openedOpen: 0 }),
+  ).find(r => r.id === 'opened-earlier')!;
+  assert.doesNotMatch(line.text, /open steps/);
+  assert.match(line.text, /^You are working on Phase 3, and all Phase 1 steps are done now\. /);
+  assert.match(line.text, /Pick Phase 3 in the phase track to go back to it\./);
 });
 
 test('a full lap of the remarks is answered, and the badge can be prodded', () => {

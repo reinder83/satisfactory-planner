@@ -41,7 +41,14 @@ import { exactClocksChange, roundingCost } from './exact-clocks.ts';
 import { onSiteChange } from './on-site-picker.ts';
 import { payoffBest, payoffDefaultSort } from './payoff.ts';
 import { render } from './shell.ts';
-import { idleStepNotes, planTasks, removedPlanTasks, stepDone, taskEditsState } from './tasks.ts';
+import {
+  idleStepNotes,
+  openStepCount,
+  planTasks,
+  removedPlanTasks,
+  stepDone,
+  taskEditsState,
+} from './tasks.ts';
 import { backupDays } from './views/backup.ts';
 import { buildRowName, currentBuildStatus, ownedTicksNotice } from './views/calculated.ts';
 import { foundList, foundWords } from './owned-ticks.ts';
@@ -463,6 +470,7 @@ function adaFacts(): AdaFacts {
     startPhase: startPhase(),
     milestoneOnly: milestones ? phaseLabel(startPhase()) : '',
     openedFrom: savedPhase ? phaseLabel(savedPhase) : '',
+    openedOpen: savedPhase ? openStepCount(steps) : 0,
     assumptions: calculated ? (calculated.warnings || []).length : 0,
     build: buildFacts(),
     payoff: payoffFacts(),

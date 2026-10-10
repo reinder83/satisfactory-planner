@@ -64,15 +64,21 @@ import RoundingCost from '../plan/RoundingCost.vue';
 // The summary's power line, from the one power model every page reads (powerView in
 // public/power.ts, #1064): what the phase has against what it needs, as the Resources page's bar
 // and the power step give them. A plan made before #1064 keeps its old line: the new generation,
-// what Phase 5's augmenters add (their 500 MW each and their boost on new and installed
-// generation, the bar's "Augmenter boost", #1050 review) and the spare existing power.
+// what Phase 5's augmenters add and the spare existing power, split as the bar and "Power
+// available now" split them (#1020): the augmenters' boost on the new generators goes with the
+// new power, and the augmenters' part is their 500 MW each and their boost on installed
+// generation (the bar's "Augmenter boost", #1050 review).
 function powerSummary(stagePlan: StoredStage, settings: StoredCalculatedPlan['settings']): string {
   const view = powerView(stagePlan, settings);
   if (view.modelled) return `${power(view.availableMW)} of power for ${power(view.needMW)} needed`;
-  const boost = view.supply.find(part => part.key === 'boost')?.mw ?? 0;
+  const augmenters = stagePlan.augmenters ?? 0,
+    boosted = view.generationMW - (stagePlan.generationMW || 0) > 0.01;
   return (
-    `${power(stagePlan.generationMW)} new power` +
-    (boost > 0.01 ? ` + ${power(boost)} augmenter boost` : '') +
+    `${power(view.generationMW)} new power` +
+    (boosted ? " with the augmenters' boost" : '') +
+    (view.augmenterMW > 0.01
+      ? ` + ${power(view.augmenterMW)} from ${num(augmenters)} augmenter${augmenters === 1 ? '' : 's'}`
+      : '') +
     (settings.availablePowerGW > 0
       ? ` + ${power(settings.availablePowerGW * 1000)} existing spare power`
       : '')

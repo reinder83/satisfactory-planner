@@ -373,10 +373,13 @@ const augmenterCaption = (stage: StoredStage) => {
 
 // A plan made before #1064: its own figures, read as the pages read them then. The need is the
 // stage's requiredMW (whole machines at full power plus the allowance), what it has its new
-// generation (with the boost), what the augmenters add and the entered spare power; the bar
-// splits it as it did (the augmenter part also holding the boost on new generation). What is
+// generation (with the boost), what the augmenters add and the entered spare power. What is
 // missing is the need less what it has, which is the stage's additionalHeadroomMW, as the planner
-// computed it then.
+// computed it then. Every page splits what it has one way (#1020, from the #1050 re-review): the
+// new generation with the augmenters' boost on it, as stageSupply and "Power available now" give
+// it and a plan with a grid splits it, and the augmenters' own part (their 500 MW each and their
+// boost on installed generation). The bar used to put the boost on new generation in its
+// augmenter part; the total is as it was.
 function storedView(stage: StoredStage, settings: ViewSettings): ViewFigures {
   const peak = stage.peakMW || 0,
     need = Math.max(peak, stage.requiredMW ?? peak),
@@ -384,10 +387,13 @@ function storedView(stage: StoredStage, settings: ViewSettings): ViewFigures {
     boosted = generation * (1 + (stage.boost || 0)),
     spare = (settings.availablePowerGW || 0) * 1000,
     augmenters = stage.augmenters ?? 0,
-    // The bar's augmenter part: everything availableMW holds beyond the new generation and the
-    // spare power, so it also holds the boost on new generation.
-    barBoost = augmenters > 0 ? Math.max(0, (stage.availableMW ?? 0) - generation - spare) : 0,
-    available = generation + barBoost + spare;
+    // Everything availableMW holds beyond the new generation and the spare power: the
+    // augmenters' part with their boost on the new generation.
+    added = augmenters > 0 ? Math.max(0, (stage.availableMW ?? 0) - generation - spare) : 0,
+    available = generation + added + spare,
+    // That boost goes with the new generation, so the parts still add up to what it has.
+    withBoost = augmenters > 0 ? generation + Math.min(added, boosted - generation) : boosted,
+    augmenterPart = augmenters > 0 ? available - withBoost - spare : 0;
   const short = Math.max(0, need - available);
   const sloops = stage.sloopsUsed ?? 0;
   return {
@@ -396,8 +402,8 @@ function storedView(stage: StoredStage, settings: ViewSettings): ViewFigures {
     availableMW: available,
     shortMW: aboveDust(short) ? short : 0,
     leftMW: available - need,
-    generationMW: boosted,
-    augmenterMW: augmenters > 0 ? Math.max(0, available - boosted - spare) : 0,
+    generationMW: withBoost,
+    augmenterMW: augmenterPart,
     spareMW: spare,
     demand: [
       {
@@ -422,15 +428,17 @@ function storedView(stage: StoredStage, settings: ViewSettings): ViewFigures {
       {
         key: 'generation',
         label: 'New generation',
-        mw: generation,
-        caption: 'Fuel and recycling included',
+        mw: withBoost,
+        caption:
+          'Fuel and recycling included' +
+          (aboveDust(withBoost - generation) ? ", with the augmenters' boost" : ''),
       },
       ...(augmenters > 0
         ? [
             {
               key: 'boost',
               label: 'Augmenter boost',
-              mw: barBoost,
+              mw: augmenterPart,
               caption: augmenterCaption(stage),
             },
           ]

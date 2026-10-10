@@ -162,6 +162,10 @@ export interface AdaFacts {
   // The saved working phase, as a label, when the profile opened on an earlier phase that still
   // has open checks (#570, app/opening-phase.ts); '' otherwise.
   openedFrom: string;
+  // The shown phase's open steps while openedFrom is set, as the opened-earlier notice counts
+  // them (openStepCount in app/tasks.ts, #974): 0 once they are all ticked, which the phase
+  // opened on does not undo.
+  openedOpen: number;
   assumptions: number;
   // A calculated profile's build-so-far status (app/build-status.ts), or null: factories marked
   // running of all, the share of the elevator delivery rate flowing now (0-100), the step to
@@ -805,8 +809,12 @@ const RULES: AdaRule[] = [
     on: ['plan'],
     tone: 'calm',
     when: facts => facts.openedFrom,
+    // The phase shown stays until another is picked, so its steps may all be ticked by now (#974):
+    // then it says so, as the notice above the plan does.
     text: facts =>
-      `You are working on ${facts.openedFrom}, but ${facts.phaseLabel} still has open steps, so the build plan opens here. Tick them off, or pick ${facts.openedFrom} in the phase track to go straight back. FICSIT prefers its paperwork in order.`,
+      facts.openedOpen > 0
+        ? `You are working on ${facts.openedFrom}, but ${facts.phaseLabel} still has open steps, so the build plan opens here. Tick them off, or pick ${facts.openedFrom} in the phase track to go straight back. FICSIT prefers its paperwork in order.`
+        : `You are working on ${facts.openedFrom}, and all ${facts.phaseLabel} steps are done now. Pick ${facts.openedFrom} in the phase track to go back to it. FICSIT has filed the paperwork, in order.`,
   },
   {
     id: 'start-phase',

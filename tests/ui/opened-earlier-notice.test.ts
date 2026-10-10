@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
+import { adaClearFault, adaCurrent, setAdaIndex } from '../../public/app/ada-panel.ts';
 import { phaseStepIds } from '../../public/app/opening-phase.ts';
 import { loadContext, openedFrom, phase, state } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
-import { planTasks } from '../../public/app/tasks.ts';
+import { planTasks, satisfiedStepIds, stepDone } from '../../public/app/tasks.ts';
 import { $, applyUpdate, generatedWith, migratedPlan, open, page, stubFetch } from './setup.ts';
 import type {
   ContextReply,
@@ -51,7 +52,8 @@ const calculatedReply = (savedPhase: Phase, checks: Record<string, boolean>): Co
 });
 const notice = () => $('[data-opened-earlier]');
 const goButton = () => $<HTMLButtonElement>('[data-go-to-saved-phase]');
-const openSteps = () => planTasks().filter(task => !state.checks[task.id]).length;
+// Open as the progress bar counts them: a step done by its own condition is done (#1070).
+const openSteps = () => planTasks().filter(task => !stepDone(task)).length;
 
 test('a profile opened on Phase 1 while saved on Phase 3 says why, above the build sequence', async () => {
   open();
@@ -82,6 +84,59 @@ test('the open-step count follows the ticks, and one open step reads in the sing
   await openThrough(calculatedReply('3', allButOne));
   assert.equal(phase(), '1');
   assert.match(notice()!.textContent!, /Phase 1 still has 1 open step, so the plan starts here\./);
+});
+
+// ADA's `opened-earlier` remark on the open build plan, or undefined when it has none.
+function adaOpenedEarlier(): string | undefined {
+  for (let i = 0; i < 60; i++) {
+    setAdaIndex(i);
+    const line = adaCurrent();
+    if (line?.id === 'opened-earlier') return line.text;
+  }
+  return undefined;
+}
+
+// #974: ticking the shown phase's last open step leaves it shown, and ADA then agrees with the
+// notice that its steps are done, rather than saying it still has open steps.
+test("ADA's opened-earlier line follows the notice once every step is ticked", async () => {
+  const plan = phaseOnePlan();
+  open({ calculated: plan, phase: '1' });
+  const ids = phaseStepIds('1' as StageKey);
+  const allButOne = Object.fromEntries(ids.slice(1).map(id => [id, true]));
+  open();
+  await openThrough(calculatedReply('3', allButOne));
+  adaClearFault();
+  assert.equal(phase(), '1');
+  assert.match(adaOpenedEarlier() ?? '', /Phase 1 still has open steps/);
+  state.checks[ids[0]!] = true;
+  render();
+  await settle();
+  assert.equal(phase(), '1', 'the phase opened on stays shown');
+  assert.match(notice()!.textContent!, /All Phase 1 steps are done now\./);
+  const text = adaOpenedEarlier() ?? '';
+  assert.doesNotMatch(text, /open steps/);
+  assert.match(text, /all Phase 1 steps are done now/);
+});
+
+// A step done by its own condition (#1070: "Send the Phase 1 delivery" while the working phase is
+// later) is done, as the progress bar counts it, though nobody ticks it: with every other step
+// ticked the notice and ADA say the phase is done, not that one step is still open.
+test('a step done by its own condition counts as done in the notice and ADA alike', async () => {
+  const plan = phaseOnePlan();
+  open({ calculated: plan, phase: '1' });
+  const ids = phaseStepIds('1' as StageKey);
+  open();
+  const satisfied = () => satisfiedStepIds('1');
+  await openThrough(calculatedReply('3', {}));
+  const own = satisfied();
+  assert.ok(own.size > 0, 'Phase 1 has a step done by its own condition');
+  for (const id of ids) if (!own.has(id)) state.checks[id] = true;
+  render();
+  await settle();
+  adaClearFault();
+  assert.equal(phase(), '1');
+  assert.match(notice()!.textContent!, /All Phase 1 steps are done now\./);
+  assert.match(adaOpenedEarlier() ?? '', /all Phase 1 steps are done now/);
 });
 
 test('Go to Phase 3 shows the saved phase, writes nothing and the notice goes', async () => {
