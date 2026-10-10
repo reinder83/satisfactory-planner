@@ -57,3 +57,23 @@ export function watchToast(el: HTMLElement) {
     attributeFilter: ['class'],
   });
 }
+
+// How much of two boxes on screen overlaps, in square pixels.
+const overlapArea = (a: DOMRect, b: DOMRect) =>
+  Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+  Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
+// Keeps a toast that is showing off `subject`, the part of the page it is about when that is not
+// the focused control: a notes box's conflict notice, which appears just after the toast about
+// it (note-draft.ts, #1052). At 390 px the strip at the bottom covered the notice's choices for
+// as long as it showed. Over it at the bottom, the toast goes to the top, unless it would cover
+// more of the notice there. A toast already at the top stays there.
+export function keepToastOff(subject: Element) {
+  const el = document.getElementById('toast');
+  if (!el?.classList.contains('show') || el.dataset.place === 'top') return;
+  const covered = () => overlapArea(el.getBoundingClientRect(), subject.getBoundingClientRect());
+  const atBottom = covered();
+  if (!atBottom) return;
+  el.dataset.place = 'top';
+  if (covered() > atBottom) delete el.dataset.place;
+}

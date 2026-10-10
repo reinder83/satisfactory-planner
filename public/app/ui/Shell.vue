@@ -37,7 +37,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { browserMode } from '../../browser-api.ts';
 import { purities } from '../../preferences.ts';
-import { allowSwitch, pending, save, toast } from '../api.ts';
+import { allowSwitch, notesNotSaved, pending, save, toast } from '../api.ts';
 import { startEdit } from '../wizard/wizard.ts';
 import { num } from '../format.ts';
 import {
@@ -77,6 +77,11 @@ const NAV: [id: string, icon: string, label: string][] = [
   ['backup', '⇅', 'Backup'],
 ];
 
+// A notes box that says "Not saved" (a failed write, or a version to choose, #1052) is never
+// outshone by "Saved": the status says a note is not saved until the box saves it or goes.
+const unsavedNotes = (count: number) =>
+  count === 1 ? 'Note not saved' : count + ' notes not saved';
+
 const frame = computed(() =>
   legacy(() => ({
     view,
@@ -102,20 +107,25 @@ const frame = computed(() =>
     // With no save open (an empty workspace, #281) nothing has been saved, so the status never
     // claims it, and its dot, which marks a save, is left out.
     hasSave: !!currentSave.id,
+    notSaved: !pending && !!currentSave.id && notesNotSaved() > 0,
     saved: pending
       ? 'Saving…'
       : !currentSave.id
         ? 'Nothing saved yet'
-        : browserMode
-          ? 'Saved in this browser'
-          : 'Saved on server',
+        : notesNotSaved()
+          ? unsavedNotes(notesNotSaved())
+          : browserMode
+            ? 'Saved in this browser'
+            : 'Saved on server',
     savedShort: pending
       ? 'Saving…'
       : !currentSave.id
         ? 'No save yet'
-        : browserMode
-          ? 'Saved in browser'
-          : 'Saved',
+        : notesNotSaved()
+          ? 'Not saved'
+          : browserMode
+            ? 'Saved in browser'
+            : 'Saved',
     // The browser edition's backup age under the save indicator (SP-40), worked out on every
     // render; the Backup page shows it in full. The Docker edition keeps its saves on the server.
     backup: browserMode && currentSave.id ? backupAge(workspace.lastBackup) : null,
@@ -365,7 +375,7 @@ async function pickTrack(event: Event) {
         >
       </nav>
       <AdaPanel />
-      <div class="save-status">
+      <div :class="['save-status', frame.notSaved ? 'is-not-saved' : '']">
         <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
         ><span id="saved" role="status" aria-live="polite">{{ frame.saved }}</span>
       </div>
@@ -554,7 +564,7 @@ async function pickTrack(event: Event) {
               </option>
             </select></label
           >
-          <div class="save-status">
+          <div :class="['save-status', frame.notSaved ? 'is-not-saved' : '']">
             <span v-if="frame.hasSave" class="dot" aria-hidden="true"></span
             ><span class="save-label"
               ><span id="saved-short" role="status" aria-live="polite">{{ frame.savedShort }}</span

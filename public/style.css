@@ -346,6 +346,15 @@ input[type='radio'] {
   flex: none;
   animation: fx-blink 2.6s steps(1) infinite;
 }
+/* While a notes box says "Not saved" (Shell.vue), the save status says so in the error tone:
+   a still red dot, not the blinking green of a save. */
+.save-status.is-not-saved {
+  color: var(--red);
+}
+.save-status.is-not-saved .dot {
+  background: var(--red);
+  animation: none;
+}
 .sidebar-foot {
   margin: 12px 18px 0;
   border-top: 1px dashed var(--line2);
