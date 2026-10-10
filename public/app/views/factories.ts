@@ -7,6 +7,7 @@ import { rowShares } from '../group-links.ts';
 import { rowMemberships } from '../group-order.ts';
 import { calculated, checked, sectionCollapsed, state } from '../session.ts';
 import { inputText } from './storage.ts';
+import { localeNumber } from '../../wording.ts';
 import type {
   CalcRow,
   CompletionLine,
@@ -109,9 +110,7 @@ export function machineLine(machines: number, machine: string, lastClock = 100):
 // up to 100%. Undefined when every machine runs at 100%.
 export function clockText(lastClock = 100): string | undefined {
   if (!(lastClock < 100 - 1e-7)) return undefined;
-  return Math.min(Math.round(lastClock * 10) / 10, 99.9).toLocaleString(undefined, {
-    maximumFractionDigits: 1,
-  });
+  return localeNumber(Math.min(Math.round(lastClock * 10) / 10, 99.9), 1);
 }
 
 // The factory dialogs' three machine cells (SP-20, #255): the total, how many run at 100% and

@@ -27,7 +27,7 @@
 // generator, while still covering it (planner/load.ts): generators burn fuel only for the power
 // drawn, and fuel made beyond that backs its chain up in the game.
 import { DEFAULT_EXTRACTION, extractionMWPerUnit } from './preferences.ts';
-import { listNames, powerAmount } from './wording.ts';
+import { listNames, localeNumber, powerAmount } from './wording.ts';
 import type {
   CalcRow,
   GridGenerator,
@@ -258,8 +258,7 @@ export function powerView(stage: StoredStage, settings: ViewSettings): PowerView
 // Whether a figure is above rounding dust.
 const aboveDust = (mw: number) => mw > POWER_DUST;
 // A number as the pages show one (num in app/format.ts).
-const figure = (value: number | undefined) =>
-  Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const figure = (value: number | undefined) => localeNumber(value);
 
 // A plan with a grid: the parts the plan sized.
 function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSettings): ViewFigures {
