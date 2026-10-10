@@ -7,8 +7,9 @@
   steps reads the one being left. The form is keyed by step, so every step starts from the
   draft and a new step clears the error line. Enter or the primary button moves on until
   Review, which calculates, and on Review creates the profile, or for Edit settings (#1071)
-  recalculates the edited profile in place ("Recalculate in place"). The submit stops here, since
-  nothing else handles the wizard form. Beside Goals and Resources is the live estimate
+  recalculates the edited profile in place ("Recalculate in place"), its owned fields started
+  from the ticks where they show more (ui/wizard/TicksPrefill.vue says which, #1068). The submit
+  stops here, since nothing else handles the wizard form. Beside Goals and Resources is the live estimate
   (ui/wizard/EstimatePanel.vue, SP-33), which every edit there restarts; at 720px and below it
   sits under the form, with a one-line summary at the foot of the screen (#412).
 -->
@@ -38,6 +39,7 @@ import PreferencesStep from '../wizard/PreferencesStep.vue';
 import ResourcesStep from '../wizard/ResourcesStep.vue';
 import ReviewStep from '../wizard/ReviewStep.vue';
 import SettingsStep from '../wizard/SettingsStep.vue';
+import TicksPrefill from '../wizard/TicksPrefill.vue';
 import { newSave } from '../actions.ts';
 import { focusNewStep } from '../refocus.ts';
 
@@ -118,6 +120,7 @@ async function submit(event: Event) {
   <template v-else>
     <BrowserNotice v-if="browserMode" />
     <PageHeader :eyebrow="page.eyebrow" :title="page.title" />
+    <TicksPrefill />
     <div class="wizard-progress">
       <button
         v-for="(title, i) in STEPS"

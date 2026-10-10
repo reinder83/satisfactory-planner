@@ -1,6 +1,7 @@
 <!--
   #plan on a calculated profile: the calculation's warnings, the notice that the lines asked to run
-  at exact clocks need a recalculation (ui/plan/ExactClocksRecalc.vue, #1066), a summary line (factories,
+  at exact clocks need a recalculation (ui/plan/ExactClocksRecalc.vue, #1066), the offer to plan with
+  what the ticks show you already have (ui/plan/OwnedTicksNotice.vue, #1068), a summary line (factories,
   storage and power, each linking to its page, and the delivery time, what is left of it once a
   delivery count is saved, #1062; SP-43), the next phase once the delivery is complete
   (ui/plan/NextPhase.vue, #1069) or Post Phase 5's finish card, the handover from the phase before
@@ -52,6 +53,7 @@ import HandoverSummary from '../plan/HandoverSummary.vue';
 import MilestoneOnlyNotice from '../plan/MilestoneOnlyNotice.vue';
 import NextPhase from '../plan/NextPhase.vue';
 import OpenedEarlierNotice from '../plan/OpenedEarlierNotice.vue';
+import OwnedTicksNotice from '../plan/OwnedTicksNotice.vue';
 import PlanEditBar from '../plan/PlanEditBar.vue';
 import PlanProgress from '../plan/PlanProgress.vue';
 import PlanSummary from '../plan/PlanSummary.vue';
@@ -171,6 +173,7 @@ const page = computed(() =>
     <PlanEditBar />
     <CalcWarnings />
     <ExactClocksRecalc />
+    <OwnedTicksNotice />
     <PlanSummary v-if="!page.milestones" :items="page.summary" />
     <NextPhase />
     <div v-if="page.post" class="notice info" data-finish-card>
