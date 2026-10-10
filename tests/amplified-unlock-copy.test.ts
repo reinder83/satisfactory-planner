@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createCommitQueue, loadWorkspace } from '../server/persistence.ts';
 import { openBrowserStore, PRE_901 } from '../public/browser-store.ts';
-import { holdsAmplifiedUnlocks, validateState } from '../public/state.ts';
+import { holdsOldUnlockKeys, validateState } from '../public/state.ts';
 import { fakeIndexedDB, type FakeControls } from './helpers/fake-indexeddb.ts';
 import { saveExport, version3 } from './types/fixtures.ts';
 import type {
@@ -52,15 +52,15 @@ const saves = (state: SavedState): SaveExport['saves'] => {
   return data;
 };
 
-test('holdsAmplifiedUnlocks: only records the merge would change, and it changes nothing', () => {
+test('holdsOldUnlockKeys: only records the merge would change, and it changes nothing', () => {
   const state = old(),
     copy = structuredClone(state);
-  assert.equal(holdsAmplifiedUnlocks(state), true);
+  assert.equal(holdsOldUnlockKeys(state), true);
   assert.deepEqual(state, copy, 'the state is left as it was');
-  assert.equal(holdsAmplifiedUnlocks(current()), false);
+  assert.equal(holdsOldUnlockKeys(current()), false);
   // What stays after the merge (the twin's title kept under its old id) needs no copy.
-  assert.equal(holdsAmplifiedUnlocks(validateState(old())), false);
-  assert.equal(holdsAmplifiedUnlocks({ taskEdits: { order: { '3': [twinUnlock(COKE)] } } }), true);
+  assert.equal(holdsOldUnlockKeys(validateState(old())), false);
+  assert.equal(holdsOldUnlockKeys({ taskEdits: { order: { '3': [twinUnlock(COKE)] } } }), true);
 });
 
 // ---- Docker edition: workspace.json.pre-901 ----

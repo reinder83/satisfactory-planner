@@ -3,9 +3,9 @@
 // hand createBrowserApi a stand-in store instead). The name, store `workspace` and key `main`
 // hold existing users' saves: renaming any of them makes those saves disappear from the UI. A
 // second key, PRE_HANDBOOK, keeps the record as it was before the handbook migration (#497), and
-// a third, PRE_901, as it was before an amplified twin's unlock records were merged (#901).
+// a third, PRE_901, as it was before old unlock keys were merged (#901, #1041).
 import { migrateOriginalProfile, type MigrationData } from './handbook-migration.ts';
-import { holdsAmplifiedUnlocks, mergeAmplifiedUnlocks } from './state.ts';
+import { holdsOldUnlockKeys, mergeOldUnlockKeys } from './state.ts';
 import type { BrowserWorkspace, StoredProfile } from './types/index.ts';
 
 // What an older planner says about saves a newer one wrote, whether the database itself or the
@@ -82,13 +82,14 @@ const needsMigration = (workspace: BrowserWorkspace) =>
 // the planner reads it. It is the pre-migration copy AGENTS.md requires, the counterpart of the
 // server's workspace.json.pre-handbook.
 export const PRE_HANDBOOK = 'pre-handbook';
-// The third key (#901): the record as it was read before the first write that merged an amplified
-// twin's unlock records (mergeAmplifiedUnlocks), from releases before #901. Written in that write's
-// own transaction, only when the key is empty, so it is never replaced; nothing in the planner
-// reads it. The counterpart of the server's workspace.json.pre-901.
+// The third key (#901): the record as it was read before the first write that merged old unlock
+// keys (mergeOldUnlockKeys): an amplified twin's unlock records from releases before #901, or a
+// group line's unlock tick from releases before #1041. Written in that write's own transaction,
+// only when the key is empty, so it is never replaced; nothing in the planner reads it. The
+// counterpart of the server's workspace.json.pre-901.
 export const PRE_901 = 'pre-901';
 const holdsUnmerged = (workspace: BrowserWorkspace) =>
-  workspace.saves.some(s => s.profiles.some(p => holdsAmplifiedUnlocks(p.state)));
+  workspace.saves.some(s => s.profiles.some(p => holdsOldUnlockKeys(p.state)));
 // What the migration needs (MigrationData): browser-api.ts loads it, and only when there is
 // something to migrate. The same loader converts an imported original profile (#605).
 export type { MigrationData };
@@ -315,10 +316,11 @@ export function openBrowserStore(
             // ("never exported"), as the type says. A change writes the field back (#72).
             data.lastBackup ??= null;
             // Progress is served as stored here, not through validateState as the server loads
-            // it, so an amplified twin's unlock records from before #901 are merged into their
-            // recipe's step as the record is read; a change writes them back merged.
+            // it, so an amplified twin's unlock records from before #901 and a group line's
+            // unlock tick from before #1041 are merged into their recipe's step as the record is
+            // read; a change writes them back merged.
             for (const save of data.saves)
-              for (const profile of save.profiles) mergeAmplifiedUnlocks(profile.state);
+              for (const profile of save.profiles) mergeOldUnlockKeys(profile.state);
             answer = change ? change(data) : (data as T);
             if (change) store.put(data, 'main');
           } catch (error) {
