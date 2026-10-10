@@ -7,7 +7,8 @@
   it ticked, "Miners you already have" (#1068, ownedMiner, data-owned-miner) raises every phase's
   miner to the mark chosen, and "Belts you already have" (#1068, ownedBelt, data-owned-belt) every
   phase's belt (both in OwnedEquipment.vue, which the guided start shares); the table follows both
-  choices too.
+  choices too. Under them all, "Generators you already have" (#1068, OwnedGenerators.vue,
+  settings.ownedGenerators), whatever the box says: their fuel comes from these budgets.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -19,6 +20,7 @@ import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import StepHeading from '../form/StepHeading.vue';
 import OwnedEquipment from './OwnedEquipment.vue';
+import OwnedGenerators from './OwnedGenerators.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -125,6 +127,7 @@ const ownedBelt = ref<number | undefined>(draft().settings.ownedBelt);
   <p v-else class="small muted">
     Off: every phase plans with these budgets as entered, whatever miners and belts it can build.
   </p>
+  <OwnedGenerators />
   <label class="check-row"
     ><input name="limitsConfirmed" type="checkbox" :checked="view.confirmed" />I have checked these
     budgets for my save (required for maximum output)</label

@@ -6,7 +6,8 @@
 //   storage.ts     the storage setting: covered items, construction materials, refill rates
 //   world.ts       World Randomization choices, the raw resources, the original map's node counts,
 //                  default budgets
-//   fuels.ts       main power, vehicle and drone fuel choices, the drone fuel supply
+//   fuels.ts       main power, the generators a player may already have, vehicle and drone
+//                  fuel choices, the drone fuel supply
 //   help.ts        the wizard's and the guided start's help text
 //   guided.ts      the guided start's questions
 //   extraction.ts  the node survey: extraction rates, yields and the budgets they give, and
@@ -33,6 +34,9 @@ export {
 export {
   droneFuels,
   droneSupply,
+  OWNED_GENERATORS,
+  OWNED_GENERATORS_MAX,
+  ownedGeneratorCounts,
   powerOptions,
   turbofuelRecipes,
   vehicleFuels,

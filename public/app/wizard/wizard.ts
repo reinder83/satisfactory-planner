@@ -10,6 +10,7 @@ import {
   GUIDED_TOPUP_RATE,
   knownWorld,
   matchingPreset,
+  ownedGeneratorCounts,
   presetSurvey,
   resourceDefaults,
 } from '../../preferences.ts';
@@ -324,6 +325,7 @@ export function readWizard(form: HTMLFormElement) {
   readSloops(form, data, settings);
   readAlternates(form, data, settings);
   readOwnedAlternates(form, data, settings);
+  readOwnedGenerators(form, data, settings);
   const supply = readSupply(form, data);
   if (supply) settings.existingSupply = supply;
   readStorageOverrides(form, data, settings);
@@ -424,6 +426,27 @@ export function readOwnedAlternates(
   const owned = data.getAll('ownedAlt').map(String);
   if (owned.length) settings.ownedAlternates = owned;
   else delete settings.ownedAlternates;
+}
+
+// "Generators you already have" (#1068, ui/wizard/OwnedGenerators.vue), when it is on screen: All
+// settings step 4 and the guided start's "What you already have". Each "ownedGenerator:<building>"
+// field with a whole count from 1 becomes settings.ownedGenerators[building]; an empty or zero
+// field leaves its kind out (ownedGeneratorCounts, as settings() keeps them), and none removes the
+// field, so a plan without owned generators keeps the settings it always had. Every kind with a
+// count is on screen, so a kind not listed has none.
+export function readOwnedGenerators(
+  form: HTMLFormElement,
+  data: FormData,
+  settings: WizardSettings,
+) {
+  if (!form.querySelector('[data-owned-generators]')) return;
+  const entered: Record<string, number> = {};
+  for (const [name, value] of data)
+    if (name.startsWith('ownedGenerator:') && String(value).trim() !== '')
+      entered[name.slice('ownedGenerator:'.length)] = Number(value);
+  const counts = ownedGeneratorCounts(entered);
+  if (counts) settings.ownedGenerators = counts;
+  else delete settings.ownedGenerators;
 }
 
 // The per-item storage rates ("rate:<item>"), when they are on screen: blank or non-numeric
