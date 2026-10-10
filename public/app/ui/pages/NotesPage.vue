@@ -1,7 +1,7 @@
 <!--
   #notes (SP-08, #243): every note of the open profile on one page. The save-wide note (key
-  `global`) comes first, then one box per phase (key `phase-<phase>`): the working phase first
-  and open, then the profile's other phases in order, folded. A phase before the profile's
+  `global`) comes first, then one box per phase (key `phase-<phase>`): the phase shown first
+  and open ("Working on", or "Showing" while the working phase is another, #992), then the profile's other phases in order, folded. A phase before the profile's
   start phase is listed too when it holds a note (a profile carried from a sibling copies its
   notes as they are), so no saved note is out of sight. Every box is NoteBox.vue and saves
   itself as you type; all of them stay mounted while folded, so allowSwitch() still sends or
@@ -18,6 +18,7 @@ import {
   phaseLabel,
   phaseOptions,
   state,
+  workingPhaseNotShown,
 } from '../../session.ts';
 import type { Phase } from '../../../types/index.ts';
 import { legacy } from '../bridge.ts';
@@ -31,6 +32,9 @@ const ALL: Phase[] = ['1', '2', '3', '4', '5', 'post'];
 const page = computed(() =>
   legacy(() => {
     const current = phase();
+    // The working phase while another is shown (#992): the shown phase is "Showing", as the phase
+    // picker calls it, and the working phase keeps "Working on".
+    const working = workingPhaseNotShown();
     const offered = phaseOptions();
     const notes = state.notes || {};
     const has = (listedPhase: Phase) => !!notes['phase-' + listedPhase]?.trim();
@@ -44,12 +48,16 @@ const page = computed(() =>
         current: listedPhase === current,
         tag:
           listedPhase === current
-            ? 'Working on'
-            : !offered.includes(listedPhase)
-              ? 'Before this profile'
-              : has(listedPhase)
-                ? 'Has notes'
-                : 'Empty',
+            ? working
+              ? 'Showing'
+              : 'Working on'
+            : listedPhase === working
+              ? 'Working on'
+              : !offered.includes(listedPhase)
+                ? 'Before this profile'
+                : has(listedPhase)
+                  ? 'Has notes'
+                  : 'Empty',
       })),
     };
   }),

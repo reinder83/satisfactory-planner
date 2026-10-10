@@ -11,8 +11,9 @@
   items the groups make on site differ from the plan's, OnSiteRecalc.vue says the plan needs a
   recalculation and offers one the user starts (#877); ExactClocksRecalc.vue does the same for the
   lines asked to run at exact clocks (#1066).
-  A milestone-only phase (#759) shows only the header and why it has no production lines, and
-  so does the page with no calculated plan open (the profile just left, before render() swaps
+  A milestone-only phase (#759) shows only the header, the two recalculation notices (they are
+  about the whole plan, #1014) and why it has no production lines; the page with no calculated
+  plan open shows only the header (the profile just left, before render() swaps
   the page).
 -->
 <script setup lang="ts">
@@ -202,6 +203,8 @@ async function roundUp(event: Event) {
 <template>
   <template v-if="page && milestones">
     <PageHeader eyebrow="CALCULATED PRODUCTION" title="Factories" />
+    <!-- The recalculation notices are about the whole plan, not this phase (#1014). -->
+    <OnSiteRecalc /><ExactClocksRecalc />
     <MilestoneOnlyNotice />
   </template>
   <template v-else-if="page">

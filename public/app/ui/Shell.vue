@@ -6,7 +6,9 @@
   The phase picker is a phase track (SP-44, #279): one segment per phase, each with its
   checklist's progress (views/phase-track.ts), as a group of radio buttons named "Working
   phase", so the arrow keys move between phases and a click switches, saved and guarded as the
-  select is. At 720px and below the track gives way to the select, which is always there.
+  select is. At 720px and below the track gives way to the select, which is always there. While
+  the tab shows a phase other than the working one, both are called "Showing" and name the
+  working phase (pickerWords, #992).
 
   The profile switcher (SP-07, #242) is the sidebar footer as a menu button (ui/ActionMenu.vue):
   the open profile's name and settings lines on the button, and in its menu the open save's
@@ -48,6 +50,7 @@ import {
   setOpenedPhase,
   setQuery,
   view,
+  workingPhaseNotShown,
   workspace,
 } from '../session.ts';
 import type { View } from '../session.ts';
@@ -95,6 +98,7 @@ const frame = computed(() =>
     phase: phase(),
     phases: phaseOptions().map(p => [p, phaseLabel(p)]),
     track: phaseTrack(),
+    picker: pickerWords(),
     // With no save open (an empty workspace, #281) nothing has been saved, so the status never
     // claims it, and its dot, which marks a save, is left out.
     hasSave: !!currentSave.id,
@@ -239,6 +243,23 @@ function profileFooter() {
     ];
   }
   return ['Create or select a profile'];
+}
+
+// What the phase picker (the select and the track) is called (#992). It always shows the phase on
+// screen, and picking one saves it as the working phase. While the working phase is on screen it
+// is "Working on" ("Working phase"); while the tab shows another (the phase the profile opened on,
+// #570, or a flow page's address names, #926) it is "Showing", naming the working phase, which
+// the notice below the top bar also names ("You are working on Phase 3"), so the two never call
+// different phases the one being worked on. `working` is that phase, or null.
+function pickerWords(): { label: string; name: string; working: Phase | null } {
+  const working = workingPhaseNotShown();
+  return working
+    ? {
+        label: 'Showing',
+        name: `Showing phase, working on ${phaseLabel(working)}`,
+        working,
+      }
+    : { label: 'Working on', name: 'Working phase', working: null };
 }
 
 // The "Working on" select: save the profile's selected phase, show it rather than the phase the
@@ -492,7 +513,7 @@ async function pickTrack(event: Event) {
           <div
             class="phase-track"
             role="radiogroup"
-            aria-label="Working phase"
+            :aria-label="frame.picker.name"
             :aria-busy="trackBusy || undefined"
             data-phase-track
           >
@@ -510,15 +531,20 @@ async function pickTrack(event: Event) {
                 @change="pickTrack" /><span class="phase-track-name">{{ segment.label }}</span
               ><span v-if="segment.pct !== null" class="visually-hidden"
                 >, {{ segment.pct }}% done</span
+              ><span
+                v-if="segment.phase === frame.picker.working"
+                class="visually-hidden"
+                data-working-phase
+                >, working phase</span
               ><span v-if="segment.pct !== null" class="phase-track-bar" aria-hidden="true"
                 ><span :style="{ width: segment.pct + '%' }"></span></span
             ></label>
           </div>
           <label class="small phase-select"
-            >Working on
+            ><span data-phase-picker-label>{{ frame.picker.label }}</span>
             <select
               id="phase-picker"
-              aria-label="Working phase"
+              :aria-label="frame.picker.name"
               :disabled="!frame.canPickPhase"
               :value="frame.phase"
               @change="pickPhase"
