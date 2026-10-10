@@ -355,9 +355,12 @@ export interface GuideState {
 
 // A production row's step title: the row's name, and for a factory group's own line made on site
 // (#876) the group it is for, "Wire for Motor works": the group's name now, else the name the
-// plan was calculated with, else its id.
+// plan was calculated with, else its id. Every place that names a line of the plan goes through
+// it: the build plan, the factory dialog's heading, deliveries and lane advice (flow.ts) and a
+// step's linked production line (#954, #964). `plan.settings` may be absent where a flow is drawn
+// without the plan's settings; the groups then name the line alone.
 export function rowStepTitle(
-  plan: Pick<StoredCalculatedPlan, 'settings'>,
+  plan: { settings?: Pick<StoredCalculatedPlan['settings'], 'onSite'> | undefined },
   state: GuideState,
   row: Pick<CalcRow, 'name' | 'onSite' | 'stock'>,
 ): string {
@@ -366,7 +369,7 @@ export function rowStepTitle(
   if (!group) return row.name;
   const name =
     state.factoryGroups?.groups?.find(known => known.id === group)?.name ??
-    plan.settings.onSite?.[group]?.name ??
+    plan.settings?.onSite?.[group]?.name ??
     group;
   return row.name + ' for ' + name;
 }

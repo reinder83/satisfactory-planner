@@ -22,6 +22,7 @@ import { factoryGroupsState } from './views/factories.ts';
 import { power } from './wizard/fields.ts';
 import { sinkCaption, sinkCause } from './sink-cause.ts';
 import { BELT_MARKS, PIPE_MARKS, phaseForTier } from '../preferences.ts';
+import { rowStepTitle } from '../progression.ts';
 import type { ItemBooks } from './group-links.ts';
 import type { FactoryLink } from './ui/actions.ts';
 import type {
@@ -414,6 +415,17 @@ export function siteBooks(
   return { groups, books: itemBooks(storedStage, groups, planned) };
 }
 
+// Another line of the phase as the flow names it, as its build-plan step is titled
+// (rowStepTitle): "Wire for Alpha" for a group's own line made on site, so a delivery or a
+// spare-lane suggestion tells it from the central "Wire" (#964). The group's name comes from the
+// context's groups, else the name the plan was calculated with.
+const lineName = (row: CalcRow, context: CalcFlowContext): string =>
+  rowStepTitle(
+    { settings: context.settings },
+    { checks: {}, factoryGroups: context.site?.groups },
+    row,
+  );
+
 // The books when a group's own lines make `item` on site, else undefined.
 const siteItemBooks = (item: string, context: CalcFlowContext): SiteBooks | undefined =>
   context.site?.books.local[item] ? context.site : undefined;
@@ -554,14 +566,14 @@ function deliveries(
     .filter(({ rate }) => !output.site || rate > LINK_DUST);
 }
 
-// The other rows of the phase consuming the item (deliveries), each with the belts that carry
-// its rate.
+// The other rows of the phase consuming the item (deliveries), each named as its build-plan step
+// (lineName) with the belts that carry its rate.
 function consumerOutputs(row: CalcRow, output: OutputItem, context: CalcFlowContext) {
   const { item, fluid, unit, pre, mach } = output;
   return deliveries(row, output, context).map(({ consumer, rate }): FlowOutput => {
     return {
       kind: 'consumer',
-      label: consumer.name,
+      label: lineName(consumer, context),
       icon: Object.keys(consumer.outputs || {})[0] || item,
       link: { calcFactory: consumer.id },
       rate,
@@ -743,28 +755,40 @@ export const generatorOutputs = (row: CalcRow): FlowOutput[] =>
       ]
     : [];
 
-// The row an input of `row` links to: the first other row producing the item; there may be more
-// than one. For an item groups make on site (#956), the line that gives the row most of it, as
-// the books share it (siteParts): a group's own line for that group's share, else the first other
-// line making the item; on a tie, the group rowPlaces lists first. A group that offers its own
-// lines' excess since a group edit (#918) gives its part of the rest through its own line.
+// The row an input of `row` links to: the single other line that gives the row the most of the
+// item (#972), compared line by line. Plan-wide, the lines making an item share each demand in
+// proportion to what they make, so that is the line making the most. For an item groups make on
+// site (#956), as the books share it (deliveredTo): a group's own line gives its part of its
+// group's share of the row (and of its group's offer since a group edit, #918); every other line
+// its part, in proportion to what it makes, of what those lines give together. On a tie the
+// group's own line comes first, in the order the row's memberships list the groups (rowPlaces,
+// as its build-plan step does), then the other lines in the phase's order.
 function inputSource(row: CalcRow, item: string, context: CalcFlowContext): CalcRow | undefined {
-  const makers = (context.storedStage.rows || []).filter(
-    maker => maker.id !== row.id && maker.outputs?.[item],
-  );
+  const makers = otherMakers(row, item, context);
   const site = siteItemBooks(item, context);
-  if (!site) return makers[0];
-  const { own, central } = siteParts(row, item, site);
-  const shares = ordinaryShares(item, site, central);
-  for (const [group, rate] of shares.offers) own.set(group, (own.get(group) || 0) + rate);
+  const groupOf = (maker: CalcRow) => (site ? ownLineGroup(maker, item, site) : undefined);
+  const shared = makers.filter(maker => !groupOf(maker));
+  const sharedMade = shared.reduce((sum, maker) => sum + (maker.outputs[item] || 0), 0);
+  const gives = (maker: CalcRow): number => {
+    const delivered = deliveredTo(maker, row, outputItem(maker, item, context));
+    if (groupOf(maker)) return delivered;
+    return sharedMade > 0 ? (delivered * (maker.outputs[item] || 0)) / sharedMade : 0;
+  };
+  const places = site ? [...rowPlaces(row, site.groups).keys()] : [];
+  const rank = (maker: CalcRow) => {
+    const group = groupOf(maker);
+    if (!group) return places.length + 1;
+    const at = places.indexOf(group);
+    return at < 0 ? places.length : at;
+  };
+  // A stable sort: lines of the same rank keep the phase's order.
+  const ordered = [...makers].sort((a, b) => rank(a) - rank(b));
   let source: CalcRow | undefined,
     largest = 0;
-  for (const [group, rate] of own) {
-    const line = makers.find(maker => ownLineGroup(maker, item, site) === group);
-    if (line && rate > largest + LINK_DUST) [source, largest] = [line, rate];
+  for (const maker of ordered) {
+    const rate = gives(maker);
+    if (rate > largest + LINK_DUST) [source, largest] = [maker, rate];
   }
-  const centralLine = makers.find(maker => !ownLineGroup(maker, item, site));
-  if (centralLine && shares.lines > largest + LINK_DUST) source = centralLine;
   return source ?? makers[0];
 }
 
@@ -992,7 +1016,8 @@ export function calcFlowModel(row: CalcRow): FlowModel {
 
 // The other factories that could share the belts of `row`'s input of `item` (LaneAdvice.vue):
 // every other row consuming the item, at its whole demand. For an item groups make on site
-// (#956), the other rows the line feeding that input delivers to, at what it delivers them.
+// (#956), the other rows the line feeding that input delivers to, at what it delivers them. Each
+// is named as its build-plan step (lineName, #964).
 function busConsumers(row: CalcRow, item: string, context: CalcFlowContext): SameItemConsumer[] {
   const source = siteItemBooks(item, context) && inputSource(row, item, context);
   const consumers = source
@@ -1003,7 +1028,7 @@ function busConsumers(row: CalcRow, item: string, context: CalcFlowContext): Sam
         .filter(consumer => consumer.id !== row.id && consumer.inputs?.[item])
         .map(consumer => ({ consumer, rate: consumer.inputs[item]! }));
   return consumers.map(({ consumer, rate }) => ({
-    label: consumer.name,
+    label: lineName(consumer, context),
     rate,
     link: { calcFactory: consumer.id },
   }));
