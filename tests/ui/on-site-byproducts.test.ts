@@ -3,17 +3,22 @@
 // makes the item only as a byproduct stays central (siteCopies in planner/on-site.ts). The picker
 // follows the same rule (onSiteCopyable): from a marked part it offers only the ingredients of the
 // lines that make the part as their product, and a mark the plan makes only as a byproduct gets
-// no line, so the notice does not ask for one and the heading says it can't be made on site.
+// no line, so the notice does not ask for one and the heading says central lines' byproduct
+// covers it.
 // The central byproduct of a marked fluid feeds the group first: its line makes only the rest,
-// and none when the byproduct covers all the group uses, which the heading words as a mark with
-// no line in this phase, and the notice does not ask for one.
+// and none when the byproduct covers all the group uses, which the heading words the same way,
+// and the notice does not ask for one.
 import assert from 'node:assert/strict';
 import { nextTick } from 'vue';
 import { beforeEach, test } from 'vitest';
 import { setFactoryEditing, setFactoryFilter, setQuery } from '../../public/app/session.ts';
 import { render } from '../../public/app/shell.ts';
 import { onSiteSettings } from '../../public/app/on-site.ts';
-import { onSiteChange, onSitePickerOffers, RAW_NOTE } from '../../public/app/on-site-picker.ts';
+import {
+  BYPRODUCT_NOTE,
+  onSiteChange,
+  onSitePickerOffers,
+} from '../../public/app/on-site-picker.ts';
 import { $, $$, generated, generatedWith, go, open, page } from './setup.ts';
 import type { FactoryGroups, StageKey, StoredCalculatedPlan } from '../../public/types/index.ts';
 
@@ -104,7 +109,7 @@ test('#1012: a mark the plan makes only as a byproduct gets no line, and the pag
   await show(plan, residual, '3');
   assert.equal(notice(), null, 'no recalculation is offered for it');
   assert.equal(made(ALPHA), null);
-  assert.equal(marked(ALPHA), `Marked, not made on site: Heavy Oil Residue ${RAW_NOTE}`);
+  assert.equal(marked(ALPHA), `Marked, not made on site: Heavy Oil Residue ${BYPRODUCT_NOTE}`);
 });
 
 // Gamma holds the Dark Matter Crystal line (all of it, or a third with Delta and Epsilon) and
@@ -142,8 +147,5 @@ test('#1012: a mark the central byproduct covers gets no line, and asks for none
   await show(recalculated(groups), groups, '5');
   assert.equal(notice(), null, 'no recalculation is offered');
   assert.equal(made(GAMMA), null);
-  assert.equal(
-    marked(GAMMA),
-    'Marked, not made on site: Dark Matter Residue (no line in this phase)',
-  );
+  assert.equal(marked(GAMMA), `Marked, not made on site: Dark Matter Residue ${BYPRODUCT_NOTE}`);
 });
