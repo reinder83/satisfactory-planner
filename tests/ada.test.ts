@@ -526,6 +526,34 @@ test('ADA says when a phase carries its nodes on belts you already have (#1068)'
   assert.ok(!ids(facts({ view: 'resources' })).includes('owned-belt'), 'absent means none');
 });
 
+test('ADA counts the generators you already have, or says the phase does not (#1068)', () => {
+  for (const view of ['plan', 'resources']) {
+    const line = (over: Partial<AdaFacts>) =>
+      adaRemarks(facts({ view, ...over })).find(r => r.id === 'owned-generators')!;
+    const counted = line({ ownedGenerators: '4 Coal Generators' });
+    assert.equal(counted.tone, 'calm');
+    assert.match(
+      counted.text,
+      /^This phase counts the 4 Coal Generators you already have before it builds any\. Their fuel still comes out of your budgets/,
+    );
+    assert.doesNotMatch(counted.text, /plans none/);
+    const idle = line({ idleGenerators: '8 Coal Generators' }).text;
+    assert.match(
+      idle,
+      /^This phase plans none of your 8 Coal Generators, so it does not count them\. Keep them fed outside the plan and they are spare power/,
+    );
+    const both = line({
+      ownedGenerators: '3 Fuel Generators',
+      idleGenerators: '8 Coal Generators',
+    });
+    assert.match(
+      both.text,
+      /^This phase counts the 3 Fuel Generators .* plans none of your 8 Coal/,
+    );
+    assert.ok(!ids(facts({ view })).includes('owned-generators'), 'absent means none');
+  }
+});
+
 test('ADA says a change to the items made on site waits for a recalculation (#877)', () => {
   for (const view of ['factories', 'plan', 'logistics']) {
     const line = adaRemarks(facts({ view, onSitePending: true })).find(

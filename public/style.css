@@ -6089,6 +6089,20 @@ th.resource-cell {
   max-width: 420px;
   margin: 8px 0 0;
 }
+/* "Generators you already have" (#1068, OwnedGenerators.vue): a count per kind, as many side by
+   side as fit, under the budgets on step 4 and on the guided start's "What you already have". */
+.owned-generators {
+  margin: 18px 0 12px;
+  max-width: 760px;
+}
+.owned-generators p {
+  margin: 0 0 4px;
+}
+.owned-generator-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 0 15px;
+}
 .phase-budgets caption {
   caption-side: top;
   text-align: left;

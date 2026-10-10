@@ -19,7 +19,8 @@
 // - Have: whole generators at 100% (each generator line's machines, which burn fuel only for the
 //   power drawn), with Phase 5's augmenter boost; what the augmenters add; the entered spare
 //   existing power. A generator building the phase before ran and this phase still fuels is kept:
-//   the phase runs at least as many of it.
+//   the phase runs at least as many of it. So are the generators the player already has
+//   (settings.ownedGenerators, #1068), from the start phase on, in a building the phase fuels.
 // The planner's power constraint charges every line at its full linear power (never less than
 // its clocked power) and the extraction at the same rate, so a plan that fits needs no more than
 // its whole generators give. Since #1086 a plan's fuel then follows the clocked need, within one
@@ -31,6 +32,8 @@ import type {
   CalcRow,
   GridGenerator,
   ItemRates,
+  OwnedGeneratorMachine,
+  OwnedGenerators,
   StageGrid,
   StoredSettings,
   StoredStage,
@@ -167,20 +170,46 @@ function withSupply(grid: StageGrid, boost: number): StageGrid {
 // building) keeps every one of them, so the phase runs at least as many and counts their
 // capacity. A building the phase no longer fuels is retired as before. Only feasible phases with
 // a grid take part. Changes the stages in place.
+// The generators the player already has (`owned`, settings.ownedGenerators, #1068) count the same
+// way from the start phase on: a phase with a generator line in that building runs at least that
+// many and counts their capacity (`owned` on its entry). They burn the fuel the phase's own lines
+// plan, only for the power drawn, so the fuel stays in the budgets, as a kept generator's does.
+// Without any, every phase is carried exactly as before.
 type CarryStage = { feasible: boolean; grid?: StageGrid; boost?: number };
-export function carryGenerators(stages: Record<number, CarryStage | undefined>, start: number) {
-  for (let phase = start + 1; phase <= 5; phase++) {
-    const before = stages[phase - 1],
+export function carryGenerators(
+  stages: Record<number, CarryStage | undefined>,
+  start: number,
+  owned: OwnedGenerators = {},
+) {
+  const has = (machine: string) => owned[machine as OwnedGeneratorMachine] ?? 0;
+  for (let phase = start; phase <= 5; phase++) {
+    const before = phase > start ? stages[phase - 1] : undefined,
+      beforeGrid = before?.feasible ? before.grid : undefined,
       stage = stages[phase];
-    if (!before?.feasible || !before.grid || !stage?.feasible || !stage.grid) continue;
-    const earlier = new Map(before.grid.generators.map(entry => [entry.machine, entry.machines]));
+    if (!stage?.feasible || !stage.grid) continue;
+    if (!beforeGrid && !stage.grid.generators.some(entry => has(entry.machine) > 0)) continue;
+    const earlier = new Map(
+      (beforeGrid?.generators || []).map(entry => [entry.machine, entry.machines]),
+    );
     const generators = stage.grid.generators.map(entry => {
-      const kept = earlier.get(entry.machine) ?? 0;
-      return { ...entry, kept, machines: Math.max(entry.own, kept) };
+      const kept = earlier.get(entry.machine) ?? 0,
+        already = has(entry.machine);
+      return {
+        ...entry,
+        kept,
+        ...(already > 0 ? { owned: already } : {}),
+        machines: Math.max(entry.own, kept, already),
+      };
     });
     stage.grid = withSupply({ ...stage.grid, generators }, stage.boost ?? 0);
   }
 }
+
+// The generators of a phase's grid the player already has beyond those the phase before built
+// and the phase keeps (#1068): at the start phase every one counted, later only where the phase
+// before did not run that building. Their entries; none for a plan without owned generators.
+export const ownedBeyondKept = (grid: Pick<StageGrid, 'generators'> | undefined): GridGenerator[] =>
+  (grid?.generators || []).filter(entry => (entry.owned ?? 0) > entry.kept);
 
 // --- Reading a stage's power ---
 
@@ -316,17 +345,22 @@ function modelledView(stage: StoredStage, grid: StageGrid, settings: ViewSetting
 }
 
 // "12 Fuel Generators and 3 Coal Generators, whole, at 100% · 5 Fuel Generators kept from the
-// phase before"; "No generators" when the phase builds none.
+// phase before"; "… · 8 Coal Generators you already have" (#1068); "No generators" when the
+// phase builds none.
 function generatorCaption(grid: StageGrid): string {
   if (!grid.generators.length) return 'No generators';
   const named = (count: number, machine: string) =>
     `${figure(count)} ${machine}${count === 1 ? '' : 's'}`;
-  const kept = grid.generators.filter(entry => entry.kept > 0);
+  const kept = grid.generators.filter(entry => entry.kept > 0),
+    owned = ownedBeyondKept(grid);
   return (
     listNames(grid.generators.map(entry => named(entry.machines, entry.machine))) +
     ', whole, at 100%' +
     (kept.length
       ? ` · ${listNames(kept.map(entry => named(entry.kept, entry.machine)))} kept from the phase before`
+      : '') +
+    (owned.length
+      ? ` · ${listNames(owned.map(entry => named(entry.owned ?? 0, entry.machine)))} you already have`
       : '')
   );
 }

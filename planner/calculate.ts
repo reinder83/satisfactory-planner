@@ -88,8 +88,9 @@ function calculatePlan(input: unknown, onPhase?: (phase: number) => void): Curre
   // with no surplus gets storage-only lines at exact clocks, built last (#1061, withStock).
   for (const [phase, stage] of Object.entries(stages))
     if (stage.feasible) stages[Number(phase)] = withStock(config, Number(phase), stage as Solved);
-  // Each phase keeps the generators the phase before built, where it still fuels them (#1064).
-  carryGenerators(stages, Number(config.phase));
+  // Each phase keeps the generators the phase before built, where it still fuels them (#1064),
+  // and counts those the player already has (#1068) the same way.
+  carryGenerators(stages, Number(config.phase), config.ownedGenerators);
   warnings.push(...planWarnings(config, stages));
   return {
     engine: ENGINE,

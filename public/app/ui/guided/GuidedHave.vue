@@ -11,6 +11,8 @@
     only the marks better than the start phase's own. They count only with per-phase mining
     (settings.phaseMining, on for every new plan), as on step 4; without it the screen says where
     to turn it on rather than turning it on.
+  - The generators you already have (OwnedGenerators.vue, All settings step 4's counts), the
+    kinds the start phase has unlocked.
   - The alternates you already own (OwnedAlternates.vue, All settings step 2's picker).
 
   readHave in wizard/guided.ts reads it with the rest of the form, as those screens read theirs.
@@ -22,6 +24,7 @@ import { legacy } from '../bridge.ts';
 import { earlierPhasesWords } from '../../../progression.ts';
 import OwnedAlternates from '../wizard/OwnedAlternates.vue';
 import OwnedEquipment from '../wizard/OwnedEquipment.vue';
+import OwnedGenerators from '../wizard/OwnedGenerators.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -67,6 +70,7 @@ const belt = ref<number | undefined>(draft().settings.ownedBelt);
       Miners and belts you already have count only when each phase's budgets follow its miners and
       belts: All settings, step 4.
     </p>
+    <OwnedGenerators :phase="view.phase" />
     <OwnedAlternates />
   </div>
 </template>

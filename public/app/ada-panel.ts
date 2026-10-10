@@ -10,7 +10,7 @@ import {
 } from '../ada.ts';
 import { browserMode } from '../browser-api.ts';
 import { noteConflicts } from './api.ts';
-import { powerView } from '../power.ts';
+import { ownedBeyondKept, powerView } from '../power.ts';
 import { deliveryKey } from '../progression.ts';
 import { durationOfHours, num, plural } from './format.ts';
 import {
@@ -52,7 +52,7 @@ import { power } from './wizard/fields.ts';
 import { guidedFlow } from './wizard/guided.ts';
 import { listNames } from '../wording.ts';
 import { minerWords, stageMiningAdvice } from '../mining.ts';
-import { phaseBelt } from '../preferences.ts';
+import { OWNED_GENERATORS, phaseBelt } from '../preferences.ts';
 import type { OnSiteSettings, StageDelivery, StoredStage } from '../types/index.ts';
 
 // localStorage key for the mute switch ('muted' or 'on').
@@ -208,6 +208,42 @@ function keptFacts(storedStage: StoredStage): Pick<AdaFacts, 'keptGenerators' | 
   };
 }
 
+// The generators the player already has (#1068, settings.ownedGenerators) that the open phase
+// counts beyond the kept ones (ownedBeyondKept), as "4 Coal Generators", and those of a building
+// unlocked by this phase that it runs none of, which it does not count; none for a plan without
+// a grid, or before the start phase. Biomass Burners stay out of both: the burner bank counts them.
+function ownedGeneratorFacts(
+  storedStage: StoredStage,
+): Pick<AdaFacts, 'ownedGenerators' | 'idleGenerators'> {
+  const owned = calculated?.settings.ownedGenerators,
+    phaseNumber = Number(stage());
+  if (!owned || !storedStage.grid || phaseNumber < Number(calculated?.settings.phase || 1))
+    return {};
+  const named = (count: number, machine: string) =>
+    `${num(count)} ${machine}${count === 1 ? '' : 's'}`;
+  const counted = ownedBeyondKept(storedStage.grid),
+    running = storedStage.grid.generators.map(entry => entry.machine);
+  const idle = OWNED_GENERATORS.filter(
+    kind =>
+      kind.machine !== 'Biomass Burner' &&
+      kind.phase <= phaseNumber &&
+      (owned[kind.machine] ?? 0) > 0 &&
+      !running.includes(kind.machine),
+  );
+  return {
+    ...(counted.length
+      ? { ownedGenerators: listNames(counted.map(entry => named(entry.owned ?? 0, entry.machine))) }
+      : {}),
+    ...(idle.length
+      ? {
+          idleGenerators: listNames(
+            idle.map(kind => named(owned[kind.machine] ?? 0, kind.machine)),
+          ),
+        }
+      : {}),
+  };
+}
+
 // Whether the plan waits for a recalculation of the lines its groups make on site (onSiteChange,
 // #877), and whether that is only because a group's lines no longer use, or now use, an item it
 // marks, with no change to the marks (#985), so ADA words it as the notice does.
@@ -325,6 +361,7 @@ function adaFacts(): AdaFacts {
       .length,
     requiredOnly,
     ...keptFacts(storedStage),
+    ...ownedGeneratorFacts(storedStage),
     factories: { done: rows.filter(r => checked(runningKey(r))).length, total: rows.length },
     storage: {
       done: slots.filter(i => checked('slot-' + i.id + '-verified')).length,

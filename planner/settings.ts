@@ -7,6 +7,7 @@ import {
   storageOptions,
   distributions,
   purities,
+  ownedGeneratorCounts,
   powerOptions,
   resourceDefaults,
   turbofuelRecipes,
@@ -327,6 +328,13 @@ const ownedAlternatesSetting = (value: unknown): { ownedAlternates?: string[] } 
   const ids = [...new Set(value.filter((id): id is string => ALT_IDS.has(id)))].sort();
   return ids.length ? { ownedAlternates: ids } : {};
 };
+// The generators the player already has (#1068): `{ ownedGenerators: { building: count } }` with
+// only the known kinds (OWNED_GENERATORS in public/preferences/fuels.ts) and whole counts from 1,
+// or nothing, so the field is absent unless one is entered.
+const ownedGeneratorsSetting = (value: unknown): Pick<CurrentSettings, 'ownedGenerators'> => {
+  const counts = ownedGeneratorCounts(value);
+  return counts ? { ownedGenerators: counts } : {};
+};
 
 // Validates and normalises a profile's settings. Every field has a default, so `settings({})` is a
 // complete profile, and a field older profiles never stored must default to the value that makes
@@ -396,6 +404,9 @@ export function settings(input: unknown = {}): CurrentSettings {
     // The alternates the player already owns (#1068): only known alternate ids are kept, so
     // settings without them, and every plan stored before them, plan the same recipe pool.
     ...ownedAlternatesSetting(input.ownedAlternates),
+    // The generators the player already has (#1068): only known kinds with whole counts are kept,
+    // so settings without them, and every plan stored before them, size the same generators.
+    ...ownedGeneratorsSetting(input.ownedGenerators),
     extraction: extractionRecord(input.extraction),
     cellsPerMinute: number(input.cellsPerMinute, 0, 1000, 0),
     installedPowerGW: number(

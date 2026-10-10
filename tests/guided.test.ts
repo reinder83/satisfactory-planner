@@ -85,6 +85,8 @@ import {
   phaseForTier,
   phaseMiner,
   phaseMining,
+  OWNED_GENERATORS,
+  ownedGeneratorCounts,
 } from '../public/preferences.ts';
 
 const source = appSource();
@@ -195,6 +197,9 @@ function ui() {
     phaseForTier,
     phaseMiner,
     phaseMining,
+    // The generators the player already has (#1068): ADA and the wizard reader.
+    OWNED_GENERATORS,
+    ownedGeneratorCounts,
   });
   vm.runInContext(source, context);
   context.catalogData = catalog();

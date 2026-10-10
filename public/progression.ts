@@ -8,8 +8,8 @@ import type {
   StoredStage,
 } from './types/index.ts';
 import { listNames, powerAmount, slug } from './wording.ts';
-import { powerView } from './power.ts';
-import { miningLinearMW, phaseForTier } from './preferences.ts';
+import { ownedBeyondKept, powerView } from './power.ts';
+import { miningLinearMW, OWNED_GENERATORS, phaseForTier } from './preferences.ts';
 import { miningBuildings, miningStepBody } from './mining.ts';
 
 // A generated guidance step: its checklist key, title and text. `optional` marks a step the phase
@@ -833,16 +833,71 @@ function unlockedPower({ byName, unlocked }: GuideContext): UnlockedPower {
 // figure from Phase 2 on, where the plan's power is balanced against it: what the phase needs
 // beyond it and the generation the plan builds for it, or that it covers the phase (#1048).
 // Without, and in Phase 1's biomass start, it follows the ticked power unlocks, as it always has.
+// The generators the player already has (settings.ownedGenerators, #1068) are named in both: how
+// many of the phase's generators they are and how many are left to build, and those of a building
+// the phase does not fuel, which it does not count (ownedPowerText).
 function powerReviewTask(context: GuideContext, unlocked: UnlockedPower): GuideTask {
   const figures = phasePower(context);
   return {
     id: 'startup-' + context.stage + '-power-review',
     title: 'Power available now',
     body:
-      figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
+      (figures.existingMW + figures.augmenterMW > 0 && context.stage >= 2
         ? existingPowerText(context, figures, unlocked)
-        : unlockText(context, figures, unlocked),
+        : unlockText(context, figures, unlocked) + ownedCountText(figures)) +
+      unfueledOwnedText(context, figures),
   };
+}
+
+// The generators the player already has that this phase counts (#1068), where "Power available
+// now" gives no generator counts of its own (without spare power): " You already have 4 of the 6
+// Coal Generators this phase's lines need, so build 2 more." or "… 8 Coal Generators, enough for
+// the 6 this phase's lines need, so build none." Empty without any.
+function ownedCountText({ owned }: PhasePowerFigures): string {
+  if (!owned.length) return '';
+  const parts = owned.map(entry => {
+    const have = entry.owned ?? 0,
+      plural = (count: number) => entry.machine + (count === 1 ? '' : 's');
+    return have < entry.own
+      ? `${formatNumber(have)} of the ${formatNumber(entry.own)} ${plural(entry.own)} this phase's lines need, so build ${formatNumber(entry.machines - Math.max(have, entry.kept))} more`
+      : `${formatNumber(have)} ${plural(have)}, enough for the ${formatNumber(entry.own)} this phase's lines need, so build none`;
+  });
+  return ` You already have ${listNames(parts)}.`;
+}
+
+// The generators the player already has in a building this phase plans no generator line in
+// (#1068), which it therefore does not count: their fuel is not in its budgets. Biomass Burners
+// are left out (they are hand-fed, outside the plan; the burner bank counts them), and so is a
+// building the phase cannot have unlocked yet. " This phase builds no Coal Generators, so the 8
+// you already have are not counted: to keep them running, leave their fuel out of the budgets and
+// enter their 600 MW as Spare existing power in Edit settings." Empty otherwise.
+function unfueledOwnedText(
+  { plan, stage }: GuideContext,
+  { modelled, running }: PhasePowerFigures,
+) {
+  const owned = plan.settings.ownedGenerators;
+  if (!owned || !modelled) return '';
+  const idle = OWNED_GENERATORS.filter(
+    kind =>
+      kind.machine !== 'Biomass Burner' &&
+      kind.phase <= stage &&
+      (owned[kind.machine] ?? 0) > 0 &&
+      !running.includes(kind.machine),
+  );
+  if (!idle.length) return '';
+  const count = (kind: (typeof idle)[number]) => owned[kind.machine] ?? 0;
+  const mw = idle.reduce((sum, kind) => sum + count(kind) * kind.mw, 0);
+  // One building names only its count ("the 8"), several name each ("the 8 Coal Generators and
+  // 1 Nuclear Power Plant"); a single generator is "it".
+  const named = (kind: (typeof idle)[number]) =>
+    idle.length === 1
+      ? count(kind) === 1
+        ? 'one'
+        : formatNumber(count(kind))
+      : `${formatNumber(count(kind))} ${kind.machine}${count(kind) === 1 ? '' : 's'}`;
+  const one = idle.length === 1 && count(idle[0]!) === 1;
+  const [are, them, their] = one ? ['is', 'it', 'its'] : ['are', 'them', 'their'];
+  return ` This phase builds no ${listNames(idle.map(kind => kind.machine + 's'))}, so the ${listNames(idle.map(named))} you already have ${are} not counted: to keep ${them} running, leave ${their} fuel out of the budgets and enter ${their} ${powerAmount(mw)} as Spare existing power in Edit settings.`;
 }
 
 // A phase's power as every page gives it (powerView in public/power.ts, #1064), in MW: what it
@@ -860,6 +915,10 @@ interface PhasePowerFigures {
   // allowance for trains, drones and pumps, with their words (powerView's need, power.ts).
   need: ReturnType<typeof powerView>['need'];
   kept: GridGenerator[];
+  // The generators the player already has (#1068) beyond the kept ones, per building
+  // (ownedBeyondKept in power.ts), and every building the phase runs generators in.
+  owned: GridGenerator[];
+  running: string[];
   // The phase before this one, which built the kept generators, and Phase 5's augmenter boost.
   previous: number;
   boost: number;
@@ -887,6 +946,8 @@ function phasePower({ plan, stage, stageOf, rows }: GuideContext): PhasePowerFig
     modelled: view.modelled,
     need: view.need,
     kept: view.generators.filter(entry => entry.kept > 0),
+    owned: ownedBeyondKept(view),
+    running: view.generators.map(entry => entry.machine),
     previous: stage - 1,
     boost: planned.boost || 0,
     plannedMW: plannedFor(planned, plan.settings),
@@ -1023,14 +1084,25 @@ function newGeneration(
 
 // The generators the phase before built that this phase keeps (#1064), after its generator lines:
 // " (7 of these Fuel Generators were built in Phase 3)", or where it keeps more than its lines
-// need, " (keep all 8 Fuel Generators built in Phase 3)". Empty without any.
-function keptText({ kept, previous }: PhasePowerFigures): string {
+// need, " (keep all 8 Fuel Generators built in Phase 3)". Then those the player already has
+// (#1068): " (you already have 4 of these Coal Generators)", or where they are more than the lines
+// need, " (keep all 8 Coal Generators you already have)". Empty without any.
+function keptText({ kept, owned, previous }: PhasePowerFigures): string {
   const parts = kept.map(entry => {
     const plural = entry.machine + (entry.kept === 1 ? '' : 's');
-    return entry.machines > entry.own
+    return entry.machines > entry.own && entry.kept >= (entry.owned ?? 0)
       ? `keep all ${formatNumber(entry.kept)} ${plural} built in Phase ${previous}`
       : `${formatNumber(entry.kept)} of these ${entry.machine}s ${entry.kept === 1 ? 'was' : 'were'} built in Phase ${previous}`;
   });
+  for (const entry of owned) {
+    const have = entry.owned ?? 0,
+      plural = entry.machine + (have === 1 ? '' : 's');
+    parts.push(
+      entry.machines > entry.own
+        ? `keep all ${formatNumber(have)} ${plural} you already have`
+        : `you already have ${formatNumber(have)} of these ${entry.machine}s`,
+    );
+  }
   return parts.length ? ` (${listNames(parts)})` : '';
 }
 
@@ -1079,10 +1151,16 @@ function spareCause(
 // plan before it, whose fuel follows the linear balance, keeps the reason it was given. Otherwise
 // no reason is given.
 function gridCause(figures: PhasePowerFigures, leftMW: number): string {
-  const { generators, kept, previous } = figures;
-  const extra = kept.filter(entry => entry.machines > entry.own);
+  const { generators, kept, owned, previous } = figures;
+  const extra = kept.filter(
+    entry => entry.machines > entry.own && entry.kept >= (entry.owned ?? 0),
+  );
   if (extra.length)
     return ` from keeping the ${listNames(extra.map(entry => `${formatNumber(entry.kept)} ${entry.machine}${entry.kept === 1 ? '' : 's'}`))} built in Phase ${previous}`;
+  // The generators the player already has, where they are more than the lines need (#1068).
+  const extraOwned = owned.filter(entry => entry.machines > entry.own);
+  if (extraOwned.length)
+    return ` from keeping the ${listNames(extraOwned.map(entry => `${formatNumber(entry.owned)} ${entry.machine}${entry.owned === 1 ? '' : 's'}`))} you already have`;
   if (!(leftMW > 0.01)) return '';
   const fuelMW = generators.reduce((sum, row) => sum + row.generationMW * (1 + figures.boost), 0);
   const unitMW = Math.max(0, ...generators.map(row => -row.power * (1 + figures.boost)));
@@ -1193,9 +1271,19 @@ function biomassStartupTasks(
     {
       id: 'startup-burner-bank-' + stage,
       title: 'Size and feed the biomass burner bank',
-      body: `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${formatNumber(burners)} standalone burners for ${formatNumber(need)} MW of planned additional load plus three fuel-processing Constructors. At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${formatNumber(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load. This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.`,
+      body: `Standalone Biomass Burners provide 30 MW each; HUB burners provide 20 MW each. Ignoring any HUB capacity not entered as spare power, allow about ${formatNumber(burners)} standalone burners for ${formatNumber(need)} MW of planned additional load plus three fuel-processing Constructors.${ownedBurnersText(plan.settings.ownedGenerators?.['Biomass Burner'] ?? 0, burners)} At full load each standalone burner consumes 4 Solid Biofuel/min; this bank needs up to ${formatNumber(burners * 4)}/min. One 60/min Solid Biofuel Constructor can fuel 15 such burners; a Mk.1-fed 30/min line supports 7.5 burners at full load. This is a startup estimate, not part of the continuous resource model: add processing capacity/power if needed, keep a reserve, and build gradually until coal is unlocked.`,
     },
   ];
+}
+
+// The Biomass Burners the player already has (settings.ownedGenerators, #1068) against the bank's
+// `burners`: " You already have 4 of them: build 6 more." or " The 12 you already have cover
+// it." Empty without any.
+function ownedBurnersText(owned: number, burners: number): string {
+  if (!(owned > 0)) return '';
+  return owned < burners
+    ? ` You already have ${formatNumber(owned)} of them: build ${formatNumber(burners - owned)} more.`
+    : ` The ${formatNumber(owned)} you already have cover it.`;
 }
 
 // Moving to the generators the plan builds: coal, fuel, the preferred main power, aluminum
