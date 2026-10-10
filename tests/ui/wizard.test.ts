@@ -781,11 +781,15 @@ test('Cancel drops the draft and shows the profiles', async () => {
 test('every guided screen offers All settings at the step that owns its question', () => {
   guidedAt(1);
   const flow = guidedFlow();
-  assert.ok(flow.length >= 5 && flow.length <= 7, 'a handful of questions, not a form');
+  // Eight for a later start phase: "What you already have" (#1068) joins the seven.
+  assert.ok(flow.length >= 5 && flow.length <= 8, 'a handful of questions, not a form');
   for (let step = 1; step <= flow.length; step++) {
     guidedAt(step);
     assert.ok($('#wizard-form.guided-panel'), 'step ' + step);
-    assert.ok($('.guided-card') || $('.supply-list'), 'cards, or the rows for the rate question');
+    assert.ok(
+      $('.guided-card') || $('.supply-list') || $('[data-guided-have]'),
+      'cards, the rows for the rate question, or what you already have',
+    );
     assert.match($('[data-guided-advanced]')!.dataset.guidedAdvanced!, /^[1-4]$/);
     assert.equal($('[data-guided-advanced]')!.dataset.guidedAdvanced, String(flow[step - 1]!.step));
     // The questions, then Review as the flow's last step (#1072).

@@ -6,18 +6,19 @@
   is read with the form like every other field; its table follows the box as it is ticked. With
   it ticked, "Miners you already have" (#1068, ownedMiner, data-owned-miner) raises every phase's
   miner to the mark chosen, and "Belts you already have" (#1068, ownedBelt, data-owned-belt) every
-  phase's belt; the table follows both choices too.
+  phase's belt (both in OwnedEquipment.vue, which the guided start shares); the table follows both
+  choices too.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { BELT_MARKS, resourceDefaults } from '../../../preferences.ts';
-import { num } from '../../format.ts';
+import { resourceDefaults } from '../../../preferences.ts';
 import { budgetShareWords, phaseBudgetRows } from '../../../mining.ts';
 import { draft, workspace } from '../../session.ts';
 import { openExtraction } from '../../wizard/extraction.ts';
 import { legacy } from '../bridge.ts';
 import InputField from '../form/InputField.vue';
 import StepHeading from '../form/StepHeading.vue';
+import OwnedEquipment from './OwnedEquipment.vue';
 
 const view = computed(() =>
   legacy(() => {
@@ -42,29 +43,10 @@ const view = computed(() =>
 );
 // Whether the phaseMining box is ticked on screen, for the table under it.
 const perPhase = ref(!!draft().settings.phaseMining);
-// The miner chosen on screen under it (#1068), for the same table: 2, 3 or undefined.
+// The miner and belt chosen on screen under it (#1068), for the same table: a miner 2 or 3, a belt
+// 3 to 6, or undefined.
 const ownedMiner = ref<number | undefined>(draft().settings.ownedMiner);
-function chooseMiner(event: Event) {
-  ownedMiner.value = Number((event.target as HTMLSelectElement).value) || undefined;
-}
-// "Follow the phases", then each mark the phases would otherwise reach only later.
-const MINER_CHOICES = [
-  ['', 'None beyond what each phase unlocks'],
-  ['2', 'Miner Mk.2'],
-  ['3', 'Miner Mk.3'],
-] as const;
-// The belt chosen on screen beside it (#1068), for the same table: 3 to 6, or undefined.
 const ownedBelt = ref<number | undefined>(draft().settings.ownedBelt);
-function chooseBelt(event: Event) {
-  ownedBelt.value = Number((event.target as HTMLSelectElement).value) || undefined;
-}
-// "Follow the phases", then each belt Phase 1 does not already have, with what one carries.
-const BELT_CHOICES = [
-  ['', 'None beyond what each phase unlocks'],
-  ...BELT_MARKS.filter(belt => belt.tier > 2).map(
-    belt => [belt.mark.slice(3), `${belt.mark} belts (${num(belt.cap)}/min)`] as const,
-  ),
-] as const;
 </script>
 
 <template>
@@ -115,32 +97,7 @@ const BELT_CHOICES = [
       @change="perPhase = ($event.target as HTMLInputElement).checked"
     />Each phase's budgets follow the miners and belts it can build</label
   >
-  <label v-if="perPhase" class="field owned-miner"
-    >Miners you already have
-    <select
-      name="ownedMiner"
-      data-owned-miner
-      :value="ownedMiner ? String(ownedMiner) : ''"
-      @change="chooseMiner"
-    >
-      <option v-for="[value, label] in MINER_CHOICES" :key="value" :value="value">
-        {{ label }}
-      </option>
-    </select></label
-  >
-  <label v-if="perPhase" class="field owned-belt"
-    >Belts you already have
-    <select
-      name="ownedBelt"
-      data-owned-belt
-      :value="ownedBelt ? String(ownedBelt) : ''"
-      @change="chooseBelt"
-    >
-      <option v-for="[value, label] in BELT_CHOICES" :key="value" :value="value">
-        {{ label }}
-      </option>
-    </select></label
-  >
+  <OwnedEquipment v-if="perPhase" v-model:miner="ownedMiner" v-model:belt="ownedBelt" />
   <div v-if="perPhase" class="table-wrap phase-budgets" data-phase-budgets>
     <table>
       <caption class="small muted">

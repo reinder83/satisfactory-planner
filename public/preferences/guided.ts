@@ -342,6 +342,19 @@ export const guidedStandingQuestion = (phase: string): GuidedQuestion =>
         title: 'What are you already producing?',
         lead: 'If a line already runs in your world, say what it makes and how fast. The plan builds only the remainder, and it does not build the chain behind what you already make. Leave this empty if you are starting from scratch here.',
       };
+// "What you already have" (#1068), asked right after the phase of a new save starting after
+// Phase 1 (guidedFlow). Not a choice of cards: the screen (ui/guided/GuidedHave.vue) has Review's
+// "Everything before Phase N is done", All settings step 4's miner and belt you already have and
+// step 2's alternates you already own, all optional and off. It writes the same draft and settings
+// fields those do, so nothing new is stored.
+export const guidedHaveQuestion = (phase: string): GuidedQuestion => ({
+  id: 'have',
+  step: 2,
+  short: 'What you have',
+  kind: 'have',
+  title: 'What do you already have?',
+  lead: `Tell the plan what is already behind you, so Phase ${phase} does not send you to unlock it again. Everything here is optional: skip it and the plan lists every earlier unlock for you to tick, and plans with the miners and belts Phase ${phase} unlocks.`,
+});
 // Ticked when someone says the HUB tutorial is behind them. Both keys already
 // exist: the Phase 1 build step, and HUB Upgrade 6 in the unlock data.
 // Used by guidedBuiltKeys in app/wizard/guided.ts.

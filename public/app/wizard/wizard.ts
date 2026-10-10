@@ -414,7 +414,12 @@ export function readAlternates(form: HTMLFormElement, data: FormData, settings: 
 // "Alternates you already own" on All settings step 2 (#1068, ui/wizard/OwnedAlternates.vue),
 // when it is on screen: its ticked boxes (name="ownedAlt") become settings.ownedAlternates, and
 // none removes the field, so a plan without owned alternates keeps the settings it always had.
-function readOwnedAlternates(form: HTMLFormElement, data: FormData, settings: WizardSettings) {
+// The guided start's "What you already have" (#1068) shows the same picker and reads it here too.
+export function readOwnedAlternates(
+  form: HTMLFormElement,
+  data: FormData,
+  settings: WizardSettings,
+) {
   if (!form.querySelector('.owned-alt-list')) return;
   const owned = data.getAll('ownedAlt').map(String);
   if (owned.length) settings.ownedAlternates = owned;
@@ -443,12 +448,24 @@ function readStepChecks(data: FormData, wizardDraft: WizardDraft) {
   if (wizardDraft.step === 4) {
     settings.limitsConfirmed = data.has('limitsConfirmed');
     settings.phaseMining = data.has('phaseMining');
-    // "Miners you already have" (#1068), drawn only with the box ticked: absent means none.
-    const owned = data.has('ownedMiner') ? Number(data.get('ownedMiner')) : 0;
+    readOwnedEquipment(data, settings);
+  }
+}
+
+// "Miners you already have" and "Belts you already have" (#1068, ui/wizard/OwnedEquipment.vue):
+// Miner Mk.2 or Mk.3, belts Mk.3 to Mk.6, kept only with phaseMining on, since only per-phase
+// mining reads them; "None" removes the field. Step 4 draws both selects only with the box ticked,
+// so a select not on screen means none there. The guided start draws only the marks better than
+// its start phase's own (`keepHidden`): a select it leaves out keeps the field as it is.
+export function readOwnedEquipment(data: FormData, settings: WizardSettings, keepHidden = false) {
+  const chosen = (name: string) => (data.has(name) ? Number(data.get(name)) : 0);
+  if (!keepHidden || data.has('ownedMiner') || !settings.phaseMining) {
+    const owned = chosen('ownedMiner');
     if (settings.phaseMining && (owned === 2 || owned === 3)) settings.ownedMiner = owned;
     else delete settings.ownedMiner;
-    // "Belts you already have" (#1068), likewise: Mk.3 to Mk.6, absent means none.
-    const belt = data.has('ownedBelt') ? Number(data.get('ownedBelt')) : 0;
+  }
+  if (!keepHidden || data.has('ownedBelt') || !settings.phaseMining) {
+    const belt = chosen('ownedBelt');
     if (settings.phaseMining && (belt === 3 || belt === 4 || belt === 5 || belt === 6))
       settings.ownedBelt = belt;
     else delete settings.ownedBelt;

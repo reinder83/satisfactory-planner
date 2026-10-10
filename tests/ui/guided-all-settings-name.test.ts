@@ -31,7 +31,7 @@ function laterQuestion(saveName: string, saveId: string | null = null) {
     carryFrom: null,
     carry: Object.fromEntries(carryOptions.map(([k]) => [k, true])),
     mode: 'guided',
-    guidedStep: saveId ? 1 : 3,
+    guidedStep: saveId ? 1 : 4, // the goal question, after phase, "What you have" and supply
     guidedAsk: saveId ? ['goal', 'recipes'] : null,
     tutorial: 'doing',
   });
@@ -65,7 +65,7 @@ test('All settings with an empty Save name stays on the question with the messag
 
   await pressAllSettings();
   assert.equal(wizard!.mode, 'guided', 'the hand-over is refused');
-  assert.equal(wizard!.guidedStep, 3);
+  assert.equal(wizard!.guidedStep, 4);
   assert.equal(box().getAttribute('aria-invalid'), 'true');
   assert.equal(box().getAttribute('aria-describedby'), 'guided-name-error');
   assert.equal(message().textContent!.trim(), 'Give the save a name to continue.');

@@ -49,6 +49,7 @@ import {
   wantsStorage,
   storageRateFor,
   guidedQuestions,
+  guidedHaveQuestion,
   guidedStandingQuestion,
   guidedTopupItems,
   GUIDED_TOPUP_RATE,
@@ -158,6 +159,7 @@ function ui() {
     wantsStorage,
     storageRateFor,
     guidedQuestions,
+    guidedHaveQuestion,
     guidedStandingQuestion,
     guidedTopupItems,
     GUIDED_TOPUP_RATE,
@@ -282,7 +284,7 @@ test('switching to All settings keeps every guided answer and can switch back', 
   assert.equal(vm.runInContext('wizard.settings.goal', context), 'minimal');
 });
 
-test('the tutorial question is asked at Phase 1 and the already-running one after it', () => {
+test('the tutorial question is asked at Phase 1, and "What you already have" and the already-running one after it', () => {
   const context = ui();
   guided(context);
   vm.runInContext(`wizard.settings.phase='1'`, context);
@@ -293,7 +295,7 @@ test('the tutorial question is asked at Phase 1 and the already-running one afte
   vm.runInContext(`wizard.settings.phase='3'`, context);
   assert.equal(
     vm.runInContext(`guidedFlow().map(q=>q.id).join(',')`, context),
-    'phase,supply,goal,recipes,stock,exact,power',
+    'phase,have,supply,goal,recipes,stock,exact,power',
   );
   // A save that already has profiles uses the Review step's carry panel instead.
   vm.runInContext(`wizard.saveId='s1'`, context);
@@ -476,6 +478,7 @@ test('every guided question reads as a question and names the step that owns it'
     ...guidedQuestions,
     guidedStandingQuestion('1'),
     guidedStandingQuestion('3'),
+    guidedHaveQuestion('3'),
   ]) {
     assert.ok(question.title && question.lead, question.id + ' reads as a question');
     assert.ok(
@@ -486,8 +489,8 @@ test('every guided question reads as a question and names the step that owns it'
       question.step >= 1 && question.step <= 4,
       question.id + ' names the advanced step that owns it',
     );
-    // One question is an input rather than a choice; the rest are picture cards.
-    if (question.kind === 'supply') {
+    // Two questions are inputs rather than a choice; the rest are picture cards.
+    if (question.kind === 'supply' || question.kind === 'have') {
       assert.ok(!question.options, question.id);
       continue;
     }
