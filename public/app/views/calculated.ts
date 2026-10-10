@@ -28,6 +28,7 @@ import {
   stage,
   state,
   ticksNoticeDismissed,
+  workingPhaseNotShown,
   workspace,
 } from '../session.ts';
 import {
@@ -450,9 +451,9 @@ export function carriedCard(row: CalcRow): { from: string; text: string } | null
 // holds something the user has not dismissed in this browser (ticksNoticeDismissed). Null
 // otherwise. It reads the ticks and changes nothing.
 export function ownedTicksNotice(): OwnedFound | null {
-  if (!calculated || milestoneOnly()) return null;
+  // The phase picker says "Showing" for any other phase (#992); this is about the working one.
+  if (!calculated || milestoneOnly() || workingPhaseNotShown()) return null;
   const working = ticksPhase(calculated, state.settings.phase);
-  if (Number(stage()) !== working) return null;
   const found = ownedFromTicks(calculated, state.checks, working, workspace.catalog?.alternates);
   return found && foundSince(found, dismissedFound(ticksNoticeDismissed())) ? found : null;
 }
