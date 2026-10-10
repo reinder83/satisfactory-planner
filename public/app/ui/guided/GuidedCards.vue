@@ -47,7 +47,6 @@ const glyph = (name?: string) => GUIDED_GLYPHS[name || ''] || GUIDED_GLYPHS.bala
       ></span>
       <strong>{{ option.label }}</strong>
       <p>{{ option.detail }}</p>
-      <span v-if="option.handoff" class="badge">Opens All settings</span>
     </label>
   </div>
 </template>

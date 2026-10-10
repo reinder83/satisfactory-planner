@@ -388,11 +388,25 @@ function readField(wizardDraft: WizardDraft, name: string, value: FormDataEntryV
   else if (name === 'installedPowerMW') settings.installedPowerGW = Number(value) / 1000;
   else if (name === 'saveName') wizardDraft.saveName = String(value);
   else if (name === 'profileName') wizardDraft.name = String(value);
-  else if (name.startsWith('limit:')) settings.limits[name.slice(6)] = Number(value);
+  else if (name.startsWith('limit:')) readLimit(settings, name, value);
   else if (NUMBER_SETTINGS.has(name)) byName[name] = Number(value);
   else if (name === 'collectables') settings.collectables = value === 'true';
   else if (name === 'pureIngots') settings.pureIngots = value === 'true';
   else if (TEXT_SETTINGS.has(name)) byName[name] = value;
+}
+
+// A budget box ("limit:<resource>", BudgetInputs.vue) into settings.limits, as a rate per minute:
+// All settings step 4's, and the guided start's budget screen's (readBudgets).
+function readLimit(settings: WizardSettings, name: string, value: FormDataEntryValue) {
+  settings.limits[name.slice('limit:'.length)] = Number(value);
+}
+
+// The guided start's budget screen for maximum output (#1072, ui/guided/GuidedBudgets.vue): the
+// budget boxes and the limitsConfirmed box, read as All settings step 4 reads the same fields
+// (readField's limits, readStepChecks' confirmation), so the settings come out the same.
+export function readBudgets(data: FormData, settings: WizardSettings) {
+  for (const [name, value] of data) if (name.startsWith('limit:')) readLimit(settings, name, value);
+  settings.limitsConfirmed = data.has('limitsConfirmed');
 }
 
 // The somersloop ledger's ticked items, when the ledger is on screen.

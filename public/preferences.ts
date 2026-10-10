@@ -44,6 +44,7 @@ export {
 export { helpText } from './preferences/help.ts';
 export {
   GUIDED_TOPUP_RATE,
+  guidedBudgetsQuestion,
   guidedHaveQuestion,
   guidedQuestions,
   guidedStandingQuestion,

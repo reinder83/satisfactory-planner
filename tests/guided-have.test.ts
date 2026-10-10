@@ -7,21 +7,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import fsp from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { createApp } from '../server.ts';
-import { createBrowserApi } from '../public/browser-api.ts';
 import { calculate } from '../planner.ts';
 import { alternateHunts, ownedAlternateKeys, stepsBeforeStart } from '../public/progression.ts';
-import type {
-  BrowserWorkspace,
-  Catalog,
-  ContextReply,
-  Progression,
-} from '../public/types/index.ts';
+import {
+  browserProfile,
+  createdProfile as created,
+  dockerProfile,
+  newSaveRequest as request,
+} from './helpers/editions.ts';
+import type { Progression } from '../public/types/index.ts';
 
 const data: Progression = JSON.parse(
   fs.readFileSync(new URL('../public/progression.json', import.meta.url), 'utf8'),
@@ -47,65 +41,6 @@ function builtFor(settings: typeof GUIDED | typeof ANSWERED, earlierDone: boolea
     ...(owned.size ? ownedAlternateKeys(alternateHunts(plan, data), owned) : []),
   ];
 }
-
-const request = (settings: object, built: string[]) => ({
-  saveId: null,
-  saveName: 'World',
-  name: 'Guided',
-  settings,
-  carryFrom: null,
-  carry: {},
-  built,
-});
-
-// The profile the Docker server creates from `body`, as /api/context returns it.
-async function dockerProfile(body: object): Promise<ContextReply> {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'planner-guided-have-'));
-  const server: Server = await createApp({ dataDir: dir, password: '' });
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const url = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
-  try {
-    const created = await fetch(url + '/api/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Planner-Request': '1' },
-      body: JSON.stringify(body),
-    });
-    assert.ok(created.ok, await created.clone().text());
-    const { saveId, profileId } = (await created.json()) as { saveId: string; profileId: string };
-    const context = await fetch(url + '/api/context', {
-      headers: { 'X-Save-Id': saveId, 'X-Profile-Id': profileId },
-    });
-    assert.ok(context.ok);
-    return (await context.json()) as ContextReply;
-  } finally {
-    await new Promise(resolve => server.close(resolve));
-    await fsp.rm(dir, { recursive: true, force: true });
-  }
-}
-
-// The profile the browser edition creates from `body`.
-async function browserProfile(body: object): Promise<ContextReply> {
-  let stored: BrowserWorkspace = { version: 1, activeSave: null, saves: [], lastBackup: null };
-  const store = {
-    async transaction<T>(change?: (workspace: BrowserWorkspace) => T): Promise<T> {
-      const copy = structuredClone(stored);
-      if (!change) return copy as T;
-      const result = change(copy);
-      stored = copy;
-      return structuredClone(result);
-    },
-  };
-  // The Catalog is not read by these routes.
-  const api = createBrowserApi(store, calculate, {} as Catalog);
-  await api('/api/profiles', { body: JSON.stringify(body) });
-  return (await api('/api/context')) as ContextReply;
-}
-
-// The parts of a new profile both editions must agree on: the plan's settings and the progress.
-const created = (context: ContextReply) => ({
-  settings: context.plan!.settings,
-  checks: context.state.checks,
-});
 
 test('the guided answers create the same profile in both editions', async () => {
   const built = builtFor(ANSWERED, true);
