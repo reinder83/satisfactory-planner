@@ -174,7 +174,9 @@ async function restoreTwice(edition: Edition) {
   assert.equal(profile.name, 'Balanced', 'the profile keeps its name');
   assert.equal(profile.backupOf, undefined);
   assertContent(profile, kept, 'the profile has the kept version');
-  assert.ok(profile.state.revision > Math.max(edited.state.revision, kept.state.revision));
+  // Past either version's revision, so a stale whole-value write from a tab on either is refused.
+  const revision = (entry: StoredProfile) => entry.state.revision ?? 0;
+  assert.ok(revision(profile) > Math.max(revision(edited), revision(kept)));
   let replaced = await find(B);
   assert.equal(replaced.name, 'Balanced (before restore)');
   assert.equal(replaced.backupOf, P, 'the replaced version is kept, linked');
