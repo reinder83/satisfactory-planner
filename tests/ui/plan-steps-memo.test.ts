@@ -1,4 +1,4 @@
-// The build plan's steps are worked out once per redraw (#1060, perRedraw in ui/bridge.ts): the
+// The build plan's steps are worked out once per redraw (#1060, perRedraw in per-redraw.ts): the
 // checklist, its progress bar, ADA and "Removed steps" share one answer, and it is worked out
 // again after a redraw or when the progress state or the plan is replaced (a tick, a change of
 // phase or settings, another profile), always reading exactly as worked out afresh.

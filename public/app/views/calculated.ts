@@ -41,7 +41,7 @@ import {
 } from '../owned-ticks.ts';
 import { power } from '../wizard/fields.ts';
 import { factoryGroupsState, siteGroupName } from './factories.ts';
-import { perRedraw } from '../ui/bridge.ts';
+import { perRedraw } from '../per-redraw.ts';
 import { minerWords } from '../../mining.ts';
 import { ownedBeyondKept } from '../../power.ts';
 import type { CalcRow, CurrentSettings, ItemRates, Phase, StoredStage } from '../../types/index.ts';
@@ -77,7 +77,7 @@ export const rowIcon = (row: CalcRow): string =>
 
 // The session values the build plan's steps are worked out from: a save replaces the progress
 // state and opening a profile the plan, so the steps of a phase are worked out once per redraw
-// for them (perRedraw in ui/bridge.ts, #1060), however many components ask.
+// for them (perRedraw in per-redraw.ts, #1060), however many components ask.
 const stepInputs = () => [calculated, state, progressionData];
 
 // The generated steps of the open calculated profile for phase `shownPhase` (the current phase
