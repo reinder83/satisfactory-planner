@@ -101,7 +101,7 @@ export interface GroupLink {
 // Water (a raw resource, never made on site), or an item the group marked after the
 // recalculation. Without the setting (a plan stored without it has no such lines) the group's
 // marks (factoryGroups.local) stand in, as before.
-const siteItems = (
+export const siteItems = (
   groups: FactoryGroups,
   group: string,
   planned: OnSiteSettings | undefined,

@@ -93,7 +93,9 @@ export interface AdaFacts {
   // app/exact-clocks.ts, #1066), as the plan's side column words it; absent without the record.
   roundingCost?: { buildings: string; power: string };
   // How many byproducts the open phase's lines make, one per line and byproduct (byproductCount
-  // in app/recycle.ts, #1022); each factory dialog says where to send its own.
+  // in app/recycle.ts, #1022); each factory dialog says where to send its own. ADA says to route
+  // them, not recycle them: the count includes a byproduct no line uses, whose advice is to store or
+  // sink it.
   byproducts?: number;
   // The Water the open phase extracts, m³/min as the pages write it (the stage's raw Water,
   // #1024), absent for none; each line taking it says how many Water Extractors to build.
@@ -514,7 +516,7 @@ const RULES: AdaRule[] = [
     tone: 'calm',
     when: facts => (facts.byproducts ?? 0) > 0,
     text: facts =>
-      `${plural(facts.byproducts!, 'byproduct')} to recycle in ${facts.phaseLabel}. Each line's dialog says where to send its own, and the build plan's step says the same. I did the sums. The plumbing is yours.`,
+      `${plural(facts.byproducts!, 'byproduct')} to route in ${facts.phaseLabel}. Each line's dialog says where to send its own, and the build plan's step says the same. I did the sums. The plumbing is yours.`,
   },
   {
     id: 'factory-handover',

@@ -329,9 +329,11 @@ const andAfter = (phrase: AdvicePart[]): string =>
 // Where `row`'s inputs that a byproduct covers come from (#1022): one paragraph per such input,
 // each source line linked, the largest first ("recycled from" a line this one feeds, else "from
 // the byproduct of"; "from this line's own byproduct" for its own), then the rest: "extract the
-// other …" for a raw resource, "the other … from existing supply" otherwise. Extracted Water gets
-// a paragraph whether or not a byproduct covers some of it ("No byproduct covers it: extract all
-// of it." when none does), with the Water Extractors for what is extracted (#1024).
+// other …" for a raw resource, "the other … from existing supply" otherwise, and "the other … from
+// extraction and existing supply" for an item that has both (the planner refuses existing supply
+// of a raw resource, so no plan it made has both). Extracted Water gets a paragraph whether or
+// not a byproduct covers some of it ("No byproduct covers it: extract all of it." when none does),
+// with the Water Extractors for what is extracted (#1024).
 export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWords): AdviceLine[] {
   const rows = new Map((model.stage.rows || []).map(other => [other.id, other]));
   return Object.keys(row.inputs || {}).flatMap(item => {
@@ -352,12 +354,17 @@ export function inputAdvice(row: CalcRow, model: RecycleModel, words: AdviceWord
       ...(i ? [', '] : []),
       ...sourcePhrase(wording, peer, all ? 'All of it' : amountOf(wording, peer.rate)),
     ]);
+    // The source pools the raw resource and existing supply of the item (sourceOf in
+    // group-links.ts), so with both the rest is named as coming from both.
+    const supplied = (model.stage.supplied?.[item] || 0) > LINK_DUST;
     const rest =
       extracted <= LINK_DUST
         ? '.'
-        : raw
-          ? `; extract the other ${amountOf(wording, extracted)}.`
-          : `; the other ${amountOf(wording, extracted)} from existing supply.`;
+        : raw && supplied
+          ? `; the other ${amountOf(wording, extracted)} from extraction and existing supply.`
+          : raw
+            ? `; extract the other ${amountOf(wording, extracted)}.`
+            : `; the other ${amountOf(wording, extracted)} from existing supply.`;
     return [
       {
         kind: 'input' as const,
